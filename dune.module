@@ -1,0 +1,13 @@
+####################################################################
+# Dune module information file: This file gets parsed by dunecontrol
+# and by the CMake build scripts.
+####################################################################
+
+Module: opm-flowgeomechanics
+Description: Simulators and utilities for automatic differentiation
+Version: 2023.04-pre
+Label: 2023.04-pre
+Maintainer: xxxx
+MaintainerName:xxxx 
+Url: http://opm-project.org
+Depends: dune-istl (>= 2.6) opm-common opm-grid opm-models opm-simulators opm-upscaling 
