@@ -133,8 +133,8 @@ include (OpmLibMain)
 
 include(OpmBashCompletion)
 
-add_library(moduleVersionExp OBJECT opm/simulators/utils/moduleVersion.cpp)
-set_property(TARGET moduleVersionExp PROPERTY POSITION_INDEPENDENT_CODE ON)
+add_library(moduleVersionGeoMech OBJECT opm/simulators/utils/moduleVersion.cpp)
+set_property(TARGET moduleVersionGeoMech PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 # Strictly we only depend on the update-version target,
 # but this is not exposed in a super-build.
@@ -142,14 +142,14 @@ set_property(TARGET moduleVersionExp PROPERTY POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_PROJECT_NAME "${PROJECT_NAME}")
 add_custom_target(opm-flowgeomechanics_prepare)
 
-opm_add_test(flow_blackoil_tracy
+opm_add_test(flow_experimental
   ONLY_COMPILE
   ALWAYS_ENABLE
   DEPENDS opmsimulators
   LIBRARIES opmsimulators
   SOURCES
-  examples/flow_blackoil_tracy.cpp
-  $<TARGET_OBJECTS:moduleVersionExp>
+  examples/flow_experimental.cpp
+  $<TARGET_OBJECTS:moduleVersionGeoMech>
 )
 target_link_libraries(flow_blackoil_tracy Tracy::TracyClient)
 
