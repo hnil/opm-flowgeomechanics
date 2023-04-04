@@ -1,5 +1,5 @@
 # defines that must be present in config.h for our headers
-set (opm-testing_CONFIG_VAR
+set (opm-geomech_CONFIG_VAR
   HAVE_OPM_GRID
   HAVE_PTHREAD
   HAVE_EWOMS
@@ -16,7 +16,7 @@ set (opm-testing_CONFIG_VAR
   )
 
 # dependencies
-set (opm-flowgeomechanics_DEPS
+set (opm-flowgeomech_DEPS
   # Compile with C99 support if available
   "C99"
   # Various runtime library enhancements
@@ -46,4 +46,4 @@ set (opm-flowgeomechanics_DEPS
   "Tracy REQUIRED"
   )
 
-find_package_deps(opm-flowgeomechanics)
+find_package_deps(opm-flowgeomech)

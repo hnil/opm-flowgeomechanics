@@ -153,6 +153,17 @@ opm_add_test(flow_experimental
 )
 target_link_libraries(flow_blackoil_tracy Tracy::TracyClient)
 
+opm_add_test(flow_geomech
+  ONLY_COMPILE
+  ALWAYS_ENABLE
+  DEPENDS opmsimulators
+  LIBRARIES opmsimulators
+  SOURCES
+  examples/flow_geomech.cpp
+  $<TARGET_OBJECTS:moduleVersionGeoMech>
+)
+target_link_libraries(flow_geomech Tracy::TracyClient)
+
 # if(dune-alugrid_FOUND)
 #   if (NOT BUILD_FLOW_ALU_GRID)
 #     set(FLOW_ALUGRID_ONLY_DEFAULT_ENABLE_IF "FALSE")
