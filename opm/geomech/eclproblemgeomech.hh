@@ -4,6 +4,7 @@
 #include "opm/geomech/vtkgeomechmodule.hh"
 #include <opm/material/densead/Evaluation.hpp>
 #include <opm/material/densead/Math.hpp>
+#include <opm/elasticity/material.hh>
 namespace Opm{
     template<typename TypeTag>
     class EclProblemGeoMech: public EclProblem<TypeTag>{
@@ -35,11 +36,22 @@ namespace Opm{
             const auto& initconfig = eclState.getInitConfig();
             geomechModel_.init(initconfig.restartRequested());
             const auto& fp = eclState.fieldProps();
-            bool has_ymodule = fp.has_double("YMODULE");
-            if(has_ymodule){
-                 ymodule_ = fp.get_double("YMODULE");
+            std::vector<std::string> needkeys = {"YMODULE","PRATIO","BIOTCOEF"};
+            for(size_t i=0; i < needkeys.size(); ++i){
+                bool ok = fp.has_double(needkeys[i]);
+                std::stringstream ss;
+                if(!ok){
+                    ss << "Missing keyword " << needkeys[i];
+                    OPM_THROW(std::runtime_error, ss.str());
+                }
             }
-            this->model().addAuxiliaryModule(&geomechModel_);
+            ymodule_ = fp.get_double("YMODULE");
+            pratio_ = fp.get_double("BIOTCOEF");
+            biotcoef_ = fp.get_double("BIOTCOEF");
+            for(size_t i=0; i < needkeys.size(); ++i){
+                using IsoMat = Opm::Elasticity::Isotropic;
+                elasticparams_.push_back(std::make_shared<IsoMat>(i,ymodule_[i],pratio_[i]));
+            }            
         }
         void initialSolutionApplied(){
             Parent::initialSolutionApplied();
@@ -51,6 +63,8 @@ namespace Opm{
                 const auto& fs = iq.fluidState();
                 initpressure_[dofIdx] = Toolbox::value(fs.pressure(waterPhaseIdx));
             }
+            // for now make a copy
+            this->geomechModel_.setMaterial(elasticparams_);
         }
         void timeIntegration()
         {
@@ -94,9 +108,11 @@ namespace Opm{
         std::vector<double> pratio_;
         std::vector<double> biotcoef_;
         std::vector<double> poelcoef_;
-        std::vector<std::vector<double>> initstress_;
         std::vector<double> initpressure_;
-    
+
+        Dune::BlockVector<Dune::FieldVector<double,6>> initstress_;
+        //std::vector<Opm::Elasticity::Material> elasticparams_;
+        std::vector<std::shared_ptr<Opm::Elasticity::Material>> elasticparams_;
         //private:
         //std::unique_ptr<TimeStepper> adaptiveTimeStepping_;
     };

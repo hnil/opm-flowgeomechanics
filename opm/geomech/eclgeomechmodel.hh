@@ -3,7 +3,10 @@
 #include <opm/models/discretization/common/baseauxiliarymodule.hh>
 #include <opm/material/densead/Evaluation.hpp>
 #include <opm/material/densead/Math.hpp>
-
+#include <opm/elasticity/elasticity_preconditioners.hpp>
+#include <opm/elasticity/elasticity_upscale.hpp>
+#include <opm/geomech/elasticity_solver.hpp>
+//#include <opm/geomech/ElasticitySolverUpscale.hpp>
 namespace Opm{
     template<typename TypeTag>
     class EclGeoMechModel : public BaseAuxiliaryModule<TypeTag>
@@ -25,8 +28,13 @@ namespace Opm{
     public:
         EclGeoMechModel(Simulator& simulator):
             //           Parent(simulator) 
-            simulator_(simulator)
-        {    
+            simulator_(simulator),
+            elacticitysolver_(simulator.vanguard().grid(),
+                              1e-14,// tol for matching not needed
+                              1e9, // scaleof youngs modulo
+                              true)
+        {
+            //const auto& eclstate = simulator_.vanguard().eclState();                
         };
         //ax model things
         void postSolve(GlobalEqVector& deltaX){
@@ -73,8 +81,7 @@ namespace Opm{
         void serializeOp(Serializer& serializer)
         {
             //serializer(tracerConcentration_);
-            //serializer(wellTracerRate_);
-            
+            //serializer(wellTracerRate_);           
         }
 
         // used in eclproblemgeomech
@@ -86,9 +93,21 @@ namespace Opm{
         double pressureDiff(unsigned dofIx) const{
             return pressDiff_[dofIx];
         }
+        void setMaterial(const std::vector<std::shared_ptr<Opm::Elasticity::Material>>& materials){
+            elacticitysolver_.setMaterial(materials);
+        }
     private:
         Simulator& simulator_;
-        std::vector<double> pressDiff_;
+        //std::vector<double> pressDiff_;
+        Dune::BlockVector<Dune::FieldVector<double,1>> pressDiff_;
+        //Dune::BlockVector<Dune::FieldVector<double,1> > solution_;
+        //Dune::BlockVector<Dune::FieldVector<double,3> > displacement_;
+        //Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1> > A_;
+        //ElasticitySolver  elasticitysolver_;
+        //using PC =  Opm::Elasticity::AMG;
+        using AMG = Opm::Elasticity::AMG1< Opm::Elasticity::ILUSmoother >;
+        Opm::Elasticity::ElasticitySolver<Grid> elacticitysolver_;
+        //Dune::VTKWriter<typename GridType::LeafGridView> vtkwriter(grid.leafGridView());
     };
 }
 

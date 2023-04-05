@@ -156,8 +156,8 @@ target_link_libraries(flow_blackoil_tracy Tracy::TracyClient)
 opm_add_test(flow_geomech
   ONLY_COMPILE
   ALWAYS_ENABLE
-  DEPENDS opmsimulators
-  LIBRARIES opmsimulators
+  DEPENDS opmsimulators opmupscaling
+  LIBRARIES opmsimulators opmupscaling
   SOURCES
   examples/flow_geomech.cpp
   $<TARGET_OBJECTS:moduleVersionGeoMech>
