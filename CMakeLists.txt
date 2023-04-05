@@ -159,7 +159,7 @@ opm_add_test(flow_geomech
   DEPENDS opmsimulators opmupscaling
   LIBRARIES opmsimulators opmupscaling
   SOURCES
-  examples/flow_geomech.cpp
+  examples/flow_geomech.cpp examples/FlexibleSolverMech.cpp
   $<TARGET_OBJECTS:moduleVersionGeoMech>
 )
 target_link_libraries(flow_geomech Tracy::TracyClient)

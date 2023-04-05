@@ -46,10 +46,13 @@ namespace Opm{
                 }
             }
             ymodule_ = fp.get_double("YMODULE");
-            pratio_ = fp.get_double("BIOTCOEF");
+            pratio_ = fp.get_double("PRATIO");
             biotcoef_ = fp.get_double("BIOTCOEF");
-            for(size_t i=0; i < needkeys.size(); ++i){
+            for(size_t i=0; i < ymodule_.size(); ++i){
                 using IsoMat = Opm::Elasticity::Isotropic;
+                if(pratio_[i]>0.5 || pratio_[i] < 0){
+                    OPM_THROW(std::runtime_error,"Pratio not valid");
+                }
                 elasticparams_.push_back(std::make_shared<IsoMat>(i,ymodule_[i],pratio_[i]));
             }            
         }
@@ -100,6 +103,10 @@ namespace Opm{
 
         double initPressure(unsigned dofIdx) const{
             return initpressure_[dofIdx];
+        }
+
+        double biotCoef(unsigned globalIdx) const{
+            return biotcoef_[globalIdx];
         }
     private:
         using GeomechModel = EclGeoMechModel<TypeTag>;

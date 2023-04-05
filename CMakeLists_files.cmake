@@ -26,7 +26,8 @@
 # originally generated with the command:
 # find opm -name '*.c*' -printf '\t%p\n' | sort
 list (APPEND MAIN_SOURCE_FILES
-  )
+	examples/FlexibleSolverMech.cpp
+)
 
 
 # originally generated with the command:
@@ -37,6 +38,8 @@ list (APPEND MAIN_SOURCE_FILES
 # originally generated with the command:
 # find tutorials examples -name '*.c*' -printf '\t%p\n' | sort
 list (APPEND EXAMPLE_SOURCE_FILES
+#	examples/flow_experimental.cpp
+#	examples/flow_geomech.cpp
 #     examples/flow_test.cpp
 #     examples/flow_test2.cpp
 #     examples/flow_test_2ph.cpp

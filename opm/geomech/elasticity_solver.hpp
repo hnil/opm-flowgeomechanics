@@ -45,6 +45,7 @@
 #include <opm/input/eclipse/Parser/Parser.hpp>
 #include <opm/input/eclipse/Deck/Deck.hpp>
 #include <opm/simulators/linalg/FlexibleSolver.hpp>
+//#include <opm/simulators/linalg/FlexibleSolver_impl.hpp>
 namespace Opm {
 namespace Elasticity {
 
@@ -74,12 +75,12 @@ class ElasticitySolver
 
 
     //! \brief The linear operator
-    ASMHandler<GridType> A;
+    ASMHandler<GridType> A;//NB NB names have to change
 
     //! \brief The solution vectors
-    Vector u[6];
+    Vector u;//NB NB names have to change
     //! \brief The load vectors
-    Vector b[6];
+    //Vector rhs;//NB NB names have to change
 
     //! \brief Main constructor
     //! \param[in] gv_ The grid to operate on
@@ -107,14 +108,14 @@ class ElasticitySolver
     //! \brief Assemble (optionally) stiffness matrix A and load vector
     //! \param[in] loadcase The strain load case. Set to -1 to skip
     //! \param[in] matrix Whether or not to assemble the matrix
-    void assemble(int loadcase, bool matrix);
+    void assemble(const Vector& pressure, bool matrix,bool vector);
 
     //! \brief Solve Au = b for u
     //! \param[in] loadcase The load case to solve
-    void solve(int loadcase);
+    void solve();
 
     // //! \param[in] params The linear solver parameters
-    void setupSolvers(const Opm::PropertyTree& prm){
+    void setupSolver(const Opm::PropertyTree& prm){
         // bool parallel=false;
         // if(parallel){
         //     OPM_THROW(std::runtime_error,"Parallel for mechanics not implemented");
@@ -133,13 +134,34 @@ class ElasticitySolver
             using SeqOperatorType = Dune::MatrixAdapter<Matrix, Vector, Vector>;
             auto sop = std::make_unique<SeqOperatorType>(A.getOperator());
             using FlexibleSolverType = Dune::FlexibleSolver<SeqOperatorType>;
-            tsolver = std::make_shared<FlexibleSolverType>(*sop, prm,
+            auto tsolver = std::make_unique<FlexibleSolverType>(*sop, prm,
                                                            weightsCalculator,
                                                            pressureIndex);
+            sop_ = std::move(sop);
+            tsolver_ = std::move(tsolver);
+            //NB names have to change.
+            //b = A.getLoadVector();
             //}
     }
   
   private:
+    using AbstractSolverType = Dune::InverseOperator<Vector, Vector>;
+    using AbstractOperatorType = Dune::AssembledLinearOperator<Matrix, Vector, Vector>;
+    using AbstractPreconditionerType = Dune::PreconditionerWithUpdate<Vector, Vector>;
+
+    using SeqOperatorType = Dune::MatrixAdapter<Matrix, Vector, Vector>;
+    //using AbstractPrecondType = Dune::PreconditionerWithUpdate<Vector, Vector>;
+    //std::unique_ptr<AbstractPrecondType> sop_;
+    std::unique_ptr<SeqOperatorType> sop_;
+
+        //! \brief Linear solver
+    typedef std::unique_ptr<Dune::InverseOperator<Vector, Vector> > SolverPtr;
+    SolverPtr tsolver_;
+
+    //! \brief Matrix adaptor for the elasticity block
+    //std::shared_ptr<Operator> op;
+
+    
     //! \brief An iterator over grid vertices
     typedef typename GridType::LeafGridView::template Codim<dim>::Iterator LeafVertexIterator;
 
@@ -200,12 +222,6 @@ class ElasticitySolver
     void fixLine(Direction dir, ctype x, ctype y,
                  const NodeValue& value = NodeValue(0));
     
-    //! \brief Linear solver
-    typedef std::shared_ptr<Dune::InverseOperator<Vector, Vector> > SolverPtr;
-    std::vector<SolverPtr> tsolver;
-
-    //! \brief Matrix adaptor for the elasticity block
-    std::shared_ptr<Operator> op;
 
     //! \brief Elasticity helper class
     Elasticity<GridType> E;

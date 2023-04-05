@@ -233,20 +233,20 @@ IMPL_FUNC(void, fixPoint(Direction dir,
 //   return delta.one_norm() < tol;
 // }
 
-IMPL_FUNC(void, assemble(int loadcase, bool matrix))
+    IMPL_FUNC(void, assemble(const Vector& pressure, bool matrix, bool vector))
 {
   const int comp = 3+(dim-2)*3;
   static const int bfunc = 4+(dim-2)*4;
-
-  Dune::FieldVector<ctype,comp> eps0;
-  eps0 = 0;
-  if (loadcase > -1) {
-    eps0[loadcase] = 1;
-    b[loadcase] = 0;
-  }
+  //int loadcase = -1;
+  Dune::FieldVector<ctype,comp> eps0 = {1, 1, 1, 0, 0, 0};
+  //eps0 = 0;
+  Vector& b = A.getLoadVector();
+  b = 0;
+  A.getLoadVector() = 0;
   if (matrix)
     A.getOperator() = 0;
 
+  
   for (int i=0;i<2;++i) {
     if (color[1].size() && matrix)
       std::cout << "\tprocessing " << (i==0?"red ":"black ") << "elements" << std::endl;
@@ -259,14 +259,18 @@ IMPL_FUNC(void, assemble(int loadcase, bool matrix))
       Dune::FieldVector<ctype,dim*bfunc>* EP=0;
       if (matrix)
         KP = &K;
-      if (loadcase > -1)
+      if (vector)
         EP = &ES;
 
       for (size_t k=0;k<color[i][j].size();++k) {
         LeafIterator it = gv.leafGridView().template begin<0>();
         for (int l=0;l<color[i][j][k];++l)
           ++it;
-        materials[color[i][j][k]]->getConstitutiveMatrix(C);
+        size_t cell_num = color[i][j][k];
+        bool valid = materials[color[i][j][k]]->getConstitutiveMatrix(C);
+        if(!valid){
+            OPM_THROW(std::runtime_error,"Not valid C matrix"); 
+        }
         // determine geometry type of the current element and get the matching reference element
         Dune::GeometryType gt = it->type();
 
@@ -302,12 +306,15 @@ IMPL_FUNC(void, assemble(int loadcase, bool matrix))
           // load vector
           if (EP) {
             Dune::FieldVector<ctype,dim*bfunc> temp;
-            temp = Dune::FMatrixHelp::multTransposed(lB,Dune::FMatrixHelp::mult(C,eps0));
+            //temp = Dune::FMatrixHelp::multTransposed(lB,Dune::FMatrixHelp::mult(C,eps0));
+            auto Ipressure = Dune::FMatrixHelp::mult(C,eps0);
+            Ipressure = eps0*pressure[cell_num][0];
+            temp = Dune::FMatrixHelp::multTransposed(lB,Ipressure);
             temp *= -detJ*r->weight();
             ES += temp;
           }
         }
-        A.addElement(KP,EP,it,(loadcase > -1)?&b[loadcase]:NULL);
+        A.addElement(KP,EP,it,&b); // NULL is no static forse based on the itegration point??
       }
     }
   }
@@ -335,28 +342,19 @@ IMPL_FUNC(void, assemble(int loadcase, bool matrix))
 
 
 
-// IMPL_FUNC(void, solve(int loadcase))
-// {
-//   try {
-//     Dune::InverseOperatorResult r;
-// #if DUNE_VERSION_NEWER(DUNE_ISTL, 2, 7)
-//     u[loadcase].resize(b[loadcase].size());
-// #else
-//     u[loadcase].resize(b[loadcase].size(), false);
-// #endif
-//     u[loadcase] = 0;
-//     int solver=0;
-// #ifdef HAVE_OPENMP
-//     solver = omp_get_thread_num();
-// #endif
-
-//     tsolver[solver]->apply(u[loadcase], b[loadcase], r);
-
-//     std::cout << "\tsolution norm: " << u[loadcase].two_norm() << std::endl;
-//   } catch (Dune::ISTLError& e) {
-//     std::cerr << "exception thrown " << e << std::endl;
-//   }
-// }
+IMPL_FUNC(void, solve())
+{
+  try {
+    Dune::InverseOperatorResult r;
+    Vector& rhs = A.getLoadVector();
+    u.resize(rhs.size());
+    u = 0;
+    tsolver_->apply(u, rhs, r);
+    std::cout << "\tsolution norm: " << u.two_norm() << std::endl;
+  } catch (Dune::ISTLError& e) {
+    std::cerr << "exception thrown " << e << std::endl;
+  }
+}
 
 }} // namespace Opm, Elasticity
 

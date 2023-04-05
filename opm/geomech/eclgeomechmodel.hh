@@ -27,11 +27,12 @@ namespace Opm{
         using Toolbox = MathToolbox<Evaluation>;
     public:
         EclGeoMechModel(Simulator& simulator):
-            //           Parent(simulator) 
+            //           Parent(simulator)
+            first_solve_(true),
             simulator_(simulator),
             elacticitysolver_(simulator.vanguard().grid(),
                               1e-14,// tol for matching not needed
-                              1e9, // scaleof youngs modulo
+                              1.0, // scaleof youngs modulo
                               true)
         {
             //const auto& eclstate = simulator_.vanguard().eclState();                
@@ -73,10 +74,37 @@ namespace Opm{
                 const auto& iq = simulator_.model().intensiveQuantities(dofIdx,0);
                 const auto& fs = iq.fluidState();
                 const auto& press = fs.pressure(waterPhaseIdx);
-                pressDiff_[dofIdx] = Toolbox::value(press) - problem.initPressure(dofIdx);
+                const auto& biotcoef = problem.biotCoef(dofIdx);
+                pressDiff_[dofIdx] = (Toolbox::value(press) - problem.initPressure(dofIdx))*biotcoef;
             }
-        }
-        
+            // for now assemble and set up solver her
+            
+            if(first_solve_){
+                bool do_matrix = true;//assemble matrix
+                bool do_vector = true;//assemble matrix
+                elacticitysolver_.A.initForAssembly();
+                elacticitysolver_.assemble(pressDiff_, do_matrix, do_vector);
+                Opm::PropertyTree prm("mechsolver.json");
+                elacticitysolver_.setupSolver(prm);
+                first_solve_ = false;
+            }else{
+                bool do_matrix = false;//assemble matrix
+                bool do_vector = true;//assemble matrix
+                //elacticitysolver_.A.initForAssembly();
+                elacticitysolver_.assemble(pressDiff_, do_matrix, do_vector);
+            }    
+            elacticitysolver_.A.printOperator();
+            elacticitysolver_.A.printLoadVector();
+            elacticitysolver_.solve();
+            Opm::Elasticity::Vector field;
+            elacticitysolver_.A.expandSolution(field,elacticitysolver_.u);
+            Dune::storeMatrixMarket(elacticitysolver_.A.getOperator(), "A.mtx");
+            Dune::storeMatrixMarket(elacticitysolver_.A.getLoadVector(), "b.mtx");
+            Dune::storeMatrixMarket(elacticitysolver_.u, "u.mtx");
+            Dune::storeMatrixMarket(field, "field.mtx");
+            //siz = A.getOperator().N();
+            //b.resize(siz);
+        }       
         template<class Serializer>
         void serializeOp(Serializer& serializer)
         {
@@ -97,6 +125,7 @@ namespace Opm{
             elacticitysolver_.setMaterial(materials);
         }
     private:
+        bool first_solve_;
         Simulator& simulator_;
         //std::vector<double> pressDiff_;
         Dune::BlockVector<Dune::FieldVector<double,1>> pressDiff_;
