@@ -30,6 +30,7 @@
 
 #include <opm/input/eclipse/Deck/Deck.hpp>
 #include <opm/input/eclipse/EclipseState/Grid/EclipseGrid.hpp>
+#include <opm/input/eclipse/EclipseState/EclipseState.hpp>
 #include <opm/input/eclipse/Parser/Parser.hpp>
 
 #include <opm/common/utility/platform_dependent/reenable_warnings.h>
@@ -145,7 +146,21 @@ int run(Params& p)
     grid.processEclipseFormat(&inputGrid, nullptr, false);
 
     ElasticitySolver<GridType> esolver(grid, p.ctol, p.Emin, p.verbose);
-
+    std::vector<std::shared_ptr<Opm::Elasticity::Material>> materials;
+    Opm::EclipseState eclState(deck);
+    //const auto& initconfig = eclState.getInitConfig();
+    const auto& fp = eclState.fieldProps();            
+    std::vector<double> ymodule = fp.get_double("YMODULE");
+    std::vector<double> pratio = fp.get_double("PRATIO");
+    std::vector<double> biotcoef = fp.get_double("BIOTCOEF");
+    for(size_t i=0; i < ymodule.size(); ++i){
+        using IsoMat = Opm::Elasticity::Isotropic;
+        if(pratio[i]>0.5 || pratio[i] < 0){
+            OPM_THROW(std::runtime_error,"Pratio not valid");
+        }
+        materials.push_back(std::make_shared<IsoMat>(i,ymodule[i],pratio[i]));
+    }    
+    esolver.setMaterial(materials);
     
     std::cout << "logical dimension: " << grid.logicalCartesianSize()[0]
               << "x"                   << grid.logicalCartesianSize()[1]
