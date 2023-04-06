@@ -143,7 +143,9 @@ class ElasticitySolver
             //b = A.getLoadVector();
             //}
     }
-  
+    template<int comp>
+    void averageStress(Dune::BlockVector<Dune::FieldVector<ctype,comp>>& sigmacells,
+                       const Vector& uarg);
   private:
     using AbstractSolverType = Dune::InverseOperator<Vector, Vector>;
     using AbstractOperatorType = Dune::AssembledLinearOperator<Matrix, Vector, Vector>;

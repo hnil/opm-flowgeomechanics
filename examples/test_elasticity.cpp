@@ -199,11 +199,12 @@ int run(Params& p)
     if (!p.vtufile.empty()) {
       Dune::VTKWriter<typename GridType::LeafGridView> vtkwriter(grid.leafGridView());
 
-      for (int i=0;i<6;++i) {
+      //for (int i=0;i<6;++i) {
         std::stringstream str;
-        str << "sol " << i+1;
-        vtkwriter.addVertexData(field[i], str.str().c_str(), dim);
-      }
+        str << "sol ";
+        vtkwriter.addVertexData(field, str.str().c_str(), dim);
+        vtkwriter.addCellData(pressforce, "pressforce");
+        //}
       vtkwriter.write(p.vtufile);
     }
 
