@@ -3,8 +3,8 @@
 #include <opm/models/discretization/common/baseauxiliarymodule.hh>
 #include <opm/material/densead/Evaluation.hpp>
 #include <opm/material/densead/Math.hpp>
-#include <opm/elasticity/elasticity_preconditioners.hpp>
-#include <opm/elasticity/elasticity_upscale.hpp>
+//#include <opm/elasticity/elasticity_preconditioners.hpp>
+//#include <opm/elasticity/elasticity_upscale.hpp>
 #include <opm/geomech/elasticity_solver.hpp>
 //#include <opm/geomech/ElasticitySolverUpscale.hpp>
 namespace Opm{
@@ -102,6 +102,7 @@ namespace Opm{
             Dune::storeMatrixMarket(elacticitysolver_.A.getLoadVector(), "b.mtx");
             Dune::storeMatrixMarket(elacticitysolver_.u, "u.mtx");
             Dune::storeMatrixMarket(field, "field.mtx");
+            Dune::storeMatrixMarket(pressDiff_, "pressforce.mtx");
             //siz = A.getOperator().N();
             //b.resize(siz);
         }       
