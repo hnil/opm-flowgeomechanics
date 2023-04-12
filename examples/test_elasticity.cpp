@@ -175,7 +175,29 @@ int run(Params& p)
     pressforce.resize(grid.size(0));
     pressforce = 1.0;
     Dune::loadMatrixMarket(pressforce,"pressforce.mtx");
-    //   upscale.fixCorners(p.min, p.max);
+
+    {
+        auto gv = grid.leafGridView();
+        // using LeafGridView = Dune::GridView<Dune::DefaultLeafGridViewTraits<GridType>>;
+        // Dune::MultipleCodimMultipleGeomTypeMapper<LeafGridView> mapper(gv.leafGridView(), Dune::mcmgVertexLayout());        
+        // for(const auto& vert : Dune::vertices(gv,Dune::Partitions::border)){
+        //     int indexi = 0 ;//mapper.index(vert);
+        //     Dune::FieldVector<double,3> value;
+        //     value = 0;
+        //     esolver.A.updateFixedNode(indexi,std::make_pair(Opm::Elasticity::XYZ,value));
+        // }
+        for (const auto& cell: Dune::elements(gv)){
+            for (const auto& is: Dune::intersections(gv,cell)){
+                if(is.boundary()){
+                    auto normal = is.centerUnitOuterNormal();
+                    //for (const auto& vert: Dune::edges(gv,is)){
+                    //}
+                }
+            }
+        }
+    }
+
+//   upscale.fixCorners(p.min, p.max);
     bool do_matrix = true;//assemble matrix
     bool do_vector = true;//assemble matrix
     esolver.A.initForAssembly();
@@ -194,16 +216,25 @@ int run(Params& p)
      Dune::storeMatrixMarket(esolver.u, "u.mtx");
      Dune::storeMatrixMarket(field, "field.mtx");
      Dune::FieldMatrix<double,6,6> C;
-    
+     Dune::BlockVector<Dune::FieldVector<double,3>> disp;
+     disp.resize(pressforce.size());
+     for(size_t i = 0; i < pressforce.size(); ++i){
+         for(size_t k = 0; k < dim; ++k){
+             disp[i][k] = field[i*dim+k];
+         }
+     }
 
     if (!p.vtufile.empty()) {
       Dune::VTKWriter<typename GridType::LeafGridView> vtkwriter(grid.leafGridView());
 
       //for (int i=0;i<6;++i) {
         std::stringstream str;
+
         str << "sol ";
         vtkwriter.addVertexData(field, str.str().c_str(), dim);
+        //vtkwriter.addVertexData(disp, "disp");
         vtkwriter.addCellData(pressforce, "pressforce");
+        //vtkwriter.addVertexData(disp, stress);
         //}
       vtkwriter.write(p.vtufile);
     }
