@@ -10,12 +10,17 @@ namespace Opm{
     class EclProblemGeoMech: public EclProblem<TypeTag>{
     public:
         using Parent = EclProblem<TypeTag>;
+        
+        
         using Simulator = GetPropType<TypeTag, Properties::Simulator>;
         using TimeStepper =  AdaptiveTimeSteppingEbos<TypeTag>;
         using Scalar = GetPropType<TypeTag, Properties::Scalar>;
         using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
         using Evaluation = GetPropType<TypeTag, Properties::Evaluation>;
+        using GridView = GetPropType<TypeTag, Properties::GridView>;
         enum { waterPhaseIdx = FluidSystem::waterPhaseIdx };
+        enum { dim = GridView::dimension };
+        enum { dimWorld = GridView::dimensionworld };
         using Toolbox = MathToolbox<Evaluation>;
         EclProblemGeoMech(Simulator& simulator):
             EclProblem<TypeTag>(simulator),
@@ -31,7 +36,7 @@ namespace Opm{
         
         void finishInit(){
             Parent::finishInit();
-            auto& simulator = this->simulator();
+            const auto& simulator = this->simulator();
             const auto& eclState = simulator.vanguard().eclState();
             const auto& initconfig = eclState.getInitConfig();
             geomechModel_.init(initconfig.restartRequested());
@@ -54,7 +59,59 @@ namespace Opm{
                     OPM_THROW(std::runtime_error,"Pratio not valid");
                 }
                 elasticparams_.push_back(std::make_shared<IsoMat>(i,ymodule_[i],pratio_[i]));
-            }            
+            }
+            // read mechanical boundary conditions
+            //const auto& simulator = this->simulator();
+            const auto& vanguard = simulator.vanguard();
+            const auto& bcconfig = vanguard.eclState().getSimulationConfig().bcconfig();
+            if (bcconfig.size() > 0) {
+                //nonTrivialBoundaryConditions_ = true;
+
+                size_t numCartDof = vanguard.cartesianSize();
+                unsigned numElems = vanguard.gridView().size(/*codim=*/0);
+                std::vector<int> cartesianToCompressedElemIdx(numCartDof, -1);
+
+                for (unsigned elemIdx = 0; elemIdx < numElems; ++elemIdx){
+                    cartesianToCompressedElemIdx[vanguard.cartesianIndex(elemIdx)] = elemIdx;
+                }
+            
+                for (const auto& bcface : bcconfig) {
+                    const auto& type = bcface.bcmechtype;
+                    if (type == BCMECHType::FREE) {
+                        // do nothing
+                    }if (type == BCMECHType::FIXED) {
+                        std::set<size_t> effected_cells;
+                        for (int i = bcface.i1; i <= bcface.i2; ++i) {
+                            for (int j = bcface.j1; j <= bcface.j2; ++j) {
+                                for (int k = bcface.k1; k <= bcface.k2; ++k) {
+                                    std::array<int, 3> tmp = {i,j,k};
+                                    auto elemIdx = cartesianToCompressedElemIdx[vanguard.cartesianIndex(tmp)];
+                                    if (elemIdx>0){
+                                        effected_cells.insert(elemIdx);
+                                    }
+                                }
+                            }
+                        }
+                        const auto& gv = this->gridView();
+                        for(const auto& cell:elements(gv)){
+                            auto index = gv.indexSet().index(cell);
+                            auto it = effected_cells.find(index);
+                            if(!(it == effected_cells.end())){
+                                // fix all noted for now
+                                 for (const auto& vertex : Dune::subEntities(cell, Dune::Codim<dim>{})){
+                                     fixed_nodes_.push_back(gv.indexSet().index(vertex));
+                                 }
+                            }
+                        }                    
+                    } else {    
+                        throw std::logic_error("invalid type for BC. Use FREE or RATE");
+                    }
+                }
+            }
+            std::sort(fixed_nodes_.begin(), fixed_nodes_.end()); // {1 1 2 3 4 4 5}
+            auto last = std::unique(fixed_nodes_.begin(), fixed_nodes_.end());
+            // v now holds {1 2 3 4 5 x x}, where 'x' is indeterminate
+            fixed_nodes_.erase(last, fixed_nodes_.end());
         }
         void initialSolutionApplied(){
             Parent::initialSolutionApplied();
@@ -116,7 +173,7 @@ namespace Opm{
         std::vector<double> biotcoef_;
         std::vector<double> poelcoef_;
         std::vector<double> initpressure_;
-
+        std::vector<size_t> fixed_nodes_;
         Dune::BlockVector<Dune::FieldVector<double,6>> initstress_;
         //std::vector<Opm::Elasticity::Material> elasticparams_;
         std::vector<std::shared_ptr<Opm::Elasticity::Material>> elasticparams_;

@@ -1,0 +1,4 @@
+{
+    "solver": "umfpack",
+    "verbosity": "0"
+}

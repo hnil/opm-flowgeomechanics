@@ -164,6 +164,41 @@ opm_add_test(flow_geomech
 )
 target_link_libraries(flow_geomech Tracy::TracyClient)
 
+opm_add_test(test_elasticity
+  ONLY_COMPILE
+  ALWAYS_ENABLE
+  DEPENDS opmsimulators opmupscaling
+  LIBRARIES opmsimulators opmupscaling
+  SOURCES
+  examples/test_elasticity.cpp examples/FlexibleSolverMech.cpp
+  $<TARGET_OBJECTS:moduleVersionGeoMech>
+)
+target_link_libraries(test_elasticity Tracy::TracyClient)
+
+opm_add_test(test_grid
+  ONLY_COMPILE
+  ALWAYS_ENABLE
+  DEPENDS opmsimulators opmupscaling
+  LIBRARIES opmsimulators opmupscaling
+  SOURCES
+  examples/test_grid.cpp
+  $<TARGET_OBJECTS:moduleVersionGeoMech>
+)
+target_link_libraries(test_grid Tracy::TracyClient)
+
+opm_add_test(testpdelab
+  ONLY_COMPILE
+  ALWAYS_ENABLE
+  DEPENDS opmsimulators opmupscaling
+  LIBRARIES opmsimulators opmupscaling
+  SOURCES
+  examples/testpdelab.cc
+  $<TARGET_OBJECTS:moduleVersionGeoMech>
+)
+target_link_libraries(testpdelab Tracy::TracyClient)
+
+
+
 # if(dune-alugrid_FOUND)
 #   if (NOT BUILD_FLOW_ALU_GRID)
 #     set(FLOW_ALUGRID_ONLY_DEFAULT_ENABLE_IF "FALSE")
