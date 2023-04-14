@@ -38,6 +38,7 @@ OIL
 GAS
 WATER
 DISGAS
+MECH
 -- As seen from figure 4 in Odeh, GOR is increasing with time,
 -- which means that dissolved gas is present
 
