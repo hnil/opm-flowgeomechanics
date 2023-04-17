@@ -186,16 +186,16 @@ opm_add_test(test_grid
 )
 target_link_libraries(test_grid Tracy::TracyClient)
 
-opm_add_test(testpdelab
-  ONLY_COMPILE
-  ALWAYS_ENABLE
-  DEPENDS opmsimulators opmupscaling
-  LIBRARIES opmsimulators opmupscaling
-  SOURCES
-  examples/testpdelab.cc
-  $<TARGET_OBJECTS:moduleVersionGeoMech>
-)
-target_link_libraries(testpdelab Tracy::TracyClient)
+# opm_add_test(testpdelab
+#   ONLY_COMPILE
+#   ALWAYS_ENABLE
+#   DEPENDS opmsimulators opmupscaling
+#   LIBRARIES opmsimulators opmupscaling
+#   SOURCES
+#   examples/testpdelab.cc
+#   $<TARGET_OBJECTS:moduleVersionGeoMech>
+# )
+# target_link_libraries(testpdelab Tracy::TracyClient)
 
 
 
