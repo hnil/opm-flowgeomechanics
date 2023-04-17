@@ -82,6 +82,9 @@ namespace Opm{
             if(first_solve_){
                 bool do_matrix = true;//assemble matrix
                 bool do_vector = true;//assemble matrix
+                // set boundary
+                elacticitysolver_.fixNodes(problem.fixedNodes()); 
+                //
                 elacticitysolver_.A.initForAssembly();
                 elacticitysolver_.assemble(pressDiff_, do_matrix, do_vector);
                 Opm::PropertyTree prm("mechsolver.json");

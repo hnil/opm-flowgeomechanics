@@ -32,7 +32,8 @@
 #include <opm/input/eclipse/EclipseState/Grid/EclipseGrid.hpp>
 #include <opm/input/eclipse/EclipseState/EclipseState.hpp>
 #include <opm/input/eclipse/Parser/Parser.hpp>
-
+#include <opm/input/eclipse/EclipseState/SimulationConfig/BCMECHConfig.hpp>
+#include <opm/input/eclipse/EclipseState/SimulationConfig/BCConfig.hpp>
 #include <opm/common/utility/platform_dependent/reenable_warnings.h>
 
 #include <opm/grid/utility/StopWatch.hpp>
@@ -98,6 +99,23 @@ void parseCommandLine(int argc, char** argv, Params& p)
   }
 }
 
+template<int dimension>
+unsigned cartesianIndex(const std::array<int,dimension>& coords,
+                        const std::array<int, dimension>& cartesianDimensions
+    )
+{
+    unsigned cartIndex = coords[0];
+    int factor = cartesianDimensions[0];
+    for (unsigned i = 1; i < dimension; ++i) {
+        cartIndex += coords[i]*factor;
+        factor *= cartesianDimensions[i];
+    }
+
+    return cartIndex;
+}
+
+
+
 //! \brief Write a log of the simulation to a text file
 void writeOutput(const Params& p, Opm::time::StopWatch& watch, int cells)
 {
@@ -144,7 +162,8 @@ int run(Params& p)
     auto deck = parser.parseFile(p.file);
     Opm::EclipseGrid inputGrid(deck);
     grid.processEclipseFormat(&inputGrid, nullptr, false);
-
+    using CartesianIndexMapper = Dune::CartesianIndexMapper<Dune::CpGrid>;
+    CartesianIndexMapper cartesianIndexMapper(grid);
     ElasticitySolver<GridType> esolver(grid, p.ctol, p.Emin, p.verbose);
     std::vector<std::shared_ptr<Opm::Elasticity::Material>> materials;
     Opm::EclipseState eclState(deck);
@@ -161,6 +180,68 @@ int run(Params& p)
         materials.push_back(std::make_shared<IsoMat>(i,ymodule[i],pratio[i]));
     }    
     esolver.setMaterial(materials);
+    std::vector<size_t> fixed_nodes;
+    const auto& bcconfig = eclState.getSimulationConfig().bcconfig();
+    if (bcconfig.size() > 0) {
+        //nonTrivialBoundaryConditions_ = true;
+        auto gv = grid.leafGridView();
+        size_t numCartDof = cartesianIndexMapper.cartesianSize();
+        unsigned numElems = gv.size(/*codim=*/0);
+        std::vector<int> cartesianToCompressedElemIdx(numCartDof, -1);
+
+        for (unsigned elemIdx = 0; elemIdx < numElems; ++elemIdx){
+            cartesianToCompressedElemIdx[cartesianIndexMapper.cartesianIndex(elemIdx)] = elemIdx;
+        }
+            
+        for (const auto& bcface : bcconfig) {
+            const auto& type = bcface.bcmechtype;
+            if (type == Opm::BCMECHType::FREE) {
+                // do nothing
+            }else if (type == Opm::BCMECHType::FIXED) {
+                std::set<size_t> effected_cells;
+                for (int i = bcface.i1; i <= bcface.i2; ++i) {
+                    for (int j = bcface.j1; j <= bcface.j2; ++j) {
+                        for (int k = bcface.k1; k <= bcface.k2; ++k) {
+                            std::array<int, 3> cartdim = cartesianIndexMapper.cartesianDimensions();
+                            
+                            std::array<int, 3> tmp = {i,j,k};
+                            int cartindex =
+                                cartesianIndex<3>(tmp,cartdim);
+                            auto elemIdx = cartesianToCompressedElemIdx[cartindex];
+                            if (elemIdx>0){
+                                effected_cells.insert(elemIdx);
+                            }
+                        }
+                    }
+                }
+                std::cout << "Effected cells" << std::endl;
+                for(int i:effected_cells){
+                    std::cout << i << std::endl;
+                }
+                const auto& gv = grid.leafGridView();
+                for(const auto& cell:elements(gv)){
+                    auto index = gv.indexSet().index(cell);
+                    auto it = effected_cells.find(index);
+                    if(!(it == effected_cells.end())){
+                        // fix all noted for now
+                        for (const auto& vertex : Dune::subEntities(cell, Dune::Codim<dim>{})){
+                            fixed_nodes.push_back(gv.indexSet().index(vertex));
+                        }
+                    }
+                }                    
+            } else {    
+                throw std::logic_error("invalid type for BC. Use FREE or RATE");
+            }
+        }
+    }
+    std::sort(fixed_nodes.begin(), fixed_nodes.end()); // {1 1 2 3 4 4 5}
+    auto last = std::unique(fixed_nodes.begin(), fixed_nodes.end());
+    // v now holds {1 2 3 4 5 x x}, where 'x' is indeterminate
+    fixed_nodes.erase(last, fixed_nodes.end());
+    std::cout << "Effected nodes" << std::endl;
+    for(int i:fixed_nodes){
+        std::cout << i << std::endl;
+    }
     
     std::cout << "logical dimension: " << grid.logicalCartesianSize()[0]
               << "x"                   << grid.logicalCartesianSize()[1]
@@ -200,6 +281,7 @@ int run(Params& p)
 //   upscale.fixCorners(p.min, p.max);
     bool do_matrix = true;//assemble matrix
     bool do_vector = true;//assemble matrix
+    esolver.fixNodes(fixed_nodes); 
     esolver.A.initForAssembly();
     esolver.assemble(pressforce, do_matrix, do_vector);
     Opm::PropertyTree prm("mechsolver.json");

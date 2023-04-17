@@ -292,7 +292,8 @@ RSVD
 8450 1.270 /
 
 BC 
-1 280 1 1 1 1 Z- NONE * * * * FREE/
+1 300  1 1 1 1 Z- NONE * * * * FIXED/
+--1 1 1 1 1 1 Z- NONE * * * * FIXED/
 /
 
 SUMMARY

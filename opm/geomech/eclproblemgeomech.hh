@@ -79,7 +79,7 @@ namespace Opm{
                     const auto& type = bcface.bcmechtype;
                     if (type == BCMECHType::FREE) {
                         // do nothing
-                    }if (type == BCMECHType::FIXED) {
+                    }else if (type == BCMECHType::FIXED) {
                         std::set<size_t> effected_cells;
                         for (int i = bcface.i1; i <= bcface.i2; ++i) {
                             for (int j = bcface.j1; j <= bcface.j2; ++j) {
@@ -151,7 +151,6 @@ namespace Opm{
             geomechModel_.endTimeStep();
         }
         
-
         const EclGeoMechModel<TypeTag>& geoMechModel() const
         { return geomechModel_; }
         
@@ -164,6 +163,10 @@ namespace Opm{
 
         double biotCoef(unsigned globalIdx) const{
             return biotcoef_[globalIdx];
+        }
+        
+        const std::vector<size_t>& fixedNodes() const{
+            return fixed_nodes_;
         }
     private:
         using GeomechModel = EclGeoMechModel<TypeTag>;
