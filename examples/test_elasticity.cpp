@@ -45,7 +45,7 @@
 
 #include <cstring>
 #include <iostream>
-
+#include "vectorfunctions.hh"
 #include <unistd.h>
 
 using namespace Opm::Elasticity;
@@ -88,7 +88,7 @@ void parseCommandLine(int argc, char** argv, Params& p)
   p.ctol     = param.getDefault<double>("ctol",1.e-6);
   p.Emin     = param.getDefault<double>("Emin",1);
   p.file     = param.get<std::string>("gridfilename");
-  p.vtufile  = param.getDefault<std::string>("vtufilename","");
+  p.vtufile  = param.getDefault<std::string>("vtufilename","test_elast");
   p.resultfilename  = param.getDefault<std::string>("resultfilename","");
   p.output   = param.getDefault<std::string>("output","");
   p.verbose  = param.getDefault<bool>("verbose",false);
@@ -158,6 +158,7 @@ int run(Params& p)
     watch.start();
 
     GridType grid;
+    using GridView = Dune::GridView<Dune::DefaultLeafGridViewTraits<GridType>>;
     Opm::Parser parser;
     auto deck = parser.parseFile(p.file);
     Opm::EclipseGrid inputGrid(deck);
@@ -192,9 +193,15 @@ int run(Params& p)
         for (unsigned elemIdx = 0; elemIdx < numElems; ++elemIdx){
             cartesianToCompressedElemIdx[cartesianIndexMapper.cartesianIndex(elemIdx)] = elemIdx;
         }
-            
+        std::array<int, 3> cartdim = cartesianIndexMapper.cartesianDimensions();    
         for (const auto& bcface : bcconfig) {
             const auto& type = bcface.bcmechtype;
+            if((bcface.i1 < 0) || (bcface.j1<0) || (bcface.k1<0)){
+                throw std::logic_error("Lower range of BC wrong");
+            }
+            if( (bcface.i2 > cartdim[0]) || (bcface.j2> cartdim[1]) || (bcface.k2 > cartdim[2])){
+                throw std::logic_error("Upper range of BC wrong");
+            }
             if (type == Opm::BCMECHType::FREE) {
                 // do nothing
             }else if (type == Opm::BCMECHType::FIXED) {
@@ -202,13 +209,13 @@ int run(Params& p)
                 for (int i = bcface.i1; i <= bcface.i2; ++i) {
                     for (int j = bcface.j1; j <= bcface.j2; ++j) {
                         for (int k = bcface.k1; k <= bcface.k2; ++k) {
-                            std::array<int, 3> cartdim = cartesianIndexMapper.cartesianDimensions();
+                            
                             
                             std::array<int, 3> tmp = {i,j,k};
                             int cartindex =
                                 cartesianIndex<3>(tmp,cartdim);
                             auto elemIdx = cartesianToCompressedElemIdx[cartindex];
-                            if (elemIdx>0){
+                            if (elemIdx>-1){
                                 effected_cells.insert(elemIdx);
                             }
                         }
@@ -258,7 +265,7 @@ int run(Params& p)
     Dune::loadMatrixMarket(pressforce,"pressforce.mtx");
 
     {
-        auto gv = grid.leafGridView();
+        //auto gv = grid.leafGridView();
         // using LeafGridView = Dune::GridView<Dune::DefaultLeafGridViewTraits<GridType>>;
         // Dune::MultipleCodimMultipleGeomTypeMapper<LeafGridView> mapper(gv.leafGridView(), Dune::mcmgVertexLayout());        
         // for(const auto& vert : Dune::vertices(gv,Dune::Partitions::border)){
@@ -267,15 +274,15 @@ int run(Params& p)
         //     value = 0;
         //     esolver.A.updateFixedNode(indexi,std::make_pair(Opm::Elasticity::XYZ,value));
         // }
-        for (const auto& cell: Dune::elements(gv)){
-            for (const auto& is: Dune::intersections(gv,cell)){
-                if(is.boundary()){
-                    auto normal = is.centerUnitOuterNormal();
-                    //for (const auto& vert: Dune::edges(gv,is)){
-                    //}
-                }
-            }
-        }
+        // for (const auto& cell: Dune::elements(gv)){
+        //     for (const auto& is: Dune::intersections(gv,cell)){
+        //         if(is.boundary()){
+        //             auto normal = is.centerUnitOuterNormal();
+        //             //for (const auto& vert: Dune::edges(gv,is)){
+        //             //}
+        //         }
+        //     }
+        // }
     }
 
 //   upscale.fixCorners(p.min, p.max);
@@ -307,18 +314,28 @@ int run(Params& p)
      }
 
     if (!p.vtufile.empty()) {
-      Dune::VTKWriter<typename GridType::LeafGridView> vtkwriter(grid.leafGridView());
-
-      //for (int i=0;i<6;++i) {
+        Dune::VTKWriter<typename GridType::LeafGridView> vtkwriter(grid.leafGridView());
+        
+        //for (int i=0;i<6;++i) {
         std::stringstream str;
-
+        
         str << "sol ";
         vtkwriter.addVertexData(field, str.str().c_str(), dim);
-        //vtkwriter.addVertexData(disp, "disp");
+        using Container = Dune::BlockVector<Dune::FieldVector<double,1>>;
+        using Function =  Dune::P1VTKFunctionVector<GridView, Container>;
+        //Dune::VTK::FieldInfo dispinfo("disp",Dune::VTK::FieldInfo::Type::vector,3);
+        Dune::VTK::Precision prec = Dune::VTK::Precision::float32;
+        std::string vtkname("disp");
+        Dune::VTKFunction<GridView>* fp = new Function(grid.leafGridView(),
+                                                       field,
+                                                       vtkname,
+                                                       3, 0, prec);
+        vtkwriter.addVertexData(std::shared_ptr< const Dune::VTKFunction<GridView> >(fp));
+        //vtkwriter.addVertexData(disp, dispinfo);
         vtkwriter.addCellData(pressforce, "pressforce");
         //vtkwriter.addVertexData(disp, stress);
         //}
-      vtkwriter.write(p.vtufile);
+        vtkwriter.write(p.vtufile);
     }
 
     if (!p.output.empty()){

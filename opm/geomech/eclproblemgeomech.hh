@@ -74,7 +74,13 @@ namespace Opm{
                 for (unsigned elemIdx = 0; elemIdx < numElems; ++elemIdx){
                     cartesianToCompressedElemIdx[vanguard.cartesianIndex(elemIdx)] = elemIdx;
                 }
-            
+                std::array<int, 3> cartdim = cartesianIndexMapper.cartesianDimensions();
+                if((bcface.i1 < 0) || (bcface.j1<0) || (bcface.k1<0)){
+                 throw std::logic_error("Lower range of BC wrong");
+                }
+                if( (bcface.i2 > cartdim[0]) || (bcface.j1> cartdim[1]) || (bcface.k1 > cartdim[2])){
+                    throw std::logic_error("Upper range of BC wrong");
+                }
                 for (const auto& bcface : bcconfig) {
                     const auto& type = bcface.bcmechtype;
                     if (type == BCMECHType::FREE) {
@@ -86,7 +92,7 @@ namespace Opm{
                                 for (int k = bcface.k1; k <= bcface.k2; ++k) {
                                     std::array<int, 3> tmp = {i,j,k};
                                     auto elemIdx = cartesianToCompressedElemIdx[vanguard.cartesianIndex(tmp)];
-                                    if (elemIdx>0){
+                                    if (elemIdx>-1){
                                         effected_cells.insert(elemIdx);
                                     }
                                 }
