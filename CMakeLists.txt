@@ -136,22 +136,24 @@ include(OpmBashCompletion)
 add_library(moduleVersionGeoMech OBJECT opm/simulators/utils/moduleVersion.cpp)
 set_property(TARGET moduleVersionGeoMech PROPERTY POSITION_INDEPENDENT_CODE ON)
 
+add_library(vem OBJECT opm/geomech/vem/vem.cpp)
+
 # Strictly we only depend on the update-version target,
 # but this is not exposed in a super-build.
 #add_dependencies(moduleVersion opmsimulators)
 set(CMAKE_PROJECT_NAME "${PROJECT_NAME}")
 add_custom_target(opm-flowgeomechanics_prepare)
 
-opm_add_test(flow_experimental
-  ONLY_COMPILE
-  ALWAYS_ENABLE
-  DEPENDS opmsimulators
-  LIBRARIES opmsimulators
-  SOURCES
-  examples/flow_experimental.cpp
-  $<TARGET_OBJECTS:moduleVersionGeoMech>
-)
-target_link_libraries(flow_blackoil_tracy Tracy::TracyClient)
+# opm_add_test(flow_experimental
+#   ONLY_COMPILE
+#   ALWAYS_ENABLE
+#   DEPENDS opmsimulators
+#   LIBRARIES opmsimulators
+#   SOURCES
+#   examples/flow_experimental.cpp
+#   $<TARGET_OBJECTS:moduleVersionGeoMech>
+# )
+# target_link_libraries(flow_blackoil_tracy Tracy::TracyClient)
 
 opm_add_test(flow_geomech
   ONLY_COMPILE
@@ -186,16 +188,38 @@ opm_add_test(test_grid
 )
 target_link_libraries(test_grid Tracy::TracyClient)
 
-opm_add_test(testpdelab
-  ONLY_COMPILE
-  ALWAYS_ENABLE
-  DEPENDS opmsimulators opmupscaling
-  LIBRARIES opmsimulators opmupscaling
-  SOURCES
-  examples/testpdelab.cc
-  $<TARGET_OBJECTS:moduleVersionGeoMech>
+opm_add_test(test_vem_elements
+	ONLY_COMPILE
+	ALWAYS_ENABLE
+	DEPENDS opmsimulators opmupscaling
+	LIBRARIES opmsimulators opmupscaling vem
+	SOURCES
+	examples/test_vem_elements.cpp
+	$<TARGET_OBJECTS:moduleVersionGeoMech>
 )
-target_link_libraries(testpdelab Tracy::TracyClient)
+target_link_libraries(test_vem_elements Tracy::TracyClient)
+
+opm_add_test(test_vem_assembly
+	ONLY_COMPILE
+	ALWAYS_ENABLE
+	DEPENDS opmsimulators opmupscaling
+	LIBRARIES opmsimulators opmupscaling vem
+	SOURCES
+	examples/test_vem_assembly.cpp
+	$<TARGET_OBJECTS:moduleVersionGeoMech>
+)
+target_link_libraries(test_vem_assembly Tracy::TracyClient)
+
+# opm_add_test(testpdelab
+#   ONLY_COMPILE
+#   ALWAYS_ENABLE
+#   DEPENDS opmsimulators opmupscaling
+#   LIBRARIES opmsimulators opmupscaling
+#   SOURCES
+#   examples/testpdelab.cc
+#   $<TARGET_OBJECTS:moduleVersionGeoMech>
+# )
+# target_link_libraries(testpdelab Tracy::TracyClient)
 
 
 

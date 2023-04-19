@@ -688,7 +688,7 @@ reduce_system(vector<tuple<int, int, double>>& A,
     // sort entries of A into columns
     cout << "Reducing system: moving elements to right hand side" << endl;
 
-    sort(A.begin(), A.end(), [](const auto& a, const auto& b) { return get<1>(a) < get<1>(b); });
+    sort(A.begin(), A.end(), [](const auto& a1, const auto& a2) { return get<1>(a1) < get<1>(a2); });
 
     // eliminate columns associated with fixed dofs (move value to b)
     auto cur_end = A.begin();
@@ -1364,17 +1364,18 @@ assemble_stiffness_matrix_3D(const double* const points,
 
 // ----------------------------------------------------------------------------
 void
-matprint(const double* data, const int r, const int c, bool transposed)
+matprint(const double* data, const int r, const int c, bool transposed, const double zthreshold)
 // ----------------------------------------------------------------------------
 {
     const pair<int, int> dim = transposed ? make_pair(c, r) : make_pair(r, c);
     const pair<int, int> stride = transposed ? make_pair(1, c) : make_pair(c, 1);
 
     for (int i = 0; i != dim.first; ++i)
-        for (int j = 0; j != dim.second; ++j)
-            cout << setw(12) << ((data[i * stride.first + j * stride.second] == 0) ? fixed : scientific)
-                 << ((data[i * stride.first + j * stride.second] == 0) ? setprecision(0) : setprecision(2))
-                 << data[i * stride.first + j * stride.second] << (j == dim.second - 1 ? "\n" : "");
+      for (int j = 0; j != dim.second; ++j)
+        cout << setw(12) << ((abs(data[i * stride.first + j * stride.second]) <= zthreshold) ? fixed : scientific)
+             << ((abs(data[i * stride.first + j * stride.second]) <= zthreshold) ? setprecision(0) : setprecision(2))
+             << (abs(data[i * stride.first + j * stride.second]) <= zthreshold ? 0 : data[i * stride.first + j * stride.second])
+             << (j == dim.second - 1 ? "\n" : "");
 }
 
 
@@ -1387,7 +1388,7 @@ sparse2full(const vector<tuple<int, int, double>>& nz, const int r, const int c)
     for (auto it = nz.begin(); it != nz.end(); ++it) {
         const int ix = get<0>(*it) * r + get<1>(*it);
         assert(ix < int(result.size()));
-        result[ix] = get<2>(*it);
+        result[ix] += get<2>(*it);
     }
     return result;
 }

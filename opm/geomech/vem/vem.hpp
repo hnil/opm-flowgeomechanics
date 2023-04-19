@@ -395,7 +395,8 @@ std::vector<double> pick_points_3D(const double* pts, const int* const p_ixs, in
 // @param r The number of rows in the matrix.
 // @param c The number of columns in the matrix.
 // @param transposed If true, the matrix is printed transposed.
-void matprint(const double* data, const int r, const int c, bool transposed);
+// @param ztreshold Values with absolute magnitude less than this value, will be rounded to zero
+void matprint(const double* data, const int r, const int c, bool transposed, const double zthreshold=0);
 // -----------------------------------------------------------------------------------------------
 
 
