@@ -78,6 +78,7 @@ namespace Opm {
         using ElementContext = GetPropType<TypeTag, Properties::ElementContext>;
 
         using GridView = GetPropType<TypeTag, Properties::GridView>;
+        using Grid = GetPropType<TypeTag, Properties::Grid>;
         using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
 
         static constexpr int vtkFormat = getPropValue<TypeTag, Properties::VtkOutputFormat>();
@@ -85,6 +86,8 @@ namespace Opm {
 
 
         using ScalarBuffer = typename ParentType::ScalarBuffer;
+        using VectorBuffer = typename ParentType::VectorBuffer;
+        using TensorBuffer = typename ParentType::TensorBuffer;
 
     public:
         VtkGeoMechModule(const Simulator& simulator)
@@ -112,6 +115,7 @@ namespace Opm {
                 const auto& geoMechModel = this->simulator_.problem().geoMechModel();
                 //pressDiff_.resize(geoMechModel.numCells);                
                 this->resizeScalarBuffer_(pressDiff_);
+                this->resizeVectorBuffer_(disp_,ParentType::BufferType::VertexBuffer);
             }
 
         }
@@ -130,6 +134,15 @@ namespace Opm {
                 unsigned globalDofIdx = elemCtx.globalSpaceIndex(dofIdx, /*timeIdx=*/0);
                 pressDiff_[globalDofIdx] = geoMechModel.pressureDiff(globalDofIdx); 
             }
+            // all vertices proably do it to many times for now
+            auto gv  = elemCtx.gridView();
+            auto elem = elemCtx.element();
+            static const int dim = 3;
+            for (const auto& vertex : Dune::subEntities(elem, Dune::Codim<dim>{})){
+                auto index = gv.indexSet().index(vertex);
+                disp_[index] = geoMechModel.displacement(index);
+            }
+            
         }
 
         /*!
@@ -143,9 +156,21 @@ namespace Opm {
 
             if (geoMechOutput_()){
                 const auto& geoMechModel = this->simulator_.problem().geoMechModel();
-                const std::string tmp = "pressureDiff"; 
-                this->commitScalarBuffer_(baseWriter,tmp.c_str(),
-                                          pressDiff_);
+                {
+                    const std::string tmp = "pressureDiff"; 
+                    this->commitScalarBuffer_(baseWriter,tmp.c_str(),
+                                              pressDiff_);
+                }
+                {
+                    const std::string tmp = "disp"; 
+                    this->commitVectorBuffer_(baseWriter,tmp.c_str(),
+                                              disp_, ParentType::BufferType::VertexBuffer);
+                }
+                // {
+                //     const std::string tmp = "stress"; 
+                //     this->commitVectorBuffer_(baseWriter,tmp.c_str(),
+                //                               stress_);
+                // }
             }
         }
 
@@ -159,6 +184,8 @@ namespace Opm {
             return val;
         }
         ScalarBuffer pressDiff_;
+        VectorBuffer disp_;
+        //TensorBuffer stress_;
     };
 } // namespace Opm
 

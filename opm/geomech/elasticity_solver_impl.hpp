@@ -431,7 +431,7 @@ IMPL_FUNC(void, solve())
     u.resize(rhs.size());
     u = 0;
     tsolver_->apply(u, rhs, r);
-    std::cout << "\tsolution norm: " << u.two_norm() << std::endl;
+    //std::cout << "\tsolution norm: " << u.two_norm() << std::endl;
   } catch (Dune::ISTLError& e) {
     std::cerr << "exception thrown " << e << std::endl;
   }
