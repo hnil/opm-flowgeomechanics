@@ -156,7 +156,31 @@ IMPL_FUNC(void, findBoundaries(double* min, double* max))
   }
 }
 
+IMPL_FUNC(void, fixNodes(const std::vector<size_t>& fixed_nodes))
+{
+  typedef typename GridType::LeafGridView::template Codim<dim>::Iterator VertexLeafIterator;
+  const VertexLeafIterator itend = gv.leafGridView().template end<dim>();
 
+  // make a mapper for codim 0 entities in the leaf grid 
+  using LeafGridView = Dune::GridView<Dune::DefaultLeafGridViewTraits<GridType>>;
+  Dune::MultipleCodimMultipleGeomTypeMapper<LeafGridView> mapper(gv.leafGridView(), Dune::mcmgVertexLayout());
+
+  NodeValue zerovec;
+  zerovec = 0.0;
+  // iterate over vertices
+  for (VertexLeafIterator it = gv.leafGridView().template begin<dim>(); it != itend; ++it) {
+      int indexi = mapper.index(*it);
+      assert(indexi == gv.leafGridView().indexSet().index(it));
+      bool exist = std::find(fixed_nodes.begin(), fixed_nodes.end(), indexi)
+          !=
+          fixed_nodes.end();
+      if(exist){
+          A.updateFixedNode(indexi,std::make_pair(XYZ,zerovec));
+      }
+  }
+}
+
+    
 IMPL_FUNC(void, fixPoint(Direction dir,
                          GlobalCoordinate coord,
                          const NodeValue& value))
@@ -407,7 +431,7 @@ IMPL_FUNC(void, solve())
     u.resize(rhs.size());
     u = 0;
     tsolver_->apply(u, rhs, r);
-    std::cout << "\tsolution norm: " << u.two_norm() << std::endl;
+    //std::cout << "\tsolution norm: " << u.two_norm() << std::endl;
   } catch (Dune::ISTLError& e) {
     std::cerr << "exception thrown " << e << std::endl;
   }

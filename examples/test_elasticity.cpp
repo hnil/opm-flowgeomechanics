@@ -32,7 +32,8 @@
 #include <opm/input/eclipse/EclipseState/Grid/EclipseGrid.hpp>
 #include <opm/input/eclipse/EclipseState/EclipseState.hpp>
 #include <opm/input/eclipse/Parser/Parser.hpp>
-
+#include <opm/input/eclipse/EclipseState/SimulationConfig/BCMECHConfig.hpp>
+#include <opm/input/eclipse/EclipseState/SimulationConfig/BCConfig.hpp>
 #include <opm/common/utility/platform_dependent/reenable_warnings.h>
 
 #include <opm/grid/utility/StopWatch.hpp>
@@ -44,9 +45,9 @@
 
 #include <cstring>
 #include <iostream>
-
+#include "vectorfunctions.hh"
 #include <unistd.h>
-
+#include <opm/geomech/boundaryutils.hh>
 using namespace Opm::Elasticity;
 
 
@@ -87,7 +88,7 @@ void parseCommandLine(int argc, char** argv, Params& p)
   p.ctol     = param.getDefault<double>("ctol",1.e-6);
   p.Emin     = param.getDefault<double>("Emin",1);
   p.file     = param.get<std::string>("gridfilename");
-  p.vtufile  = param.getDefault<std::string>("vtufilename","");
+  p.vtufile  = param.getDefault<std::string>("vtufilename","test_elast");
   p.resultfilename  = param.getDefault<std::string>("resultfilename","");
   p.output   = param.getDefault<std::string>("output","");
   p.verbose  = param.getDefault<bool>("verbose",false);
@@ -97,6 +98,9 @@ void parseCommandLine(int argc, char** argv, Params& p)
     p.vtufile = p.vtufile.substr(0,i);
   }
 }
+
+
+
 
 //! \brief Write a log of the simulation to a text file
 void writeOutput(const Params& p, Opm::time::StopWatch& watch, int cells)
@@ -140,11 +144,13 @@ int run(Params& p)
     watch.start();
 
     GridType grid;
+    using GridView = Dune::GridView<Dune::DefaultLeafGridViewTraits<GridType>>;
     Opm::Parser parser;
     auto deck = parser.parseFile(p.file);
     Opm::EclipseGrid inputGrid(deck);
     grid.processEclipseFormat(&inputGrid, nullptr, false);
-
+    using CartesianIndexMapper = Dune::CartesianIndexMapper<Dune::CpGrid>;
+    CartesianIndexMapper cartesianIndexMapper(grid);
     ElasticitySolver<GridType> esolver(grid, p.ctol, p.Emin, p.verbose);
     std::vector<std::shared_ptr<Opm::Elasticity::Material>> materials;
     Opm::EclipseState eclState(deck);
@@ -161,6 +167,19 @@ int run(Params& p)
         materials.push_back(std::make_shared<IsoMat>(i,ymodule[i],pratio[i]));
     }    
     esolver.setMaterial(materials);
+    std::vector<size_t> fixed_nodes;
+    const auto& bcconfig = eclState.getSimulationConfig().bcconfig();
+    const auto& gv = grid.leafGridView();
+    Opm::Elasticity::fixNodesAtBoundary(fixed_nodes,
+                                        bcconfig,
+                                        gv,
+                                        cartesianIndexMapper
+        );
+    
+    std::cout << "Effected nodes" << std::endl;
+    for(int i:fixed_nodes){
+        std::cout << i << std::endl;
+    }
     
     std::cout << "logical dimension: " << grid.logicalCartesianSize()[0]
               << "x"                   << grid.logicalCartesianSize()[1]
@@ -177,7 +196,7 @@ int run(Params& p)
     Dune::loadMatrixMarket(pressforce,"pressforce.mtx");
 
     {
-        auto gv = grid.leafGridView();
+        //auto gv = grid.leafGridView();
         // using LeafGridView = Dune::GridView<Dune::DefaultLeafGridViewTraits<GridType>>;
         // Dune::MultipleCodimMultipleGeomTypeMapper<LeafGridView> mapper(gv.leafGridView(), Dune::mcmgVertexLayout());        
         // for(const auto& vert : Dune::vertices(gv,Dune::Partitions::border)){
@@ -186,29 +205,31 @@ int run(Params& p)
         //     value = 0;
         //     esolver.A.updateFixedNode(indexi,std::make_pair(Opm::Elasticity::XYZ,value));
         // }
-        for (const auto& cell: Dune::elements(gv)){
-            for (const auto& is: Dune::intersections(gv,cell)){
-                if(is.boundary()){
-                    auto normal = is.centerUnitOuterNormal();
-                    //for (const auto& vert: Dune::edges(gv,is)){
-                    //}
-                }
-            }
-        }
+        // for (const auto& cell: Dune::elements(gv)){
+        //     for (const auto& is: Dune::intersections(gv,cell)){
+        //         if(is.boundary()){
+        //             auto normal = is.centerUnitOuterNormal();
+        //             //for (const auto& vert: Dune::edges(gv,is)){
+        //             //}
+        //         }
+        //     }
+        // }
     }
 
 //   upscale.fixCorners(p.min, p.max);
     bool do_matrix = true;//assemble matrix
     bool do_vector = true;//assemble matrix
+    esolver.fixNodes(fixed_nodes); 
     esolver.A.initForAssembly();
     esolver.assemble(pressforce, do_matrix, do_vector);
     Opm::PropertyTree prm("mechsolver.json");
     esolver.setupSolver(prm);
 
 
-     esolver.A.printOperator();
-     esolver.A.printLoadVector();
+    //esolver.A.printOperator();
+    //esolver.A.printLoadVector();
      esolver.solve();
+     std::cout << "\tsolution norm: " << esolver.u.two_norm() << std::endl;
      Opm::Elasticity::Vector field;
      esolver.A.expandSolution(field,esolver.u);
      Dune::storeMatrixMarket(esolver.A.getOperator(), "A.mtx");
@@ -225,18 +246,28 @@ int run(Params& p)
      }
 
     if (!p.vtufile.empty()) {
-      Dune::VTKWriter<typename GridType::LeafGridView> vtkwriter(grid.leafGridView());
-
-      //for (int i=0;i<6;++i) {
+        Dune::VTKWriter<typename GridType::LeafGridView> vtkwriter(grid.leafGridView());
+        
+        //for (int i=0;i<6;++i) {
         std::stringstream str;
-
+        
         str << "sol ";
         vtkwriter.addVertexData(field, str.str().c_str(), dim);
-        //vtkwriter.addVertexData(disp, "disp");
+        using Container = Dune::BlockVector<Dune::FieldVector<double,1>>;
+        using Function =  Dune::P1VTKFunctionVector<GridView, Container>;
+        //Dune::VTK::FieldInfo dispinfo("disp",Dune::VTK::FieldInfo::Type::vector,3);
+        Dune::VTK::Precision prec = Dune::VTK::Precision::float32;
+        std::string vtkname("disp");
+        Dune::VTKFunction<GridView>* fp = new Function(grid.leafGridView(),
+                                                       field,
+                                                       vtkname,
+                                                       3, 0, prec);
+        vtkwriter.addVertexData(std::shared_ptr< const Dune::VTKFunction<GridView> >(fp));
+        //vtkwriter.addVertexData(disp, dispinfo);
         vtkwriter.addCellData(pressforce, "pressforce");
         //vtkwriter.addVertexData(disp, stress);
         //}
-      vtkwriter.write(p.vtufile);
+        vtkwriter.write(p.vtufile);
     }
 
     if (!p.output.empty()){

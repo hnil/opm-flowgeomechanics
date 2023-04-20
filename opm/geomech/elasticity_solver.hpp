@@ -104,7 +104,7 @@ class ElasticitySolver
     //! \param[out] min The miminum coordinates of the grid
     //! \param[out] max The maximum coordinates of the grid
     void findBoundaries(double* min, double* max);
-
+    void fixNodes(const std::vector<size_t>& fixed_nodes);
     //! \brief Assemble (optionally) stiffness matrix A and load vector
     //! \param[in] loadcase The strain load case. Set to -1 to skip
     //! \param[in] matrix Whether or not to assemble the matrix

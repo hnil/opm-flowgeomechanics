@@ -2,6 +2,7 @@
 #define OPM_ECLPROBLEM_GEOMECH_HH
 #include "ebos/eclproblem.hh"
 #include "opm/geomech/vtkgeomechmodule.hh"
+#include "opm/geomech/boundaryutils.hh"
 #include <opm/material/densead/Evaluation.hpp>
 #include <opm/material/densead/Math.hpp>
 #include <opm/elasticity/material.hh>
@@ -18,6 +19,7 @@ namespace Opm{
         using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
         using Evaluation = GetPropType<TypeTag, Properties::Evaluation>;
         using GridView = GetPropType<TypeTag, Properties::GridView>;
+        using Grid = GetPropType<TypeTag, Properties::Grid>;
         enum { waterPhaseIdx = FluidSystem::waterPhaseIdx };
         enum { dim = GridView::dimension };
         enum { dimWorld = GridView::dimensionworld };
@@ -64,54 +66,15 @@ namespace Opm{
             //const auto& simulator = this->simulator();
             const auto& vanguard = simulator.vanguard();
             const auto& bcconfig = vanguard.eclState().getSimulationConfig().bcconfig();
-            if (bcconfig.size() > 0) {
-                //nonTrivialBoundaryConditions_ = true;
-
-                size_t numCartDof = vanguard.cartesianSize();
-                unsigned numElems = vanguard.gridView().size(/*codim=*/0);
-                std::vector<int> cartesianToCompressedElemIdx(numCartDof, -1);
-
-                for (unsigned elemIdx = 0; elemIdx < numElems; ++elemIdx){
-                    cartesianToCompressedElemIdx[vanguard.cartesianIndex(elemIdx)] = elemIdx;
-                }
-            
-                for (const auto& bcface : bcconfig) {
-                    const auto& type = bcface.bcmechtype;
-                    if (type == BCMECHType::FREE) {
-                        // do nothing
-                    }if (type == BCMECHType::FIXED) {
-                        std::set<size_t> effected_cells;
-                        for (int i = bcface.i1; i <= bcface.i2; ++i) {
-                            for (int j = bcface.j1; j <= bcface.j2; ++j) {
-                                for (int k = bcface.k1; k <= bcface.k2; ++k) {
-                                    std::array<int, 3> tmp = {i,j,k};
-                                    auto elemIdx = cartesianToCompressedElemIdx[vanguard.cartesianIndex(tmp)];
-                                    if (elemIdx>0){
-                                        effected_cells.insert(elemIdx);
-                                    }
-                                }
-                            }
-                        }
-                        const auto& gv = this->gridView();
-                        for(const auto& cell:elements(gv)){
-                            auto index = gv.indexSet().index(cell);
-                            auto it = effected_cells.find(index);
-                            if(!(it == effected_cells.end())){
-                                // fix all noted for now
-                                 for (const auto& vertex : Dune::subEntities(cell, Dune::Codim<dim>{})){
-                                     fixed_nodes_.push_back(gv.indexSet().index(vertex));
-                                 }
-                            }
-                        }                    
-                    } else {    
-                        throw std::logic_error("invalid type for BC. Use FREE or RATE");
-                    }
-                }
-            }
-            std::sort(fixed_nodes_.begin(), fixed_nodes_.end()); // {1 1 2 3 4 4 5}
-            auto last = std::unique(fixed_nodes_.begin(), fixed_nodes_.end());
-            // v now holds {1 2 3 4 5 x x}, where 'x' is indeterminate
-            fixed_nodes_.erase(last, fixed_nodes_.end());
+            //using CartesianIndexMapper = Dune::CartesianIndexMapper<Grid>;
+            const auto& gv = this->gridView();
+            //const auto& grid = simulator.grid();
+            const auto& cartesianIndexMapper = vanguard.cartesianIndexMapper();
+            //CartesianIndexMapper cartesianIndexMapper(grid);
+            Opm::Elasticity::fixNodesAtBoundary(fixed_nodes_,
+                                                bcconfig,
+                                                gv,
+                                                cartesianIndexMapper);
         }
         void initialSolutionApplied(){
             Parent::initialSolutionApplied();
@@ -151,7 +114,6 @@ namespace Opm{
             geomechModel_.endTimeStep();
         }
         
-
         const EclGeoMechModel<TypeTag>& geoMechModel() const
         { return geomechModel_; }
         
@@ -164,6 +126,10 @@ namespace Opm{
 
         double biotCoef(unsigned globalIdx) const{
             return biotcoef_[globalIdx];
+        }
+        
+        const std::vector<size_t>& fixedNodes() const{
+            return fixed_nodes_;
         }
     private:
         using GeomechModel = EclGeoMechModel<TypeTag>;

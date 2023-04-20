@@ -82,6 +82,9 @@ namespace Opm{
             if(first_solve_){
                 bool do_matrix = true;//assemble matrix
                 bool do_vector = true;//assemble matrix
+                // set boundary
+                elacticitysolver_.fixNodes(problem.fixedNodes()); 
+                //
                 elacticitysolver_.A.initForAssembly();
                 elacticitysolver_.assemble(pressDiff_, do_matrix, do_vector);
                 Opm::PropertyTree prm("mechsolver.json");
@@ -93,31 +96,41 @@ namespace Opm{
                 //elacticitysolver_.A.initForAssembly();
                 elacticitysolver_.assemble(pressDiff_, do_matrix, do_vector);
             }    
-            elacticitysolver_.A.printOperator();
-            elacticitysolver_.A.printLoadVector();
+            
             elacticitysolver_.solve();
             Opm::Elasticity::Vector field;
-            elacticitysolver_.A.expandSolution(field,elacticitysolver_.u);
+            elacticitysolver_.A.expandSolution(field,elacticitysolver_.u);            
+            //elacticitysolver_.A.printOperator();
+            //elacticitysolver_.A.printLoadVector();
             Dune::storeMatrixMarket(elacticitysolver_.A.getOperator(), "A.mtx");
             Dune::storeMatrixMarket(elacticitysolver_.A.getLoadVector(), "b.mtx");
             Dune::storeMatrixMarket(elacticitysolver_.u, "u.mtx");
             Dune::storeMatrixMarket(field, "field.mtx");
             Dune::storeMatrixMarket(pressDiff_, "pressforce.mtx");
-            //siz = A.getOperator().N();
-            //b.resize(siz);
+            // always make the full displacement field
+            int dim = 3;
+            const auto& gv = simulator_.vanguard().grid().leafGridView();
+            for (const auto& vertex : Dune::vertices(gv)){
+                auto index = gv.indexSet().index(vertex);
+                for(int k=0; k < dim; ++k){
+                    displacement_[index][k] = field[index*dim+k];
+                }
+            }
         }       
         template<class Serializer>
         void serializeOp(Serializer& serializer)
         {
             //serializer(tracerConcentration_);
             //serializer(wellTracerRate_);           
-        }
+         }
 
         // used in eclproblemgeomech
         void init(bool restart){
             std::cout << "Geomech init" << std::endl;
             size_t numDof = simulator_.model().numGridDof();
             pressDiff_.resize(numDof);
+            const auto& gv = simulator_.vanguard().grid().leafGridView();
+            displacement_.resize(gv.indexSet().size(3));                       
         };
         double pressureDiff(unsigned dofIx) const{
             return pressDiff_[dofIx];
@@ -125,13 +138,16 @@ namespace Opm{
         void setMaterial(const std::vector<std::shared_ptr<Opm::Elasticity::Material>>& materials){
             elacticitysolver_.setMaterial(materials);
         }
+        const Dune::FieldVector<double,3>& displacement(size_t vertexIndex) const{
+            return displacement_[vertexIndex];
+        }
     private:
         bool first_solve_;
         Simulator& simulator_;
         //std::vector<double> pressDiff_;
         Dune::BlockVector<Dune::FieldVector<double,1>> pressDiff_;
         //Dune::BlockVector<Dune::FieldVector<double,1> > solution_;
-        //Dune::BlockVector<Dune::FieldVector<double,3> > displacement_;
+        Dune::BlockVector<Dune::FieldVector<double,3> > displacement_;
         //Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1> > A_;
         //ElasticitySolver  elasticitysolver_;
         //using PC =  Opm::Elasticity::AMG;
