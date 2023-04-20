@@ -62,14 +62,14 @@ int main(int argc, char** argv)
 {
   Dune::MPIHelper::instance(argc,argv); // to prevent compiler from complaining about MPI ??
 
-  const double young_val   = (argc > 1)  ? atof(argv[1])    : 1.0;
-  const double poisson_val = (argc > 2)  ? atof(argv[2])    : 0.25;
-  const int xres           = (argc > 3)  ? atoi(argv[3])    : 3;
-  const int yres           = (argc > 4)  ? atoi(argv[4])    : 3;
-  const int zres           = (argc > 5)  ? atoi(argv[5])    : 3;
-  const double Lx          = (argc > 6)  ? atof(argv[6])    : 4.0;
-  const double Ly          = (argc > 7)  ? atof(argv[7])    : 4.0;
-  const double Lz          = (argc > 8)  ? atof(argv[8])    : 4.0;
+  const int xres           = (argc > 1)  ? atoi(argv[1])    : 3;
+  const int yres           = (argc > 2)  ? atoi(argv[2])    : 3;
+  const int zres           = (argc > 3)  ? atoi(argv[3])    : 3;
+  const double Lx          = (argc > 4)  ? atof(argv[4])    : 4.0;
+  const double Ly          = (argc > 5)  ? atof(argv[5])    : 4.0;
+  const double Lz          = (argc > 6)  ? atof(argv[6])    : 4.0;
+  const double poisson_val = (argc > 7)  ? atof(argv[7])    : 0.25;
+  const double young_val   = (argc > 8)  ? atof(argv[8])    : 1.0;
   const string bfcase      = (argc > 9)  ? string(argv[9])  : string("down");
   const string dircase     = (argc > 10) ? string(argv[10]) : string("fixed_bottom");
   
