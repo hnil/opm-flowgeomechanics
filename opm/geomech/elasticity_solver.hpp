@@ -120,6 +120,7 @@ class ElasticitySolver
     void findBoundaries(double* min, double* max);
     void initForAssembly(){A.initForAssembly();};
     void fixNodes(const std::vector<size_t>& fixed_nodes);
+    void expandSolution(Vector& result, const Vector& u){A.expandSolution(result,u);};
     //! \brief Assemble (optionally) stiffness matrix A and load vector
     //! \param[in] loadcase The strain load case. Set to -1 to skip
     //! \param[in] matrix Whether or not to assemble the matrix

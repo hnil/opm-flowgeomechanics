@@ -116,6 +116,22 @@ class VemElasticitySolver
 
         dirichlet_={num_fixed_dofs, fixed_dof_ixs, fixed_dof_values};
     }
+    void expandSolution(Vector& result, const Vector& u){
+        //vector<double> displacements_full(prob.points.size(), nan("1"));
+         // cout << prob.fixed_dof_ixs.size() << endl;
+        std::fill(result.begin(),result.end(),nan("1"));
+        const auto& fixed_dof_values = std::get<2>(dirichlet_);
+        const auto& fixed_dof_ixs = std::get<1>(dirichlet_);
+        //const auto& num_dof_dofs = std::get<0>(dirichlet_); 
+        for (int i = 0; i != int(fixed_dof_ixs.size()); ++i)
+             result[fixed_dof_ixs[i]] = fixed_dof_values[i];
+         
+         for (int i = 0, cur_ix = 0; i != int(result.size()); ++i){
+             if (isnan(result[i])) {
+                 result[i] = u[cur_ix++];
+             }
+         }
+    }
     //! \brief Assemble (optionally) stiffness matrix A and load vector
     //! \param[in] loadcase The strain load case. Set to -1 to skip
     //! \param[in] matrix Whether or not to assemble the matrix

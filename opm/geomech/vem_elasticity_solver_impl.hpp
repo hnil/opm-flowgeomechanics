@@ -107,8 +107,8 @@ IMPL_FUNC(void, assemble(const Vector& pressure, bool do_matrix, bool do_vector)
   // correct order of nodes in each face, to ensure they are mentioned in
   // clockwise or counterclockwise order. @@ This is a hack that might only work
   // for 4-faces!
-  for (int i = 0, j = 0; i != (int)num_face_corners.size(); j += num_face_corners[i++])
-    swap(face_corners[j], face_corners[j+1]);
+  // for (int i = 0, j = 0; i != (int)num_face_corners.size(); j += num_face_corners[i++])
+  //   swap(face_corners[j], face_corners[j+1]);
   
   // body force
 

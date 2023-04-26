@@ -641,6 +641,7 @@ compute_bodyforce_3D(const double* const points,
             const double vol2 = tetrahedron_volume(&t2[0], &t2[3], &t2[6], &centroid[0]);
             for (int d = 0; d != 3; ++d) {
                 b_global[3 * face_corners[fcorner_start + c] + d] += (vol1 + vol2) * bforce[d];
+                assert(!isnan(b_global[3 * face_corners[fcorner_start + c] + d]));
             }
         }
         fcorner_start += nfc;
