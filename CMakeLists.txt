@@ -170,7 +170,7 @@ opm_add_test(test_elasticity
   ONLY_COMPILE
   ALWAYS_ENABLE
   DEPENDS opmsimulators opmupscaling
-  LIBRARIES opmsimulators opmupscaling
+  LIBRARIES opmsimulators opmupscaling vem
   SOURCES
   examples/test_elasticity.cpp examples/FlexibleSolverMech.cpp
   $<TARGET_OBJECTS:moduleVersionGeoMech>

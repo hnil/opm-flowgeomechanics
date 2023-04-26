@@ -162,7 +162,7 @@ IMPL_FUNC(void, fixNodes(const std::vector<size_t>& fixed_nodes))
   const VertexLeafIterator itend = gv.leafGridView().template end<dim>();
 
   // make a mapper for codim 0 entities in the leaf grid 
-  using LeafGridView = Dune::GridView<Dune::DefaultLeafGridViewTraits<GridType>>;
+  using LeafGridView = typename GridType::LeafGridView;//Dune::GridView<Dune::DefaultLeafGridViewTraits<GridType>>;
   Dune::MultipleCodimMultipleGeomTypeMapper<LeafGridView> mapper(gv.leafGridView(), Dune::mcmgVertexLayout());
 
   NodeValue zerovec;
@@ -170,7 +170,7 @@ IMPL_FUNC(void, fixNodes(const std::vector<size_t>& fixed_nodes))
   // iterate over vertices
   for (VertexLeafIterator it = gv.leafGridView().template begin<dim>(); it != itend; ++it) {
       int indexi = mapper.index(*it);
-      assert(indexi == gv.leafGridView().indexSet().index(it));
+      //assert(indexi == gv.leafGridView().indexSet().index(it));
       bool exist = std::find(fixed_nodes.begin(), fixed_nodes.end(), indexi)
           !=
           fixed_nodes.end();
@@ -314,7 +314,7 @@ IMPL_FUNC(template<int comp> void,
 //   return delta.one_norm() < tol;
 // }
 
-    IMPL_FUNC(void, assemble(const Vector& pressure, bool matrix, bool vector))
+    IMPL_FUNC(void, assemble(const Vector& pressure, bool do_matrix, bool do_vector))
 {
   const int comp = 3+(dim-2)*3;
   static const int bfunc = 4+(dim-2)*4;
@@ -324,12 +324,12 @@ IMPL_FUNC(template<int comp> void,
   Vector& b = A.getLoadVector();
   b = 0;
   A.getLoadVector() = 0;
-  if (matrix)
+  if (do_matrix)
     A.getOperator() = 0;
 
   
   for (int i=0;i<2;++i) {
-    if (color[1].size() && matrix)
+    if (color[1].size() && do_matrix)
       std::cout << "\tprocessing " << (i==0?"red ":"black ") << "elements" << std::endl;
 #pragma omp parallel for schedule(static)
     for (size_t j=0;j<color[i].size();++j) {
@@ -338,9 +338,9 @@ IMPL_FUNC(template<int comp> void,
       Dune::FieldMatrix<ctype,dim*bfunc,dim*bfunc>* KP=0;
       Dune::FieldVector<ctype,dim*bfunc> ES;
       Dune::FieldVector<ctype,dim*bfunc>* EP=0;
-      if (matrix)
+      if (do_matrix)
         KP = &K;
-      if (vector)
+      if (do_vector)
         EP = &ES;
 
       for (size_t k=0;k<color[i][j].size();++k) {
@@ -379,7 +379,7 @@ IMPL_FUNC(template<int comp> void,
           Dune::FieldMatrix<ctype,comp,dim*bfunc> lB;
           E.getBmatrix(lB,r->position(),jacInvTra);
 
-          if (matrix) {
+          if (do_matrix) {
             E.getStiffnessMatrix(Aq,lB,C,detJ*r->weight());
             K += Aq;
           }

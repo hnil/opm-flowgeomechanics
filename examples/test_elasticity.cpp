@@ -17,7 +17,10 @@
 
 #include <dune/common/exceptions.hh> // We use exceptions
 #include <dune/common/version.hh>
+#include <dune/grid/utility/structuredgridfactory.hh>
 #include <dune/grid/io/file/vtk/vtkwriter.hh>
+//#include <dune/grid/io/file/vtk/subsampleingvtkwriter.hh>
+
 #include <dune/istl/matrixmarket.hh>
 #include <dune/common/fmatrix.hh>
 
@@ -27,7 +30,7 @@
 
 #include <dune/common/version.hh>
 #include <dune/common/parallel/mpihelper.hh>
-
+#include <opm/grid/polyhedralgrid.hh>
 #include <opm/input/eclipse/Deck/Deck.hpp>
 #include <opm/input/eclipse/EclipseState/Grid/EclipseGrid.hpp>
 #include <opm/input/eclipse/EclipseState/EclipseState.hpp>
@@ -36,12 +39,15 @@
 #include <opm/input/eclipse/EclipseState/SimulationConfig/BCConfig.hpp>
 #include <opm/common/utility/platform_dependent/reenable_warnings.h>
 
+#include <dune/alugrid/grid.hh>
 #include <opm/grid/utility/StopWatch.hpp>
 #include <opm/common/utility/parameters/ParameterGroup.hpp>
 
 #include <opm/simulators/linalg/PropertyTree.hpp>
 #include <opm/geomech/elasticity_solver.hpp>
+#include <opm/geomech/vem_elasticity_solver.hpp>
 #include <opm/elasticity/matrixops.hpp>
+#include <dune/alugrid/common/fromtogridfactory.hh>
 
 #include <cstring>
 #include <iostream>
@@ -132,28 +138,72 @@ void writeOutput(const Params& p, Opm::time::StopWatch& watch, int cells)
   
   f << "#" << std::endl;
 }
+using PolyGrid = Dune::PolyhedralGrid<3, 3>;
+using AluGrid3D = Dune::ALUGrid<3, 3, Dune::cube, Dune::nonconforming >;
+
+void createGrids(std::unique_ptr<PolyGrid>& grid ,const Opm::EclipseState& eclState,std::vector<unsigned int>& /*ordering*/)
+{
+    grid  = std::make_unique<PolyGrid>(eclState.getInputGrid(), eclState.fieldProps().porv(true));
+}
+
+void createGrids(std::unique_ptr<Dune::CpGrid>& grid ,const Opm::EclipseState& eclState,std::vector<unsigned int>& /*ordering*/){
+    grid = std::make_unique<Dune::CpGrid>();
+    std::vector<std::size_t>  nums = grid->processEclipseFormat(&eclState.getInputGrid(), nullptr, false);
+}
+
+void createGrids(std::unique_ptr<AluGrid3D>& grid ,Opm::EclipseState& eclState,std::vector<unsigned int>& ordering){
+    Dune::CpGrid cpgrid;
+    const auto& input_grid = eclState.getInputGrid();
+    const auto& global_porv = eclState.fieldProps().porv(true);
+    cpgrid.processEclipseFormat(&input_grid,
+                                &eclState,
+                                /*isPeriodic=*/false,
+                                /*flipNormals=*/false,
+                                /*clipZ=*/false);
+    
+    //auto  cartesianCellId = cpgrid.globalCell();
+    //std::vector<std::size_t>  nums = cpgrid.processEclipseFormat(eclState.getInputGrid(), nullptr, false);
+    Dune::FromToGridFactory<AluGrid3D> factory;
+    //std::vector<unsigned int> ordering;
+    auto cartesianCellIndx = cpgrid.globalCell();
+    grid = factory.convert(cpgrid, cartesianCellIndx, ordering);
+}
+
 
 //! \brief Main solution loop. Allows templating over the AMG type
 template<class GridType>
 int run(Params& p)
 {
+    
+    using ElasticitySolverType = Opm::Elasticity::VemElasticitySolver<GridType>;
+    //using ElasticitySolverType = Opm::Elasticity::ElasticitySolver<GridType>;
   try {
-    static const int dim = 3;
+    static constexpr int dim = GridType::dimension;
+    //static constexpr int dimensionworld = GridType::dimensionworld;  
+    //static const int dim = 3;
 
     Opm::time::StopWatch watch;
     watch.start();
-
-    GridType grid;
-    using GridView = Dune::GridView<Dune::DefaultLeafGridViewTraits<GridType>>;
+    
+    
+    std::unique_ptr<GridType> grid_ptr;
+    using GridView = typename GridType::LeafGridView;//Dune::GridView<Dune::DefaultLeafGridViewTraits<GridType>>;
     Opm::Parser parser;
+    // process grid
     auto deck = parser.parseFile(p.file);
+    Opm::EclipseState eclState(deck);    
     Opm::EclipseGrid inputGrid(deck);
-    grid.processEclipseFormat(&inputGrid, nullptr, false);
-    using CartesianIndexMapper = Dune::CartesianIndexMapper<Dune::CpGrid>;
-    CartesianIndexMapper cartesianIndexMapper(grid);
-    ElasticitySolver<GridType> esolver(grid, p.ctol, p.Emin, p.verbose);
+    // create grids depeing on grid type
+    std::vector<unsigned int> ordering;
+    createGrids(grid_ptr, eclState, ordering);
+    const GridType& grid = *grid_ptr;
+    Dune::CpGrid cpGrid;
+    std::vector<std::size_t>  nums = cpGrid.processEclipseFormat(&eclState.getInputGrid(), nullptr, false);
+    using CartesianIndexMapper = Dune::CartesianIndexMapper<Dune::CpGrid>;//maybe wrong
+    CartesianIndexMapper cartesianIndexMapper(cpGrid);
+    ElasticitySolverType esolver(grid);// p.ctol, p.Emin, p.verbose);
     std::vector<std::shared_ptr<Opm::Elasticity::Material>> materials;
-    Opm::EclipseState eclState(deck);
+    
     //const auto& initconfig = eclState.getInitConfig();
     const auto& fp = eclState.fieldProps();            
     std::vector<double> ymodule = fp.get_double("YMODULE");
@@ -166,7 +216,8 @@ int run(Params& p)
         }
         materials.push_back(std::make_shared<IsoMat>(i,ymodule[i],pratio[i]));
     }    
-    esolver.setMaterial(materials);
+    //esolver.setMaterial(materials);
+    esolver.setMaterial(ymodule,pratio);
     std::vector<size_t> fixed_nodes;
     const auto& bcconfig = eclState.getSimulationConfig().bcconfig();
     const auto& gv = grid.leafGridView();
@@ -181,10 +232,10 @@ int run(Params& p)
         std::cout << i << std::endl;
     }
     
-    std::cout << "logical dimension: " << grid.logicalCartesianSize()[0]
-              << "x"                   << grid.logicalCartesianSize()[1]
-              << "x"                   << grid.logicalCartesianSize()[2]
-              << std::endl;
+    // std::cout << "logical dimension: " << grid.logicalCartesianSize()[0]
+    //           << "x"                   << grid.logicalCartesianSize()[1]
+    //           << "x"                   << grid.logicalCartesianSize()[2]
+    //           << std::endl;
 
     if (p.inspect == "mesh")
       return 0;
@@ -195,39 +246,16 @@ int run(Params& p)
     pressforce = 1.0;
     Dune::loadMatrixMarket(pressforce,"pressforce.mtx");
 
-    {
-        //auto gv = grid.leafGridView();
-        // using LeafGridView = Dune::GridView<Dune::DefaultLeafGridViewTraits<GridType>>;
-        // Dune::MultipleCodimMultipleGeomTypeMapper<LeafGridView> mapper(gv.leafGridView(), Dune::mcmgVertexLayout());        
-        // for(const auto& vert : Dune::vertices(gv,Dune::Partitions::border)){
-        //     int indexi = 0 ;//mapper.index(vert);
-        //     Dune::FieldVector<double,3> value;
-        //     value = 0;
-        //     esolver.A.updateFixedNode(indexi,std::make_pair(Opm::Elasticity::XYZ,value));
-        // }
-        // for (const auto& cell: Dune::elements(gv)){
-        //     for (const auto& is: Dune::intersections(gv,cell)){
-        //         if(is.boundary()){
-        //             auto normal = is.centerUnitOuterNormal();
-        //             //for (const auto& vert: Dune::edges(gv,is)){
-        //             //}
-        //         }
-        //     }
-        // }
-    }
-
-//   upscale.fixCorners(p.min, p.max);
     bool do_matrix = true;//assemble matrix
     bool do_vector = true;//assemble matrix
-    esolver.fixNodes(fixed_nodes); 
-    esolver.A.initForAssembly();
+    esolver.fixNodes(fixed_nodes);
+    //esolver.fixNodesVem(fixed_nodes); 
+    esolver.initForAssembly();
     esolver.assemble(pressforce, do_matrix, do_vector);
     Opm::PropertyTree prm("mechsolver.json");
     esolver.setupSolver(prm);
 
 
-    //esolver.A.printOperator();
-    //esolver.A.printLoadVector();
      esolver.solve();
      std::cout << "\tsolution norm: " << esolver.u.two_norm() << std::endl;
      Opm::Elasticity::Vector field;
@@ -246,7 +274,7 @@ int run(Params& p)
      }
 
     if (!p.vtufile.empty()) {
-        Dune::VTKWriter<typename GridType::LeafGridView> vtkwriter(grid.leafGridView());
+        Dune::VTKWriter<typename GridType::LeafGridView> vtkwriter(grid.leafGridView(), Dune::VTK::nonconforming);
         
         //for (int i=0;i<6;++i) {
         std::stringstream str;
@@ -254,15 +282,15 @@ int run(Params& p)
         str << "sol ";
         vtkwriter.addVertexData(field, str.str().c_str(), dim);
         using Container = Dune::BlockVector<Dune::FieldVector<double,1>>;
-        using Function =  Dune::P1VTKFunctionVector<GridView, Container>;
+        using Function =  Dune::P1VTKFunctionVector<typename GridType::LeafGridView, Container>;
         //Dune::VTK::FieldInfo dispinfo("disp",Dune::VTK::FieldInfo::Type::vector,3);
         Dune::VTK::Precision prec = Dune::VTK::Precision::float32;
         std::string vtkname("disp");
-        Dune::VTKFunction<GridView>* fp = new Function(grid.leafGridView(),
+        Dune::VTKFunction<typename GridType::LeafGridView>* fp = new Function(grid.leafGridView(),
                                                        field,
                                                        vtkname,
                                                        3, 0, prec);
-        vtkwriter.addVertexData(std::shared_ptr< const Dune::VTKFunction<GridView> >(fp));
+        vtkwriter.addVertexData(std::shared_ptr< const Dune::VTKFunction<typename GridType::LeafGridView> >(fp));
         //vtkwriter.addVertexData(disp, dispinfo);
         vtkwriter.addCellData(pressforce, "pressforce");
         //vtkwriter.addVertexData(disp, stress);
@@ -306,7 +334,16 @@ try
 
     Params p;
     parseCommandLine(argc,argv,p);
-    return run<Dune::CpGrid>(p);
+    static const int dim = 3;
+    //using GridType = Dune::ALUGrid<dim, dim, Dune::cube, Dune::nonconforming >;
+    //using GridType = Dune::CpGrid;
+    //using GridType = AluGrid3D;
+    //using GridType = PolyGrid;
+    int ok;
+    //ok = run<AluGrid3D>(p);
+    ok = run<PolyGrid>(p);
+    //ok = run<Dune::CpGrid>(p);
+    return ok;
   } catch (Dune::Exception &e) {
       std::cerr << "Dune reported error: " << e << std::endl;
   } catch (const std::exception &e) {

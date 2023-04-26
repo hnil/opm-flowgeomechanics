@@ -79,8 +79,12 @@ struct VtkWriteMoleFractions<TypeTag, TTag::EclFlowProblemMech> {
 template<class TypeTag>
 struct EnableVtkOutput<TypeTag, TTag::EclFlowProblemMech> {
     static constexpr bool value = true;
-};    
+};
     
+template<class TypeTag>
+struct EnableOpmRstFile<TypeTag, TTag::EclFlowProblemMech> {
+    static constexpr bool value = true;
+};
     
 template<class TypeTag>
 struct ThreadsPerProcess<TypeTag, TTag::EclFlowProblemMech> {

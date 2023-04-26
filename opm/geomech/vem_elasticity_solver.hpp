@@ -9,8 +9,8 @@
 //! \brief Elasticity upscale class
 //!
 //==============================================================================
-#ifndef ELASTICITY_SOLVER_HPP_
-#define ELASTICITY_SOLVER_HPP_
+#ifndef VEM_ELASTICITY_SOLVER_HPP_
+#define VEM_ELASTICITY_SOLVER_HPP_
 
 
 #include <opm/common/utility/platform_dependent/disable_warnings.h>
@@ -52,7 +52,7 @@ namespace Elasticity {
 
 //! \brief The main driver class
 template<class GridType>
-class ElasticitySolver
+class VemElasticitySolver
 {
   public:
     //! \brief Dimension of our grid
@@ -89,15 +89,8 @@ class ElasticitySolver
     //! \param[in] file The eclipse grid file
     //! \param[in] rocklist If not blank, file is a rocklist
     //! \param[in] verbose If true, give verbose output
-    ElasticitySolver(const GridType& gv_)
-        :  A(gv_), gv(gv_), tol(1e-10), Escale(1.0), E(gv_), verbose(true),
-           color(gv_)
-    {
-    }
-    ElasticitySolver(const GridType& gv_, ctype tol_, ctype Escale_, 
-                     bool verbose_)
-        :  A(gv_), gv(gv_), tol(tol_), Escale(Escale_), E(gv_), verbose(verbose_),
-           color(gv_)
+    VemElasticitySolver(const GridType& grid)
+        : A(grid),grid_(grid)
     {
     }
     
@@ -105,26 +98,30 @@ class ElasticitySolver
         materials = materials_;
     }
     void setMaterial(const std::vector<double>& ymodule,const std::vector<double>& pratio){
-        materials.resize(0);
-        for(size_t i=0; i < ymodule.size(); ++i){
-            using IsoMat = Opm::Elasticity::Isotropic;
-            if(pratio[i]>0.5 || pratio[i] < 0){
-                OPM_THROW(std::runtime_error,"Pratio not valid");
-            }
-            materials.push_back(std::make_shared<IsoMat>(i,ymodule[i],pratio[i]));
-        }
+        ymodule_ = ymodule;
+        pratio_ = pratio;
     }
     //! \brief Find boundary coordinates
     //! \param[out] min The miminum coordinates of the grid
     //! \param[out] max The maximum coordinates of the grid
-    void findBoundaries(double* min, double* max);
-    void initForAssembly(){A.initForAssembly();};
-    void fixNodes(const std::vector<size_t>& fixed_nodes);
+    void initForAssembly(){}
+    void fixNodes(const std::vector<size_t>& fixed_nodes){
+        //void fixNodesVem(const std::vector<size_t>& fixed_nodes){
+        std::vector<int> fixed_dof_ixs;
+        for (int node = 0; node < int(fixed_nodes.size()); ++node){
+            fixed_dof_ixs.insert(fixed_dof_ixs.end(), {3*node, 3*node+1, 3*node+2});
+        }        
+        const int num_fixed_dofs = (int)fixed_dof_ixs.size();
+        const std::vector<double> fixed_dof_values(num_fixed_dofs, 0.0);
+
+        dirichlet_={num_fixed_dofs, fixed_dof_ixs, fixed_dof_values};
+    }
     //! \brief Assemble (optionally) stiffness matrix A and load vector
     //! \param[in] loadcase The strain load case. Set to -1 to skip
     //! \param[in] matrix Whether or not to assemble the matrix
     void assemble(const Vector& pressure, bool matrix,bool vector);
-    
+
+ 
     //! \brief Solve Au = b for u
     //! \param[in] loadcase The load case to solve
     void solve();
@@ -150,8 +147,8 @@ class ElasticitySolver
             auto sop = std::make_unique<SeqOperatorType>(A.getOperator());
             using FlexibleSolverType = Dune::FlexibleSolver<SeqOperatorType>;
             auto tsolver = std::make_unique<FlexibleSolverType>(*sop, prm,
-                                                           weightsCalculator,
-                                                           pressureIndex);
+                                                                weightsCalculator,
+                                                                pressureIndex);
             sop_ = std::move(sop);
             tsolver_ = std::move(tsolver);
             //NB names have to change.
@@ -167,91 +164,29 @@ class ElasticitySolver
     using AbstractPreconditionerType = Dune::PreconditionerWithUpdate<Vector, Vector>;
 
     using SeqOperatorType = Dune::MatrixAdapter<Matrix, Vector, Vector>;
-    //using AbstractPrecondType = Dune::PreconditionerWithUpdate<Vector, Vector>;
-    //std::unique_ptr<AbstractPrecondType> sop_;
     std::unique_ptr<SeqOperatorType> sop_;
 
         //! \brief Linear solver
     typedef std::unique_ptr<Dune::InverseOperator<Vector, Vector> > SolverPtr;
     SolverPtr tsolver_;
 
-    //! \brief Matrix adaptor for the elasticity block
-    //std::shared_ptr<Operator> op;
-
-    
     //! \brief An iterator over grid vertices
     typedef typename GridType::LeafGridView::template Codim<dim>::Iterator LeafVertexIterator;
 
     //! \brief A reference to our grid
-    const GridType& gv;
-
-    //! \brief Tolerance used to decide whether or not a coordinate falls on a plane/line/point.
-    ctype tol;
-
-    //! \brief Minimum E-modulus (scaling factor)
-    ctype Escale;
-
-    //! \brief Minimum real E for materials
-    ctype Emin;
+    const GridType& grid_;
 
     //! \brief Vector holding material parameters for each active grid cell
     std::vector< std::shared_ptr<Material> > materials;
+    std::vector<double> ymodule_;
+    std::vector<double> pratio_;
+    std::vector<double> body_force_;//= set_body_force(num_cells, bfcase);
+    std::tuple<int, std::vector<int>, std::vector<double>> dirichlet_; //set_dirichlet(coords, dircase);
 
-    //! \brief Extract the vertices on a given face
-    //! \param[in] dir The direction of the face normal
-    //! \param[in] coord The coordinate of the face plane
-    //! \returns A vector holding the matching vertices
-    std::vector<BoundaryGrid::Vertex> extractFace(Direction dir, ctype coord);
-
-    //! \brief An enumeration used to indicate which side to extract from a cube
-    enum SIDE {
-      LEFT,
-      RIGHT
-    };
-
-    //! \brief Extract a quad grid over a given face
-    //! \param[in] dir The direction of the face normal
-    //! \param[in] coord the coordinate of the face plance
-    //! \param[in] side Extract left or right side
-    //! \param[in] dc If true, order vertices in dune convention
-    //! \returns A quad grid spanning the face
-    BoundaryGrid extractMasterFace(Direction dir, ctype coord,
-                                   SIDE side=LEFT, bool dc=false);
-
-    //! \brief Find and establish master/slave grids (MPC)
-    //! \param[in] min The minimum coordinates of the grid
-    //! \param[in] max The maximum coordinates of the grid
-    void determineSideFaces(const double* min, const double* max);
-
-
-    //! \brief Fix the DOFs in a given point on the grid
-    //! \param[in] dir The coordinate direction to fix in
-    //! \param[in] coord The coordinates of the node to fix
-    //! \param[in] value The values to fix the given DOFs to
-    void fixPoint(Direction dir, GlobalCoordinate coord,
-                  const NodeValue& value = NodeValue(0));
-
-    //! \brief Fix the DOFs in a given line on the grid
-    //! \param[in] dir The coordinate direction to fix in
-    //! \param[in] x The first coordinate of the line
-    //! \param[in] y The second coordinate of the line
-    //! \param[in] value The values to fix the given DOFs to
-    void fixLine(Direction dir, ctype x, ctype y,
-                 const NodeValue& value = NodeValue(0));
-    
-
-    //! \brief Elasticity helper class
-    Elasticity<GridType> E;
-
-    //! \brief Verbose output
-    bool verbose;
-
-    //! \brief Mesh colorizer used with multithreaded assembly
-    MeshColorizer<GridType> color;
 };
 
 }} // namespace Opm, Elasticity
 
-#include "elasticity_solver_impl.hpp"
+#include "vem_elasticity_solver_impl.hpp"
 
 #endif
