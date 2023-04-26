@@ -217,6 +217,28 @@ void assemble_stiffness_matrix_3D(const double* const points,
 // -----------------------------------------------------------------------------------------------
 
 
+// -----------------------------------------------------------------------------------------------
+void field_gradient_3D(const double* const points,
+                       const int num_cells,
+                       const int* const num_cell_faces, // cell faces per cell
+                       const int* const num_face_corners, // corners per face
+                       const int* const face_corners,
+                       const double* const field,
+                       std::vector<double>& fgrad);
+// -----------------------------------------------------------------------------------------------
+
+
+// -----------------------------------------------------------------------------------------------
+void field_gradient_2D(const double* const points,
+                       const int num_cells,
+                       const int* const num_cell_faces,
+                       const int* const cell_corners,
+                       const double* const field,
+                       std::vector<double>& fgrad);
+// -----------------------------------------------------------------------------------------------  
+
+
+  
 // ============================================================================
 // ============ Various utility functions for geometry computations ===========
 // ============================================================================
@@ -395,8 +417,7 @@ std::vector<double> pick_points_3D(const double* pts, const int* const p_ixs, in
 // @param r The number of rows in the matrix.
 // @param c The number of columns in the matrix.
 // @param transposed If true, the matrix is printed transposed.
-// @param ztreshold Values with absolute magnitude less than this value, will be rounded to zero
-void matprint(const double* data, const int r, const int c, bool transposed, const double zthreshold=0);
+void matprint(const double* data, const int r, const int c, bool transposed);
 // -----------------------------------------------------------------------------------------------
 
 

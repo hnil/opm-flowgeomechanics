@@ -255,6 +255,8 @@ trinormal(const double* const c1, const double* const c2, const double* const c3
 // @param skip_if_tri If true and the face is already a triangle, returns the face
 //        unchanged. If false, still performs the computation to split the face
 //        into triangles.
+// @param centroid If a pointer that is not a nullpointer is given here, the
+//        3-component face centroid will be returned here
 // @return A vector of vectors, where each inner vector represents the coordinates
 //         of a triangle that together tessellate the face. Each inner vector has
 //         3*Dim values: the first Dim values are the coordinates of the centroid of
@@ -262,7 +264,8 @@ trinormal(const double* const c1, const double* const c2, const double* const c3
 //         corner points of the triangle.
 template <int Dim>
 vector<vector<double>>
-tessellate_face(const double* const corners, const int num_corners, bool skip_if_tri = true)
+tessellate_face(const double* const corners, const int num_corners,
+                bool skip_if_tri = true, double* centroid = nullptr)
 // ----------------------------------------------------------------------------
 {
     if (skip_if_tri && num_corners == 3)
@@ -272,6 +275,9 @@ tessellate_face(const double* const corners, const int num_corners, bool skip_if
     // compute face centroid
     const array<double, Dim> center = face_centroid<Dim>(corners, num_corners);
 
+    if (centroid != nullptr)
+      copy(center.begin(), center.end(), centroid);
+    
     vector<vector<double>> result;
     for (int c = 0; c != num_corners; ++c) {
         const int cnext = (c + 1) % num_corners;
@@ -312,34 +318,6 @@ tessellate_face(const vector<double>& corners, bool skip_if_tri = true)
 // ----------------------------------------------------------------------------
 {
   return tessellate_face<Dim>(&corners[0], corners.size() / Dim, skip_if_tri);
-}
-
-// ----------------------------------------------------------------------------
-array<double, 3>
-outward_normal_3D(const double* const corners, const int num_corners, const double* const centroid)
-// ----------------------------------------------------------------------------
-{
-    array<double, 3> result {0, 0, 0};
-    for (auto tri : tessellate_face<3>(corners, num_corners)) {
-        const auto tn = trinormal(&tri[0], &tri[3], &tri[6]);
-        for (int d = 0; d != 3; ++d)
-            result[d] += tn[d];
-    }
-
-    // normalize
-    const double n = norm<3>(&result[0]);
-    for (int d = 0; d != 3; ++d)
-        result[d] /= n;
-
-    // check direction
-    const auto fc = point_average<3>(corners, num_corners); // "face center"
-    const array<double, 3> v {fc[0] - centroid[0], fc[1] - centroid[1], fc[2] - centroid[2]};
-    const double scalprod = (result[0] * v[0]) + (result[1] * v[1]) + (result[2] * v[2]);
-    if (scalprod < 0)
-        // flip normal orientation
-        transform(result.begin(), result.end(), result.begin(), [](double d) { return -d; });
-
-    return result;
 }
 
 // ----------------------------------------------------------------------------
@@ -688,7 +666,7 @@ reduce_system(vector<tuple<int, int, double>>& A,
     // sort entries of A into columns
     cout << "Reducing system: moving elements to right hand side" << endl;
 
-    sort(A.begin(), A.end(), [](const auto& a1, const auto& a2) { return get<1>(a1) < get<1>(a2); });
+    sort(A.begin(), A.end(), [](const auto& a, const auto& b) { return get<1>(a) < get<1>(b); });
 
     // eliminate columns associated with fixed dofs (move value to b)
     auto cur_end = A.begin();
@@ -742,7 +720,7 @@ reduce_system(vector<tuple<int, int, double>>& A,
 // Write this local indexing into the `indexing` output argument, and return a
 // map from global to local indexing.
 map<int, int>
-local_to_global_indexing(const int* const faces,
+global_to_local_indexing(const int* const faces,
                          const int* const num_face_edges,
                          const int num_faces,
                          vector<int>& indexing)
@@ -803,8 +781,6 @@ compute_q_2D(const double* const corners, const int num_corners)
 // over element faces in 3D.  These are used as intermediary values when
 // assembling the 2D stiffness matrix for a given element.  See (Gain, 2014)
 // DOI:10.1016/j.cma.2014.05.005
-// Also computes the centroid of the element, which will be returned in the
-// output argument `centroid`.
 vector<double>
 compute_q_3D(const double* const corners,
              const int num_corners,
@@ -812,11 +788,9 @@ compute_q_3D(const double* const corners,
              const int* const num_face_edges,
              const int num_faces,
              const double volume,
-             array<double, 3>& centroid)
+             const vector<double>& outward_normals)
 // ----------------------------------------------------------------------------
 {
-    centroid = centroid_3D(corners, num_corners, faces, num_face_edges, num_faces);
-
     vector<double> result(num_corners * 3, 0); // the vector of q
 
     // common factor outside the integral: 1 / (2 |E|)
@@ -826,7 +800,7 @@ compute_q_3D(const double* const corners,
     int cur_vertex_ix = 0;
     for (int f = 0; f != num_faces; ++f) {
         const auto facecorners = pick_points<3>(corners, &faces[cur_vertex_ix], num_face_edges[f]);
-        const auto normal = outward_normal_3D(&facecorners[0], num_face_edges[f], &centroid[0]);
+        const double* const normal = &outward_normals[3*f];
         vector<double> cvals(num_face_edges[f], 0);
         for (int e = 0; e != num_face_edges[f]; ++e, ++cur_vertex_ix) {
             fill(cvals.begin(), cvals.end(), 0);
@@ -1119,6 +1093,245 @@ compute_ImP(const vector<double>& Nr,
     return result;
 }
 
+// ----------------------------------------------------------------------------
+bool is_behind_face(const array<double, 3>& point,
+                    const double* const face_normal,
+                    const double* const face_centroid)
+// ----------------------------------------------------------------------------  
+{
+  const double tol = 1e-13; 
+  const array<double, 3> v {face_centroid[0] - point[0],
+                            face_centroid[1] - point[1],
+                            face_centroid[2] - point[2]};
+  return (v[0] * face_normal[0] +
+          v[1] * face_normal[1] +
+          v[2] * face_normal[2]) + tol > 0;
+}
+
+
+// ----------------------------------------------------------------------------
+bool is_star_point(const array<double, 3>& point,
+                   const vector<double>& face_normals,
+                   const vector<double>& face_centroids)
+// ----------------------------------------------------------------------------
+{
+  const int N = (int)face_normals.size() / 3;
+  for (int i = 0; i != N; ++i)
+    if (!is_behind_face(point, &face_normals[3*i], &face_centroids[3*i]))
+      return false;
+  return true;
+}
+
+// ----------------------------------------------------------------------------
+// NB, the face normals must be _unit_ normals (not scaled by face area)
+// in order for this algorithm to work as intended.
+//
+// @@ NB: The algorithm assumes planar faces, which is not always guaranteed in
+// reality.  If it proves that the obtained star point creates inconsistencies
+// in some settings, one might have to tessellate the faces into planar triangles first
+array<double, 3> identify_star_point(const array<double, 3>& point,
+                                     const vector<double>& face_normals,
+                                     const vector<double>& face_centroids)
+// ----------------------------------------------------------------------------  
+{
+  const int N = (int)face_normals.size() / 3;
+  const int max_iter = 20 * N; // presumably enough for most realistic cases?
+
+  array<double, 3> result(point);
+  int count = 0;
+  for (int i = 0; i != max_iter; ++i) {
+    const int f_ix = i % N;
+    if (!is_behind_face(result, &face_normals[3 * f_ix], &face_centroids[3 * f_ix])) {
+      count = 0;
+      // projecting the point onto the plane defined by the normal and the centroid
+      const double proj = (result[0] - face_centroids[3*f_ix])   * face_normals[3*f_ix] +
+                          (result[1] - face_centroids[3*f_ix+1]) * face_normals[3*f_ix+1] +
+                          (result[2] - face_centroids[3*f_ix+2]) * face_normals[3*f_ix+2];
+      for (int i = 0; i != 3; ++i)
+        result[i] -= proj * face_normals[3*f_ix+i];
+    }
+    if (++count == N)
+      break;
+  }
+  if (count != N)
+      throw runtime_error("Unable to find a star point for cell.");
+  return result;
+}
+
+// ----------------------------------------------------------------------------
+void compute_face_geometry(const vector<double>& points, double* normal, double* centroid)
+// ----------------------------------------------------------------------------
+{
+  // compute tessellation and face centroid
+  const auto face_tessellation = tessellate_face<3>(&points[0],
+                                                    (int)points.size()/3, false, centroid);
+
+  // compute (normalized) face normal
+  fill(normal, normal+3, 0);
+    
+  for (auto tri : face_tessellation) {
+    const auto tn = trinormal(&tri[0], &tri[3], &tri[6]);
+    for (int d = 0; d != 3; ++d)
+      normal[d] += tn[d];
+  }
+  
+  // normalize
+  const double n = norm<3>(&normal[0]);
+  for (int d = 0; d != 3; ++d)
+    normal[d] /= n;
+}
+
+// ----------------------------------------------------------------------------
+vector<int> consistent_face_ordering(const int* const faces,
+                                     const int* const num_face_edges,
+                                     const int num_faces)
+// ----------------------------------------------------------------------------
+{
+  vector<int> result(faces, faces + accumulate(num_face_edges, num_face_edges + num_faces, 0));
+  vector<int> sorted_facenodes(result); // we need to sort the facenodes for quicker set operations
+  for (int f = 0, fpos=0; f != num_faces; fpos += num_face_edges[f++])
+    sort(&sorted_facenodes[fpos], &sorted_facenodes[fpos] + num_face_edges[f]);
+  vector<int*> face_ptrs(1, &result[0]);
+  vector<int*> sorted_fnode_ptrs(1, &sorted_facenodes[0]);
+  for (int i = 1; i != num_faces; ++i) {
+    face_ptrs.push_back(face_ptrs[i-1] + num_face_edges[i-1]);
+    sorted_fnode_ptrs.push_back(sorted_fnode_ptrs[i-1] + num_face_edges[i-1]);
+  }
+  vector<int> ordered(num_faces, false), completed(num_faces, false);
+  ordered[0] = true;
+
+  while (!all_of(ordered.begin(), ordered.end(), [](auto x){return x;})) {
+    // identfying the reference face to use this time
+    int ref_face = -1;
+    for (ref_face = 0; ref_face != num_faces; ++ref_face)
+      if (ordered[ref_face] && !completed[ref_face])
+        break;
+
+    // check which faces that can be oriented based on the current reference face
+    vector<int> isect; 
+    for (int i = 0; i != num_faces; ++i, isect.clear()) {
+      if (!ordered[i]) {
+        set_intersection(sorted_fnode_ptrs[ref_face], sorted_fnode_ptrs[ref_face] + num_face_edges[ref_face],
+                         sorted_fnode_ptrs[i], sorted_fnode_ptrs[i] + num_face_edges[i], back_inserter(isect));
+        if (!isect.empty()) {
+          assert(isect.size() > 1); // should be at least two corners to a shared edge
+          const auto ref1 = find(face_ptrs[ref_face], face_ptrs[ref_face] + num_face_edges[ref_face], isect[0]);
+          const auto ref2 = find(face_ptrs[ref_face], face_ptrs[ref_face] + num_face_edges[ref_face], isect[1]);
+          const auto i1 = find(face_ptrs[i], face_ptrs[i] + num_face_edges[i], isect[0]);
+          const auto i2 = find(face_ptrs[i], face_ptrs[i] + num_face_edges[i], isect[1]);
+
+          const bool orient1 = (ref2 == ref1+1 || ref2 == face_ptrs[ref_face]);  // order is ref1, ref2 if true
+          const bool orient2 = (i2 == i1 + 1 || i2 == face_ptrs[i]);            // order is i1, i2 if true
+          if (orient1 == orient2) 
+            // faces have the same orientation.  Flip the orientation of the non-reference face
+            reverse(face_ptrs[i], face_ptrs[i] + num_face_edges[i]);
+          
+          // at this point, we should be assured that face 'i' is oriented consistently with face 'ref'
+          ordered[i] = true;
+        }
+      }
+    }
+    completed[ref_face] = true;
+  }
+  return result;  
+}
+
+// ----------------------------------------------------------------------------
+bool inward_pointing_normals(const vector<double>& normals,
+                             const vector<double>& face_centroids)
+// ----------------------------------------------------------------------------
+{
+  const int N = (int)normals.size()/3;
+  const double tol = 1e-9;
+  
+  for (int d = 0; d != 3; ++d) {
+    // usually, it should be enough to check for d==0, but there may be pathological
+    // cases where we would have to resort to other coordinate directions
+    int max_ix = 0, min_ix = 0;
+    double max_val = face_centroids[d], min_val = max_val;
+    for (int i = 0; i != N; ++i) {
+      if (face_centroids[3*i+d] < min_val) {
+        min_val = face_centroids[3*i+d];
+        min_ix = i;
+      } else if (face_centroids[3*i+d] > max_val) {
+        max_val = face_centroids[3*i+d];
+        max_ix = i;
+      }
+    }
+    if (fabs(normals[3 * max_ix + d]) > tol)
+      return normals[3 * max_ix + d] < 0;
+    else if (fabs(normals[3 * min_ix + d]) > tol)
+      return normals[3 * min_ix + d] > 0;
+  }
+      
+  // if we got here, there is something peculiar about the input data
+  throw runtime_error("Unable to determine orientation of normals in element.");
+}
+
+// ----------------------------------------------------------------------------
+// Compute key parts of cell geometry, including a consistent set of outward
+// normals, the cell volume, centroid and a point for which the cell is
+// star-shaped (which may or may not be the centroid)
+void compute_cell_geometry(const double* points,
+                           const int num_points,
+                           const int* const faces,
+                           const int* const num_face_edges,
+                           const int num_faces,
+                           vector<double>& outward_normals,
+                           vector<double>& face_centroids,
+                           array<double, 3>& cell_centroid,
+                           array<double, 3>& star_point,
+                           double& volume)
+// ----------------------------------------------------------------------------
+{
+  // ensure faces are consistently oriented so that normals all point outwards
+  // or inwards
+  vector<int> faces2 = consistent_face_ordering(faces, num_face_edges, num_faces);
+  
+  outward_normals.resize(num_faces * 3);
+  face_centroids.resize(num_faces * 3);
+  for (int f = 0, faces_offset = 0; f != num_faces; faces_offset += num_face_edges[f++])
+    compute_face_geometry(pick_points<3>(points, &faces2[faces_offset], num_face_edges[f]),
+                          &outward_normals[f*3], &face_centroids[f*3]);
+
+
+  // ensure normals are pointing out of, rather than into, polyhedron
+  if (inward_pointing_normals(outward_normals, face_centroids))
+    for_each(outward_normals.begin(), outward_normals.end(), [](double& d) {d *= -1;});
+
+  // identify a star point (usually, mean_point qualifies, but not necessarily)
+  star_point = identify_star_point(point_average<3>(points, num_points),
+                                   outward_normals, face_centroids);
+
+  // compute cell centroid and volume
+  volume = 0;
+  cell_centroid = {0, 0, 0};
+  
+  // loop over faces, split each face into triangles, and accumulate the volumes
+  // defined by these triangles and the inside point
+  for (int f = 0, fpos = 0; f != num_faces; fpos += num_face_edges[f++]) {
+    for (auto tri : tessellate_face<3>(pick_points<3>(points, &faces[fpos], num_face_edges[f]))) {
+      tri.insert(tri.end(), &star_point[0], &star_point[0] + 3);
+      const double tvol = tetrahedron_volume(&tri[0], &tri[3], &tri[6], &tri[9]);
+      const auto tet_centroid = point_average<3>(&tri[0], 4);
+      volume += tvol;
+      for (int d = 0; d != 3; ++d)
+        cell_centroid[d] += tvol * tet_centroid[d];
+    }
+  }
+  
+  for (int d = 0; d != 3; ++d)
+    cell_centroid[d] /= volume;
+  
+  // if cell_centroid is also a star_point, use that as star_point instead
+  if (is_star_point(cell_centroid, outward_normals, face_centroids))
+    star_point = cell_centroid;
+
+}
+
+
+
+
 }; // end anonymous namespace
 
 // ============================================================================
@@ -1126,6 +1339,90 @@ namespace vem
 {
 // ============================================================================
 
+// ----------------------------------------------------------------------------
+void field_gradient_3D(const double* const points,
+                       const int num_cells,
+                       const int* const num_cell_faces, // cell faces per cell
+                       const int* const num_face_corners, // corners per cellface
+                       const int* const face_corners,
+                       const double* const field,
+                       vector<double>& fgrad)
+// ----------------------------------------------------------------------------
+{
+  // initializing result vector
+  const int tot_num_faces = accumulate(num_cell_faces, num_cell_faces + num_cells, 0);
+  const int tot_num_fcorners = accumulate(num_face_corners, num_face_corners + tot_num_faces, 0);
+  const int tot_num_nodes = *max_element(face_corners, face_corners + tot_num_fcorners) + 1;
+  fgrad = vector<double>(3 * tot_num_nodes, 0.0);
+
+  // The contribution from a given cell to the gradient of pressure evaluated at
+  // one of its corners can be obtained from vem by considering the first three componnets
+  // of `volume * P * Wc`, where `P = [p p p 0 0 0]`.  Therefore, only the three first columns
+  // of Wc matter, which is `diag([2*q1, 2*q2, 2*q3])`.  Moreover, `q_i = 1/(2*volume) z_i`,
+  // where z_i is the face integral of the phi_i basis function of the node in question.  As such,
+  // we can compute the contribution of this cell to the gradient of pressure in the given node
+  // directly as `p * z_i`, and bypass the volume computation entirely.
+  
+  // Below, we compute the contribution from all corners of all faces to the global 'fgrad' vector.
+
+  vector<int> indexing;
+  int cur_fcor_start = 0;
+  int cur_cface_start = 0;
+  for (int cell = 0; cell != num_cells; ++cell) {
+    const auto reindex = global_to_local_indexing(&face_corners[cur_fcor_start],
+                                                  &num_face_corners[cur_cface_start],
+                                                  num_cell_faces[cell], indexing);
+    const int num_corners = int(indexing.size());
+    const auto corners_loc = pick_points<3>(points, &indexing[0], num_corners);
+    
+    const int tot_num_cellface_corners =
+      accumulate(&num_face_corners[cur_cface_start],
+                 &num_face_corners[cur_cface_start] + num_cell_faces[cell], 0);
+    
+    vector<int> faces_loc(tot_num_cellface_corners);
+    transform(&face_corners[cur_fcor_start],
+              &face_corners[cur_fcor_start] + tot_num_cellface_corners,
+              faces_loc.begin(), [&reindex] (const int I) { return reindex.find(I)->second;});
+    
+    double volume;                                  // to be computed below
+    vector<double> outward_normals, face_centroids; // to be computed below
+    array<double, 3> star_point, cell_centroid;     // to be computed below
+    compute_cell_geometry(&corners_loc[0], num_corners, &faces_loc[0],
+                          &num_face_corners[cur_cface_start], num_cell_faces[cell],
+                          outward_normals, face_centroids, cell_centroid, star_point, volume);
+    
+    // Since computing q involves dividing by volume, we are really computing q * volume
+    // in the below call, by passing the value '1' for volume.  In other words, we are computing
+    // (1/2) z_i.
+    const auto qv = compute_q_3D(&corners_loc[0], num_corners, &faces_loc[0],
+                                 &num_face_corners[cur_cface_start], num_cell_faces[cell],
+                                 1, outward_normals);
+
+    // fill in entries in global fgrad vector
+    for (int c = 0; c != num_corners; ++c) 
+      for (int d = 0; d != 3; ++d)
+        fgrad[3 * indexing[c] + d] += 2 * field[cell] * qv[3 * c + d];
+
+    // keep track of our current position in the `face_corners` array
+    cur_fcor_start += tot_num_cellface_corners;
+    cur_cface_start += num_cell_faces[cell];
+  }
+}
+
+// // --------------------------------------------------------------------------
+// void field_gradient_2D(const double* const points,
+//                        const int num_cells,
+//                        const int* const num_cell_faces,
+//                        const int* const cell_corners,
+//                        const double* const field,
+//                        vector<double>& fgrad)
+// // ----------------------------------------------------------------------------
+// {
+//   // @@ TODO
+//   throw runtime_error("field_gradient_2D not yet implemented.");
+// }
+
+  
 // ----------------------------------------------------------------------------
 int
 assemble_mech_system_2D(const double* const points,
@@ -1333,7 +1630,7 @@ assemble_stiffness_matrix_3D(const double* const points,
 {
     // compute mapping between local vertex indices (0, 1, ... Ne) to
     // indexing in the global 'points' vector (0, 1, .....N)
-    const auto reindex = local_to_global_indexing(faces, num_face_edges, num_faces, indexing);
+    const auto reindex = global_to_local_indexing(faces, num_face_edges, num_faces, indexing);
     const int num_corners = int(indexing.size());
     const int num_face_entries = accumulate(num_face_edges, num_face_edges + num_faces, 0);
 
@@ -1345,10 +1642,15 @@ assemble_stiffness_matrix_3D(const double* const points,
         return reindex.find(I)->second;
     });
 
-    const double volume = element_volume_3D(&corners_loc[0], num_corners, &faces_loc[0], num_face_edges, num_faces);
+    double volume;                                    // computed in 'compute_cell_geometry' below
+    vector<double> outward_normals, face_centroids;   // computed in 'compute_cell_geometry' below
+    array<double, 3> star_point;                      // computed in 'compute_cell_geometry' below
+    compute_cell_geometry(&corners_loc[0], num_corners, &faces_loc[0], num_face_edges, num_faces,
+                          outward_normals, face_centroids, centroid, star_point, volume);
+                          
     // // compute all intermediary matrices
-    const auto q = compute_q_3D(
-        &corners_loc[0], int(corners_loc.size() / 3), &faces_loc[0], num_face_edges, num_faces, volume, centroid);
+    const auto q = compute_q_3D(&corners_loc[0], int(corners_loc.size() / 3), &faces_loc[0],
+                                num_face_edges, num_faces, volume, outward_normals);
     const auto Nr = compute_Nr_3D(&corners_loc[0], num_corners);
     const auto Nc = compute_Nc_3D(&corners_loc[0], num_corners);
     const auto Wr = compute_Wr_3D(q);
@@ -1364,18 +1666,17 @@ assemble_stiffness_matrix_3D(const double* const points,
 
 // ----------------------------------------------------------------------------
 void
-matprint(const double* data, const int r, const int c, bool transposed, const double zthreshold)
+matprint(const double* data, const int r, const int c, bool transposed)
 // ----------------------------------------------------------------------------
 {
     const pair<int, int> dim = transposed ? make_pair(c, r) : make_pair(r, c);
     const pair<int, int> stride = transposed ? make_pair(1, c) : make_pair(c, 1);
 
     for (int i = 0; i != dim.first; ++i)
-      for (int j = 0; j != dim.second; ++j)
-        cout << setw(12) << ((abs(data[i * stride.first + j * stride.second]) <= zthreshold) ? fixed : scientific)
-             << ((abs(data[i * stride.first + j * stride.second]) <= zthreshold) ? setprecision(0) : setprecision(2))
-             << (abs(data[i * stride.first + j * stride.second]) <= zthreshold ? 0 : data[i * stride.first + j * stride.second])
-             << (j == dim.second - 1 ? "\n" : "");
+        for (int j = 0; j != dim.second; ++j)
+            cout << setw(12) << ((data[i * stride.first + j * stride.second] == 0) ? fixed : scientific)
+                 << ((data[i * stride.first + j * stride.second] == 0) ? setprecision(0) : setprecision(2))
+                 << data[i * stride.first + j * stride.second] << (j == dim.second - 1 ? "\n" : "");
 }
 
 
@@ -1436,7 +1737,8 @@ centroid_2D(const double* const points, const int num_points)
     return result;
 }
 
-// ----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// @@ Might fail in case of strongly non-convex faces
 array<double, 3>
 centroid_2D_3D(const double* const points, const int num_points)
 // ----------------------------------------------------------------------------
@@ -1461,43 +1763,6 @@ centroid_2D_3D(const double* const points, const int num_points)
 }
 
 // ----------------------------------------------------------------------------
-array<double, 3>
-centroid_3D(const double* const points,
-            const int num_points,
-            const int* const faces,
-            const int* const num_face_edges,
-            const int num_faces)
-// ----------------------------------------------------------------------------
-{
-    // @@ This routine is very similar to element_volume_3D.  It might be useful
-    // to combine them.
-    double volume = 0;
-    array<double, 3> result {0, 0, 0};
-
-    // This is not the geometric centroid, but should be a point inside the
-    // polyhedral element (@@ this assumption might be broken on weird geometries)
-    const array<double, 3> inside_point = point_average<3>(points, num_points);
-
-    // loop over faces, split each face into triangles, and accumulate the volumes
-    // defined by these triangles and the inside point
-    for (int f = 0, fpos = 0; f != num_faces; fpos += num_face_edges[f++]) {
-        for (auto tri : tessellate_face<3>(pick_points<3>(points, &faces[fpos], num_face_edges[f]))) {
-            tri.insert(tri.end(), &inside_point[0], &inside_point[0] + 3);
-            const double tvol = tetrahedron_volume(&tri[0], &tri[3], &tri[6], &tri[9]);
-            const auto tet_centroid = point_average<3>(&tri[0], 4);
-            volume += tvol;
-            for (int d = 0; d != 3; ++d)
-                result[d] += tvol * tet_centroid[d];
-        }
-    }
-
-    for (int d = 0; d != 3; ++d)
-        result[d] /= volume;
-
-    return result;
-}
-
-// ----------------------------------------------------------------------------
 // requires that corner points are already ordered consecutively
 double
 face_integral(const double* const corners, const int num_corners, const int dim, const double* const corner_values)
@@ -1507,33 +1772,6 @@ face_integral(const double* const corners, const int num_corners, const int dim,
 
     return dim == 2 ? face_integral_impl<2>(corners, num_corners, corner_values)
                     : face_integral_impl<3>(corners, num_corners, corner_values);
-}
-
-// ----------------------------------------------------------------------------
-double
-element_volume_3D(const double* const points,
-                  const int num_points,
-                  const int* const faces,
-                  const int* const num_face_edges,
-                  const int num_faces)
-// ----------------------------------------------------------------------------
-{
-    double volume = 0;
-
-    // This is not the geometric centroid, but should be a point inside the
-    // polyhedral element (@@ this assumption might be broken on weird geometries)
-    const array<double, 3> inside_point = point_average<3>(points, num_points);
-
-    // loop over faces, split each face into triangles, and accumulate the volumes
-    // defined by these triangles and the inside point.
-    // @@ Note: an alternative approach to consider would be to apply the
-    // divergence theorem to compute the volume.  If so, we would also need to
-    // provide, or compute outward normals.
-    for (int f = 0, fpos = 0; f != num_faces; fpos += num_face_edges[f++])
-        for (auto tri : tessellate_face<3>(pick_points<3>(points, &faces[fpos], num_face_edges[f])))
-            volume += tetrahedron_volume(&tri[0], &tri[3], &tri[6], &inside_point[0]);
-
-    return volume;
 }
 
 // ----------------------------------------------------------------------------
