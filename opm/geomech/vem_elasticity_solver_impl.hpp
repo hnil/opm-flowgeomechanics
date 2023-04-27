@@ -20,6 +20,7 @@
 #include <vector>
 #include <opm/input/eclipse/Deck/DeckKeyword.hpp>
 #include <opm/geomech/vem/vem.hpp>
+#include <opm/geomech/vem/vemutils.hpp>
 namespace Opm {
 namespace Elasticity {
 
@@ -56,71 +57,29 @@ namespace Elasticity {
 // }
 
 
-IMPL_FUNC(void, assemble(const Vector& pressure, bool do_matrix, bool do_vector))
+
+ IMPL_FUNC(void, assemble(const Vector& pressure, bool do_matrix, bool do_vector))
 {
     using namespace std;
-    using namespace Dune;
-    const auto& gv = grid_.leafGridView();
-  const int comp = 3+(dim-2)*3;
-  static const int bfunc = 4+(dim-2)*4;
-  //int loadcase = -1;
-  //Dune::FieldVector<ctype,comp> eps0 = {1, 1, 1, 0, 0, 0};
-  //eps0 = 0;
-  Vector& b = A.getLoadVector();
-  b = 0;
-  A.getLoadVector() = 0;
-  if (do_matrix)
-    A.getOperator() = 0;
+    Vector& b = A.getLoadVector();
+    b = 0;
+    A.getLoadVector() = 0;
+    if (do_matrix)
+        A.getOperator() = 0;
 
-
-  // start VEM assembly
-   // make global point coordinate vector
-  vector<double> coords;
-  for (const auto& v : vertices(gv)) {
-    const auto c = v.geometry().corner(0);
-    coords.insert(coords.end(), c.begin(), c.end());
-  }
-
-  const int num_cells = gv.size(0); // entities of codim 0
-  const auto& ixset = gv.indexSet();
-  // count cell faces
-  vector<int> num_cell_faces;
-  for (const auto& c : elements(gv)) 
-    num_cell_faces.push_back(Dune::subEntities(c, Dune::Codim<1>{}).size());
-  const int tot_num_cfaces = accumulate(num_cell_faces.begin(), num_cell_faces.end(), 0);
-
-  // count face corners
-  vector<int> num_face_corners;
-  for (const auto& c : elements(gv))
-    for (const auto& f : Dune::subEntities(c, Dune::Codim<1>{}))
-      num_face_corners.push_back(f.geometry().corners());
-
-  // establish all face corners
-  vector<int> face_corners;
-  for (const auto& c : elements(gv))  
-    for (const auto& f: Dune::subEntities(c, Dune::Codim<1>{})) 
-      for (int i = 0, f_ix = 0;
-           f_ix != tot_num_cfaces && i != num_face_corners[f_ix];
-           ++i, f_ix += (i == num_face_corners[f_ix]))
-        face_corners.push_back(ixset.subIndex(f, i, 3));
-
-  // correct order of nodes in each face, to ensure they are mentioned in
-  // clockwise or counterclockwise order. @@ This is a hack that might only work
-  // for 4-faces!
-  // for (int i = 0, j = 0; i != (int)num_face_corners.size(); j += num_face_corners[i++])
-  //   swap(face_corners[j], face_corners[j+1]);
-  
-  // body force
-
-  // dirichlet boundary conditions
-  
-  const int num_fixed_dofs = get<0>(dirichlet_);
-  const vector<int>& fixed_dof_ixs = get<1>(dirichlet_);
-  const vector<double>& fixed_dof_values = get<2>(dirichlet_);
+    std::vector<double> coords;
+    std::vector<int> num_cell_faces, num_face_corners,face_corners;
+    vem::getGridVectors(grid_,coords,
+                        num_cell_faces,
+                        num_face_corners,
+                        face_corners);
+    const int num_fixed_dofs = get<0>(dirichlet_);
+    const vector<int>& fixed_dof_ixs = std::get<1>(dirichlet_);
+    const vector<double>& fixed_dof_values = std::get<2>(dirichlet_);
 
   // neumann boundary conditions 
   const int num_neumann_faces = 0;
-  
+  const int num_cells = grid_.leafGridView().size(0); // entities of codim 0
   // assemble the mechanical system
   vector<tuple<int, int, double>> A_entries;
   vector<double> rhs;
@@ -131,6 +90,16 @@ IMPL_FUNC(void, assemble(const Vector& pressure, bool do_matrix, bool do_vector)
                                  num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0],
                                  num_neumann_faces, nullptr, nullptr,
                                  A_entries, rhs);
+  // adding pressure force
+  vector<double> rhs_pressure;
+  vector<double> std_pressure(pressure.size(), 0);
+  for(size_t i = 0; i < pressure.size(); ++i){
+      std_pressure[i] = pressure[i][0];
+  }
+  vem::field_gradient_3D(&coords[0], num_cells, &num_cell_faces[0], &num_face_corners[0],
+                         &face_corners[0], &std_pressure[0],rhs_pressure);
+  
+  std::transform(rhs.begin(),rhs.end(),rhs_pressure.begin(),rhs.begin(), [](double a, double b) {return a+b;});
   // hopefully consisten with matrix
   // should be moved to initialization
   std::vector< std::set<int> > rows;

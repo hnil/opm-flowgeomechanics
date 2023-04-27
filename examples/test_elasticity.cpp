@@ -12,7 +12,7 @@
 #ifdef HAVE_CONFIG_H
 # include "config.h"     
 #endif
-
+# define DISABLE_ALUGRID_SFC_ORDERING 1
 #include <opm/common/utility/platform_dependent/disable_warnings.h>
 
 #include <dune/common/exceptions.hh> // We use exceptions
@@ -175,8 +175,8 @@ template<class GridType>
 int run(Params& p)
 {
     
-    using ElasticitySolverType = Opm::Elasticity::VemElasticitySolver<GridType>;
-    //using ElasticitySolverType = Opm::Elasticity::ElasticitySolver<GridType>;
+    //using ElasticitySolverType = Opm::Elasticity::VemElasticitySolver<GridType>;
+    using ElasticitySolverType = Opm::Elasticity::ElasticitySolver<GridType>;
   try {
     static constexpr int dim = GridType::dimension;
     //static constexpr int dimensionworld = GridType::dimensionworld;  
@@ -259,7 +259,8 @@ int run(Params& p)
      esolver.solve();
      std::cout << "\tsolution norm: " << esolver.u.two_norm() << std::endl;
      Opm::Elasticity::Vector field;
-     esolver.A.expandSolution(field,esolver.u);
+     field.resize(grid.size(dim)*dim);
+     esolver.expandSolution(field,esolver.u);
      Dune::storeMatrixMarket(esolver.A.getOperator(), "A.mtx");
      Dune::storeMatrixMarket(esolver.A.getLoadVector(), "b.mtx");
      Dune::storeMatrixMarket(esolver.u, "u.mtx");
@@ -341,8 +342,8 @@ try
     //using GridType = PolyGrid;
     int ok;
     //ok = run<AluGrid3D>(p);
-    ok = run<PolyGrid>(p);
-    //ok = run<Dune::CpGrid>(p);
+    //ok = run<PolyGrid>(p);
+    ok = run<Dune::CpGrid>(p);
     return ok;
   } catch (Dune::Exception &e) {
       std::cerr << "Dune reported error: " << e << std::endl;
