@@ -94,13 +94,13 @@ namespace Elasticity {
                                  num_neumann_faces, nullptr, nullptr,
                                  A_entries, rhs);
   // adding pressure force
- // vector<double> rhs_pressure;
- //  vector<double> std_pressure(pressure.size(), 0);
- //  for(size_t i = 0; i < pressure.size(); ++i){
- //      std_pressure[i] = pressure[i][0];
- //  }
- //  vem::field_gradient_3D(&coords[0], num_cells, &num_cell_faces[0], &num_face_corners[0],
- //                         &face_corners[0], &std_pressure[0],rhs_pressure);
+  vector<double> rhs_pressure;
+  vector<double> std_pressure(pressure.size(), 0);
+  for(size_t i = 0; i < pressure.size(); ++i){
+      std_pressure[i] = pressure[i][0];
+  }
+  vem::potential_gradient_force_3D(&coords[0], num_cells, &num_cell_faces[0], &num_face_corners[0],
+                                   &face_corners[0], &std_pressure[0],rhs_pressure);
   
  //  std::transform(rhs.begin(),rhs.end(),rhs_pressure.begin(),rhs.begin(), [](double a, double b) {return a+b;});
   // hopefully consisten with matrix

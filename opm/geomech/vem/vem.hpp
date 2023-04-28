@@ -218,25 +218,41 @@ void assemble_stiffness_matrix_3D(const double* const points,
 
 
 // -----------------------------------------------------------------------------------------------
-void field_gradient_3D(const double* const points,
-                       const int num_cells,
-                       const int* const num_cell_faces, // cell faces per cell
-                       const int* const num_face_corners, // corners per face
-                       const int* const face_corners,
-                       const double* const field,
-                       std::vector<double>& fgrad);
+// Computes the node-wise body force resulting from the gradient of a potential (e.g.
+// for poromechanics, this would be the gradient of pressure.  The computed value represents
+// the gradient of the potential in the node, scaled by the volumes of the neighboring cells.
+//
+// @param points Pointer to an array of size 3*N, where N is the number of
+//               points in the global mesh. The array stores the x, y, and z
+//               coordinates of each point.
+// @param num_cells          The number of cells in the mesh.
+// @param num_cell_faces     Pointer to an array of ints, of length `num_cells`, containing the
+//                           number of faces for each cell in the mesh.
+// @param num_face_corners   Pointer to an array of ints, containing the number of corners
+//                           for each face in the mesh.  The length of this array equals
+//                           the total number of cell-faces, i.e. the sum of
+//                           `num_cell_faces[0]...[num_cells-1]`.  The number of face corners
+//                           for the nth face of the kth cell is found at entry l, where
+//                           l = sum(num_cell_faces[0]...[k-1]) + n.
+// @param face_corners       Pointer to an array of ints, containing the indices of the
+//                           corners of each face for each cell in the grid in the `points` array.
+//                           The indices of corners for the nth face of the kth cell is found
+//                           in `face_corners[m+n... m+n+p-1]`, where
+//                           m = sum(num_face_corners[0 .. l-1]), and p = num_face_corners[l].
+//                           Here, `l` is defined as above in the documentation of `num_face_corners`.
+// @param field              The field representing the potential from which we want to compute the
+//                           force.
+// @param fgrad              Output parameter that stores the resulting, node-wise force field
+//                           defined in each node by the local gradient of the field, scaled by
+//                           the cell volumes of the cells neighboring the node.
+void potential_gradient_force_3D(const double* const points,
+                                 const int num_cells,
+                                 const int* const num_cell_faces, // cell faces per cell
+                                 const int* const num_face_corners, // corners per face
+                                 const int* const face_corners,
+                                 const double* const field,
+                                 std::vector<double>& fgrad);
 // -----------------------------------------------------------------------------------------------
-
-
-// -----------------------------------------------------------------------------------------------
-void field_gradient_2D(const double* const points,
-                       const int num_cells,
-                       const int* const num_cell_faces,
-                       const int* const cell_corners,
-                       const double* const field,
-                       std::vector<double>& fgrad);
-// -----------------------------------------------------------------------------------------------  
-
 
   
 // ============================================================================
@@ -417,7 +433,8 @@ std::vector<double> pick_points_3D(const double* pts, const int* const p_ixs, in
 // @param r The number of rows in the matrix.
 // @param c The number of columns in the matrix.
 // @param transposed If true, the matrix is printed transposed.
-void matprint(const double* data, const int r, const int c, bool transposed);
+// @param ztreshold Values with absolute magnitude less than this value, will be rounded to zero
+void matprint(const double* data, const int r, const int c, bool transposed, const double zthreshold=0);
 // -----------------------------------------------------------------------------------------------
 
 
