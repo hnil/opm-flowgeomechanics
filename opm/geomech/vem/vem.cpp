@@ -427,14 +427,121 @@ matmul(const double* data1,
 }
 
 // ----------------------------------------------------------------------------
+// compute the trace of a (full) matrix A, whose elements are stored in a vector
+// (row-major or column-major order does not really matter here).
+double trace(const vector<double>& A)
+// ----------------------------------------------------------------------------
+{
+    const int N = int(sqrt(A.size()));
+    assert(N * N == A.size()); // should be a square matrix
+
+    double result = 0;
+    for (int i = 0; i != N; ++i)
+        result += A[i + N * i];
+
+    return result;
+}
+
+// ----------------------------------------------------------------------------
+// extract the diagonal elements of a matrix
+vector<double> diag_elems(const vector<double>& A)
+// ----------------------------------------------------------------------------
+{
+  const int N = int(sqrt(A.size()));
+  vector<double> result(N, 0);
+  for (int i = 0; i != N; ++i)
+    result[i] = A[i*N+i];
+  return result;
+}
+
+
+
+// ----------------------------------------------------------------------------
+// Compute the trace of the inverse matrix.  The function only works correctly
+// for positive symmetric matrices
+double invtrace(const vector<double>& A)
+// ----------------------------------------------------------------------------
+{
+  const auto diag = diag_elems(A);
+  double result = 0;
+  for (int i = 0; i != (int)diag.size(); ++i)
+    result += 1.0/diag[i];
+  return result;
+}
+
+// ----------------------------------------------------------------------------
+// Identity matrix of size N, returned as a vector of lenght N^2 containing.
+// its elements (row-major or column-major order is equivalent here).
+// The matrix is multiplied by the number 'fac' before being returned.
+vector<double>
+identity_matrix(const double fac, const int N)
+// ----------------------------------------------------------------------------
+{
+    // create zero matrix
+    vector<double> result(N * N, 0);
+
+    // fill in diagonal elements with the value 'fac'
+    for (int i = 0; i != N; ++i)
+        result[i + N * i] = fac;
+
+    // return the result
+    return result;
+}
+
+// ----------------------------------------------------------------------------
+// Compute the VEM stability term for a given 2D or 3D element.
+// This is a very simple term that is described in (Gain, 2014)
+// DOI:10.1016/j.cma.2014.05.005
+// @@TODO: find a better estimate for S
+vector<double>
+compute_S(const std::vector<double>& Nc,
+          const std::vector<double>& D,
+          const int num_corners,
+          const double volume,
+          const int dim,
+          const StabilityChoice stability_choice)
+// ----------------------------------------------------------------------------
+{
+    assert(dim == 2 || dim == 3);
+    assert(stability_choice == SIMPLE || stability_choice == HARMONIC);
+    const int r = dim * num_corners;
+    const int c = dim == 2 ? 3 : 6;
+    const auto NtN = matmul(&Nc[0], r, c, true, &Nc[0], r, c, false);
+
+    // const double alpha = 1;  // @@ use this line for comparison with vemmech
+    const double alpha = stability_choice == SIMPLE ?
+      volume * trace(D) / trace(NtN) :             // from Gain et al. 2014
+      (1/9.0) * volume * trace(D) * invtrace(NtN); // Andersen et al. 2017
+
+    return identity_matrix(alpha, dim * num_corners);
+}
+
+// ----------------------------------------------------------------------------
+vector<double> compute_S_D_recipe(const std::vector<double>& EWcDWct,
+                                  const int dofs,
+                                  const double volume)
+// ----------------------------------------------------------------------------
+{
+  vector<double> result(dofs * dofs, 0);
+
+  const double h = cbrt(volume); // diameter of cell scales with cube root of volume
+  for (int i = 0; i != dofs; ++i)
+    result[i + dofs*i] = max(h, EWcDWct[i + dofs * i]); // extract diagonal from matrix
+
+  return result;
+}
+
+
+// ----------------------------------------------------------------------------
 // Assemble the VEM stiffness matrix for a single element, based on a number
 // of intermediary matrices and values, as defined in (Gain, 2014)
 // DOI:10.1016/j.cma.2014.05.005
 void
 final_assembly(const vector<double>& Wc,
                const vector<double>& D,
-               const vector<double>& S,
+               const vector<double>& Nc,
                const vector<double>& ImP,
+               const StabilityChoice stability_choice,
                const double volume,
                const double num_nodes,
                const double dim,
@@ -448,6 +555,11 @@ final_assembly(const vector<double>& Wc,
     // compute stiffness matrix components
     const auto DWct = matmul(&D[0], lsdim, lsdim, false, &Wc[0], totdim, lsdim, true);
     const auto EWcDWct = matmul(&Wc[0], totdim, lsdim, false, &DWct[0], lsdim, totdim, false, volume);
+
+    const auto S = stability_choice == D_RECIPE ?
+      compute_S_D_recipe(EWcDWct, totdim, volume) :
+      compute_S(Nc, D, num_nodes, volume, dim, stability_choice);
+
     const auto SImP = matmul(&S[0], totdim, totdim, false, &ImP[0], totdim, totdim, false);
     const auto ImpSImp = matmul(&ImP[0], totdim, totdim, true, &SImP[0], totdim, totdim, false); 
     assert(EWcDWct.size() == ImpSImp.size());
@@ -500,66 +612,6 @@ matentry_3D(const double e1,
                            0, 0, e7, 0, e8, e9};
 }
 
-
-// ----------------------------------------------------------------------------
-// extract the diagonal elements of a matrix
-vector<double> diag_elems(const vector<double>& A)
-// ----------------------------------------------------------------------------
-{
-  const int N = int(sqrt(A.size()));
-  vector<double> result(N, 0);
-  for (int i = 0; i != N; ++i)
-    result[i] = A[i*N+i];
-  return result;
-}
-
-// ----------------------------------------------------------------------------
-// compute the trace of a (full) matrix A, whose elements are stored in a vector
-// (row-major or column-major order does not really matter here).
-double trace(const vector<double>& A)
-// ----------------------------------------------------------------------------
-{
-    const int N = int(sqrt(A.size()));
-    assert(N * N == A.size()); // should be a square matrix
-
-    double result = 0;
-    for (int i = 0; i != N; ++i)
-        result += A[i + N * i];
-
-    return result;
-}
-
-// ----------------------------------------------------------------------------
-// Compute the trace of the inverse matrix.  The function only works correctly
-// for positive symmetric matrices
-double invtrace(const vector<double>& A)
-// ----------------------------------------------------------------------------
-{
-  const auto diag = diag_elems(A);
-  double result = 0;
-  for (int i = 0; i != (int)diag.size(); ++i)
-    result += 1.0/diag[i];
-  return result;
-}
-  
-// ----------------------------------------------------------------------------
-// Identity matrix of size N, returned as a vector of lenght N^2 containing.
-// its elements (row-major or column-major order is equivalent here).
-// The matrix is multiplied by the number 'fac' before being returned.
-vector<double>
-identity_matrix(const double fac, const int N)
-// ----------------------------------------------------------------------------
-{
-    // create zero matrix
-    vector<double> result(N * N, 0);
-
-    // fill in diagonal elements with the value 'fac'
-    for (int i = 0; i != N; ++i)
-        result[i + N * i] = fac;
-
-    // return the result
-    return result;
-}
 
 // ----------------------------------------------------------------------------
 // Compute and distribute the impact of a 2D force applied to a given 2D element
@@ -1062,31 +1114,6 @@ compute_D_3D(const double young, const double poisson)
 }
 
 // ----------------------------------------------------------------------------
-// Compute the VEM stability term for a given 2D or 3D element.
-// This is a very simple term that is described in (Gain, 2014)
-// DOI:10.1016/j.cma.2014.05.005
-// @@TODO: find a better estimate for S
-vector<double>
-compute_S(const std::vector<double>& Nc,
-          const std::vector<double>& D,
-          const int num_corners,
-          const double volume,
-          const int dim)
-// ----------------------------------------------------------------------------
-{
-    assert(dim == 2 || dim == 3);
-    const int r = dim * num_corners;
-    const int c = dim == 2 ? 3 : 6;
-    const auto NtN = matmul(&Nc[0], r, c, true, &Nc[0], r, c, false);
-
-    // const double alpha = 1;  // @@ use this line for comparison with vemmech
-    //const double alpha = volume * trace(D) / trace(NtN);   // from original article
-    const double alpha = (1/9.0) * volume * trace(D) * invtrace(NtN); // Andersen et al.
-
-    return identity_matrix(alpha, dim * num_corners);
-}
-
-// ----------------------------------------------------------------------------
 // Compute the matrix corresponding to (I - P), as described in
 // (Gain, 2014) DOI:10.1016/j.cma.2014.05.005.
 vector<double>
@@ -1451,7 +1478,8 @@ assemble_mech_system_2D(const double* const points,
                         const int* const neumann_faces,
                         const double* const neumann_forces, // 2 * number of neumann faces
                         vector<tuple<int, int, double>>& A_entries,
-                        vector<double>& b)
+                        vector<double>& b,
+                        const StabilityChoice stability_choice)
 // ----------------------------------------------------------------------------
 {
     // preliminary computations
@@ -1471,7 +1499,8 @@ assemble_mech_system_2D(const double* const points,
         // computing local stiffness matrix, and writing its entries into the global
         // system matrix
         const int ncf = num_cell_faces[c];
-        assemble_stiffness_matrix_2D(points, &cell_corners[corner_ixs], ncf, young[c], poisson[c], loc);
+        assemble_stiffness_matrix_2D(points, &cell_corners[corner_ixs], ncf, young[c],
+                                     poisson[c], stability_choice, loc);
 
         for (int i = 0; i != 2 * ncf; ++i) {
             for (int j = 0; j != 2 * ncf; ++j) {
@@ -1522,7 +1551,8 @@ assemble_mech_system_3D(const double* const points,
                         const int* const neumann_faces,
                         const double* const neumann_forces, // 3 * number of neumann faces
                         std::vector<std::tuple<int, int, double>>& A_entries,
-                        std::vector<double>& b)
+                        std::vector<double>& b,
+                        const StabilityChoice stability_choice)
 // ----------------------------------------------------------------------------
 {
     // preliminary computations
@@ -1551,6 +1581,7 @@ assemble_mech_system_3D(const double* const points,
                                      num_cell_faces[c],
                                      young[c],
                                      poisson[c],
+                                     stability_choice,
                                      centroid,
                                      loc_indexing,
                                      loc);
@@ -1604,6 +1635,7 @@ assemble_stiffness_matrix_2D(const double* const points,
                              const int num_corners,
                              const double young,
                              const double poisson,
+                             const StabilityChoice stability_choice,
                              vector<double>& target)
 // ----------------------------------------------------------------------------
 {
@@ -1619,12 +1651,12 @@ assemble_stiffness_matrix_2D(const double* const points,
     const auto Wr = compute_Wr_2D(q);
     const auto Wc = compute_Wc_2D(q);
     const auto D = compute_D_2D(young, poisson);
-    const auto S = compute_S(Nc, D, num_corners, area, 2);
+    //const auto S = compute_S(Nc, D, num_corners, area, 2);
     const auto ImP = compute_ImP(Nr, Nc, Wr, Wc, 2);
 
     // do the final assembly of matrices, and write result to target
     target.resize(pow(2 * num_corners, 2));
-    final_assembly(Wc, D, S, ImP, area, num_corners, 2, &target[0]);
+    final_assembly(Wc, D, Nc, ImP, stability_choice, area, num_corners, 2, &target[0]);
 }
 
 // ----------------------------------------------------------------------------
@@ -1635,6 +1667,7 @@ assemble_stiffness_matrix_3D(const double* const points,
                              const int num_faces,
                              const double young,
                              const double poisson,
+                             const StabilityChoice stability_choice,
                              array<double, 3>& centroid,
                              vector<int>& indexing,
                              vector<double>& target)
@@ -1668,12 +1701,12 @@ assemble_stiffness_matrix_3D(const double* const points,
     const auto Wr = compute_Wr_3D(q);
     const auto Wc = compute_Wc_3D(q);
     const auto D = compute_D_3D(young, poisson);
-    const auto S = compute_S(Nc, D, num_corners, volume, 3);
+    //const auto S = compute_S(Nc, D, num_corners, volume, 3);
     const auto ImP = compute_ImP(Nr, Nc, Wr, Wc, 3);
 
     // // do the final assembly of matrices, and write result to target
     target.resize(pow(3 * num_corners, 2));
-    final_assembly(Wc, D, S, ImP, volume, num_corners, 3, &target[0]);
+    final_assembly(Wc, D, Nc, ImP, stability_choice, volume, num_corners, 3, &target[0]);
 }
 
 // ----------------------------------------------------------------------------
