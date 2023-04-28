@@ -58,7 +58,7 @@ namespace Elasticity {
 
 
 
- IMPL_FUNC(void, assemble(const Vector& pressure, bool do_matrix, bool do_vector))
+    IMPL_FUNC(void, assemble(const Vector& pressure, bool do_matrix, bool do_vector))
 {
     using namespace std;
     Vector& b = A.getLoadVector();
@@ -84,6 +84,9 @@ namespace Elasticity {
   vector<tuple<int, int, double>> A_entries;
   vector<double> rhs;
   body_force_.resize(3*num_cells, 0.0);
+  for(int i=0; i<num_cells; ++i){
+      body_force_[3*i+2] = 2000*9.8;
+  }
   const int numdof =
     vem::assemble_mech_system_3D(&coords[0], num_cells, &num_cell_faces[0], &num_face_corners[0],
                                  &face_corners[0], &ymodule_[0], &pratio_[0], &body_force_[0],
@@ -91,15 +94,15 @@ namespace Elasticity {
                                  num_neumann_faces, nullptr, nullptr,
                                  A_entries, rhs);
   // adding pressure force
-  vector<double> rhs_pressure;
-  vector<double> std_pressure(pressure.size(), 0);
-  for(size_t i = 0; i < pressure.size(); ++i){
-      std_pressure[i] = pressure[i][0];
-  }
-  vem::field_gradient_3D(&coords[0], num_cells, &num_cell_faces[0], &num_face_corners[0],
-                         &face_corners[0], &std_pressure[0],rhs_pressure);
+ // vector<double> rhs_pressure;
+ //  vector<double> std_pressure(pressure.size(), 0);
+ //  for(size_t i = 0; i < pressure.size(); ++i){
+ //      std_pressure[i] = pressure[i][0];
+ //  }
+ //  vem::field_gradient_3D(&coords[0], num_cells, &num_cell_faces[0], &num_face_corners[0],
+ //                         &face_corners[0], &std_pressure[0],rhs_pressure);
   
-  std::transform(rhs.begin(),rhs.end(),rhs_pressure.begin(),rhs.begin(), [](double a, double b) {return a+b;});
+ //  std::transform(rhs.begin(),rhs.end(),rhs_pressure.begin(),rhs.begin(), [](double a, double b) {return a+b;});
   // hopefully consisten with matrix
   // should be moved to initialization
   std::vector< std::set<int> > rows;

@@ -171,12 +171,9 @@ void createGrids(std::unique_ptr<AluGrid3D>& grid ,Opm::EclipseState& eclState,s
 
 
 //! \brief Main solution loop. Allows templating over the AMG type
-template<class GridType>
-int run(Params& p)
-{
-    
-    //using ElasticitySolverType = Opm::Elasticity::VemElasticitySolver<GridType>;
-    using ElasticitySolverType = Opm::Elasticity::ElasticitySolver<GridType>;
+template<class GridType,class ElasticitySolverType>
+int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
+{    
   try {
     static constexpr int dim = GridType::dimension;
     //static constexpr int dimensionworld = GridType::dimensionworld;  
@@ -243,13 +240,18 @@ int run(Params& p)
 
     Opm::Elasticity::Vector pressforce;
     pressforce.resize(grid.size(0));
-    pressforce = 1.0;
-    Dune::loadMatrixMarket(pressforce,"pressforce.mtx");
-
+    pressforce = 0.0;
+    if(with_pressure){
+        Dune::loadMatrixMarket(pressforce,"pressforce.mtx");
+    }
+    if(with_gravity){
+        esolver.setBodyForce(9.8);
+    }else{
+        esolver.setBodyForce(0.0);
+    }
     bool do_matrix = true;//assemble matrix
     bool do_vector = true;//assemble matrix
     esolver.fixNodes(fixed_nodes);
-    //esolver.fixNodesVem(fixed_nodes); 
     esolver.initForAssembly();
     esolver.assemble(pressforce, do_matrix, do_vector);
     Opm::PropertyTree prm("mechsolver.json");
@@ -296,7 +298,8 @@ int run(Params& p)
         vtkwriter.addCellData(pressforce, "pressforce");
         //vtkwriter.addVertexData(disp, stress);
         //}
-        vtkwriter.write(p.vtufile);
+        std::string outputfile = name + "_" + p.vtufile;
+        vtkwriter.write(outputfile);
     }
 
     if (!p.output.empty()){
@@ -343,7 +346,14 @@ try
     int ok;
     //ok = run<AluGrid3D>(p);
     //ok = run<PolyGrid>(p);
-    ok = run<Dune::CpGrid>(p);
+    using GridType = Dune::CpGrid;
+    using ElasticitySolverTypeVem = Opm::Elasticity::VemElasticitySolver<GridType>;
+    using ElasticitySolverTypeFem = Opm::Elasticity::ElasticitySolver<GridType>;
+    bool with_pressure =true;
+    bool with_gravity = false;
+    std::string name = "vem";
+    ok = run<Dune::CpGrid, ElasticitySolverTypeVem>(p, with_pressure, with_gravity, std::string("vem"));
+    ok = run<Dune::CpGrid, ElasticitySolverTypeFem>(p, with_pressure, with_gravity, std::string("fem"));
     return ok;
   } catch (Dune::Exception &e) {
       std::cerr << "Dune reported error: " << e << std::endl;

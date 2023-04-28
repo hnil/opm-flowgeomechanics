@@ -386,13 +386,31 @@ IMPL_FUNC(template<int comp> void,
 
           // load vector
           if (EP) {
-            Dune::FieldVector<ctype,dim*bfunc> temp;
-            //temp = Dune::FMatrixHelp::multTransposed(lB,Dune::FMatrixHelp::mult(C,eps0));
-            auto Ipressure = Dune::FMatrixHelp::mult(C,eps0);
-            Ipressure = eps0*pressure[cell_num][0];
-            temp = Dune::FMatrixHelp::multTransposed(lB,Ipressure);
-            temp *= -detJ*r->weight();
-            ES += temp;
+              // body force
+              if(body_force_.size() > 0){
+                  Dune::FieldVector<ctype,bfunc> Bvector;
+                  Dune::FieldVector<ctype,dim*bfunc> lrhs;
+                  //force piece wise constant over cell for now
+                  const Dune::FieldVector<ctype,dim>& force = body_force_[color[i][j][k]];
+                  E.getBVector(Bvector,r->position());
+                  for(size_t fi=0; fi < bfunc; ++fi){
+                      for(size_t vd=0; vd < dim; ++vd){
+                          lrhs[dim*fi+vd] = Bvector[fi]*force[vd];
+                      }
+                  }
+                  lrhs *= detJ*r->weight();
+                  ES += lrhs;
+              }
+              // pressure force i.e. \div I*p
+              {
+                  Dune::FieldVector<ctype,dim*bfunc> temp;
+                  //temp = Dune::FMatrixHelp::multTransposed(lB,Dune::FMatrixHelp::mult(C,eps0));
+                  auto Ipressure = Dune::FMatrixHelp::mult(C,eps0);
+                  Ipressure = eps0*pressure[cell_num][0];
+                  temp = Dune::FMatrixHelp::multTransposed(lB,Ipressure);
+                  temp *= -detJ*r->weight();
+                  ES += temp;
+              }
           }
         }
         A.addElement(KP,EP,it,&b); // NULL is no static forse based on the itegration point??

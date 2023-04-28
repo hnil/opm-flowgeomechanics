@@ -117,6 +117,7 @@ class ElasticitySolver
     //! \brief Find boundary coordinates
     //! \param[out] min The miminum coordinates of the grid
     //! \param[out] max The maximum coordinates of the grid
+    
     void findBoundaries(double* min, double* max);
     void initForAssembly(){A.initForAssembly();};
     void fixNodes(const std::vector<size_t>& fixed_nodes);
@@ -129,7 +130,15 @@ class ElasticitySolver
     //! \brief Solve Au = b for u
     //! \param[in] loadcase The load case to solve
     void solve();
-
+    void setBodyForce(double gravity){
+        const int num_cells = gv.leafGridView().size(0); // entities of codim 0
+        // assemble the mechanical system
+         body_force_.resize(3*num_cells);
+        for(int i=0; i<num_cells; ++i){
+            body_force_[i][2] = 2000*gravity;
+        }
+    }
+    
     // //! \param[in] params The linear solver parameters
     void setupSolver(const Opm::PropertyTree& prm){
         // bool parallel=false;
@@ -197,6 +206,7 @@ class ElasticitySolver
 
     //! \brief Vector holding material parameters for each active grid cell
     std::vector< std::shared_ptr<Material> > materials;
+    std::vector< Dune::FieldVector<ctype,dim> > body_force_;
 
     //! \brief Extract the vertices on a given face
     //! \param[in] dir The direction of the face normal

@@ -108,7 +108,8 @@ class VemElasticitySolver
     void fixNodes(const std::vector<size_t>& fixed_nodes){
         //void fixNodesVem(const std::vector<size_t>& fixed_nodes){
         std::vector<int> fixed_dof_ixs;
-        for (int node = 0; node < int(fixed_nodes.size()); ++node){
+        for (int i = 0; i < int(fixed_nodes.size()); ++i){
+            int node = fixed_nodes[i];
             fixed_dof_ixs.insert(fixed_dof_ixs.end(), {3*node, 3*node+1, 3*node+2});
         }        
         const int num_fixed_dofs = (int)fixed_dof_ixs.size();
@@ -174,6 +175,14 @@ class VemElasticitySolver
     template<int comp>
     void averageStress(Dune::BlockVector<Dune::FieldVector<ctype,comp>>& sigmacells,
                        const Vector& uarg);
+    void setBodyForce(double gravity){
+        const int num_cells = grid_.leafGridView().size(0); // entities of codim 0
+        // assemble the mechanical system
+        body_force_.resize(3*num_cells, 0.0);
+        for(int i=0; i<num_cells; ++i){
+            body_force_[3*i+2] = 2000*gravity;
+        }
+    }
   private:
     using AbstractSolverType = Dune::InverseOperator<Vector, Vector>;
     using AbstractOperatorType = Dune::AssembledLinearOperator<Matrix, Vector, Vector>;
