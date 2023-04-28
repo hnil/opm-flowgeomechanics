@@ -1365,13 +1365,13 @@ namespace vem
 // ============================================================================
 
 // ----------------------------------------------------------------------------
-void field_gradient_3D(const double* const points,
-                       const int num_cells,
-                       const int* const num_cell_faces, // cell faces per cell
-                       const int* const num_face_corners, // corners per cellface
-                       const int* const face_corners,
-                       const double* const field,
-                       vector<double>& fgrad)
+void potential_gradient_force_3D(const double* const points,
+                                 const int num_cells,
+                                 const int* const num_cell_faces, // cell faces per cell
+                                 const int* const num_face_corners, // corners per cellface
+                                 const int* const face_corners,
+                                 const double* const field,
+                                 vector<double>& fgrad)
 // ----------------------------------------------------------------------------
 {
   // initializing result vector
@@ -1433,19 +1433,6 @@ void field_gradient_3D(const double* const points,
     cur_cface_start += num_cell_faces[cell];
   }
 }
-
-// // --------------------------------------------------------------------------
-// void field_gradient_2D(const double* const points,
-//                        const int num_cells,
-//                        const int* const num_cell_faces,
-//                        const int* const cell_corners,
-//                        const double* const field,
-//                        vector<double>& fgrad)
-// // ----------------------------------------------------------------------------
-// {
-//   // @@ TODO
-//   throw runtime_error("field_gradient_2D not yet implemented.");
-// }
 
   
 // ----------------------------------------------------------------------------
