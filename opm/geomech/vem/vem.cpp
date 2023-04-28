@@ -449,8 +449,7 @@ final_assembly(const vector<double>& Wc,
     const auto DWct = matmul(&D[0], lsdim, lsdim, false, &Wc[0], totdim, lsdim, true);
     const auto EWcDWct = matmul(&Wc[0], totdim, lsdim, false, &DWct[0], lsdim, totdim, false, volume);
     const auto SImP = matmul(&S[0], totdim, totdim, false, &ImP[0], totdim, totdim, false);
-    const auto ImpSImp = matmul(&ImP[0], totdim, totdim, true, &SImP[0], totdim, totdim, false);
-
+    const auto ImpSImp = matmul(&ImP[0], totdim, totdim, true, &SImP[0], totdim, totdim, false); 
     assert(EWcDWct.size() == ImpSImp.size());
 
     // add conformance and stability term, and write result to target
@@ -501,14 +500,26 @@ matentry_3D(const double e1,
                            0, 0, e7, 0, e8, e9};
 }
 
+
+// ----------------------------------------------------------------------------
+// extract the diagonal elements of a matrix
+vector<double> diag_elems(const vector<double>& A)
+// ----------------------------------------------------------------------------
+{
+  const int N = int(sqrt(A.size()));
+  vector<double> result(N, 0);
+  for (int i = 0; i != N; ++i)
+    result[i] = A[i*N+i];
+  return result;
+}
+
 // ----------------------------------------------------------------------------
 // compute the trace of a (full) matrix A, whose elements are stored in a vector
 // (row-major or column-major order does not really matter here).
-double
-trace(const vector<double>& A)
+double trace(const vector<double>& A)
 // ----------------------------------------------------------------------------
 {
-    int N = int(sqrt(A.size()));
+    const int N = int(sqrt(A.size()));
     assert(N * N == A.size()); // should be a square matrix
 
     double result = 0;
@@ -518,6 +529,19 @@ trace(const vector<double>& A)
     return result;
 }
 
+// ----------------------------------------------------------------------------
+// Compute the trace of the inverse matrix.  The function only works correctly
+// for positive symmetric matrices
+double invtrace(const vector<double>& A)
+// ----------------------------------------------------------------------------
+{
+  const auto diag = diag_elems(A);
+  double result = 0;
+  for (int i = 0; i != (int)diag.size(); ++i)
+    result += 1.0/diag[i];
+  return result;
+}
+  
 // ----------------------------------------------------------------------------
 // Identity matrix of size N, returned as a vector of lenght N^2 containing.
 // its elements (row-major or column-major order is equivalent here).
@@ -641,7 +665,6 @@ compute_bodyforce_3D(const double* const points,
             const double vol2 = tetrahedron_volume(&t2[0], &t2[3], &t2[6], &centroid[0]);
             for (int d = 0; d != 3; ++d) {
                 b_global[3 * face_corners[fcorner_start + c] + d] += (vol1 + vol2) * bforce[d];
-                assert(!isnan(b_global[3 * face_corners[fcorner_start + c] + d]));
             }
         }
         fcorner_start += nfc;
@@ -1057,7 +1080,8 @@ compute_S(const std::vector<double>& Nc,
     const auto NtN = matmul(&Nc[0], r, c, true, &Nc[0], r, c, false);
 
     // const double alpha = 1;  // @@ use this line for comparison with vemmech
-    const double alpha = volume * trace(D) / trace(NtN);
+    //const double alpha = volume * trace(D) / trace(NtN);   // from original article
+    const double alpha = (1/9.0) * volume * trace(D) * invtrace(NtN); // Andersen et al.
 
     return identity_matrix(alpha, dim * num_corners);
 }
@@ -1667,19 +1691,19 @@ assemble_stiffness_matrix_3D(const double* const points,
 
 // ----------------------------------------------------------------------------
 void
-matprint(const double* data, const int r, const int c, bool transposed)
+matprint(const double* data, const int r, const int c, bool transposed, const double zthreshold)
 // ----------------------------------------------------------------------------
 {
     const pair<int, int> dim = transposed ? make_pair(c, r) : make_pair(r, c);
     const pair<int, int> stride = transposed ? make_pair(1, c) : make_pair(c, 1);
 
     for (int i = 0; i != dim.first; ++i)
-        for (int j = 0; j != dim.second; ++j)
-            cout << setw(12) << ((data[i * stride.first + j * stride.second] == 0) ? fixed : scientific)
-                 << ((data[i * stride.first + j * stride.second] == 0) ? setprecision(0) : setprecision(2))
-                 << data[i * stride.first + j * stride.second] << (j == dim.second - 1 ? "\n" : "");
+      for (int j = 0; j != dim.second; ++j)
+        cout << setw(12) << ((abs(data[i * stride.first + j * stride.second]) <= zthreshold) ? fixed : scientific)
+             << ((abs(data[i * stride.first + j * stride.second]) <= zthreshold) ? setprecision(0) : setprecision(2))
+             << (abs(data[i * stride.first + j * stride.second]) <= zthreshold ? 0 : data[i * stride.first + j * stride.second])
+             << (j == dim.second - 1 ? "\n" : "");
 }
-
 
 // ----------------------------------------------------------------------------
 vector<double>
