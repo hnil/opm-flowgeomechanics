@@ -6,7 +6,12 @@
 #include <vector>
 namespace vem
 {
-
+  enum StabilityChoice {
+    SIMPLE = 1,     // the basic stability term described in (Gain et al., 2014)
+    HARMONIC = 2,   // modified stability term more robust for high aspect ratios (Andersen et al., 2017)
+    D_RECIPE = 3    // another modified stability based on the diagonal of the consistency matrix
+  };
+  
 // ============================================================================
 // == Main functions for computing element stiffness matrices and assembling ==
 // ==                      linear systems in 2D and 3D                       ==
@@ -74,7 +79,8 @@ int assemble_mech_system_2D(const double* const points,
                             const int* const neumann_faces,
                             const double* const neumann_forces, // 2 * number of neumann faces
                             std::vector<std::tuple<int, int, double>>& A_entries,
-                            std::vector<double>& b);
+                            std::vector<double>& b,
+                            const StabilityChoice stability_choice = D_RECIPE);
 // -----------------------------------------------------------------------------------------------
 
 
@@ -149,7 +155,8 @@ int assemble_mech_system_3D(const double* const points,
                             const int* const neumann_faces,
                             const double* const neumann_forces, // 3 * number of neumann faces
                             std::vector<std::tuple<int, int, double>>& A_entries,
-                            std::vector<double>& b);
+                            std::vector<double>& b,
+                            const StabilityChoice stability_choice = D_RECIPE);
 // -----------------------------------------------------------------------------------------------
 
 
@@ -172,6 +179,7 @@ void assemble_stiffness_matrix_2D(const double* const points,
                                   const int num_corners,
                                   const double young,
                                   const double poisson,
+                                  const StabilityChoice stability_choice,
                                   std::vector<double>& target);
 // -----------------------------------------------------------------------------------------------
 
@@ -211,6 +219,7 @@ void assemble_stiffness_matrix_3D(const double* const points,
                                   const int num_faces,
                                   const double young,
                                   const double poisson,
+                                  const StabilityChoice stability_choice,
                                   std::array<double, 3>& centroid,
                                   std::vector<int>& indexing,
                                   std::vector<double>& target);
