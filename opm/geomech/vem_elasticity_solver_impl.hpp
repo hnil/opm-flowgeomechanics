@@ -84,13 +84,13 @@ namespace Elasticity {
   // assemble the mechanical system
   vector<tuple<int, int, double>> A_entries;
   vector<double> rhs;
-  
+  vem::StabilityChoice stability_choice = vem::D_RECIPE;
   const int numdof =
     vem::assemble_mech_system_3D(&coords[0], num_cells, &num_cell_faces[0], &num_face_corners[0],
                                  &face_corners[0], &ymodule_[0], &pratio_[0], &body_force_[0],
                                  num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0],
                                  num_neumann_faces, nullptr, nullptr,
-                                 A_entries, rhs);
+                                 A_entries, rhs, stability_choice);
   // adding pressure force
   vector<double> rhs_pressure;
   vector<double> std_pressure(pressure.size(), 0);
