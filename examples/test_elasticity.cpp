@@ -85,6 +85,8 @@ struct Params {
   std::string inspect;
   //! \brief Result template filename (input/output)
   std::string resultfilename;
+  bool with_gravity;
+  bool with_pressure;    
 };
 
 //! \brief Parse the command line arguments
@@ -99,6 +101,8 @@ void parseCommandLine(int argc, char** argv, Params& p)
   p.output   = param.getDefault<std::string>("output","");
   p.verbose  = param.getDefault<bool>("verbose",false);
   p.inspect  = param.getDefault<std::string>("inspect","");
+  p.with_gravity  = param.getDefault<bool>("with_gravity",false);
+  p.with_pressure  = param.getDefault<bool>("with_pressure",true);
   size_t i;
   if ((i=p.vtufile.find(".vtu")) != std::string::npos){
     p.vtufile = p.vtufile.substr(0,i);
@@ -240,11 +244,11 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
 
     Opm::Elasticity::Vector pressforce;
     pressforce.resize(grid.size(0));
-    pressforce = 0.0;
-    if(with_pressure){
+    pressforce = 1.0;
+    if(p.with_pressure){
         Dune::loadMatrixMarket(pressforce,"pressforce.mtx");
     }
-    if(with_gravity){
+    if(p.with_gravity){
         esolver.setBodyForce(9.8);
     }else{
         esolver.setBodyForce(0.0);
@@ -262,11 +266,11 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
      std::cout << "\tsolution norm: " << esolver.u.two_norm() << std::endl;
      Opm::Elasticity::Vector field;
      field.resize(grid.size(dim)*dim);
-     esolver.expandSolution(field,esolver.u);
-     Dune::storeMatrixMarket(esolver.A.getOperator(), "A.mtx");
-     Dune::storeMatrixMarket(esolver.A.getLoadVector(), "b.mtx");
-     Dune::storeMatrixMarket(esolver.u, "u.mtx");
-     Dune::storeMatrixMarket(field, "field.mtx");
+     esolver.expandSolution(field,esolver.u);     
+     Dune::storeMatrixMarket(esolver.A.getOperator(), name + "_" + std::string("A.mtx"));
+     Dune::storeMatrixMarket(esolver.A.getLoadVector(), name + "_" + std::string("b.mtx"));
+     Dune::storeMatrixMarket(esolver.u, name + "_" + std::string("u.mtx"));
+     Dune::storeMatrixMarket(field, name + "_" + std::string("field.mtx"));
      Dune::FieldMatrix<double,6,6> C;
      Dune::BlockVector<Dune::FieldVector<double,3>> disp;
      disp.resize(pressforce.size());

@@ -690,7 +690,7 @@ reduce_system(vector<tuple<int, int, double>>& A,
     // sort entries of A into columns
     cout << "Reducing system: moving elements to right hand side" << endl;
 
-    sort(A.begin(), A.end(), [](const auto& a, const auto& b) { return get<1>(a) < get<1>(b); });
+    sort(A.begin(), A.end(), [](const auto& aa, const auto& bb) { return get<1>(aa) < get<1>(bb); });
 
     // eliminate columns associated with fixed dofs (move value to b)
     auto cur_end = A.begin();
@@ -1172,8 +1172,8 @@ array<double, 3> identify_star_point(const array<double, 3>& point,
       const double proj = (result[0] - face_centroids[3*f_ix])   * face_normals[3*f_ix] +
                           (result[1] - face_centroids[3*f_ix+1]) * face_normals[3*f_ix+1] +
                           (result[2] - face_centroids[3*f_ix+2]) * face_normals[3*f_ix+2];
-      for (int i = 0; i != 3; ++i)
-        result[i] -= proj * face_normals[3*f_ix+i];
+      for (int ii = 0; ii != 3; ++ii)
+        result[i] -= proj * face_normals[3*f_ix+ii];
     }
     if (++count == N)
       break;

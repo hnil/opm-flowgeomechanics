@@ -18,6 +18,7 @@
 #include <omp.h>
 #endif
 #include <vector>
+#include <algorithm>
 #include <opm/input/eclipse/Deck/DeckKeyword.hpp>
 #include <opm/geomech/vem/vem.hpp>
 #include <opm/geomech/vem/vemutils.hpp>
@@ -83,10 +84,7 @@ namespace Elasticity {
   // assemble the mechanical system
   vector<tuple<int, int, double>> A_entries;
   vector<double> rhs;
-  body_force_.resize(3*num_cells, 0.0);
-  for(int i=0; i<num_cells; ++i){
-      body_force_[3*i+2] = 2000*9.8;
-  }
+  
   const int numdof =
     vem::assemble_mech_system_3D(&coords[0], num_cells, &num_cell_faces[0], &num_face_corners[0],
                                  &face_corners[0], &ymodule_[0], &pratio_[0], &body_force_[0],
@@ -101,8 +99,16 @@ namespace Elasticity {
   }
   vem::potential_gradient_force_3D(&coords[0], num_cells, &num_cell_faces[0], &num_face_corners[0],
                                    &face_corners[0], &std_pressure[0],rhs_pressure);
+  std::vector<int> dof_idx(rhs_pressure.size());
+  std::iota(dof_idx.begin(), dof_idx.end(),0);
+  std::vector<int> idx_free;
+  std::set_difference(dof_idx.begin(), dof_idx.end(), fixed_dof_ixs.begin(), fixed_dof_ixs.end(),std::back_inserter(idx_free));
   
- //  std::transform(rhs.begin(),rhs.end(),rhs_pressure.begin(),rhs.begin(), [](double a, double b) {return a+b;});
+  for(size_t i=0; i< idx_free.size(); ++i){
+      rhs[i] -= rhs_pressure[idx_free[i]];
+  }
+  
+
   // hopefully consisten with matrix
   // should be moved to initialization
   std::vector< std::set<int> > rows;
