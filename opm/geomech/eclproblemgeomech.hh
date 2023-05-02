@@ -28,7 +28,9 @@ namespace Opm{
             EclProblem<TypeTag>(simulator),
             geomechModel_(simulator)
         {
-            this->model().addOutputModule(new VtkGeoMechModule<TypeTag>(simulator));
+            if(this->simulator().vanguard().eclState().runspec().mech()){
+                this->model().addOutputModule(new VtkGeoMechModule<TypeTag>(simulator));
+            }
         }
 
         static void registerParameters(){
@@ -40,45 +42,50 @@ namespace Opm{
             Parent::finishInit();
             const auto& simulator = this->simulator();
             const auto& eclState = simulator.vanguard().eclState();
-            const auto& initconfig = eclState.getInitConfig();
-            geomechModel_.init(initconfig.restartRequested());
-            const auto& fp = eclState.fieldProps();
-            std::vector<std::string> needkeys = {"YMODULE","PRATIO","BIOTCOEF"};
-            for(size_t i=0; i < needkeys.size(); ++i){
-                bool ok = fp.has_double(needkeys[i]);
+            if(eclState.runspec().mech()){
+                const auto& initconfig = eclState.getInitConfig();
+                geomechModel_.init(initconfig.restartRequested());
+                const auto& fp = eclState.fieldProps();
+                std::vector<std::string> needkeys = {"YMODULE","PRATIO","BIOTCOEF"};
+                for(size_t i=0; i < needkeys.size(); ++i){
+                    bool ok = fp.has_double(needkeys[i]);
                 std::stringstream ss;
                 if(!ok){
                     ss << "Missing keyword " << needkeys[i];
                     OPM_THROW(std::runtime_error, ss.str());
                 }
-            }
-            ymodule_ = fp.get_double("YMODULE");
-            pratio_ = fp.get_double("PRATIO");
-            biotcoef_ = fp.get_double("BIOTCOEF");
-            for(size_t i=0; i < ymodule_.size(); ++i){
-                using IsoMat = Opm::Elasticity::Isotropic;
-                if(pratio_[i]>0.5 || pratio_[i] < 0){
-                    OPM_THROW(std::runtime_error,"Pratio not valid");
                 }
-                elasticparams_.push_back(std::make_shared<IsoMat>(i,ymodule_[i],pratio_[i]));
+                ymodule_ = fp.get_double("YMODULE");
+                pratio_ = fp.get_double("PRATIO");
+                biotcoef_ = fp.get_double("BIOTCOEF");
+                for(size_t i=0; i < ymodule_.size(); ++i){
+                    using IsoMat = Opm::Elasticity::Isotropic;
+                    if(pratio_[i]>0.5 || pratio_[i] < 0.0){
+                        OPM_THROW(std::runtime_error,"Pratio not valid");
+                    }
+                    if(biotcoef_[i]>1.0 || biotcoef_[i] < 0.0){
+                        OPM_THROW(std::runtime_error,"BIOTCOEF not valid");
+                    }
+                    elasticparams_.push_back(std::make_shared<IsoMat>(i,ymodule_[i],pratio_[i]));
+                }
+                // read mechanical boundary conditions
+                //const auto& simulator = this->simulator();
+                const auto& vanguard = simulator.vanguard();
+                const auto& bcconfig = vanguard.eclState().getSimulationConfig().bcconfig();
+                //using CartesianIndexMapper = Dune::CartesianIndexMapper<Grid>;
+                const auto& gv = this->gridView();
+                //const auto& grid = simulator.grid();
+                const auto& cartesianIndexMapper = vanguard.cartesianIndexMapper();
+                //CartesianIndexMapper cartesianIndexMapper(grid);
+                Opm::Elasticity::fixNodesAtBoundary(fixed_nodes_,
+                                                    bcconfig,
+                                                    gv,
+                                                    cartesianIndexMapper);
             }
-            // read mechanical boundary conditions
-            //const auto& simulator = this->simulator();
-            const auto& vanguard = simulator.vanguard();
-            const auto& bcconfig = vanguard.eclState().getSimulationConfig().bcconfig();
-            //using CartesianIndexMapper = Dune::CartesianIndexMapper<Grid>;
-            const auto& gv = this->gridView();
-            //const auto& grid = simulator.grid();
-            const auto& cartesianIndexMapper = vanguard.cartesianIndexMapper();
-            //CartesianIndexMapper cartesianIndexMapper(grid);
-            Opm::Elasticity::fixNodesAtBoundary(fixed_nodes_,
-                                                bcconfig,
-                                                gv,
-                                                cartesianIndexMapper);
         }
         void initialSolutionApplied(){
             Parent::initialSolutionApplied();
-            auto& simulator = this->simulator();
+            const auto& simulator = this->simulator();
             size_t numDof = simulator.model().numGridDof();
             initpressure_.resize(numDof);
             for(size_t dofIdx=0; dofIdx < numDof; ++dofIdx){
@@ -87,7 +94,10 @@ namespace Opm{
                 initpressure_[dofIdx] = Toolbox::value(fs.pressure(waterPhaseIdx));
             }
             // for now make a copy
-            this->geomechModel_.setMaterial(elasticparams_);
+            if(simulator.vanguard().eclState().runspec().mech()){
+                //this->geomechModel_.setMaterial(elasticparams_);
+                this->geomechModel_.setMaterial(ymodule_,pratio_);
+            }
         }
         void timeIntegration()
         {
@@ -103,7 +113,9 @@ namespace Opm{
                 << std::flush;                                                     
             }
             Parent::beginTimeStep();
-            geomechModel_.beginTimeStep();
+            if(this->simulator().vanguard().eclState().runspec().mech()){
+                geomechModel_.beginTimeStep();
+            }
         }
         void endTimeStep(){
             if (this->gridView().comm().rank() == 0){
@@ -111,7 +123,9 @@ namespace Opm{
                 << std::flush;                                                     
             }
             Parent::endTimeStep();
-            geomechModel_.endTimeStep();
+            if(this->simulator().vanguard().eclState().runspec().mech()){
+                geomechModel_.endTimeStep();
+            }
         }
         
         const EclGeoMechModel<TypeTag>& geoMechModel() const

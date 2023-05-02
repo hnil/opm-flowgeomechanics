@@ -159,7 +159,7 @@ opm_add_test(flow_geomech
   ONLY_COMPILE
   ALWAYS_ENABLE
   DEPENDS opmsimulators opmupscaling
-  LIBRARIES opmsimulators opmupscaling
+  LIBRARIES opmsimulators opmupscaling vem
   SOURCES
   examples/flow_geomech.cpp examples/FlexibleSolverMech.cpp
   $<TARGET_OBJECTS:moduleVersionGeoMech>

@@ -4,6 +4,8 @@
 #include <array>
 #include <tuple>
 #include <vector>
+#include <opm/grid/polyhedralgrid.hh>
+#include <dune/alugrid/grid.hh>
 #include <opm/geomech/boundaryutils.hh>
 namespace vem
 {
@@ -19,19 +21,19 @@ namespace vem
     using namespace std;
     using namespace Dune;
     const auto& gv = grid.leafGridView();
-  const int comp = 3+(dim-2)*3;
-  static const int bfunc = 4+(dim-2)*4;
-  //int loadcase = -1;
-  //Dune::FieldVector<ctype,comp> eps0 = {1, 1, 1, 0, 0, 0};
-  //eps0 = 0;
-  
-  // start VEM assembly
-   // make global point coordinate vector
-  //vector<double> coords;
-  for (const auto& v : vertices(gv)) {
-    const auto c = v.geometry().corner(0);
-    coords.insert(coords.end(), c.begin(), c.end());
-  }
+    const int comp = 3+(dim-2)*3;
+    static const int bfunc = 4+(dim-2)*4;
+    //int loadcase = -1;
+    //Dune::FieldVector<ctype,comp> eps0 = {1, 1, 1, 0, 0, 0};
+    //eps0 = 0;
+    
+    // start VEM assembly
+    // make global point coordinate vector
+    //vector<double> coords;
+    for (const auto& v : vertices(gv)) {
+        const auto c = v.geometry().corner(0);
+        coords.insert(coords.end(), c.begin(), c.end());
+    }
 
   const int num_cells = gv.size(0); // entities of codim 0
   const auto& ixset = gv.indexSet();

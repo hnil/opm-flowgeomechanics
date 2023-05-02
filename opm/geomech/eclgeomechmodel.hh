@@ -6,6 +6,7 @@
 //#include <opm/elasticity/elasticity_preconditioners.hpp>
 //#include <opm/elasticity/elasticity_upscale.hpp>
 #include <opm/geomech/elasticity_solver.hpp>
+#include <opm/geomech/vem_elasticity_solver.hpp>
 //#include <opm/geomech/ElasticitySolverUpscale.hpp>
 namespace Opm{
     template<typename TypeTag>
@@ -30,10 +31,7 @@ namespace Opm{
             //           Parent(simulator)
             first_solve_(true),
             simulator_(simulator),
-            elacticitysolver_(simulator.vanguard().grid(),
-                              1e-14,// tol for matching not needed
-                              1.0, // scaleof youngs modulo
-                              true)
+            elacticitysolver_(simulator.vanguard().grid())
         {
             //const auto& eclstate = simulator_.vanguard().eclState();                
         };
@@ -83,9 +81,10 @@ namespace Opm{
                 bool do_matrix = true;//assemble matrix
                 bool do_vector = true;//assemble matrix
                 // set boundary
+                elacticitysolver_.setBodyForce(0.0);
                 elacticitysolver_.fixNodes(problem.fixedNodes()); 
                 //
-                elacticitysolver_.A.initForAssembly();
+                elacticitysolver_.initForAssembly();
                 elacticitysolver_.assemble(pressDiff_, do_matrix, do_vector);
                 Opm::PropertyTree prm("mechsolver.json");
                 elacticitysolver_.setupSolver(prm);
@@ -99,7 +98,11 @@ namespace Opm{
             
             elacticitysolver_.solve();
             Opm::Elasticity::Vector field;
-            elacticitysolver_.A.expandSolution(field,elacticitysolver_.u);            
+            const auto& grid = simulator_.vanguard().grid();
+            const auto& gv = grid.leafGridView();
+            static constexpr int dim = Grid::dimension;
+            field.resize(grid.size(dim)*dim);
+            elacticitysolver_.expandSolution(field,elacticitysolver_.u);            
             //elacticitysolver_.A.printOperator();
             //elacticitysolver_.A.printLoadVector();
             Dune::storeMatrixMarket(elacticitysolver_.A.getOperator(), "A.mtx");
@@ -108,8 +111,7 @@ namespace Opm{
             Dune::storeMatrixMarket(field, "field.mtx");
             Dune::storeMatrixMarket(pressDiff_, "pressforce.mtx");
             // always make the full displacement field
-            int dim = 3;
-            const auto& gv = simulator_.vanguard().grid().leafGridView();
+            
             for (const auto& vertex : Dune::vertices(gv)){
                 auto index = gv.indexSet().index(vertex);
                 for(int k=0; k < dim; ++k){
@@ -138,6 +140,9 @@ namespace Opm{
         void setMaterial(const std::vector<std::shared_ptr<Opm::Elasticity::Material>>& materials){
             elacticitysolver_.setMaterial(materials);
         }
+        void setMaterial(const std::vector<double>& ymodule,const std::vector<double>& pratio){
+            elacticitysolver_.setMaterial(ymodule,pratio);
+        }
         const Dune::FieldVector<double,3>& displacement(size_t vertexIndex) const{
             return displacement_[vertexIndex];
         }
@@ -152,7 +157,8 @@ namespace Opm{
         //ElasticitySolver  elasticitysolver_;
         //using PC =  Opm::Elasticity::AMG;
         using AMG = Opm::Elasticity::AMG1< Opm::Elasticity::ILUSmoother >;
-        Opm::Elasticity::ElasticitySolver<Grid> elacticitysolver_;
+        //Opm::Elasticity::ElasticitySolver<Grid> elacticitysolver_;
+        Opm::Elasticity::VemElasticitySolver<Grid> elacticitysolver_;
         //Dune::VTKWriter<typename GridType::LeafGridView> vtkwriter(grid.leafGridView());
     };
 }

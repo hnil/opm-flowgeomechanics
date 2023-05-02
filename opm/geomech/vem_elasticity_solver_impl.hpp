@@ -68,83 +68,61 @@ namespace Elasticity {
     if (do_matrix)
         A.getOperator() = 0;
 
-    std::vector<double> coords;
-    std::vector<int> num_cell_faces, num_face_corners,face_corners;
-    vem::getGridVectors(grid_,coords,
-                        num_cell_faces,
-                        num_face_corners,
-                        face_corners);
-    const int num_fixed_dofs = get<0>(dirichlet_);
-    const vector<int>& fixed_dof_ixs = std::get<1>(dirichlet_);
-    const vector<double>& fixed_dof_values = std::get<2>(dirichlet_);
+    if(do_matrix){
+        vem::getGridVectors(grid_,coords_,
+                            num_cell_faces_,
+                            num_face_corners_,
+                            face_corners_);
+    
+        const int num_fixed_dofs = get<0>(dirichlet_);
+        const vector<int>& fixed_dof_ixs = std::get<1>(dirichlet_);
+        const vector<double>& fixed_dof_values = std::get<2>(dirichlet_);
 
-  // neumann boundary conditions 
-  const int num_neumann_faces = 0;
-  const int num_cells = grid_.leafGridView().size(0); // entities of codim 0
-  // assemble the mechanical system
-  vector<tuple<int, int, double>> A_entries;
-  vector<double> rhs;
-  vem::StabilityChoice stability_choice = vem::D_RECIPE;
-  const int numdof =
-    vem::assemble_mech_system_3D(&coords[0], num_cells, &num_cell_faces[0], &num_face_corners[0],
-                                 &face_corners[0], &ymodule_[0], &pratio_[0], &body_force_[0],
-                                 num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0],
-                                 num_neumann_faces, nullptr, nullptr,
-                                 A_entries, rhs, stability_choice);
-  // adding pressure force
-  vector<double> rhs_pressure;
-  vector<double> std_pressure(pressure.size(), 0);
-  for(size_t i = 0; i < pressure.size(); ++i){
-      std_pressure[i] = pressure[i][0];
-  }
-  vem::potential_gradient_force_3D(&coords[0], num_cells, &num_cell_faces[0], &num_face_corners[0],
-                                   &face_corners[0], &std_pressure[0],rhs_pressure);
-  std::vector<int> dof_idx(rhs_pressure.size());
-  std::iota(dof_idx.begin(), dof_idx.end(),0);
-  std::vector<int> idx_free;
-  std::set_difference(dof_idx.begin(), dof_idx.end(), fixed_dof_ixs.begin(), fixed_dof_ixs.end(),std::back_inserter(idx_free));
-  
-  for(size_t i=0; i< idx_free.size(); ++i){
-      rhs[i] -= rhs_pressure[idx_free[i]];
-  }
-  
+        // neumann boundary conditions 
+        const int num_neumann_faces = 0;
+        num_cells_ = grid_.leafGridView().size(0); // entities of codim 0
+        // assemble the mechanical system
+        vector<tuple<int, int, double>> A_entries;
+        vem::StabilityChoice stability_choice = vem::D_RECIPE;
+        const int numdof =
+            vem::assemble_mech_system_3D(&coords_[0], num_cells_, &num_cell_faces_[0], &num_face_corners_[0],
+                                         &face_corners_[0], &ymodule_[0], &pratio_[0], &body_force_[0],
+                                         num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0],
+                                         num_neumann_faces, nullptr, nullptr,
+                                         A_entries, rhs_force_, stability_choice);
+        
+    
+    
+        this->makeDuneMatrix(A_entries);
 
-  // hopefully consisten with matrix
-  // should be moved to initialization
-  std::vector< std::set<int> > rows;
-  int nrows=0;
-  int ncols=0;
-  for(auto matel: A_entries){
-      int i = get<0>(matel);
-      int j = get<1>(matel);
-      nrows = std::max(nrows,i);
-      ncols = std::max(ncols,j);
-  }
-  nrows = nrows+1;
-  ncols = ncols+1;
-  assert(nrows==ncols);
-  rows.resize(nrows);
-  for(auto matel: A_entries){
-      int i = get<0>(matel);
-      int j = get<1>(matel);
-      rows[i].insert(j);
-  }
-  auto& MAT =this->A.getOperator();      
-  MatrixOps::fromAdjacency(MAT, rows, nrows, ncols);
-  MAT = 0;
-  for(auto matel:A_entries){
-      int i = get<0>(matel);
-      int j = get<1>(matel);
-      double val = get<2>(matel);
-      A.addMatElement(i,j, val);// += val;
-  }
-  b.resize(rhs.size());
-  // end initialization
-  if(do_vector){
-      for(int i=0; i < numdof; ++i){
-          b[i] = rhs[i];
-      }
-  }
+        
+        // make indexing for div operator i.e. all nodes to dofs
+        std::vector<int> dof_idx(num_cells_);
+        std::iota(dof_idx.begin(), dof_idx.end(),0);
+        
+        std::set_difference(dof_idx.begin(), dof_idx.end(), fixed_dof_ixs.begin(), fixed_dof_ixs.end(),std::back_inserter(idx_free_));
+        
+    }
+    if(do_vector){
+        //NB rhs_force_ is calculated by matrix call
+        vector<double> rhs_pressure;
+        vector<double> std_pressure(pressure.size(), 0);
+        for(size_t i = 0; i < pressure.size(); ++i){
+            std_pressure[i] = pressure[i][0];
+        }
+        vem::potential_gradient_force_3D(&coords_[0], num_cells_, &num_cell_faces_[0], &num_face_corners_[0],
+                                         &face_corners_[0], &std_pressure[0], rhs_pressure);
+        
+        vector<double> rhs(rhs_force_);
+        for(size_t i=0; i< idx_free_.size(); ++i){
+            rhs[i] -= rhs_pressure[idx_free_[i]];
+        }
+        b.resize(rhs.size());
+        // end initialization
+        for(int i=0; i < rhs.size(); ++i){
+                b[i] = rhs[i];
+        }
+    }
 }
 
 

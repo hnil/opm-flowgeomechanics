@@ -128,7 +128,7 @@ class VemElasticitySolver
              result[fixed_dof_ixs[i]] = fixed_dof_values[i];
          
          for (int i = 0, cur_ix = 0; i != int(result.size()); ++i){
-             if (isnan(result[i])) {
+             if (std::isnan(result[i][0])) {
                  result[i] = u[cur_ix++];
              }
          }
@@ -183,6 +183,39 @@ class VemElasticitySolver
             body_force_[3*i+2] = 2000*gravity;
         }
     }
+
+    void makeDuneMatrix(const std::vector<std::tuple<int, int, double>>& A_entries){
+
+        // hopefully consisten with matrix
+        // should be moved to initialization
+        std::vector< std::set<int> > rows;
+        int nrows=0;
+        int ncols=0;
+        for(auto matel: A_entries){
+            int i = std::get<0>(matel);
+            int j = std::get<1>(matel);
+            nrows = std::max(nrows,i);
+            ncols = std::max(ncols,j);
+        }
+        nrows = nrows+1;
+        ncols = ncols+1;
+        assert(nrows==ncols);
+        rows.resize(nrows);
+        for(auto matel: A_entries){
+            int i = std::get<0>(matel);
+            int j = std::get<1>(matel);
+            rows[i].insert(j);
+        }
+        auto& MAT =this->A.getOperator();      
+        MatrixOps::fromAdjacency(MAT, rows, nrows, ncols);
+        MAT = 0;
+        for(auto matel:A_entries){
+            int i = std::get<0>(matel);
+            int j = std::get<1>(matel);
+            double val = std::get<2>(matel);
+            A.addMatElement(i,j, val);// += val;
+        }
+    }
   private:
     using AbstractSolverType = Dune::InverseOperator<Vector, Vector>;
     using AbstractOperatorType = Dune::AssembledLinearOperator<Matrix, Vector, Vector>;
@@ -200,7 +233,12 @@ class VemElasticitySolver
 
     //! \brief A reference to our grid
     const GridType& grid_;
+    int num_cells_;
+    std::vector<double> coords_;
+    std::vector<int> num_cell_faces_, num_face_corners_,face_corners_;
+    std::vector<int> idx_free_;
 
+    std::vector<double> rhs_force_;
     //! \brief Vector holding material parameters for each active grid cell
     std::vector< std::shared_ptr<Material> > materials;
     std::vector<double> ymodule_;

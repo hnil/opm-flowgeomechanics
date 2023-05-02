@@ -215,6 +215,10 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
         if(pratio[i]>0.5 || pratio[i] < 0){
             OPM_THROW(std::runtime_error,"Pratio not valid");
         }
+        if(biotcoef[i]>1.0 || biotcoef[i] < 0.0){
+            OPM_THROW(std::runtime_error,"BIOTCOEF not valid");
+        }
+    }    
         materials.push_back(std::make_shared<IsoMat>(i,ymodule[i],pratio[i]));
     }    
     //esolver.setMaterial(materials);
