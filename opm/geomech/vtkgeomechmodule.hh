@@ -116,6 +116,7 @@ namespace Opm {
                 //pressDiff_.resize(geoMechModel.numCells);                
                 this->resizeScalarBuffer_(pressDiff_);
                 this->resizeVectorBuffer_(disp_,ParentType::BufferType::VertexBuffer);
+                this->resizeTensorBuffer_(stress_);
             }
 
         }
@@ -132,7 +133,25 @@ namespace Opm {
             const auto& geoMechModel = elemCtx.problem().geoMechModel();
             for (unsigned dofIdx = 0; dofIdx < elemCtx.numPrimaryDof(/*timeIdx=*/0); ++dofIdx) {
                 unsigned globalDofIdx = elemCtx.globalSpaceIndex(dofIdx, /*timeIdx=*/0);
-                pressDiff_[globalDofIdx] = geoMechModel.pressureDiff(globalDofIdx); 
+                pressDiff_[globalDofIdx] = geoMechModel.pressureDiff(globalDofIdx);
+                //
+                auto& stress = stress_[globalDofIdx];
+                for(int i=0; i< 3; ++i){
+                    stress[i][i] =geoMechModel.stress(globalDofIdx,i);
+                }
+                // voit notation converion
+                stress[0][1] = geoMechModel.stress(globalDofIdx,5); //xy
+                stress[0][2] = geoMechModel.stress(globalDofIdx,4); //xz
+                stress[1][2] = geoMechModel.stress(globalDofIdx,3); //yz
+                // fix symmetry of tensor
+                for(int i=0; i< 3; ++i){
+                    for(int j=0; j < 3; ++j){
+                        if(i > j){
+                            stress[i][j] = stress[j][i];
+                        }
+                    }
+                }
+                    
             }
             // all vertices proably do it to many times for now
             auto gv  = elemCtx.gridView();
@@ -142,6 +161,7 @@ namespace Opm {
                 auto index = gv.indexSet().index(vertex);
                 disp_[index] = geoMechModel.displacement(index);
             }
+            
             
         }
 
@@ -166,11 +186,12 @@ namespace Opm {
                     this->commitVectorBuffer_(baseWriter,tmp.c_str(),
                                               disp_, ParentType::BufferType::VertexBuffer);
                 }
-                // {
-                //     const std::string tmp = "stress"; 
-                //     this->commitVectorBuffer_(baseWriter,tmp.c_str(),
-                //                               stress_);
-                // }
+                {
+                    const std::string tmp = "stress"; 
+                    this->commitTensorBuffer_(baseWriter,tmp.c_str(),
+                                              stress_,
+                                              ParentType::BufferType::ElementBuffer);
+                }
             }
         }
 
@@ -185,7 +206,7 @@ namespace Opm {
         }
         ScalarBuffer pressDiff_;
         VectorBuffer disp_;
-        //TensorBuffer stress_;
+        TensorBuffer stress_;
     };
 } // namespace Opm
 

@@ -73,7 +73,7 @@ namespace Opm{
                 const auto& fs = iq.fluidState();
                 const auto& press = fs.pressure(waterPhaseIdx);
                 const auto& biotcoef = problem.biotCoef(dofIdx);
-                pressDiff_[dofIdx] = (Toolbox::value(press) - problem.initPressure(dofIdx))*biotcoef;
+                mechPotentialForce_[dofIdx] = (Toolbox::value(press) - problem.initPressure(dofIdx))*biotcoef;
             }
             // for now assemble and set up solver her
             
@@ -85,7 +85,7 @@ namespace Opm{
                 elacticitysolver_.fixNodes(problem.fixedNodes()); 
                 //
                 elacticitysolver_.initForAssembly();
-                elacticitysolver_.assemble(pressDiff_, do_matrix, do_vector);
+                elacticitysolver_.assemble(mechPotentialForce_, do_matrix, do_vector);
                 Opm::PropertyTree prm("mechsolver.json");
                 elacticitysolver_.setupSolver(prm);
                 first_solve_ = false;
@@ -93,7 +93,7 @@ namespace Opm{
                 bool do_matrix = false;//assemble matrix
                 bool do_vector = true;//assemble matrix
                 //elacticitysolver_.A.initForAssembly();
-                elacticitysolver_.assemble(pressDiff_, do_matrix, do_vector);
+                elacticitysolver_.assemble(mechPotentialForce_, do_matrix, do_vector);
             }    
             
             elacticitysolver_.solve();
@@ -102,22 +102,25 @@ namespace Opm{
             const auto& gv = grid.leafGridView();
             static constexpr int dim = Grid::dimension;
             field.resize(grid.size(dim)*dim);
-            elacticitysolver_.expandSolution(field,elacticitysolver_.u);            
-            //elacticitysolver_.A.printOperator();
-            //elacticitysolver_.A.printLoadVector();
-            Dune::storeMatrixMarket(elacticitysolver_.A.getOperator(), "A.mtx");
-            Dune::storeMatrixMarket(elacticitysolver_.A.getLoadVector(), "b.mtx");
-            Dune::storeMatrixMarket(elacticitysolver_.u, "u.mtx");
-            Dune::storeMatrixMarket(field, "field.mtx");
-            Dune::storeMatrixMarket(pressDiff_, "pressforce.mtx");
-            // always make the full displacement field
+            elacticitysolver_.expandSolution(field,elacticitysolver_.u);
             
-            for (const auto& vertex : Dune::vertices(gv)){
-                auto index = gv.indexSet().index(vertex);
-                for(int k=0; k < dim; ++k){
-                    displacement_[index][k] = field[index*dim+k];
-                }
+            this->makeDisplacement(field);
+            // update variables used for output to resinsight
+            // NB TO DO
+            elacticitysolver_.calculateStress();
+            stress_ = elacticitysolver_.stress();
+            
+            
+            bool verbose = true;
+            if(verbose){
+                // debug output to matrixmaket format
+                Dune::storeMatrixMarket(elacticitysolver_.A.getOperator(), "A.mtx");
+                Dune::storeMatrixMarket(elacticitysolver_.A.getLoadVector(), "b.mtx");
+                Dune::storeMatrixMarket(elacticitysolver_.u, "u.mtx");
+                Dune::storeMatrixMarket(field, "field.mtx");
+                Dune::storeMatrixMarket(mechPotentialForce_, "pressforce.mtx");
             }
+            
         }       
         template<class Serializer>
         void serializeOp(Serializer& serializer)
@@ -130,12 +133,15 @@ namespace Opm{
         void init(bool restart){
             std::cout << "Geomech init" << std::endl;
             size_t numDof = simulator_.model().numGridDof();
-            pressDiff_.resize(numDof);
+            mechPotentialForce_.resize(numDof);
+            celldisplacement_.resize(numDof);
+            stress_.resize(numDof);
             const auto& gv = simulator_.vanguard().grid().leafGridView();
-            displacement_.resize(gv.indexSet().size(3));                       
+            displacement_.resize(gv.indexSet().size(3));
+            celldisplacement_.resize(gv.indexSet().size(3));
         };
         double pressureDiff(unsigned dofIx) const{
-            return pressDiff_[dofIx];
+            return mechPotentialForce_[dofIx];
         }
         void setMaterial(const std::vector<std::shared_ptr<Opm::Elasticity::Material>>& materials){
             elacticitysolver_.setMaterial(materials);
@@ -146,20 +152,53 @@ namespace Opm{
         const Dune::FieldVector<double,3>& displacement(size_t vertexIndex) const{
             return displacement_[vertexIndex];
         }
+        const double mechPotentialForce(unsigned globalDofIdx) const
+        {
+            return mechPotentialForce_[globalDofIdx];
+        }
+        const double disp(unsigned globalDofIdx, unsigned dim) const
+        {
+            return celldisplacement_[globalDofIdx][dim];
+        }
+        const double stress(unsigned globalDofIdx, unsigned dim) const
+        {
+            return stress_[globalDofIdx][dim];
+        }
+        
+        void makeDisplacement(const Opm::Elasticity::Vector& field) {
+            // make displacement on all nodes used for output to vtk
+            const auto& grid = simulator_.vanguard().grid();
+            const auto& gv = grid.leafGridView();
+            int dim = 3;
+            for (const auto& vertex : Dune::vertices(gv)){
+                auto index = gv.indexSet().index(vertex);
+                for(int k=0; k < dim; ++k){
+                    displacement_[index][k] = field[index*dim+k];
+                }
+            }
+            for (const auto& cell: elements(gv)){
+                auto cellindex = gv.indexSet().index(cell);
+                const auto& vertices = Dune::subEntities(cell, Dune::Codim<Grid::dimension>{});
+                for (const auto& vertex : vertices){
+                    auto nodeidex = gv.indexSet().index(vertex);
+                    for(int k=0; k < dim; ++k){
+                        celldisplacement_[cellindex][nodeidex] += displacement_[nodeidex][k] ;
+                    }
+                }
+                celldisplacement_[cellindex] /= vertices.size(); 
+            }
+        }
+        
     private:
         bool first_solve_;
         Simulator& simulator_;
-        //std::vector<double> pressDiff_;
-        Dune::BlockVector<Dune::FieldVector<double,1>> pressDiff_;
+        Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialForce_;
         //Dune::BlockVector<Dune::FieldVector<double,1> > solution_;
+        Dune::BlockVector<Dune::FieldVector<double,3> > celldisplacement_;
         Dune::BlockVector<Dune::FieldVector<double,3> > displacement_;
+        Dune::BlockVector<Dune::FieldVector<double,6> > stress_;//NB is also stored in esolver
         //Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1> > A_;
-        //ElasticitySolver  elasticitysolver_;
-        //using PC =  Opm::Elasticity::AMG;
-        using AMG = Opm::Elasticity::AMG1< Opm::Elasticity::ILUSmoother >;
-        //Opm::Elasticity::ElasticitySolver<Grid> elacticitysolver_;
         Opm::Elasticity::VemElasticitySolver<Grid> elacticitysolver_;
-        //Dune::VTKWriter<typename GridType::LeafGridView> vtkwriter(grid.leafGridView());
     };
 }
 

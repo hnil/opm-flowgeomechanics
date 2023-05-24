@@ -1627,6 +1627,58 @@ assemble_mech_system_3D(const double* const points,
     return b.size();
 }
 
+void
+compute_stress_3D(const double* const points,
+                  const int num_cells,
+                  const int* const num_cell_faces, // cell faces per cell
+                  const int* const num_face_corners, // corners per face
+                  const int* const face_corners,
+                  const double* const young,
+                  const double* const poisson,
+                  //const double* const body_force, // 3 * number of cells
+                  //const int num_fixed_dofs, // dirichlet
+                  //const int* const fixed_dof_ixs, // indices must be sorted
+                  //const double* const fixed_dof_values,
+                  //const int num_neumann_faces,
+                  //const int* const neumann_faces,
+                  //const double* const neumann_forces, // 3 * number of neumann faces
+                  const std::vector<double>& disp,
+                  std::vector<std::array<double,6>>& stress,
+                  const StabilityChoice stability_choice)
+// ----------------------------------------------------------------------------
+{
+    // preliminary computations
+    //const int tot_num_cell_faces = accumulate(num_cell_faces, num_cell_faces + num_cells, 0);
+    //const int tot_num_face_corners = accumulate(num_face_corners, num_face_corners + tot_num_cell_faces, 0);
+    //const int num_points = *max_element(face_corners, face_corners + tot_num_face_corners) + 1;
+
+    // assemble full system matrix
+    // loop over cells and assemble system matrix
+    // vector<int> loc_indexing;
+    // vector<double> loc; // use as local 'scratch' vector
+    // array<double, 3> centroid; // will contain the centroid for the currently treated cell
+    int cf_ix = 0; // index to first cell face for the current cell
+    int fcorners_start = 0; // index to first cell corner for current cell
+
+    cout << "Starting assembly" << endl;
+    for (int c = 0; c != num_cells; ++c) {
+        // computing local stiffness matrix, writing its entries into the global matrix
+        calculate_stress_3D_local(points,
+                                  &face_corners[fcorners_start],
+                                  &num_face_corners[cf_ix],
+                                  num_cell_faces[c],
+                                  young[c],
+                                  poisson[c],
+                                  stability_choice,
+                                  disp,// global displacement
+                                  stress[c]
+            );
+        fcorners_start += accumulate(&num_face_corners[cf_ix], &num_face_corners[cf_ix + num_cell_faces[c]], 0);
+        cf_ix += num_cell_faces[c];
+    }
+}
+
+
 
 // ----------------------------------------------------------------------------
 void
@@ -1709,6 +1761,93 @@ assemble_stiffness_matrix_3D(const double* const points,
     final_assembly(Wc, D, Nc, ImP, stability_choice, volume, num_corners, 3, &target[0]);
 }
 
+void
+calculate_stress_3D_local(const double* const points,
+                          const int* const faces,
+                          const int* const num_face_edges,
+                          const int num_faces,
+                          const double young,
+                          const double poisson,
+                          const StabilityChoice stability_choice,
+                          const std::vector<double>& disp,/// global displacement
+                          std::array<double,6>& stress)
+// ----------------------------------------------------------------------------
+{
+    array<double, 3> centroid;
+    vector<int> indexing;
+    vector<double> target;
+    // compute mapping between local vertex indices (0, 1, ... Ne) to
+    // indexing in the global 'points' vector (0, 1, .....N)
+    const auto reindex = global_to_local_indexing(faces, num_face_edges, num_faces, indexing);
+    const int num_corners = int(indexing.size());
+    const int num_face_entries = accumulate(num_face_edges, num_face_edges + num_faces, 0);
+
+    // make local list of corner coordinates, and a locally indexed version of
+    // 'faces'
+    const auto corners_loc = pick_points<3>(points, &indexing[0], num_corners);
+    vector<int> faces_loc(num_face_entries);
+    transform(faces, faces + num_face_entries, faces_loc.begin(), [&reindex](const int I) {
+        return reindex.find(I)->second;
+    });
+
+    double volume;                                    // computed in 'compute_cell_geometry' below
+    vector<double> outward_normals, face_centroids;   // computed in 'compute_cell_geometry' below
+    array<double, 3> star_point;                      // computed in 'compute_cell_geometry' below
+    compute_cell_geometry(&corners_loc[0], num_corners, &faces_loc[0], num_face_edges, num_faces,
+                          outward_normals, face_centroids, centroid, star_point, volume);
+                          
+    // // compute all intermediary matrices
+    const auto q = compute_q_3D(&corners_loc[0], int(corners_loc.size() / 3), &faces_loc[0],
+                                num_face_edges, num_faces, volume, outward_normals);
+    const auto Nr = compute_Nr_3D(&corners_loc[0], num_corners);
+    const auto Nc = compute_Nc_3D(&corners_loc[0], num_corners);
+    const auto Wr = compute_Wr_3D(q);
+    const auto Wc = compute_Wc_3D(q);
+    const auto D = compute_D_3D(young, poisson);
+    //const auto S = compute_S(Nc, D, num_corners, volume, 3);
+    const auto ImP = compute_ImP(Nr, Nc, Wr, Wc, 3);
+
+    // // do the final assembly of matrices, and write result to target
+    target.resize(pow(3 * num_corners, 2));
+    //
+    const int dim = 3;
+    //assert(dim == 2 || dim == 3);
+    const int lsdim = (dim == 2) ? 3 : 6; // dimension of "linear strain space"
+    const int totdim = dim * num_corners; // total number of unknowns
+
+    // compute stiffness matrix components
+    const auto DWct = matmul(&D[0], lsdim, lsdim, false, &Wc[0], totdim, lsdim, true);
+    /*
+    const auto EWcDWct = matmul(&Wc[0], totdim, lsdim, false, &DWct[0], lsdim, totdim, false, volume);
+
+    const auto S = stability_choice == D_RECIPE ?
+      compute_S_D_recipe(EWcDWct, totdim, volume) :
+      compute_S(Nc, D, num_corners, volume, dim, stability_choice);
+
+    const auto SImP = matmul(&S[0], totdim, totdim, false, &ImP[0], totdim, totdim, false);
+    const auto ImpSImp = matmul(&ImP[0], totdim, totdim, true, &SImP[0], totdim, totdim, false); 
+    assert(EWcDWct.size() == ImpSImp.size());
+
+    // add conformance and stability term, and write result to target
+    transform(EWcDWct.begin(), EWcDWct.end(), ImpSImp.begin(), target.begin(), [](double a, double b) { return a + b; });
+    */
+    // 
+    std::vector<double> local_disp;
+    local_disp.resize(indexing.size()*3);
+    for(size_t i = 0; i < indexing.size(); ++i){
+        for (size_t d = 0; d != 3; ++d){
+            local_disp[3*i+ d] = disp[3*indexing[i] + d]; 
+        }
+    }
+    for(int i=0; i < lsdim; ++i){
+        for(int j=0; j < totdim; ++j){
+            stress[i] += DWct[i*totdim + j]*local_disp[j];           
+        }
+    }
+    for(int i = 3; i<lsdim; ++i){
+        stress[i] /=2;
+    }
+}
 // ----------------------------------------------------------------------------
 void
 matprint(const double* data, const int r, const int c, bool transposed, const double zthreshold)

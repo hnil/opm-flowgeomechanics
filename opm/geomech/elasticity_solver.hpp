@@ -57,7 +57,8 @@ class ElasticitySolver
   public:
     //! \brief Dimension of our grid
     static const int dim = GridType::dimension;
-
+    static const int comp = 3+(dim-2)*3;
+    static const int bfunc = 4+(dim-2)*4;
     //! \brief A basic number
     typedef typename GridType::LeafGridView::ctype ctype;
 
@@ -138,6 +139,13 @@ class ElasticitySolver
             body_force_[i][2] = 2000*gravity;
         }
     }
+
+    const Dune::BlockVector<Dune::FieldVector<ctype,comp>>& stress(){return stress_;};
+
+    void calculateStress(){
+        stress_.resize(gv.leafGridView().size(0));        
+        this->averageStress(stress_, this->u);
+    }
     
     // //! \param[in] params The linear solver parameters
     void setupSolver(const Opm::PropertyTree& prm){
@@ -168,10 +176,64 @@ class ElasticitySolver
             //b = A.getLoadVector();
             //}
     }
-    template<int comp>
-    void averageStress(Dune::BlockVector<Dune::FieldVector<ctype,comp>>& sigmacells,
-                       const Vector& uarg);
+
+    template <int comp>
+    void averageStress(Dune::BlockVector<Dune::FieldVector<ctype, comp>>& sigmacells, const Vector& uarg)
+    {
+
+        static const int bfunc = 4 + (dim - 2) * 4;
+
+        const LeafIterator itend = gv.leafGridView().template end<0>();
+
+        Dune::FieldMatrix<ctype, comp, comp> C;
+        Dune::FieldVector<ctype, comp> eps0;
+        eps0 = 0;
+        // eps0[loadcase] = 1; // NB do not understand
+        int m = 0;
+
+        for (LeafIterator it = gv.leafGridView().template begin<0>(); it != itend; ++it) {
+            materials[m]->getConstitutiveMatrix(C);
+            // determine geometry type of the current element and get the matching reference element
+            Dune::GeometryType gt = it->type();
+
+            Dune::FieldVector<ctype, bfunc * dim> v;
+            A.extractValues(v, uarg, it);
+            Dune::FieldVector<ctype, comp> sigma;
+            sigma = 0;
+            double volume = 0;
+            // get a quadrature rule of order two for the given geometry type
+            const Dune::QuadratureRule<ctype, dim>& rule = Dune::QuadratureRules<ctype, dim>::rule(gt, 2);
+            for (typename Dune::QuadratureRule<ctype, dim>::const_iterator r = rule.begin(); r != rule.end(); ++r) {
+                // compute the jacobian inverse transposed to transform the gradients
+                Dune::FieldMatrix<ctype, dim, dim> jacInvTra = it->geometry().jacobianInverseTransposed(r->position());
+
+                ctype detJ = it->geometry().integrationElement(r->position());
+
+                volume += detJ * r->weight();
+
+                Dune::FieldMatrix<ctype, comp, dim * bfunc> lB;
+                E.getBmatrix(lB, r->position(), jacInvTra);
+
+                Dune::FieldVector<ctype, comp> s;
+                E.getStressVector(s, v, eps0, lB, C);
+                s *= detJ * r->weight();
+                sigma += s;
+            }
+            sigma /= volume;
+            // if (Escale > 0) {
+            //     sigma /= Escale / Emin;
+            // }
+            // switch to voits notation
+            std::swap(sigma[4],sigma[5]);
+            
+            sigmacells[m] = sigma;
+            m++;
+        }
+    }
+
   private:
+    Dune::BlockVector<Dune::FieldVector<ctype,comp>> stress_;
+    
     using AbstractSolverType = Dune::InverseOperator<Vector, Vector>;
     using AbstractOperatorType = Dune::AssembledLinearOperator<Matrix, Vector, Vector>;
     using AbstractPreconditionerType = Dune::PreconditionerWithUpdate<Vector, Vector>;
@@ -202,7 +264,7 @@ class ElasticitySolver
     ctype Escale;
 
     //! \brief Minimum real E for materials
-    ctype Emin;
+    //ctype Emin;
 
     //! \brief Vector holding material parameters for each active grid cell
     std::vector< std::shared_ptr<Material> > materials;
@@ -259,6 +321,7 @@ class ElasticitySolver
 
     //! \brief Mesh colorizer used with multithreaded assembly
     MeshColorizer<GridType> color;
+    
 };
 
 }} // namespace Opm, Elasticity

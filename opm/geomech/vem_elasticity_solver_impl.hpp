@@ -57,7 +57,47 @@ namespace Elasticity {
 //   }
 // }
 
+    IMPL_FUNC(void, calculateStress())
+{
+    //assumes the grid structure is made
+    const int num_neumann_faces = 0;
+    num_cells_ = grid_.leafGridView().size(0); // entities of codim 0
+    // assemble the mechanical system
+    vem::StabilityChoice stability_choice = vem::D_RECIPE;
+    //const int numdof =
+    // const int tot_num_faces = accumulate(num_cell_faces_, num_cell_faces_ + num_cells_, 0);
+    // const int tot_num_fcorners = accumulate(num_face_corners_, &num_face_corners_[0] + tot_num_faces, 0);
+    // const int tot_num_nodes = *max_element(face_corners_, face_corners + tot_num_fcorners) + 1;
+    stress_.resize(num_cells_);
+    std::vector<std::array<double,6>> stress;
+    stress.resize(num_cells_);
 
+    std::vector<double> dispall;
+    dispall.resize(3*grid_.leafGridView().size(3));
+    {
+        Vector dispalldune;
+        dispalldune.resize(3*grid_.leafGridView().size(3));
+        this->expandSolution(dispalldune,this->u);
+        for(size_t i=0; i < dispall.size(); ++i){
+            dispall[i] = dispalldune[i];//fieldvector<double,1> can be converted to double
+        }
+    }
+    
+    vem::compute_stress_3D(&coords_[0], num_cells_, &num_cell_faces_[0], &num_face_corners_[0],
+                           &face_corners_[0], &ymodule_[0], &pratio_[0],
+                           dispall,
+                           stress,
+                           stability_choice);
+    // copy to dune definitions
+    stress_.resize(num_cells_);
+    for(size_t i=0; i < num_cells_; ++i){
+        for(size_t k=0; k < 6; ++k){
+            stress_[i][k] = stress[i][k];
+        }
+    }
+        
+}
+    
 
     IMPL_FUNC(void, assemble(const Vector& pressure, bool do_matrix, bool do_vector))
 {
@@ -97,7 +137,7 @@ namespace Elasticity {
 
         
         // make indexing for div operator i.e. all nodes to dofs
-        std::vector<int> dof_idx(num_cells_);
+        std::vector<int> dof_idx(grid_.leafGridView().size(3)*3);
         std::iota(dof_idx.begin(), dof_idx.end(),0);
         
         std::set_difference(dof_idx.begin(), dof_idx.end(), fixed_dof_ixs.begin(), fixed_dof_ixs.end(),std::back_inserter(idx_free_));

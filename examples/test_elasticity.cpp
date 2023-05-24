@@ -217,8 +217,7 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
         }
         if(biotcoef[i]>1.0 || biotcoef[i] < 0.0){
             OPM_THROW(std::runtime_error,"BIOTCOEF not valid");
-        }
-    }    
+        }    
         materials.push_back(std::make_shared<IsoMat>(i,ymodule[i],pratio[i]));
     }    
     //esolver.setMaterial(materials);
@@ -247,7 +246,9 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
 
 
     Opm::Elasticity::Vector pressforce;
-    pressforce.resize(grid.size(0));
+    size_t num_cells = grid.size(0);
+    size_t num_nodes = grid.size(3);
+    pressforce.resize(num_cells);
     pressforce = 1.0;
     if(p.with_pressure){
         Dune::loadMatrixMarket(pressforce,"pressforce.mtx");
@@ -276,14 +277,37 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
      Dune::storeMatrixMarket(esolver.u, name + "_" + std::string("u.mtx"));
      Dune::storeMatrixMarket(field, name + "_" + std::string("field.mtx"));
      Dune::FieldMatrix<double,6,6> C;
+     
      Dune::BlockVector<Dune::FieldVector<double,3>> disp;
+     Opm::Elasticity::Vector lindisp;
      disp.resize(pressforce.size());
-     for(size_t i = 0; i < pressforce.size(); ++i){
-         for(size_t k = 0; k < dim; ++k){
-             disp[i][k] = field[i*dim+k];
+     lindisp.resize(pressforce.size()*dim);
+     disp = 0.0;
+     for (const auto& cell: elements(gv)){
+         auto cellindex = gv.indexSet().index(cell);
+         const auto& vertices = Dune::subEntities(cell, Dune::Codim<GridType::dimension>{});
+         const auto numvert = vertices.size(); 
+         for (const auto& vertex : vertices){
+             auto nodeidex = gv.indexSet().index(vertex);
+             for(int k=0; k < dim; ++k){
+                 disp[cellindex][k] += field[nodeidex*dim+k] ;
+                 lindisp[cellindex*dim+k] += field[nodeidex*dim+k]/numvert;
+             }
+         }
+         disp[cellindex] /= numvert;
+     }
+     std::vector<double> stresslin(num_cells*6,0.0);
+     
+     esolver.calculateStress();
+     
+     const Dune::BlockVector<Dune::FieldVector<double,6>>& stress = esolver.stress();
+     
+     for(int i=0; i < grid.size(0); ++i){
+         for(int k=0; k < 6; ++k){
+             stresslin[i*6+k] = stress[i][k];
          }
      }
-
+       
     if (!p.vtufile.empty()) {
         Dune::VTKWriter<typename GridType::LeafGridView> vtkwriter(grid.leafGridView(), Dune::VTK::nonconforming);
         
@@ -292,19 +316,37 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
         
         str << "sol ";
         vtkwriter.addVertexData(field, str.str().c_str(), dim);
-        using Container = Dune::BlockVector<Dune::FieldVector<double,1>>;
-        using Function =  Dune::P1VTKFunctionVector<typename GridType::LeafGridView, Container>;
-        //Dune::VTK::FieldInfo dispinfo("disp",Dune::VTK::FieldInfo::Type::vector,3);
-        Dune::VTK::Precision prec = Dune::VTK::Precision::float32;
-        std::string vtkname("disp");
-        Dune::VTKFunction<typename GridType::LeafGridView>* fp = new Function(grid.leafGridView(),
-                                                       field,
-                                                       vtkname,
-                                                       3, 0, prec);
-        vtkwriter.addVertexData(std::shared_ptr< const Dune::VTKFunction<typename GridType::LeafGridView> >(fp));
-        //vtkwriter.addVertexData(disp, dispinfo);
+        vtkwriter.addCellData(lindisp, "celldisp_", dim);
+        {
+            using Container = Dune::BlockVector<Dune::FieldVector<double,1>>;
+            using Function =  Dune::P1VTKFunctionVectorLin<typename GridType::LeafGridView, Container>;
+            //Dune::VTK::FieldInfo dispinfo("disp",Dune::VTK::FieldInfo::Type::vector,3);
+            Dune::VTK::Precision prec = Dune::VTK::Precision::float32;
+            std::string vtkname("disp");
+            Dune::VTKFunction<typename GridType::LeafGridView>* fp = new Function(grid.leafGridView(),
+                                                                                  field,
+                                                                                  vtkname,
+                                                                                  3, 0, prec);
+            vtkwriter.addVertexData(std::shared_ptr< const Dune::VTKFunction<typename GridType::LeafGridView> >(fp));
+        }
         vtkwriter.addCellData(pressforce, "pressforce");
-        //vtkwriter.addVertexData(disp, stress);
+        //vtkwriter.addVertexData(disp, dispinfo);
+        
+        {
+            using Container = Dune::BlockVector<Dune::FieldVector<double,1>>;
+            using Function =  Dune::P0VTKFunctionVectorLin<typename GridType::LeafGridView, Container>;
+            //Dune::VTK::FieldInfo dispinfo("disp",Dune::VTK::FieldInfo::Type::vector,3);
+            Dune::VTK::Precision prec = Dune::VTK::Precision::float32;
+            std::string vtkname("veccelldisp");
+            Dune::VTKFunction<typename GridType::LeafGridView>* fp = new Function(grid.leafGridView(),
+                                                                                  lindisp,
+                                                                                  vtkname,
+                                                                                  3, 0, prec);
+            vtkwriter.addCellData(std::shared_ptr< const Dune::VTKFunction<typename GridType::LeafGridView> >(fp));
+        }
+        
+        vtkwriter.addCellData(stresslin, "stresscomp", 6);
+        //vtkwriter.addTensorData(stress, "stress");
         //}
         std::string outputfile = name + "_" + p.vtufile;
         vtkwriter.write(outputfile);

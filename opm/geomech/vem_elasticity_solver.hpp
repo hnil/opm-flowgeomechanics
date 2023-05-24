@@ -216,6 +216,10 @@ class VemElasticitySolver
             A.addMatElement(i,j, val);// += val;
         }
     }
+    void calculateStress();
+    //const std::vector<std::array<double,6>>& stress(){return stress_;}
+    const Dune::BlockVector<Dune::FieldVector<ctype,6>>& stress() const{return stress_;}
+
   private:
     using AbstractSolverType = Dune::InverseOperator<Vector, Vector>;
     using AbstractOperatorType = Dune::AssembledLinearOperator<Matrix, Vector, Vector>;
@@ -245,6 +249,9 @@ class VemElasticitySolver
     std::vector<double> pratio_;
     std::vector<double> body_force_;//= set_body_force(num_cells, bfcase);
     std::tuple<int, std::vector<int>, std::vector<double>> dirichlet_; //set_dirichlet(coords, dircase);
+
+    Dune::BlockVector<Dune::FieldVector<ctype,6>> stress_;
+    //std::vector<std::array<double,6>> stress_;
 
 };
 
