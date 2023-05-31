@@ -108,7 +108,21 @@ namespace Opm{
             // update variables used for output to resinsight
             // NB TO DO
             elacticitysolver_.calculateStress();
-            stress_ = elacticitysolver_.stress();
+            const auto& linstress = elacticitysolver_.stress();
+            stress_.resize(linstress.size());
+            for (const auto& cell: elements(gv)){
+                auto cellindex = simulator_.problem().elementMapper().index(cell);
+                // add initial stress
+                assert(cellindex == gv.indexSet().index(cell));
+                //auto cellindex2 = gv.indexSet().index(cell);
+                stress_[cellindex] = linstress[cellindex];
+            }
+            size_t lsdim = 6;
+            for(size_t i = 0; i < stress_.size(); ++i){
+                for(size_t j = 0; j < lsdim; ++j){
+                    stress_[i][j] += problem.initStress(i,j);
+                }
+            }
             
             
             bool verbose = true;
@@ -138,7 +152,6 @@ namespace Opm{
             stress_.resize(numDof);
             const auto& gv = simulator_.vanguard().grid().leafGridView();
             displacement_.resize(gv.indexSet().size(3));
-            celldisplacement_.resize(gv.indexSet().size(3));
         };
         double pressureDiff(unsigned dofIx) const{
             return mechPotentialForce_[dofIx];
@@ -164,7 +177,10 @@ namespace Opm{
         {
             return stress_[globalDofIdx][dim];
         }
-        
+
+        void setStress(const Dune::BlockVector<Dune::FieldVector<double,6> >& stress){
+            stress_ = stress;
+        }
         void makeDisplacement(const Opm::Elasticity::Vector& field) {
             // make displacement on all nodes used for output to vtk
             const auto& grid = simulator_.vanguard().grid();
@@ -177,12 +193,14 @@ namespace Opm{
                 }
             }
             for (const auto& cell: elements(gv)){
-                auto cellindex = gv.indexSet().index(cell);
+                auto cellindex = simulator_.problem().elementMapper().index(cell);
+                assert(cellindex== gv.indexSet().index(cell));
+                celldisplacement_[cellindex] = 0.0;
                 const auto& vertices = Dune::subEntities(cell, Dune::Codim<Grid::dimension>{});
                 for (const auto& vertex : vertices){
                     auto nodeidex = gv.indexSet().index(vertex);
                     for(int k=0; k < dim; ++k){
-                        celldisplacement_[cellindex][nodeidex] += displacement_[nodeidex][k] ;
+                        celldisplacement_[cellindex][k] += displacement_[nodeidex][k] ;
                     }
                 }
                 celldisplacement_[cellindex] /= vertices.size(); 

@@ -28,6 +28,9 @@ DIMENS
 EQLDIMS
 /
 
+EQLDIMS
+/
+
 -- The number of PVTW tables is inferred from the TABDIMS keyword;
 -- when no data is included in the keyword the default values are used.
 TABDIMS
@@ -82,7 +85,8 @@ DY
 	300*1000 /
 DZ
 -- The layers are 20, 30 and 50 ft thick, in each layer there are 100 cells
-	100*20 100*30 100*50 /
+	100*20 100*30 100*40 /
+--	300*1000 /
 
 TOPS
 -- The depth of the top of each grid block
@@ -112,7 +116,13 @@ PRATIO
        100*0.3 100*0.3 100*0.3 /
 
 BIOTCOEF
-       100*-1 100*-1 100*-1 /
+       100*1 100*1 100*1 /
+
+POELCOEF
+       100*1 100*1 100*1 /
+
+THELCOEF
+       100*1 100*1 100*1 /
 
 
 ECHO
@@ -283,6 +293,21 @@ EQUIL
 -- Item #: 1 2    3    4 5    6 7 8 9
 	8400 4800 8450 0 8300 0 1 0 0 /
 
+STRESSEQUIL
+-- Item 1: datum depth (ft)
+-- Item 2: datum posx (ft)
+-- Item 3: datum posy (ft)
+-- Item 4: stessxx
+-- Item 5: stressxxgrad
+-- Item 6: stessyy
+-- Item 7: stressyygrad
+-- Item 8: stesszz
+-- Item 9: stresszzgrad
+   --8400  0.0 0.0  8400 0.0 8400 0.0 8400 0.0/
+   --8400  0.0 0.0  8400000 0.0 8400000 0.0 8400000 0.0/
+   8400  0.0 0.0  0.0 0.0 0.0 0.0 0.0 0.0/
+/
+
 RSVD
 -- Dissolved GOR is initially constant with depth through the reservoir.
 -- The reason is that the initial reservoir pressure given is higher 
@@ -296,8 +321,12 @@ BC
 1 10  10 10 1 3 Y+ NONE * * * * FIXED/
 1 1  1 10 1 3 X- NONE * * * * FIXED/
 10 10 1 10 1 3 X+ NONE * * * * FIXED/
-1 10 1 10 1 1 Z- NONE * * * * FIXED/
-1 10 1 10 3 3 Z+ NONE * * * * FIXED/
+--1 10 1 10 1 1 Z- NONE * * * * FIXED/
+--1 10 1 10 3 3 Z+ NONE * * * * FIXED/
+/
+
+RPTRST
+BASIC=2 
 /
 
 SUMMARY

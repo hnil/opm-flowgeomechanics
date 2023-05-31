@@ -152,10 +152,11 @@ namespace Elasticity {
         }
         vem::potential_gradient_force_3D(&coords_[0], num_cells_, &num_cell_faces_[0], &num_face_corners_[0],
                                          &face_corners_[0], &std_pressure[0], rhs_pressure);
-        
+
+        //Sign is added here  i.e \div \sigma = 
         vector<double> rhs(rhs_force_);
         for(size_t i=0; i< idx_free_.size(); ++i){
-            rhs[i] -= rhs_pressure[idx_free_[i]];
+            rhs[i] += rhs_pressure[idx_free_[i]];
         }
         b.resize(rhs.size());
         // end initialization

@@ -6,6 +6,11 @@
 #include <opm/material/densead/Evaluation.hpp>
 #include <opm/material/densead/Math.hpp>
 #include <opm/elasticity/material.hh>
+
+//#include <opm/input/eclipse/Deck/Deck.hpp>
+//#include <opm/input/eclipse/Deck/DeckSection.hpp>
+#include <opm/input/eclipse/Parser/ParserKeywords/S.hpp>
+#include <opm/input/eclipse/Parser/ParserKeywords/E.hpp>
 namespace Opm{
     template<typename TypeTag>
     class EclProblemGeoMech: public EclProblem<TypeTag>{
@@ -81,6 +86,63 @@ namespace Opm{
                                                     bcconfig,
                                                     gv,
                                                     cartesianIndexMapper);
+                
+
+                
+                //using Opm::ParserKeywords::;
+                if( initconfig.hasStressEquil()) {
+                    using StressEQ = Opm::ParserKeywords::STRESSEQUIL;
+                    size_t numCartDof = cartesianIndexMapper.cartesianSize();
+                    unsigned numElems = gv.size(/*codim=*/0);
+                    std::vector<int> cartesianToCompressedElemIdx(numCartDof, -1); 
+                    for (unsigned elemIdx = 0; elemIdx < numElems; ++elemIdx){
+                        cartesianToCompressedElemIdx[cartesianIndexMapper.cartesianIndex(elemIdx)] = elemIdx;
+                    }
+                    const DeckKeyword& keyword = initconfig.getStressEquil();
+                    const auto& equilRegionData = fp.get_int("STRESSEQUILNUM");
+                    //make lambda functions for each regaion
+                    std::vector<std::function<std::array<double,6>()>> functors;
+                    int recnum=1;
+                    int num_records = keyword.size();
+                    initstress_.resize(gv.size(0));
+                    for (const auto& record : keyword) {
+                        const auto datum_depth = record.getItem<StressEQ::DATUM_DEPTH>().getSIDouble(0);
+                        const auto datum_posx = record.getItem<StressEQ::DATUM_POSX>().getSIDouble(0);
+                        const auto datum_posy = record.getItem<StressEQ::DATUM_POSY>().getSIDouble(0);
+                        const auto STRESSXX= record.getItem<StressEQ::STRESSXX>().getSIDouble(0);
+                        const auto STRESSXXGRAD = record.getItem<StressEQ::STRESSXXGRAD>().getSIDouble(0);
+                        const auto STRESSYY= record.getItem<StressEQ::STRESSYY>().getSIDouble(0);
+                        const auto STRESSYYGRAD = record.getItem<StressEQ::STRESSYYGRAD>().getSIDouble(0);
+                        const auto STRESSZZ= record.getItem<StressEQ::STRESSZZ>().getSIDouble(0);
+                        const auto STRESSZZGRAD = record.getItem<StressEQ::STRESSZZGRAD>().getSIDouble(0);
+                        for(const auto& cell : elements(gv)){
+                            const auto& center = cell.geometry().center();
+                            const auto& cellIdx = gv.indexSet().index(cell);
+                            const auto& region = equilRegionData[cartesianIndexMapper.cartesianIndex(cellIdx)];
+                            if(region == recnum){
+                                Dune::FieldVector<double, 6> initstress;
+                                initstress[0] = STRESSXX +  STRESSXXGRAD*(center[0] - datum_posx);
+                                initstress[1] = STRESSYY +  STRESSYYGRAD*(center[1] - datum_posy);
+                                initstress[2] = STRESSZZ +  STRESSZZGRAD*(center[2] - datum_depth);
+                                initstress[3] = 0.0;
+                                initstress[4] = 0.0;
+                                initstress[5] = 0.0;
+                                // NB share stress not set to zero
+                                initstress_[cellIdx] = initstress;
+                                // functors.push_back([&]{
+                                    
+                                //     return center;   
+                                // }
+                                //     );
+                            }   
+                        }
+                        recnum +=1;
+                    }
+                    // NB setting initial stress
+                    this->geomechModel_.setStress(initstress_);
+                }else{
+                    OPM_THROW(std::runtime_error, "Missing stress initialization keywords");
+                }
             }
         }
         void initialSolutionApplied(){
@@ -88,11 +150,14 @@ namespace Opm{
             const auto& simulator = this->simulator();
             size_t numDof = simulator.model().numGridDof();
             initpressure_.resize(numDof);
+            
             for(size_t dofIdx=0; dofIdx < numDof; ++dofIdx){
                 const auto& iq = this->model().intensiveQuantities(dofIdx,0);
                 const auto& fs = iq.fluidState();
                 initpressure_[dofIdx] = Toolbox::value(fs.pressure(waterPhaseIdx));
             }
+            initstress_.resize(numDof);
+            
             // for now make a copy
             if(simulator.vanguard().eclState().runspec().mech()){
                 //this->geomechModel_.setMaterial(elasticparams_);
@@ -136,6 +201,10 @@ namespace Opm{
 
         double initPressure(unsigned dofIdx) const{
             return initpressure_[dofIdx];
+        }
+
+        double initStress(unsigned dofIdx,int comp) const{
+            return initstress_[dofIdx][comp];
         }
 
         double biotCoef(unsigned globalIdx) const{

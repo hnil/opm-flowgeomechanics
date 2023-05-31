@@ -408,7 +408,7 @@ IMPL_FUNC(void, fixPoint(Direction dir,
                   auto Ipressure = Dune::FMatrixHelp::mult(C,eps0);
                   Ipressure = eps0*pressure[cell_num][0];
                   temp = Dune::FMatrixHelp::multTransposed(lB,Ipressure);
-                  temp *= -detJ*r->weight();
+                  temp *= detJ*r->weight();
                   ES += temp;
               }
           }

@@ -86,7 +86,7 @@ namespace Dune
     //! return number of components
     int ncomps () const override
     {
-      return 1;
+      return ncomps_;
     }
 
     //! evaluate
@@ -275,7 +275,7 @@ namespace Dune
     int ncomps_;
     //! index of the component of the field in the vector this function is
     //! responsible for
-    int mycomp_;
+    //int mycomp_;
     //! precision with which to output the field
     VTK::Precision prec_;
     //! mapper used to map elements to indices
@@ -289,7 +289,7 @@ namespace Dune
     //! return number of components
     int ncomps () const override
     {
-      return 1;
+      return ncomps_;
     }
 
     //! evaluate
@@ -330,11 +330,11 @@ namespace Dune
      * \param prec   the precision with which to output the field
      */
     P0VTKFunctionVectorLin(const GV &gv, const V &v_, const std::string &s_,
-                  int ncomps=1, int mycomp=0, VTK::Precision prec = VTK::Precision::float32)
+                  int ncomps=1, VTK::Precision prec = VTK::Precision::float32)
       : v( v_ ),
         s( s_ ),
         ncomps_(ncomps),
-        mycomp_(mycomp),
+        //mycomp_(mycomp),
         prec_(prec),
         mapper( gv, mcmgElementLayout() )
     {
@@ -383,7 +383,7 @@ namespace Dune
     int ncomps_;
     //! index of the component of the field in the vector this function is
     //! responsible for
-    int mycomp_;
+    //int mycomp_;
     //! precision with which to output the field
     VTK::Precision prec_;
     //! mapper used to map elements to indices
@@ -447,11 +447,11 @@ namespace Dune
      * \param prec   the precision with which to output the field
      */
     P1VTKFunctionVectorLin(const GV& gv, const V &v_, const std::string &s_,
-                  int ncomps=1, int mycomp=0, VTK::Precision prec = VTK::Precision::float32)
+                  int ncomps=1, VTK::Precision prec = VTK::Precision::float32)
       : v( v_ ),
         s( s_ ),
         ncomps_(ncomps),
-        mycomp_(mycomp),
+        //mycomp_(mycomp),
         prec_(prec),
         mapper( gv, mcmgVertexLayout() )
     {

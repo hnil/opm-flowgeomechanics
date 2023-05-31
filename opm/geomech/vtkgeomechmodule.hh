@@ -117,6 +117,7 @@ namespace Opm {
                 this->resizeScalarBuffer_(pressDiff_);
                 this->resizeVectorBuffer_(disp_,ParentType::BufferType::VertexBuffer);
                 this->resizeTensorBuffer_(stress_);
+                //this->resizeVectorBuffer_(symstress_,ParentType::BufferType::ElementBuffer, 6);
             }
 
         }
@@ -206,7 +207,9 @@ namespace Opm {
         }
         ScalarBuffer pressDiff_;
         VectorBuffer disp_;
+        VectorBuffer symstress_;
         TensorBuffer stress_;
+        
     };
 } // namespace Opm
 
