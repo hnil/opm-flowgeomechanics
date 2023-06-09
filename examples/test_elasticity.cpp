@@ -298,14 +298,18 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
          disp[cellindex] /= numvert;
      }
      std::vector<double> stresslin(num_cells*6,0.0);
+     std::vector<double> strainlin(num_cells*6,0.0);
      
      esolver.calculateStress(true);
+     esolver.calculateStrain(true);
      
      const Dune::BlockVector<Dune::FieldVector<double,6>>& stress = esolver.stress();
+     const Dune::BlockVector<Dune::FieldVector<double,6>>& strain = esolver.strain();
      
      for(int i=0; i < grid.size(0); ++i){
          for(int k=0; k < 6; ++k){
              stresslin[i*6+k] = stress[i][k];
+             strainlin[i*6+k] = strain[i][k];
          }
      }
        
@@ -359,6 +363,19 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
             std::string vtkname("stresstensor");
             Dune::VTKFunction<typename GridType::LeafGridView>* fp = new Function(grid.leafGridView(),
                                                                                   stresslin,
+                                                                                  vtkname,
+                                                                                  6, prec);
+            vtkwriter.addCellData(std::shared_ptr< const Dune::VTKFunction<typename GridType::LeafGridView> >(fp));
+            //vtkwriter.addCellData(std::shared_ptr< const Dune::VTKFunction<typename GridType::LeafGridView> >(fp));
+        }
+        {
+            using Container = std::vector<double>;//Dune::BlockVector<Dune::FieldVector<double,1>>;
+            using Function =  Dune::P0VTKFunctionVectorLin<typename GridType::LeafGridView, Container>;
+            Dune::VTK::FieldInfo dispinfo("disp",Dune::VTK::FieldInfo::Type::vector,3);
+            Dune::VTK::Precision prec = Dune::VTK::Precision::float32;
+            std::string vtkname("straintensor");
+            Dune::VTKFunction<typename GridType::LeafGridView>* fp = new Function(grid.leafGridView(),
+                                                                                  strainlin,
                                                                                   vtkname,
                                                                                   6, prec);
             vtkwriter.addCellData(std::shared_ptr< const Dune::VTKFunction<typename GridType::LeafGridView> >(fp));

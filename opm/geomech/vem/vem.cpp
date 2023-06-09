@@ -1657,7 +1657,9 @@ compute_stress_3D(const double* const points,
                   std::vector<std::array<double,6>>& stress,
                   const StabilityChoice stability_choice,
                   vector<tuple<int, int, double>>& stressmat,
-                  bool do_matrix)    
+                  bool do_matrix,
+                  bool do_stress
+    )    
 // ----------------------------------------------------------------------------
 {
     // preliminary computations
@@ -1687,7 +1689,8 @@ compute_stress_3D(const double* const points,
                                   c,
                                   stress[c],
                                   stressmat,
-                                  do_matrix
+                                  do_matrix,
+                                  do_stress
             );
         fcorners_start += accumulate(&num_face_corners[cf_ix], &num_face_corners[cf_ix + num_cell_faces[c]], 0);
         cf_ix += num_cell_faces[c];
@@ -1789,7 +1792,9 @@ calculate_stress_3D_local(const double* const points,
                           const int cell,
                           std::array<double,6>& stress,
                           vector<tuple<int, int, double>>& stressmat,
-                          bool do_matrix)
+                          bool do_matrix,
+                          bool do_stress
+    )
 // ----------------------------------------------------------------------------
 {
     array<double, 3> centroid;
@@ -1818,39 +1823,29 @@ calculate_stress_3D_local(const double* const points,
     // // compute all intermediary matrices
     const auto q = compute_q_3D(&corners_loc[0], int(corners_loc.size() / 3), &faces_loc[0],
                                 num_face_edges, num_faces, volume, outward_normals);
-    const auto Nr = compute_Nr_3D(&corners_loc[0], num_corners);
-    const auto Nc = compute_Nc_3D(&corners_loc[0], num_corners);
-    const auto Wr = compute_Wr_3D(q);
-    const auto Wc = compute_Wc_3D(q);
-    const auto D = compute_D_3D(young, poisson);
-    //const auto S = compute_S(Nc, D, num_corners, volume, 3);
-    const auto ImP = compute_ImP(Nr, Nc, Wr, Wc, 3);
-
-    // // do the final assembly of matrices, and write result to target
-    target.resize(pow(3 * num_corners, 2));
-    //
+    //const auto Nr = compute_Nr_3D(&corners_loc[0], num_corners);
+    //const auto Nc = compute_Nc_3D(&corners_loc[0], num_corners);
+    //const auto Wr = compute_Wr_3D(q);
+    
     const int dim = 3;
     //assert(dim == 2 || dim == 3);
     const int lsdim = (dim == 2) ? 3 : 6; // dimension of "linear strain space"
     const int totdim = dim * num_corners; // total number of unknowns
-
-    // compute stiffness matrix components
-    const auto DWct = matmul(&D[0], lsdim, lsdim, false, &Wc[0], totdim, lsdim, true);
-    /*
-    const auto EWcDWct = matmul(&Wc[0], totdim, lsdim, false, &DWct[0], lsdim, totdim, false, volume);
-
-    const auto S = stability_choice == D_RECIPE ?
-      compute_S_D_recipe(EWcDWct, totdim, volume) :
-      compute_S(Nc, D, num_corners, volume, dim, stability_choice);
-
-    const auto SImP = matmul(&S[0], totdim, totdim, false, &ImP[0], totdim, totdim, false);
-    const auto ImpSImp = matmul(&ImP[0], totdim, totdim, true, &SImP[0], totdim, totdim, false); 
-    assert(EWcDWct.size() == ImpSImp.size());
-
-    // add conformance and stability term, and write result to target
-    transform(EWcDWct.begin(), EWcDWct.end(), ImpSImp.begin(), target.begin(), [](double a, double b) { return a + b; });
-    */
-    // 
+    const auto Wc = compute_Wc_3D(q);
+    std::vector<double> matrix(lsdim*totdim,0.0);            
+    if(do_stress){
+        const auto D = compute_D_3D(young, poisson);
+        // compute stiffness matrix components
+        const auto DWct = matmul(&D[0], lsdim, lsdim, false, &Wc[0], totdim, lsdim, true);
+        matrix = DWct;
+    }else{
+        for(int i = 0; i < lsdim; ++i){
+            for(int j = 0; j < totdim; ++ j){
+                matrix[i*totdim+j] =Wc[j*lsdim+i];
+            }
+        }
+    }
+    
     std::vector<double> local_disp;
     local_disp.resize(indexing.size()*3);
     std::vector<int> global_index;
@@ -1863,20 +1858,22 @@ calculate_stress_3D_local(const double* const points,
     }
     for(int i=0; i < lsdim; ++i){
         for(int j=0; j < totdim; ++j){
-            stress[i] += DWct[i*totdim + j]*local_disp[j];
+            stress[i] += matrix[i*totdim + j]*local_disp[j];
             if(do_matrix){
                 int I = lsdim*cell+i;
                 int J = global_index[j];
-                double val = DWct[i*totdim + j];
-                if(i>2){    
+                double val = matrix[i*totdim + j];
+                if(i>2 && do_stress){    
                     val /=2.0;
                 }
                 stressmat.push_back(tuple<int, int, double> {I, J, val});
             }
         }
     }
-    for(int i = 3; i<lsdim; ++i){
-        stress[i] /=2;
+    if(do_stress){
+        for(int i = 3; i<lsdim; ++i){
+            stress[i] /=2;
+        }
     }
 }
 // ----------------------------------------------------------------------------

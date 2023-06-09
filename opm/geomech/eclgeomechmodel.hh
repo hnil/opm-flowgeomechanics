@@ -87,9 +87,11 @@ namespace Opm{
                 double tcoeff = thelcoef*fac;//+ youngs*tempExp;
                 double diffpress = (Toolbox::value(press) - problem.initPressure(dofIdx));
                 mechPotentialForce_[dofIdx] = diffpress*pcoeff;
+                mechPotentialPressForce_[dofIdx] = diffpress*pcoeff;
                 // assume difftemp = 0 for non termal runs
                 double difftemp = (Toolbox::value(temp) - problem.initTemperature(dofIdx));
                 mechPotentialForce_[dofIdx] += difftemp*tcoeff;
+                mechPotentialTempForce_[dofIdx] = difftemp*tcoeff;
                 //NB check sign !!
                 mechPotentialForce_[dofIdx] *= 1.0;
             }
@@ -182,8 +184,11 @@ namespace Opm{
             std::cout << "Geomech init" << std::endl;
             size_t numDof = simulator_.model().numGridDof();
             mechPotentialForce_.resize(numDof);
+            mechPotentialTempForce_.resize(numDof);
+            mechPotentialPressForce_.resize(numDof);
             celldisplacement_.resize(numDof);
             stress_.resize(numDof);
+            strain_.resize(numDof);
             const auto& gv = simulator_.vanguard().grid().leafGridView();
             displacement_.resize(gv.indexSet().size(3));
         };
@@ -203,6 +208,14 @@ namespace Opm{
         {
             return mechPotentialForce_[globalDofIdx];
         }
+        const double mechPotentialTempForce(unsigned globalDofIdx) const
+        {
+            return mechPotentialTempForce_[globalDofIdx];
+        }
+        const double mechPotentialPressForce(unsigned globalDofIdx) const
+        {
+            return mechPotentialPressForce_[globalDofIdx];
+        }
         const double disp(unsigned globalDofIdx, unsigned dim) const
         {
             return celldisplacement_[globalDofIdx][dim];
@@ -210,6 +223,10 @@ namespace Opm{
         const double stress(unsigned globalDofIdx, unsigned dim) const
         {
             return stress_[globalDofIdx][dim];
+        }
+        const double strain(unsigned globalDofIdx, unsigned dim) const
+        {
+            return strain_[globalDofIdx][dim];
         }
 
         void setStress(const Dune::BlockVector<Dune::FieldVector<double,6> >& stress){
@@ -245,10 +262,13 @@ namespace Opm{
         bool first_solve_;
         Simulator& simulator_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialForce_;
+        Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialPressForce_;
+        Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialTempForce_;
         //Dune::BlockVector<Dune::FieldVector<double,1> > solution_;
         Dune::BlockVector<Dune::FieldVector<double,3> > celldisplacement_;
         Dune::BlockVector<Dune::FieldVector<double,3> > displacement_;
         Dune::BlockVector<Dune::FieldVector<double,6> > stress_;//NB is also stored in esolver
+        Dune::BlockVector<Dune::FieldVector<double,6> > strain_;
         //Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1> > A_;
         Opm::Elasticity::VemElasticitySolver<Grid> elacticitysolver_;
     };

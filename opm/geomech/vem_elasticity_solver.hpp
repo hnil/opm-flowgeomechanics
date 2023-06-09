@@ -201,7 +201,7 @@ class VemElasticitySolver
         }
         nrows = nrows+1;
         ncols = ncols+1;
-        assert(nrows==ncols);
+        //assert(nrows==ncols);
         rows.resize(nrows);
         for(auto matel: A_entries){
             int i = std::get<0>(matel);
@@ -263,8 +263,10 @@ class VemElasticitySolver
         }
     }
     void calculateStress(bool precalculated);
+    void calculateStrain(bool precalculated);
     //const std::vector<std::array<double,6>>& stress(){return stress_;}
     const Dune::BlockVector<Dune::FieldVector<ctype,6>>& stress() const{return stress_;}
+    const Dune::BlockVector<Dune::FieldVector<ctype,6>>& strain() const{return strain_;}
 
   private:
     using AbstractSolverType = Dune::InverseOperator<Vector, Vector>;
@@ -297,7 +299,9 @@ class VemElasticitySolver
     std::tuple<int, std::vector<int>, std::vector<double>> dirichlet_; //set_dirichlet(coords, dircase);
 
     Dune::BlockVector<Dune::FieldVector<ctype,6>> stress_;
+    Dune::BlockVector<Dune::FieldVector<ctype,6>> strain_;
     Matrix stressmat_; // from all dofs (not eliminating bc) to cell
+    Matrix strainmat_;
     Matrix divmat_;   // from cell pressure to active dofs
     //std::vector<std::array<double,6>> stress_;
 

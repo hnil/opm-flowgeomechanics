@@ -283,7 +283,9 @@ compute_stress_3D(const double* const points,
                   std::vector<std::array<double,6>>& stress,
                   const StabilityChoice stability_choice,
                   std::vector<std::tuple<int, int, double>>& stressmat,
-                  bool do_matrix);    
+                  bool do_matrix,
+                  bool do_stress
+    );    
 
 
 void
@@ -298,7 +300,9 @@ calculate_stress_3D_local(const double* const points,
                           const int cell,
                           std::array<double,6>& stress,
                           std::vector<std::tuple<int, int, double>>& stressmat,
-                          bool do_matrix);    
+                          bool do_matrix,
+                          bool do_stress
+    );    
 // ============================================================================
 // ============ Various utility functions for geometry computations ===========
 // ============================================================================

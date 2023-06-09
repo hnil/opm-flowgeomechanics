@@ -68,7 +68,7 @@ namespace Elasticity {
             dispalldune.resize(3 * grid_.leafGridView().size(3));
             this->expandSolution(dispalldune, this->u);
             // Dune::BlockVector< DuneFieldVector<double,1> >
-            Vector stress(6 * grid_.leafGridView().size(3));
+            Vector stress(6 * grid_.leafGridView().size(0));
             stressmat_.mv(dispalldune,stress);
             stress_.resize(num_cells_);
             for (size_t i = 0; i < num_cells_; ++i) {
@@ -113,7 +113,9 @@ namespace Elasticity {
                                    stress,
                                    stability_choice,
                                    stressmat,
-                                   false);
+                                   false,
+                                   true
+                );
             // copy to dune definitions
             stress_.resize(num_cells_);
             for (size_t i = 0; i < num_cells_; ++i) {
@@ -124,6 +126,72 @@ namespace Elasticity {
         }
     }
 
+    IMPL_FUNC(void, calculateStrain(bool precomputed))
+    {
+        if (precomputed) {
+            OPM_TIMEBLOCK(calculateStrainPrecomputed);
+            //NB stressmat is defined in linear indices not block linear indices
+            Vector dispalldune;
+            dispalldune.resize(3 * grid_.leafGridView().size(3));
+            this->expandSolution(dispalldune, this->u);
+            // Dune::BlockVector< DuneFieldVector<double,1> >
+            Vector strain(6 * grid_.leafGridView().size(0));
+            strainmat_.mv(dispalldune,strain);
+            strain_.resize(num_cells_);
+            for (size_t i = 0; i < num_cells_; ++i) {
+                for (size_t k = 0; k < 6; ++k) {
+                    strain_[i][k] = strain[i * 6 + k];
+                }
+            }
+        } else {
+            OPM_TIMEBLOCK(calculateStressFull);
+            // assumes the grid structure is made
+            const int num_neumann_faces = 0;
+            num_cells_ = grid_.leafGridView().size(0); // entities of codim 0
+            // assemble the mechanical system
+            vem::StabilityChoice stability_choice = vem::D_RECIPE;
+            // const int numdof =
+            //  const int tot_num_faces = accumulate(num_cell_faces_, num_cell_faces_ + num_cells_, 0);
+            //  const int tot_num_fcorners = accumulate(num_face_corners_, &num_face_corners_[0] + tot_num_faces, 0);
+            //  const int tot_num_nodes = *max_element(face_corners_, face_corners + tot_num_fcorners) + 1;
+            strain_.resize(num_cells_);
+            std::vector<std::array<double, 6>> strain;
+            strain.resize(num_cells_);
+
+            std::vector<double> dispall;
+            dispall.resize(3 * grid_.leafGridView().size(3));
+            {
+                Vector dispalldune;
+                dispalldune.resize(3 * grid_.leafGridView().size(3));
+                this->expandSolution(dispalldune, this->u);
+                for (size_t i = 0; i < dispall.size(); ++i) {
+                    dispall[i] = dispalldune[i]; // fieldvector<double,1> can be converted to double
+                }
+            }
+            std::vector<std::tuple<int, int, double>> stressmat;
+            vem::compute_stress_3D(&coords_[0],
+                                   num_cells_,
+                                   &num_cell_faces_[0],
+                                   &num_face_corners_[0],
+                                   &face_corners_[0],
+                                   &ymodule_[0],
+                                   &pratio_[0],
+                                   dispall,
+                                   strain,
+                                   stability_choice,
+                                   stressmat,
+                                   false,
+                                   false
+                );
+            // copy to dune definitions
+            strain_.resize(num_cells_);
+            for (size_t i = 0; i < num_cells_; ++i) {
+                for (size_t k = 0; k < 6; ++k) {
+                    strain_[i][k] = strain[i][k];
+                }
+            }
+        }
+    }
 
     IMPL_FUNC(void, assemble(const Vector& pressure, bool do_matrix, bool do_vector))
 {
@@ -208,7 +276,7 @@ namespace Elasticity {
         std::vector<double> dispall(grid_.leafGridView().size(3)*3);
         std::vector<std::array<double,6>> stresstmp(grid_.leafGridView().size(0));
         {
-        OPM_TIMEBLOCK(setUpStressMatrix);    
+        OPM_TIMEBLOCK(setUpStressStrainMatrix);    
         vem::compute_stress_3D(&coords_[0],
                                num_cells_,
                                &num_cell_faces_[0],
@@ -219,10 +287,28 @@ namespace Elasticity {
                                stresstmp,
                                stability_choice,
                                stressmat,
+                               true,
                                true
         );
-        }
+        
         makeDuneMatrix(stressmat, stressmat_);
+        std::vector<std::tuple<int, int, double>> strainmat;
+        vem::compute_stress_3D(&coords_[0],
+                               num_cells_,
+                               &num_cell_faces_[0],
+                               &num_face_corners_[0],
+                               &face_corners_[0],
+                               &ymodule_[0], &pratio_[0],
+                               dispall,
+                               stresstmp,
+                               stability_choice,
+                               strainmat,
+                               true,
+                               false
+        );
+        makeDuneMatrix(strainmat, strainmat_);
+        }
+        
         }
     }
     if(do_vector){
