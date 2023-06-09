@@ -171,10 +171,10 @@ namespace Opm{
                                 }
                             }
                         }
-                        std::cout << "Effected cells" << std::endl;
-                        for(int i:effected_cells){
-                            std::cout << i << std::endl;
-                        }
+                        // std::cout << "Effected cells" << std::endl;
+                        // for(int i:effected_cells){
+                        //     std::cout << i << std::endl;
+                        // }
                         //const auto& gv = grid.leafGridView();
                         for(const auto& cell:elements(gv)){
                             auto index = gv.indexSet().index(cell);

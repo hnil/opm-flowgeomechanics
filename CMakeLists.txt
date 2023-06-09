@@ -166,6 +166,17 @@ opm_add_test(flow_geomech
 )
 target_link_libraries(flow_geomech Tracy::TracyClient)
 
+opm_add_test(flow_energy_geomech
+  ONLY_COMPILE
+  ALWAYS_ENABLE
+  DEPENDS opmsimulators opmupscaling
+  LIBRARIES opmsimulators opmupscaling vem
+  SOURCES
+  examples/flow_energy_geomech.cpp examples/FlexibleSolverMech.cpp
+  $<TARGET_OBJECTS:moduleVersionGeoMech>
+)
+target_link_libraries(flow_energy_geomech Tracy::TracyClient)
+
 opm_add_test(test_elasticity
   ONLY_COMPILE
   ALWAYS_ENABLE

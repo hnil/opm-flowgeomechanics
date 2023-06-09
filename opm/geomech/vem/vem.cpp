@@ -1390,7 +1390,7 @@ void compute_cell_geometry(const double* points,
 namespace vem
 {
 // ============================================================================
-
+    
 // ----------------------------------------------------------------------------
 void potential_gradient_force_3D(const double* const points,
                                  const int num_cells,
@@ -1398,7 +1398,10 @@ void potential_gradient_force_3D(const double* const points,
                                  const int* const num_face_corners, // corners per cellface
                                  const int* const face_corners,
                                  const double* const field,
-                                 vector<double>& fgrad)
+                                 vector<double>& fgrad,
+                                 vector<tuple<int, int, double>>& div,
+                                 bool get_matrix
+    )
 // ----------------------------------------------------------------------------
 {
   // initializing result vector
@@ -1451,9 +1454,17 @@ void potential_gradient_force_3D(const double* const points,
                                  1, outward_normals);
 
     // fill in entries in global fgrad vector
-    for (int c = 0; c != num_corners; ++c) 
-      for (int d = 0; d != 3; ++d)
-        fgrad[3 * indexing[c] + d] += 2 * field[cell] * qv[3 * c + d];
+    for (int c = 0; c != num_corners; ++c){ 
+        for (int d = 0; d != 3; ++d){
+            fgrad[3 * indexing[c] + d] += 2 * field[cell] * qv[3 * c + d];
+            if(get_matrix){
+                int I = 3 * indexing[c] + d;
+                int J = cell;
+                double val = 2*qv[3 * c + d];
+                div.push_back(tuple<int, int, double> {I, J, val});
+            }
+        }
+    }
 
     // keep track of our current position in the `face_corners` array
     cur_fcor_start += tot_num_cellface_corners;
@@ -1644,7 +1655,9 @@ compute_stress_3D(const double* const points,
                   //const double* const neumann_forces, // 3 * number of neumann faces
                   const std::vector<double>& disp,
                   std::vector<std::array<double,6>>& stress,
-                  const StabilityChoice stability_choice)
+                  const StabilityChoice stability_choice,
+                  vector<tuple<int, int, double>>& stressmat,
+                  bool do_matrix)    
 // ----------------------------------------------------------------------------
 {
     // preliminary computations
@@ -1671,7 +1684,10 @@ compute_stress_3D(const double* const points,
                                   poisson[c],
                                   stability_choice,
                                   disp,// global displacement
-                                  stress[c]
+                                  c,
+                                  stress[c],
+                                  stressmat,
+                                  do_matrix
             );
         fcorners_start += accumulate(&num_face_corners[cf_ix], &num_face_corners[cf_ix + num_cell_faces[c]], 0);
         cf_ix += num_cell_faces[c];
@@ -1770,7 +1786,10 @@ calculate_stress_3D_local(const double* const points,
                           const double poisson,
                           const StabilityChoice stability_choice,
                           const std::vector<double>& disp,/// global displacement
-                          std::array<double,6>& stress)
+                          const int cell,
+                          std::array<double,6>& stress,
+                          vector<tuple<int, int, double>>& stressmat,
+                          bool do_matrix)
 // ----------------------------------------------------------------------------
 {
     array<double, 3> centroid;
@@ -1834,14 +1853,26 @@ calculate_stress_3D_local(const double* const points,
     // 
     std::vector<double> local_disp;
     local_disp.resize(indexing.size()*3);
+    std::vector<int> global_index;
+    global_index.resize(indexing.size()*3);
     for(size_t i = 0; i < indexing.size(); ++i){
         for (size_t d = 0; d != 3; ++d){
-            local_disp[3*i+ d] = disp[3*indexing[i] + d]; 
+            local_disp[3*i+ d] = disp[3*indexing[i] + d];
+            global_index[3*i+ d] = 3*indexing[i] + d;
         }
     }
     for(int i=0; i < lsdim; ++i){
         for(int j=0; j < totdim; ++j){
-            stress[i] += DWct[i*totdim + j]*local_disp[j];           
+            stress[i] += DWct[i*totdim + j]*local_disp[j];
+            if(do_matrix){
+                int I = lsdim*cell+i;
+                int J = global_index[j];
+                double val = DWct[i*totdim + j];
+                if(i>2){    
+                    val /=2.0;
+                }
+                stressmat.push_back(tuple<int, int, double> {I, J, val});
+            }
         }
     }
     for(int i = 3; i<lsdim; ++i){

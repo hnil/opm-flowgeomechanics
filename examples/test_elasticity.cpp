@@ -231,10 +231,10 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
                                         cartesianIndexMapper
         );
     
-    std::cout << "Effected nodes" << std::endl;
-    for(int i:fixed_nodes){
-        std::cout << i << std::endl;
-    }
+    // std::cout << "Effected nodes" << std::endl;
+    // for(int i:fixed_nodes){
+    //     std::cout << i << std::endl;
+    // }
     
     // std::cout << "logical dimension: " << grid.logicalCartesianSize()[0]
     //           << "x"                   << grid.logicalCartesianSize()[1]
@@ -263,6 +263,7 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
     esolver.fixNodes(fixed_nodes);
     esolver.initForAssembly();
     esolver.assemble(pressforce, do_matrix, do_vector);
+    esolver.updateRhsWithGrad(pressforce);
     Opm::PropertyTree prm("mechsolver.json");
     esolver.setupSolver(prm);
 
@@ -298,7 +299,7 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
      }
      std::vector<double> stresslin(num_cells*6,0.0);
      
-     esolver.calculateStress();
+     esolver.calculateStress(true);
      
      const Dune::BlockVector<Dune::FieldVector<double,6>>& stress = esolver.stress();
      
@@ -420,7 +421,7 @@ try
     bool with_gravity = false;
     std::string name = "vem";
     ok = run<Dune::CpGrid, ElasticitySolverTypeVem>(p, with_pressure, with_gravity, std::string("vem"));
-    ok = run<Dune::CpGrid, ElasticitySolverTypeFem>(p, with_pressure, with_gravity, std::string("fem"));
+    //ok = run<Dune::CpGrid, ElasticitySolverTypeFem>(p, with_pressure, with_gravity, std::string("fem"));
     return ok;
   } catch (Dune::Exception &e) {
       std::cerr << "Dune reported error: " << e << std::endl;

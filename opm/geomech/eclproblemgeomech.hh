@@ -44,6 +44,7 @@ namespace Opm{
         }
         
         void finishInit(){
+            OPM_TIMEBLOCK(finishInit);
             Parent::finishInit();
             const auto& simulator = this->simulator();
             const auto& eclState = simulator.vanguard().eclState();
@@ -63,6 +64,10 @@ namespace Opm{
                 ymodule_ = fp.get_double("YMODULE");
                 pratio_ = fp.get_double("PRATIO");
                 biotcoef_ = fp.get_double("BIOTCOEF");
+                // thermal related
+                thelcoef_ = fp.get_double("THELCOEF");
+                thermexr_ = fp.get_double("THERMEXR");
+                poelcoef_ = fp.get_double("POELCOEF");
                 for(size_t i=0; i < ymodule_.size(); ++i){
                     using IsoMat = Opm::Elasticity::Isotropic;
                     if(pratio_[i]>0.5 || pratio_[i] < 0.0){
@@ -121,8 +126,8 @@ namespace Opm{
                             const auto& region = equilRegionData[cartesianIndexMapper.cartesianIndex(cellIdx)];
                             if(region == recnum){
                                 Dune::FieldVector<double, 6> initstress;
-                                initstress[0] = STRESSXX +  STRESSXXGRAD*(center[0] - datum_posx);
-                                initstress[1] = STRESSYY +  STRESSYYGRAD*(center[1] - datum_posy);
+                                initstress[0] = STRESSXX +  STRESSXXGRAD*(center[0] - datum_depth);
+                                initstress[1] = STRESSYY +  STRESSYYGRAD*(center[1] - datum_depth);
                                 initstress[2] = STRESSZZ +  STRESSZZGRAD*(center[2] - datum_depth);
                                 initstress[3] = 0.0;
                                 initstress[4] = 0.0;
@@ -146,15 +151,18 @@ namespace Opm{
             }
         }
         void initialSolutionApplied(){
+            OPM_TIMEBLOCK(initialSolutionApplied);
             Parent::initialSolutionApplied();
             const auto& simulator = this->simulator();
             size_t numDof = simulator.model().numGridDof();
             initpressure_.resize(numDof);
+            inittemperature_.resize(numDof);
             
             for(size_t dofIdx=0; dofIdx < numDof; ++dofIdx){
                 const auto& iq = this->model().intensiveQuantities(dofIdx,0);
                 const auto& fs = iq.fluidState();
                 initpressure_[dofIdx] = Toolbox::value(fs.pressure(waterPhaseIdx));
+                inittemperature_[dofIdx] = Toolbox::value(fs.temperature(waterPhaseIdx));
             }
             initstress_.resize(numDof);
             
@@ -203,25 +211,51 @@ namespace Opm{
             return initpressure_[dofIdx];
         }
 
+        double initTemperature(unsigned dofIdx) const{
+            return inittemperature_[dofIdx];
+        }
+
         double initStress(unsigned dofIdx,int comp) const{
             return initstress_[dofIdx][comp];
         }
-
+        
         double biotCoef(unsigned globalIdx) const{
             return biotcoef_[globalIdx];
         }
-        
+        double thelCoef(unsigned globalIdx) const{
+            return thelcoef_[globalIdx];
+        }
+        double thermExr(unsigned globalIdx) const{
+            return thermexr_[globalIdx];
+        }
+        double poelCoef(unsigned globalIdx) const{
+            return poelcoef_[globalIdx];
+        }
+        double pRatio(unsigned globalIdx) const{
+            return pratio_[globalIdx];
+        }
         const std::vector<size_t>& fixedNodes() const{
             return fixed_nodes_;
         }
+        // double getFieldProps(const std::string& field, unsigned globalIdx) const{
+        //     const auto& eclState = this->simulator().vanguard().eclState();
+        //     const auto& fp = eclState.fieldProps();
+        //     const auto& myvec = fp.get_double(field);
+        //     return myvec[globalIdx];
+        // }
     private:
         using GeomechModel = EclGeoMechModel<TypeTag>;
         GeomechModel geomechModel_;
+
         std::vector<double> ymodule_;
         std::vector<double> pratio_;
         std::vector<double> biotcoef_;
         std::vector<double> poelcoef_;
+        std::vector<double> thermexr_;
+        std::vector<double> thelcoef_;
+
         std::vector<double> initpressure_;
+        std::vector<double> inittemperature_;
         std::vector<size_t> fixed_nodes_;
         Dune::BlockVector<Dune::FieldVector<double,6>> initstress_;
         //std::vector<Opm::Elasticity::Material> elasticparams_;

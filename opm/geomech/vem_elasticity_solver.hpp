@@ -14,7 +14,7 @@
 
 
 #include <opm/common/utility/platform_dependent/disable_warnings.h>
-
+#include <opm/common/TimingMacros.hpp>
 #include <dune/common/fmatrix.hh>
 #include <opm/common/utility/parameters/ParameterGroup.hpp>
 #include <dune/grid/common/mcmgmapper.hh>
@@ -73,7 +73,7 @@ class VemElasticitySolver
     //! \brief An iterator over grid cells
     typedef typename GridType::LeafGridView::template Codim<0>::Iterator LeafIterator;
 
-
+    typedef Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1> > Matrix;
     //! \brief The linear operator
     ASMHandler<GridType> A;//NB NB names have to change
 
@@ -145,6 +145,7 @@ class VemElasticitySolver
 
     // //! \param[in] params The linear solver parameters
     void setupSolver(const Opm::PropertyTree& prm){
+        OPM_TIMEBLOCK(setupLinearSolver);
         // bool parallel=false;
         // if(parallel){
         //     OPM_THROW(std::runtime_error,"Parallel for mechanics not implemented");
@@ -176,6 +177,7 @@ class VemElasticitySolver
     void averageStress(Dune::BlockVector<Dune::FieldVector<ctype,comp>>& sigmacells,
                        const Vector& uarg);
     void setBodyForce(double gravity){
+        OPM_TIMEBLOCK(setBodyFrorce);
         const int num_cells = grid_.leafGridView().size(0); // entities of codim 0
         // assemble the mechanical system
         body_force_.resize(3*num_cells, 0.0);
@@ -184,8 +186,8 @@ class VemElasticitySolver
         }
     }
 
-    void makeDuneMatrix(const std::vector<std::tuple<int, int, double>>& A_entries){
-
+    static void makeDuneMatrix(const std::vector<std::tuple<int, int, double>>& A_entries, Matrix& mat){
+        OPM_TIMEBLOCK(makeDuneMatrix1);
         // hopefully consisten with matrix
         // should be moved to initialization
         std::vector< std::set<int> > rows;
@@ -206,6 +208,50 @@ class VemElasticitySolver
             int j = std::get<1>(matel);
             rows[i].insert(j);
         }
+        // set up matrix structure
+        MatrixOps::fromAdjacency(mat, rows, nrows, ncols);
+        mat = 0;
+        for(auto matel:A_entries){
+            int i = std::get<0>(matel);
+            int j = std::get<1>(matel);
+            double val = std::get<2>(matel);
+            mat[i][j] += val;
+        }
+    }
+    void updateRhsWithGrad(const Vector& mechpot){
+        OPM_TIMEBLOCK(updateRhsWithGrad);
+         Vector& b = A.getLoadVector();
+         b = 0;
+         b.resize(rhs_force_.size());
+         divmat_.mv(mechpot,b);
+        // end initialization
+        for(int i=0; i < rhs_force_.size(); ++i){
+                b[i] += rhs_force_[i];
+        }
+    }
+    
+    void makeDuneMatrix(const std::vector<std::tuple<int, int, double>>& A_entries){
+        OPM_TIMEBLOCK(makeDuneMatrix2);
+        // hopefully consisten with matrix
+        // should be moved to initialization
+        std::vector< std::set<int> > rows;
+        int nrows=0;
+        int ncols=0;
+        for(auto matel: A_entries){
+            int i = std::get<0>(matel);
+            int j = std::get<1>(matel);
+            nrows = std::max(nrows,i);
+            ncols = std::max(ncols,j);
+        }
+        nrows = nrows+1;
+        ncols = ncols+1;
+        //assert(nrows==ncols);
+        rows.resize(nrows);
+        for(auto matel: A_entries){
+            int i = std::get<0>(matel);
+            int j = std::get<1>(matel);
+            rows[i].insert(j);
+        }
         auto& MAT =this->A.getOperator();      
         MatrixOps::fromAdjacency(MAT, rows, nrows, ncols);
         MAT = 0;
@@ -216,7 +262,7 @@ class VemElasticitySolver
             A.addMatElement(i,j, val);// += val;
         }
     }
-    void calculateStress();
+    void calculateStress(bool precalculated);
     //const std::vector<std::array<double,6>>& stress(){return stress_;}
     const Dune::BlockVector<Dune::FieldVector<ctype,6>>& stress() const{return stress_;}
 
@@ -251,6 +297,8 @@ class VemElasticitySolver
     std::tuple<int, std::vector<int>, std::vector<double>> dirichlet_; //set_dirichlet(coords, dircase);
 
     Dune::BlockVector<Dune::FieldVector<ctype,6>> stress_;
+    Matrix stressmat_; // from all dofs (not eliminating bc) to cell
+    Matrix divmat_;   // from cell pressure to active dofs
     //std::vector<std::array<double,6>> stress_;
 
 };

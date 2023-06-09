@@ -19,7 +19,7 @@ WCONINJE
         P1      WATER       OPEN       RATE   2.0000000e+03             1*             1*             1*        0             1*             1*             1*             1*             1* / 
 /
 WTEMP
-   P1 10 /
+   P1 30 /
 /
 TSTEP
    28.571429

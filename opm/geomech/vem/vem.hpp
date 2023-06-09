@@ -257,11 +257,13 @@ void assemble_stiffness_matrix_3D(const double* const points,
 void potential_gradient_force_3D(const double* const points,
                                  const int num_cells,
                                  const int* const num_cell_faces, // cell faces per cell
-                                 const int* const num_face_corners, // corners per face
+                                 const int* const num_face_corners, // corners per cellface
                                  const int* const face_corners,
                                  const double* const field,
-                                 std::vector<double>& fgrad);
-// -----------------------------------------------------------------------------------------------
+                                 std::vector<double>& fgrad,
+                                 std::vector<std::tuple<int, int, double>>& div,
+                                 bool get_matrix);    
+
 void
 compute_stress_3D(const double* const points,
                   const int num_cells,
@@ -279,7 +281,10 @@ compute_stress_3D(const double* const points,
                   // const double* const neumann_forces, // 3 * number of neumann faces
                   const std::vector<double>& disp,
                   std::vector<std::array<double,6>>& stress,
-                  const StabilityChoice stability_choice);
+                  const StabilityChoice stability_choice,
+                  std::vector<std::tuple<int, int, double>>& stressmat,
+                  bool do_matrix);    
+
 
 void
 calculate_stress_3D_local(const double* const points,
@@ -290,9 +295,10 @@ calculate_stress_3D_local(const double* const points,
                           const double poisson,
                           const StabilityChoice stability_choice,
                           const std::vector<double>& disp,
-                          std::array<double,6>& stress);
-
-  
+                          const int cell,
+                          std::array<double,6>& stress,
+                          std::vector<std::tuple<int, int, double>>& stressmat,
+                          bool do_matrix);    
 // ============================================================================
 // ============ Various utility functions for geometry computations ===========
 // ============================================================================

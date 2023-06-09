@@ -65,19 +65,38 @@ namespace Opm{
         }
         void endTimeStep(){
             //Parent::endIteration();
+            OPM_TIMEBLOCK(endTimeStepMech);
             std::cout << "Geomech end iteration" << std::endl;
             size_t numDof = simulator_.model().numGridDof();
             const auto& problem = simulator_.problem();
             for(size_t dofIdx=0; dofIdx < numDof; ++dofIdx){    
                 const auto& iq = simulator_.model().intensiveQuantities(dofIdx,0);
+                // pressure part
                 const auto& fs = iq.fluidState();
                 const auto& press = fs.pressure(waterPhaseIdx);
-                const auto& biotcoef = problem.biotCoef(dofIdx);
-                mechPotentialForce_[dofIdx] = (Toolbox::value(press) - problem.initPressure(dofIdx))*biotcoef;
+                // const auto& biotcoef = problem.biotCoef(dofIdx); //NB not used
+                //thermal part
+                //Properties::EnableTemperature
+                const auto& temp = fs.temperature(waterPhaseIdx);//NB all phases have equal temperature
+                const auto& thelcoef = problem.thelCoef(dofIdx);
+                // const auto& termExpr = problem.termExpr(dofIdx); //NB not used
+                const auto& poelCoef = problem.poelCoef(dofIdx);
+                const auto& pratio = problem.pRatio(dofIdx);
+                double fac = (1-2*pratio)/(1-pratio);
+                double pcoeff = poelCoef*fac;
+                double tcoeff = thelcoef*fac;//+ youngs*tempExp;
+                double diffpress = (Toolbox::value(press) - problem.initPressure(dofIdx));
+                mechPotentialForce_[dofIdx] = diffpress*pcoeff;
+                // assume difftemp = 0 for non termal runs
+                double difftemp = (Toolbox::value(temp) - problem.initTemperature(dofIdx));
+                mechPotentialForce_[dofIdx] += difftemp*tcoeff;
+                //NB check sign !!
+                mechPotentialForce_[dofIdx] *= 1.0;
             }
             // for now assemble and set up solver her
             
             if(first_solve_){
+                OPM_TIMEBLOCK(SetupMechSolver);
                 bool do_matrix = true;//assemble matrix
                 bool do_vector = true;//assemble matrix
                 // set boundary
@@ -90,13 +109,24 @@ namespace Opm{
                 elacticitysolver_.setupSolver(prm);
                 first_solve_ = false;
             }else{
-                bool do_matrix = false;//assemble matrix
-                bool do_vector = true;//assemble matrix
+                OPM_TIMEBLOCK(AssembleRhs);
+                
+                // need "static boundary conditions is changing"
+                //bool do_matrix = false;//assemble matrix
+                //bool do_vector = true;//assemble matrix
                 //elacticitysolver_.A.initForAssembly();
-                elacticitysolver_.assemble(mechPotentialForce_, do_matrix, do_vector);
+                //elacticitysolver_.assemble(mechPotentialForce_, do_matrix, do_vector);
+                
+                // need precomputed divgrad operator
+                elacticitysolver_.updateRhsWithGrad(mechPotentialForce_);
             }    
-            
-            elacticitysolver_.solve();
+
+            {
+                OPM_TIMEBLOCK(SolveMechanicalSystem);
+                elacticitysolver_.solve();
+            }
+            {
+            OPM_TIMEBLOCK(CalculateOutputQuantitesMech);
             Opm::Elasticity::Vector field;
             const auto& grid = simulator_.vanguard().grid();
             const auto& gv = grid.leafGridView();
@@ -107,7 +137,10 @@ namespace Opm{
             this->makeDisplacement(field);
             // update variables used for output to resinsight
             // NB TO DO
-            elacticitysolver_.calculateStress();
+            {
+            OPM_TIMEBLOCK(calculateStress);    
+            elacticitysolver_.calculateStress(true);
+            }
             const auto& linstress = elacticitysolver_.stress();
             stress_.resize(linstress.size());
             for (const auto& cell: elements(gv)){
@@ -125,8 +158,9 @@ namespace Opm{
             }
             
             
-            bool verbose = true;
+            bool verbose = false;
             if(verbose){
+                OPM_TIMEBLOCK(WriteMatrixMarket);
                 // debug output to matrixmaket format
                 Dune::storeMatrixMarket(elacticitysolver_.A.getOperator(), "A.mtx");
                 Dune::storeMatrixMarket(elacticitysolver_.A.getLoadVector(), "b.mtx");
@@ -134,7 +168,7 @@ namespace Opm{
                 Dune::storeMatrixMarket(field, "field.mtx");
                 Dune::storeMatrixMarket(mechPotentialForce_, "pressforce.mtx");
             }
-            
+            }
         }       
         template<class Serializer>
         void serializeOp(Serializer& serializer)

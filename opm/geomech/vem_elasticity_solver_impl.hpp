@@ -17,8 +17,10 @@
 #ifdef HAVE_OPENMP
 #include <omp.h>
 #endif
+#include <tuple>
 #include <vector>
 #include <algorithm>
+#include <opm/common/TimingMacros.hpp>
 #include <opm/input/eclipse/Deck/DeckKeyword.hpp>
 #include <opm/geomech/vem/vem.hpp>
 #include <opm/geomech/vem/vemutils.hpp>
@@ -57,50 +59,75 @@ namespace Elasticity {
 //   }
 // }
 
-    IMPL_FUNC(void, calculateStress())
-{
-    //assumes the grid structure is made
-    const int num_neumann_faces = 0;
-    num_cells_ = grid_.leafGridView().size(0); // entities of codim 0
-    // assemble the mechanical system
-    vem::StabilityChoice stability_choice = vem::D_RECIPE;
-    //const int numdof =
-    // const int tot_num_faces = accumulate(num_cell_faces_, num_cell_faces_ + num_cells_, 0);
-    // const int tot_num_fcorners = accumulate(num_face_corners_, &num_face_corners_[0] + tot_num_faces, 0);
-    // const int tot_num_nodes = *max_element(face_corners_, face_corners + tot_num_fcorners) + 1;
-    stress_.resize(num_cells_);
-    std::vector<std::array<double,6>> stress;
-    stress.resize(num_cells_);
-
-    std::vector<double> dispall;
-    dispall.resize(3*grid_.leafGridView().size(3));
+    IMPL_FUNC(void, calculateStress(bool precomputed))
     {
-        Vector dispalldune;
-        dispalldune.resize(3*grid_.leafGridView().size(3));
-        this->expandSolution(dispalldune,this->u);
-        for(size_t i=0; i < dispall.size(); ++i){
-            dispall[i] = dispalldune[i];//fieldvector<double,1> can be converted to double
+        if (precomputed) {
+            OPM_TIMEBLOCK(calculateStressPrecomputed);
+            //NB stressmat is defined in linear indices not block linear indices
+            Vector dispalldune;
+            dispalldune.resize(3 * grid_.leafGridView().size(3));
+            this->expandSolution(dispalldune, this->u);
+            // Dune::BlockVector< DuneFieldVector<double,1> >
+            Vector stress(6 * grid_.leafGridView().size(3));
+            stressmat_.mv(dispalldune,stress);
+            stress_.resize(num_cells_);
+            for (size_t i = 0; i < num_cells_; ++i) {
+                for (size_t k = 0; k < 6; ++k) {
+                    stress_[i][k] = stress[i * 6 + k];
+                }
+            }
+        } else {
+            OPM_TIMEBLOCK(calculateStressFull);
+            // assumes the grid structure is made
+            const int num_neumann_faces = 0;
+            num_cells_ = grid_.leafGridView().size(0); // entities of codim 0
+            // assemble the mechanical system
+            vem::StabilityChoice stability_choice = vem::D_RECIPE;
+            // const int numdof =
+            //  const int tot_num_faces = accumulate(num_cell_faces_, num_cell_faces_ + num_cells_, 0);
+            //  const int tot_num_fcorners = accumulate(num_face_corners_, &num_face_corners_[0] + tot_num_faces, 0);
+            //  const int tot_num_nodes = *max_element(face_corners_, face_corners + tot_num_fcorners) + 1;
+            stress_.resize(num_cells_);
+            std::vector<std::array<double, 6>> stress;
+            stress.resize(num_cells_);
+
+            std::vector<double> dispall;
+            dispall.resize(3 * grid_.leafGridView().size(3));
+            {
+                Vector dispalldune;
+                dispalldune.resize(3 * grid_.leafGridView().size(3));
+                this->expandSolution(dispalldune, this->u);
+                for (size_t i = 0; i < dispall.size(); ++i) {
+                    dispall[i] = dispalldune[i]; // fieldvector<double,1> can be converted to double
+                }
+            }
+            std::vector<std::tuple<int, int, double>> stressmat;
+            vem::compute_stress_3D(&coords_[0],
+                                   num_cells_,
+                                   &num_cell_faces_[0],
+                                   &num_face_corners_[0],
+                                   &face_corners_[0],
+                                   &ymodule_[0],
+                                   &pratio_[0],
+                                   dispall,
+                                   stress,
+                                   stability_choice,
+                                   stressmat,
+                                   false);
+            // copy to dune definitions
+            stress_.resize(num_cells_);
+            for (size_t i = 0; i < num_cells_; ++i) {
+                for (size_t k = 0; k < 6; ++k) {
+                    stress_[i][k] = stress[i][k];
+                }
+            }
         }
     }
-    
-    vem::compute_stress_3D(&coords_[0], num_cells_, &num_cell_faces_[0], &num_face_corners_[0],
-                           &face_corners_[0], &ymodule_[0], &pratio_[0],
-                           dispall,
-                           stress,
-                           stability_choice);
-    // copy to dune definitions
-    stress_.resize(num_cells_);
-    for(size_t i=0; i < num_cells_; ++i){
-        for(size_t k=0; k < 6; ++k){
-            stress_[i][k] = stress[i][k];
-        }
-    }
-        
-}
-    
+
 
     IMPL_FUNC(void, assemble(const Vector& pressure, bool do_matrix, bool do_vector))
 {
+    OPM_TIMEBLOCK(assemble);
     using namespace std;
     Vector& b = A.getLoadVector();
     b = 0;
@@ -124,34 +151,98 @@ namespace Elasticity {
         // assemble the mechanical system
         vector<tuple<int, int, double>> A_entries;
         vem::StabilityChoice stability_choice = vem::D_RECIPE;
-        const int numdof =
-            vem::assemble_mech_system_3D(&coords_[0], num_cells_, &num_cell_faces_[0], &num_face_corners_[0],
+        {
+        OPM_TIMEBLOCK(assembleVEM);
+        const int numdof =    vem::assemble_mech_system_3D(&coords_[0], num_cells_, &num_cell_faces_[0], &num_face_corners_[0],
                                          &face_corners_[0], &ymodule_[0], &pratio_[0], &body_force_[0],
                                          num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0],
                                          num_neumann_faces, nullptr, nullptr,
                                          A_entries, rhs_force_, stability_choice);
-        
+        }
     
     
         this->makeDuneMatrix(A_entries);
 
-        
+        {
+        OPM_TIMEBLOCK(setUpExtraStructuresForVEM);    
         // make indexing for div operator i.e. all nodes to dofs
         std::vector<int> dof_idx(grid_.leafGridView().size(3)*3);
         std::iota(dof_idx.begin(), dof_idx.end(),0);
         
         std::set_difference(dof_idx.begin(), dof_idx.end(), fixed_dof_ixs.begin(), fixed_dof_ixs.end(),std::back_inserter(idx_free_));
-        
+        //
+        vector<double> rhs_tmp(pressure.size(),0);
+        vector<double> pressure_tmp(pressure.size(),0);
+        vector<tuple<int, int, double>> divmat;
+        vem::potential_gradient_force_3D(&coords_[0],
+                                         num_cells_,
+                                         &num_cell_faces_[0],
+                                         &num_face_corners_[0],
+                                         &face_corners_[0],
+                                         &pressure_tmp[0],
+                                         rhs_tmp,
+                                         divmat,
+                                         true);
+        // sort(divmat_.begin(),
+        //      divmat_.end(),
+        //      [](const auto& aa, const auto& bb) { return std::get<1>(aa) < std::get<1>(bb); });
+        std::vector<int> global_to_dof(grid_.leafGridView().size(3)*3,-1);
+        for(size_t i=0; i< idx_free_.size(); ++i){
+            global_to_dof[idx_free_[i]] = i; 
+        }
+        //renumber and eliminate dof fized
+        vector<tuple<int, int, double>> divmatdof;
+        for(const auto& elem: divmat){
+            int I = global_to_dof[std::get<0>(elem)];
+            if(I>-1){
+                // renumber                
+                int J = get<1>(elem);
+                double val = std::get<2>(elem);
+                divmatdof.push_back(std::tuple<int, int, double>(I,J,val));
+            }
+        }
+        // finaly make dune matrix
+        makeDuneMatrix(divmatdof,divmat_);
+        // also make stress matrix
+        std::vector<std::tuple<int, int, double>> stressmat;
+        std::vector<double> dispall(grid_.leafGridView().size(3)*3);
+        std::vector<std::array<double,6>> stresstmp(grid_.leafGridView().size(0));
+        {
+        OPM_TIMEBLOCK(setUpStressMatrix);    
+        vem::compute_stress_3D(&coords_[0],
+                               num_cells_,
+                               &num_cell_faces_[0],
+                               &num_face_corners_[0],
+                               &face_corners_[0],
+                               &ymodule_[0], &pratio_[0],
+                               dispall,
+                               stresstmp,
+                               stability_choice,
+                               stressmat,
+                               true
+        );
+        }
+        makeDuneMatrix(stressmat, stressmat_);
+        }
     }
     if(do_vector){
+        OPM_TIMEBLOCK(calculateRHS);
         //NB rhs_force_ is calculated by matrix call
         vector<double> rhs_pressure;
         vector<double> std_pressure(pressure.size(), 0);
         for(size_t i = 0; i < pressure.size(); ++i){
             std_pressure[i] = pressure[i][0];
         }
-        vem::potential_gradient_force_3D(&coords_[0], num_cells_, &num_cell_faces_[0], &num_face_corners_[0],
-                                         &face_corners_[0], &std_pressure[0], rhs_pressure);
+        std::vector<std::tuple<int, int, double>> divmat;
+        vem::potential_gradient_force_3D(&coords_[0],
+                                         num_cells_,
+                                         &num_cell_faces_[0],
+                                         &num_face_corners_[0],
+                                         &face_corners_[0],
+                                         &std_pressure[0],
+                                         rhs_pressure,
+                                         divmat,
+                                         false);
 
         //Sign is added here  i.e \div \sigma = 
         vector<double> rhs(rhs_force_);

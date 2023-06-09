@@ -28,6 +28,9 @@ WELLDIMS
        1       10       10        1 
 /
 
+EQLDIMS
+/
+
 WATER
 OIL
 GAS
@@ -73,7 +76,7 @@ INCLUDE
 
 
 THCONR
-    9610*1        
+    9610*0.577        
 /
 
 YMODULE
@@ -83,13 +86,16 @@ PRATIO
        9610*0.3 /
 
 BIOTCOEF
-       9610*1 /
+       9610*0.9 /
 
 POELCOEF
-       9610*1 /
+       9610*0.6 /
 
 THELCOEF
-       9610*1 /
+       9610*0.1e5 /
+
+THERMEXR
+      9610*1 /
 
 ---------------------------------------------------------
 EDIT
@@ -135,9 +141,26 @@ SPECROCK
 SPECHEAT
 --T [C]   Cp [KJ/Rm3 C]  Cp [KJ/Rm3 C]  Cp [KJ/Rm3 C]
 --          oil            water           gas 
-0    2.1    3.9    2.1
-100    2.1    3.9    2.1
+0    2.1    4.19    2.1
+100    2.1    4.19    2.1
  /
+
+VISCREF
+-- -- Item (1) reference pressure for the viscosity and temperature tables (barsa)
+-- --      (2) reference gas-oil ratio for when the model contains gas dissolved as activated by the DISGAS 
+-- --   REF      REF 
+-- -- PRESSURE   GOR 
+ 200 0.0 / TABLE NO. 01
+ 
+WATVISCT
+ -- water viscosity as a function of temperature.
+ -- Item (1) A columnar vector of real monotonically increasing down the column values that defines the temperature values. (C)
+ --      (2) A columnar vector of real increasing down the column values that defines the water viscosity for the corresponding temperature values (cP).
+ -- WATER  WATER
+ -- TEMP   VISC
+30    1.1   
+60    0.78
+80    0.54 / TABLE NO. 01 
 
 
 
@@ -159,7 +182,8 @@ STRESSEQUIL
 -- Item 7: stressyygrad
 -- Item 8: stesszz
 -- Item 9: stresszzgrad
-   2000  0.0 0.0  400 0.0 400 0.0 400 0.0/
+--   2000  0.0 0.0  400 0.0 400 0.0 400 0.0/
+   0  0.0 0.0  6.9 0.0 8.6 0.0 8.6 0.0/
    --2000  0.0 0.0  0.0 0.0 0.0 0.0 0.0 0.0/
 /
 
@@ -167,8 +191,8 @@ STRESSEQUIL
 --9610*150
 --/
 RTEMPVD
-2000 100
-2100 100
+2000 80
+2100 80
 /
 
 BC
@@ -176,6 +200,7 @@ BC
 31 31 1 31 1 10 X+ FREE WATER 3* FIXED/
 1 31 1 1 1 10 Y- FREE WATER 3* FIXED/
 1 31 31 31 1 10 Y+ FREE WATER 3* FIXED/
+1 31 1 31 10 10 Z+ NONE WATER 3* FIXED/
 /
 
 
