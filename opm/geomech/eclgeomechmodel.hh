@@ -142,15 +142,19 @@ namespace Opm{
             {
             OPM_TIMEBLOCK(calculateStress);    
             elacticitysolver_.calculateStress(true);
+            elacticitysolver_.calculateStrain(true);
             }
             const auto& linstress = elacticitysolver_.stress();
-            stress_.resize(linstress.size());
+            const auto& linstrain = elacticitysolver_.strain();
+            
             for (const auto& cell: elements(gv)){
                 auto cellindex = simulator_.problem().elementMapper().index(cell);
                 // add initial stress
                 assert(cellindex == gv.indexSet().index(cell));
                 //auto cellindex2 = gv.indexSet().index(cell);
                 stress_[cellindex] = linstress[cellindex];
+                strain_[cellindex] = linstrain[cellindex];
+                delstress_[cellindex] = linstress[cellindex];
             }
             size_t lsdim = 6;
             for(size_t i = 0; i < stress_.size(); ++i){
@@ -158,7 +162,7 @@ namespace Opm{
                     stress_[i][j] += problem.initStress(i,j);
                 }
             }
-            
+            //NB ssume initial strain is 0
             
             bool verbose = false;
             if(verbose){
@@ -188,6 +192,7 @@ namespace Opm{
             mechPotentialPressForce_.resize(numDof);
             celldisplacement_.resize(numDof);
             stress_.resize(numDof);
+            delstress_.resize(numDof);
             strain_.resize(numDof);
             const auto& gv = simulator_.vanguard().grid().leafGridView();
             displacement_.resize(gv.indexSet().size(3));
@@ -223,6 +228,10 @@ namespace Opm{
         const double stress(unsigned globalDofIdx, unsigned dim) const
         {
             return stress_[globalDofIdx][dim];
+        }
+        const double delstress(unsigned globalDofIdx, unsigned dim) const
+        {
+            return delstress_[globalDofIdx][dim];
         }
         const double strain(unsigned globalDofIdx, unsigned dim) const
         {
@@ -268,6 +277,7 @@ namespace Opm{
         Dune::BlockVector<Dune::FieldVector<double,3> > celldisplacement_;
         Dune::BlockVector<Dune::FieldVector<double,3> > displacement_;
         Dune::BlockVector<Dune::FieldVector<double,6> > stress_;//NB is also stored in esolver
+        Dune::BlockVector<Dune::FieldVector<double,6> > delstress_;//NB is also stored in esolver
         Dune::BlockVector<Dune::FieldVector<double,6> > strain_;
         //Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1> > A_;
         Opm::Elasticity::VemElasticitySolver<Grid> elacticitysolver_;
