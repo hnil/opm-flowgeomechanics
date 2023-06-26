@@ -103,7 +103,7 @@ namespace Opm{
                 bool do_vector = true;//assemble matrix
                 // set boundary
                 elacticitysolver_.setBodyForce(0.0);
-                elacticitysolver_.fixNodes(problem.fixedNodes()); 
+                elacticitysolver_.fixNodes(problem.bcNodes()); 
                 //
                 elacticitysolver_.initForAssembly();
                 elacticitysolver_.assemble(mechPotentialForce_, do_matrix, do_vector);

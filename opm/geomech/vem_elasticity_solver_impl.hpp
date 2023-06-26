@@ -332,13 +332,14 @@ namespace Elasticity {
 
         //Sign is added here  i.e \div \sigma = 
         vector<double> rhs(rhs_force_);
+        assert(rhs_force_.size() == idx_free_.size());
         for(size_t i=0; i< idx_free_.size(); ++i){
             rhs[i] += rhs_pressure[idx_free_[i]];
         }
         b.resize(rhs.size());
         // end initialization
         for(int i=0; i < rhs.size(); ++i){
-                b[i] = rhs[i];
+            b[i] = rhs[i];
         }
     }
 }

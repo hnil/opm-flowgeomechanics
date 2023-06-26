@@ -105,15 +105,25 @@ class VemElasticitySolver
     //! \param[out] min The miminum coordinates of the grid
     //! \param[out] max The maximum coordinates of the grid
     void initForAssembly(){}
-    void fixNodes(const std::vector<size_t>& fixed_nodes){
+    void fixNodes(const std::vector<std::tuple<size_t,MechBCValue>>& bc_nodes){
         //void fixNodesVem(const std::vector<size_t>& fixed_nodes){
         std::vector<int> fixed_dof_ixs;
-        for (int i = 0; i < int(fixed_nodes.size()); ++i){
-            int node = fixed_nodes[i];
-            fixed_dof_ixs.insert(fixed_dof_ixs.end(), {3*node, 3*node+1, 3*node+2});
+        std::vector<double> fixed_dof_values;
+        for (int i = 0; i < int(bc_nodes.size()); ++i){
+            int node = std::get<0>(bc_nodes[i]);
+            const auto& mechbcvalue = std::get<1>(bc_nodes[i]);
+            const auto& mask = mechbcvalue.fixeddir;
+            const auto& disp = mechbcvalue.disp;
+            for(int m = 0; m < 3; ++m){
+                if(mask[m]){
+                    fixed_dof_ixs.insert(fixed_dof_ixs.end(), {3*node + m});
+                    fixed_dof_values.insert(fixed_dof_values.end(),{disp[m]});
+                }
+                //fixed_dof_ixs.insert(fixed_dof_ixs.end(), {3*node, 3*node+1, 3*node+2});
+            }
         }        
         const int num_fixed_dofs = (int)fixed_dof_ixs.size();
-        const std::vector<double> fixed_dof_values(num_fixed_dofs, 0.0);
+        
 
         dirichlet_={num_fixed_dofs, fixed_dof_ixs, fixed_dof_values};
     }

@@ -222,13 +222,13 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
     }    
     //esolver.setMaterial(materials);
     esolver.setMaterial(ymodule,pratio);
-    std::vector<size_t> fixed_nodes;
+    std::vector< std::tuple<size_t, Opm::MechBCValue> > bc_nodes;
     const auto& bcconfig = eclState.getSimulationConfig().bcconfig();
     const auto& gv = grid.leafGridView();
-    Opm::Elasticity::fixNodesAtBoundary(fixed_nodes,
-                                        bcconfig,
-                                        gv,
-                                        cartesianIndexMapper
+    Opm::Elasticity::nodesAtBoundary(bc_nodes,
+                                     bcconfig,
+                                     gv,
+                                     cartesianIndexMapper
         );
     
     // std::cout << "Effected nodes" << std::endl;
@@ -260,7 +260,7 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
     }
     bool do_matrix = true;//assemble matrix
     bool do_vector = true;//assemble matrix
-    esolver.fixNodes(fixed_nodes);
+    esolver.fixNodes(bc_nodes);
     esolver.initForAssembly();
     esolver.assemble(pressforce, do_matrix, do_vector);
     esolver.updateRhsWithGrad(pressforce);

@@ -87,10 +87,10 @@ namespace Opm{
                 //const auto& grid = simulator.grid();
                 const auto& cartesianIndexMapper = vanguard.cartesianIndexMapper();
                 //CartesianIndexMapper cartesianIndexMapper(grid);
-                Opm::Elasticity::fixNodesAtBoundary(fixed_nodes_,
-                                                    bcconfig,
-                                                    gv,
-                                                    cartesianIndexMapper);
+                Opm::Elasticity::nodesAtBoundary(bc_nodes_,
+                                                 bcconfig,
+                                                 gv,
+                                                 cartesianIndexMapper);
                 
 
                 
@@ -234,9 +234,10 @@ namespace Opm{
         double pRatio(unsigned globalIdx) const{
             return pratio_[globalIdx];
         }
-        const std::vector<size_t>& fixedNodes() const{
-            return fixed_nodes_;
+        const std::vector<std::tuple<size_t,MechBCValue>>& bcNodes() const{
+            return bc_nodes_;
         }
+        
         // double getFieldProps(const std::string& field, unsigned globalIdx) const{
         //     const auto& eclState = this->simulator().vanguard().eclState();
         //     const auto& fp = eclState.fieldProps();
@@ -256,7 +257,7 @@ namespace Opm{
 
         std::vector<double> initpressure_;
         std::vector<double> inittemperature_;
-        std::vector<size_t> fixed_nodes_;
+        std::vector<std::tuple<size_t,MechBCValue>> bc_nodes_;
         Dune::BlockVector<Dune::FieldVector<double,6>> initstress_;
         //std::vector<Opm::Elasticity::Material> elasticparams_;
         std::vector<std::shared_ptr<Opm::Elasticity::Material>> elasticparams_;

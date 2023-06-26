@@ -128,10 +128,10 @@ namespace Opm{
 
         
         template<class BCConfig, class GvType, class CartMapperType>
-        void fixNodesAtBoundary(std::vector<size_t>& fixed_nodes,
-                                const BCConfig& bcconfig,
-                                const GvType& gv,
-                                const CartMapperType& cartesianIndexMapper
+        void nodesAtBoundary(std::vector<std::tuple<size_t,MechBCValue>>& bc_nodes,
+                             const BCConfig& bcconfig,
+                             const GvType& gv,
+                             const CartMapperType& cartesianIndexMapper
             ){
             static const int dim = 3;
             if (bcconfig.size() > 0) {
@@ -171,27 +171,19 @@ namespace Opm{
                                 }
                             }
                         }
-                        // std::cout << "Effected cells" << std::endl;
-                        // for(int i:effected_cells){
-                        //     std::cout << i << std::endl;
-                        // }
-                        //const auto& gv = grid.leafGridView();
+                        MechBCValue bcval = *bcface.mechbcvalue;
                         for(const auto& cell:elements(gv)){
                             auto index = gv.indexSet().index(cell);
                             auto it = effected_cells.find(index);
-                            
-                            
                             if(!(it == effected_cells.end())){
                                 // fix all noted for now
                                 std::array<int,4> nodes = faceDirToNodes(bcface.dir);
                                 for(auto nind: nodes){
                                     auto global_ind = gv.indexSet().subIndex(cell,nind,dim);
-                                    fixed_nodes.push_back(global_ind);
+                                    bc_nodes.push_back(
+                                        std::tuple<size_t,MechBCValue>(global_ind,bcval)
+                                        );
                                 }
-                                // //gv.indexSet().subIndices(cell,facenum,1)
-                                // for (const auto& vertex : Dune::subEntities(cell, Dune::Codim<dim>{})){
-                                //     fixed_nodes.push_back(gv.indexSet().index(vertex));
-                                // }
                             }
                         }
                     } else {    
@@ -199,11 +191,21 @@ namespace Opm{
                     }
                 }
             }
-            std::sort(fixed_nodes.begin(), fixed_nodes.end()); // {1 1 2 3 4 4 5}
-            auto last = std::unique(fixed_nodes.begin(), fixed_nodes.end());
+            auto compare = [](std::tuple<size_t,MechBCValue> const &t1,
+                              std::tuple<size_t,MechBCValue> const &t2)
+            {
+                return std::get<0>(t1) < std::get<0>(t2);
+            };
+            auto isequal = [](std::tuple<size_t,MechBCValue> const &t1,
+                              std::tuple<size_t,MechBCValue> const &t2)
+            {
+                return std::get<0>(t1) == std::get<0>(t2);
+            };
+            std::sort(bc_nodes.begin(), bc_nodes.end(), compare); // {1 1 2 3 4 4 5}
+            auto last = std::unique(bc_nodes.begin(), bc_nodes.end(), isequal);
             // v now holds {1 2 3 4 5 x x}, where 'x' is indeterminate
-            fixed_nodes.erase(last, fixed_nodes.end());   
-                
+            bc_nodes.erase(last, bc_nodes.end());   
+            
         }
     }
 }
