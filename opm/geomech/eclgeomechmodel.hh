@@ -33,7 +33,7 @@ namespace Opm{
             simulator_(simulator),
             elacticitysolver_(simulator.vanguard().grid())
         {
-            //const auto& eclstate = simulator_.vanguard().eclState();                
+            //const auto& eclstate = simulator_.vanguard().eclState();
         };
         //ax model things
         void postSolve(GlobalEqVector& deltaX){
@@ -61,7 +61,7 @@ namespace Opm{
         }
         void beginTimeStep(){
             //Parent::beginIteration();
-            std::cout << "Geomech begin iteration" << std::endl;            
+            std::cout << "Geomech begin iteration" << std::endl;
         }
         void endTimeStep(){
             //Parent::endIteration();
@@ -69,7 +69,7 @@ namespace Opm{
             std::cout << "Geomech end iteration" << std::endl;
             size_t numDof = simulator_.model().numGridDof();
             const auto& problem = simulator_.problem();
-            for(size_t dofIdx=0; dofIdx < numDof; ++dofIdx){    
+            for(size_t dofIdx=0; dofIdx < numDof; ++dofIdx){
                 const auto& iq = simulator_.model().intensiveQuantities(dofIdx,0);
                 // pressure part
                 const auto& fs = iq.fluidState();
@@ -77,33 +77,38 @@ namespace Opm{
                 // const auto& biotcoef = problem.biotCoef(dofIdx); //NB not used
                 //thermal part
                 //Properties::EnableTemperature
-                const auto& temp = fs.temperature(waterPhaseIdx);//NB all phases have equal temperature
-                const auto& thelcoef = problem.thelCoef(dofIdx);
-                // const auto& termExpr = problem.termExpr(dofIdx); //NB not used
                 const auto& poelCoef = problem.poelCoef(dofIdx);
+                double diffpress = (Toolbox::value(press) - problem.initPressure(dofIdx));
                 const auto& pratio = problem.pRatio(dofIdx);
                 double fac = (1-2*pratio)/(1-pratio);
                 double pcoeff = poelCoef*fac;
-                double tcoeff = thelcoef*fac;//+ youngs*tempExp;
-                double diffpress = (Toolbox::value(press) - problem.initPressure(dofIdx));
                 mechPotentialForce_[dofIdx] = diffpress*pcoeff;
-                mechPotentialPressForce_[dofIdx] = diffpress*pcoeff;
-                // assume difftemp = 0 for non termal runs
-                double difftemp = (Toolbox::value(temp) - problem.initTemperature(dofIdx));
-                mechPotentialForce_[dofIdx] += difftemp*tcoeff;
-                mechPotentialTempForce_[dofIdx] = difftemp*tcoeff;
+                bool thermal_expansion = getPropValue<TypeTag, Properties::EnableEnergy>();
+
+                if(thermal_expansion){
+                    const auto& temp = fs.temperature(waterPhaseIdx);//NB all phases have equal temperature
+                    const auto& thelcoef = problem.thelCoef(dofIdx);
+                    // const auto& termExpr = problem.termExpr(dofIdx); //NB not used
+
+                    double tcoeff = thelcoef*fac;//+ youngs*tempExp;
+
+                    // assume difftemp = 0 for non termal runs
+                    double difftemp = (Toolbox::value(temp) - problem.initTemperature(dofIdx));
+                    mechPotentialForce_[dofIdx] += difftemp*tcoeff;
+                    mechPotentialTempForce_[dofIdx] = difftemp*tcoeff;
+                }
                 //NB check sign !!
                 mechPotentialForce_[dofIdx] *= 1.0;
             }
             // for now assemble and set up solver her
-            
+
             if(first_solve_){
                 OPM_TIMEBLOCK(SetupMechSolver);
                 bool do_matrix = true;//assemble matrix
                 bool do_vector = true;//assemble matrix
                 // set boundary
                 elacticitysolver_.setBodyForce(0.0);
-                elacticitysolver_.fixNodes(problem.bcNodes()); 
+                elacticitysolver_.fixNodes(problem.bcNodes());
                 //
                 elacticitysolver_.initForAssembly();
                 elacticitysolver_.assemble(mechPotentialForce_, do_matrix, do_vector);
@@ -112,16 +117,16 @@ namespace Opm{
                 first_solve_ = false;
             }else{
                 OPM_TIMEBLOCK(AssembleRhs);
-                
+
                 // need "static boundary conditions is changing"
                 //bool do_matrix = false;//assemble matrix
                 //bool do_vector = true;//assemble matrix
                 //elacticitysolver_.A.initForAssembly();
                 //elacticitysolver_.assemble(mechPotentialForce_, do_matrix, do_vector);
-                
+
                 // need precomputed divgrad operator
                 elacticitysolver_.updateRhsWithGrad(mechPotentialForce_);
-            }    
+            }
 
             {
                 OPM_TIMEBLOCK(SolveMechanicalSystem);
@@ -135,18 +140,18 @@ namespace Opm{
             static constexpr int dim = Grid::dimension;
             field.resize(grid.size(dim)*dim);
             elacticitysolver_.expandSolution(field,elacticitysolver_.u);
-            
+
             this->makeDisplacement(field);
             // update variables used for output to resinsight
             // NB TO DO
             {
-            OPM_TIMEBLOCK(calculateStress);    
+            OPM_TIMEBLOCK(calculateStress);
             elacticitysolver_.calculateStress(true);
             elacticitysolver_.calculateStrain(true);
             }
             const auto& linstress = elacticitysolver_.stress();
             const auto& linstrain = elacticitysolver_.strain();
-            
+
             for (const auto& cell: elements(gv)){
                 auto cellindex = simulator_.problem().elementMapper().index(cell);
                 // add initial stress
@@ -163,7 +168,7 @@ namespace Opm{
                 }
             }
             //NB ssume initial strain is 0
-            
+
             bool verbose = false;
             if(verbose){
                 OPM_TIMEBLOCK(WriteMatrixMarket);
@@ -175,12 +180,12 @@ namespace Opm{
                 Dune::storeMatrixMarket(mechPotentialForce_, "pressforce.mtx");
             }
             }
-        }       
+        }
         template<class Serializer>
         void serializeOp(Serializer& serializer)
         {
             //serializer(tracerConcentration_);
-            //serializer(wellTracerRate_);           
+            //serializer(wellTracerRate_);
          }
 
         // used in eclproblemgeomech
@@ -263,10 +268,10 @@ namespace Opm{
                         celldisplacement_[cellindex][k] += displacement_[nodeidex][k] ;
                     }
                 }
-                celldisplacement_[cellindex] /= vertices.size(); 
+                celldisplacement_[cellindex] /= vertices.size();
             }
         }
-        
+
     private:
         bool first_solve_;
         Simulator& simulator_;

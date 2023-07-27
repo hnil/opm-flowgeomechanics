@@ -17,15 +17,15 @@ TITLE
 waterthermal
 
 DIMENS
-      31       31       10 
+      31       31       10
 /
 
 TABDIMS
-       1        1       50       50       16       30 
+       1        1       50       50       16       30
 /
 
 WELLDIMS
-       1       10       10        1 
+       1       10       10        1
 /
 
 EQLDIMS
@@ -76,7 +76,7 @@ INCLUDE
 
 
 THCONR
-    9610*0.577        
+    9610*0.577
 /
 
 YMODULE
@@ -84,7 +84,7 @@ YMODULE
 
 PRATIO
        9610*0.3 /
-
+-- not used ?? calculated from POE
 BIOTCOEF
        9610*0.9 /
 
@@ -111,7 +111,7 @@ INCLUDE
 /
 
 SWOF
-0	0    		 	1	0
+0	0                       1	0
 1	1			0	0 /
 
 
@@ -140,27 +140,27 @@ SPECROCK
 -- add fluid heat capacities
 SPECHEAT
 --T [C]   Cp [KJ/Rm3 C]  Cp [KJ/Rm3 C]  Cp [KJ/Rm3 C]
---          oil            water           gas 
+--          oil            water           gas
 0    2.1    4.19    2.1
 100    2.1    4.19    2.1
  /
 
 VISCREF
 -- -- Item (1) reference pressure for the viscosity and temperature tables (barsa)
--- --      (2) reference gas-oil ratio for when the model contains gas dissolved as activated by the DISGAS 
--- --   REF      REF 
--- -- PRESSURE   GOR 
+-- --      (2) reference gas-oil ratio for when the model contains gas dissolved as activated by the DISGAS
+-- --   REF      REF
+-- -- PRESSURE   GOR
  200 0.0 / TABLE NO. 01
- 
+
 WATVISCT
  -- water viscosity as a function of temperature.
  -- Item (1) A columnar vector of real monotonically increasing down the column values that defines the temperature values. (C)
  --      (2) A columnar vector of real increasing down the column values that defines the water viscosity for the corresponding temperature values (cP).
  -- WATER  WATER
  -- TEMP   VISC
-30    1.1   
+30    1.1
 60    0.78
-80    0.54 / TABLE NO. 01 
+80    0.54 / TABLE NO. 01
 
 
 
@@ -177,11 +177,11 @@ STRESSEQUIL
 -- Item 2: datum posx (ft)
 -- Item 3: datum posy (ft)
 -- Item 4: stessxx
--- Item 5: stressxxgrad
+-- Item 5: stressxxgradz
 -- Item 6: stessyy
--- Item 7: stressyygrad
+-- Item 7: stressyygradz
 -- Item 8: stesszz
--- Item 9: stresszzgrad
+-- Item 9: stresszzgradz
 --   2000  0.0 0.0  400 0.0 400 0.0 400 0.0/
    0  0.0 0.0  6.9 0.0 8.6 0.0 8.6 0.0/
    --2000  0.0 0.0  0.0 0.0 0.0 0.0 0.0 0.0/
@@ -203,13 +203,15 @@ RTEMPVD
 -- 1 31 1 31 10 10 Z+ NONE WATER 3* FIXED 1 1 1 3*0 3*0/
 -- /
 
-BC
-1 1 1 31 1 10 X- FREE  WATER 3* FIXED 1 0 0 3*0 3*0/
-31 31 1 31 1 10 X+ FREE WATER 3* FIXED 1 0 0 3*0 3*0/
-1 31 1 1 1 10 Y- FREE WATER 3* FIXED 0 1 0 3*0 3*0/
-1 31 31 31 1 10 Y+ FREE WATER 3* FIXED 0 1 0 3*0 3*0/
-1 31 1 31 10 10 Z+ NONE WATER 3* FIXED 0 0 1 3*0 3*0/
+BCCON
+1 1 1 1 31 1 10 X- /
+2 31 31 1 31 1 10 X+ /
+3 1 31 1 1 1 10 Y- /
+4 1 31 31 31 1 10 Y+ /
+5 1 31 1 31 10 10 Z+ /
 /
+
+
 
 
 INCLUDE
@@ -224,7 +226,7 @@ INCLUDE
 'RPTSOL.TXT'
 /
 RPTRST
-BASIC=2 
+BASIC=2
 /
 
 ---------------------------------------------------------
@@ -245,6 +247,3 @@ BASIC=1
 
 INCLUDE
 SCHEDULE.TXT/
-
-
-

@@ -111,7 +111,7 @@ namespace Opm{
                     face = {0,1,5,4};
                     break;
                 case FaceDir::YPlus:
-                    face = {3,2,6,7}; 
+                    face = {3,2,6,7};
                     break;
                 case FaceDir::ZMinus:
                     face = {0,2,3,1};
@@ -126,68 +126,81 @@ namespace Opm{
             return face;
         }
 
-        
+
         template<class BCConfig, class GvType, class CartMapperType>
         void nodesAtBoundary(std::vector<std::tuple<size_t,MechBCValue>>& bc_nodes,
-                             const BCConfig& bcconfig,
+                             const BCConfig& bcconfigs,
+                             const BCProp& bcprops,
                              const GvType& gv,
                              const CartMapperType& cartesianIndexMapper
             ){
             static const int dim = 3;
-            if (bcconfig.size() > 0) {
+            if (bcprops.size() > 0) {
                 //nonTrivialBoundaryConditions_ = true;
                 //auto gv = grid.leafGridView();
                 size_t numCartDof = cartesianIndexMapper.cartesianSize();
                 unsigned numElems = gv.size(/*codim=*/0);
-                std::vector<int> cartesianToCompressedElemIdx(numCartDof, -1);               
+                std::vector<int> cartesianToCompressedElemIdx(numCartDof, -1);
                 for (unsigned elemIdx = 0; elemIdx < numElems; ++elemIdx){
                     cartesianToCompressedElemIdx[cartesianIndexMapper.cartesianIndex(elemIdx)] = elemIdx;
                 }
-                std::array<int, 3> cartdim = cartesianIndexMapper.cartesianDimensions();    
-                for (const auto& bcface : bcconfig) {
-                    const auto& type = bcface.bcmechtype;
-                    if((bcface.i1 < 0) || (bcface.j1<0) || (bcface.k1<0)){
-                        throw std::logic_error("Lower range of BC wrong");
-                    }
-                    if( (bcface.i2 > cartdim[0]) || (bcface.j2> cartdim[1]) || (bcface.k2 > cartdim[2])){
-                        throw std::logic_error("Upper range of BC wrong");
-                    }
-                    if (type == Opm::BCMECHType::FREE) {
-                        // do nothing
-                    }else if (type == Opm::BCMECHType::FIXED) {
-                        std::set<size_t> effected_cells;
-                        for (int i = bcface.i1; i <= bcface.i2; ++i) {
-                            for (int j = bcface.j1; j <= bcface.j2; ++j) {
-                                for (int k = bcface.k1; k <= bcface.k2; ++k) {
-                                    
-                                    
-                                    std::array<int, 3> tmp = {i,j,k};
-                                    int cartindex =
-                                        cartesianIndex<3>(tmp,cartdim);
-                                    auto elemIdx = cartesianToCompressedElemIdx[cartindex];
-                                    if (elemIdx>-1){
-                                        effected_cells.insert(elemIdx);
+                std::array<int, 3> cartdim = cartesianIndexMapper.cartesianDimensions();
+                for (const auto& bcconfig : bcconfigs) {
+                    for (const auto& bcprop : bcprops) {
+
+
+                        if(bcprop.index == bcconfig.index){
+                            int bcindex = bcprop.index;
+                            // double search since structure is strange
+                            const auto& bcface = bcconfig;
+
+                            if((bcface.i1 < 0) || (bcface.j1<0) || (bcface.k1<0)){
+                                throw std::logic_error("Lower range of BC wrong");
+                            }
+                            if( (bcface.i2 > cartdim[0]) || (bcface.j2> cartdim[1]) || (bcface.k2 > cartdim[2])){
+                                throw std::logic_error("Upper range of BC wrong");
+                            }
+
+                            const auto& type = bcprop.bcmechtype;
+                            if (type == Opm::BCMECHType::FREE) {
+                                // do nothing
+                            }else if (type == Opm::BCMECHType::FIXED) {
+                                std::set<size_t> effected_cells;
+                                for (int i = bcface.i1; i <= bcface.i2; ++i) {
+                                    for (int j = bcface.j1; j <= bcface.j2; ++j) {
+                                        for (int k = bcface.k1; k <= bcface.k2; ++k) {
+
+
+                                            std::array<int, 3> tmp = {i,j,k};
+                                            int cartindex =
+                                                cartesianIndex<3>(tmp,cartdim);
+                                            auto elemIdx = cartesianToCompressedElemIdx[cartindex];
+                                            if (elemIdx>-1){
+                                                effected_cells.insert(elemIdx);
+                                            }
+                                        }
                                     }
                                 }
-                            }
-                        }
-                        MechBCValue bcval = *bcface.mechbcvalue;
-                        for(const auto& cell:elements(gv)){
-                            auto index = gv.indexSet().index(cell);
-                            auto it = effected_cells.find(index);
-                            if(!(it == effected_cells.end())){
-                                // fix all noted for now
-                                std::array<int,4> nodes = faceDirToNodes(bcface.dir);
-                                for(auto nind: nodes){
-                                    auto global_ind = gv.indexSet().subIndex(cell,nind,dim);
-                                    bc_nodes.push_back(
-                                        std::tuple<size_t,MechBCValue>(global_ind,bcval)
-                                        );
+
+                                MechBCValue bcval = *bcprop.mechbcvalue;
+                                for(const auto& cell:elements(gv)){
+                                    auto index = gv.indexSet().index(cell);
+                                    auto it = effected_cells.find(index);
+                                    if(!(it == effected_cells.end())){
+                                        // fix all noted for now
+                                        std::array<int,4> nodes = faceDirToNodes(bcface.dir);
+                                        for(auto nind: nodes){
+                                            auto global_ind = gv.indexSet().subIndex(cell,nind,dim);
+                                            bc_nodes.push_back(
+                                                std::tuple<size_t,MechBCValue>(global_ind,bcval)
+                                                );
+                                        }
+                                    }
                                 }
+                            } else {
+                                throw std::logic_error("invalid type for BC. Use FREE or RATE");
                             }
                         }
-                    } else {    
-                        throw std::logic_error("invalid type for BC. Use FREE or RATE");
                     }
                 }
             }
@@ -204,8 +217,7 @@ namespace Opm{
             std::sort(bc_nodes.begin(), bc_nodes.end(), compare); // {1 1 2 3 4 4 5}
             auto last = std::unique(bc_nodes.begin(), bc_nodes.end(), isequal);
             // v now holds {1 2 3 4 5 x x}, where 'x' is indeterminate
-            bc_nodes.erase(last, bc_nodes.end());   
-            
+            bc_nodes.erase(last, bc_nodes.end());
         }
     }
 }

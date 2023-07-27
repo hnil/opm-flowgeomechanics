@@ -16,8 +16,8 @@ namespace Opm{
     class EclProblemGeoMech: public EclProblem<TypeTag>{
     public:
         using Parent = EclProblem<TypeTag>;
-        
-        
+
+
         using Simulator = GetPropType<TypeTag, Properties::Simulator>;
         using TimeStepper =  AdaptiveTimeSteppingEbos<TypeTag>;
         using Scalar = GetPropType<TypeTag, Properties::Scalar>;
@@ -42,7 +42,7 @@ namespace Opm{
             Parent::registerParameters();
             VtkGeoMechModule<TypeTag>::registerParameters();
         }
-        
+
         void finishInit(){
             OPM_TIMEBLOCK(finishInit);
             Parent::finishInit();
@@ -64,10 +64,14 @@ namespace Opm{
                 ymodule_ = fp.get_double("YMODULE");
                 pratio_ = fp.get_double("PRATIO");
                 biotcoef_ = fp.get_double("BIOTCOEF");
-                // thermal related
-                thelcoef_ = fp.get_double("THELCOEF");
-                thermexr_ = fp.get_double("THERMEXR");
                 poelcoef_ = fp.get_double("POELCOEF");
+
+                // thermal related
+                bool thermal_expansion = getPropValue<TypeTag, Properties::EnableEnergy>();
+                if(thermal_expansion){
+                    thelcoef_ = fp.get_double("THELCOEF");
+                    thermexr_ = fp.get_double("THERMEXR");
+                }
                 for(size_t i=0; i < ymodule_.size(); ++i){
                     using IsoMat = Opm::Elasticity::Isotropic;
                     if(pratio_[i]>0.5 || pratio_[i] < 0.0){
@@ -81,25 +85,27 @@ namespace Opm{
                 // read mechanical boundary conditions
                 //const auto& simulator = this->simulator();
                 const auto& vanguard = simulator.vanguard();
-                const auto& bcconfig = vanguard.eclState().getSimulationConfig().bcconfig();
+                const auto& bcconfigs = vanguard.eclState().getSimulationConfig().bcconfig();
+                const auto& bcprops = this->simulator().vanguard().schedule()[this->episodeIndex()].bcprop;
                 //using CartesianIndexMapper = Dune::CartesianIndexMapper<Grid>;
                 const auto& gv = this->gridView();
                 //const auto& grid = simulator.grid();
                 const auto& cartesianIndexMapper = vanguard.cartesianIndexMapper();
                 //CartesianIndexMapper cartesianIndexMapper(grid);
                 Opm::Elasticity::nodesAtBoundary(bc_nodes_,
-                                                 bcconfig,
+                                                 bcconfigs,
+                                                 bcprops,
                                                  gv,
                                                  cartesianIndexMapper);
-                
 
-                
+
+
                 //using Opm::ParserKeywords::;
                 if( initconfig.hasStressEquil()) {
                     using StressEQ = Opm::ParserKeywords::STRESSEQUIL;
                     size_t numCartDof = cartesianIndexMapper.cartesianSize();
                     unsigned numElems = gv.size(/*codim=*/0);
-                    std::vector<int> cartesianToCompressedElemIdx(numCartDof, -1); 
+                    std::vector<int> cartesianToCompressedElemIdx(numCartDof, -1);
                     for (unsigned elemIdx = 0; elemIdx < numElems; ++elemIdx){
                         cartesianToCompressedElemIdx[cartesianIndexMapper.cartesianIndex(elemIdx)] = elemIdx;
                     }
@@ -135,11 +141,11 @@ namespace Opm{
                                 // NB share stress not set to zero
                                 initstress_[cellIdx] = initstress;
                                 // functors.push_back([&]{
-                                    
-                                //     return center;   
+
+                                //     return center;
                                 // }
                                 //     );
-                            }   
+                            }
                         }
                         recnum +=1;
                     }
@@ -157,7 +163,7 @@ namespace Opm{
             size_t numDof = simulator.model().numGridDof();
             initpressure_.resize(numDof);
             inittemperature_.resize(numDof);
-            
+
             for(size_t dofIdx=0; dofIdx < numDof; ++dofIdx){
                 const auto& iq = this->model().intensiveQuantities(dofIdx,0);
                 const auto& fs = iq.fluidState();
@@ -165,7 +171,7 @@ namespace Opm{
                 inittemperature_[dofIdx] = Toolbox::value(fs.temperature(waterPhaseIdx));
             }
             initstress_.resize(numDof);
-            
+
             // for now make a copy
             if(simulator.vanguard().eclState().runspec().mech()){
                 //this->geomechModel_.setMaterial(elasticparams_);
@@ -176,14 +182,14 @@ namespace Opm{
         {
             if (this->gridView().comm().rank() == 0){
                 std::cout << "----------------------Start TimeIntegration-------------------\n"
-                << std::flush;                                                     
+                << std::flush;
             }
             Parent::timeIntegration();
         }
         void beginTimeStep(){
             if (this->gridView().comm().rank() == 0){
                 std::cout << "----------------------Start beginTimeStep-------------------\n"
-                << std::flush;                                                     
+                << std::flush;
             }
             Parent::beginTimeStep();
             if(this->simulator().vanguard().eclState().runspec().mech()){
@@ -193,17 +199,17 @@ namespace Opm{
         void endTimeStep(){
             if (this->gridView().comm().rank() == 0){
                 std::cout << "----------------------Start endTimeStep-------------------\n"
-                << std::flush;                                                     
+                << std::flush;
             }
             Parent::endTimeStep();
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 geomechModel_.endTimeStep();
             }
         }
-        
+
         const EclGeoMechModel<TypeTag>& geoMechModel() const
         { return geomechModel_; }
-        
+
         EclGeoMechModel<TypeTag>& geoMechModel()
         { return geomechModel_; }
 
@@ -218,7 +224,7 @@ namespace Opm{
         double initStress(unsigned dofIdx,int comp) const{
             return initstress_[dofIdx][comp];
         }
-        
+
         double biotCoef(unsigned globalIdx) const{
             return biotcoef_[globalIdx];
         }
@@ -237,7 +243,7 @@ namespace Opm{
         const std::vector<std::tuple<size_t,MechBCValue>>& bcNodes() const{
             return bc_nodes_;
         }
-        
+
         // double getFieldProps(const std::string& field, unsigned globalIdx) const{
         //     const auto& eclState = this->simulator().vanguard().eclState();
         //     const auto& fp = eclState.fieldProps();

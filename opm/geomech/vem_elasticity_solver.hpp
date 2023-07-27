@@ -44,6 +44,7 @@
 
 #include <opm/input/eclipse/Parser/Parser.hpp>
 #include <opm/input/eclipse/Deck/Deck.hpp>
+#include <opm/input/eclipse/Schedule/BCProp.hpp>
 #include <opm/simulators/linalg/FlexibleSolver.hpp>
 //#include <opm/simulators/linalg/FlexibleSolver_impl.hpp>
 namespace Opm {
@@ -93,7 +94,7 @@ class VemElasticitySolver
         : A(grid),grid_(grid)
     {
     }
-    
+
     void setMaterial(const std::vector<std::shared_ptr<Material>>& materials_){
         materials = materials_;
     }
@@ -121,9 +122,9 @@ class VemElasticitySolver
                 }
                 //fixed_dof_ixs.insert(fixed_dof_ixs.end(), {3*node, 3*node+1, 3*node+2});
             }
-        }        
+        }
         const int num_fixed_dofs = (int)fixed_dof_ixs.size();
-        
+
 
         dirichlet_={num_fixed_dofs, fixed_dof_ixs, fixed_dof_values};
     }
@@ -133,10 +134,10 @@ class VemElasticitySolver
         std::fill(result.begin(),result.end(),nan("1"));
         const auto& fixed_dof_values = std::get<2>(dirichlet_);
         const auto& fixed_dof_ixs = std::get<1>(dirichlet_);
-        //const auto& num_dof_dofs = std::get<0>(dirichlet_); 
+        //const auto& num_dof_dofs = std::get<0>(dirichlet_);
         for (int i = 0; i != int(fixed_dof_ixs.size()); ++i)
              result[fixed_dof_ixs[i]] = fixed_dof_values[i];
-         
+
          for (int i = 0, cur_ix = 0; i != int(result.size()); ++i){
              if (std::isnan(result[i][0])) {
                  result[i] = u[cur_ix++];
@@ -148,7 +149,7 @@ class VemElasticitySolver
     //! \param[in] matrix Whether or not to assemble the matrix
     void assemble(const Vector& pressure, bool matrix,bool vector);
 
- 
+
     //! \brief Solve Au = b for u
     //! \param[in] loadcase The load case to solve
     void solve();
@@ -239,7 +240,7 @@ class VemElasticitySolver
                 b[i] += rhs_force_[i];
         }
     }
-    
+
     void makeDuneMatrix(const std::vector<std::tuple<int, int, double>>& A_entries){
         OPM_TIMEBLOCK(makeDuneMatrix2);
         // hopefully consisten with matrix
@@ -262,7 +263,7 @@ class VemElasticitySolver
             int j = std::get<1>(matel);
             rows[i].insert(j);
         }
-        auto& MAT =this->A.getOperator();      
+        auto& MAT =this->A.getOperator();
         MatrixOps::fromAdjacency(MAT, rows, nrows, ncols);
         MAT = 0;
         for(auto matel:A_entries){

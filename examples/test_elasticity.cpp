@@ -10,7 +10,7 @@
 //!
 //==============================================================================
 #ifdef HAVE_CONFIG_H
-# include "config.h"     
+# include "config.h"
 #endif
 # define DISABLE_ALUGRID_SFC_ORDERING 1
 #include <opm/common/utility/platform_dependent/disable_warnings.h>
@@ -35,9 +35,10 @@
 #include <opm/input/eclipse/EclipseState/Grid/EclipseGrid.hpp>
 #include <opm/input/eclipse/EclipseState/EclipseState.hpp>
 #include <opm/input/eclipse/Parser/Parser.hpp>
-#include <opm/input/eclipse/EclipseState/SimulationConfig/BCMECHConfig.hpp>
 #include <opm/input/eclipse/EclipseState/SimulationConfig/BCConfig.hpp>
 #include <opm/common/utility/platform_dependent/reenable_warnings.h>
+#include <opm/input/eclipse/Python/Python.hpp>
+#include <opm/input/eclipse/Schedule/Schedule.hpp>
 
 #include <dune/alugrid/grid.hh>
 #include <opm/grid/utility/StopWatch.hpp>
@@ -86,7 +87,7 @@ struct Params {
   //! \brief Result template filename (input/output)
   std::string resultfilename;
   bool with_gravity;
-  bool with_pressure;    
+  bool with_pressure;
 };
 
 //! \brief Parse the command line arguments
@@ -124,7 +125,7 @@ void writeOutput(const Params& p, Opm::time::StopWatch& watch, int cells)
   // get hostname
   char hostname[1024];
   gethostname(hostname,1024);
-  
+
   // write log
   std::ofstream f;
   f.open(p.output.c_str());
@@ -136,10 +137,10 @@ void writeOutput(const Params& p, Opm::time::StopWatch& watch, int cells)
     << "#" << std::endl
     << "# Upscaling time: " << watch.secsSinceStart() << " secs" << std::endl
     << "#" << std::endl;
-  
+
     f  << "# Eclipse file: " << p.file << std::endl
        << "#\t cells: " << cells << std::endl;
-  
+
   f << "#" << std::endl;
 }
 using PolyGrid = Dune::PolyhedralGrid<3, 3>;
@@ -164,7 +165,7 @@ void createGrids(std::unique_ptr<AluGrid3D>& grid ,Opm::EclipseState& eclState,s
                                 /*isPeriodic=*/false,
                                 /*flipNormals=*/false,
                                 /*clipZ=*/false);
-    
+
     //auto  cartesianCellId = cpgrid.globalCell();
     //std::vector<std::size_t>  nums = cpgrid.processEclipseFormat(eclState.getInputGrid(), nullptr, false);
     Dune::FromToGridFactory<AluGrid3D> factory;
@@ -177,36 +178,39 @@ void createGrids(std::unique_ptr<AluGrid3D>& grid ,Opm::EclipseState& eclState,s
 //! \brief Main solution loop. Allows templating over the AMG type
 template<class GridType,class ElasticitySolverType>
 int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
-{    
+{
   try {
     static constexpr int dim = GridType::dimension;
-    //static constexpr int dimensionworld = GridType::dimensionworld;  
+    //static constexpr int dimensionworld = GridType::dimensionworld;
     //static const int dim = 3;
 
     Opm::time::StopWatch watch;
     watch.start();
-    
-    
+
+
     std::unique_ptr<GridType> grid_ptr;
     using GridView = typename GridType::LeafGridView;//Dune::GridView<Dune::DefaultLeafGridViewTraits<GridType>>;
     Opm::Parser parser;
     // process grid
     auto deck = parser.parseFile(p.file);
-    Opm::EclipseState eclState(deck);    
+    Opm::EclipseState eclState(deck);
     Opm::EclipseGrid inputGrid(deck);
     // create grids depeing on grid type
     std::vector<unsigned int> ordering;
     createGrids(grid_ptr, eclState, ordering);
     const GridType& grid = *grid_ptr;
+    auto python = std::make_shared<Opm::Python>();
+    const Opm::Schedule schedule(deck, eclState);
+    //
     Dune::CpGrid cpGrid;
     std::vector<std::size_t>  nums = cpGrid.processEclipseFormat(&eclState.getInputGrid(), nullptr, false);
     using CartesianIndexMapper = Dune::CartesianIndexMapper<Dune::CpGrid>;//maybe wrong
     CartesianIndexMapper cartesianIndexMapper(cpGrid);
     ElasticitySolverType esolver(grid);// p.ctol, p.Emin, p.verbose);
     std::vector<std::shared_ptr<Opm::Elasticity::Material>> materials;
-    
+
     //const auto& initconfig = eclState.getInitConfig();
-    const auto& fp = eclState.fieldProps();            
+    const auto& fp = eclState.fieldProps();
     std::vector<double> ymodule = fp.get_double("YMODULE");
     std::vector<double> pratio = fp.get_double("PRATIO");
     std::vector<double> biotcoef = fp.get_double("BIOTCOEF");
@@ -217,25 +221,27 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
         }
         if(biotcoef[i]>1.0 || biotcoef[i] < 0.0){
             OPM_THROW(std::runtime_error,"BIOTCOEF not valid");
-        }    
+        }
         materials.push_back(std::make_shared<IsoMat>(i,ymodule[i],pratio[i]));
-    }    
+    }
     //esolver.setMaterial(materials);
     esolver.setMaterial(ymodule,pratio);
     std::vector< std::tuple<size_t, Opm::MechBCValue> > bc_nodes;
-    const auto& bcconfig = eclState.getSimulationConfig().bcconfig();
+    const auto& bcconfigs = eclState.getSimulationConfig().bcconfig();
+    const auto& bcprops  = schedule[0].bcprop;
     const auto& gv = grid.leafGridView();
     Opm::Elasticity::nodesAtBoundary(bc_nodes,
-                                     bcconfig,
+                                     bcconfigs,
+                                     bcprops,
                                      gv,
                                      cartesianIndexMapper
         );
-    
+
     // std::cout << "Effected nodes" << std::endl;
     // for(int i:fixed_nodes){
     //     std::cout << i << std::endl;
     // }
-    
+
     // std::cout << "logical dimension: " << grid.logicalCartesianSize()[0]
     //           << "x"                   << grid.logicalCartesianSize()[1]
     //           << "x"                   << grid.logicalCartesianSize()[2]
@@ -272,13 +278,13 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
      std::cout << "\tsolution norm: " << esolver.u.two_norm() << std::endl;
      Opm::Elasticity::Vector field;
      field.resize(grid.size(dim)*dim);
-     esolver.expandSolution(field,esolver.u);     
+     esolver.expandSolution(field,esolver.u);
      Dune::storeMatrixMarket(esolver.A.getOperator(), name + "_" + std::string("A.mtx"));
      Dune::storeMatrixMarket(esolver.A.getLoadVector(), name + "_" + std::string("b.mtx"));
      Dune::storeMatrixMarket(esolver.u, name + "_" + std::string("u.mtx"));
      Dune::storeMatrixMarket(field, name + "_" + std::string("field.mtx"));
      Dune::FieldMatrix<double,6,6> C;
-     
+
      Dune::BlockVector<Dune::FieldVector<double,3>> disp;
      Opm::Elasticity::Vector lindisp;
      disp.resize(pressforce.size());
@@ -287,7 +293,7 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
      for (const auto& cell: elements(gv)){
          auto cellindex = gv.indexSet().index(cell);
          const auto& vertices = Dune::subEntities(cell, Dune::Codim<GridType::dimension>{});
-         const auto numvert = vertices.size(); 
+         const auto numvert = vertices.size();
          for (const auto& vertex : vertices){
              auto nodeidex = gv.indexSet().index(vertex);
              for(int k=0; k < dim; ++k){
@@ -299,26 +305,26 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
      }
      std::vector<double> stresslin(num_cells*6,0.0);
      std::vector<double> strainlin(num_cells*6,0.0);
-     
+
      esolver.calculateStress(true);
      esolver.calculateStrain(true);
-     
+
      const Dune::BlockVector<Dune::FieldVector<double,6>>& stress = esolver.stress();
      const Dune::BlockVector<Dune::FieldVector<double,6>>& strain = esolver.strain();
-     
+
      for(int i=0; i < grid.size(0); ++i){
          for(int k=0; k < 6; ++k){
              stresslin[i*6+k] = stress[i][k];
              strainlin[i*6+k] = strain[i][k];
          }
      }
-       
+
     if (!p.vtufile.empty()) {
         Dune::VTKWriter<typename GridType::LeafGridView> vtkwriter(grid.leafGridView(), Dune::VTK::nonconforming);
-        
+
         //for (int i=0;i<6;++i) {
         std::stringstream str;
-        
+
         str << "sol ";
         vtkwriter.addVertexData(field, str.str().c_str(), dim);
         vtkwriter.addCellData(lindisp, "celldisp_", dim);
@@ -336,7 +342,7 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
         }
         vtkwriter.addCellData(pressforce, "pressforce");
         //vtkwriter.addVertexData(disp, dispinfo);
-        
+
         {
             using Container = Dune::BlockVector<Dune::FieldVector<double,3>>;
             using Function =  Dune::P0VTKFunctionVector<typename GridType::LeafGridView, Container>;
@@ -351,9 +357,9 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
             vtkwriter.addCellData(ptr);
             //vtkwriter.addCellData(std::make_unique<Dune::VTKFunctionWrapper>(ptr), dispinfo);
             //vtkwriter.addCellData(ptr, dispinfo, 1);
-            
+
         }
-        
+
         vtkwriter.addCellData(stresslin, "stresscomp", 6);
         {
             using Container = std::vector<double>;//Dune::BlockVector<Dune::FieldVector<double,1>>;
@@ -407,7 +413,7 @@ int main(int argc, char** argv)
 try
 {
   try {
-    if (argc < 2 || strcmp(argv[1],"-h") == 0 
+    if (argc < 2 || strcmp(argv[1],"-h") == 0
                  || strcmp(argv[1],"--help") == 0
                  || strcmp(argv[1],"-?") == 0) {
       syntax(argv);
