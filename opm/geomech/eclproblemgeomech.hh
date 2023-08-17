@@ -9,8 +9,7 @@
 
 //#include <opm/input/eclipse/Deck/Deck.hpp>
 //#include <opm/input/eclipse/Deck/DeckSection.hpp>
-#include <opm/input/eclipse/Parser/ParserKeywords/S.hpp>
-#include <opm/input/eclipse/Parser/ParserKeywords/E.hpp>
+
 namespace Opm{
     template<typename TypeTag>
     class EclProblemGeoMech: public EclProblem<TypeTag>{
@@ -102,39 +101,28 @@ namespace Opm{
 
                 //using Opm::ParserKeywords::;
                 if( initconfig.hasStressEquil()) {
-                    using StressEQ = Opm::ParserKeywords::STRESSEQUIL;
                     size_t numCartDof = cartesianIndexMapper.cartesianSize();
                     unsigned numElems = gv.size(/*codim=*/0);
                     std::vector<int> cartesianToCompressedElemIdx(numCartDof, -1);
                     for (unsigned elemIdx = 0; elemIdx < numElems; ++elemIdx){
                         cartesianToCompressedElemIdx[cartesianIndexMapper.cartesianIndex(elemIdx)] = elemIdx;
                     }
-                    const DeckKeyword& keyword = initconfig.getStressEquil();
+                    const auto& sequil = initconfig.getStressEquil();
                     const auto& equilRegionData = fp.get_int("STRESSEQUILNUM");
                     //make lambda functions for each regaion
                     std::vector<std::function<std::array<double,6>()>> functors;
                     int recnum=1;
-                    int num_records = keyword.size();
                     initstress_.resize(gv.size(0));
-                    for (const auto& record : keyword) {
-                        const auto datum_depth = record.getItem<StressEQ::DATUM_DEPTH>().getSIDouble(0);
-                        const auto datum_posx = record.getItem<StressEQ::DATUM_POSX>().getSIDouble(0);
-                        const auto datum_posy = record.getItem<StressEQ::DATUM_POSY>().getSIDouble(0);
-                        const auto STRESSXX= record.getItem<StressEQ::STRESSXX>().getSIDouble(0);
-                        const auto STRESSXXGRAD = record.getItem<StressEQ::STRESSXXGRAD>().getSIDouble(0);
-                        const auto STRESSYY= record.getItem<StressEQ::STRESSYY>().getSIDouble(0);
-                        const auto STRESSYYGRAD = record.getItem<StressEQ::STRESSYYGRAD>().getSIDouble(0);
-                        const auto STRESSZZ= record.getItem<StressEQ::STRESSZZ>().getSIDouble(0);
-                        const auto STRESSZZGRAD = record.getItem<StressEQ::STRESSZZGRAD>().getSIDouble(0);
+                    for (const auto& record : sequil) {
                         for(const auto& cell : elements(gv)){
                             const auto& center = cell.geometry().center();
                             const auto& cellIdx = gv.indexSet().index(cell);
                             const auto& region = equilRegionData[cartesianIndexMapper.cartesianIndex(cellIdx)];
                             if(region == recnum){
                                 Dune::FieldVector<double, 6> initstress;
-                                initstress[0] = STRESSXX +  STRESSXXGRAD*(center[0] - datum_depth);
-                                initstress[1] = STRESSYY +  STRESSYYGRAD*(center[1] - datum_depth);
-                                initstress[2] = STRESSZZ +  STRESSZZGRAD*(center[2] - datum_depth);
+                                initstress[0] = record.stressXX() +  record.stressXX_grad()*(center[0] - record.datumDepth());
+                                initstress[1] = record.stressYY() +  record.stressYY_grad()*(center[1] - record.datumDepth());
+                                initstress[2] = record.stressZZ() +  record.stressZZ_grad()*(center[2] - record.datumDepth());
                                 initstress[3] = 0.0;
                                 initstress[4] = 0.0;
                                 initstress[5] = 0.0;
