@@ -22,7 +22,7 @@
 #include "tracy/TracyC.h"
 #define OPM_TIMEBLOCK(blockname) ZoneNamedN(blockname, #blockname, true);
 //#define OPM_TIMEBLOCK_LOCAL(blockname) ZoneNamedN(blockname, #blockname, true);
-//#endif
+//#endif    
 
 #include <exception>
 #include <ebos/eclproblem.hh>
@@ -38,15 +38,8 @@
 #include <opm/geomech/eclgeomechmodel.hh>
 #include <opm/geomech/eclproblemgeomech.hh>
 
-#include <opm/grid/polyhedralgrid.hh>
-#ifdef HAVE_ALUGRID
-#include <dune/alugrid/grid.hh>
-#endif
-#include <ebos/eclalugridvanguard.hh>
-#include <ebos/eclpolyhedralgridvanguard.hh>
-#include <ebos/equil/initstateequil_impl.hh>
-#include <ebos/equil/equilibrationhelpers_impl.hh>
-//#include <ebos/eclpolyhedralgridvanguard.hh>
+        
+
 // adding linearshe sould be chaning the update_ function in the same class with condition that the error is reduced.
 // the trick is to be able to recalculate the residual from here.
 // unsure where the timestepping is done from suggestedtime??
@@ -54,7 +47,7 @@
 namespace Opm {
 namespace Properties {
 namespace TTag {
-struct EclFlowProblemMech {
+struct EclFlowProblemMech {    
     using InheritsFrom = std::tuple<EclFlowProblem,VtkGeoMech>;
 };
 }
@@ -65,50 +58,32 @@ struct Problem<TypeTag, TTag::EclFlowProblemMech> {
     using type = EclProblemGeoMech<TypeTag>;
 };
 
-template<class TypeTag>
-struct Grid<TypeTag, TTag::EclFlowProblemMech> {
-    static const int dim = 3;
-    //using type = Dune::ALUGrid<dim, dim, Dune::cube, Dune::nonconforming,Dune::ALUGridMPIComm>;
-    using type = Dune::PolyhedralGrid<3, 3>;
-    //using type = Dune::CpGrid;
-};
-// need to be cpgrid for alugrid
-template<class TypeTag>
-struct EquilGrid<TypeTag, TTag::EclFlowProblemMech> {
-    //using type = Dune::CpGrid;
-    using type = GetPropType<TypeTag, Properties::Grid>;
-};
-// template<class TypeTag>
-// struct EnableExperiments<TypeTag, TTag::EclFlowProblemMech> {
-//     static constexpr bool value = true;
-// }
-
-template<class TypeTag>
-struct Vanguard<TypeTag, TTag::EclFlowProblemMech> {
-    //using type = Opm::EclAluGridVanguard<TypeTag>;
-    using type = Opm::EclPolyhedralGridVanguard<TypeTag>;
-    //using type = Opm::EclCpGridVanguard<TypeTag>;
-};
 // template<class TypeTag>
 // struct Model<TypeTag, TTag::EclFlowProblemMech> {
 //     using type = BlackOilModelFvLocal<TypeTag>;
 // };
-
+    
 
 // template<class TypeTag>
 // struct EclWellModel<TypeTag, TTag::EclFlowProblemMech> {
 //     using type = BlackoilWellModelFvExtra<TypeTag>;
 // };
-
+    
 // template<class TypeTag>
 // struct NewtonMethod<TypeTag, TTag::EclFlowProblemMech> {
 //     using type = EclNewtonMethodLinesearch<TypeTag>;
-// };
+// };    
 template<class TypeTag>
 struct EnableMech<TypeTag, TTag::EclFlowProblemMech> {
     static constexpr bool value = true;
 };
 
+template<class TypeTag>
+struct EnableEnergy<TypeTag, TTag::EclFlowProblemMech> {
+    static constexpr bool value = true;
+};
+
+    
 template<class TypeTag>
 struct VtkWriteMoleFractions<TypeTag, TTag::EclFlowProblemMech> {
     static constexpr bool value = false;
@@ -118,12 +93,12 @@ template<class TypeTag>
 struct EnableVtkOutput<TypeTag, TTag::EclFlowProblemMech> {
     static constexpr bool value = true;
 };
-
+    
 template<class TypeTag>
 struct EnableOpmRstFile<TypeTag, TTag::EclFlowProblemMech> {
     static constexpr bool value = true;
 };
-
+    
 template<class TypeTag>
 struct ThreadsPerProcess<TypeTag, TTag::EclFlowProblemMech> {
     static constexpr int value = 1;
@@ -139,7 +114,7 @@ struct EclNewtonSumTolerance<TypeTag, TTag::EclFlowProblemMech> {
     using type = GetPropType<TypeTag, Scalar>;
     static constexpr type value = 1e-5;
 };
-
+    
 // the default for the allowed volumetric error for oil per second
 template<class TypeTag>
 struct NewtonTolerance<TypeTag, TTag::EclFlowProblemMech> {
@@ -169,49 +144,32 @@ struct EclNewtonRelaxedTolerance<TypeTag, TTag::EclFlowProblemMech> {
 //     //using type = BlackOilIntensiveQuantitiesDryGas<TypeTag>;
 // };
 
-template<class TypeTag>
-struct Linearizer<TypeTag, TTag::EclFlowProblemMech> { using type = TpfaLinearizer<TypeTag>; };
+// template<class TypeTag>
+// struct Linearizer<TypeTag, TTag::EclFlowProblemMech> { using type = TpfaLinearizer<TypeTag>; };
 
-template<class TypeTag>
-struct LocalResidual<TypeTag, TTag::EclFlowProblemMech> { using type = BlackOilLocalResidualTPFA<TypeTag>; };
-
+// template<class TypeTag>
+// struct LocalResidual<TypeTag, TTag::EclFlowProblemMech> { using type = BlackOilLocalResidualTPFA<TypeTag>; };
+    
 template<class TypeTag>
 struct EnableDiffusion<TypeTag, TTag::EclFlowProblemMech> { static constexpr bool value = false; };
 
 template<class TypeTag>
-struct EnableDisgasInWater<TypeTag, TTag::EclFlowProblemMech> { static constexpr bool value = false; };
+struct EnableDisgasInWater<TypeTag, TTag::EclFlowProblemMech> { static constexpr bool value = false; };    
 
-//static constexpr bool has_disgas_in_water = getPropValue<TypeTag, Properties::EnableDisgasInWater>();
-
+//static constexpr bool has_disgas_in_water = getPropValue<TypeTag, Properties::EnableDisgasInWater>();    
+    
 template<class TypeTag>
-struct Simulator<TypeTag, TTag::EclFlowProblemMech> { using type = Opm::Simulator<TypeTag>; };
-
-template<class TypeTag>
-struct EnableExperiments<TypeTag, TTag::EclFlowProblemMech> {
-    static constexpr bool value = false;
-};
-
+struct Simulator<TypeTag, TTag::EclFlowProblemMech> { using type = Opm::Simulator<TypeTag>; };    
+    
 template<class TypeTag>
 struct EclEnableAquifers<TypeTag, TTag::EclFlowProblemMech> {
      static constexpr bool value = false;
 };
 }
-
-// template<>
-// class SupportsFaceTag<Dune::PolyhedralGrid<3, 3>>
-//     : public std::bool_constant<true>
-// {};
-// template<>
-// class SupportsFaceTag<Dune::ALUGrid<3, 3, Dune::cube, Dune::nonconforming>>
-//     : public std::bool_constant<true>
-// {};
-
 }
-
-
 int main(int argc, char** argv)
 {
-
+    
     OPM_TIMEBLOCK(fullSimulation);
     using TypeTag = Opm::Properties::TTag::EclFlowProblemMech;
     auto mainObject = Opm::Main(argc, argv);

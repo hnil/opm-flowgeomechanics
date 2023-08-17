@@ -214,31 +214,31 @@ namespace Opm{
         const Dune::FieldVector<double,3>& displacement(size_t vertexIndex) const{
             return displacement_[vertexIndex];
         }
-        const double mechPotentialForce(unsigned globalDofIdx) const
+        const double& mechPotentialForce(unsigned globalDofIdx) const
         {
             return mechPotentialForce_[globalDofIdx];
         }
-        const double mechPotentialTempForce(unsigned globalDofIdx) const
+        const double& mechPotentialTempForce(unsigned globalDofIdx) const
         {
             return mechPotentialTempForce_[globalDofIdx];
         }
-        const double mechPotentialPressForce(unsigned globalDofIdx) const
+        const double& mechPotentialPressForce(unsigned globalDofIdx) const
         {
             return mechPotentialPressForce_[globalDofIdx];
         }
-        const double disp(unsigned globalDofIdx, unsigned dim) const
+        const double& disp(unsigned globalDofIdx, unsigned dim) const
         {
             return celldisplacement_[globalDofIdx][dim];
         }
-        const double stress(unsigned globalDofIdx, unsigned dim) const
+        const double& stress(unsigned globalDofIdx, unsigned dim) const
         {
             return stress_[globalDofIdx][dim];
         }
-        const double delstress(unsigned globalDofIdx, unsigned dim) const
+        const double& delstress(unsigned globalDofIdx, unsigned dim) const
         {
             return delstress_[globalDofIdx][dim];
         }
-        const double strain(unsigned globalDofIdx, unsigned dim) const
+        const double& strain(unsigned globalDofIdx, unsigned dim) const
         {
             return strain_[globalDofIdx][dim];
         }

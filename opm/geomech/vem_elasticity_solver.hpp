@@ -197,36 +197,58 @@ class VemElasticitySolver
         }
     }
 
-    static void makeDuneMatrix(const std::vector<std::tuple<int, int, double>>& A_entries, Matrix& mat){
-        OPM_TIMEBLOCK(makeDuneMatrix1);
-        // hopefully consisten with matrix
-        // should be moved to initialization
-        std::vector< std::set<int> > rows;
-        int nrows=0;
-        int ncols=0;
-        for(auto matel: A_entries){
-            int i = std::get<0>(matel);
-            int j = std::get<1>(matel);
-            nrows = std::max(nrows,i);
-            ncols = std::max(ncols,j);
+    static void makeDuneMatrixCompressed(const std::vector<std::tuple<int, int, double>>& A_entries, Matrix& mat){
+        OPM_TIMEBLOCK(makeDuneMatrixCompressed);
+        // // hopefully consisten with matrix
+        // // should be moved to initialization
+        // std::vector< std::set<int> > rows;
+        // int nrows=0;
+        // int ncols=0;
+        // {
+        // OPM_TIMEBLOCK(findRowStructure);
+        // for(auto matel: A_entries){
+        //     int i = std::get<0>(matel);
+        //     int j = std::get<1>(matel);
+        //     nrows = std::max(nrows,i);
+        //     ncols = std::max(ncols,j);
+        // }
+        // nrows = nrows+1;
+        // ncols = ncols+1;
+        // //assert(nrows==ncols);
+        // rows.resize(nrows);
+        // for(auto matel: A_entries){
+        //     int i = std::get<0>(matel);
+        //     int j = std::get<1>(matel);
+        //     rows[i].insert(j);
+        // }
+        // }
+        // // set up matrix structure
+        // {
+        // OPM_TIMEBLOCK(makeMatrix);
+        // MatrixOps::fromAdjacency(mat, rows, nrows, ncols);
+        // }
+        {
+            OPM_TIMEBLOCK(buildMatrixImplicite);
+            //build mode need to be implicite and corredect matrix settings has to be done
+            //mat = 0;
+            for (auto matel: A_entries) {
+                int i = std::get<0>(matel);
+                int j = std::get<1>(matel);
+                mat.entry(i,j)=0;
+            }
+            //Dune::CompressionStatistics<Matrix::size_type> stats = mat.compress();
+            mat.compress();
+            //std::cout << stats;
         }
-        nrows = nrows+1;
-        ncols = ncols+1;
-        //assert(nrows==ncols);
-        rows.resize(nrows);
-        for(auto matel: A_entries){
-            int i = std::get<0>(matel);
-            int j = std::get<1>(matel);
-            rows[i].insert(j);
-        }
-        // set up matrix structure
-        MatrixOps::fromAdjacency(mat, rows, nrows, ncols);
+        {
+        OPM_TIMEBLOCK(setMatrixValues);
         mat = 0;
         for(auto matel:A_entries){
             int i = std::get<0>(matel);
             int j = std::get<1>(matel);
             double val = std::get<2>(matel);
             mat[i][j] += val;
+        }
         }
     }
     void updateRhsWithGrad(const Vector& mechpot){
@@ -241,36 +263,72 @@ class VemElasticitySolver
         }
     }
 
-    void makeDuneMatrix(const std::vector<std::tuple<int, int, double>>& A_entries){
-        OPM_TIMEBLOCK(makeDuneMatrix2);
+    void makeDuneSystemMatrix(const std::vector<std::tuple<int, int, double>>& A_entries){
+        OPM_TIMEBLOCK(makeDuneSystemMatrix);
         // hopefully consisten with matrix
         // should be moved to initialization
-        std::vector< std::set<int> > rows;
-        int nrows=0;
-        int ncols=0;
-        for(auto matel: A_entries){
-            int i = std::get<0>(matel);
-            int j = std::get<1>(matel);
-            nrows = std::max(nrows,i);
-            ncols = std::max(ncols,j);
-        }
-        nrows = nrows+1;
-        ncols = ncols+1;
-        //assert(nrows==ncols);
-        rows.resize(nrows);
-        for(auto matel: A_entries){
-            int i = std::get<0>(matel);
-            int j = std::get<1>(matel);
-            rows[i].insert(j);
-        }
+        // std::vector< std::set<int> > rows;
+        // int nrows=0;
+        // int ncols=0;
+
+        // {
+        // OPM_TIMEBLOCK(makeStructure);
+        // for (auto matel: A_entries) {
+        //     int i = std::get<0>(matel);
+        //     int j = std::get<1>(matel);
+        //     nrows = std::max(nrows,i);
+        //     ncols = std::max(ncols,j);
+        // }
+        // nrows = nrows+1;
+        // ncols = ncols+1;
+        // //assert(nrows==ncols);
+        // rows.resize(nrows);
+        // for(const auto& matel: A_entries){
+        //     int i = std::get<0>(matel);
+        //     int j = std::get<1>(matel);
+        //     rows[i].insert(j);
+        // }
+        // }
         auto& MAT =this->A.getOperator();
-        MatrixOps::fromAdjacency(MAT, rows, nrows, ncols);
-        MAT = 0;
-        for(auto matel:A_entries){
-            int i = std::get<0>(matel);
-            int j = std::get<1>(matel);
-            double val = std::get<2>(matel);
-            A.addMatElement(i,j, val);// += val;
+        // {
+        // OPM_TIMEBLOCK(matrixFromAdjacency);
+        // MatrixOps::fromAdjacency(MAT, rows, nrows, ncols);
+        // }
+        {
+            OPM_TIMEBLOCK(buildMatrixImplicite);
+            int ncols = 0;
+            int nrows = 0;
+            for (auto matel: A_entries) {
+                int i = std::get<0>(matel);
+                int j = std::get<1>(matel);
+                nrows = std::max(nrows,i);
+                ncols = std::max(ncols,j);
+            }
+            nrows = nrows+1;
+            ncols = ncols+1;
+            Matrix& MAT =this->A.getOperator();
+            MAT = 0;
+            MAT.setBuildMode(Matrix::implicit);
+            MAT.setImplicitBuildModeParameters (81, 0.4);
+            MAT.setSize(nrows, ncols);
+            makeDuneMatrixCompressed(A_entries,MAT);
+            //    for (auto matel: A_entries) {
+            //         int i = std::get<0>(matel);
+            //         int j = std::get<1>(matel);
+            //         MAT.entry(i,j)=0;
+            //     }
+            //     Dune::CompressionStatistics<Matrix::size_type> stats = MAT.compress();
+            //     //std::cout << stats;
+            // }
+            // {
+            // OPM_TIMEBLOCK(insertValues);
+            // MAT = 0;
+            // for(const auto& matel:A_entries){
+            //     int i = std::get<0>(matel);
+            //     int j = std::get<1>(matel);
+            //     double val = std::get<2>(matel);
+            //     A.addMatElement(i,j, val);// += val;
+            // }
         }
     }
     void calculateStress(bool precalculated);

@@ -18,7 +18,7 @@
 */
 
 #include "config.h"
-
+#include <opm/common/TimingMacros.hpp>
 #include <opm/simulators/linalg/FlexibleSolver_impl.hpp>
 #include <opm/simulators/linalg/PreconditionerFactory_impl.hpp>
 template <int N>

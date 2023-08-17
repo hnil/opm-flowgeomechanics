@@ -36,11 +36,11 @@ namespace Elasticity {
 // {
 //     // makestructure for vem assembly
 //     this->fixNodesVem(fixed_nodes);
-    
+
 //   typedef typename GridType::LeafGridView::template Codim<dim>::Iterator VertexLeafIterator;
 //   const VertexLeafIterator itend = grid_.leafGridView().template end<dim>();
 
-//   // make a mapper for codim 0 entities in the leaf grid 
+//   // make a mapper for codim 0 entities in the leaf grid
 //   using LeafGridView = typename GridType::LeafGridView;
 //   Dune::MultipleCodimMultipleGeomTypeMapper<LeafGridView> mapper(grid_.leafGridView(), Dune::mcmgVertexLayout());
 
@@ -208,12 +208,12 @@ namespace Elasticity {
                             num_cell_faces_,
                             num_face_corners_,
                             face_corners_);
-    
+
         const int num_fixed_dofs = get<0>(dirichlet_);
         const vector<int>& fixed_dof_ixs = std::get<1>(dirichlet_);
         const vector<double>& fixed_dof_values = std::get<2>(dirichlet_);
 
-        // neumann boundary conditions 
+        // neumann boundary conditions
         const int num_neumann_faces = 0;
         num_cells_ = grid_.leafGridView().size(0); // entities of codim 0
         // assemble the mechanical system
@@ -227,16 +227,16 @@ namespace Elasticity {
                                          num_neumann_faces, nullptr, nullptr,
                                          A_entries, rhs_force_, stability_choice);
         }
-    
-    
-        this->makeDuneMatrix(A_entries);
+
+
+        this->makeDuneSystemMatrix(A_entries);
 
         {
-        OPM_TIMEBLOCK(setUpExtraStructuresForVEM);    
+        OPM_TIMEBLOCK(setUpExtraStructuresForVEM);
         // make indexing for div operator i.e. all nodes to dofs
         std::vector<int> dof_idx(grid_.leafGridView().size(3)*3);
         std::iota(dof_idx.begin(), dof_idx.end(),0);
-        
+
         std::set_difference(dof_idx.begin(), dof_idx.end(), fixed_dof_ixs.begin(), fixed_dof_ixs.end(),std::back_inserter(idx_free_));
         //
         vector<double> rhs_tmp(pressure.size(),0);
@@ -256,27 +256,31 @@ namespace Elasticity {
         //      [](const auto& aa, const auto& bb) { return std::get<1>(aa) < std::get<1>(bb); });
         std::vector<int> global_to_dof(grid_.leafGridView().size(3)*3,-1);
         for(size_t i=0; i< idx_free_.size(); ++i){
-            global_to_dof[idx_free_[i]] = i; 
+            global_to_dof[idx_free_[i]] = i;
         }
         //renumber and eliminate dof fized
         vector<tuple<int, int, double>> divmatdof;
         for(const auto& elem: divmat){
             int I = global_to_dof[std::get<0>(elem)];
             if(I>-1){
-                // renumber                
+                // renumber
                 int J = get<1>(elem);
                 double val = std::get<2>(elem);
                 divmatdof.push_back(std::tuple<int, int, double>(I,J,val));
             }
         }
         // finaly make dune matrix
-        makeDuneMatrix(divmatdof,divmat_);
+        divmat_.setBuildMode(Matrix::implicit);
+        // map from dof=3*nodes at a cell (ca 3*3*3) to cell
+        divmat_.setImplicitBuildModeParameters (3*3*3, 0.4);
+        divmat_.setSize(idx_free_.size(), num_cells_);
+        makeDuneMatrixCompressed(divmatdof,divmat_);
         // also make stress matrix
         std::vector<std::tuple<int, int, double>> stressmat;
         std::vector<double> dispall(grid_.leafGridView().size(3)*3);
         std::vector<std::array<double,6>> stresstmp(grid_.leafGridView().size(0));
         {
-        OPM_TIMEBLOCK(setUpStressStrainMatrix);    
+        OPM_TIMEBLOCK(setUpStressStressMatrix);
         vem::compute_stress_3D(&coords_[0],
                                num_cells_,
                                &num_cell_faces_[0],
@@ -290,9 +294,14 @@ namespace Elasticity {
                                true,
                                true
         );
-        
-        makeDuneMatrix(stressmat, stressmat_);
+        }
+        stressmat_.setBuildMode(Matrix::implicit);
+        stressmat_.setImplicitBuildModeParameters (3*3*3, 0.4);
+        stressmat_.setSize(num_cells_*6, dispall.size());
+        makeDuneMatrixCompressed(stressmat, stressmat_);
         std::vector<std::tuple<int, int, double>> strainmat;
+        {
+        OPM_TIMEBLOCK(setUpStressStrainMatrix);
         vem::compute_stress_3D(&coords_[0],
                                num_cells_,
                                &num_cell_faces_[0],
@@ -306,9 +315,11 @@ namespace Elasticity {
                                true,
                                false
         );
-        makeDuneMatrix(strainmat, strainmat_);
         }
-        
+        strainmat_.setBuildMode(Matrix::implicit);
+        strainmat_.setImplicitBuildModeParameters (3*3*3, 0.4);
+        strainmat_.setSize(num_cells_*6, dispall.size());
+        makeDuneMatrixCompressed(strainmat, strainmat_);
         }
     }
     if(do_vector){
@@ -330,7 +341,7 @@ namespace Elasticity {
                                          divmat,
                                          false);
 
-        //Sign is added here  i.e \div \sigma = 
+        //Sign is added here  i.e \div \sigma =
         vector<double> rhs(rhs_force_);
         assert(rhs_force_.size() == idx_free_.size());
         for(size_t i=0; i< idx_free_.size(); ++i){
@@ -343,7 +354,6 @@ namespace Elasticity {
         }
     }
 }
-
 
 
 IMPL_FUNC(void, solve())
