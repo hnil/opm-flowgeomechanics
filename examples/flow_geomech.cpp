@@ -69,8 +69,8 @@ template<class TypeTag>
 struct Grid<TypeTag, TTag::EclFlowProblemMech> {
     static const int dim = 3;
     //using type = Dune::ALUGrid<dim, dim, Dune::cube, Dune::nonconforming,Dune::ALUGridMPIComm>;
-    using type = Dune::PolyhedralGrid<3, 3>;
-    //using type = Dune::CpGrid;
+    //using type = Dune::PolyhedralGrid<3, 3>;
+    using type = Dune::CpGrid;
 };
 // need to be cpgrid for alugrid
 template<class TypeTag>
@@ -86,8 +86,8 @@ struct EquilGrid<TypeTag, TTag::EclFlowProblemMech> {
 template<class TypeTag>
 struct Vanguard<TypeTag, TTag::EclFlowProblemMech> {
     //using type = Opm::EclAluGridVanguard<TypeTag>;
-    using type = Opm::EclPolyhedralGridVanguard<TypeTag>;
-    //using type = Opm::EclCpGridVanguard<TypeTag>;
+    //using type = Opm::EclPolyhedralGridVanguard<TypeTag>;
+   using type = Opm::EclCpGridVanguard<TypeTag>;
 };
 // template<class TypeTag>
 // struct Model<TypeTag, TTag::EclFlowProblemMech> {

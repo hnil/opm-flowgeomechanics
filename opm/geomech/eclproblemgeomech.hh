@@ -102,30 +102,29 @@ namespace Opm{
 
                 //using Opm::ParserKeywords::;
                 if( initconfig.hasStressEquil()) {
-                    using StressEQ = Opm::ParserKeywords::STRESSEQUIL;
                     size_t numCartDof = cartesianIndexMapper.cartesianSize();
                     unsigned numElems = gv.size(/*codim=*/0);
                     std::vector<int> cartesianToCompressedElemIdx(numCartDof, -1);
                     for (unsigned elemIdx = 0; elemIdx < numElems; ++elemIdx){
                         cartesianToCompressedElemIdx[cartesianIndexMapper.cartesianIndex(elemIdx)] = elemIdx;
                     }
-                    const DeckKeyword& keyword = initconfig.getStressEquil();
+                    const auto& stressequil = initconfig.getStressEquil();
                     const auto& equilRegionData = fp.get_int("STRESSEQUILNUM");
                     //make lambda functions for each regaion
                     std::vector<std::function<std::array<double,6>()>> functors;
                     int recnum=1;
-                    int num_records = keyword.size();
+                    int num_records = stressequil.size();
                     initstress_.resize(gv.size(0));
-                    for (const auto& record : keyword) {
-                        const auto datum_depth = record.getItem<StressEQ::DATUM_DEPTH>().getSIDouble(0);
-                        const auto datum_posx = record.getItem<StressEQ::DATUM_POSX>().getSIDouble(0);
-                        const auto datum_posy = record.getItem<StressEQ::DATUM_POSY>().getSIDouble(0);
-                        const auto STRESSXX= record.getItem<StressEQ::STRESSXX>().getSIDouble(0);
-                        const auto STRESSXXGRAD = record.getItem<StressEQ::STRESSXXGRAD>().getSIDouble(0);
-                        const auto STRESSYY= record.getItem<StressEQ::STRESSYY>().getSIDouble(0);
-                        const auto STRESSYYGRAD = record.getItem<StressEQ::STRESSYYGRAD>().getSIDouble(0);
-                        const auto STRESSZZ= record.getItem<StressEQ::STRESSZZ>().getSIDouble(0);
-                        const auto STRESSZZGRAD = record.getItem<StressEQ::STRESSZZGRAD>().getSIDouble(0);
+                    for (const auto& record : stressequil) {
+                        const auto datum_depth = record.datumDepth();
+                        const auto datum_posx = record.datumPosX();
+                        const auto datum_posy = record.datumPosY();
+                        const auto STRESSXX= record.stressXX();
+                        const auto STRESSXXGRAD = record.stressXX_grad();
+                        const auto STRESSYY= record.stressYY();
+                        const auto STRESSYYGRAD = record.stressYY_grad();
+                        const auto STRESSZZ= record.stressZZ();
+                        const auto STRESSZZGRAD = record.stressZZ_grad();
                         for(const auto& cell : elements(gv)){
                             const auto& center = cell.geometry().center();
                             const auto& cellIdx = gv.indexSet().index(cell);
