@@ -41,8 +41,8 @@
 #include <opm/grid/polyhedralgrid.hh>
 #ifdef HAVE_ALUGRID
 #include <dune/alugrid/grid.hh>
-#endif
 #include <ebos/eclalugridvanguard.hh>
+#endif
 #include <ebos/eclpolyhedralgridvanguard.hh>
 #include <ebos/equil/initstateequil_impl.hh>
 #include <ebos/equil/equilibrationhelpers_impl.hh>

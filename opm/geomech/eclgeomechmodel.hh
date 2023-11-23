@@ -86,6 +86,7 @@ namespace Opm{
                 bool thermal_expansion = getPropValue<TypeTag, Properties::EnableEnergy>();
 
                 if(thermal_expansion){
+                    OPM_TIMEBLOCK(addTermalParametersToMech);
                     const auto& temp = fs.temperature(waterPhaseIdx);//NB all phases have equal temperature
                     const auto& thelcoef = problem.thelCoef(dofIdx);
                     // const auto& termExpr = problem.termExpr(dofIdx); //NB not used

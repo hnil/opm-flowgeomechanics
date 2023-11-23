@@ -39,8 +39,10 @@
 #include <opm/common/utility/platform_dependent/reenable_warnings.h>
 #include <opm/input/eclipse/Python/Python.hpp>
 #include <opm/input/eclipse/Schedule/Schedule.hpp>
-
+#if HAVE_ALUGRID
 #include <dune/alugrid/grid.hh>
+#include <dune/alugrid/common/fromtogridfactory.hh>
+#endif
 #include <opm/grid/utility/StopWatch.hpp>
 #include <opm/common/utility/parameters/ParameterGroup.hpp>
 
@@ -48,7 +50,6 @@
 #include <opm/geomech/elasticity_solver.hpp>
 #include <opm/geomech/vem_elasticity_solver.hpp>
 #include <opm/elasticity/matrixops.hpp>
-#include <dune/alugrid/common/fromtogridfactory.hh>
 
 #include <cstring>
 #include <iostream>
@@ -144,18 +145,8 @@ void writeOutput(const Params& p, Opm::time::StopWatch& watch, int cells)
   f << "#" << std::endl;
 }
 using PolyGrid = Dune::PolyhedralGrid<3, 3>;
+#if HAVE_ALUGRID
 using AluGrid3D = Dune::ALUGrid<3, 3, Dune::cube, Dune::nonconforming >;
-
-void createGrids(std::unique_ptr<PolyGrid>& grid ,const Opm::EclipseState& eclState,std::vector<unsigned int>& /*ordering*/)
-{
-    grid  = std::make_unique<PolyGrid>(eclState.getInputGrid(), eclState.fieldProps().porv(true));
-}
-
-void createGrids(std::unique_ptr<Dune::CpGrid>& grid ,const Opm::EclipseState& eclState,std::vector<unsigned int>& /*ordering*/){
-    grid = std::make_unique<Dune::CpGrid>();
-    std::vector<std::size_t>  nums = grid->processEclipseFormat(&eclState.getInputGrid(), nullptr, false);
-}
-
 void createGrids(std::unique_ptr<AluGrid3D>& grid ,Opm::EclipseState& eclState,std::vector<unsigned int>& ordering){
     Dune::CpGrid cpgrid;
     const auto& input_grid = eclState.getInputGrid();
@@ -173,6 +164,18 @@ void createGrids(std::unique_ptr<AluGrid3D>& grid ,Opm::EclipseState& eclState,s
     auto cartesianCellIndx = cpgrid.globalCell();
     grid = factory.convert(cpgrid, cartesianCellIndx, ordering);
 }
+#endif
+void createGrids(std::unique_ptr<PolyGrid>& grid ,const Opm::EclipseState& eclState,std::vector<unsigned int>& /*ordering*/)
+{
+    grid  = std::make_unique<PolyGrid>(eclState.getInputGrid(), eclState.fieldProps().porv(true));
+}
+
+void createGrids(std::unique_ptr<Dune::CpGrid>& grid ,const Opm::EclipseState& eclState,std::vector<unsigned int>& /*ordering*/){
+    grid = std::make_unique<Dune::CpGrid>();
+    std::vector<std::size_t>  nums = grid->processEclipseFormat(&eclState.getInputGrid(), nullptr, false);
+}
+
+
 
 
 //! \brief Main solution loop. Allows templating over the AMG type
