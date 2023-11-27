@@ -1264,7 +1264,7 @@ vector<int> consistent_face_ordering(const int* const faces,
     vector<int> isect;
     for (int i = 0; i != num_faces; ++i, isect.clear()) {
       if (!ordered[i]) {
-        std::cout << "Fix ordering of face" << std::endl;
+        //std::cout << "Fix ordering of face" << std::endl;
         set_intersection(sorted_fnode_ptrs[ref_face], sorted_fnode_ptrs[ref_face] + num_face_edges[ref_face],
                          sorted_fnode_ptrs[i], sorted_fnode_ptrs[i] + num_face_edges[i], back_inserter(isect));
         if (isect.size() == 2 ) {
@@ -1376,7 +1376,7 @@ void compute_cell_geometry(const double* points,
   if (inward_pointing_normals(outward_normals, face_centroids))
     for_each(outward_normals.begin(), outward_normals.end(), [](double& d) {d *= -1;});
   assert(face_centroids.size() == num_faces*3);
-  std::cout << "Size # "<< face_centroids.size() << std::endl;
+  //std::cout << "Size # "<< face_centroids.size() << std::endl;
   // identify a star point (usually, mean_point qualifies, but not necessarily)
   star_point = identify_star_point(point_average<3>(points, num_points),
                                    outward_normals, face_centroids);
