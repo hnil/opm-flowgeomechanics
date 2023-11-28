@@ -29,21 +29,31 @@ namespace vem
         }
     }
     num_cell_faces.resize(ungrid.number_of_cells);
-    for(int i=0; i< ungrid.number_of_faces; ++i){
+    for(int i=0; i< ungrid.number_of_cells; ++i){
         num_cell_faces[i]=ungrid.cell_facepos[i+1]-ungrid.cell_facepos[i];
     }
     num_face_corners.resize(ungrid.cell_facepos[ungrid.number_of_cells]);
     int num_cellfaces = ungrid.cell_facepos[ungrid.number_of_cells];
     int tot_num_face_corners = 0;
-    for(int i=0; i< num_cellfaces; ++i){
-        int face = ungrid.cell_faces[i];//ungrid.cell_facepos[i]];
-        int num_local_corners = ungrid.face_nodepos[face+1] - ungrid.face_nodepos[face];
-        num_face_corners[i] = num_local_corners;
-        // NB maybe we should order with outwards normal
-        for(int j = ungrid.face_nodepos[face]; j <  ungrid.face_nodepos[face+1]; ++j){
-            face_corners.push_back(  ungrid.face_nodes[j]);
+    //for(int i=0; i< num_cellfaces; ++i){
+    for(int cell=0; cell < ungrid.number_of_cells; ++cell){
+        for(int hface = ungrid.cell_facepos[cell]; hface < ungrid.cell_facepos[cell+1]; hface ++){
+            int face = ungrid.cell_faces[hface];//ungrid.cell_facepos[i]];
+            int num_local_corners = ungrid.face_nodepos[face+1] - ungrid.face_nodepos[face];
+            num_face_corners[hface] = num_local_corners;
+            // NB maybe we should order with outwards normal
+            if(cell == ungrid.face_cells[2*face]){
+                for(int j  = ungrid.face_nodepos[face]; j <  ungrid.face_nodepos[face+1]; ++j){
+                    face_corners.push_back(ungrid.face_nodes[j]);
+                }
+            }else{
+                // flip orientation for hface
+                for(int j  = ungrid.face_nodepos[face+1]-1; j >=  ungrid.face_nodepos[face]; --j){
+                    face_corners.push_back(ungrid.face_nodes[j]);
+                }
+            }
+            tot_num_face_corners += num_local_corners;
         }
-        tot_num_face_corners += num_local_corners;
     }
     assert(face_corners.size() == tot_num_face_corners);
 }
