@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <office:document xmlns:officeooo="http://openoffice.org/2009/office" xmlns:css3t="http://www.w3.org/TR/css3-text/" xmlns:grddl="http://www.w3.org/2003/g/data-view#" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:formx="urn:openoffice:names:experimental:ooxml-odf-interop:xmlns:form:1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:chart="urn:oasis:names:tc:opendocument:xmlns:chart:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:oooc="http://openoffice.org/2004/calc" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:ooow="http://openoffice.org/2004/writer" xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:rpt="http://openoffice.org/2005/report" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:config="urn:oasis:names:tc:opendocument:xmlns:config:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:ooo="http://openoffice.org/2004/office" xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:dr3d="urn:oasis:names:tc:opendocument:xmlns:dr3d:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:number="urn:oasis:names:tc:opendocument:xmlns:datastyle:1.0" xmlns:of="urn:oasis:names:tc:opendocument:xmlns:of:1.2" xmlns:calcext="urn:org:documentfoundation:names:experimental:calc:xmlns:calcext:1.0" xmlns:tableooo="http://openoffice.org/2009/table" xmlns:drawooo="http://openoffice.org/2010/draw" xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0" xmlns:dom="http://www.w3.org/2001/xml-events" xmlns:field="urn:openoffice:names:experimental:ooo-ms-interop:xmlns:field:1.0" xmlns:math="http://www.w3.org/1998/Math/MathML" xmlns:form="urn:oasis:names:tc:opendocument:xmlns:form:1.0" xmlns:script="urn:oasis:names:tc:opendocument:xmlns:script:1.0" xmlns:xforms="http://www.w3.org/2002/xforms" office:version="1.3" office:mimetype="application/vnd.oasis.opendocument.text">
- <office:meta><meta:creation-date>2023-05-18T17:05:55.227000000</meta:creation-date><meta:editing-duration>P1DT6H38M57S</meta:editing-duration><meta:editing-cycles>52</meta:editing-cycles><meta:generator>LibreOffice/7.3.7.2$Linux_X86_64 LibreOffice_project/30$Build-2</meta:generator><dc:subject>OPM Flow Reference Manual</dc:subject><dc:title>OPEN POROUS MEDIA</dc:title><dc:description>To insert equations with numbing and correct Table layout type
+ <office:meta><meta:creation-date>2023-05-18T17:05:55.227000000</meta:creation-date><meta:editing-duration>P2DT10H35M37S</meta:editing-duration><meta:editing-cycles>54</meta:editing-cycles><meta:generator>LibreOffice/7.3.7.2$Linux_X86_64 LibreOffice_project/30$Build-2</meta:generator><dc:subject>OPM Flow Reference Manual</dc:subject><dc:title>OPEN POROUS MEDIA</dc:title><dc:description>To insert equations with numbing and correct Table layout type
 1) eq 
 2) F3
 
@@ -17,24 +17,24 @@ To insert a new keyword section (except for the header
 To insert standard text:
 1) t0, t1, t2
 2) F3
-Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:initial-creator>David Baxendale</meta:initial-creator><dc:date>2023-12-13T10:33:10.271803376</dc:date><meta:document-statistic meta:table-count="9" meta:image-count="0" meta:object-count="0" meta:page-count="4" meta:paragraph-count="119" meta:word-count="469" meta:character-count="3106" meta:non-whitespace-character-count="2375"/><meta:user-defined meta:name="ClientContact">ClientContact</meta:user-defined><meta:user-defined meta:name="ClientEmail">ClientEmail</meta:user-defined><meta:user-defined meta:name="ClientName">Equinor ASA</meta:user-defined><meta:user-defined meta:name="ClientOffice">ClientOfficeAddres</meta:user-defined><meta:user-defined meta:name="ClientRegistered" meta:value-type="string">ClientRegisteredAddress</meta:user-defined><meta:user-defined meta:name="ClientTelNo" meta:value-type="string">ClientTelNo</meta:user-defined><meta:user-defined meta:name="DocumentDate" meta:value-type="string">June 8, 2023</meta:user-defined><meta:user-defined meta:name="DocumentNumber" meta:value-type="string">2023-04-RPT</meta:user-defined><meta:user-defined meta:name="DocumentRevision" meta:value-type="string">Rev-0</meta:user-defined><meta:user-defined meta:name="ProgramVersion" meta:value-type="string">2023-04</meta:user-defined></office:meta>
+Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:initial-creator>David Baxendale</meta:initial-creator><dc:date>2023-12-15T09:16:45.581129667</dc:date><meta:document-statistic meta:table-count="9" meta:image-count="0" meta:object-count="0" meta:page-count="4" meta:paragraph-count="140" meta:word-count="508" meta:character-count="3369" meta:non-whitespace-character-count="2621"/><meta:user-defined meta:name="ClientContact">ClientContact</meta:user-defined><meta:user-defined meta:name="ClientEmail">ClientEmail</meta:user-defined><meta:user-defined meta:name="ClientName">Equinor ASA</meta:user-defined><meta:user-defined meta:name="ClientOffice">ClientOfficeAddres</meta:user-defined><meta:user-defined meta:name="ClientRegistered" meta:value-type="string">ClientRegisteredAddress</meta:user-defined><meta:user-defined meta:name="ClientTelNo" meta:value-type="string">ClientTelNo</meta:user-defined><meta:user-defined meta:name="DocumentDate" meta:value-type="string">June 8, 2023</meta:user-defined><meta:user-defined meta:name="DocumentNumber" meta:value-type="string">2023-04-RPT</meta:user-defined><meta:user-defined meta:name="DocumentRevision" meta:value-type="string">Rev-0</meta:user-defined><meta:user-defined meta:name="ProgramVersion" meta:value-type="string">2023-04</meta:user-defined></office:meta>
  <office:settings>
   <config:config-item-set config:name="ooo:view-settings">
-   <config:config-item config:name="ViewAreaTop" config:type="long">38232</config:config-item>
+   <config:config-item config:name="ViewAreaTop" config:type="long">25135</config:config-item>
    <config:config-item config:name="ViewAreaLeft" config:type="long">0</config:config-item>
-   <config:config-item config:name="ViewAreaWidth" config:type="long">40185</config:config-item>
-   <config:config-item config:name="ViewAreaHeight" config:type="long">19648</config:config-item>
+   <config:config-item config:name="ViewAreaWidth" config:type="long">31321</config:config-item>
+   <config:config-item config:name="ViewAreaHeight" config:type="long">17415</config:config-item>
    <config:config-item config:name="ShowRedlineChanges" config:type="boolean">true</config:config-item>
    <config:config-item config:name="InBrowseMode" config:type="boolean">false</config:config-item>
    <config:config-item-map-indexed config:name="Views">
     <config:config-item-map-entry>
      <config:config-item config:name="ViewId" config:type="string">view2</config:config-item>
-     <config:config-item config:name="ViewLeft" config:type="long">23588</config:config-item>
-     <config:config-item config:name="ViewTop" config:type="long">41060</config:config-item>
+     <config:config-item config:name="ViewLeft" config:type="long">18302</config:config-item>
+     <config:config-item config:name="ViewTop" config:type="long">35285</config:config-item>
      <config:config-item config:name="VisibleLeft" config:type="long">0</config:config-item>
-     <config:config-item config:name="VisibleTop" config:type="long">38232</config:config-item>
-     <config:config-item config:name="VisibleRight" config:type="long">40183</config:config-item>
-     <config:config-item config:name="VisibleBottom" config:type="long">57878</config:config-item>
+     <config:config-item config:name="VisibleTop" config:type="long">25135</config:config-item>
+     <config:config-item config:name="VisibleRight" config:type="long">31320</config:config-item>
+     <config:config-item config:name="VisibleBottom" config:type="long">42549</config:config-item>
      <config:config-item config:name="ZoomType" config:type="short">0</config:config-item>
      <config:config-item config:name="ViewLayoutColumns" config:type="short">0</config:config-item>
      <config:config-item config:name="ViewLayoutBookMode" config:type="boolean">false</config:config-item>
@@ -113,7 +113,7 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
    </config:config-item-map-indexed>
    <config:config-item config:name="PrinterSetup" config:type="base64Binary"/>
    <config:config-item config:name="AddParaTableSpacingAtStart" config:type="boolean">true</config:config-item>
-   <config:config-item config:name="Rsid" config:type="int">2303968</config:config-item>
+   <config:config-item config:name="Rsid" config:type="int">2428591</config:config-item>
    <config:config-item config:name="EmbeddedDatabaseName" config:type="string"/>
    <config:config-item config:name="FieldAutoUpdate" config:type="boolean">false</config:config-item>
    <config:config-item config:name="OutlineLevelYieldsNumbering" config:type="boolean">false</config:config-item>
@@ -485,7 +485,7 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
   </draw:fill-image>
   <style:default-style style:family="graphic">
    <style:graphic-properties svg:stroke-color="#000000" draw:fill-color="#99ccff" fo:wrap-option="no-wrap" draw:shadow-offset-x="0.1181in" draw:shadow-offset-y="0.1181in" draw:start-line-spacing-horizontal="0.1114in" draw:start-line-spacing-vertical="0.1114in" draw:end-line-spacing-horizontal="0.1114in" draw:end-line-spacing-vertical="0.1114in" style:flow-with-text="false"/>
-   <style:paragraph-properties style:text-autospace="ideograph-alpha" style:line-break="strict" style:font-independent-line-spacing="false">
+   <style:paragraph-properties style:text-autospace="ideograph-alpha" style:line-break="strict" style:writing-mode="lr-tb" style:font-independent-line-spacing="false">
     <style:tab-stops/>
    </style:paragraph-properties>
    <style:text-properties style:use-window-font-color="true" loext:opacity="0%" style:font-name="Times New Roman1" fo:font-size="12pt" fo:language="en" fo:country="US" style:letter-kerning="true" style:font-name-asian="DejaVu Sans" style:font-size-asian="12pt" style:language-asian="zxx" style:country-asian="none" style:font-name-complex="Lucidasans1" style:font-size-complex="12pt" style:language-complex="zxx" style:country-complex="none"/>
@@ -1833,13 +1833,13 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
   <text:notes-configuration text:note-class="endnote" style:num-format="i" text:start-value="0"/>
   <text:linenumbering-configuration text:number-lines="false" text:offset="0.1965in" style:num-format="1" text:number-position="left" text:increment="5"/>
   <number:number-style style:name="N123">
-   <number:number number:decimal-places="3" number:min-decimal-places="3" number:min-integer-digits="1"/>
+   <number:number number:decimal-places="1" number:min-decimal-places="1" number:min-integer-digits="1"/>
   </number:number-style>
   <number:number-style style:name="N122">
    <number:number number:decimal-places="4" number:min-decimal-places="4" number:min-integer-digits="1"/>
   </number:number-style>
   <number:number-style style:name="N121">
-   <number:number number:decimal-places="1" number:min-decimal-places="1" number:min-integer-digits="1"/>
+   <number:number number:decimal-places="3" number:min-decimal-places="3" number:min-integer-digits="1"/>
   </number:number-style>
   <style:default-page-layout>
    <style:page-layout-properties style:writing-mode="lr-tb" style:layout-grid-standard-mode="true"/>
@@ -2032,10 +2032,10 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
   <style:style style:name="Table115.F3" style:family="table-cell">
    <style:table-cell-properties style:vertical-align="" fo:padding="0.0382in" fo:border-left="0.05pt solid #000000" fo:border-right="0.05pt solid #000000" fo:border-top="none" fo:border-bottom="0.05pt solid #000000"/>
   </style:style>
-  <style:style style:name="Table115.A10" style:family="table-cell">
+  <style:style style:name="Table115.A12" style:family="table-cell">
    <style:table-cell-properties fo:padding="0.0382in" fo:border-left="0.05pt solid #000000" fo:border-right="0.05pt solid #000000" fo:border-top="none" fo:border-bottom="0.05pt solid #000000"/>
   </style:style>
-  <style:style style:name="Table115.A11" style:family="table-cell">
+  <style:style style:name="Table115.A13" style:family="table-cell">
    <style:table-cell-properties fo:padding="0.0382in" fo:border-left="0.05pt solid #000000" fo:border-right="0.05pt solid #000000" fo:border-top="none" fo:border-bottom="0.05pt solid #000000"/>
   </style:style>
   <style:style style:name="P1" style:family="paragraph" style:parent-style-name="_40_Table_20_Contents">
@@ -2046,40 +2046,44 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
    <style:text-properties fo:language="en" fo:country="US" style:text-underline-style="solid" style:text-underline-width="auto" style:text-underline-color="font-color" fo:font-weight="bold" officeooo:rsid="00531151" officeooo:paragraph-rsid="06608a53" style:font-weight-asian="bold" style:font-weight-complex="bold"/>
   </style:style>
   <style:style style:name="P3" style:family="paragraph" style:parent-style-name="Table_20_Contents">
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="center" style:justify-single-word="false" fo:text-indent="0in" style:auto-text-indent="false"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="062e77b5" officeooo:paragraph-rsid="06608a53"/>
+   <style:paragraph-properties fo:text-align="start" style:justify-single-word="false"/>
+   <style:text-properties fo:language="en" fo:country="US" style:text-underline-style="solid" style:text-underline-width="auto" style:text-underline-color="font-color" fo:font-weight="normal" officeooo:rsid="00531151" officeooo:paragraph-rsid="00209c32" style:font-weight-asian="normal" style:font-weight-complex="normal"/>
   </style:style>
   <style:style style:name="P4" style:family="paragraph" style:parent-style-name="Table_20_Contents">
-   <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="center" style:justify-single-word="false" fo:text-indent="0in" style:auto-text-indent="false"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="062e77b5" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
   <style:style style:name="P5" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="062e77b5" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
   <style:style style:name="P6" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="05c320bc" officeooo:paragraph-rsid="05d3ace4"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="062e77b5" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
   <style:style style:name="P7" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06372cf3" officeooo:paragraph-rsid="06608a53"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="05c320bc" officeooo:paragraph-rsid="05d3ace4"/>
   </style:style>
   <style:style style:name="P8" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="06566c1a"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06372cf3" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
   <style:style style:name="P9" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="06608a53"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="06566c1a"/>
   </style:style>
   <style:style style:name="P10" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+   <loext:graphic-properties draw:fill="none"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="06608a53"/>
+  </style:style>
+  <style:style style:name="P11" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb">
     <style:tab-stops>
@@ -2089,16 +2093,6 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
    </style:paragraph-properties>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="001bc7c1"/>
   </style:style>
-  <style:style style:name="P11" style:family="paragraph" style:parent-style-name="Table_20_Contents">
-   <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb">
-    <style:tab-stops>
-     <style:tab-stop style:position="0.3783in"/>
-     <style:tab-stop style:position="0.5in"/>
-    </style:tab-stops>
-   </style:paragraph-properties>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="066dd38f"/>
-  </style:style>
   <style:style style:name="P12" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb">
@@ -2107,7 +2101,7 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
      <style:tab-stop style:position="0.5in"/>
     </style:tab-stops>
    </style:paragraph-properties>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="0665b9db"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="066dd38f"/>
   </style:style>
   <style:style style:name="P13" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
@@ -2117,9 +2111,19 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
      <style:tab-stop style:position="0.5in"/>
     </style:tab-stops>
    </style:paragraph-properties>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="066589dd"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="0665b9db"/>
   </style:style>
   <style:style style:name="P14" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+   <loext:graphic-properties draw:fill="none"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb">
+    <style:tab-stops>
+     <style:tab-stop style:position="0.3783in"/>
+     <style:tab-stop style:position="0.5in"/>
+    </style:tab-stops>
+   </style:paragraph-properties>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="066589dd"/>
+  </style:style>
+  <style:style style:name="P15" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb">
     <style:tab-stops>
@@ -2129,7 +2133,7 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
    </style:paragraph-properties>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
-  <style:style style:name="P15" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P16" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb">
     <style:tab-stops>
@@ -2139,92 +2143,92 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
    </style:paragraph-properties>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="001bc7c1"/>
   </style:style>
-  <style:style style:name="P16" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P17" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="066dd38f"/>
   </style:style>
-  <style:style style:name="P17" style:family="paragraph" style:parent-style-name="Table_20_Contents">
-   <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="06608a53"/>
-  </style:style>
   <style:style style:name="P18" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" style:writing-mode="lr-tb"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
   <style:style style:name="P19" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="001bc7c1"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" style:writing-mode="lr-tb"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
   <style:style style:name="P20" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="001d374c"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="001bc7c1"/>
   </style:style>
   <style:style style:name="P21" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="062cbd9a" officeooo:paragraph-rsid="06608a53"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06566c1a" officeooo:paragraph-rsid="001d374c"/>
   </style:style>
   <style:style style:name="P22" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" style:writing-mode="lr-tb"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="062cbd9a" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
   <style:style style:name="P23" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06305dda" officeooo:paragraph-rsid="06608a53"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" style:writing-mode="lr-tb"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="062cbd9a" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
   <style:style style:name="P24" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb">
-    <style:tab-stops>
-     <style:tab-stop style:position="0.3783in"/>
-     <style:tab-stop style:position="0.5in"/>
-    </style:tab-stops>
-   </style:paragraph-properties>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06305dda" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
   <style:style style:name="P25" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
+   <style:paragraph-properties fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb">
+    <style:tab-stops>
+     <style:tab-stop style:position="0.3783in"/>
+     <style:tab-stop style:position="0.5in"/>
+    </style:tab-stops>
+   </style:paragraph-properties>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06305dda" officeooo:paragraph-rsid="06608a53"/>
+  </style:style>
+  <style:style style:name="P26" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+   <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="0654745b" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
-  <style:style style:name="P26" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P27" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="065ba18e" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
-  <style:style style:name="P27" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P28" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="065d9e8e" officeooo:paragraph-rsid="14e9a3f2"/>
   </style:style>
-  <style:style style:name="P28" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P29" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="065d9e8e" officeooo:paragraph-rsid="14fc473c"/>
   </style:style>
-  <style:style style:name="P29" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P30" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="09541ed4" officeooo:paragraph-rsid="09541ed4"/>
   </style:style>
-  <style:style style:name="P30" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P31" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="0663aa92" officeooo:paragraph-rsid="0663aa92"/>
   </style:style>
-  <style:style style:name="P31" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P32" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="0663aa92" officeooo:paragraph-rsid="0663aa92"/>
   </style:style>
-  <style:style style:name="P32" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P33" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb">
     <style:tab-stops>
@@ -2234,40 +2238,30 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
    </style:paragraph-properties>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="0663aa92" officeooo:paragraph-rsid="0663aa92"/>
   </style:style>
-  <style:style style:name="P33" style:family="paragraph" style:parent-style-name="Table_20_Contents">
-   <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066589dd" officeooo:paragraph-rsid="066589dd"/>
-  </style:style>
   <style:style style:name="P34" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066589dd" officeooo:paragraph-rsid="066589dd"/>
   </style:style>
   <style:style style:name="P35" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066589dd" officeooo:paragraph-rsid="0665b9db"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066589dd" officeooo:paragraph-rsid="066589dd"/>
   </style:style>
   <style:style style:name="P36" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+   <loext:graphic-properties draw:fill="none"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066589dd" officeooo:paragraph-rsid="0665b9db"/>
+  </style:style>
+  <style:style style:name="P37" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066589dd" officeooo:paragraph-rsid="066589dd"/>
   </style:style>
-  <style:style style:name="P37" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P38" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="0665b9db" officeooo:paragraph-rsid="0665b9db"/>
-  </style:style>
-  <style:style style:name="P38" style:family="paragraph" style:parent-style-name="Table_20_Contents">
-   <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb">
-    <style:tab-stops>
-     <style:tab-stop style:position="0.3783in"/>
-     <style:tab-stop style:position="0.5in"/>
-    </style:tab-stops>
-   </style:paragraph-properties>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="0665b9db" officeooo:paragraph-rsid="06677a5d"/>
   </style:style>
   <style:style style:name="P39" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
@@ -2277,19 +2271,29 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
      <style:tab-stop style:position="0.5in"/>
     </style:tab-stops>
    </style:paragraph-properties>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="0665b9db" officeooo:paragraph-rsid="0665b9db"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="0665b9db" officeooo:paragraph-rsid="06677a5d"/>
   </style:style>
   <style:style style:name="P40" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb">
+    <style:tab-stops>
+     <style:tab-stop style:position="0.3783in"/>
+     <style:tab-stop style:position="0.5in"/>
+    </style:tab-stops>
+   </style:paragraph-properties>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="0665b9db" officeooo:paragraph-rsid="0665b9db"/>
   </style:style>
   <style:style style:name="P41" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="0665b9db" officeooo:paragraph-rsid="001bc7c1"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="0665b9db" officeooo:paragraph-rsid="0665b9db"/>
   </style:style>
   <style:style style:name="P42" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+   <loext:graphic-properties draw:fill="none"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="0665b9db" officeooo:paragraph-rsid="001bc7c1"/>
+  </style:style>
+  <style:style style:name="P43" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb">
     <style:tab-stops>
@@ -2299,24 +2303,14 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
    </style:paragraph-properties>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06677a5d" officeooo:paragraph-rsid="066986a8"/>
   </style:style>
-  <style:style style:name="P43" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P44" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06608a53" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
-  <style:style style:name="P44" style:family="paragraph" style:parent-style-name="Table_20_Contents">
-   <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06608a53" officeooo:paragraph-rsid="06608a53"/>
-  </style:style>
   <style:style style:name="P45" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb">
-    <style:tab-stops>
-     <style:tab-stop style:position="0.3783in"/>
-     <style:tab-stop style:position="0.5in"/>
-    </style:tab-stops>
-   </style:paragraph-properties>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06608a53" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
   <style:style style:name="P46" style:family="paragraph" style:parent-style-name="Table_20_Contents">
@@ -2327,7 +2321,7 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
      <style:tab-stop style:position="0.5in"/>
     </style:tab-stops>
    </style:paragraph-properties>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06608a53" officeooo:paragraph-rsid="066234cf"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06608a53" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
   <style:style style:name="P47" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
@@ -2337,9 +2331,19 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
      <style:tab-stop style:position="0.5in"/>
     </style:tab-stops>
    </style:paragraph-properties>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06608a53" officeooo:paragraph-rsid="001bc7c1"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06608a53" officeooo:paragraph-rsid="066234cf"/>
   </style:style>
   <style:style style:name="P48" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+   <loext:graphic-properties draw:fill="none"/>
+   <style:paragraph-properties fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb">
+    <style:tab-stops>
+     <style:tab-stop style:position="0.3783in"/>
+     <style:tab-stop style:position="0.5in"/>
+    </style:tab-stops>
+   </style:paragraph-properties>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06608a53" officeooo:paragraph-rsid="001bc7c1"/>
+  </style:style>
+  <style:style style:name="P49" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb">
     <style:tab-stops>
@@ -2349,32 +2353,32 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
    </style:paragraph-properties>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066234cf" officeooo:paragraph-rsid="066234cf"/>
   </style:style>
-  <style:style style:name="P49" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P50" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066986a8" officeooo:paragraph-rsid="066986a8"/>
   </style:style>
-  <style:style style:name="P50" style:family="paragraph" style:parent-style-name="Table_20_Contents">
-   <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="14e9a3f2" officeooo:paragraph-rsid="14e9a3f2"/>
-  </style:style>
   <style:style style:name="P51" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="14e9a3f2" officeooo:paragraph-rsid="14e9a3f2"/>
   </style:style>
   <style:style style:name="P52" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="14f57d16" officeooo:paragraph-rsid="14f57d16"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="14e9a3f2" officeooo:paragraph-rsid="14e9a3f2"/>
   </style:style>
   <style:style style:name="P53" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="14f57d16" officeooo:paragraph-rsid="14fc473c"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="14f57d16" officeooo:paragraph-rsid="14f57d16"/>
   </style:style>
   <style:style style:name="P54" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+   <loext:graphic-properties draw:fill="none"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="14f57d16" officeooo:paragraph-rsid="14fc473c"/>
+  </style:style>
+  <style:style style:name="P55" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb">
     <style:tab-stops>
@@ -2384,129 +2388,141 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
    </style:paragraph-properties>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="14f57d16" officeooo:paragraph-rsid="14fc473c"/>
   </style:style>
-  <style:style style:name="P55" style:family="paragraph" style:parent-style-name="Table_20_Contents">
-   <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="14fc473c" officeooo:paragraph-rsid="14fc473c"/>
-  </style:style>
   <style:style style:name="P56" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="14fc473c" officeooo:paragraph-rsid="14fc473c"/>
   </style:style>
   <style:style style:name="P57" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="14fc473c" officeooo:paragraph-rsid="14fc473c"/>
+  </style:style>
+  <style:style style:name="P58" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+   <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="1984dce1" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
-  <style:style style:name="P58" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P59" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="004069ac" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
-  <style:style style:name="P59" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P60" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="05c34edf" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
-  <style:style style:name="P60" style:family="paragraph" style:parent-style-name="Table_20_Heading">
+  <style:style style:name="P61" style:family="paragraph" style:parent-style-name="Table_20_Heading">
    <style:text-properties fo:language="en" fo:country="US"/>
   </style:style>
-  <style:style style:name="P61" style:family="paragraph" style:parent-style-name="_40_TextBody">
+  <style:style style:name="P62" style:family="paragraph" style:parent-style-name="_40_TextBody">
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="063c3886" officeooo:paragraph-rsid="19855cdf"/>
   </style:style>
-  <style:style style:name="P62" style:family="paragraph" style:parent-style-name="_40_TextBody">
+  <style:style style:name="P63" style:family="paragraph" style:parent-style-name="_40_TextBody">
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="00c4ec6d" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
-  <style:style style:name="P63" style:family="paragraph" style:parent-style-name="Standard">
+  <style:style style:name="P64" style:family="paragraph" style:parent-style-name="Standard">
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="00c4ec6d" officeooo:paragraph-rsid="06608a53"/>
-  </style:style>
-  <style:style style:name="P64" style:family="paragraph" style:parent-style-name="_40_Example">
-   <style:paragraph-properties fo:text-align="start" style:justify-single-word="false"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:paragraph-rsid="066af41e"/>
   </style:style>
   <style:style style:name="P65" style:family="paragraph" style:parent-style-name="_40_Example">
    <style:paragraph-properties fo:text-align="start" style:justify-single-word="false"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:paragraph-rsid="19855cdf"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:paragraph-rsid="066af41e"/>
   </style:style>
   <style:style style:name="P66" style:family="paragraph" style:parent-style-name="_40_Example">
    <style:paragraph-properties fo:text-align="start" style:justify-single-word="false"/>
-   <style:text-properties fo:language="en" fo:country="US" fo:font-style="normal" officeooo:rsid="063c3886" officeooo:paragraph-rsid="19855cdf" style:font-style-asian="normal" style:font-style-complex="normal"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:paragraph-rsid="19855cdf"/>
   </style:style>
   <style:style style:name="P67" style:family="paragraph" style:parent-style-name="_40_Example">
-   <style:paragraph-properties fo:text-align="start" style:justify-single-word="false"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="065e8b3e" officeooo:paragraph-rsid="19855cdf"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0in" fo:text-align="start" style:justify-single-word="false" fo:text-indent="0in" style:auto-text-indent="false"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:paragraph-rsid="0022cb2b"/>
   </style:style>
-  <style:style style:name="P68" style:family="paragraph" style:parent-style-name="Standard">
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="065e8b3e" officeooo:paragraph-rsid="066cec6f"/>
+  <style:style style:name="P68" style:family="paragraph" style:parent-style-name="_40_Example">
+   <style:paragraph-properties fo:text-align="start" style:justify-single-word="false"/>
+   <style:text-properties fo:language="en" fo:country="US" fo:font-style="normal" officeooo:rsid="063c3886" officeooo:paragraph-rsid="19855cdf" style:font-style-asian="normal" style:font-style-complex="normal"/>
   </style:style>
   <style:style style:name="P69" style:family="paragraph" style:parent-style-name="_40_Example">
    <style:paragraph-properties fo:text-align="start" style:justify-single-word="false"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066af41e" officeooo:paragraph-rsid="066af41e"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="065e8b3e" officeooo:paragraph-rsid="19855cdf"/>
   </style:style>
-  <style:style style:name="P70" style:family="paragraph" style:parent-style-name="_40_Example">
-   <style:paragraph-properties fo:text-align="start" style:justify-single-word="false"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066af41e" officeooo:paragraph-rsid="19855cdf"/>
+  <style:style style:name="P70" style:family="paragraph" style:parent-style-name="Standard">
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="065e8b3e" officeooo:paragraph-rsid="066cec6f"/>
   </style:style>
   <style:style style:name="P71" style:family="paragraph" style:parent-style-name="_40_Example">
-   <style:paragraph-properties fo:text-align="start" style:justify-single-word="false" fo:break-before="page"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066af41e" officeooo:paragraph-rsid="19855cdf"/>
+   <style:paragraph-properties fo:text-align="start" style:justify-single-word="false"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066af41e" officeooo:paragraph-rsid="066af41e"/>
   </style:style>
   <style:style style:name="P72" style:family="paragraph" style:parent-style-name="_40_Example">
    <style:paragraph-properties fo:text-align="start" style:justify-single-word="false"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066af41e" officeooo:paragraph-rsid="19975e6f"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066af41e" officeooo:paragraph-rsid="19855cdf"/>
   </style:style>
   <style:style style:name="P73" style:family="paragraph" style:parent-style-name="_40_Example">
-   <style:paragraph-properties fo:text-align="start" style:justify-single-word="false"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066af41e" officeooo:paragraph-rsid="001bc7c1"/>
+   <style:paragraph-properties fo:text-align="start" style:justify-single-word="false" fo:break-before="page"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066af41e" officeooo:paragraph-rsid="19855cdf"/>
   </style:style>
   <style:style style:name="P74" style:family="paragraph" style:parent-style-name="_40_Example">
    <style:paragraph-properties fo:text-align="start" style:justify-single-word="false"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066af41e" officeooo:paragraph-rsid="001d374c"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066af41e" officeooo:paragraph-rsid="19975e6f"/>
   </style:style>
   <style:style style:name="P75" style:family="paragraph" style:parent-style-name="_40_Example">
    <style:paragraph-properties fo:text-align="start" style:justify-single-word="false"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="069f4f78" officeooo:paragraph-rsid="19855cdf"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066af41e" officeooo:paragraph-rsid="001bc7c1"/>
   </style:style>
   <style:style style:name="P76" style:family="paragraph" style:parent-style-name="_40_Example">
    <style:paragraph-properties fo:text-align="start" style:justify-single-word="false"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="069f4f78" officeooo:paragraph-rsid="00a00840"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066af41e" officeooo:paragraph-rsid="001d374c"/>
   </style:style>
-  <style:style style:name="P77" style:family="paragraph" style:parent-style-name="_40_TextBody">
+  <style:style style:name="P77" style:family="paragraph" style:parent-style-name="_40_Example">
+   <style:paragraph-properties fo:text-align="start" style:justify-single-word="false"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066af41e" officeooo:paragraph-rsid="0022cb2b"/>
+  </style:style>
+  <style:style style:name="P78" style:family="paragraph" style:parent-style-name="_40_Example">
+   <style:paragraph-properties fo:text-align="start" style:justify-single-word="false"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="069f4f78" officeooo:paragraph-rsid="19855cdf"/>
   </style:style>
-  <style:style style:name="P78" style:family="paragraph" style:parent-style-name="Table">
+  <style:style style:name="P79" style:family="paragraph" style:parent-style-name="_40_Example">
+   <style:paragraph-properties fo:text-align="start" style:justify-single-word="false"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="069f4f78" officeooo:paragraph-rsid="00a00840"/>
+  </style:style>
+  <style:style style:name="P80" style:family="paragraph" style:parent-style-name="_40_TextBody">
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="069f4f78" officeooo:paragraph-rsid="19855cdf"/>
+  </style:style>
+  <style:style style:name="P81" style:family="paragraph" style:parent-style-name="Table">
    <style:text-properties fo:language="en" fo:country="US"/>
   </style:style>
-  <style:style style:name="P79" style:family="paragraph" style:parent-style-name="Standard">
+  <style:style style:name="P82" style:family="paragraph" style:parent-style-name="Standard">
    <style:text-properties fo:language="en" fo:country="US" officeooo:paragraph-rsid="066cec6f"/>
   </style:style>
-  <style:style style:name="P80" style:family="paragraph" style:parent-style-name="Standard">
+  <style:style style:name="P83" style:family="paragraph" style:parent-style-name="Standard">
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0in" fo:text-indent="0in" style:auto-text-indent="false"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:paragraph-rsid="066cec6f"/>
+  </style:style>
+  <style:style style:name="P84" style:family="paragraph" style:parent-style-name="Standard">
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="19855cdf" officeooo:paragraph-rsid="1986f1c5"/>
   </style:style>
-  <style:style style:name="P81" style:family="paragraph" style:parent-style-name="_40_Example">
+  <style:style style:name="P85" style:family="paragraph" style:parent-style-name="_40_Example">
    <style:paragraph-properties fo:text-align="start" style:justify-single-word="false" fo:break-before="page"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="19855cdf" officeooo:paragraph-rsid="19855cdf"/>
   </style:style>
-  <style:style style:name="P82" style:family="paragraph" style:parent-style-name="Heading_20_3">
+  <style:style style:name="P86" style:family="paragraph" style:parent-style-name="Heading_20_3">
    <style:paragraph-properties fo:break-before="page"/>
    <style:text-properties fo:language="en" fo:country="US"/>
   </style:style>
-  <style:style style:name="P83" style:family="paragraph" style:parent-style-name="Heading_20_4">
+  <style:style style:name="P87" style:family="paragraph" style:parent-style-name="Heading_20_4">
    <style:text-properties fo:language="en" fo:country="US"/>
   </style:style>
-  <style:style style:name="P84" style:family="paragraph" style:parent-style-name="Heading_20_4">
+  <style:style style:name="P88" style:family="paragraph" style:parent-style-name="Heading_20_4">
    <style:paragraph-properties fo:break-before="page"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
-  <style:style style:name="P85" style:family="paragraph" style:parent-style-name="Heading_20_4">
+  <style:style style:name="P89" style:family="paragraph" style:parent-style-name="Heading_20_4">
    <style:text-properties fo:language="en" fo:country="US" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
-  <style:style style:name="P86" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P90" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <style:paragraph-properties fo:text-align="justify" style:justify-single-word="false"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="05c7f16b" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
-  <style:style style:name="P87" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P91" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb">
     <style:tab-stops>
@@ -2516,7 +2532,7 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
    </style:paragraph-properties>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="06561bb9" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
-  <style:style style:name="P88" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P92" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb">
     <style:tab-stops>
@@ -2526,63 +2542,91 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
    </style:paragraph-properties>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="067299fc" officeooo:paragraph-rsid="067299fc"/>
   </style:style>
-  <style:style style:name="P89" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P93" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="001bc7c1" officeooo:paragraph-rsid="001bc7c1"/>
   </style:style>
-  <style:style style:name="P90" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P94" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="001bc7c1" officeooo:paragraph-rsid="001bc7c1"/>
   </style:style>
-  <style:style style:name="P91" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P95" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="001bc7c1" officeooo:paragraph-rsid="001bc7c1"/>
   </style:style>
-  <style:style style:name="P92" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P96" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="001bc7c1" officeooo:paragraph-rsid="001bc7c1"/>
   </style:style>
-  <style:style style:name="P93" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P97" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="001bc7c1" officeooo:paragraph-rsid="001bc7c1"/>
   </style:style>
-  <style:style style:name="P94" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P98" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <style:paragraph-properties fo:text-align="justify" style:justify-single-word="false"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="001bc7c1" officeooo:paragraph-rsid="001bc7c1" fo:background-color="transparent"/>
   </style:style>
-  <style:style style:name="P95" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P99" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="001d374c" officeooo:paragraph-rsid="001d374c"/>
   </style:style>
-  <style:style style:name="P96" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P100" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <style:paragraph-properties fo:text-align="justify" style:justify-single-word="false"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="001d374c" officeooo:paragraph-rsid="001d374c"/>
   </style:style>
-  <style:style style:name="P97" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P101" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="001d374c" officeooo:paragraph-rsid="001d374c"/>
   </style:style>
-  <style:style style:name="P98" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P102" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" style:writing-mode="lr-tb"/>
    <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="001d374c" officeooo:paragraph-rsid="001d374c"/>
   </style:style>
-  <style:style style:name="P99" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P103" style:family="paragraph" style:parent-style-name="_40_TextBody">
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="0022cb2b" officeooo:paragraph-rsid="0022cb2b"/>
+  </style:style>
+  <style:style style:name="P104" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+   <loext:graphic-properties draw:fill="none"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" style:writing-mode="lr-tb"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="0022cb2b" officeooo:paragraph-rsid="0022cb2b"/>
+  </style:style>
+  <style:style style:name="P105" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+   <loext:graphic-properties draw:fill="none"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="00209c32" officeooo:paragraph-rsid="00209c32"/>
+  </style:style>
+  <style:style style:name="P106" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+   <loext:graphic-properties draw:fill="none"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="002327e0" officeooo:paragraph-rsid="002327e0"/>
+  </style:style>
+  <style:style style:name="P107" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+   <loext:graphic-properties draw:fill="none"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" style:writing-mode="lr-tb"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="002327e0" officeooo:paragraph-rsid="002327e0"/>
+  </style:style>
+  <style:style style:name="P108" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+   <loext:graphic-properties draw:fill="none"/>
+   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" style:writing-mode="lr-tb"/>
+   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="002327e0" officeooo:paragraph-rsid="002327e0"/>
+  </style:style>
+  <style:style style:name="P109" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-indent="0in" style:auto-text-indent="false"/>
    <style:text-properties officeooo:rsid="003d1478" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
-  <style:style style:name="P100" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P110" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-indent="0in" style:auto-text-indent="false"/>
    <style:text-properties officeooo:rsid="00b0a801" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
-  <style:style style:name="P101" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P111" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb">
     <style:tab-stops>
@@ -2592,7 +2636,7 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
    </style:paragraph-properties>
    <style:text-properties officeooo:paragraph-rsid="1986f1c5"/>
   </style:style>
-  <style:style style:name="P102" style:family="paragraph" style:parent-style-name="Table_20_Contents">
+  <style:style style:name="P112" style:family="paragraph" style:parent-style-name="Table_20_Contents">
    <loext:graphic-properties draw:fill="none"/>
    <style:paragraph-properties fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb">
     <style:tab-stops>
@@ -2602,114 +2646,34 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
    </style:paragraph-properties>
    <style:text-properties officeooo:paragraph-rsid="1984dce1"/>
   </style:style>
-  <style:style style:name="P103" style:family="paragraph" style:parent-style-name="Heading_20_3">
+  <style:style style:name="P113" style:family="paragraph" style:parent-style-name="Heading_20_3">
    <style:paragraph-properties fo:break-before="page"/>
    <style:text-properties officeooo:paragraph-rsid="001bc7c1"/>
   </style:style>
-  <style:style style:name="P104" style:family="paragraph" style:parent-style-name="_40_TextBody">
+  <style:style style:name="P114" style:family="paragraph" style:parent-style-name="_40_TextBody">
    <style:text-properties officeooo:paragraph-rsid="001d374c"/>
   </style:style>
-  <style:style style:name="P105" style:family="paragraph" style:parent-style-name="_40_Example">
+  <style:style style:name="P115" style:family="paragraph" style:parent-style-name="_40_Example">
    <style:paragraph-properties fo:text-align="start" style:justify-single-word="false" fo:break-before="page"/>
    <style:text-properties style:font-name="Gill Sans MT4" fo:font-size="10pt" fo:language="en" fo:country="US" officeooo:rsid="1986f1c5" officeooo:paragraph-rsid="19855cdf"/>
   </style:style>
-  <style:style style:name="P106" style:family="paragraph" style:parent-style-name="_40_Example">
-   <style:paragraph-properties fo:text-align="start" style:justify-single-word="false"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="066af41e" officeooo:paragraph-rsid="0022cb2b"/>
-  </style:style>
-  <style:style style:name="P107" style:family="paragraph" style:parent-style-name="_40_Example">
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0in" fo:text-align="start" style:justify-single-word="false" fo:text-indent="0in" style:auto-text-indent="false"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:paragraph-rsid="0022cb2b"/>
-  </style:style>
-  <style:style style:name="P108" style:family="paragraph" style:parent-style-name="_40_Example">
-   <style:paragraph-properties fo:text-align="start" style:justify-single-word="false"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:paragraph-rsid="066af41e"/>
-  </style:style>
-  <style:style style:name="P109" style:family="paragraph" style:parent-style-name="_40_TextBody">
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="00c4ec6d" officeooo:paragraph-rsid="06608a53"/>
-  </style:style>
-  <style:style style:name="P110" style:family="paragraph" style:parent-style-name="_40_TextBody">
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="0022cb2b" officeooo:paragraph-rsid="0022cb2b"/>
-  </style:style>
-  <style:style style:name="P111" style:family="paragraph" style:parent-style-name="_40_TextBody">
+  <style:style style:name="P116" style:family="paragraph" style:parent-style-name="_40_TextBody">
    <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0in" fo:text-indent="0in" style:auto-text-indent="false"/>
    <style:text-properties fo:color="#c9211e" loext:opacity="100%" fo:language="en" fo:country="US" officeooo:rsid="0022cb2b" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
-  <style:style style:name="P112" style:family="paragraph" style:parent-style-name="Heading_20_3">
+  <style:style style:name="P117" style:family="paragraph" style:parent-style-name="Heading_20_3">
    <style:paragraph-properties fo:break-before="page"/>
    <style:text-properties officeooo:paragraph-rsid="001bc7c1"/>
   </style:style>
-  <style:style style:name="P113" style:family="paragraph" style:parent-style-name="Heading_20_4">
+  <style:style style:name="P118" style:family="paragraph" style:parent-style-name="Heading_20_4">
    <style:text-properties fo:language="en" fo:country="US"/>
   </style:style>
-  <style:style style:name="P114" style:family="paragraph" style:parent-style-name="Heading_20_4">
+  <style:style style:name="P119" style:family="paragraph" style:parent-style-name="Heading_20_4">
    <style:text-properties fo:language="en" fo:country="US" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
-  <style:style style:name="P115" style:family="paragraph" style:parent-style-name="Standard">
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0in" fo:text-indent="0in" style:auto-text-indent="false"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:paragraph-rsid="066cec6f"/>
-  </style:style>
-  <style:style style:name="P116" style:family="paragraph" style:parent-style-name="Standard">
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="00c4ec6d" officeooo:paragraph-rsid="06608a53"/>
-  </style:style>
-  <style:style style:name="P117" style:family="paragraph" style:parent-style-name="Standard">
-   <style:text-properties officeooo:paragraph-rsid="0022cb2b"/>
-  </style:style>
-  <style:style style:name="P118" style:family="paragraph" style:parent-style-name="Table_20_Contents" style:list-style-name="L1">
+  <style:style style:name="P120" style:family="paragraph" style:parent-style-name="Table_20_Contents" style:list-style-name="L1">
    <style:paragraph-properties fo:text-align="justify" style:justify-single-word="false"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="05c7f16b" officeooo:paragraph-rsid="06608a53"/>
-  </style:style>
-  <style:style style:name="P119" style:family="paragraph" style:parent-style-name="Table_20_Contents">
-   <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="00209c32" officeooo:paragraph-rsid="00209c32"/>
-  </style:style>
-  <style:style style:name="P120" style:family="paragraph" style:parent-style-name="Table_20_Contents">
-   <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="00209c32" officeooo:paragraph-rsid="00209c32"/>
-  </style:style>
-  <style:style style:name="P121" style:family="paragraph" style:parent-style-name="Table_20_Contents">
-   <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="00209c32" officeooo:paragraph-rsid="0022cb2b"/>
-  </style:style>
-  <style:style style:name="P122" style:family="paragraph" style:parent-style-name="Table_20_Contents">
-   <style:paragraph-properties fo:text-align="start" style:justify-single-word="false"/>
-   <style:text-properties fo:language="en" fo:country="US" style:text-underline-style="solid" style:text-underline-width="auto" style:text-underline-color="font-color" fo:font-weight="normal" officeooo:rsid="00531151" officeooo:paragraph-rsid="00209c32" style:font-weight-asian="normal" style:font-weight-complex="normal"/>
-  </style:style>
-  <style:style style:name="P123" style:family="paragraph" style:parent-style-name="Table_20_Contents">
-   <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="004069ac" officeooo:paragraph-rsid="06608a53"/>
-  </style:style>
-  <style:style style:name="P124" style:family="paragraph" style:parent-style-name="Table_20_Contents">
-   <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="center" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="004069ac" officeooo:paragraph-rsid="0022cb2b"/>
-  </style:style>
-  <style:style style:name="P125" style:family="paragraph" style:parent-style-name="Table_20_Contents">
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="center" style:justify-single-word="false" fo:text-indent="0in" style:auto-text-indent="false"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="062e77b5" officeooo:paragraph-rsid="06608a53"/>
-  </style:style>
-  <style:style style:name="P126" style:family="paragraph" style:parent-style-name="Table_20_Contents">
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="center" style:justify-single-word="false" fo:text-indent="0in" style:auto-text-indent="false"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="062e77b5" officeooo:paragraph-rsid="0022cb2b"/>
-  </style:style>
-  <style:style style:name="P127" style:family="paragraph" style:parent-style-name="Table_20_Contents">
-   <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="00210d95" officeooo:paragraph-rsid="00210d95"/>
-  </style:style>
-  <style:style style:name="P128" style:family="paragraph" style:parent-style-name="Table_20_Contents">
-   <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:text-align="justify" style:justify-single-word="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="0022cb2b" officeooo:paragraph-rsid="0022cb2b"/>
-  </style:style>
-  <style:style style:name="P129" style:family="paragraph" style:parent-style-name="Table_20_Contents">
-   <loext:graphic-properties draw:fill="none"/>
-   <style:paragraph-properties fo:margin-left="0in" fo:margin-right="0.0799in" fo:margin-top="0.0299in" fo:margin-bottom="0.0299in" style:contextual-spacing="false" fo:orphans="0" fo:widows="0" fo:text-indent="0in" style:auto-text-indent="false" fo:background-color="transparent" style:shadow="none" text:number-lines="false" text:line-number="0" style:writing-mode="lr-tb"/>
-   <style:text-properties fo:language="en" fo:country="US" officeooo:rsid="002327e0" officeooo:paragraph-rsid="002327e0"/>
+   <style:text-properties style:text-position="0% 100%" fo:language="en" fo:country="US" officeooo:rsid="02eddc5f" officeooo:paragraph-rsid="06608a53"/>
   </style:style>
   <style:style style:name="T1" style:family="text"/>
   <style:style style:name="T2" style:family="text">
@@ -2910,6 +2874,9 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
   <style:style style:name="T67" style:family="text">
    <style:text-properties officeooo:rsid="002327e0"/>
   </style:style>
+  <style:style style:name="T68" style:family="text">
+   <style:text-properties officeooo:rsid="00250eaf"/>
+  </style:style>
   <style:style style:name="Sect1" style:family="section">
    <style:section-properties style:editable="false">
     <style:columns fo:column-count="1" fo:column-gap="0in"/>
@@ -2962,110 +2929,6 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
     </style:list-level-properties>
    </text:list-level-style-number>
    <text:list-level-style-number text:level="10" loext:num-list-format="%10%)" style:num-suffix=")" style:num-format="1">
-    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
-     <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="2.75in" fo:text-indent="-0.25in" fo:margin-left="2.75in"/>
-    </style:list-level-properties>
-   </text:list-level-style-number>
-  </text:list-style>
-  <text:list-style style:name="L2">
-   <text:list-level-style-bullet text:level="1" text:style-name="Bullet_20_Symbols" loext:num-list-format="%1%." text:bullet-char="•">
-    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
-     <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="0.5in" fo:text-indent="-0.25in" fo:margin-left="0.5in"/>
-    </style:list-level-properties>
-   </text:list-level-style-bullet>
-   <text:list-level-style-bullet text:level="2" text:style-name="Bullet_20_Symbols" loext:num-list-format="%2%." text:bullet-char="◦">
-    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
-     <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="0.75in" fo:text-indent="-0.25in" fo:margin-left="0.75in"/>
-    </style:list-level-properties>
-   </text:list-level-style-bullet>
-   <text:list-level-style-bullet text:level="3" text:style-name="Bullet_20_Symbols" loext:num-list-format="%3%." text:bullet-char="▪">
-    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
-     <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="1in" fo:text-indent="-0.25in" fo:margin-left="1in"/>
-    </style:list-level-properties>
-   </text:list-level-style-bullet>
-   <text:list-level-style-bullet text:level="4" text:style-name="Bullet_20_Symbols" loext:num-list-format="%4%." text:bullet-char="•">
-    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
-     <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="1.25in" fo:text-indent="-0.25in" fo:margin-left="1.25in"/>
-    </style:list-level-properties>
-   </text:list-level-style-bullet>
-   <text:list-level-style-bullet text:level="5" text:style-name="Bullet_20_Symbols" loext:num-list-format="%5%." text:bullet-char="◦">
-    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
-     <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="1.5in" fo:text-indent="-0.25in" fo:margin-left="1.5in"/>
-    </style:list-level-properties>
-   </text:list-level-style-bullet>
-   <text:list-level-style-bullet text:level="6" text:style-name="Bullet_20_Symbols" loext:num-list-format="%6%." text:bullet-char="▪">
-    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
-     <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="1.75in" fo:text-indent="-0.25in" fo:margin-left="1.75in"/>
-    </style:list-level-properties>
-   </text:list-level-style-bullet>
-   <text:list-level-style-bullet text:level="7" text:style-name="Bullet_20_Symbols" loext:num-list-format="%7%." text:bullet-char="•">
-    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
-     <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="2in" fo:text-indent="-0.25in" fo:margin-left="2in"/>
-    </style:list-level-properties>
-   </text:list-level-style-bullet>
-   <text:list-level-style-bullet text:level="8" text:style-name="Bullet_20_Symbols" loext:num-list-format="%8%." text:bullet-char="◦">
-    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
-     <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="2.25in" fo:text-indent="-0.25in" fo:margin-left="2.25in"/>
-    </style:list-level-properties>
-   </text:list-level-style-bullet>
-   <text:list-level-style-bullet text:level="9" text:style-name="Bullet_20_Symbols" loext:num-list-format="%9%." text:bullet-char="▪">
-    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
-     <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="2.5in" fo:text-indent="-0.25in" fo:margin-left="2.5in"/>
-    </style:list-level-properties>
-   </text:list-level-style-bullet>
-   <text:list-level-style-bullet text:level="10" text:style-name="Bullet_20_Symbols" loext:num-list-format="%10%." text:bullet-char="•">
-    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
-     <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="2.75in" fo:text-indent="-0.25in" fo:margin-left="2.75in"/>
-    </style:list-level-properties>
-   </text:list-level-style-bullet>
-  </text:list-style>
-  <text:list-style style:name="L3">
-   <text:list-level-style-number text:level="1" text:style-name="Numbering_20_Symbols" loext:num-list-format="%1%." style:num-suffix="." style:num-format="1">
-    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
-     <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="0.5in" fo:text-indent="-0.25in" fo:margin-left="0.5in"/>
-    </style:list-level-properties>
-   </text:list-level-style-number>
-   <text:list-level-style-number text:level="2" text:style-name="Numbering_20_Symbols" loext:num-list-format="%2%." style:num-suffix="." style:num-format="1">
-    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
-     <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="0.75in" fo:text-indent="-0.25in" fo:margin-left="0.75in"/>
-    </style:list-level-properties>
-   </text:list-level-style-number>
-   <text:list-level-style-number text:level="3" text:style-name="Numbering_20_Symbols" loext:num-list-format="%3%." style:num-suffix="." style:num-format="1">
-    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
-     <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="1in" fo:text-indent="-0.25in" fo:margin-left="1in"/>
-    </style:list-level-properties>
-   </text:list-level-style-number>
-   <text:list-level-style-number text:level="4" text:style-name="Numbering_20_Symbols" loext:num-list-format="%4%." style:num-suffix="." style:num-format="1">
-    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
-     <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="1.25in" fo:text-indent="-0.25in" fo:margin-left="1.25in"/>
-    </style:list-level-properties>
-   </text:list-level-style-number>
-   <text:list-level-style-number text:level="5" text:style-name="Numbering_20_Symbols" loext:num-list-format="%5%." style:num-suffix="." style:num-format="1">
-    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
-     <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="1.5in" fo:text-indent="-0.25in" fo:margin-left="1.5in"/>
-    </style:list-level-properties>
-   </text:list-level-style-number>
-   <text:list-level-style-number text:level="6" text:style-name="Numbering_20_Symbols" loext:num-list-format="%6%." style:num-suffix="." style:num-format="1">
-    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
-     <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="1.75in" fo:text-indent="-0.25in" fo:margin-left="1.75in"/>
-    </style:list-level-properties>
-   </text:list-level-style-number>
-   <text:list-level-style-number text:level="7" text:style-name="Numbering_20_Symbols" loext:num-list-format="%7%." style:num-suffix="." style:num-format="1">
-    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
-     <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="2in" fo:text-indent="-0.25in" fo:margin-left="2in"/>
-    </style:list-level-properties>
-   </text:list-level-style-number>
-   <text:list-level-style-number text:level="8" text:style-name="Numbering_20_Symbols" loext:num-list-format="%8%." style:num-suffix="." style:num-format="1">
-    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
-     <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="2.25in" fo:text-indent="-0.25in" fo:margin-left="2.25in"/>
-    </style:list-level-properties>
-   </text:list-level-style-number>
-   <text:list-level-style-number text:level="9" text:style-name="Numbering_20_Symbols" loext:num-list-format="%9%." style:num-suffix="." style:num-format="1">
-    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
-     <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="2.5in" fo:text-indent="-0.25in" fo:margin-left="2.5in"/>
-    </style:list-level-properties>
-   </text:list-level-style-number>
-   <text:list-level-style-number text:level="10" text:style-name="Numbering_20_Symbols" loext:num-list-format="%10%." style:num-suffix="." style:num-format="1">
     <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
      <style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="2.75in" fo:text-indent="-0.25in" fo:margin-left="2.75in"/>
     </style:list-level-properties>
@@ -3457,7 +3320,7 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
    </text:user-field-decls>
    <text:p text:style-name="Standard"/>
    <text:section text:style-name="Sect1" text:name="WCONPROD">
-    <text:h text:style-name="P103" text:outline-level="3"><text:bookmark-start text:name="__RefHeading___Toc146754_4203985108"/><text:span text:style-name="T9">STREQUIL</text:span><text:span text:style-name="T5"> – </text:span><text:span text:style-name="T9">STRESS equilibration</text:span><text:bookmark-end text:name="__RefHeading___Toc146754_4203985108"/></text:h>
+    <text:h text:style-name="P113" text:outline-level="3"><text:bookmark-start text:name="__RefHeading___Toc146754_4203985108"/><text:span text:style-name="T9">STREQUIL</text:span><text:span text:style-name="T5"> – </text:span><text:span text:style-name="T9">STRESS equilibration</text:span><text:bookmark-end text:name="__RefHeading___Toc146754_4203985108"/></text:h>
     <table:table table:name="Table114" table:style-name="Table114">
      <table:table-column table:style-name="Table114.A" table:number-columns-repeated="4"/>
      <table:table-column table:style-name="Table114.E"/>
@@ -3465,33 +3328,33 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
      <table:table-column table:style-name="Table114.A" table:number-columns-repeated="2"/>
      <table:table-row>
       <table:table-cell table:style-name="Table114.A1" office:value-type="string">
-       <text:p text:style-name="P99"><text:a xlink:type="simple" xlink:href="#3.RUNSPEC SECTION|outline" text:style-name="Internet_20_link" text:visited-style-name="Visited_20_Internet_20_Link"><text:span text:style-name="T2">RUNSPEC</text:span></text:a></text:p>
+       <text:p text:style-name="P109"><text:a xlink:type="simple" xlink:href="#3.RUNSPEC SECTION|outline" text:style-name="Internet_20_link" text:visited-style-name="Visited_20_Internet_20_Link"><text:span text:style-name="T2">RUNSPEC</text:span></text:a></text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table114.A1" office:value-type="string">
-       <text:p text:style-name="P100"><text:a xlink:type="simple" xlink:href="#4.GRID SECTION|outline" text:style-name="Internet_20_link" text:visited-style-name="Visited_20_Internet_20_Link"><text:span text:style-name="T2">GRID</text:span></text:a></text:p>
+       <text:p text:style-name="P110"><text:a xlink:type="simple" xlink:href="#4.GRID SECTION|outline" text:style-name="Internet_20_link" text:visited-style-name="Visited_20_Internet_20_Link"><text:span text:style-name="T2">GRID</text:span></text:a></text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table114.A1" office:value-type="string">
-       <text:p text:style-name="P100"><text:a xlink:type="simple" xlink:href="#5.EDIT SECTION|outline" text:style-name="Internet_20_link" text:visited-style-name="Visited_20_Internet_20_Link"><text:span text:style-name="T2">EDIT</text:span></text:a></text:p>
+       <text:p text:style-name="P110"><text:a xlink:type="simple" xlink:href="#5.EDIT SECTION|outline" text:style-name="Internet_20_link" text:visited-style-name="Visited_20_Internet_20_Link"><text:span text:style-name="T2">EDIT</text:span></text:a></text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table114.A1" office:value-type="string">
-       <text:p text:style-name="P100"><text:a xlink:type="simple" xlink:href="#6.PROPS SECTION|outline" text:style-name="Internet_20_link" text:visited-style-name="Visited_20_Internet_20_Link"><text:span text:style-name="T2">PROPS</text:span></text:a></text:p>
+       <text:p text:style-name="P110"><text:a xlink:type="simple" xlink:href="#6.PROPS SECTION|outline" text:style-name="Internet_20_link" text:visited-style-name="Visited_20_Internet_20_Link"><text:span text:style-name="T2">PROPS</text:span></text:a></text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table114.A1" office:value-type="string">
-       <text:p text:style-name="P100"><text:a xlink:type="simple" xlink:href="#7.REGIONS SECTION|outline" text:style-name="Internet_20_link" text:visited-style-name="Visited_20_Internet_20_Link"><text:span text:style-name="T2">REGIONS</text:span></text:a></text:p>
+       <text:p text:style-name="P110"><text:a xlink:type="simple" xlink:href="#7.REGIONS SECTION|outline" text:style-name="Internet_20_link" text:visited-style-name="Visited_20_Internet_20_Link"><text:span text:style-name="T2">REGIONS</text:span></text:a></text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table114.A1" office:value-type="string">
-       <text:p text:style-name="P100"><text:a xlink:type="simple" xlink:href="#8.SOLUTION SECTION|outline" text:style-name="Internet_20_link" text:visited-style-name="Visited_20_Internet_20_Link"><text:span text:style-name="T2">SOLUTION</text:span></text:a></text:p>
+       <text:p text:style-name="P110"><text:a xlink:type="simple" xlink:href="#8.SOLUTION SECTION|outline" text:style-name="Internet_20_link" text:visited-style-name="Visited_20_Internet_20_Link"><text:span text:style-name="T2">SOLUTION</text:span></text:a></text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table114.A1" office:value-type="string">
-       <text:p text:style-name="P100"><text:a xlink:type="simple" xlink:href="#9.SUMMARY SECTION|outline" text:style-name="Internet_20_link" text:visited-style-name="Visited_20_Internet_20_Link"><text:span text:style-name="T2">SUMMARY</text:span></text:a></text:p>
+       <text:p text:style-name="P110"><text:a xlink:type="simple" xlink:href="#9.SUMMARY SECTION|outline" text:style-name="Internet_20_link" text:visited-style-name="Visited_20_Internet_20_Link"><text:span text:style-name="T2">SUMMARY</text:span></text:a></text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table114.H1" office:value-type="string">
-       <text:p text:style-name="P100"><text:a xlink:type="simple" xlink:href="#10.SCHEDULE SECTION|outline" text:style-name="Internet_20_link" text:visited-style-name="Visited_20_Internet_20_Link"><text:span text:style-name="T2">SCHEDULE</text:span></text:a></text:p>
+       <text:p text:style-name="P110"><text:a xlink:type="simple" xlink:href="#10.SCHEDULE SECTION|outline" text:style-name="Internet_20_link" text:visited-style-name="Visited_20_Internet_20_Link"><text:span text:style-name="T2">SCHEDULE</text:span></text:a></text:p>
       </table:table-cell>
      </table:table-row>
     </table:table>
-    <text:h text:style-name="P83" text:outline-level="4" text:is-list-header="true"><text:bookmark-start text:name="__RefHeading___Toc716717_3964674244"/>Description<text:bookmark-end text:name="__RefHeading___Toc716717_3964674244"/></text:h>
-    <text:p text:style-name="P104">The <text:span text:style-name="T66">STR</text:span><text:span text:style-name="T67">EQUIL</text:span>.<text:span text:style-name="T59"> </text:span></text:p>
+    <text:h text:style-name="P87" text:outline-level="4" text:is-list-header="true"><text:bookmark-start text:name="__RefHeading___Toc716717_3964674244"/>Description<text:bookmark-end text:name="__RefHeading___Toc716717_3964674244"/></text:h>
+    <text:p text:style-name="P114">The <text:span text:style-name="T66">STR</text:span><text:span text:style-name="T67">EQUIL </text:span><text:span text:style-name="T68">gives the stress initial stress equilibrium</text:span></text:p>
     <table:table table:name="Table115" table:style-name="Table115">
      <table:table-column table:style-name="Table115.A"/>
      <table:table-column table:style-name="Table115.B"/>
@@ -3502,157 +3365,189 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
      <table:table-header-rows>
       <table:table-row table:style-name="Table115.1">
        <table:table-cell table:style-name="Table115.A1" table:number-rows-spanned="2" office:value-type="string">
-        <text:p text:style-name="P60">No.</text:p>
+        <text:p text:style-name="P61">No.</text:p>
        </table:table-cell>
        <table:table-cell table:style-name="Table115.A1" table:number-rows-spanned="2" office:value-type="string">
-        <text:p text:style-name="P60">Name</text:p>
+        <text:p text:style-name="P61">Name</text:p>
        </table:table-cell>
        <table:table-cell table:style-name="Table115.A1" table:number-columns-spanned="3" office:value-type="string">
-        <text:p text:style-name="P60">Description</text:p>
+        <text:p text:style-name="P61">Description</text:p>
        </table:table-cell>
        <table:covered-table-cell/>
        <table:covered-table-cell/>
        <table:table-cell table:style-name="Table115.F1" table:number-rows-spanned="2" office:value-type="string">
-        <text:p text:style-name="P60">Default</text:p>
+        <text:p text:style-name="P61">Default</text:p>
        </table:table-cell>
       </table:table-row>
       <table:table-row table:style-name="Table115.1">
        <table:covered-table-cell table:style-name="Table115.A1"/>
        <table:covered-table-cell table:style-name="Table115.A1"/>
        <table:table-cell table:style-name="Table115.C2" office:value-type="string">
-        <text:p text:style-name="P60">Field</text:p>
+        <text:p text:style-name="P61">Field</text:p>
        </table:table-cell>
        <table:table-cell table:style-name="Table115.C2" office:value-type="string">
-        <text:p text:style-name="P60">Metric</text:p>
+        <text:p text:style-name="P61">Metric</text:p>
        </table:table-cell>
        <table:table-cell table:style-name="Table115.C2" office:value-type="string">
-        <text:p text:style-name="P60">Laboratory</text:p>
+        <text:p text:style-name="P61">Laboratory</text:p>
        </table:table-cell>
        <table:covered-table-cell table:style-name="Table115.F1"/>
       </table:table-row>
      </table:table-header-rows>
      <table:table-row table:style-name="Table115.1">
       <table:table-cell table:style-name="Table115.C2" office:value-type="string">
-       <text:p text:style-name="P58">1</text:p>
+       <text:p text:style-name="P59">1</text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table115.C2" office:value-type="string">
-       <text:p text:style-name="P128"/>
+       <text:p text:style-name="P108">DATUM_DEPTH</text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table115.C2" table:number-columns-spanned="3" office:value-type="string">
-       <text:p text:style-name="P120"><text:span text:style-name="T65"><text:s/></text:span><text:span text:style-name="T67">Datum depth</text:span></text:p>
-       <text:p text:style-name="P120"/>
+       <text:p text:style-name="P105"><text:span text:style-name="T65"><text:s/></text:span><text:span text:style-name="T67">Datum depth</text:span></text:p>
+       <text:p text:style-name="P105"/>
       </table:table-cell>
       <table:covered-table-cell/>
       <table:covered-table-cell/>
       <table:table-cell table:style-name="Table115.F3" office:value-type="string">
-       <text:p text:style-name="P3">None</text:p>
+       <text:p text:style-name="P4">None</text:p>
       </table:table-cell>
      </table:table-row>
      <table:table-row table:style-name="Table115.1">
       <table:table-cell table:style-name="Table115.C2" office:value-type="string">
-       <text:p text:style-name="P58"/>
+       <text:p text:style-name="P107">2</text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table115.C2" office:value-type="string">
-       <text:p text:style-name="P128"/>
+       <text:p text:style-name="P108">DATUM_DEPTH</text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table115.C2" table:number-columns-spanned="3" office:value-type="string">
-       <text:p text:style-name="P129">Datum posx</text:p>
+       <text:p text:style-name="P106">Datum posx</text:p>
       </table:table-cell>
       <table:covered-table-cell/>
       <table:covered-table-cell/>
       <table:table-cell table:style-name="Table115.F3" office:value-type="string">
-       <text:p text:style-name="P3"/>
+       <text:p text:style-name="P4"/>
       </table:table-cell>
      </table:table-row>
      <table:table-row table:style-name="Table115.1">
       <table:table-cell table:style-name="Table115.C2" office:value-type="string">
-       <text:p text:style-name="P58"/>
+       <text:p text:style-name="P107">3</text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table115.C2" office:value-type="string">
-       <text:p text:style-name="P128"/>
+       <text:p text:style-name="P108">DATUM_DEPTH</text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table115.C2" table:number-columns-spanned="3" office:value-type="string">
-       <text:p text:style-name="P129">Datum posy</text:p>
+       <text:p text:style-name="P106">Datum posy</text:p>
       </table:table-cell>
       <table:covered-table-cell/>
       <table:covered-table-cell/>
       <table:table-cell table:style-name="Table115.F3" office:value-type="string">
-       <text:p text:style-name="P3"/>
+       <text:p text:style-name="P4"/>
       </table:table-cell>
      </table:table-row>
      <table:table-row table:style-name="Table115.1">
       <table:table-cell table:style-name="Table115.C2" office:value-type="string">
-       <text:p text:style-name="P58"/>
+       <text:p text:style-name="P107">4</text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table115.C2" office:value-type="string">
-       <text:p text:style-name="P128"/>
+       <text:p text:style-name="P104">STRESSXX</text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table115.C2" table:number-columns-spanned="3" office:value-type="string">
-       <text:p text:style-name="P129">Reference stressxx</text:p>
+       <text:p text:style-name="P106">Reference stressxx</text:p>
       </table:table-cell>
       <table:covered-table-cell/>
       <table:covered-table-cell/>
       <table:table-cell table:style-name="Table115.F3" office:value-type="string">
-       <text:p text:style-name="P3"/>
+       <text:p text:style-name="P4"/>
       </table:table-cell>
      </table:table-row>
      <table:table-row table:style-name="Table115.1">
       <table:table-cell table:style-name="Table115.C2" office:value-type="string">
-       <text:p text:style-name="P58"/>
+       <text:p text:style-name="P107">5</text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table115.C2" office:value-type="string">
-       <text:p text:style-name="P128"/>
+       <text:p text:style-name="P104">STRESS<text:span text:style-name="T67">XX</text:span>GRAD</text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table115.C2" table:number-columns-spanned="3" office:value-type="string">
-       <text:p text:style-name="P129">Gradient of stressxx in z direction</text:p>
+       <text:p text:style-name="P106">Gradient of stressxx in z direction</text:p>
       </table:table-cell>
       <table:covered-table-cell/>
       <table:covered-table-cell/>
       <table:table-cell table:style-name="Table115.F3" office:value-type="string">
-       <text:p text:style-name="P3"/>
+       <text:p text:style-name="P4"/>
       </table:table-cell>
      </table:table-row>
      <table:table-row table:style-name="Table115.1">
       <table:table-cell table:style-name="Table115.C2" office:value-type="string">
-       <text:p text:style-name="P58"/>
+       <text:p text:style-name="P107">6</text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table115.C2" office:value-type="string">
-       <text:p text:style-name="P128"/>
+       <text:p text:style-name="P104">STRESS<text:span text:style-name="T67">YY</text:span></text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table115.C2" table:number-columns-spanned="3" office:value-type="string">
-       <text:p text:style-name="P120"/>
+       <text:p text:style-name="P106">Reference stressyy</text:p>
       </table:table-cell>
       <table:covered-table-cell/>
       <table:covered-table-cell/>
       <table:table-cell table:style-name="Table115.F3" office:value-type="string">
-       <text:p text:style-name="P3"/>
+       <text:p text:style-name="P4"/>
       </table:table-cell>
      </table:table-row>
      <table:table-row table:style-name="Table115.1">
       <table:table-cell table:style-name="Table115.C2" office:value-type="string">
-       <text:p text:style-name="P58"/>
+       <text:p text:style-name="P107">7</text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table115.C2" office:value-type="string">
-       <text:p text:style-name="P128"/>
+       <text:p text:style-name="P104">STRESSY<text:span text:style-name="T67">Y</text:span>GRAD</text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table115.C2" table:number-columns-spanned="3" office:value-type="string">
-       <text:p text:style-name="P120"/>
+       <text:p text:style-name="P106">Gradient of stressyy in z direction</text:p>
       </table:table-cell>
       <table:covered-table-cell/>
       <table:covered-table-cell/>
       <table:table-cell table:style-name="Table115.F3" office:value-type="string">
-       <text:p text:style-name="P3"/>
+       <text:p text:style-name="P4"/>
       </table:table-cell>
      </table:table-row>
      <table:table-row table:style-name="Table115.1">
-      <table:table-cell table:style-name="Table115.A10" table:number-columns-spanned="6" office:value-type="string">
+      <table:table-cell table:style-name="Table115.C2" office:value-type="string">
+       <text:p text:style-name="P107">8</text:p>
+      </table:table-cell>
+      <table:table-cell table:style-name="Table115.C2" office:value-type="string">
+       <text:p text:style-name="P104">STRESS<text:span text:style-name="T67">ZZ</text:span></text:p>
+      </table:table-cell>
+      <table:table-cell table:style-name="Table115.C2" table:number-columns-spanned="3" office:value-type="string">
+       <text:p text:style-name="P106">Reference stresszz</text:p>
+      </table:table-cell>
+      <table:covered-table-cell/>
+      <table:covered-table-cell/>
+      <table:table-cell table:style-name="Table115.F3" office:value-type="string">
+       <text:p text:style-name="P4"/>
+      </table:table-cell>
+     </table:table-row>
+     <table:table-row table:style-name="Table115.1">
+      <table:table-cell table:style-name="Table115.C2" office:value-type="string">
+       <text:p text:style-name="P107">9</text:p>
+      </table:table-cell>
+      <table:table-cell table:style-name="Table115.C2" office:value-type="string">
+       <text:p text:style-name="P104">STRESS<text:span text:style-name="T67">ZZ</text:span>GRAD</text:p>
+      </table:table-cell>
+      <table:table-cell table:style-name="Table115.C2" table:number-columns-spanned="3" office:value-type="string">
+       <text:p text:style-name="P106">Gradient of stresszz in z direction</text:p>
+      </table:table-cell>
+      <table:covered-table-cell/>
+      <table:covered-table-cell/>
+      <table:table-cell table:style-name="Table115.F3" office:value-type="string">
+       <text:p text:style-name="P4"/>
+      </table:table-cell>
+     </table:table-row>
+     <table:table-row table:style-name="Table115.1">
+      <table:table-cell table:style-name="Table115.A12" table:number-columns-spanned="6" office:value-type="string">
        <text:p text:style-name="P2">Notes:</text:p>
-       <text:list xml:id="list635031372" text:style-name="L1">
+       <text:list xml:id="list1439148681" text:style-name="L1">
         <text:list-item>
-         <text:p text:style-name="P118"><text:span text:style-name="T10">The keyword is followed by NTEQUL records as declared on the EQLDIMS keyword in the RUNSPEC section.</text:span></text:p>
+         <text:p text:style-name="P120">The keyword is followed by NTEQUL records as declared on the EQLDIMS keyword in the RUNSPEC section.</text:p>
         </text:list-item>
         <text:list-item>
-         <text:p text:style-name="P118"><text:span text:style-name="T10">Each record is terminated by a “/” and there is no “/” terminator for the keyword.</text:span></text:p>
+         <text:p text:style-name="P120">Each record is terminated by a “/” and there is no “/” terminator for the keyword.</text:p>
         </text:list-item>
        </text:list>
       </table:table-cell>
@@ -3663,8 +3558,8 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
       <table:covered-table-cell/>
      </table:table-row>
      <table:table-row table:style-name="Table115.1">
-      <table:table-cell table:style-name="Table115.A11" table:number-columns-spanned="6" office:value-type="string">
-       <text:p text:style-name="P122"/>
+      <table:table-cell table:style-name="Table115.A13" table:number-columns-spanned="6" office:value-type="string">
+       <text:p text:style-name="P3"/>
       </table:table-cell>
       <table:covered-table-cell/>
       <table:covered-table-cell/>
@@ -3673,39 +3568,39 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
       <table:covered-table-cell/>
      </table:table-row>
     </table:table>
-    <text:p text:style-name="P78">Table <text:sequence text:ref-name="refTable0" text:name="Table" text:formula="ooow:Table+1" style:num-format="1">12.3.255.1</text:sequence>: <text:span text:style-name="T66">STREQUIL</text:span> Keyword Description</text:p>
+    <text:p text:style-name="P81">Table <text:sequence text:ref-name="refTable0" text:name="Table" text:formula="ooow:Table+1" style:num-format="1">12.3.255.1</text:sequence>: <text:span text:style-name="T66">STREQUIL</text:span> Keyword Description</text:p>
+    <text:p text:style-name="P64"/>
+    <text:p text:style-name="P64">See <text:span text:style-name="T65">also </text:span><text:span text:style-name="T66">STRE</text:span><text:span text:style-name="T68">SSEQUILNUM</text:span><text:span text:style-name="T66">.</text:span></text:p>
     <text:p text:style-name="P63"/>
-    <text:p text:style-name="P63">See <text:span text:style-name="T65">also </text:span><text:span text:style-name="T66">STREQUIL.</text:span></text:p>
-    <text:p text:style-name="P62"/>
-    <text:p text:style-name="P110">The initial stress is calculated as:</text:p>
-    <text:p text:style-name="P110">STRESS?? = stress?? + (z-depth)* stress??gradz</text:p>
-    <text:p text:style-name="P110">where the parameters is taken from the definition below and ?? stands for XX,YY,ZZ representing the diagonal of the stress tensor. Current implementation has the initial values of the off-diagonal set to zero</text:p>
-    <text:p text:style-name="P111"/>
-    <text:h text:style-name="P85" text:outline-level="4" text:is-list-header="true"><text:bookmark-start text:name="__RefHeading___Toc716719_3964674244"/>Example<text:bookmark-end text:name="__RefHeading___Toc716719_3964674244"/></text:h>
+    <text:p text:style-name="P103">The initial stress is calculated as:</text:p>
+    <text:p text:style-name="P103"><text:span text:style-name="T67">stress</text:span>??<text:span text:style-name="T67">(z)</text:span> = <text:span text:style-name="T67">STRESS</text:span>?? + (z-<text:span text:style-name="T67">DATUM_DEPTH</text:span>)* <text:span text:style-name="T67">STRESS</text:span>??<text:span text:style-name="T67">GRAD</text:span></text:p>
+    <text:p text:style-name="P103">where the parameters is taken from the definition below and ?? stands for XX,YY,ZZ representing the diagonal of the stress tensor. Current implementation has the initial values of the off-diagonal set to zero</text:p>
+    <text:p text:style-name="P116"/>
+    <text:h text:style-name="P89" text:outline-level="4" text:is-list-header="true"><text:bookmark-start text:name="__RefHeading___Toc716719_3964674244"/>Example<text:bookmark-end text:name="__RefHeading___Toc716719_3964674244"/></text:h>
     <text:p text:style-name="Text_20_body">The following example <text:span text:style-name="T65">define a </text:span><text:span text:style-name="T66">stress equilibration</text:span><text:span text:style-name="T18">:</text:span></text:p>
     <text:p text:style-name="_40_Example">--<text:span text:style-name="T8"> <text:s text:c="52"/></text:span></text:p>
-    <text:p text:style-name="P106">--</text:p>
-    <text:p text:style-name="P106">STREQUIL</text:p>
-    <text:p text:style-name="P106">-- Item 1: datum depth (ft)</text:p>
-    <text:p text:style-name="P106">-- Item 2: datum posx (ft)</text:p>
-    <text:p text:style-name="P106">-- Item 3: datum posy (ft)</text:p>
-    <text:p text:style-name="P106">-- Item 4: stessxx</text:p>
-    <text:p text:style-name="P106">-- Item 5: stressxxgradz</text:p>
-    <text:p text:style-name="P106">-- Item 6: stessyy</text:p>
-    <text:p text:style-name="P106">-- Item 7: stressyygradz</text:p>
-    <text:p text:style-name="P106">-- Item 8: stesszz</text:p>
-    <text:p text:style-name="P106">-- Item 9: stresszzgradz</text:p>
-    <text:p text:style-name="P106"><text:s text:c="3"/>2000 <text:s/>0.0 0.0 <text:s/>400 0.0 400 0.0 400 0.0/</text:p>
-    <text:p text:style-name="P106">/ <text:s text:c="77"/></text:p>
-    <text:p text:style-name="P64"/>
-    <text:p text:style-name="P107"><text:soft-page-break/><text:span text:style-name="T40"><text:s text:c="158"/></text:span><text:s text:c="77"/></text:p>
-    <text:p text:style-name="P115"/>
+    <text:p text:style-name="P77">--</text:p>
+    <text:p text:style-name="P77">STREQUIL</text:p>
+    <text:p text:style-name="P77">-- Item 1: datum depth (ft)</text:p>
+    <text:p text:style-name="P77">-- Item 2: datum posx (ft)</text:p>
+    <text:p text:style-name="P77">-- Item 3: datum posy (ft)</text:p>
+    <text:p text:style-name="P77">-- Item 4: stessxx</text:p>
+    <text:p text:style-name="P77">-- Item 5: stressxxgradz</text:p>
+    <text:p text:style-name="P77">-- Item 6: stessyy</text:p>
+    <text:p text:style-name="P77">-- Item 7: stressyygradz</text:p>
+    <text:p text:style-name="P77">-- Item 8: stesszz</text:p>
+    <text:p text:style-name="P77"><text:soft-page-break/>-- Item 9: stresszzgradz</text:p>
+    <text:p text:style-name="P77"><text:s text:c="3"/>2000 <text:s/>0.0 0.0 <text:s/>400 0.0 400 0.0 400 0.0/</text:p>
+    <text:p text:style-name="P77">/ <text:s text:c="77"/></text:p>
+    <text:p text:style-name="P65"/>
+    <text:p text:style-name="P67"><text:span text:style-name="T40"><text:s text:c="158"/></text:span><text:s text:c="77"/></text:p>
+    <text:p text:style-name="P83"/>
     <text:p text:style-name="Text_20_body"/>
-    <text:p text:style-name="P77"/>
-    <text:p text:style-name="P105"/>
-    <text:p text:style-name="P68"/>
-    <text:p text:style-name="P68"/>
-    <text:p text:style-name="P79"/>
+    <text:p text:style-name="P80"/>
+    <text:p text:style-name="P115"/>
+    <text:p text:style-name="P70"/>
+    <text:p text:style-name="P70"/>
+    <text:p text:style-name="P82"/>
    </text:section>
   </office:text>
  </office:body>
