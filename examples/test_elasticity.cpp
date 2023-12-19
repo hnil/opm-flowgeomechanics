@@ -192,7 +192,6 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
 
 
     std::unique_ptr<GridType> grid_ptr;
-    using GridView = typename GridType::LeafGridView;//Dune::GridView<Dune::DefaultLeafGridViewTraits<GridType>>;
     Opm::Parser parser;
     // process grid
     auto deck = parser.parseFile(p.file);
@@ -439,7 +438,7 @@ try
     //ok = run<PolyGrid>(p);
     using GridType = Dune::CpGrid;
     using ElasticitySolverTypeVem = Opm::Elasticity::VemElasticitySolver<GridType>;
-    using ElasticitySolverTypeFem = Opm::Elasticity::ElasticitySolver<GridType>;
+    //using ElasticitySolverTypeFem = Opm::Elasticity::ElasticitySolver<GridType>;
     bool with_pressure =true;
     bool with_gravity = false;
     std::string name = "vem";
