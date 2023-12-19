@@ -17,12 +17,10 @@
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 */
 #include "config.h"
-//#if HAVE_TRACY
-#include "tracy/Tracy.hpp"
-#include "tracy/TracyC.h"
-#define OPM_TIMEBLOCK(blockname) ZoneNamedN(blockname, #blockname, true);
-//#define OPM_TIMEBLOCK_LOCAL(blockname) ZoneNamedN(blockname, #blockname, true);
-//#endif
+
+#if USE_TRACY
+#define DETAILED_PROFILING 1
+#endif
 
 #include <exception>
 #include <ebos/eclproblem.hh>

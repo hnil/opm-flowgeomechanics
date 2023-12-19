@@ -21,6 +21,7 @@ cmake_minimum_required(VERSION 3.15)
 
 option(SIBLING_SEARCH "Search for other modules in sibling directories?" ON)
 set( USE_OPENMP_DEFAULT OFF ) # Use of OpenMP is considered experimental
+option(USE_TRACY_PROFILER "Enable tracy profiling" OFF)
 
 # The following was copied from CMakeLists.txt in opm-common.
 # TODO: factor out the common parts in opm-common and opm-simulator as a cmake module
@@ -101,6 +102,10 @@ macro (config_hook)
 	endif()
 	include_directories(${EXTRA_INCLUDES})
 
+  if(USE_TRACY_PROFILER AND Tracy_FOUND)
+    set(USE_TRACY 1)
+  endif()
+
 	include(UseDamaris)
 endmacro (config_hook)
 
@@ -164,7 +169,9 @@ opm_add_test(flow_geomech
 	examples/flow_geomech.cpp examples/FlexibleSolverMech.cpp
 	$<TARGET_OBJECTS:moduleVersionGeoMech>
 )
-target_link_libraries(flow_geomech Tracy::TracyClient)
+if(USE_TRACY_PROFILER AND Tracy_FOUND)
+  target_link_libraries(flow_geomech Tracy::TracyClient)
+endif()
 
 opm_add_test(flow_energy_geomech
 	ONLY_COMPILE
@@ -175,7 +182,9 @@ opm_add_test(flow_energy_geomech
 	examples/flow_energy_geomech.cpp examples/FlexibleSolverMech.cpp
 	$<TARGET_OBJECTS:moduleVersionGeoMech>
 )
-target_link_libraries(flow_energy_geomech Tracy::TracyClient)
+if(USE_TRACY_PROFILER AND Tracy_FOUND)
+  target_link_libraries(flow_energy_geomech Tracy::TracyClient)
+endif()
 
 opm_add_test(flow_energy_geomech_polygrid
 	ONLY_COMPILE
@@ -186,7 +195,9 @@ opm_add_test(flow_energy_geomech_polygrid
 	examples/flow_energy_geomech_polygrid.cpp examples/FlexibleSolverMech.cpp
 	$<TARGET_OBJECTS:moduleVersionGeoMech>
 )
-target_link_libraries(flow_energy_geomech_polygrid Tracy::TracyClient)
+if(USE_TRACY_PROFILER AND Tracy_FOUND)
+  target_link_libraries(flow_energy_geomech_polygrid Tracy::TracyClient)
+endif()
 
 opm_add_test(test_elasticity
 	ONLY_COMPILE
@@ -197,7 +208,9 @@ opm_add_test(test_elasticity
 	examples/test_elasticity.cpp examples/FlexibleSolverMech.cpp
 	$<TARGET_OBJECTS:moduleVersionGeoMech>
 )
-target_link_libraries(test_elasticity Tracy::TracyClient)
+if(USE_TRACY_PROFILER AND Tracy_FOUND)
+  target_link_libraries(test_elasticity Tracy::TracyClient)
+endif()
 
 opm_add_test(test_grid
 	ONLY_COMPILE
@@ -208,7 +221,9 @@ opm_add_test(test_grid
 	examples/test_grid.cpp
 	$<TARGET_OBJECTS:moduleVersionGeoMech>
 )
-target_link_libraries(test_grid Tracy::TracyClient)
+if(USE_TRACY_PROFILER AND Tracy_FOUND)
+  target_link_libraries(test_grid Tracy::TracyClient)
+endif()
 
 
 opm_add_test(test_vem_elements
@@ -220,7 +235,9 @@ opm_add_test(test_vem_elements
 	examples/test_vem_elements.cpp
 	$<TARGET_OBJECTS:moduleVersionGeoMech>
 )
-target_link_libraries(test_vem_elements Tracy::TracyClient)
+if(USE_TRACY_PROFILER AND Tracy_FOUND)
+  target_link_libraries(test_vem_elements Tracy::TracyClient)
+endif()
 
 opm_add_test(test_vem_assembly
 	ONLY_COMPILE
@@ -231,7 +248,9 @@ opm_add_test(test_vem_assembly
 	examples/test_vem_assembly.cpp
 	$<TARGET_OBJECTS:moduleVersionGeoMech>
 )
-target_link_libraries(test_vem_assembly Tracy::TracyClient)
+if(USE_TRACY_PROFILER AND Tracy_FOUND)
+  target_link_libraries(test_vem_assembly Tracy::TracyClient)
+endif()
 
 # opm_add_test(testpdelab
 #   ONLY_COMPILE
