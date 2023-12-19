@@ -256,7 +256,6 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
 
     Opm::Elasticity::Vector pressforce;
     size_t num_cells = grid.size(0);
-    size_t num_nodes = grid.size(3);
     pressforce.resize(num_cells);
     pressforce = 1.0;
     if(p.with_pressure){
@@ -286,7 +285,6 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
      Dune::storeMatrixMarket(esolver.A.getLoadVector(), name + "_" + std::string("b.mtx"));
      Dune::storeMatrixMarket(esolver.u, name + "_" + std::string("u.mtx"));
      Dune::storeMatrixMarket(field, name + "_" + std::string("field.mtx"));
-     Dune::FieldMatrix<double,6,6> C;
 
      Dune::BlockVector<Dune::FieldVector<double,3>> disp;
      Opm::Elasticity::Vector lindisp;
@@ -432,7 +430,6 @@ try
 
     Params p;
     parseCommandLine(argc,argv,p);
-    static const int dim = 3;
     //using GridType = Dune::ALUGrid<dim, dim, Dune::cube, Dune::nonconforming >;
     //using GridType = Dune::CpGrid;
     //using GridType = AluGrid3D;

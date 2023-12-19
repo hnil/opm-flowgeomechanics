@@ -112,7 +112,6 @@ namespace Opm {
         void allocBuffers()
         {
             if (geoMechOutput_()){
-                const auto& geoMechModel = this->simulator_.problem().geoMechModel();
                 //pressDiff_.resize(geoMechModel.numCells);                
                 this->resizeScalarBuffer_(pressDiff_);
                 this->resizeVectorBuffer_(disp_,ParentType::BufferType::VertexBuffer);
@@ -176,7 +175,6 @@ namespace Opm {
                 return;
 
             if (geoMechOutput_()){
-                const auto& geoMechModel = this->simulator_.problem().geoMechModel();
                 {
                     const std::string tmp = "pressureDiff"; 
                     this->commitScalarBuffer_(baseWriter,tmp.c_str(),

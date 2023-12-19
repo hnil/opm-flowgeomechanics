@@ -289,7 +289,6 @@ class VemElasticitySolver
         //     rows[i].insert(j);
         // }
         // }
-        auto& MAT =this->A.getOperator();
         // {
         // OPM_TIMEBLOCK(matrixFromAdjacency);
         // MatrixOps::fromAdjacency(MAT, rows, nrows, ncols);

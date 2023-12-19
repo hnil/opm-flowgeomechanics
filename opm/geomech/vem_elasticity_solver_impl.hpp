@@ -79,7 +79,6 @@ namespace Elasticity {
         } else {
             OPM_TIMEBLOCK(calculateStressFull);
             // assumes the grid structure is made
-            const int num_neumann_faces = 0;
             num_cells_ = grid_.leafGridView().size(0); // entities of codim 0
             // assemble the mechanical system
             vem::StabilityChoice stability_choice = vem::D_RECIPE;
@@ -146,7 +145,6 @@ namespace Elasticity {
         } else {
             OPM_TIMEBLOCK(calculateStressFull);
             // assumes the grid structure is made
-            const int num_neumann_faces = 0;
             num_cells_ = grid_.leafGridView().size(0); // entities of codim 0
             // assemble the mechanical system
             vem::StabilityChoice stability_choice = vem::D_RECIPE;
@@ -220,12 +218,12 @@ namespace Elasticity {
         vector<tuple<int, int, double>> A_entries;
         vem::StabilityChoice stability_choice = vem::D_RECIPE;
         {
-        OPM_TIMEBLOCK(assembleVEM);
-        const int numdof =    vem::assemble_mech_system_3D(&coords_[0], num_cells_, &num_cell_faces_[0], &num_face_corners_[0],
-                                         &face_corners_[0], &ymodule_[0], &pratio_[0], &body_force_[0],
-                                         num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0],
-                                         num_neumann_faces, nullptr, nullptr,
-                                         A_entries, rhs_force_, stability_choice);
+            OPM_TIMEBLOCK(assembleVEM);
+            vem::assemble_mech_system_3D(&coords_[0], num_cells_, &num_cell_faces_[0], &num_face_corners_[0],
+                       &face_corners_[0], &ymodule_[0], &pratio_[0], &body_force_[0],
+                       num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0],
+                       num_neumann_faces, nullptr, nullptr,
+                       A_entries, rhs_force_, stability_choice);
         }
 
 

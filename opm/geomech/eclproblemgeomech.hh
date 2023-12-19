@@ -113,12 +113,9 @@ namespace Opm{
                     //make lambda functions for each regaion
                     std::vector<std::function<std::array<double,6>()>> functors;
                     int recnum=1;
-                    int num_records = stressequil.size();
                     initstress_.resize(gv.size(0));
                     for (const auto& record : stressequil) {
                         const auto datum_depth = record.datumDepth();
-                        const auto datum_posx = record.datumPosX();
-                        const auto datum_posy = record.datumPosY();
                         const auto STRESSXX= record.stressXX();
                         const auto STRESSXXGRAD = record.stressXX_grad();
                         const auto STRESSYY= record.stressYY();
