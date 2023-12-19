@@ -55,7 +55,7 @@ namespace Opm {
 namespace Properties {
 namespace TTag {
 struct EclFlowProblemMech {
-    using InheritsFrom = std::tuple<EclFlowProblem,VtkGeoMech>;
+    using InheritsFrom = std::tuple<EclFlowProblem,VtkGeoMech,FlowGeomechIstlSolverParams>;
 };
 }
 
