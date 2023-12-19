@@ -180,7 +180,7 @@ void createGrids(std::unique_ptr<Dune::CpGrid>& grid ,const Opm::EclipseState& e
 
 //! \brief Main solution loop. Allows templating over the AMG type
 template<class GridType,class ElasticitySolverType>
-int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
+int run(Params& p, const std::string& name)
 {
   try {
     static constexpr int dim = GridType::dimension;
@@ -439,11 +439,10 @@ try
     using GridType = Dune::CpGrid;
     using ElasticitySolverTypeVem = Opm::Elasticity::VemElasticitySolver<GridType>;
     //using ElasticitySolverTypeFem = Opm::Elasticity::ElasticitySolver<GridType>;
-    bool with_pressure =true;
-    bool with_gravity = false;
-    std::string name = "vem";
-    ok = run<Dune::CpGrid, ElasticitySolverTypeVem>(p, with_pressure, with_gravity, std::string("vem"));
-    //ok = run<Dune::CpGrid, ElasticitySolverTypeFem>(p, with_pressure, with_gravity, std::string("fem"));
+    p.with_pressure = true;
+    p.with_gravity = false;
+    ok = run<Dune::CpGrid, ElasticitySolverTypeVem>(p, "vem");
+    //ok = run<Dune::CpGrid, ElasticitySolverTypeFem>(p, "fem");
     return ok;
   } catch (Dune::Exception &e) {
       std::cerr << "Dune reported error: " << e << std::endl;
