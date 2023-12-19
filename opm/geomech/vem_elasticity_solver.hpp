@@ -258,8 +258,8 @@ class VemElasticitySolver
          b.resize(rhs_force_.size());
          divmat_.mv(mechpot,b);
         // end initialization
-        for(int i=0; i < rhs_force_.size(); ++i){
-                b[i] += rhs_force_[i];
+        for (std::size_t i = 0; i < rhs_force_.size(); ++i) {
+            b[i] += rhs_force_[i];
         }
     }
 

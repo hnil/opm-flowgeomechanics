@@ -432,11 +432,11 @@ matmul(const double* data1,
 double trace(const vector<double>& A)
 // ----------------------------------------------------------------------------
 {
-    const int N = int(sqrt(A.size()));
+    const auto N = std::size_t(std::sqrt(A.size()));
     assert(N * N == A.size()); // should be a square matrix
 
     double result = 0;
-    for (int i = 0; i != N; ++i)
+    for (std::size_t i = 0; i < N; ++i)
         result += A[i + N * i];
 
     return result;
@@ -1370,13 +1370,13 @@ void compute_cell_geometry(const double* points,
   for (int f = 0, faces_offset = 0; f != num_faces; faces_offset += num_face_edges[f++])
     compute_face_geometry(pick_points<3>(points, &faces2[faces_offset], num_face_edges[f]),
                           &outward_normals[f*3], &face_centroids[f*3]);
-  assert(face_centroids.size() == num_faces*3);
+  assert(face_centroids.size() == static_cast<std::size_t>(num_faces*3));
 
 
   // ensure normals are pointing out of, rather than into, polyhedron
   if (inward_pointing_normals(outward_normals, face_centroids))
     for_each(outward_normals.begin(), outward_normals.end(), [](double& d) {d *= -1;});
-  assert(face_centroids.size() == num_faces*3);
+  assert(face_centroids.size() == static_cast<std::size_t>(num_faces*3));
   //std::cout << "Size # "<< face_centroids.size() << std::endl;
   // identify a star point (usually, mean_point qualifies, but not necessarily)
   star_point = identify_star_point(point_average<3>(points, num_points),

@@ -71,7 +71,7 @@ namespace Elasticity {
             Vector stress(6 * grid_.leafGridView().size(0));
             stressmat_.mv(dispalldune,stress);
             stress_.resize(num_cells_);
-            for (size_t i = 0; i < num_cells_; ++i) {
+            for (int i = 0; i < num_cells_; ++i) {
                 for (size_t k = 0; k < 6; ++k) {
                     stress_[i][k] = stress[i * 6 + k];
                 }
@@ -117,7 +117,7 @@ namespace Elasticity {
                 );
             // copy to dune definitions
             stress_.resize(num_cells_);
-            for (size_t i = 0; i < num_cells_; ++i) {
+            for (int i = 0; i < num_cells_; ++i) {
                 for (size_t k = 0; k < 6; ++k) {
                     stress_[i][k] = stress[i][k];
                 }
@@ -137,7 +137,7 @@ namespace Elasticity {
             Vector strain(6 * grid_.leafGridView().size(0));
             strainmat_.mv(dispalldune,strain);
             strain_.resize(num_cells_);
-            for (size_t i = 0; i < num_cells_; ++i) {
+            for (int i = 0; i < num_cells_; ++i) {
                 for (size_t k = 0; k < 6; ++k) {
                     strain_[i][k] = strain[i * 6 + k];
                 }
@@ -183,7 +183,7 @@ namespace Elasticity {
                 );
             // copy to dune definitions
             strain_.resize(num_cells_);
-            for (size_t i = 0; i < num_cells_; ++i) {
+            for (int i = 0; i < num_cells_; ++i) {
                 for (size_t k = 0; k < 6; ++k) {
                     strain_[i][k] = strain[i][k];
                 }
@@ -347,7 +347,7 @@ namespace Elasticity {
         }
         b.resize(rhs.size());
         // end initialization
-        for(int i=0; i < rhs.size(); ++i){
+        for (std::size_t i = 0; i < rhs.size(); ++i) {
             b[i] = rhs[i];
         }
     }

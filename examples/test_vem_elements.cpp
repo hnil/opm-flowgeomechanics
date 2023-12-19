@@ -122,7 +122,7 @@ int main(int argc, char** argv)
     cout << endl;
 
     cout << "Coordinates are: " << endl;
-    for (int i = 0; i != coords.size(); i +=3)
+    for (std::size_t i = 0; i < coords.size(); i += 3)
       cout << coords[i] << " " << coords[i+1] << " " << coords[i+2] << endl;
     
   }

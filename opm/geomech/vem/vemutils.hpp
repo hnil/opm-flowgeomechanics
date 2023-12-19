@@ -54,7 +54,7 @@ namespace vem
             tot_num_face_corners += num_local_corners;
         }
     }
-    assert(face_corners.size() == tot_num_face_corners);
+    assert(face_corners.size() == static_cast<std::size_t>(tot_num_face_corners));
 }
     void getGridVectorsDune(const PolyGrid& grid, std::vector<double>& coords,
                 std::vector<int>& num_cell_faces,
