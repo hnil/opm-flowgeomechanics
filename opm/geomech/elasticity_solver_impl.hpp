@@ -316,8 +316,6 @@ IMPL_FUNC(void, fixPoint(Direction dir,
 
     IMPL_FUNC(void, assemble(const Vector& pressure, bool do_matrix, bool do_vector))
 {
-  const int comp = 3+(dim-2)*3;
-  static const int bfunc = 4+(dim-2)*4;
   //int loadcase = -1;
   Dune::FieldVector<ctype,comp> eps0 = {1, 1, 1, 0, 0, 0};
   //eps0 = 0;

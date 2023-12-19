@@ -128,7 +128,7 @@ class VemElasticitySolver
 
         dirichlet_={num_fixed_dofs, fixed_dof_ixs, fixed_dof_values};
     }
-    void expandSolution(Vector& result, const Vector& u){
+    void expandSolution(Vector& result, const Vector& U){
         //vector<double> displacements_full(prob.points.size(), nan("1"));
          // cout << prob.fixed_dof_ixs.size() << endl;
         std::fill(result.begin(),result.end(),nan("1"));
@@ -140,7 +140,7 @@ class VemElasticitySolver
 
          for (int i = 0, cur_ix = 0; i != int(result.size()); ++i){
              if (std::isnan(result[i][0])) {
-                 result[i] = u[cur_ix++];
+                 result[i] = U[cur_ix++];
              }
          }
     }
@@ -172,7 +172,6 @@ class VemElasticitySolver
         // }else{
             std::size_t pressureIndex;//Dummy
             const std::function<Vector()> weightsCalculator;//Dummy
-            using SeqOperatorType = Dune::MatrixAdapter<Matrix, Vector, Vector>;
             auto sop = std::make_unique<SeqOperatorType>(A.getOperator());
             using FlexibleSolverType = Dune::FlexibleSolver<SeqOperatorType>;
             auto tsolver = std::make_unique<FlexibleSolverType>(*sop, prm,

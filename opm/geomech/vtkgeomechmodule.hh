@@ -156,8 +156,8 @@ namespace Opm {
             // all vertices proably do it to many times for now
             auto gv  = elemCtx.gridView();
             auto elem = elemCtx.element();
-            static const int dim = 3;
-            for (const auto& vertex : Dune::subEntities(elem, Dune::Codim<dim>{})){
+            static constexpr int Dim = 3;
+            for (const auto& vertex : Dune::subEntities(elem, Dune::Codim<Dim>{})){
                 auto index = gv.indexSet().index(vertex);
                 disp_[index] = geoMechModel.displacement(index);
             }
