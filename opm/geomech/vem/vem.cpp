@@ -1682,7 +1682,6 @@ compute_stress_3D(const double* const points,
                   //const double* const neumann_forces, // 3 * number of neumann faces
                   const std::vector<double>& disp,
                   std::vector<std::array<double,6>>& stress,
-                  const StabilityChoice stability_choice,
                   vector<tuple<int, int, double>>& stressmat,
                   bool do_matrix,
                   bool do_stress
@@ -1711,7 +1710,6 @@ compute_stress_3D(const double* const points,
                                   num_cell_faces[c],
                                   young[c],
                                   poisson[c],
-                                  stability_choice,
                                   disp,// global displacement
                                   c,
                                   stress[c],
@@ -1814,7 +1812,6 @@ calculate_stress_3D_local(const double* const points,
                           const int num_faces,
                           const double young,
                           const double poisson,
-                          const StabilityChoice stability_choice,
                           const std::vector<double>& disp,/// global displacement
                           const int cell,
                           std::array<double,6>& stress,

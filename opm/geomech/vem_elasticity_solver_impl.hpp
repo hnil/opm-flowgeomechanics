@@ -81,7 +81,6 @@ namespace Elasticity {
             // assumes the grid structure is made
             num_cells_ = grid_.leafGridView().size(0); // entities of codim 0
             // assemble the mechanical system
-            vem::StabilityChoice stability_choice = vem::D_RECIPE;
             // const int numdof =
             //  const int tot_num_faces = accumulate(num_cell_faces_, num_cell_faces_ + num_cells_, 0);
             //  const int tot_num_fcorners = accumulate(num_face_corners_, &num_face_corners_[0] + tot_num_faces, 0);
@@ -110,7 +109,6 @@ namespace Elasticity {
                                    &pratio_[0],
                                    dispall,
                                    stress,
-                                   stability_choice,
                                    stressmat,
                                    false,
                                    true
@@ -147,7 +145,6 @@ namespace Elasticity {
             // assumes the grid structure is made
             num_cells_ = grid_.leafGridView().size(0); // entities of codim 0
             // assemble the mechanical system
-            vem::StabilityChoice stability_choice = vem::D_RECIPE;
             // const int numdof =
             //  const int tot_num_faces = accumulate(num_cell_faces_, num_cell_faces_ + num_cells_, 0);
             //  const int tot_num_fcorners = accumulate(num_face_corners_, &num_face_corners_[0] + tot_num_faces, 0);
@@ -176,7 +173,6 @@ namespace Elasticity {
                                    &pratio_[0],
                                    dispall,
                                    strain,
-                                   stability_choice,
                                    stressmat,
                                    false,
                                    false
@@ -287,7 +283,6 @@ namespace Elasticity {
                                &ymodule_[0], &pratio_[0],
                                dispall,
                                stresstmp,
-                               stability_choice,
                                stressmat,
                                true,
                                true
@@ -308,7 +303,6 @@ namespace Elasticity {
                                &ymodule_[0], &pratio_[0],
                                dispall,
                                stresstmp,
-                               stability_choice,
                                strainmat,
                                true,
                                false
