@@ -39,17 +39,17 @@ namespace Opm{
             //const auto& eclstate = simulator_.vanguard().eclState();
         };
         //ax model things
-        void postSolve(GlobalEqVector& deltaX){
+        void postSolve(GlobalEqVector&) {
             std::cout << "Geomech dummy PostSolve Aux" << std::endl;
         }
-        void addNeighbors(std::vector<NeighborSet>& neighbors) const{
+        void addNeighbors(std::vector<NeighborSet>&) const {
             std::cout << "Geomech add neigbors" << std::endl;
         };
         void applyInitial(){
             std::cout << "Geomech applyInitial" << std::endl;
         };
         unsigned numDofs() const{return 0;};
-        void linearize(SparseMatrixAdapter& matrix, GlobalEqVector& residual){
+        void linearize(SparseMatrixAdapter&, GlobalEqVector&) {
             std::cout << "Geomech Dummy Linearize" << std::endl;
         };
 
@@ -196,14 +196,14 @@ namespace Opm{
             }
         }
         template<class Serializer>
-        void serializeOp(Serializer& serializer)
+        void serializeOp(Serializer&)
         {
             //serializer(tracerConcentration_);
             //serializer(wellTracerRate_);
          }
 
         // used in eclproblemgeomech
-        void init(bool restart){
+        void init(bool /*restart*/){
             std::cout << "Geomech init" << std::endl;
             size_t numDof = simulator_.model().numGridDof();
             mechPotentialForce_.resize(numDof);

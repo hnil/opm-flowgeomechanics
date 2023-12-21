@@ -112,7 +112,6 @@ namespace Opm {
         void allocBuffers()
         {
             if (geoMechOutput_()){
-                const auto& geoMechModel = this->simulator_.problem().geoMechModel();
                 //pressDiff_.resize(geoMechModel.numCells);                
                 this->resizeScalarBuffer_(pressDiff_);
                 this->resizeVectorBuffer_(disp_,ParentType::BufferType::VertexBuffer);
@@ -157,8 +156,8 @@ namespace Opm {
             // all vertices proably do it to many times for now
             auto gv  = elemCtx.gridView();
             auto elem = elemCtx.element();
-            static const int dim = 3;
-            for (const auto& vertex : Dune::subEntities(elem, Dune::Codim<dim>{})){
+            static constexpr int Dim = 3;
+            for (const auto& vertex : Dune::subEntities(elem, Dune::Codim<Dim>{})){
                 auto index = gv.indexSet().index(vertex);
                 disp_[index] = geoMechModel.displacement(index);
             }
@@ -176,7 +175,6 @@ namespace Opm {
                 return;
 
             if (geoMechOutput_()){
-                const auto& geoMechModel = this->simulator_.problem().geoMechModel();
                 {
                     const std::string tmp = "pressureDiff"; 
                     this->commitScalarBuffer_(baseWriter,tmp.c_str(),

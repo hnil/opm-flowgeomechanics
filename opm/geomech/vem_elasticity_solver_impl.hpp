@@ -71,7 +71,7 @@ namespace Elasticity {
             Vector stress(6 * grid_.leafGridView().size(0));
             stressmat_.mv(dispalldune,stress);
             stress_.resize(num_cells_);
-            for (size_t i = 0; i < num_cells_; ++i) {
+            for (int i = 0; i < num_cells_; ++i) {
                 for (size_t k = 0; k < 6; ++k) {
                     stress_[i][k] = stress[i * 6 + k];
                 }
@@ -79,10 +79,8 @@ namespace Elasticity {
         } else {
             OPM_TIMEBLOCK(calculateStressFull);
             // assumes the grid structure is made
-            const int num_neumann_faces = 0;
             num_cells_ = grid_.leafGridView().size(0); // entities of codim 0
             // assemble the mechanical system
-            vem::StabilityChoice stability_choice = vem::D_RECIPE;
             // const int numdof =
             //  const int tot_num_faces = accumulate(num_cell_faces_, num_cell_faces_ + num_cells_, 0);
             //  const int tot_num_fcorners = accumulate(num_face_corners_, &num_face_corners_[0] + tot_num_faces, 0);
@@ -111,14 +109,13 @@ namespace Elasticity {
                                    &pratio_[0],
                                    dispall,
                                    stress,
-                                   stability_choice,
                                    stressmat,
                                    false,
                                    true
                 );
             // copy to dune definitions
             stress_.resize(num_cells_);
-            for (size_t i = 0; i < num_cells_; ++i) {
+            for (int i = 0; i < num_cells_; ++i) {
                 for (size_t k = 0; k < 6; ++k) {
                     stress_[i][k] = stress[i][k];
                 }
@@ -138,7 +135,7 @@ namespace Elasticity {
             Vector strain(6 * grid_.leafGridView().size(0));
             strainmat_.mv(dispalldune,strain);
             strain_.resize(num_cells_);
-            for (size_t i = 0; i < num_cells_; ++i) {
+            for (int i = 0; i < num_cells_; ++i) {
                 for (size_t k = 0; k < 6; ++k) {
                     strain_[i][k] = strain[i * 6 + k];
                 }
@@ -146,10 +143,8 @@ namespace Elasticity {
         } else {
             OPM_TIMEBLOCK(calculateStressFull);
             // assumes the grid structure is made
-            const int num_neumann_faces = 0;
             num_cells_ = grid_.leafGridView().size(0); // entities of codim 0
             // assemble the mechanical system
-            vem::StabilityChoice stability_choice = vem::D_RECIPE;
             // const int numdof =
             //  const int tot_num_faces = accumulate(num_cell_faces_, num_cell_faces_ + num_cells_, 0);
             //  const int tot_num_fcorners = accumulate(num_face_corners_, &num_face_corners_[0] + tot_num_faces, 0);
@@ -178,14 +173,13 @@ namespace Elasticity {
                                    &pratio_[0],
                                    dispall,
                                    strain,
-                                   stability_choice,
                                    stressmat,
                                    false,
                                    false
                 );
             // copy to dune definitions
             strain_.resize(num_cells_);
-            for (size_t i = 0; i < num_cells_; ++i) {
+            for (int i = 0; i < num_cells_; ++i) {
                 for (size_t k = 0; k < 6; ++k) {
                     strain_[i][k] = strain[i][k];
                 }
@@ -220,12 +214,12 @@ namespace Elasticity {
         vector<tuple<int, int, double>> A_entries;
         vem::StabilityChoice stability_choice = vem::D_RECIPE;
         {
-        OPM_TIMEBLOCK(assembleVEM);
-        const int numdof =    vem::assemble_mech_system_3D(&coords_[0], num_cells_, &num_cell_faces_[0], &num_face_corners_[0],
-                                         &face_corners_[0], &ymodule_[0], &pratio_[0], &body_force_[0],
-                                         num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0],
-                                         num_neumann_faces, nullptr, nullptr,
-                                         A_entries, rhs_force_, stability_choice);
+            OPM_TIMEBLOCK(assembleVEM);
+            vem::assemble_mech_system_3D(&coords_[0], num_cells_, &num_cell_faces_[0], &num_face_corners_[0],
+                       &face_corners_[0], &ymodule_[0], &pratio_[0], &body_force_[0],
+                       num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0],
+                       num_neumann_faces, nullptr, nullptr,
+                       A_entries, rhs_force_, stability_choice);
         }
 
 
@@ -289,7 +283,6 @@ namespace Elasticity {
                                &ymodule_[0], &pratio_[0],
                                dispall,
                                stresstmp,
-                               stability_choice,
                                stressmat,
                                true,
                                true
@@ -310,7 +303,6 @@ namespace Elasticity {
                                &ymodule_[0], &pratio_[0],
                                dispall,
                                stresstmp,
-                               stability_choice,
                                strainmat,
                                true,
                                false
@@ -349,7 +341,7 @@ namespace Elasticity {
         }
         b.resize(rhs.size());
         // end initialization
-        for(int i=0; i < rhs.size(); ++i){
+        for (std::size_t i = 0; i < rhs.size(); ++i) {
             b[i] = rhs[i];
         }
     }

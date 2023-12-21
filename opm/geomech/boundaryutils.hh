@@ -150,7 +150,6 @@ namespace Opm{
 
 
                         if(bcprop.index == bcconfig.index){
-                            int bcindex = bcprop.index;
                             // double search since structure is strange
                             const auto& bcface = bcconfig;
 

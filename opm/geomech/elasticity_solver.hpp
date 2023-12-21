@@ -56,9 +56,9 @@ class ElasticitySolver
 {
   public:
     //! \brief Dimension of our grid
-    static const int dim = GridType::dimension;
-    static const int comp = 3+(dim-2)*3;
-    static const int bfunc = 4+(dim-2)*4;
+    static constexpr int dim = GridType::dimension;
+    static constexpr int comp = 3 + (dim - 2) * 3;
+    static constexpr int bfunc = 4 + (dim - 2) * 4;
     //! \brief A basic number
     typedef typename GridType::LeafGridView::ctype ctype;
 
@@ -122,7 +122,7 @@ class ElasticitySolver
     void findBoundaries(double* min, double* max);
     void initForAssembly(){A.initForAssembly();};
     void fixNodes(const std::vector<size_t>& fixed_nodes);
-    void expandSolution(Vector& result, const Vector& u){A.expandSolution(result,u);};
+    void expandSolution(Vector& result, const Vector& U){A.expandSolution(result,U);};
     //! \brief Assemble (optionally) stiffness matrix A and load vector
     //! \param[in] loadcase The strain load case. Set to -1 to skip
     //! \param[in] matrix Whether or not to assemble the matrix
@@ -164,7 +164,6 @@ class ElasticitySolver
         // }else{
             std::size_t pressureIndex;//Dummy
             const std::function<Vector()> weightsCalculator;//Dummy
-            using SeqOperatorType = Dune::MatrixAdapter<Matrix, Vector, Vector>;
             auto sop = std::make_unique<SeqOperatorType>(A.getOperator());
             using FlexibleSolverType = Dune::FlexibleSolver<SeqOperatorType>;
             auto tsolver = std::make_unique<FlexibleSolverType>(*sop, prm,
@@ -180,9 +179,6 @@ class ElasticitySolver
     template <int comp>
     void averageStress(Dune::BlockVector<Dune::FieldVector<ctype, comp>>& sigmacells, const Vector& uarg)
     {
-
-        static const int bfunc = 4 + (dim - 2) * 4;
-
         const LeafIterator itend = gv.leafGridView().template end<0>();
 
         Dune::FieldMatrix<ctype, comp, comp> C;

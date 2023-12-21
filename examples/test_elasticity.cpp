@@ -180,7 +180,7 @@ void createGrids(std::unique_ptr<Dune::CpGrid>& grid ,const Opm::EclipseState& e
 
 //! \brief Main solution loop. Allows templating over the AMG type
 template<class GridType,class ElasticitySolverType>
-int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
+int run(Params& p, const std::string& name)
 {
   try {
     static constexpr int dim = GridType::dimension;
@@ -192,7 +192,6 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
 
 
     std::unique_ptr<GridType> grid_ptr;
-    using GridView = typename GridType::LeafGridView;//Dune::GridView<Dune::DefaultLeafGridViewTraits<GridType>>;
     Opm::Parser parser;
     // process grid
     auto deck = parser.parseFile(p.file);
@@ -256,7 +255,6 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
 
     Opm::Elasticity::Vector pressforce;
     size_t num_cells = grid.size(0);
-    size_t num_nodes = grid.size(3);
     pressforce.resize(num_cells);
     pressforce = 1.0;
     if(p.with_pressure){
@@ -286,7 +284,6 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
      Dune::storeMatrixMarket(esolver.A.getLoadVector(), name + "_" + std::string("b.mtx"));
      Dune::storeMatrixMarket(esolver.u, name + "_" + std::string("u.mtx"));
      Dune::storeMatrixMarket(field, name + "_" + std::string("field.mtx"));
-     Dune::FieldMatrix<double,6,6> C;
 
      Dune::BlockVector<Dune::FieldVector<double,3>> disp;
      Opm::Elasticity::Vector lindisp;
@@ -337,11 +334,11 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
             //Dune::VTK::FieldInfo dispinfo("disp",Dune::VTK::FieldInfo::Type::vector,3);
             Dune::VTK::Precision prec = Dune::VTK::Precision::float32;
             std::string vtkname("disp");
-            Dune::VTKFunction<typename GridType::LeafGridView>* fp = new Function(grid.leafGridView(),
+            Dune::VTKFunction<typename GridType::LeafGridView>* Fp = new Function(grid.leafGridView(),
                                                                                   field,
                                                                                   vtkname,
                                                                                   3, prec);
-            vtkwriter.addVertexData(std::shared_ptr< const Dune::VTKFunction<typename GridType::LeafGridView> >(fp));
+            vtkwriter.addVertexData(std::shared_ptr< const Dune::VTKFunction<typename GridType::LeafGridView> >(Fp));
         }
         vtkwriter.addCellData(pressforce, "pressforce");
         //vtkwriter.addVertexData(disp, dispinfo);
@@ -352,11 +349,11 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
             Dune::VTK::FieldInfo dispinfo("veccelldisp",Dune::VTK::FieldInfo::Type::vector,3);
             Dune::VTK::Precision prec = Dune::VTK::Precision::float32;
             std::string vtkname("veccelldisp");
-            Dune::VTKFunction<typename GridType::LeafGridView>* fp = new Function(grid.leafGridView(),
+            Dune::VTKFunction<typename GridType::LeafGridView>* Fp = new Function(grid.leafGridView(),
                                                                                   disp,
                                                                                   vtkname,
                                                                                   3, prec);
-            auto ptr = std::shared_ptr< const Dune::VTKFunction<typename GridType::LeafGridView> >(fp);
+            auto ptr = std::shared_ptr< const Dune::VTKFunction<typename GridType::LeafGridView> >(Fp);
             vtkwriter.addCellData(ptr);
             //vtkwriter.addCellData(std::make_unique<Dune::VTKFunctionWrapper>(ptr), dispinfo);
             //vtkwriter.addCellData(ptr, dispinfo, 1);
@@ -370,11 +367,11 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
             Dune::VTK::FieldInfo dispinfo("disp",Dune::VTK::FieldInfo::Type::vector,3);
             Dune::VTK::Precision prec = Dune::VTK::Precision::float32;
             std::string vtkname("stresstensor");
-            Dune::VTKFunction<typename GridType::LeafGridView>* fp = new Function(grid.leafGridView(),
+            Dune::VTKFunction<typename GridType::LeafGridView>* Fp = new Function(grid.leafGridView(),
                                                                                   stresslin,
                                                                                   vtkname,
                                                                                   6, prec);
-            vtkwriter.addCellData(std::shared_ptr< const Dune::VTKFunction<typename GridType::LeafGridView> >(fp));
+            vtkwriter.addCellData(std::shared_ptr< const Dune::VTKFunction<typename GridType::LeafGridView> >(Fp));
             //vtkwriter.addCellData(std::shared_ptr< const Dune::VTKFunction<typename GridType::LeafGridView> >(fp));
         }
         {
@@ -383,11 +380,11 @@ int run(Params& p, bool with_pressure, bool with_gravity, std::string name)
             Dune::VTK::FieldInfo dispinfo("disp",Dune::VTK::FieldInfo::Type::vector,3);
             Dune::VTK::Precision prec = Dune::VTK::Precision::float32;
             std::string vtkname("straintensor");
-            Dune::VTKFunction<typename GridType::LeafGridView>* fp = new Function(grid.leafGridView(),
+            Dune::VTKFunction<typename GridType::LeafGridView>* Fp = new Function(grid.leafGridView(),
                                                                                   strainlin,
                                                                                   vtkname,
                                                                                   6, prec);
-            vtkwriter.addCellData(std::shared_ptr< const Dune::VTKFunction<typename GridType::LeafGridView> >(fp));
+            vtkwriter.addCellData(std::shared_ptr< const Dune::VTKFunction<typename GridType::LeafGridView> >(Fp));
             //vtkwriter.addCellData(std::shared_ptr< const Dune::VTKFunction<typename GridType::LeafGridView> >(fp));
         }
         //vtkwriter.addTensorData(stress, "stress");
@@ -432,7 +429,6 @@ try
 
     Params p;
     parseCommandLine(argc,argv,p);
-    static const int dim = 3;
     //using GridType = Dune::ALUGrid<dim, dim, Dune::cube, Dune::nonconforming >;
     //using GridType = Dune::CpGrid;
     //using GridType = AluGrid3D;
@@ -442,12 +438,11 @@ try
     //ok = run<PolyGrid>(p);
     using GridType = Dune::CpGrid;
     using ElasticitySolverTypeVem = Opm::Elasticity::VemElasticitySolver<GridType>;
-    using ElasticitySolverTypeFem = Opm::Elasticity::ElasticitySolver<GridType>;
-    bool with_pressure =true;
-    bool with_gravity = false;
-    std::string name = "vem";
-    ok = run<Dune::CpGrid, ElasticitySolverTypeVem>(p, with_pressure, with_gravity, std::string("vem"));
-    //ok = run<Dune::CpGrid, ElasticitySolverTypeFem>(p, with_pressure, with_gravity, std::string("fem"));
+    //using ElasticitySolverTypeFem = Opm::Elasticity::ElasticitySolver<GridType>;
+    p.with_pressure = true;
+    p.with_gravity = false;
+    ok = run<Dune::CpGrid, ElasticitySolverTypeVem>(p, "vem");
+    //ok = run<Dune::CpGrid, ElasticitySolverTypeFem>(p, "fem");
     return ok;
   } catch (Dune::Exception &e) {
       std::cerr << "Dune reported error: " << e << std::endl;
