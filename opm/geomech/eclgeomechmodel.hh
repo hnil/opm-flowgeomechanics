@@ -7,6 +7,9 @@
 //#include <opm/elasticity/elasticity_upscale.hpp>
 #include <opm/geomech/elasticity_solver.hpp>
 #include <opm/geomech/vem_elasticity_solver.hpp>
+
+#include <opm/geomech/FlowGeomechLinearSolverParameters.hpp>
+
 //#include <opm/geomech/ElasticitySolverUpscale.hpp>
 namespace Opm{
     template<typename TypeTag>
@@ -113,7 +116,17 @@ namespace Opm{
                 //
                 elacticitysolver_.initForAssembly();
                 elacticitysolver_.assemble(mechPotentialForce_, do_matrix, do_vector);
-                Opm::PropertyTree prm("mechsolver.json");
+                FlowLinearSolverParametersGeoMech p;
+                p.init<TypeTag>();
+                // Print parameters to PRT/DBG logs.
+
+                PropertyTree prm = setupPropertyTree(p, true, true);
+                if (p.linear_solver_print_json_definition_) {
+                    std::ostringstream os;
+                    os << "Property tree for mech linear solver:\n";
+                    prm.write_json(os, true);
+                    OpmLog::note(os.str());
+                }
                 elacticitysolver_.setupSolver(prm);
                 first_solve_ = false;
             }else{

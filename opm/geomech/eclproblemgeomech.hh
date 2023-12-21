@@ -3,6 +3,7 @@
 #include "ebos/eclproblem.hh"
 #include "opm/geomech/vtkgeomechmodule.hh"
 #include "opm/geomech/boundaryutils.hh"
+#include "opm/geomech/FlowGeomechLinearSolverParameters.hpp"
 #include <opm/material/densead/Evaluation.hpp>
 #include <opm/material/densead/Math.hpp>
 #include <opm/elasticity/material.hh>
@@ -41,6 +42,7 @@ namespace Opm{
         static void registerParameters(){
             Parent::registerParameters();
             VtkGeoMechModule<TypeTag>::registerParameters();
+            FlowLinearSolverParametersGeoMech::registerParameters<TypeTag>();
         }
 
         void finishInit(){

@@ -5,8 +5,8 @@
 
 Module: opm-flowgeomechanics
 Description: Simulators and utilities for automatic differentiation
-Version: 2023.10-pre
-Label: 2023.10-pre
+Version: 2024.04-pre
+Label: 2024.04-pre
 Maintainer: xxxx
 MaintainerName:xxxx 
 Url: http://opm-project.org
