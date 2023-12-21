@@ -98,7 +98,8 @@ namespace Opm{
             return face;
         }
 
-        std::array<int,4> faceDirToNodes(Opm::FaceDir::DirEnum faceDirection){
+        template<class GvType>
+        std::array<int,4> faceDirToNodes(const GvType& /**/,Opm::FaceDir::DirEnum faceDirection){
             std::array<int,4> face;
             switch (faceDirection) {
                 case FaceDir::XMinus:
@@ -188,7 +189,7 @@ namespace Opm{
                                     auto it = effected_cells.find(index);
                                     if(!(it == effected_cells.end())){
                                         // fix all noted for now
-                                        std::array<int,4> nodes = faceDirToNodes(bcface.dir);
+                                        std::array<int,4> nodes = faceDirToNodes(gv, index, bcface.dir);
                                         for(auto nind: nodes){
                                             auto global_ind = gv.indexSet().subIndex(cell,nind,dim);
                                             bc_nodes.push_back(

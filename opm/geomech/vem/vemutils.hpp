@@ -114,6 +114,61 @@ namespace vem
   // dirichlet boundary conditions
 
 }
+
+    void getGridVectors(const CpGrid& grid, std::vector<double>& coords,
+                        std::vector<int>& num_cell_faces,
+                        std::vector<int>& num_face_corners,
+                        std::vector<int>& face_corners)
+    {
+        const CpGridData ungrid = *(grid->getCpGrid());
+        static constexpr int dim = 3;
+        coords.resize(grid.numVertices()*dim);
+        for(int i=0; i< grid.numberVertices(); ++i){
+            for(int j=0; j < dim; ++j){
+                coords[3*i+j] = ungrid.node_coordinates[3*i+j];
+            }
+        }
+        int num_cellfaces = 0;
+        num_cell_faces.resize(ungrid.cell_to_face_.size());
+        for(int i=0; i< ungrid.number_of_cells; ++i){
+            num_cell_faces[i]=ungrid.cell_to_face_[i].size();
+            num_cellfaces += num_cell_faces[i];
+        }
+        num_face_corners.resize(num_cellfaces);
+
+        int num_facecorners = 0;
+        num_face_corners.resize(ungrid.face_to_points_);
+        for(int i=0; i< ungrid.number_of_cells; ++i){
+            num_cell_faces[i]=ungrid.cell_to_face_[i].size();
+            num_cellfaces += num_cell_faces[i];
+        }
+        num_face_corners.resize(num_cellfaces);
+        int num_cellfaces = count;
+    int tot_num_face_corners = 0;
+    //for(int i=0; i< num_cellfaces; ++i){
+    for(int cell=0; cell < ungrid.number_of_cells; ++cell){
+        for(int hface = ungrid.cell_facepos[cell]; hface < ungrid.cell_facepos[cell+1]; hface ++){
+            int face = ungrid.cell_faces[hface];//ungrid.cell_facepos[i]];
+            int num_local_corners = ungrid.face_nodepos[face+1] - ungrid.face_nodepos[face];
+            num_face_corners[hface] = num_local_corners;
+            // NB maybe we should order with outwards normal
+            if(cell == ungrid.face_cells[2*face]){
+                for(int j  = ungrid.face_nodepos[face]; j <  ungrid.face_nodepos[face+1]; ++j){
+                    face_corners.push_back(ungrid.face_nodes[j]);
+                }
+            }else{
+                // flip orientation for hface
+                for(int j  = ungrid.face_nodepos[face+1]-1; j >=  ungrid.face_nodepos[face]; --j){
+                    face_corners.push_back(ungrid.face_nodes[j]);
+                }
+            }
+            tot_num_face_corners += num_local_corners;
+        }
+    }
+    assert(face_corners.size() == tot_num_face_corners);
+}
+
+
     template<class GridType>
     void getGridVectors(const GridType& grid, std::vector<double>& coords,
                 std::vector<int>& num_cell_faces,
