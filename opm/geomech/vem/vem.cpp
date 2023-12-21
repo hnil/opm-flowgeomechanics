@@ -1,4 +1,7 @@
 #include "vem.hpp"
+
+#include <opm/porsol/common/blas_lapack.hpp>
+
 #include <algorithm>
 #include <array>
 #include <assert.h>
@@ -373,26 +376,17 @@ matmul(const double* data1,
        const double fac = 1)
 // ----------------------------------------------------------------------------
 {
-    const pair<int, int> dim1 = transposed1 ? make_pair(c1, r1) : make_pair(r1, c1);
-    const pair<int, int> dim2 = transposed2 ? make_pair(c2, r2) : make_pair(r2, c2);
-    const pair<int, int> stride1 = transposed1 ? make_pair(1, c1) : make_pair(c1, 1);
-    const pair<int, int> stride2 = transposed2 ? make_pair(1, c2) : make_pair(c2, 1);
-
-    if (dim1.second != dim2.first)
+    if ((transposed1 ? r1 : c1) != (transposed2 ? c2 : r2))
         throw invalid_argument("Matrices are not compatible for multiplication.");
 
-    const int num_elements = dim1.first * dim2.second;
-    fill(result, result + num_elements, 0);
-
-    for (int r = 0; r != dim1.first; ++r)
-        for (int c = 0; c != dim2.second; ++c)
-            for (int k = 0; k != dim1.second; ++k)
-                result[r * dim2.second + c]
-                    += data1[r * stride1.first + k * stride1.second] * data2[k * stride2.first + c * stride2.second];
-
-    // Multiply matrix by a scalar factor, if requested
-    if (fac != 1.0)
-        for_each(result, result + num_elements, [fac](double& e) { e *= fac; });
+    double null = 0.0;
+    char T = 'T';
+    char N = 'N';
+    DGEMM(transposed1 ? &T : &N,
+          transposed2 ? &T : &N,
+          &r1, &c1, transposed1 ? &r1 : &c1,
+          &fac, data1, &r1,
+          data2, &r2, &null, result, &r1);
 }
 
 // ----------------------------------------------------------------------------
