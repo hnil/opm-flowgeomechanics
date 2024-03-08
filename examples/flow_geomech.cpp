@@ -23,9 +23,6 @@
 #endif
 
 #include <exception>
-#include <ebos/eclproblem.hh>
-#include <ebos/eclnewtonmethod.hh>
-#include <ebos/ebos.hh>
 #include <opm/simulators/flow/Main.hpp>
 
 #include <opm/models/blackoil/blackoillocalresidualtpfa.hh>
@@ -39,11 +36,12 @@
 #include <opm/grid/polyhedralgrid.hh>
 #ifdef HAVE_ALUGRID
 #include <dune/alugrid/grid.hh>
-#include <ebos/eclalugridvanguard.hh>
+#include <opm/simulators/flow/AluGridVanguard.hpp>
 #endif
-#include <ebos/eclpolyhedralgridvanguard.hh>
-#include <ebos/equil/initstateequil_impl.hh>
-#include <ebos/equil/equilibrationhelpers_impl.hh>
+#include <opm/simulators/flow/FlowProblem.hpp>
+#include <opm/simulators/flow/PolyhedralGridVanguard.hpp>
+#include <opm/simulators/flow/equil/EquilibrationHelpers_impl.hpp>
+#include <opm/simulators/flow/equil/InitStateEquil_impl.hpp>
 //#include <ebos/eclpolyhedralgridvanguard.hh>
 // adding linearshe sould be chaning the update_ function in the same class with condition that the error is reduced.
 // the trick is to be able to recalculate the residual from here.
@@ -53,7 +51,7 @@ namespace Opm {
 namespace Properties {
 namespace TTag {
 struct EclFlowProblemMech {
-    using InheritsFrom = std::tuple<EclFlowProblem,VtkGeoMech,FlowGeomechIstlSolverParams>;
+    using InheritsFrom = std::tuple<FlowProblem,VtkGeoMech,FlowGeomechIstlSolverParams>;
 };
 }
 
@@ -83,9 +81,9 @@ struct EquilGrid<TypeTag, TTag::EclFlowProblemMech> {
 
 template<class TypeTag>
 struct Vanguard<TypeTag, TTag::EclFlowProblemMech> {
-    //using type = Opm::EclAluGridVanguard<TypeTag>;
-    //using type = Opm::EclPolyhedralGridVanguard<TypeTag>;
-   using type = Opm::EclCpGridVanguard<TypeTag>;
+    //using type = Opm::AluGridVanguard<TypeTag>;
+    //using type = Opm::PolyhedralGridVanguard<TypeTag>;
+   using type = Opm::CpGridVanguard<TypeTag>;
 };
 // template<class TypeTag>
 // struct Model<TypeTag, TTag::EclFlowProblemMech> {
@@ -132,31 +130,11 @@ struct ContinueOnConvergenceError<TypeTag, TTag::EclFlowProblemMech> {
     static constexpr bool value = false;
 };
 
-template<class TypeTag>
-struct EclNewtonSumTolerance<TypeTag, TTag::EclFlowProblemMech> {
-    using type = GetPropType<TypeTag, Scalar>;
-    static constexpr type value = 1e-5;
-};
-
 // the default for the allowed volumetric error for oil per second
 template<class TypeTag>
 struct NewtonTolerance<TypeTag, TTag::EclFlowProblemMech> {
     using type = GetPropType<TypeTag, Scalar>;
     static constexpr type value = 1e-2;
-};
-
-// set fraction of the pore volume where the volumetric residual may be violated during
-// strict Newton iterations
-template<class TypeTag>
-struct EclNewtonRelaxedVolumeFraction<TypeTag, TTag::EclFlowProblemMech> {
-    using type = GetPropType<TypeTag, Scalar>;
-    static constexpr type value = 0.0;
-};
-
-template<class TypeTag>
-struct EclNewtonRelaxedTolerance<TypeTag, TTag::EclFlowProblemMech> {
-    using type = GetPropType<TypeTag, Scalar>;
-    static constexpr type value = 10*getPropValue<TypeTag, Properties::NewtonTolerance>();
 };
 
 // template<class TypeTag>
@@ -189,10 +167,6 @@ struct EnableExperiments<TypeTag, TTag::EclFlowProblemMech> {
     static constexpr bool value = false;
 };
 
-template<class TypeTag>
-struct EclEnableAquifers<TypeTag, TTag::EclFlowProblemMech> {
-     static constexpr bool value = false;
-};
 }
 
 // template<>

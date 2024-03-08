@@ -21,10 +21,6 @@
 #define DETAILED_PROFILING 1
 #endif
 
-#include <exception>
-#include <ebos/eclproblem.hh>
-#include <ebos/eclnewtonmethod.hh>
-#include <ebos/ebos.hh>
 #include <opm/simulators/flow/Main.hpp>
 
 #include <opm/models/blackoil/blackoillocalresidualtpfa.hh>
@@ -34,17 +30,20 @@
 #include <opm/simulators/wells/BlackoilWellModel.hpp>
 #include <opm/geomech/eclgeomechmodel.hh>
 #include <opm/geomech/eclproblemgeomech.hh>
-
-#include <ebos/eclpolyhedralgridvanguard.hh>
-
 #include <opm/grid/polyhedralgrid.hh>
-#include <ebos/collecttoiorank_impl.hh>
-#include <ebos/eclgenericproblem_impl.hh>
-#include <ebos/eclgenericthresholdpressure_impl.hh>
-#include <ebos/eclgenerictracermodel_impl.hh>
-#include <ebos/ecltransmissibility_impl.hh>
-#include <ebos/eclgenericwriter_impl.hh>
-#include <ebos/equil/initstateequil_impl.hh>
+
+#include <opm/simulators/flow/FlowProblem.hpp>
+#include <opm/simulators/flow/PolyhedralGridVanguard.hpp>
+
+#include <opm/simulators/aquifers/SupportsFaceTag.hpp>
+#include <opm/simulators/flow/equil/InitStateEquil_impl.hpp>
+#include <opm/simulators/flow/CollectDataOnIORank_impl.hpp>
+#include <opm/simulators/flow/EclGenericWriter_impl.hpp>
+#include <opm/simulators/flow/FlowGenericProblem_impl.hpp>
+#include <opm/simulators/flow/GenericThresholdPressure_impl.hpp>
+#include <opm/simulators/flow/GenericTracerModel_impl.hpp>
+#include <opm/simulators/flow/Transmissibility_impl.hpp>
+#include <opm/simulators/utils/GridDataOutput_impl.hpp>
 
 // adding linearshe sould be chaning the update_ function in the same class with condition that the error is reduced.
 // the trick is to be able to recalculate the residual from here.
@@ -54,7 +53,7 @@ namespace Opm {
 namespace Properties {
 namespace TTag {
 struct EclFlowProblemMech {
-    using InheritsFrom = std::tuple<EclFlowProblem,VtkGeoMech,FlowGeomechIstlSolverParams>;
+    using InheritsFrom = std::tuple<FlowProblem,VtkGeoMech,FlowGeomechIstlSolverParams>;
 };
 }
 
@@ -115,31 +114,11 @@ struct ContinueOnConvergenceError<TypeTag, TTag::EclFlowProblemMech> {
     static constexpr bool value = false;
 };
 
-template<class TypeTag>
-struct EclNewtonSumTolerance<TypeTag, TTag::EclFlowProblemMech> {
-    using type = GetPropType<TypeTag, Scalar>;
-    static constexpr type value = 1e-5;
-};
-
 // the default for the allowed volumetric error for oil per second
 template<class TypeTag>
 struct NewtonTolerance<TypeTag, TTag::EclFlowProblemMech> {
     using type = GetPropType<TypeTag, Scalar>;
     static constexpr type value = 1e-2;
-};
-
-// set fraction of the pore volume where the volumetric residual may be violated during
-// strict Newton iterations
-template<class TypeTag>
-struct EclNewtonRelaxedVolumeFraction<TypeTag, TTag::EclFlowProblemMech> {
-    using type = GetPropType<TypeTag, Scalar>;
-    static constexpr type value = 0.0;
-};
-
-template<class TypeTag>
-struct EclNewtonRelaxedTolerance<TypeTag, TTag::EclFlowProblemMech> {
-    using type = GetPropType<TypeTag, Scalar>;
-    static constexpr type value = 10*getPropValue<TypeTag, Properties::NewtonTolerance>();
 };
 
 // template<class TypeTag>
@@ -167,10 +146,6 @@ struct EnableDisgasInWater<TypeTag, TTag::EclFlowProblemMech> { static constexpr
 template<class TypeTag>
 struct Simulator<TypeTag, TTag::EclFlowProblemMech> { using type = Opm::Simulator<TypeTag>; };
 
-template<class TypeTag>
-struct EclEnableAquifers<TypeTag, TTag::EclFlowProblemMech> {
-     static constexpr bool value = false;
-};
 // set grid to polygrid
     template<class TypeTag>
     struct Grid<TypeTag, TTag::EclFlowProblemMech> {
@@ -184,13 +159,18 @@ struct EclEnableAquifers<TypeTag, TTag::EclFlowProblemMech> {
 
     template<class TypeTag>
     struct Vanguard<TypeTag, TTag::EclFlowProblemMech> {
-        using type = Opm::EclPolyhedralGridVanguard<TypeTag>;
+        using type = Opm::PolyhedralGridVanguard<TypeTag>;
     };
 
+}
 
+template<>
+class SupportsFaceTag<Dune::PolyhedralGrid<3, 3>>
+    : public std::bool_constant<true>
+{};
 
 }
-}
+
 int main(int argc, char** argv)
 {
 
