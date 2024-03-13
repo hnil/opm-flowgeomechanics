@@ -1,4 +1,7 @@
 #include "vem.hpp"
+
+#include <opm/porsol/common/blas_lapack.hpp>
+
 #include <algorithm>
 #include <array>
 #include <assert.h>
@@ -373,26 +376,17 @@ matmul(const double* data1,
        const double fac = 1)
 // ----------------------------------------------------------------------------
 {
-    const pair<int, int> dim1 = transposed1 ? make_pair(c1, r1) : make_pair(r1, c1);
-    const pair<int, int> dim2 = transposed2 ? make_pair(c2, r2) : make_pair(r2, c2);
-    const pair<int, int> stride1 = transposed1 ? make_pair(1, c1) : make_pair(c1, 1);
-    const pair<int, int> stride2 = transposed2 ? make_pair(1, c2) : make_pair(c2, 1);
-
-    if (dim1.second != dim2.first)
+    if ((transposed1 ? r1 : c1) != (transposed2 ? c2 : r2))
         throw invalid_argument("Matrices are not compatible for multiplication.");
 
-    const int num_elements = dim1.first * dim2.second;
-    fill(result, result + num_elements, 0);
-
-    for (int r = 0; r != dim1.first; ++r)
-        for (int c = 0; c != dim2.second; ++c)
-            for (int k = 0; k != dim1.second; ++k)
-                result[r * dim2.second + c]
-                    += data1[r * stride1.first + k * stride1.second] * data2[k * stride2.first + c * stride2.second];
-
-    // Multiply matrix by a scalar factor, if requested
-    if (fac != 1.0)
-        for_each(result, result + num_elements, [fac](double& e) { e *= fac; });
+    double null = 0.0;
+    char T = 'T';
+    char N = 'N';
+    DGEMM(transposed1 ? &T : &N,
+          transposed2 ? &T : &N,
+          &r1, &c1, transposed1 ? &r1 : &c1,
+          &fac, data1, &r1,
+          data2, &r2, &null, result, &r1);
 }
 
 // ----------------------------------------------------------------------------
@@ -432,11 +426,11 @@ matmul(const double* data1,
 double trace(const vector<double>& A)
 // ----------------------------------------------------------------------------
 {
-    const int N = int(sqrt(A.size()));
+    const auto N = std::size_t(std::sqrt(A.size()));
     assert(N * N == A.size()); // should be a square matrix
 
     double result = 0;
-    for (int i = 0; i != N; ++i)
+    for (std::size_t i = 0; i < N; ++i)
         result += A[i + N * i];
 
     return result;
@@ -1370,13 +1364,13 @@ void compute_cell_geometry(const double* points,
   for (int f = 0, faces_offset = 0; f != num_faces; faces_offset += num_face_edges[f++])
     compute_face_geometry(pick_points<3>(points, &faces2[faces_offset], num_face_edges[f]),
                           &outward_normals[f*3], &face_centroids[f*3]);
-  assert(face_centroids.size() == num_faces*3);
+  assert(face_centroids.size() == static_cast<std::size_t>(num_faces*3));
 
 
   // ensure normals are pointing out of, rather than into, polyhedron
   if (inward_pointing_normals(outward_normals, face_centroids))
     for_each(outward_normals.begin(), outward_normals.end(), [](double& d) {d *= -1;});
-  assert(face_centroids.size() == num_faces*3);
+  assert(face_centroids.size() == static_cast<std::size_t>(num_faces*3));
   //std::cout << "Size # "<< face_centroids.size() << std::endl;
   // identify a star point (usually, mean_point qualifies, but not necessarily)
   star_point = identify_star_point(point_average<3>(points, num_points),
@@ -1682,7 +1676,6 @@ compute_stress_3D(const double* const points,
                   //const double* const neumann_forces, // 3 * number of neumann faces
                   const std::vector<double>& disp,
                   std::vector<std::array<double,6>>& stress,
-                  const StabilityChoice stability_choice,
                   vector<tuple<int, int, double>>& stressmat,
                   bool do_matrix,
                   bool do_stress
@@ -1711,7 +1704,6 @@ compute_stress_3D(const double* const points,
                                   num_cell_faces[c],
                                   young[c],
                                   poisson[c],
-                                  stability_choice,
                                   disp,// global displacement
                                   c,
                                   stress[c],
@@ -1814,7 +1806,6 @@ calculate_stress_3D_local(const double* const points,
                           const int num_faces,
                           const double young,
                           const double poisson,
-                          const StabilityChoice stability_choice,
                           const std::vector<double>& disp,/// global displacement
                           const int cell,
                           std::array<double,6>& stress,

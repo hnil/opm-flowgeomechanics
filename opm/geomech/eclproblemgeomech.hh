@@ -1,26 +1,40 @@
 #ifndef OPM_ECLPROBLEM_GEOMECH_HH
 #define OPM_ECLPROBLEM_GEOMECH_HH
-#include "ebos/eclproblem.hh"
-#include "opm/geomech/vtkgeomechmodule.hh"
-#include "opm/geomech/boundaryutils.hh"
-#include "opm/geomech/FlowGeomechLinearSolverParameters.hpp"
+
+#include <opm/common/ErrorMacros.hpp>
+
+#include <opm/elasticity/material.hh>
+#include <opm/elasticity/materials.hh>
+
+#include <opm/geomech/eclgeomechmodel.hh>
+#include <opm/geomech/vtkgeomechmodule.hh>
+#include <opm/geomech/boundaryutils.hh>
+#include <opm/geomech/FlowGeomechLinearSolverParameters.hpp>
+
 #include <opm/material/densead/Evaluation.hpp>
 #include <opm/material/densead/Math.hpp>
 #include <opm/elasticity/material.hh>
 
-//#include <opm/input/eclipse/Deck/Deck.hpp>
-//#include <opm/input/eclipse/Deck/DeckSection.hpp>
-#include <opm/input/eclipse/Parser/ParserKeywords/S.hpp>
-#include <opm/input/eclipse/Parser/ParserKeywords/E.hpp>
+#include <opm/simulators/flow/FlowProblem.hpp>
+
+#include <array>
+#include <functional>
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <tuple>
+#include <vector>
+
 namespace Opm{
     template<typename TypeTag>
-    class EclProblemGeoMech: public EclProblem<TypeTag>{
+    class EclProblemGeoMech: public FlowProblem<TypeTag>{
     public:
-        using Parent = EclProblem<TypeTag>;
+        using Parent = FlowProblem<TypeTag>;
 
 
         using Simulator = GetPropType<TypeTag, Properties::Simulator>;
-        using TimeStepper =  AdaptiveTimeSteppingEbos<TypeTag>;
+        using TimeStepper = AdaptiveTimeStepping<TypeTag>;
         using Scalar = GetPropType<TypeTag, Properties::Scalar>;
         using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
         using Evaluation = GetPropType<TypeTag, Properties::Evaluation>;
@@ -31,7 +45,7 @@ namespace Opm{
         enum { dimWorld = GridView::dimensionworld };
         using Toolbox = MathToolbox<Evaluation>;
         EclProblemGeoMech(Simulator& simulator):
-            EclProblem<TypeTag>(simulator),
+            FlowProblem<TypeTag>(simulator),
             geomechModel_(simulator)
         {
             if(this->simulator().vanguard().eclState().runspec().mech()){
@@ -115,12 +129,9 @@ namespace Opm{
                     //make lambda functions for each regaion
                     std::vector<std::function<std::array<double,6>()>> functors;
                     int recnum=1;
-                    int num_records = stressequil.size();
                     initstress_.resize(gv.size(0));
                     for (const auto& record : stressequil) {
                         const auto datum_depth = record.datumDepth();
-                        const auto datum_posx = record.datumPosX();
-                        const auto datum_posy = record.datumPosY();
                         const auto STRESSXX= record.stressXX();
                         const auto STRESSXXGRAD = record.stressXX_grad();
                         const auto STRESSYY= record.stressYY();

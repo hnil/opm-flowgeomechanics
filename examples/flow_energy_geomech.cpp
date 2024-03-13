@@ -22,9 +22,7 @@
 #endif
 
 #include <exception>
-#include <ebos/eclproblem.hh>
-#include <ebos/eclnewtonmethod.hh>
-#include <ebos/ebos.hh>
+#include <opm/simulators/flow/FlowProblem.hpp>
 #include <opm/simulators/flow/Main.hpp>
 
 #include <opm/models/blackoil/blackoillocalresidualtpfa.hh>
@@ -45,7 +43,7 @@ namespace Opm {
 namespace Properties {
 namespace TTag {
 struct EclFlowProblemMech {
-    using InheritsFrom = std::tuple<EclFlowProblem,VtkGeoMech,FlowGeomechIstlSolverParams>;
+    using InheritsFrom = std::tuple<FlowProblem,VtkGeoMech,FlowGeomechIstlSolverParams>;
 };
 }
 
@@ -106,31 +104,11 @@ struct ContinueOnConvergenceError<TypeTag, TTag::EclFlowProblemMech> {
     static constexpr bool value = false;
 };
 
-template<class TypeTag>
-struct EclNewtonSumTolerance<TypeTag, TTag::EclFlowProblemMech> {
-    using type = GetPropType<TypeTag, Scalar>;
-    static constexpr type value = 1e-5;
-};
-    
 // the default for the allowed volumetric error for oil per second
 template<class TypeTag>
 struct NewtonTolerance<TypeTag, TTag::EclFlowProblemMech> {
     using type = GetPropType<TypeTag, Scalar>;
     static constexpr type value = 1e-2;
-};
-
-// set fraction of the pore volume where the volumetric residual may be violated during
-// strict Newton iterations
-template<class TypeTag>
-struct EclNewtonRelaxedVolumeFraction<TypeTag, TTag::EclFlowProblemMech> {
-    using type = GetPropType<TypeTag, Scalar>;
-    static constexpr type value = 0.0;
-};
-
-template<class TypeTag>
-struct EclNewtonRelaxedTolerance<TypeTag, TTag::EclFlowProblemMech> {
-    using type = GetPropType<TypeTag, Scalar>;
-    static constexpr type value = 10*getPropValue<TypeTag, Properties::NewtonTolerance>();
 };
 
 // template<class TypeTag>
@@ -158,10 +136,6 @@ struct EnableDisgasInWater<TypeTag, TTag::EclFlowProblemMech> { static constexpr
 template<class TypeTag>
 struct Simulator<TypeTag, TTag::EclFlowProblemMech> { using type = Opm::Simulator<TypeTag>; };    
     
-template<class TypeTag>
-struct EclEnableAquifers<TypeTag, TTag::EclFlowProblemMech> {
-     static constexpr bool value = false;
-};
 }
 }
 int main(int argc, char** argv)

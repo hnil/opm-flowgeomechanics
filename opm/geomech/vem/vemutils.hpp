@@ -33,7 +33,6 @@ namespace vem
         num_cell_faces[i]=ungrid.cell_facepos[i+1]-ungrid.cell_facepos[i];
     }
     num_face_corners.resize(ungrid.cell_facepos[ungrid.number_of_cells]);
-    int num_cellfaces = ungrid.cell_facepos[ungrid.number_of_cells];
     int tot_num_face_corners = 0;
     //for(int i=0; i< num_cellfaces; ++i){
     for(int cell=0; cell < ungrid.number_of_cells; ++cell){
@@ -55,19 +54,16 @@ namespace vem
             tot_num_face_corners += num_local_corners;
         }
     }
-    assert(face_corners.size() == tot_num_face_corners);
+    assert(face_corners.size() == static_cast<std::size_t>(tot_num_face_corners));
 }
     void getGridVectorsDune(const PolyGrid& grid, std::vector<double>& coords,
                 std::vector<int>& num_cell_faces,
                 std::vector<int>& num_face_corners,
                 std::vector<int>& face_corners)
 {
-   static constexpr int dim = PolyGrid::dimension;
     using namespace std;
     using namespace Dune;
     const auto& gv = grid.leafGridView();
-    const int comp = 3+(dim-2)*3;
-    static const int bfunc = 4+(dim-2)*4;
     //int loadcase = -1;
     //Dune::FieldVector<ctype,comp> eps0 = {1, 1, 1, 0, 0, 0};
     //eps0 = 0;
@@ -80,7 +76,6 @@ namespace vem
         coords.insert(coords.end(), c.begin(), c.end());
     }
 
-  const int num_cells = gv.size(0); // entities of codim 0
   const auto& ixset = gv.indexSet();
   // count cell faces
   //vector<int> num_cell_faces;
@@ -124,17 +119,11 @@ namespace vem
     using namespace std;
     using namespace Dune;
     const auto& gv = grid.leafGridView();
-  const int comp = 3+(dim-2)*3;
-  static const int bfunc = 4+(dim-2)*4;
 
   for (const auto& v : vertices(gv)) {
     const auto c = v.geometry().corner(0);
     coords.insert(coords.end(), c.begin(), c.end());
   }
-
-  const int num_cells = gv.size(0); // entities of codim 0
-  const auto& ixset = gv.indexSet();
-
 
   for (const auto& cell : elements(gv)){
       num_cell_faces.push_back(6);
@@ -148,7 +137,6 @@ namespace vem
           }
       }
   }
-  const int tot_num_cfaces = accumulate(num_cell_faces.begin(), num_cell_faces.end(), 0);
 }
 
 }
