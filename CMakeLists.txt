@@ -68,6 +68,7 @@ endmacro (dir_hook)
 # project information is in dune.module. Read this file and set variables.
 # we cannot generate dune.module since it is read by dunecontrol before
 # the build starts, so it makes sense to keep the data there then.
+list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/Modules)
 include (OpmInit)
 
 # Look for the opm-tests repository; if found the variable
@@ -102,9 +103,9 @@ macro (config_hook)
 	endif()
 	include_directories(${EXTRA_INCLUDES})
 
-  if(USE_TRACY_PROFILER AND Tracy_FOUND)
-    set(USE_TRACY 1)
-  endif()
+	if(USE_TRACY_PROFILER AND Tracy_FOUND)
+		set(USE_TRACY 1)
+	endif()
 
 	include(UseDamaris)
 endmacro (config_hook)
@@ -170,7 +171,7 @@ opm_add_test(flow_geomech
 	$<TARGET_OBJECTS:moduleVersionGeoMech>
 )
 if(USE_TRACY_PROFILER AND Tracy_FOUND)
-  target_link_libraries(flow_geomech Tracy::TracyClient)
+	target_link_libraries(flow_geomech Tracy::TracyClient)
 endif()
 
 opm_add_test(flow_energy_geomech
@@ -183,7 +184,7 @@ opm_add_test(flow_energy_geomech
 	$<TARGET_OBJECTS:moduleVersionGeoMech>
 )
 if(USE_TRACY_PROFILER AND Tracy_FOUND)
-  target_link_libraries(flow_energy_geomech Tracy::TracyClient)
+	target_link_libraries(flow_energy_geomech Tracy::TracyClient)
 endif()
 
 opm_add_test(flow_energy_geomech_polygrid
@@ -196,7 +197,7 @@ opm_add_test(flow_energy_geomech_polygrid
 	$<TARGET_OBJECTS:moduleVersionGeoMech>
 )
 if(USE_TRACY_PROFILER AND Tracy_FOUND)
-  target_link_libraries(flow_energy_geomech_polygrid Tracy::TracyClient)
+	target_link_libraries(flow_energy_geomech_polygrid Tracy::TracyClient)
 endif()
 
 opm_add_test(test_elasticity
@@ -209,7 +210,7 @@ opm_add_test(test_elasticity
 	$<TARGET_OBJECTS:moduleVersionGeoMech>
 )
 if(USE_TRACY_PROFILER AND Tracy_FOUND)
-  target_link_libraries(test_elasticity Tracy::TracyClient)
+	target_link_libraries(test_elasticity Tracy::TracyClient)
 endif()
 
 opm_add_test(test_grid
@@ -222,7 +223,7 @@ opm_add_test(test_grid
 	$<TARGET_OBJECTS:moduleVersionGeoMech>
 )
 if(USE_TRACY_PROFILER AND Tracy_FOUND)
-  target_link_libraries(test_grid Tracy::TracyClient)
+	target_link_libraries(test_grid Tracy::TracyClient)
 endif()
 
 
@@ -236,7 +237,7 @@ opm_add_test(test_vem_elements
 	$<TARGET_OBJECTS:moduleVersionGeoMech>
 )
 if(USE_TRACY_PROFILER AND Tracy_FOUND)
-  target_link_libraries(test_vem_elements Tracy::TracyClient)
+	target_link_libraries(test_vem_elements Tracy::TracyClient)
 endif()
 
 opm_add_test(test_vem_assembly
@@ -249,18 +250,28 @@ opm_add_test(test_vem_assembly
 	$<TARGET_OBJECTS:moduleVersionGeoMech>
 )
 if(USE_TRACY_PROFILER AND Tracy_FOUND)
-  target_link_libraries(test_vem_assembly Tracy::TracyClient)
+	target_link_libraries(test_vem_assembly Tracy::TracyClient)
 endif()
 
-# opm_add_test(testpdelab
-#   ONLY_COMPILE
-#   ALWAYS_ENABLE
-#   DEPENDS opmsimulators opmupscaling
-#   LIBRARIES opmsimulators opmupscaling
-#   SOURCES
-#   examples/testpdelab.cc
-#   $<TARGET_OBJECTS:moduleVersionGeoMech>
-# )
+opm_add_test(testpdelab
+	 ONLY_COMPILE
+	 ALWAYS_ENABLE
+	 DEPENDS opmsimulators opmupscaling
+	 LIBRARIES opmsimulators opmupscaling
+	 SOURCES
+	 examples/testpdelab.cpp
+	 $<TARGET_OBJECTS:moduleVersionGeoMech>
+)
+
+opm_add_test(test_foamgrid
+	 ONLY_COMPILE
+	 ALWAYS_ENABLE
+	 DEPENDS opmsimulators opmupscaling
+	 LIBRARIES opmsimulators opmupscaling
+	 SOURCES
+	 examples/test_foamgrid.cpp
+	 $<TARGET_OBJECTS:moduleVersionGeoMech>
+)
 # target_link_libraries(testpdelab Tracy::TracyClient)
 
 

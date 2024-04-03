@@ -14,6 +14,7 @@ set (opm-flowgeomechanics_CONFIG_VAR
   HAVE_SUITESPARSE_UMFPACK
   HAVE_HDF5
   USE_TRACY
+  HAVE_DUNE_PDELAB
   )
 
 # dependencies
@@ -26,6 +27,8 @@ set (opm-flowgeomechanics_DEPS
   # DUNE prerequisites
   "dune-common REQUIRED"
   "dune-istl REQUIRED"
+  "dune-pdelab REQUIRED"
+  "dune-foamgrid REQUIRED"
   # matrix library
   "BLAS REQUIRED"
   "LAPACK REQUIRED"
@@ -44,7 +47,7 @@ set (opm-flowgeomechanics_DEPS
   "opm-simulators REQUIRED"
   "opm-upscaling REQUIRED"
   "Damaris 1.7"
-  "HDF5"  
+  "HDF5"
   "Tracy"
   )
 
