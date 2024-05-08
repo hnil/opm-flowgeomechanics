@@ -40,6 +40,8 @@
 #include <opm/input/eclipse/Python/Python.hpp>
 #include <opm/input/eclipse/Schedule/Schedule.hpp>
 #include <opm/input/eclipse/Schedule/Well/Well.hpp>
+#include <opm/simulators/utils/readDeck.hpp>
+#include <opm/input/eclipse/Parser/ParseContext.hpp>
 #if HAVE_ALUGRID
 #include <dune/alugrid/grid.hh>
 #include <dune/alugrid/common/fromtogridfactory.hh>
@@ -180,7 +182,6 @@ void createGrids(std::unique_ptr<Dune::CpGrid>& grid ,const Opm::EclipseState& e
 template<class GridType>
 int run(Params& p, const std::string& name)
 {
-  try {
     static constexpr int dim = GridType::dimension;
     //static constexpr int dimensionworld = GridType::dimensionworld;
     //static const int dim = 3;
@@ -190,7 +191,8 @@ int run(Params& p, const std::string& name)
     std::unique_ptr<GridType> grid_ptr;
     Opm::Parser parser;
     // process grid
-    auto deck = parser.parseFile(p.file);
+    std::unique_ptr<Opm::ParseContext> parsercontext = Opm::setupParseContext(false);
+    auto deck = parser.parseFile(p.file, *parsercontext.get());
     Opm::EclipseState eclState(deck);
     Opm::EclipseGrid inputGrid(deck);
     // create grids depeing on grid type
@@ -200,31 +202,27 @@ int run(Params& p, const std::string& name)
     auto python = std::make_shared<Opm::Python>();
     const Opm::Schedule schedule(deck, eclState);
     std::vector<Opm::Well> wells = schedule.getWells(0);
-    Opm::FractureModel fracuremodel(grid, wells);
+
     //const auto& wells = schedule.getWells(/*reportstep*/0);
     //
+    const Opm::EclipseGrid& eclgrid = eclState.getInputGrid();
     Dune::CpGrid cpGrid;
-    std::vector<std::size_t>  nums = cpGrid.processEclipseFormat(&eclState.getInputGrid(), nullptr, false);
+    std::vector<std::size_t>  nums = cpGrid.processEclipseFormat(&eclgrid, nullptr, false);
     using CartesianIndexMapper = Dune::CartesianIndexMapper<Dune::CpGrid>;
 
     Dune::VTKWriter<typename GridType::LeafGridView> vtkwriter(grid.leafGridView(), Dune::VTK::nonconforming);
     std::string outputfile = name + "_" + p.vtufile;
     std::cout << "Writing output to " << outputfile << std::endl;
     vtkwriter.write(outputfile);
-    }
+
+    // look at fracture model
+    Opm::FractureModel fracturemodel(grid, wells, eclgrid);
+    fracturemodel.write();
 
     if (!p.output.empty()){
         writeOutput(p, watch, grid.size(0));
     }
-    return 0;
-  }
-  catch (Dune::Exception &e) {
-      throw e;
-  }
-  catch (...) {
-      throw;
-  }
-  return 1;
+    return 1;
 }
 
 
