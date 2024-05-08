@@ -143,12 +143,13 @@ add_library(moduleVersionGeoMech OBJECT opm/simulators/utils/moduleVersion.cpp)
 set_property(TARGET moduleVersionGeoMech PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 add_library(vem OBJECT opm/geomech/vem/vem.cpp)
-add_library(fracture OBJECT 
-	opm/geomech/Fracture.cpp 
-	opm/geomech/FractureModel.cpp 
-	opm/geomech/FractureWell.cpp 
-	opm/geomech/GeometryHelpers.cpp 
-	opm/geomech/DiscreteDisplacement.cpp)
+add_library(fracture OBJECT
+	opm/geomech/Fracture.cpp
+	opm/geomech/FractureModel.cpp
+	opm/geomech/FractureWell.cpp
+	opm/geomech/GeometryHelpers.cpp
+	opm/geomech/DiscreteDisplacement.cpp
+	examples/FlexibleSolverMech.cpp)
 # target_link_libraries( vem PUBLIC Tracy::TracyClient)
 # Strictly we only depend on the update-version target,
 # but this is not exposed in a super-build.
