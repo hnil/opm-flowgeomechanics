@@ -100,7 +100,7 @@ namespace Opm {
      */
         static void registerParameters()
         {
-            EWOMS_REGISTER_PARAM(TypeTag, bool, VtkWriteGeoMech,
+            Parameters::registerParam<TypeTag, Properties::VtkWriteGeoMech>(
                                  "Include the tracer concentration "
                                  "in the VTK output files");
         }
@@ -127,7 +127,7 @@ namespace Opm {
      */
         void processElement(const ElementContext& elemCtx)
         {
-            if (!EWOMS_GET_PARAM(TypeTag, bool, EnableVtkOutput))
+            if (!Parameters::get<TypeTag, Properties::EnableVtkOutput>())
                 return;
 
             const auto& geoMechModel = elemCtx.problem().geoMechModel();
@@ -200,7 +200,7 @@ namespace Opm {
 
     private:
         static bool geoMechOutput_(){
-            static bool val = EWOMS_GET_PARAM(TypeTag, bool, VtkWriteGeoMech);
+            static bool val = Parameters::get<TypeTag, Properties::VtkWriteGeoMech>();
             return val;
         }
         ScalarBuffer pressDiff_;

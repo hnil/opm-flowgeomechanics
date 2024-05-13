@@ -89,22 +89,22 @@ namespace Opm {
         void init()
         {
             // TODO: these parameters have undocumented non-trivial dependencies
-            linear_solver_reduction_ = EWOMS_GET_PARAM(TypeTag, double, LinearSolverMechReduction);
-            linear_solver_maxiter_ = EWOMS_GET_PARAM(TypeTag, int, LinearSolverMechMaxIter);
-            linear_solver_verbosity_ = EWOMS_GET_PARAM(TypeTag, int, LinearSolverMechVerbosity);
-            linsolver_ = EWOMS_GET_PARAM(TypeTag, std::string, LinearSolverMech);
-            linear_solver_print_json_definition_ = EWOMS_GET_PARAM(TypeTag, bool, LinearSolverMechPrintJsonDefinition);
-            linsolver_ = EWOMS_GET_PARAM(TypeTag, std::string, LinearSolverMech);
+            linear_solver_reduction_ = Parameters::get<TypeTag, Properties::LinearSolverMechReduction>();
+            linear_solver_maxiter_ = Parameters::get<TypeTag, Properties::LinearSolverMechMaxIter>();
+            linear_solver_verbosity_ = Parameters::get<TypeTag, Properties::LinearSolverMechVerbosity>();
+            linsolver_ = Parameters::get<TypeTag, Properties::LinearSolverMech>();
+            linear_solver_print_json_definition_ = Parameters::get<TypeTag, Properties::LinearSolverMechPrintJsonDefinition>();            
+            linsolver_ = Parameters::get<TypeTag, Properties::LinearSolverMech>();
         }
 
         template <class TypeTag>
         static void registerParameters()
         {
-            EWOMS_REGISTER_PARAM(TypeTag, double, LinearSolverMechReduction, "The minimum reduction of the residual which the linear solver must achieve");
-            EWOMS_REGISTER_PARAM(TypeTag, int, LinearSolverMechMaxIter, "The maximum number of iterations of the linear solver");
-            EWOMS_REGISTER_PARAM(TypeTag, int, LinearSolverMechVerbosity, "The verbosity level of the linear solver (0: off, 2: all)");
-            EWOMS_REGISTER_PARAM(TypeTag, std::string, LinearSolverMech, "Configuration of solver. Valid options are: ilu0 (default), amg or umfpack. Alternatively, you can request a configuration to be read from a JSON file by giving the filename here, ending with '.json.'");
-            EWOMS_REGISTER_PARAM(TypeTag, bool, LinearSolverMechPrintJsonDefinition, "Write the JSON definition of the linear solver setup to the DBG file.");
+          Parameters::registerParam<TypeTag, Properties::LinearSolverMechReduction>("The minimum reduction of the residual which the linear solver must achieve");
+          Parameters::registerParam<TypeTag, Properties::LinearSolverMechMaxIter>("The maximum number of iterations of the linear solver");
+          Parameters::registerParam<TypeTag, Properties::LinearSolverMechVerbosity>("The verbosity level of the linear solver (0: off, 2: all)");
+          Parameters::registerParam<TypeTag, Properties::LinearSolverMech>("Configuration of solver. Valid options are: ilu0 (default), amg or umfpack. Alternatively, you can request a configuration to be read from a JSON file by giving the filename here, ending with '.json.'");
+          Parameters::registerParam<TypeTag, Properties::LinearSolverMechPrintJsonDefinition>("Write the JSON definition of the linear solver setup to the DBG file.");
         }
 
         FlowLinearSolverParametersGeoMech() { reset(); }
