@@ -67,6 +67,8 @@ public:
     void addFractures();
     void addWell(std::string name, const std::vector<Point3D>& points,const std::vector<std::array<unsigned,2>>& segments );
     void write() const;
+    void solve();
+    void updateReservoirProperties();
 private:
     std::vector<FractureWell> wells_;
     std::vector<std::vector<Fracture>> well_fractures_;

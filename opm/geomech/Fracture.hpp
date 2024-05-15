@@ -77,11 +77,10 @@ namespace Opm {
 
         // solver related
         void updateReservoirProperties();
-        void updateFracture();
-        // solving
+
         void solveFractureWidth();
         void solvePressure();
-
+        void solve();
     private:
         // helpers for growing grid
         void insertLinear(const std::vector<unsigned int>& inner_indices);
@@ -107,11 +106,13 @@ namespace Opm {
         void assemblePressure();
         void setSource();
         void initPressureMatrix();
+        void setupPressureSolver();
         std::vector<int> well_source_;
         // for reservoir
         std::vector<int> reservoir_cells_;
         std::vector<double> reservoir_perm_;
         std::vector<double> reservoir_dist_;
+        std::vector<double> reservoir_pressure_;
 
         // solution variables
         Dune::BlockVector<Dune::FieldVector<double,1>> fracture_width_;
@@ -129,7 +130,7 @@ namespace Opm {
         using Matrix = Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1>>;
         using PressureOperatorType = Dune::MatrixAdapter<Matrix, Vector, Vector>;
         using FlexibleSolverType = Dune::FlexibleSolver<PressureOperatorType>;
-        Matrix pressure_matrix_;
+        std::unique_ptr<Matrix> pressure_matrix_;
         std::unique_ptr<PressureOperatorType> pressure_operator_;
         std::unique_ptr<FlexibleSolverType> pressure_solver_;
         using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView>;

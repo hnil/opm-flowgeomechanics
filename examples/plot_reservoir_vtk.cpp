@@ -217,6 +217,8 @@ int run(Params& p, const std::string& name)
 
     // look at fracture model
     Opm::FractureModel fracturemodel(grid, wells, eclgrid);
+    fracturemodel.updateReservoirProperties();
+    fracturemodel.solve();
     fracturemodel.write();
 
     if (!p.output.empty()){

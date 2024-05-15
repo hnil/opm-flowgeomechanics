@@ -28,18 +28,23 @@ Fracture::init(std::string well, int perf, int well_cell, Fracture::Point3D orig
     grid_->postGrow();
     vtkwriter_ = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(), Dune::VTK::nonconforming);
     //
-    Opm::FlowLinearSolverParameters p;
+
+}
+void Fracture::setupPressureSolver(){
+        Opm::FlowLinearSolverParameters p;
     prmpressure_ = Opm::setupPropertyTree(p, true, true);
     {
         std::size_t pressureIndex; // Dummy
         const std::function<Vector()> weightsCalculator; // Dummy
-        auto pressure_operator = std::make_unique<PressureOperatorType>(pressure_matrix_);
+        auto pressure_operator = std::make_unique<PressureOperatorType>(*pressure_matrix_);
         // using FlexibleSolverType = Dune::FlexibleSolver<SeqOperatorType>;
+        pressure_operator_ = std::move(pressure_operator);
         auto psolver
             = std::make_unique<FlexibleSolverType>(*pressure_operator_, prmpressure_, weightsCalculator, pressureIndex);
-        pressure_operator_ = std::move(pressure_operator);
+
         pressure_solver_ = std::move(psolver);
     }
+
 }
 std::string
 Fracture::name() const
@@ -96,16 +101,19 @@ Fracture::write() const
         vtkwriter_->addCellData(reservoir_cells_, "ReservoirCell");
     }
     if (reservoir_perm_.size() > 0) {
-        vtkwriter_->addCellData(reservoir_cells_, "ReservoirPerm");
+        vtkwriter_->addCellData(reservoir_perm_, "ReservoirPerm");
     }
     if (reservoir_dist_.size() > 0) {
-        vtkwriter_->addCellData(reservoir_cells_, "ReservoirDist");
+        vtkwriter_->addCellData(reservoir_dist_, "ReservoirDist");
     }
     if (fracture_pressure_.size() > 0) {
-        vtkwriter_->addCellData(reservoir_cells_, "ReservoirPressure");
+        vtkwriter_->addCellData(fracture_pressure_, "FracturePressure");
+    }
+    if (reservoir_pressure_.size() > 0) {
+        vtkwriter_->addCellData(fracture_pressure_, "ReservoirPressure");
     }
     if (fracture_width_.size() > 0) {
-        vtkwriter_->addCellData(reservoir_cells_, "ReservoirWidth");
+        vtkwriter_->addCellData(fracture_width_, "FractureWidth");
     }
     vtkwriter_->write(this->name().c_str());
 };
@@ -271,9 +279,10 @@ Fracture::updateReservoirProperties()
     assert(reservoir_cells_.size() == nc);
     reservoir_perm_.resize(nc, perm);
     reservoir_dist_.resize(nc, 10.0);
+    reservoir_pressure_.resize(nc, 0.0);
 }
 void
-Fracture::updateFracture()
+Fracture::solve()
 {
 
     this->solveFractureWidth();
@@ -284,6 +293,10 @@ Fracture::updateFracture()
 void
 Fracture::setSource()
 {
+    if(rhs_pressure_.size() == 0){
+        size_t nc = grid_->leafGridView().size(0);
+        rhs_pressure_.resize(nc);
+    }
     rhs_pressure_ = 0;
     double scale = well_source_.size();
     for (auto cell : well_source_) {
@@ -296,9 +309,15 @@ Fracture::solvePressure()
     size_t nc = grid_->leafGridView().size(0);
     fracture_pressure_.resize(nc);
     fracture_pressure_ = 1e5;
+    if(!pressure_matrix_){
+        this->initPressureMatrix();
+    }
     this->assemblePressure();
     this->setSource(); // probably include reservoir pressure
     try {
+        if(!pressure_solver_){
+            this->setupPressureSolver();
+        }
         Dune::InverseOperatorResult r;
         fracture_pressure_.resize(rhs_pressure_.size());
         fracture_pressure_ = 0;
@@ -311,7 +330,7 @@ void
 Fracture::solveFractureWidth()
 {
     size_t nc = grid_->leafGridView().size(0);
-    fracture_width_.resize(nc); 
+    fracture_width_.resize(nc);
     fracture_width_ = 1e-3;
     ElementMapper elemMapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     for (auto& element : elements(grid_->leafGridView())) {
@@ -327,6 +346,8 @@ Fracture::initPressureMatrix()
 {
     // size_t num_columns = 0;
     //  index of the neighbour
+    size_t nc = grid_->leafGridView().size(0);
+    leakof_.resize(nc,0.0);
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     for (auto& element : Dune::elements(grid_->leafGridView())) {
         int eIdx = mapper.index(element);
@@ -366,17 +387,20 @@ Fracture::initPressureMatrix()
     // std::sort(transes.begin(),transes.end(),sortcsr);
     //  build matrix
     //if (pressure_matrix_.bu == 0){
-        auto& matrix = pressure_matrix_;
+    pressure_matrix_ = std::make_unique<Matrix>();
+        auto& matrix = *pressure_matrix_;
         matrix.setBuildMode(Matrix::implicit);
         // map from dof=3*nodes at a cell (ca 3*3*3) to cell
         matrix.setImplicitBuildModeParameters(3 * 6 - 3 - 2, 0.4);
-        size_t nc = grid_->leafGridView().size(0);
+        //size_t nc = grid_->leafGridView().size(0);
         matrix.setSize(nc, nc);
         for (auto matel : htrans_) {
             size_t i = std::get<0>(matel);
             size_t j = std::get<1>(matel);
             matrix.entry(i, j) = 0;
             matrix.entry(j, i) = 0;
+            matrix.entry(j, j) = 0;
+            matrix.entry(i, i) = 0;
         }
         matrix.compress();
     //}
@@ -384,7 +408,7 @@ Fracture::initPressureMatrix()
 void
 Fracture::assemblePressure()
 {
-    auto& matrix = pressure_matrix_;
+    auto& matrix = *pressure_matrix_;
     for (auto matel : htrans_) {
         size_t i = std::get<0>(matel);
         size_t j = std::get<1>(matel);
@@ -395,14 +419,22 @@ Fracture::assemblePressure()
         // harmonic mean of surface flow
         double value = 12. / (h1 * h1 * t1) + 1. / (h2 * h2 * t2);
         value = 1 / value;
-        matrix.entry(i, j) -= value;
-        matrix.entry(j, i) -= value;
+
+        // matrix.entry(i, j) -= value;
+        // matrix.entry(j, i) -= value;
+        // //
+        // matrix.entry(i, i) += value;
+        // matrix.entry(j, j) += value;
+
+        matrix[i][j] -= value;
+        matrix[j][i] -= value;
         //
-        matrix.entry(i, i) += value;
-        matrix.entry(j, j) += value;
+        matrix[i][i] += value;
+        matrix[j][j] += value;
     }
     for (size_t i = 0; i < leakof_.size(); ++i) {
-        matrix.entry(i, i) += leakof_[i];
+        //matrix.entry(i, i) += leakof_[i];
+        matrix[i][i] += leakof_[i];
     }
 }
 
