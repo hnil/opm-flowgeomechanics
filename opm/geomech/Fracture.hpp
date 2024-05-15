@@ -78,6 +78,7 @@ namespace Opm {
         // solver related
         void updateReservoirProperties();
 
+        void initFractureWidth();
         void solveFractureWidth();
         void solvePressure();
         void solve();
@@ -102,11 +103,15 @@ namespace Opm {
 
 
         // help function for solving
-        void initFlowMatrix();
         void assemblePressure();
         void setSource();
         void initPressureMatrix();
         void setupPressureSolver();
+
+
+        void assembleFracture();
+
+
         std::vector<int> well_source_;
         // for reservoir
         std::vector<int> reservoir_cells_;
@@ -116,6 +121,7 @@ namespace Opm {
 
         // solution variables
         Dune::BlockVector<Dune::FieldVector<double,1>> fracture_width_;
+        Dune::BlockVector<Dune::FieldVector<double,1>> rhs_width_;
         Dune::BlockVector<Dune::FieldVector<double,1>> fracture_pressure_;
         Dune::BlockVector<Dune::FieldVector<double,1>> rhs_pressure_;
 
@@ -134,6 +140,13 @@ namespace Opm {
         std::unique_ptr<PressureOperatorType> pressure_operator_;
         std::unique_ptr<FlexibleSolverType> pressure_solver_;
         using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView>;
+        //
+        //using DenseMatrix = Dune::DynamicMatrix<Dune::FieldMatrix<double,1,1>>;
+        //using DenseMatrix = Dune::DynamicMatrix<Dune::FieldMatrix<double,1,1>>;
+        //using DynamicMatrix = Dune::DynamicMatrix<Dune::FieldMatrix<double,1,1>>;
+         using DynamicMatrix = Dune::DynamicMatrix<double>;
+        std::unique_ptr<DynamicMatrix> fracture_matrix_;
+
     };
 }
 #endif

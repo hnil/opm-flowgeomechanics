@@ -148,7 +148,7 @@ add_library(fracture OBJECT
 	opm/geomech/FractureModel.cpp
 	opm/geomech/FractureWell.cpp
 	opm/geomech/GeometryHelpers.cpp
-	opm/geomech/DiscreteDisplacement.cpp
+	opm/geomech/CutDe.cpp
 	examples/FlexibleSolverMech.cpp)
 # target_link_libraries( vem PUBLIC Tracy::TracyClient)
 # Strictly we only depend on the update-version target,

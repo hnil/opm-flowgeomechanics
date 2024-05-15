@@ -63,6 +63,7 @@ Only the interface code is modified to easier call it from c++
 
 #include <bits/stdc++.h>
 #include <array>
+#include "CutDe.hpp"
 using namespace std;
 namespace ddm{
 #define WITHIN_KERNEL ;
@@ -72,26 +73,6 @@ namespace ddm{
 #ifndef EPS
   #define EPS   1e-14
 #endif
-typedef double Real;
-typedef struct Real2 {
-    Real x;
-    Real y;
-} Real2;
-
-typedef struct Real3 {
-    Real x;
-    Real y;
-    Real z;
-} Real3;
-
-typedef struct Real6 {
-    Real x;
-    Real y;
-    Real z;
-    Real a;
-    Real b;
-    Real c;
-} Real6;
 
 
 // WITHIN_KERNEL void print(Real x) {

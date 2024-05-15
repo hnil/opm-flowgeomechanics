@@ -3,6 +3,7 @@
 #include <opm/geomech/Math.hpp>
 #include <opm/simulators/linalg/setupPropertyTree.hpp>
 #include <opm/simulators/linalg/FlowLinearSolverParameters.hpp>
+#include <opm/geomech/DiscreteDisplacement.hpp>
 namespace Opm
 {
 void
@@ -329,6 +330,13 @@ Fracture::solvePressure()
 void
 Fracture::solveFractureWidth()
 {
+    this->assembleFracture();
+    fracture_matrix_->solve(fracture_width_,rhs_width_);
+}
+
+void
+Fracture::initFractureWidth()
+{
     size_t nc = grid_->leafGridView().size(0);
     fracture_width_.resize(nc);
     fracture_width_ = 1e-3;
@@ -436,6 +444,22 @@ Fracture::assemblePressure()
         //matrix.entry(i, i) += leakof_[i];
         matrix[i][i] += leakof_[i];
     }
+}
+
+void  Fracture::assembleFracture(){
+    size_t nc = grid_->leafGridView().size(0);
+    rhs_width_.resize(nc);
+    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+    for (auto elem : elements(grid_->leafGridView())) {
+        int idx = mapper.index(elem);
+        auto geom = elem.geometry();
+        rhs_width_[idx] = geom.volume()*reservoir_pressure_[idx];
+    }
+
+    fracture_matrix_->resize(nc,nc);
+    double E = 1;
+    double nu = 0.5;
+    ddm::assembleMatrix(*fracture_matrix_,E,nu,*grid_);
 }
 
 // bool sortcsr(const tuple<size_t,size_t,double>& a,
