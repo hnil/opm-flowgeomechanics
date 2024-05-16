@@ -22,9 +22,9 @@ Fracture::init(std::string well, int perf, int well_cell, Fracture::Point3D orig
     }
     layers_ = 0;
     initFracture();
-    grow(3, 0);
+    grow(1, 0);
     nlinear_ = layers_;
-    grow(10, 1);
+    //grow(10, 1);
     grid_->grow();
     grid_->postGrow();
     vtkwriter_ = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(), Dune::VTK::nonconforming);
@@ -280,12 +280,12 @@ Fracture::updateReservoirProperties()
     assert(reservoir_cells_.size() == nc);
     reservoir_perm_.resize(nc, perm);
     reservoir_dist_.resize(nc, 10.0);
-    reservoir_pressure_.resize(nc, 0.0);
+    reservoir_pressure_.resize(nc, 1.0);
+    this->initFractureWidth();
 }
 void
 Fracture::solve()
 {
-
     this->solveFractureWidth();
     // grow fracture
     this->setSource();
@@ -332,6 +332,9 @@ Fracture::solveFractureWidth()
 {
     this->assembleFracture();
     fracture_matrix_->solve(fracture_width_,rhs_width_);
+    for(int i=0; i < fracture_width_.size(); ++i){
+        assert(fracture_width_[i]>0);
+    }
 }
 
 void
@@ -452,13 +455,16 @@ void  Fracture::assembleFracture(){
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     for (auto elem : elements(grid_->leafGridView())) {
         int idx = mapper.index(elem);
-        auto geom = elem.geometry();
-        rhs_width_[idx] = geom.volume()*reservoir_pressure_[idx];
+        //auto geom = elem.geometry();
+        rhs_width_[idx] = reservoir_pressure_[idx];//*geom.volume();
     }
 
+    if(!fracture_matrix_){
+        fracture_matrix_ = std::make_unique<DynamicMatrix>();
+    }
     fracture_matrix_->resize(nc,nc);
     double E = 1;
-    double nu = 0.5;
+    double nu = 0.3;
     ddm::assembleMatrix(*fracture_matrix_,E,nu,*grid_);
 }
 
