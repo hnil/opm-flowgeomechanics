@@ -138,6 +138,7 @@ assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double
             // symmetric stress voit notation
             Dune::FieldVector<double,6> strain = TDStrainFS(center, elem2, slip, nu);
             Dune::FieldVector<double,6> stress = strainToStress(E,nu,strain);
+            stress *= E;
             double ntraction = tractionSymTensor(stress,normal);
             // matrix relate to pure traction not area weighted
             matrix[idx1][idx2] = ntraction;

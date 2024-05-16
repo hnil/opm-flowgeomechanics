@@ -147,6 +147,8 @@ namespace Opm {
          using DynamicMatrix = Dune::DynamicMatrix<double>;
         std::unique_ptr<DynamicMatrix> fracture_matrix_;
 
+        double E_;
+        double nu_;
     };
 }
 #endif

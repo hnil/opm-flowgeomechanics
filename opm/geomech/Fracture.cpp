@@ -18,13 +18,13 @@ Fracture::init(std::string well, int perf, int well_cell, Fracture::Point3D orig
     axis_[1] = crossProduct(axis_[2], axis_[0]);
     for (int i = 0; i < 3; ++i) {
         axis_[i] /= axis_[i].two_norm();
-        axis_[i] *= 20;
+        axis_[i] *= 30;
     }
     layers_ = 0;
     initFracture();
-    grow(1, 0);
+    grow(3, 0);
     nlinear_ = layers_;
-    //grow(10, 1);
+    grow(4, 1);
     grid_->grow();
     grid_->postGrow();
     vtkwriter_ = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(), Dune::VTK::nonconforming);
@@ -280,7 +280,9 @@ Fracture::updateReservoirProperties()
     assert(reservoir_cells_.size() == nc);
     reservoir_perm_.resize(nc, perm);
     reservoir_dist_.resize(nc, 10.0);
-    reservoir_pressure_.resize(nc, 1.0);
+    reservoir_pressure_.resize(nc, 1.0e5);
+    nu_ = 0.25;
+    E_ = 1e9;
     this->initFractureWidth();
 }
 void
@@ -343,14 +345,14 @@ Fracture::initFractureWidth()
     size_t nc = grid_->leafGridView().size(0);
     fracture_width_.resize(nc);
     fracture_width_ = 1e-3;
-    ElementMapper elemMapper(grid_->leafGridView(), Dune::mcmgElementLayout());
-    for (auto& element : elements(grid_->leafGridView())) {
-        const auto elemIdx = elemMapper.index(element);
-        auto geom = element.geometry();
-        auto vec_origo = geom.center() - origo_;
-        double dist_origo = vec_origo.two_norm();
-        fracture_width_[elemIdx] *= dist_origo;
-    }
+    // ElementMapper elemMapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+    // for (auto& element : elements(grid_->leafGridView())) {
+    //     const auto elemIdx = elemMapper.index(element);
+    //     auto geom = element.geometry();
+    //     auto vec_origo = geom.center() - origo_;
+    //     double dist_origo = vec_origo.two_norm();
+    //     fracture_width_[elemIdx] *= dist_origo;
+    // }
 }
 void
 Fracture::initPressureMatrix()
@@ -463,9 +465,7 @@ void  Fracture::assembleFracture(){
         fracture_matrix_ = std::make_unique<DynamicMatrix>();
     }
     fracture_matrix_->resize(nc,nc);
-    double E = 1;
-    double nu = 0.3;
-    ddm::assembleMatrix(*fracture_matrix_,E,nu,*grid_);
+    ddm::assembleMatrix(*fracture_matrix_,E_, nu_,*grid_);
 }
 
 // bool sortcsr(const tuple<size_t,size_t,double>& a,
