@@ -301,6 +301,16 @@ opm_add_test(plot_reservoir_vtk
 	 $<TARGET_OBJECTS:moduleVersionGeoMech>
 )
 
+opm_add_test(single_fracture_sim
+   ONLY_COMPILE
+	 ALWAYS_ENABLE
+	 DEPENDS opmsimulators opmupscaling
+	 LIBRARIES opmsimulators opmupscaling fracture
+	 SOURCES
+	 examples/single_fracture_sim.cpp
+	 $<TARGET_OBJECTS:moduleVersionGeoMech>
+)
+
 # target_link_libraries(testpdelab Tracy::TracyClient)
 
 

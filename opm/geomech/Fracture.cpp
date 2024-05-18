@@ -4,6 +4,9 @@
 #include <opm/simulators/linalg/setupPropertyTree.hpp>
 #include <opm/simulators/linalg/FlowLinearSolverParameters.hpp>
 #include <opm/geomech/DiscreteDisplacement.hpp>
+#include <dune/common/filledarray.hh> // needed for printSparseMatrix??
+#include <dune/istl/io.hh> // needed for printSparseMatrix??
+
 namespace Opm
 {
 void
@@ -27,6 +30,13 @@ Fracture::init(std::string well, int perf, int well_cell, Fracture::Point3D orig
     grow(4, 1);
     grid_->grow();
     grid_->postGrow();
+
+    size_t nc = grid_->leafGridView().size(0);
+    reservoir_cells_ = std::vector<int>(nc, -1);
+    fracture_pressure_.resize(nc); fracture_pressure_ = 1e5;
+    this->initFractureWidth();
+    //fracture_width_.resize(nc); fracture_width_ = 1e-3;
+
     vtkwriter_ = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(), Dune::VTK::nonconforming);
     //
 
@@ -410,10 +420,11 @@ Fracture::initPressureMatrix()
         for (auto matel : htrans_) {
             size_t i = std::get<0>(matel);
             size_t j = std::get<1>(matel);
-            matrix.entry(i, j) = 0;
-            matrix.entry(j, i) = 0;
-            matrix.entry(j, j) = 0;
-            matrix.entry(i, i) = 0;
+            double zero_entry = 0.0; //1e-11;
+            matrix.entry(i, j) = zero_entry; //0;
+            matrix.entry(j, i) = zero_entry; //0;
+            matrix.entry(j, j) = zero_entry; //0;
+            matrix.entry(i, i) = zero_entry; //0;
         }
         matrix.compress();
     //}
@@ -466,6 +477,11 @@ void  Fracture::assembleFracture(){
     }
     fracture_matrix_->resize(nc,nc);
     ddm::assembleMatrix(*fracture_matrix_,E_, nu_,*grid_);
+}
+
+void Fracture::printPressureMatrix() const // debug purposes
+{
+  Dune::printSparseMatrix(std::cout, *pressure_matrix_, "matname", "linameo");
 }
 
 // bool sortcsr(const tuple<size_t,size_t,double>& a,

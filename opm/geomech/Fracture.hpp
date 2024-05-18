@@ -82,6 +82,8 @@ namespace Opm {
         void solveFractureWidth();
         void solvePressure();
         void solve();
+
+      void printPressureMatrix() const; // debug purposes
     private:
         // helpers for growing grid
         void insertLinear(const std::vector<unsigned int>& inner_indices);
