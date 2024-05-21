@@ -1,0 +1,5 @@
+RPTSOL
+ RESTART=2 
+     FIP=1 
+/
+
