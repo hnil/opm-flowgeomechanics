@@ -37,6 +37,9 @@
 #include <iostream>
 
 #include <dune/istl/matrixmarket.hh>
+#include <dune/gmsh4/gmsh4reader.hh>
+#include <dune/gmsh4/gridcreators/lagrangegridcreator.hh>
+#include <dune/grid/uggrid.hh> // debug
 #include "opm/geomech/Fracture.hpp"
 
 //#include <dune/common/filledarray.hh>
@@ -45,6 +48,17 @@
 
 int main(int argc, char** argv) {
 
+  auto refgrid = Dune::Gmsh4Reader<Dune::FoamGrid<2,3>>::createGridFromFile("Sphere.msh");
+  
+  // using Grid = Dune::FoamGrid<2, 3>;
+  // Dune::GridFactory<Grid> factory;
+  // Dune::Gmsh4::LagrangeGridCreator creator{factory};
+  
+
+  //using Grid = Dune::UGGrid<2>;
+  //Dune::Gmsh4Reader<Grid>::createGridFromFile("filename.msh");
+
+  
   using Point3D = Dune::FieldVector<double, 3>;
 
   // constructing and initializing fracture
