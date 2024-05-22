@@ -84,6 +84,8 @@ namespace Opm {
         void solve();
 
       void printPressureMatrix() const; // debug purposes
+      void printMechMatrix() const; // debug purposes      
+      void setFractureGrid(std::unique_ptr<Fracture::Grid>& gptr); // a hack to allow use of another grid
     private:
         // helpers for growing grid
         void insertLinear(const std::vector<unsigned int>& inner_indices);

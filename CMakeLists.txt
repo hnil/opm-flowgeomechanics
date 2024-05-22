@@ -311,6 +311,16 @@ opm_add_test(single_fracture_sim
 	 $<TARGET_OBJECTS:moduleVersionGeoMech>
 )
 
+opm_add_test(make_test_disk
+   ONLY_COMPILE
+	 ALWAYS_ENABLE
+	 DEPENDS opmsimulators opmupscaling
+	 LIBRARIES gmsh
+	 SOURCES
+	 examples/make_test_disk.cpp
+	 $<TARGET_OBJECTS:moduleVersionGeoMech>
+)
+
 # target_link_libraries(testpdelab Tracy::TracyClient)
 
 

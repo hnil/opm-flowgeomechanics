@@ -82,15 +82,16 @@ TDStrainFS(const Dune::FieldVector<double, 3>& obs,
     return strain;
 }
 
-    double traceSymTensor(const Dune::FieldVector<double,6> symtensor){
-        double trace = 0;
-        for(int i=0; i < 3; ++i){
-            trace = symtensor[i];
-        }
-        return trace;
-    }
+inline double traceSymTensor(const Dune::FieldVector<double,6> symtensor){
+  double trace = 0;
+  for(int i=0; i < 3; ++i){
+    trace = symtensor[i];
+  }
+  return trace;
+}
 
-Dune::FieldVector<double,6>
+// compute the stress tensor (6 components) from the strain tensor (6 components)
+inline Dune::FieldVector<double,6>
 strainToStress(const double E,const double nu,const Dune::FieldVector<double,6> strain){
     Dune::FieldVector<double,6> stress;
     double volum_strain = traceSymTensor(strain);
@@ -102,7 +103,8 @@ strainToStress(const double E,const double nu,const Dune::FieldVector<double,6> 
     }
     return stress;
 }
-double
+
+inline double
 tractionSymTensor(const Dune::FieldVector<double,6> symtensor, Dune::FieldVector<double,3> normal){
     const Dune::FieldVector<double,6> stress;
     assert(std::abs(normal.two_norm()-1) < 1e-13);
@@ -116,7 +118,7 @@ tractionSymTensor(const Dune::FieldVector<double,6> symtensor, Dune::FieldVector
     return traction;
 }
 
-void
+inline void
 //assembleMatrix(Dune::DynamicMatrix<Dune::FieldMatrix<double,1,1>>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid)
 assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid)
 
@@ -147,3 +149,5 @@ assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double
 }
 
 } // namespace ddm
+
+

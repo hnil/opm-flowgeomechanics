@@ -24,6 +24,7 @@ Fracture::init(std::string well, int perf, int well_cell, Fracture::Point3D orig
         axis_[i] *= 30;
     }
     layers_ = 0;
+    nlinear_ = 0;
     initFracture();
     grow(3, 0);
     nlinear_ = layers_;
@@ -282,12 +283,25 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
 }
 
 
+void Fracture::setFractureGrid(std::unique_ptr<Fracture::Grid>& gptr)
+{
+  grid_ = std::move(gptr);
+  layers_ = 0;
+  nlinear_ = 0;
+
+  size_t nc = grid_->leafGridView().size(0);
+  fracture_pressure_.resize(nc); fracture_pressure_ = 1e5;
+  reservoir_pressure_.resize(nc, 1.0e5);
+  updateReservoirProperties();
+  this->assembleFracture();
+}
+
 void
 Fracture::updateReservoirProperties()
 {
     double perm = 1e-13;
     size_t nc = grid_->leafGridView().size(0);
-    assert(reservoir_cells_.size() == nc);
+    //assert(reservoir_cells_.size() == nc);
     reservoir_perm_.resize(nc, perm);
     reservoir_dist_.resize(nc, 10.0);
     reservoir_pressure_.resize(nc, 1.0e5);
@@ -482,6 +496,11 @@ void  Fracture::assembleFracture(){
 void Fracture::printPressureMatrix() const // debug purposes
 {
   Dune::printSparseMatrix(std::cout, *pressure_matrix_, "matname", "linameo");
+}
+
+void Fracture::printMechMatrix() const // debug purposes
+{
+  Dune::printmatrix(std::cout, *fracture_matrix_, "matname", "linameo");
 }
 
 // bool sortcsr(const tuple<size_t,size_t,double>& a,
