@@ -85,7 +85,7 @@ TDStrainFS(const Dune::FieldVector<double, 3>& obs,
 inline double traceSymTensor(const Dune::FieldVector<double,6> symtensor){
   double trace = 0;
   for(int i=0; i < 3; ++i){
-    trace = symtensor[i];
+    trace += symtensor[i];
   }
   return trace;
 }
@@ -94,12 +94,12 @@ inline double traceSymTensor(const Dune::FieldVector<double,6> symtensor){
 inline Dune::FieldVector<double,6>
 strainToStress(const double E,const double nu,const Dune::FieldVector<double,6> strain){
     Dune::FieldVector<double,6> stress;
-    double volum_strain = traceSymTensor(strain);
+    double volume_strain = traceSymTensor(strain);
     double mu = E/(2*(1+nu));//??
     double lambda = 2 * mu * nu / (1 - 2 * nu);
     for(int i=0; i < 3; ++i){
-        stress[i] = 2*mu + (lambda*volum_strain);
-        stress[i+3] =  2*mu*strain[i+3]; // [xy,xz,yz]
+        stress[i]   =  2*mu*strain[i] + (lambda * volume_strain);
+        stress[i+3] += 2*mu*strain[i+3]; // [xy,xz,yz]
     }
     return stress;
 }
@@ -137,10 +137,11 @@ assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double
             // check if this is defined in relative coordinates
             Dune::FieldVector<double,3> slip;// = make3(1.0,0.0, 0.0);
             slip[0]=1;slip[1]=0;slip[2]=0;
+
             // symmetric stress voit notation
             Dune::FieldVector<double,6> strain = TDStrainFS(center, elem2, slip, nu);
             Dune::FieldVector<double,6> stress = strainToStress(E,nu,strain);
-            stress *= E;
+
             double ntraction = tractionSymTensor(stress,normal);
             // matrix relate to pure traction not area weighted
             matrix[idx1][idx2] = ntraction;
