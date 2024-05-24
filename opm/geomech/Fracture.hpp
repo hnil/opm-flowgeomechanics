@@ -70,10 +70,10 @@ namespace Opm {
                   Point3D normal);
         void grow(int layers,int method);
         std::string name() const;
-        void write() const;
+        void write(int reportStep = -1) const;
         template<class Grid3D>
         void updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
-                                  Grid3D& grid3D);
+                                  const Grid3D& grid3D);
 
         // solver related
         void updateReservoirProperties();
@@ -114,7 +114,7 @@ namespace Opm {
 
 
         void assembleFracture();
-
+        std::vector<double> stressIntensityK1() const;
 
         std::vector<int> well_source_;
         // for reservoir

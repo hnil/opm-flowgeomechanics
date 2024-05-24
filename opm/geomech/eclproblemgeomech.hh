@@ -16,6 +16,7 @@
 #include <opm/elasticity/material.hh>
 
 #include <opm/simulators/flow/FlowProblem.hpp>
+#include <opm/simulators/linalg/PropertyTree.hpp>
 
 #include <array>
 #include <functional>
@@ -25,6 +26,13 @@
 #include <string>
 #include <tuple>
 #include <vector>
+namespace Opm::Properties {
+    template<class TypeTag, class MyTypeTag>
+    struct FractureParamFile {
+        inline static std::string value{"notafile"};
+    };
+}
+
 
 namespace Opm{
     template<typename TypeTag>
@@ -48,6 +56,23 @@ namespace Opm{
             FlowProblem<TypeTag>(simulator),
             geomechModel_(simulator)
         {
+            std::string filename = Parameters::get<TypeTag, Properties::FractureParamFile>();
+            try{
+                Opm::PropertyTree fracture_param(filename);
+                fracture_param_ = fracture_param;
+            }
+            catch(...){
+                std::stringstream ss;
+                ss << "No fracture parameter file: " << filename << " : no fractures added ";
+                //ss << e.what();
+                OpmLog::warning(ss.str());
+                Opm::PropertyTree fracture_param;
+                fracture_param.put("hasfractures",false);
+                fracture_param.put("fractureparams.numfractures",1);
+                fracture_param_ = fracture_param;
+            }
+
+            hasFractures_ = fracture_param_.get<bool>("hasfractures");
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 this->model().addOutputModule(new VtkGeoMechModule<TypeTag>(simulator));
             }
@@ -57,6 +82,9 @@ namespace Opm{
             Parent::registerParameters();
             VtkGeoMechModule<TypeTag>::registerParameters();
             FlowLinearSolverParametersGeoMech::registerParameters<TypeTag>();
+            Parameters::registerParam<TypeTag, Properties::FractureParamFile>
+                ("json file defining fracture setting");
+
         }
 
         void finishInit(){
@@ -219,6 +247,11 @@ namespace Opm{
             }
         }
 
+        void endEpisode(){
+            Parent::endEpisode();
+            geomechModel_.writeFractureSolution();
+        }
+
         const EclGeoMechModel<TypeTag>& geoMechModel() const
         { return geomechModel_; }
 
@@ -262,6 +295,8 @@ namespace Opm{
         //     const auto& myvec = fp.get_double(field);
         //     return myvec[globalIdx];
         // }
+        bool hasFractures() const{ return hasFractures_;}
+        Opm::PropertyTree getFractureParam() const{return fracture_param_.get_child("fractureparam");};
     private:
         using GeomechModel = EclGeoMechModel<TypeTag>;
         GeomechModel geomechModel_;
@@ -279,6 +314,11 @@ namespace Opm{
         Dune::BlockVector<Dune::FieldVector<double,6>> initstress_;
         //std::vector<Opm::Elasticity::Material> elasticparams_;
         std::vector<std::shared_ptr<Opm::Elasticity::Material>> elasticparams_;
+
+        // for fracture calculation
+        bool hasFractures_;
+        Opm::PropertyTree fracture_param_;
+
         //private:
         //std::unique_ptr<TimeStepper> adaptiveTimeStepping_;
     };

@@ -216,7 +216,11 @@ int run(Params& p, const std::string& name)
     vtkwriter.write(outputfile);
 
     // look at fracture model
-    Opm::FractureModel fracturemodel(grid, wells, eclgrid);
+    Opm::PropertyTree prm;
+    Opm::PropertyTree prmtmp;
+    prm.put("hasfracture",true);
+    prm.put("fractureparam.radius",10);
+    Opm::FractureModel fracturemodel(grid, wells, eclgrid, prm);
     fracturemodel.updateReservoirProperties();
     fracturemodel.solve();
     fracturemodel.write();

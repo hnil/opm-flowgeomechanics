@@ -9,13 +9,13 @@
 #include <opm/geomech/vem_elasticity_solver.hpp>
 
 #include <opm/geomech/FlowGeomechLinearSolverParameters.hpp>
-
+#include <opm/geomech/FractureModel.hpp>
 //#include <opm/geomech/ElasticitySolverUpscale.hpp>
 namespace Opm{
     template<typename TypeTag>
     class EclGeoMechModel : public BaseAuxiliaryModule<TypeTag>
     {
-        //using Parent = BaseAuxiliaryModule<TypeTag>;
+        using Parent = BaseAuxiliaryModule<TypeTag>;
         using Simulator = GetPropType<TypeTag, Properties::Simulator>;
         using GlobalEqVector = GetPropType<TypeTag, Properties::GlobalEqVector>;
         using NeighborSet = typename BaseAuxiliaryModule<TypeTag>::NeighborSet;
@@ -68,6 +68,44 @@ namespace Opm{
         }
         void endTimeStep(){
             //Parent::endIteration();
+            const auto& problem = simulator_.problem();
+            this->solveGeomechanics();
+            if(problem.hasFractures()){
+                if(!fracturemodel_){
+                    // let fracture contain all wells
+                    Opm::PropertyTree param = problem.getFractureParam();
+                    //param.read("fractureparam.json");
+                    const auto& schedule =  this->simulator_.vanguard().schedule();
+                    int reportStepIdx = simulator_.episodeIndex();
+                    const std::vector<Opm::Well>& wells = schedule.getWells(reportStepIdx);
+                    const Opm::EclipseGrid& eclgrid = simulator_.vanguard().eclState().getInputGrid();
+                    const auto& grid = simulator_.vanguard().grid();
+                    fracturemodel_ = std::make_unique<FractureModel>(grid,
+                                                                     wells,
+                                                                     eclgrid,
+                                                                     param
+                        );
+                }
+                fracturemodel_->updateReservoirProperties();
+                fracturemodel_->solve();
+                // update and change well indices
+                // std::vector<std::vector<double>> WI = this->getFractureWI()
+                // std::vector<std::string> well_names = this->wellnames()
+                // simulator_->problem().updateWI()
+
+            }
+
+        }
+
+        void writeFractureSolution(){
+            const auto& problem = simulator_.problem();
+            if(problem.hasFractures()){
+                int reportStepIdx = simulator_.episodeIndex();
+                fracturemodel_->write(reportStepIdx);
+            }
+        }
+
+        void solveGeomechanics(){
             OPM_TIMEBLOCK(endTimeStepMech);
             std::cout << "Geomech end iteration" << std::endl;
             size_t numDof = simulator_.model().numGridDof();
@@ -300,6 +338,8 @@ namespace Opm{
         Dune::BlockVector<Dune::FieldVector<double,6> > strain_;
         //Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1> > A_;
         Opm::Elasticity::VemElasticitySolver<Grid> elacticitysolver_;
+        //
+        std::unique_ptr<FractureModel> fracturemodel_;
     };
 }
 

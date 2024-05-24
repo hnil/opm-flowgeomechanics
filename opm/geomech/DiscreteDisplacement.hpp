@@ -27,6 +27,32 @@ normalOfElement(const Element& elem){
     return normal;
 }
 
+double fractureK1(double dist,double width, double E, double nu){
+    double K1;
+    double mu = E/(2*(1+nu));//??
+    K1 = (mu*sqrt(M_PI)/(2*std::sqrt(dist)*(1.0-nu)))*width;
+    K1 *= 1.834; //factor found numerically
+    return K1;
+}
+
+/*
+//formulas for share ned rotation to find share in correct directions
+double fractureK2(double dist,double edist, double E, double nu){
+    double K1;
+    K1 = mu*sqrt(M_PI)/(2*sqrt(dist).*(1-nu))*emid;
+    K1 *= 1.834; //factor found numerically
+    return K1;
+}
+
+double fractureK3(double dist,double edist, double E, double nu){
+    double K1;
+    K1 = mu*sqrt(M_PI)/(2*sqrt(dist).*(1-nu))*edist*(1-nu);
+    K1 *= 1.834; //factor found numerically
+    return K1;
+}
+*/
+
+
 template <class Element>
 std::array<Real3, 3>
 getTri(const Element& elem){

@@ -172,7 +172,7 @@ opm_add_test(flow_geomech
 	ONLY_COMPILE
 	ALWAYS_ENABLE
 	DEPENDS opmsimulators opmupscaling
-	LIBRARIES opmsimulators opmupscaling vem
+	LIBRARIES opmsimulators opmupscaling vem fracture
 	SOURCES
 	examples/flow_geomech.cpp examples/FlexibleSolverMech.cpp
 	$<TARGET_OBJECTS:moduleVersionGeoMech>
@@ -185,7 +185,7 @@ opm_add_test(flow_energy_geomech
 	ONLY_COMPILE
 	ALWAYS_ENABLE
 	DEPENDS opmsimulators opmupscaling
-	LIBRARIES opmsimulators opmupscaling vem
+	LIBRARIES opmsimulators opmupscaling vem fracture
 	SOURCES
 	examples/flow_energy_geomech.cpp examples/FlexibleSolverMech.cpp
 	$<TARGET_OBJECTS:moduleVersionGeoMech>
@@ -302,7 +302,7 @@ opm_add_test(plot_reservoir_vtk
 )
 
 opm_add_test(single_fracture_sim
-   ONLY_COMPILE
+	 ONLY_COMPILE
 	 ALWAYS_ENABLE
 	 DEPENDS opmsimulators opmupscaling
 	 LIBRARIES opmsimulators opmupscaling fracture

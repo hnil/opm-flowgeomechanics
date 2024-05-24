@@ -27,12 +27,12 @@ namespace Opm{
             }
         }
     }
-    void FractureModel::write() const{
+    void FractureModel::write(int reportStep) const{
         for(size_t i=0; i < wells_.size(); ++i){
             wells_[i].write();
             const std::vector<Fracture>& fractures = well_fractures_[i];
             for(size_t j=0; j < fractures.size(); ++j){
-                fractures[j].write();
+                fractures[j].write(reportStep);
             }
         }
     }

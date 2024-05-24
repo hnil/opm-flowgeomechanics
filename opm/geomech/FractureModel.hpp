@@ -8,6 +8,10 @@
 #include <opm/input/eclipse/Schedule/Well/Connection.hpp>
 #include <opm/input/eclipse/Schedule/Well/Well.hpp>
 #include <opm/input/eclipse/Schedule/Well/WellConnections.hpp>
+#include <opm/simulators/linalg/PropertyTree.hpp>
+#include <iostream>
+#include <sstream>
+#include <string>
 namespace Opm{
 class FractureModel{
     //using CartesianIndexMapper = Dune::CartesianIndexMapper<Dune::CpGrid>;
@@ -15,7 +19,13 @@ public:
     using Point3D = Dune::FieldVector<double,3>;
     using Segment = std::array<unsigned int,2>;
     template<class Grid>
-    FractureModel(Grid grid, const std::vector<Opm::Well>& wells, const Opm::EclipseGrid& eclgrid){
+    FractureModel(const Grid& grid,
+                  const std::vector<Opm::Well>& wells,
+                  const Opm::EclipseGrid& eclgrid,
+                  const Opm::PropertyTree& param
+        ):
+        prm_(param)
+    {
         //using CartesianIndexMapper = Dune::CartesianIndexMapper<Grid>;
         //CartesianIndexMapper cartmapper(grid);
         //const std::array<int, dimension>
@@ -66,11 +76,12 @@ public:
     }
     void addFractures();
     void addWell(std::string name, const std::vector<Point3D>& points,const std::vector<std::array<unsigned,2>>& segments );
-    void write() const;
+    void write(int ReportStep = -1) const;
     void solve();
     void updateReservoirProperties();
 private:
     std::vector<FractureWell> wells_;
     std::vector<std::vector<Fracture>> well_fractures_;
+    Opm::PropertyTree prm_;
 };
 }

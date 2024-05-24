@@ -6,7 +6,10 @@
 #include <opm/geomech/DiscreteDisplacement.hpp>
 #include <dune/common/filledarray.hh> // needed for printSparseMatrix??
 #include <dune/istl/io.hh> // needed for printSparseMatrix??
-
+#include <cmath>
+#include <iostream>
+#include <sstream>
+#include<string>
 namespace Opm
 {
 void
@@ -106,9 +109,32 @@ Fracture::initFracture()
     // grid_ = factory.createGrid();
 }
 
+std::vector<double> Fracture::stressIntensityK1() const{
+        size_t nc = grid_->leafGridView().size(0);
+        std::vector<double> stressIntensityK1(nc, std::nan("0"));
+        ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+        for(const auto& elem: elements(grid_->leafGridView())){
+            //bool isboundary = false;
+            for (auto& is : Dune::intersections(grid_->leafGridView(),elem)) {
+                if (is.boundary()) {
+                    int nIdx = mapper.index(elem);
+                    auto isCenter = is.geometry().center();
+                    auto elCenter = elem.geometry().center();
+                    auto vecC = isCenter-elCenter;
+                    auto distC = vecC.two_norm();
+                    double K1 = ddm::fractureK1(distC, fracture_width_[nIdx], E_, nu_);
+                    stressIntensityK1[nIdx] = K1;
+                }
+            }
+
+        }
+        return stressIntensityK1;
+    }
+
 void
-Fracture::write() const
+Fracture::write(int reportStep) const
 {
+    std::vector<double> K1;//need to be in scope until written
     if (reservoir_cells_.size() > 0) {
         vtkwriter_->addCellData(reservoir_cells_, "ReservoirCell");
     }
@@ -126,8 +152,15 @@ Fracture::write() const
     }
     if (fracture_width_.size() > 0) {
         vtkwriter_->addCellData(fracture_width_, "FractureWidth");
+        K1 = this->stressIntensityK1();
+        vtkwriter_->addCellData(K1, "stressIntensityK1");
     }
-    vtkwriter_->write(this->name().c_str());
+    //std::stringstream ss(this->name());
+    std::string filename(this->name());
+    if(reportStep > 0){
+        filename = filename + "_step_" +  std::to_string(reportStep);
+    }
+    vtkwriter_->write(filename.c_str());
 };
 void
 Fracture::grow(int layers, int method)
@@ -224,7 +257,7 @@ Fracture::surfaceMap(double x, double y)
 }
 template <class Grid3D>
 void
-Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree, Grid3D& grid3D)
+Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,const Grid3D& grid3D)
 {
     reservoir_cells_.resize(grid_->leafGridView().size(0));
     using GridView = typename Grid::LeafGridView;
@@ -304,9 +337,9 @@ Fracture::updateReservoirProperties()
     //assert(reservoir_cells_.size() == nc);
     reservoir_perm_.resize(nc, perm);
     reservoir_dist_.resize(nc, 10.0);
-    reservoir_pressure_.resize(nc, 1.0e5);
+    reservoir_pressure_.resize(nc, 100.0e5);
     nu_ = 0.25;
-    E_ = 1e9;
+    E_ = 1e5;
     this->initFractureWidth();
 }
 void
@@ -536,5 +569,5 @@ void Fracture::printMechMatrix() const // debug purposes
 
 template void
 Fracture::updateReservoirCells<Dune::CpGrid>(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
-                                             Dune::CpGrid& grid3D);
+                                             const Dune::CpGrid& grid3D);
 } // namespace Opm
