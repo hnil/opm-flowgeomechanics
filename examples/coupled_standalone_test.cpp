@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <vector>
 
 #include <dune/istl/matrixmarket.hh>
 
@@ -23,22 +24,73 @@ namespace{
   using Point3D = Dune::FieldVector<double, 3>;
   using Grid = Dune::FoamGrid<2, 3>;
   using Htrans = std::tuple<size_t,size_t, double, double>;
+  using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView>;
+  using PressureMatrixInfo = std::tuple<std::unique_ptr<Matrix>, std::vector<Htrans>>;
+  
   const double E = 1e9;
   const double nu = 0.25;
   const double init_frac_press = 1e6;
 }; // end anonymous namespace
 
 // ============================================================================
-std::tuple<std::unique_ptr<Matrix>, Htrans> pressureMatrixStructure()
+std::vector<Htrans> computeHtrans(const Grid& grid)
 // ============================================================================
 {
-  //@@ implement me
-  return std::tuple<std::unique_ptr<Matrix>, Htrans>(std::unique_ptr<Matrix>(),
-                                                     Htrans(0,0,0,0));
+  std::vector<Htrans> result;
+  const ElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
+  for (const auto& element : Dune::elements(grid.leafGridView())) {
+    const int eIdx = mapper.index(element);
+    const auto geom = element.geometry();
+    for (const auto& is : Dune::intersections(grid.leafGridView(), element)) {
+      if (is.boundary())
+        continue;
+      const int nIdx = mapper.index(is.outside());
+      const auto igeom = is.geometry();
+      if( eIdx < nIdx) {
+        const auto iscenter = igeom.center();
+        const auto ncenter = is.outside().geometry().center() - iscenter;
+        const auto ecenter = geom.center() - iscenter;
+        const double area = igeom.volume();
+        const double h1 = ecenter.two_norm() / area;
+        const double h2 = ncenter.two_norm() / area;
+
+        result.push_back({nIdx, eIdx, h1, h2});
+      }
+    }
+  }
+  return result;
 }
 
 // ============================================================================
-void updateTrans(std::tuple<std::unique_ptr<Matrix>, Htrans>& pmat,
+PressureMatrixInfo pressureMatrixStructure(const std::unique_ptr<Grid>& grid)
+// ============================================================================
+{
+  // computing pre-transmissibilities
+  const std::vector<Htrans> htrans = computeHtrans(*grid);
+
+  // setting up matrix and initializing its sparsity structure based on the
+  // computed pre-transmissibilities
+  std::unique_ptr<Matrix> pressure_matrix = std::make_unique<Matrix>();
+  pressure_matrix->setBuildMode(Matrix::implicit);
+
+  // map from dof=3*nodes at a cell (ca 3*3*3) to cell
+  pressure_matrix->setImplicitBuildModeParameters(3 * 6 - 3 - 2, 0.4);
+  const size_t nc = grid->leafGridView().size(0);
+  pressure_matrix->setSize(nc, nc);
+  for (const auto& elem : htrans) {
+    const size_t ix(std::get<0>(elem));
+    const size_t jx(std::get<1>(elem));
+    pressure_matrix->entry(ix, jx) = 0.0;
+    pressure_matrix->entry(jx, ix) = 0.0;
+    pressure_matrix->entry(jx, jx) = 0.0;
+    pressure_matrix->entry(ix, ix) = 0.0;
+  }
+
+  return PressureMatrixInfo(std::move(pressure_matrix), htrans);
+}
+
+// ============================================================================
+void updateTrans(PressureMatrixInfo& pmat,
                  const Dune::BlockVector<Dune::FieldVector<double, 1>>& aperture)
 // ============================================================================  
 {
@@ -73,7 +125,7 @@ int main()
   std::cout << frac_aperture << std::endl;
 
   // compute flow matrix
-  std::tuple<std::unique_ptr<Matrix>, Htrans> pmat = pressureMatrixStructure();
+  PressureMatrixInfo pmat = pressureMatrixStructure(grid);
 
   updateTrans(pmat, frac_aperture);
   
