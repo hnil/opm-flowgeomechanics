@@ -488,7 +488,7 @@ Fracture::assemblePressure()
         double h1 = fracture_width_[i];
         double h2 = fracture_width_[j];
         // harmonic mean of surface flow
-        double value = 12. / (h1 * h1 * t1) + 1. / (h2 * h2 * t2);
+        double value = 12. / (h1 * h1 * t1) + 12. / (h2 * h2 * t2); 
         value = 1 / value;
 
         // matrix.entry(i, j) -= value;
