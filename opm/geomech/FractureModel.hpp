@@ -57,7 +57,8 @@ public:
             }
             vertices.insert(vertices.begin(),refpoint);
             std::vector<Segment> segments;
-            for(size_t i=0; i < cells.size(); ++i){
+            //NB unsinged so grid can not be to big
+            for(unsigned i=0; i < unsigned(cells.size()); ++i){
                 segments.push_back(Segment({i,i+1}));
             }
             // NB should add gri cells
@@ -77,6 +78,7 @@ public:
     void addFractures();
     void addWell(std::string name, const std::vector<Point3D>& points,const std::vector<std::array<unsigned,2>>& segments );
     void write(int ReportStep = -1) const;
+    void writemulti(double time) const;
     void solve();
     void updateReservoirProperties();
 private:

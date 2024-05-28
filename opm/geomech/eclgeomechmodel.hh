@@ -80,6 +80,11 @@ namespace Opm{
                     const std::vector<Opm::Well>& wells = schedule.getWells(reportStepIdx);
                     const Opm::EclipseGrid& eclgrid = simulator_.vanguard().eclState().getInputGrid();
                     const auto& grid = simulator_.vanguard().grid();
+                    std::string outputDir = Parameters::get<TypeTag, Properties::OutputDir>();
+                    std::string caseName  = simulator_.vanguard().caseName();
+                    param.put("outputdir", outputDir);
+                    param.put("casename", caseName);
+
                     fracturemodel_ = std::make_unique<FractureModel>(grid,
                                                                      wells,
                                                                      eclgrid,
@@ -100,9 +105,15 @@ namespace Opm{
         void writeFractureSolution(){
             const auto& problem = simulator_.problem();
             if(problem.hasFractures()){
+                // write first solution in standard format
                 int reportStepIdx = simulator_.episodeIndex();
-                fracturemodel_->write(reportStepIdx);
+                if(reportStepIdx==1){
+                    fracturemodel_->write(reportStepIdx);
+                }
             }
+            double time = simulator_.time();
+            fracturemodel_->writemulti(time);
+
         }
 
         void solveGeomechanics(){

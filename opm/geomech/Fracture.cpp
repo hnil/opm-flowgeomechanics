@@ -10,11 +10,19 @@
 #include <iostream>
 #include <sstream>
 #include<string>
+#include <dune/common/fmatrixev.hh>
 namespace Opm
 {
 void
-Fracture::init(std::string well, int perf, int well_cell, Fracture::Point3D origo, Fracture::Point3D normal)
+Fracture::init(std::string well,
+               int perf,
+               int well_cell,
+               Fracture::Point3D origo,
+               Fracture::Point3D normal,
+               Opm::PropertyTree prm
+    )
 {
+    prm_ = prm;
     wellinfo_ = WellInfo({well, perf, well_cell});
     origo_ = origo;
     axis_[2] = normal;
@@ -40,8 +48,17 @@ Fracture::init(std::string well, int perf, int well_cell, Fracture::Point3D orig
     fracture_pressure_.resize(nc); fracture_pressure_ = 1e5;
     this->initFractureWidth();
     //fracture_width_.resize(nc); fracture_width_ = 1e-3;
-
     vtkwriter_ = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(), Dune::VTK::nonconforming);
+
+    std::string outputdir = prm_.get<std::string>("outputdir");
+    std::string simName = prm_.get<std::string>("casename");
+    std::string multiFileName =  this->name();
+    vtkmultiwriter_ = std::make_unique< Opm::VtkMultiWriter<Grid::LeafGridView, VTKFormat > >(/*async*/ false,
+                                                                                              grid_->leafGridView(),
+                                                                                              outputdir,
+                                                                                              simName,
+                                                                                              multiFileName
+        );
     //
 
 }
@@ -156,12 +173,59 @@ Fracture::write(int reportStep) const
         vtkwriter_->addCellData(K1, "stressIntensityK1");
     }
     //std::stringstream ss(this->name());
-    std::string filename(this->name());
+    std::string outputdir = prm_.get<std::string>("outputdir");
+    std::string simName = prm_.get<std::string>("casename");
+    std::string filename = outputdir + "/" + simName + this->name();
     if(reportStep > 0){
         filename = filename + "_step_" +  std::to_string(reportStep);
     }
     vtkwriter_->write(filename.c_str());
 };
+
+void Fracture::writemulti(double time) const
+{
+    //vtkmultiwriter_->gridChanged(); need to be called if grid is changed
+    // need to have copies in case of async outout (and interface to functions)
+    std::vector<double> K1 = this->stressIntensityK1();
+    std::vector<double> fracture_pressure(fracture_pressure_.size(),0.0);
+    std::vector<double> reservoir_pressure = reservoir_pressure_;//.size(),0.0);
+    std::vector<double> reservoir_dist = reservoir_dist_;//.size(),0.0);
+    std::vector<double> reservoir_perm = reservoir_perm_;//.size(),0.0);
+    std::vector<double> reservoir_cells(reservoir_cells_.size(),0.0);
+    std::vector<double> fracture_width(fracture_width_.size(),0.0);
+
+    for(size_t i=0; i < fracture_width_.size(); ++i){
+        fracture_width[i] = fracture_width_[i][0];
+        fracture_pressure[i] = fracture_pressure_[i][0];
+        reservoir_cells[i] = reservoir_cells_[i];// only converts to double
+    }
+
+    vtkmultiwriter_->beginWrite(time);
+
+
+    if (reservoir_cells_.size() > 0) {
+        vtkmultiwriter_->attachScalarElementData(reservoir_cells, "ReservoirCell");
+    }
+    if (reservoir_perm_.size() > 0) {
+        vtkmultiwriter_->attachScalarElementData(reservoir_perm, "ReservoirPerm");
+    }
+    if (reservoir_dist_.size() > 0) {
+        vtkmultiwriter_->attachScalarElementData(reservoir_dist, "ReservoirDist");
+    }
+    if (fracture_pressure_.size() > 0) {
+        vtkmultiwriter_->attachScalarElementData(fracture_pressure, "FracturePressure");
+    }
+    if (reservoir_pressure_.size() > 0) {
+        vtkmultiwriter_->attachScalarElementData(reservoir_pressure, "ReservoirPressure");
+    }
+    if (fracture_width_.size() > 0) {
+        vtkmultiwriter_->attachScalarElementData(fracture_width, "FractureWidth");
+
+        vtkmultiwriter_->attachScalarElementData(K1, "stressIntensityK1");
+    }
+    vtkmultiwriter_->endWrite();
+};
+
 void
 Fracture::grow(int layers, int method)
 {
@@ -259,6 +323,7 @@ template <class Grid3D>
 void
 Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,const Grid3D& grid3D)
 {
+    cell_normals_.resize(grid_->leafGridView().size(0));
     reservoir_cells_.resize(grid_->leafGridView().size(0));
     using GridView = typename Grid::LeafGridView;
     using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
@@ -308,6 +373,9 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
             // std::cout << "Fallback Search" << std::endl;
             // int cell = Opm::findCell(grid3D,geom.center());
         }
+        auto normal = ddm::normalOfElement(element);
+        cell_normals_[elemIdx] = normal;
+
     }
     std::cout << "For Fracture : " << this->name() << " : " << tri_divide << " triangles should be devided"
               << std::endl;
@@ -337,9 +405,10 @@ Fracture::updateReservoirProperties()
     //assert(reservoir_cells_.size() == nc);
     reservoir_perm_.resize(nc, perm);
     reservoir_dist_.resize(nc, 10.0);
+    reservoir_mobility_.resize(nc, 1000);
     reservoir_pressure_.resize(nc, 100.0e5);
     nu_ = 0.25;
-    E_ = 1e5;
+    E_ = 1e9;
     this->initFractureWidth();
 }
 void
@@ -425,6 +494,7 @@ Fracture::initPressureMatrix()
         auto eCenter = geom.center();
         // iterator over all intersections
         for (auto& is : Dune::intersections(grid_->leafGridView(),element)) {
+            
             if (!is.boundary()) {
                 int nIdx = mapper.index(is.outside());
                 if (eIdx < nIdx) {
@@ -447,7 +517,13 @@ Fracture::initPressureMatrix()
             }
         }
         {
-            double value = (reservoir_perm_[eIdx] * geom.volume()) ;
+            //auto normal = ddm::normalOfElement(element);
+            //auto permmatrix =  reservoir_perm_[eIdx];
+            //auto pn = permmatrix.mv(normal);
+            //double permval  = pn.dot(normal); 
+
+            // keap reservoir perm as n'K'n 
+            double value = reservoir_mobility_[eIdx]*(reservoir_perm_[eIdx] * geom.volume()) ;
             value /= reservoir_dist_[eIdx];
             leakof_[eIdx] = value;
         }
@@ -516,7 +592,7 @@ void  Fracture::assembleFracture(){
     for (auto elem : elements(grid_->leafGridView())) {
         int idx = mapper.index(elem);
         //auto geom = elem.geometry();
-        rhs_width_[idx] = reservoir_pressure_[idx];//*geom.volume();
+        rhs_width_[idx] -= reservoir_pressure_[idx];//*geom.volume();
     }
 
     if(!fracture_matrix_){

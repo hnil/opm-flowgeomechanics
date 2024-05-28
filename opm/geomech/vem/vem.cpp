@@ -1276,7 +1276,7 @@ vector<int> consistent_face_ordering(const int* const faces,
           const auto ref2 = find(face_ptrs[ref_face], face_ptrs[ref_face] + num_face_edges[ref_face], isect[1]);
           const auto i1 = find(face_ptrs[i], face_ptrs[i] + num_face_edges[i], isect[0]);
           const auto i2 = find(face_ptrs[i], face_ptrs[i] + num_face_edges[i], isect[1]);
-          if(!(i1-i2) == 1){
+          if(!((i1-i2) == 1)){
               bool is_ok = false;
               if( i1 == (face_ptrs[i]) ){
                   if( i2 == face_ptrs[i]+num_face_edges[i] ){
