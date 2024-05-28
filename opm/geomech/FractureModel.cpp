@@ -22,7 +22,13 @@ namespace Opm{
                 int perf = well_fractures_[i].size();
                 int well_cell = -1;
                 Fracture fracture;
-                fracture.init(well.name(),perf,well_cell,origo,normal);
+                fracture.init(well.name(),
+                              perf,
+                              well_cell,
+                              origo,
+                              normal,
+                              prm_
+                    );
                 well_fractures_[i].push_back(std::move(fracture));
             }
         }
@@ -33,6 +39,15 @@ namespace Opm{
             const std::vector<Fracture>& fractures = well_fractures_[i];
             for(size_t j=0; j < fractures.size(); ++j){
                 fractures[j].write(reportStep);
+            }
+        }
+    }
+    void FractureModel::writemulti(double time) const{
+        for(size_t i=0; i < wells_.size(); ++i){
+            //wells_[i].write();
+            const std::vector<Fracture>& fractures = well_fractures_[i];
+            for(size_t j=0; j < fractures.size(); ++j){
+                fractures[j].writemulti(time);
             }
         }
     }

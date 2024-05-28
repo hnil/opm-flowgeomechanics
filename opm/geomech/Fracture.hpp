@@ -46,8 +46,11 @@
 // for linear solve
 #include <opm/simulators/linalg/PropertyTree.hpp>
 #include <opm/simulators/linalg/FlexibleSolver.hpp>
-
-
+#include <opm/models/io/vtkmultiwriter.hh>
+#include <opm/models/utils/propertysystem.hh>
+#include <opm/models/blackoil/blackoilmodel.hh>
+//#include <opm/models/utils/parametersystem.hh>
+#include <opm/material/fluidsystems/BlackOilFluidSystem.hpp>
 namespace Opm {
     struct WellInfo{
         std::string name;
@@ -67,24 +70,61 @@ namespace Opm {
                   int perf,
                   int well_cell,
                   Point3D origo,
-                  Point3D normal);
+                  Point3D normal,
+                  Opm::PropertyTree prm
+            );
         void grow(int layers,int method);
         std::string name() const;
         void write(int reportStep = -1) const;
+        void writemulti(double time) const;
         template<class Grid3D>
         void updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
                                   const Grid3D& grid3D);
 
         // solver related
         void updateReservoirProperties();
+        template<class TypeTag, class Simulator>
+        void updateReservoirProperties(const Simulator& simulator){
+            using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
+            const auto& problem = simulator.problem();
+            //NB burde truleg interpolere
+            size_t ncf = reservoir_cells_.size();
+            reservoir_perm_.resize(ncf);
+            reservoir_pressure_.resize(ncf);
+            reservoir_stress_.resize(ncf);
+            for(size_t i=0; i < ncf; ++i){
+                int cell = reservoir_cells_[i];
+                auto normal = this->cell_normals_[i];
+                {
 
+                    auto permmat = problem.intrinsicPermeability(cell);
+                    auto np = permmat.mv(normal);
+                    double value = np.dot(normal);
+                    reservoir_perm_[i]  = value;
+                } 
+                const auto &intQuants = simulator.model().intensiveQuantities(cell, /*timeIdx*/ 0);
+                const auto& fs = intQuants.fluidState();
+                reservoir_pressure_[i]  = fs.pressure(FluidSystem::waterPhaseIdx);
+                enum { numPhases = getPropValue<TypeTag, Properties::NumPhases>() };
+                for (unsigned phaseIdx = 0; phaseIdx < numPhases; ++phaseIdx) {
+                    if (!FluidSystem::phaseIsActive(phaseIdx)){
+                        // assume sum should only be water;
+                        reservoir_mobility_[i]  += fs.mobility(phaseIdx);   
+                    }
+                }
+                for(int dim=0; dim < 3; ++ dim){
+                    reservoir_stress_[i][dim] = problem.model().stress(cell, dim);
+                }
+                // assume reservoir distance is calculated
+            }
+        }
         void initFractureWidth();
         void solveFractureWidth();
         void solvePressure();
         void solve();
 
       void printPressureMatrix() const; // debug purposes
-      void printMechMatrix() const; // debug purposes      
+      void printMechMatrix() const; // debug purposes
       void setFractureGrid(std::unique_ptr<Fracture::Grid>& gptr); // a hack to allow use of another grid
     private:
         // helpers for growing grid
@@ -98,6 +138,8 @@ namespace Opm {
         std::array<Point3D,3> axis_;
         WellInfo wellinfo_;
         std::unique_ptr<Dune::VTKWriter<Grid::LeafGridView>> vtkwriter_;
+        static constexpr int VTKFormat = Dune::VTK::ascii;
+        std::unique_ptr<Opm::VtkMultiWriter<Grid::LeafGridView,VTKFormat>> vtkmultiwriter_;
         std::vector<unsigned int> out_indices_;
 
         // should probably not be needed
@@ -116,12 +158,19 @@ namespace Opm {
         void assembleFracture();
         std::vector<double> stressIntensityK1() const;
 
+
         std::vector<int> well_source_;
         // for reservoir
         std::vector<int> reservoir_cells_;
-        std::vector<double> reservoir_perm_;
+        //std::vector< Dune::FieldMatrix<double, 3, 3> > reservoir_perm_;
+        std::vector< double > reservoir_perm_;
+        std::vector<double> reservoir_mobility_;
         std::vector<double> reservoir_dist_;
         std::vector<double> reservoir_pressure_;
+        std::vector<Dune::FieldVector<double,6> > reservoir_stress_;
+
+        // only for radom access need to be updater after trid change
+        Dune::BlockVector<Dune::FieldVector<double,3>> cell_normals_;
 
         // solution variables
         Dune::BlockVector<Dune::FieldVector<double,1>> fracture_width_;
@@ -153,6 +202,7 @@ namespace Opm {
 
         double E_;
         double nu_;
+        Opm::PropertyTree prm_;
     };
 }
 #endif
