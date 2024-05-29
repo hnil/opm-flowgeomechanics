@@ -1,8 +1,13 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <assert.h>
 
 #include <dune/istl/matrixmarket.hh>
+
+//@@ there must be a more correct way to ensure UMFpack is included here
+#define HAVE_SUITESPARSE_UMFPACK 1
+#include <dune/istl/umfpack.hh>
 
 //#include "opm/geomech/Fracture.hpp"
 #include <dune/foamgrid/foamgrid.hh>
@@ -26,14 +31,15 @@
 
 namespace{
   // definitions and constants
-  using Matrix = Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1>>;
-  using Vector = Dune::BlockVector<Dune::FieldVector<double,1>>;
-  using Point3D = Dune::FieldVector<double, 3>;
+  //using Matrix = Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1>>;
+  using Matrix = Dune::BCRSMatrix<double>;
+  using Vector = Dune::BlockVector<double>;
+  //using Point3D = Dune::FieldVector<double, 3>;
   using Grid = Dune::FoamGrid<2, 3>;
   using Htrans = std::tuple<size_t,size_t, double, double>;
   using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView>;
-  using PressureOperatorType = Dune::MatrixAdapter<Matrix, Vector, Vector>;
-  using FlexibleSolverType = Dune::FlexibleSolver<PressureOperatorType>;
+  //using PressureOperatorType = Dune::MatrixAdapter<Matrix, Vector, Vector>;
+  //using FlexibleSolverType = Dune::FlexibleSolver<PressureOperatorType>;
   using PressureMatrixInfo = std::tuple<std::unique_ptr<Matrix>,std::vector<Htrans>>;
                                         
   using IntFloatPair = std::tuple<int, double>;
@@ -118,11 +124,13 @@ void updateTrans(PressureMatrixInfo& pmat,
 // ============================================================================  
 {
   auto& matrix = *std::get<0>(pmat);
+  matrix = 0;
   const auto& elems = std::get<1>(pmat);
   
   for (const auto& e : elems) {
     const size_t i = std::get<0>(e);
     const size_t j = std::get<1>(e);
+    assert(i != j);
     const double t1 = std::get<2>(e);
     const double t2 = std::get<3>(e);
     const double h1 = aperture[i];
@@ -137,6 +145,7 @@ void updateTrans(PressureMatrixInfo& pmat,
     const bool i_imposed = inrange(i, imposed_vals_ixs);
     const bool j_imposed = inrange(j, imposed_vals_ixs);
 
+    
     matrix[i][i] = i_imposed ? double(1) : double(matrix[i][i] + T);
     matrix[i][j] = i_imposed ? double(0) : double(matrix[i][j] - T);
     
@@ -159,21 +168,35 @@ Vector solvePressure(const Vector& aperture,
     
   updateTrans(pmat, aperture, imposed_ixs);
 
+  // std::ofstream os("matrix.txt"); // @@@
+  // //Dune::printSparseMatrix(os, *std::get<0>(pmat), "matname", "");
+  // Dune::printmatrix(os, *std::get<0>(pmat), "matname", "", 10, 6);
+  
   // prepare right-hand side
   Vector rhs(aperture.size()); rhs = 0;
   for (auto fp : fixed_pvals)
     rhs[std::get<0>(fp)] = std::get<1>(fp);
 
   // setup solver
-  const auto prm = Opm::setupPropertyTree(Opm::FlowLinearSolverParameters(), true, true);
-  auto op = PressureOperatorType(*std::get<0>(pmat));
-  auto psolver = std::make_unique<FlexibleSolverType>(op, prm, std::function<Vector()>(), size_t(0));
+  //const auto prm = Opm::setupPropertyTree(Opm::FlowLinearSolverParameters(), true, true);
+  //auto op = PressureOperatorType(*std::get<0>(pmat));
+  //auto psolver = std::make_unique<FlexibleSolverType>(op, prm, std::function<Vector()>(), size_t(0));
 
+  //Dune::MatrixAdapter<Matrix, Vector, Vector> op(*std::get<0>(pmat));
+  //Dune::UMFPackMethodChooser<double> a;
+  Dune::UMFPack psolver(*std::get<0>(pmat));
+  
+  // std::ofstream os2("rhs.txt"); // @@@
+  // Dune::printvector(os2, rhs, "rhs", "");
+  
   // solve pressure system
   Vector result(aperture.size());
   Dune::InverseOperatorResult r;
-  psolver->apply(result, rhs, r);
+  psolver.apply(result, rhs, r);
 
+  // std::ofstream os3("result.txt"); // @@@
+  // Dune::printvector(os3, result, "result", "");
+  
   return result;  
 }
 
@@ -233,13 +256,14 @@ int main()
   const auto wellcells = n_closest<2>(*grid);
 
   std::vector<IntFloatPair> fixed_pvals;
-  const double pfixedval = 1.0;
+  const double pfixedval = 2.0;
   std::transform(wellcells.begin(), wellcells.end(), std::back_inserter(fixed_pvals),
                  [pfixedval] (const size_t ix) {return IntFloatPair(ix, pfixedval);});
   
   // prepare pressure matrix structure
   PressureMatrixInfo pmat = pressureMatrixStructure(grid);
 
+  //frac_aperture = 1.0; // @@@
   // solve pressure system
   frac_press = solvePressure(frac_aperture, pmat, fixed_pvals);
 
