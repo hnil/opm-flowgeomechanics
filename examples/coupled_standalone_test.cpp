@@ -31,9 +31,9 @@
 
 namespace{
   // definitions and constants
-  //using Matrix = Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1>>;
-  using Matrix = Dune::BCRSMatrix<double>;
-  using Vector = Dune::BlockVector<double>;
+  using Matrix = Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1>>;
+  //using Matrix = Dune::BCRSMatrix<double>;
+  using Vector = Dune::BlockVector<Dune::FieldVector<double, 1>>;
   //using Point3D = Dune::FieldVector<double, 3>;
   using Grid = Dune::FoamGrid<2, 3>;
   using Htrans = std::tuple<size_t,size_t, double, double>;

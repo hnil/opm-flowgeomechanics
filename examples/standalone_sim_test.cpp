@@ -6,6 +6,7 @@
 #include <assert.h>
 
 #include <dune/istl/matrixmarket.hh>
+#include <dune/istl/preconditioners.hh>
 
 //@@ there must be a more correct way to ensure UMFpack is included here
 #define HAVE_SUITESPARSE_UMFPACK 1
@@ -30,14 +31,21 @@
 #include "opm/geomech/DiscreteDisplacement.hpp"
 
 
+  // using Matrix = Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1>>;
+  // //using Matrix = Dune::BCRSMatrix<double>;
+  // using Vector = Dune::BlockVector<Dune::FieldVector<double, 1>>;
+
+
 namespace {
 template<class M, class X, class Y> class ReducedMatrixAdapter; // forward declaration
   
 using Grid = Dune::FoamGrid<2, 3>;
+//using Vector = Dune::BlockVector<Dune::FieldVector<double, 1>>;
 using Vector = Dune::BlockVector<double>;
 using HTrans = std::tuple<size_t,size_t, double, double>;
   
-using FullMatrix = Dune::DynamicMatrix<double>; //Dune::Matrix<double, std::allocator<double> >;
+using FullMatrix = Dune::DynamicMatrix<double>;
+//using SparseMatrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>;
 using SparseMatrix = Dune::BCRSMatrix<double>;
 using EquationSystem = std::tuple<std::shared_ptr<FullMatrix>,
                                   std::shared_ptr<SparseMatrix>,
@@ -190,6 +198,7 @@ public:
   virtual void applyscaleadd(field_type alpha, const X& x, Y& y) const
   {
     expand(x, tmpX_); // expand x into tmpX_
+    expand(y, tmpY_); // expand y into tmpY_
     mat_.usmv(alpha, tmpX_, tmpY_);
     contract(tmpY_, y); //contract tmpY_ into y    
   }
@@ -200,18 +209,21 @@ public:
   }
 
   void expand(const X& source, X& target) const {
-    target.resize(mat_.M());
+    target.resize(fullSize());
     target = 0;
-    for (size_t i = 0; i != source.N(); ++i)
+    for (size_t i = 0; i != reducedSize(); ++i)
       target[keep_[i]] = source[i];
   }
 
   void contract(const Y& source, Y& target) const {
-    target.resize(keep_.size());
-    for (size_t i = 0; i != keep_.size(); ++i)
+    target.resize(reducedSize());
+    for (size_t i = 0; i != reducedSize(); ++i)
       target[i] = source[keep_[i]];
   }
-  
+
+  size_t fullSize() const {return mat_.M();}
+  size_t reducedSize() const {return keep_.size();}
+
 private:
 
   std::vector<size_t> sorted_(const std::vector<size_t>& vec)
@@ -285,7 +297,7 @@ template<typename T> inline T hmean(const T a, const T b) {return T(1) / ( T(1)/
   const std::vector<HTrans>& htransvec =  std::get<2>(eqsys);
 
   const RMAdapter MA_p(M_p, wellcells);
-  
+    
   // initialize pressure
   p = 0;
   for (auto w : wellcells) p[w] = bhp;
@@ -299,28 +311,28 @@ template<typename T> inline T hmean(const T a, const T b) {return T(1) / ( T(1)/
   M_p.mv(p, rhs_full); // only imposed values of p should be nonzero here.
   Vector rhs;
   MA_p.contract(rhs_full, rhs); // remove entries corresponding to eliminated equations
+  rhs *= -1;
   
   // solve for pressure
+  Dune::Richardson<Vector, Vector> precond(1);
+  auto psolver = Dune::CGSolver<Vector>(MA_p,
+                                        precond, 
+                                        1e-5, // desired residual reduction factor
+                                        100, // max number of iterations
+                                        1.0); // relaxation factor
+                                
+   Dune::InverseOperatorResult iores;
 
-  using PressureOperatorType = Dune::MatrixAdapter<SparseMatrix, Vector, Vector>;
-  using FlexibleSolverType = Dune::FlexibleSolver<PressureOperatorType>;
+   Vector p_reduced(MA_p.reducedSize());
+   psolver.apply(p_reduced, rhs, iores);
+   MA_p.expand(p_reduced, p);
+   for (auto w: wellcells) p[w] = bhp;
 
 
-  
-  
-  const auto prm = Opm::setupPropertyTree(Opm::FlowLinearSolverParameters(), true, true);
+  // solve for aperture again
+  M_h.solve(h, p); // solve for aperture (h) given pressure (p)
 
-  auto op = PressureOperatorType(M_p);
-  auto psolver = FlexibleSolverType(op, prm, std::function<Vector()>(), size_t(0));
-
-
-
-  // auto psolver = Dune::FlexibleSolver<const RMAdapter>(MA_p, prm,
-  //                                                      std::function<Vector()>(),
-  //                                                      size_t(0));
-  Dune::InverseOperatorResult iores;
-  psolver.apply(p, rhs, iores);
-                                                         
+   
 }
   
 }; // end anonymous namespace
