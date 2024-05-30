@@ -38,8 +38,8 @@ namespace{
   using Grid = Dune::FoamGrid<2, 3>;
   using Htrans = std::tuple<size_t,size_t, double, double>;
   using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView>;
-  //using PressureOperatorType = Dune::MatrixAdapter<Matrix, Vector, Vector>;
-  //using FlexibleSolverType = Dune::FlexibleSolver<PressureOperatorType>;
+  using PressureOperatorType = Dune::MatrixAdapter<Matrix, Vector, Vector>;
+  using FlexibleSolverType = Dune::FlexibleSolver<PressureOperatorType>;
   using PressureMatrixInfo = std::tuple<std::unique_ptr<Matrix>,std::vector<Htrans>>;
                                         
   using IntFloatPair = std::tuple<int, double>;
@@ -178,10 +178,11 @@ Vector solvePressure(const Vector& aperture,
     rhs[std::get<0>(fp)] = std::get<1>(fp);
 
   // setup solver
-  //const auto prm = Opm::setupPropertyTree(Opm::FlowLinearSolverParameters(), true, true);
-  //auto op = PressureOperatorType(*std::get<0>(pmat));
-  //auto psolver = std::make_unique<FlexibleSolverType>(op, prm, std::function<Vector()>(), size_t(0));
-
+  const auto prm = Opm::setupPropertyTree(Opm::FlowLinearSolverParameters(), true, true);
+  auto op = PressureOperatorType(*std::get<0>(pmat));
+  // auto psolver_dummy = std::make_unique<FlexibleSolverType>(op, prm, std::function<Vector()>(), size_t(0));
+auto psolver_dummy = FlexibleSolverType(op, prm, std::function<Vector()>(), size_t(0));
+ 
   //Dune::MatrixAdapter<Matrix, Vector, Vector> op(*std::get<0>(pmat));
   //Dune::UMFPackMethodChooser<double> a;
   Dune::UMFPack psolver(*std::get<0>(pmat));
@@ -215,12 +216,9 @@ std::array<size_t, N> n_closest(const Grid& grid)
     distances.push_back({distances.size(), center.two_norm()});
   }
 
-  std::sort(distances.begin(), distances.end(), [](Elem& a, Elem& b) {return std::get<1>(a) < std::get<1>(b);});
-
-  // std::for_each(distances.begin(), distances.end(), [&](const auto& t) {
-  //   std::cout << "(" << std::get<0>(t) << ", " << std::get<1>(t) << ")\n";
-  // });
-
+  std::sort(distances.begin(), distances.end(),
+            [](Elem& a, Elem& b) {return std::get<1>(a) < std::get<1>(b);});
+  
   std::array<size_t, N> result;
   for (int i = 0; i != N; ++i)
     result[i] = std::get<0>(distances[i]);

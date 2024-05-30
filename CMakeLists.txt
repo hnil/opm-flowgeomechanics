@@ -331,6 +331,16 @@ opm_add_test(coupled_standalone_test
 	 $<TARGET_OBJECTS:moduleVersionGeoMech>
 )
 
+opm_add_test(standalone_sim_test
+   ONLY_COMPILE
+	 ALWAYS_ENABLE
+	 DEPENDS opmsimulators opmupscaling 
+	 LIBRARIES opmsimulators opmupscaling fracture gmsh
+	 SOURCES
+	 examples/standalone_sim_test.cpp
+	 $<TARGET_OBJECTS:moduleVersionGeoMech>
+)
+
 # target_link_libraries(testpdelab Tracy::TracyClient)
 
 

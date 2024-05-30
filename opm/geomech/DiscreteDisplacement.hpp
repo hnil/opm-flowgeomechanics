@@ -9,7 +9,7 @@ template <class Element>
 Dune::FieldVector<double, 3>
 normalOfElement(const Element& elem){
     // dim = Dune::Codim<Grid::dimension>{}
-    int codim = 2;//vertices in this cases
+    //int codim = 2;//vertices in this cases
     std::array<Dune::FieldVector<double, 3>, 3> tri;
     int i = 0;
     for (const auto& vertex : Dune::subEntities(elem, Dune::Codim<2>{})){
@@ -57,7 +57,7 @@ template <class Element>
 std::array<Real3, 3>
 getTri(const Element& elem){
     // dim = Dune::Codim<Grid::dimension>{}
-    int codim = 2;//vertices in this cases
+    //int codim = 2;//vertices in this cases
     std::array<Real3, 3> tri;
     int i = 0;
     for (const auto& vertex : Dune::subEntities(elem, Dune::Codim<2>{})){
