@@ -31,21 +31,14 @@
 #include "opm/geomech/DiscreteDisplacement.hpp"
 
 
-  // using Matrix = Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1>>;
-  // //using Matrix = Dune::BCRSMatrix<double>;
-  // using Vector = Dune::BlockVector<Dune::FieldVector<double, 1>>;
-
-
 namespace {
 template<class M, class X, class Y> class ReducedMatrixAdapter; // forward declaration
   
 using Grid = Dune::FoamGrid<2, 3>;
-//using Vector = Dune::BlockVector<Dune::FieldVector<double, 1>>;
 using Vector = Dune::BlockVector<double>;
 using HTrans = std::tuple<size_t,size_t, double, double>;
   
 using FullMatrix = Dune::DynamicMatrix<double>;
-//using SparseMatrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>;
 using SparseMatrix = Dune::BCRSMatrix<double>;
 using EquationSystem = std::tuple<std::shared_ptr<FullMatrix>,
                                   std::shared_ptr<SparseMatrix>,
