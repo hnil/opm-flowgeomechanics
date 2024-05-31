@@ -40,9 +40,10 @@ using HTrans = std::tuple<size_t,size_t, double, double>;
   
 using FullMatrix = Dune::DynamicMatrix<double>;
 using SparseMatrix = Dune::BCRSMatrix<double>;
-using EquationSystem = std::tuple<std::shared_ptr<FullMatrix>,
-                                  std::shared_ptr<SparseMatrix>,
-                                  std::vector<HTrans>>;
+using EquationSystem = std::tuple<std::shared_ptr<FullMatrix>,    // aperture matrix
+                                  std::shared_ptr<SparseMatrix>,  // pressure matrix
+                                  std::vector<HTrans>,            // inter-cell transmissibility factors
+                                  std::vector<double>>;           // leakoff factors
 
 using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView>;
 using RMAdapter = ReducedMatrixAdapter<SparseMatrix, Vector, Vector>;
@@ -98,10 +99,13 @@ std::shared_ptr<FullMatrix> computeApertureMatrix(const Grid& G,
 }
 
 // ----------------------------------------------------------------------------
-std::vector<HTrans> computeHTrans(const Grid& grid)
+  std::tuple<std::vector<HTrans>, std::vector<double>>
+  computeHTrans(const Grid& grid, const double leakoff_fac)
 // ----------------------------------------------------------------------------
 {
-  std::vector<HTrans> result;
+  std::vector<HTrans> htransvec;
+  std::vector<double> leakvec(grid.leafGridView().size(0), 0.0);
+
   const ElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
   for (const auto& element : Dune::elements(grid.leafGridView())) {
     const int eIdx = mapper.index(element);
@@ -119,22 +123,24 @@ std::vector<HTrans> computeHTrans(const Grid& grid)
         const double h1 = ecenter.two_norm() / area;
         const double h2 = ncenter.two_norm() / area;
 
-        result.push_back({nIdx, eIdx, h1, h2});
+        htransvec.push_back({nIdx, eIdx, h1, h2});
       }
     }
+    leakvec[eIdx] = geom.volume() * leakoff_fac;
   }
-  return result;
+  return {htransvec, leakvec};
 }
 
   
 // ----------------------------------------------------------------------------
-std::tuple<std::shared_ptr<SparseMatrix>, std::vector<HTrans>>
-computePressureMatrix(const Grid& G)
+std::tuple<std::shared_ptr<SparseMatrix>, std::vector<HTrans>, std::vector<double>>
+computePressureMatrix(const Grid& G, const double leakoff_fac)
 // ----------------------------------------------------------------------------
 {
   // initialize the sparsity pattern of a pressure matrix, with all entries set to zero.
 
-  std::vector<HTrans> hvec = computeHTrans(G);
+  std::tuple<std::vector<HTrans>,
+             std::vector<double>> hvec = computeHTrans(G, leakoff_fac);
 
   const size_t nc = G.leafGridView().size(0);
   std::shared_ptr<SparseMatrix> mat(new SparseMatrix());
@@ -142,7 +148,7 @@ computePressureMatrix(const Grid& G)
   mat->setImplicitBuildModeParameters(3 * 6 - 3 - 2, 0.4);
   mat->setSize(nc, nc);
 
-  for (const auto& elem : hvec) {
+  for (const auto& elem : std::get<0>(hvec)) {
     const size_t ix(std::get<0>(elem));
     const size_t jx(std::get<1>(elem));
     mat->entry(ix, jx) = 0.0;
@@ -152,17 +158,18 @@ computePressureMatrix(const Grid& G)
   }
   mat->compress();
   
-  return {mat, hvec}; 
+  return std::tuple_cat(std::make_tuple(mat), hvec); 
 }
   
   
 // ----------------------------------------------------------------------------
 EquationSystem computeEquationSystem(const Grid& G,
-                                     const double young, const double poisson)
+                                     const double young, const double poisson,
+                                     const double leakoff_fac)
 // ----------------------------------------------------------------------------
 {
   return std::tuple_cat(std::make_tuple(computeApertureMatrix(G, young, poisson)),
-                        computePressureMatrix(G));
+                        computePressureMatrix(G, leakoff_fac));
 }
 
 // ----------------------------------------------------------------------------
@@ -240,8 +247,8 @@ private:
   const M& mat_;
   const std::vector<size_t> elim_;
   const std::vector<size_t> keep_;
-  mutable Y tmpY_;
   mutable X tmpX_;
+  mutable Y tmpY_;
 };
 
 // ----------------------------------------------------------------------------  
@@ -249,9 +256,12 @@ template<typename T> inline T hmean(const T a, const T b) {return T(1) / ( T(1)/
 // ----------------------------------------------------------------------------
   
 // ----------------------------------------------------------------------------
-  void updateTrans(SparseMatrix& mat, const std::vector<HTrans>& htransvec, const Vector& h)
+void updateTrans(SparseMatrix& mat, const std::vector<HTrans>& htransvec,
+                 const Vector& h, const std::vector<double>& leakvec)
 // ----------------------------------------------------------------------------
 {
+  mat = 0; // reset matrix before starting to fill in values
+
   for (const auto& e : htransvec) {
     const size_t i = std::get<0>(e);
     const size_t j = std::get<1>(e);
@@ -275,12 +285,16 @@ template<typename T> inline T hmean(const T a, const T b) {return T(1) / ( T(1)/
     mat[j][i] -= T;
     
   }
+
+  // add-in leakage term on diagonal
+  for (size_t ix = 0; ix != mat.N(); ++ix)
+    mat[ix][ix] += leakvec[ix];
+  
 }
 
 // ----------------------------------------------------------------------------
-  void solveFixedBHP(Vector& p, Vector& h, const EquationSystem& eqsys,
-                     const std::vector<size_t> wellcells,
-                     const double bhp)
+void solveFixedBHP(Vector& p, Vector& h, const EquationSystem& eqsys,
+                   const std::vector<size_t> wellcells, const double bhp)
 // ----------------------------------------------------------------------------
 {
   // reduce pressure system
@@ -288,6 +302,7 @@ template<typename T> inline T hmean(const T a, const T b) {return T(1) / ( T(1)/
   const FullMatrix&          M_h       = *std::get<0>(eqsys);
   SparseMatrix&              M_p       = *std::get<1>(eqsys);
   const std::vector<HTrans>& htransvec =  std::get<2>(eqsys);
+  const std::vector<double>& leakvec   =  std::get<3>(eqsys);
 
   const RMAdapter MA_p(M_p, wellcells);
     
@@ -299,7 +314,7 @@ template<typename T> inline T hmean(const T a, const T b) {return T(1) / ( T(1)/
   M_h.solve(h, p); // solve for aperture (h) given pressure (p)
 
   // update pressure matrix entries
-  updateTrans(M_p, htransvec, h);
+  updateTrans(M_p, htransvec, h, leakvec);
   Vector rhs_full(p.N());
   M_p.mv(p, rhs_full); // only imposed values of p should be nonzero here.
   Vector rhs;
@@ -355,7 +370,8 @@ int main(int varnum, char** vararg)
   // compute equation system
   const double young = 1e9; // Young's modulus
   const double poisson = 0.25; // Poisson's ratio
-  const auto eqsys = computeEquationSystem(*grid, young, poisson);
+  const double leakoff_fac = 1e-6; //1e-13; // a bit heuristic; conceptually rock perm divided by distance  
+  const auto eqsys = computeEquationSystem(*grid, young, poisson, leakoff_fac);
   
   // solve fixed pressure system
   const size_t nc = grid->leafGridView().size(0);
