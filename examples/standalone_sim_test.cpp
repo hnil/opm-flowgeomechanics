@@ -7,6 +7,7 @@
 
 #include <dune/istl/matrixmarket.hh>
 #include <dune/istl/preconditioners.hh>
+//#include <dune/istl/paamg/amg.hh>
 
 //@@ there must be a more correct way to ensure UMFpack is included here
 #define HAVE_SUITESPARSE_UMFPACK 1
@@ -293,54 +294,112 @@ void updateTrans(SparseMatrix& mat, const std::vector<HTrans>& htransvec,
 }
 
 // ----------------------------------------------------------------------------
-void solveFixedBHP(Vector& p, Vector& h, const EquationSystem& eqsys,
-                   const std::vector<size_t> wellcells, const double bhp)
+void solveCoupled(Vector& p, Vector& h, const EquationSystem& eqsys,
+                  const std::vector<size_t> bhpcells, const double bhp,
+                  const std::vector<size_t> ratecells, const double rate, 
+                  const double convergence_tol=1e-4, const int max_nonlin_iter=400)
 // ----------------------------------------------------------------------------
 {
+  // NB: there should be no overlap between the cells in 'bhpcells' and 'ratecells'
   // reduce pressure system
+
   //Dune::MatrixAdapter<FullMatrix, Vector, Vector> MA_h(*std::get<0>(eqsys));
   const FullMatrix&          M_h       = *std::get<0>(eqsys);
   SparseMatrix&              M_p       = *std::get<1>(eqsys);
   const std::vector<HTrans>& htransvec =  std::get<2>(eqsys);
   const std::vector<double>& leakvec   =  std::get<3>(eqsys);
 
-  const RMAdapter MA_p(M_p, wellcells);
+  const RMAdapter MA_p(M_p, bhpcells); // allows reducing the system without creating new matrices
+
+  // define convergence criterion
+  auto converged = [&](const Vector& v1, const Vector& v2) {
+    auto diff = v1; diff -= v2; // diff = v1 - v2
+    const double delta = diff.infinity_norm();
+    const double denom = std::max(v1.infinity_norm(), v2.infinity_norm());
+    std::cout << "Delta: " << delta << " Denom: " << denom;
+    std::cout << " Delta/denom: " << delta/denom << std::endl;
+    return delta/denom < convergence_tol;
+  };
+
+  // helper function to set vector values
+  auto setvals = [](Vector& v, const std::vector<size_t>& ixs, const double val) {
+    for (auto i : ixs) v[i] = val;
+  };
     
   // initialize pressure
   p = 0;
-  for (auto w : wellcells) p[w] = bhp;
-
+  if (bhpcells.size() > 0)
+    setvals(p, bhpcells, bhp);
+  else
+    p = 1e6; // we need something to get started without h being 0.
+      
   // solve for aperture
   M_h.solve(h, p); // solve for aperture (h) given pressure (p)
 
-  // update pressure matrix entries
-  updateTrans(M_p, htransvec, h, leakvec);
-  Vector rhs_full(p.N());
-  M_p.mv(p, rhs_full); // only imposed values of p should be nonzero here.
+  Vector htmp(h.N()); htmp = 0;
+  Vector rhs_full_rate(p.N()), rhs_full(p.N());
   Vector rhs;
-  MA_p.contract(rhs_full, rhs); // remove entries corresponding to eliminated equations
-  rhs *= -1;
+  Dune::InverseOperatorResult iores;  
+  rhs_full_rate = 0; setvals(rhs_full_rate, ratecells, rate);
+
+  int i;
+  for (i = 0; i != max_nonlin_iter; ++i) {
   
-  // solve for pressure
-  Dune::Richardson<Vector, Vector> precond(1);
-  auto psolver = Dune::CGSolver<Vector>(MA_p,
-                                        precond, 
-                                        1e-5, // desired residual reduction factor
-                                        100, // max number of iterations
-                                        1.0); // relaxation factor
-                                
-   Dune::InverseOperatorResult iores;
+    // update pressure matrix entries
+    updateTrans(M_p, htransvec, h, leakvec);
 
-   Vector p_reduced(MA_p.reducedSize());
-   psolver.apply(p_reduced, rhs, iores);
-   MA_p.expand(p_reduced, p);
-   for (auto w: wellcells) p[w] = bhp;
+    // determine right-hand side modifications from eliminated degrees of freedom
+    
+    M_p.mv(p, rhs_full); // only imposed values of p should be nonzero here.
+    rhs_full *= -1;
+    rhs_full += rhs_full_rate;
+    
+    MA_p.contract(rhs_full, rhs); // remove entries corresponding to eliminated equations
+  
+    // solve for pressure
+    Dune::Richardson<Vector, Vector> precond(1); // "no" preconditioner 
+    //Dune::SeqJac<SparseMatrix, Vector, Vector> precond(M_p, 3, 0.3);
+    // using Smoother = Dune::SeqSSOR<SparseMatrix, Vector, Vector>;
+    // Dune::Amg::SmootherTraits<Smoother>::Arguments smootherArgs;
+    // smootherArgs.iterations = 3;
+    // smootherArgs.relaxationFactor = 1;
 
+    // auto criterion =
+    //   Dune::Amg::CoarsenCriterion<Dune::Amg::UnSymmetricCriterion<SparseMatrix,
+    //                                                               Dune::Amg::FirstDiagonal>>(15, 50);
+    // criterion.setDefaultValuesIsotropic(2);
+    // criterion.setAlpha(.67);
+    // criterion.setBeta(1.0e-4);
+    // criterion.setGamma(1);
+    // criterion.setDebugLevel(2);
+    // using AMG = Dune::Amg::AMG<RMAdapter, Vector, Smoother>;
+    // AMG precond(MA_p, criterion, smootherArgs);
+
+    auto psolver = Dune::CGSolver<Vector>(MA_p,
+                                          precond, 
+                                          1e-7, // desired residual reduction factor
+                                          100, // max number of iterations
+                                          1); // verbose
+                                          
+    Vector p_reduced(MA_p.reducedSize());
+    psolver.apply(p_reduced, rhs, iores);
+    MA_p.expand(p_reduced, p);
+    setvals(p, bhpcells, bhp);
 
   // solve for aperture again
-  M_h.solve(h, p); // solve for aperture (h) given pressure (p)
+    M_h.solve(htmp, p); // solve for aperture (h) given pressure (p)
 
-   
+    if (converged(h, htmp))
+      break;
+
+    h = htmp;
+    
+  }
+    
+  if (i == max_nonlin_iter)
+    std::cout << "Warning, did not converge in max number of nonlinear iterations." << std::endl;
+  else
+    std::cout << "Converged in: " << i << " iterations." << std::endl;
 }
   
 }; // end anonymous namespace
@@ -378,10 +437,17 @@ int main(int varnum, char** vararg)
   Vector pressure(nc), aperture(nc);
   pressure = 0;
   const double bhp = 1e7; // in Pascal
-  solveFixedBHP(pressure, aperture, eqsys,
-                std::vector<size_t>(wellcells.begin(), wellcells.end()), bhp);
+  const double rate = -0.1;
 
-  // solve one injection timestep
+  // solve fixed pressure system  
+  // solveCoupled(pressure, aperture, eqsys,
+  //              std::vector<size_t>(wellcells.begin(), wellcells.end()), bhp,
+  //              std::vector<size_t>(), rate);
+
+  // solve fixed rate system
+  solveCoupled(pressure, aperture, eqsys,
+               std::vector<size_t>(), bhp,
+               std::vector<size_t>(wellcells.begin(), wellcells.end()), rate);
 
 
   // write output
