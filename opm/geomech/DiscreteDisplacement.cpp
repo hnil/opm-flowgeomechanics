@@ -44,6 +44,19 @@ strainToStress(const double E,const double nu,const Dune::FieldVector<double,6> 
     return stress;
 }
 
+Dune::FieldMatrix<double,3,3>
+symTensor2Matrix(const Dune::FieldVector<double,6> symtensor){
+    Dune::FieldMatrix<double,3,3> mat;
+    for(int i=0; i < 3; ++i){
+        mat[i][i] = symtensor[i];
+    }
+    mat[2][1] = symtensor[4]; mat[1][2] = mat[2][1];
+    mat[2][0] = symtensor[5]; mat[0][2] = mat[2][0];
+    mat[1][0] = symtensor[5]; mat[0][1] = mat[1][0];
+    return mat;
+}
+
+
 double
 tractionSymTensor(const Dune::FieldVector<double,6> symtensor, Dune::FieldVector<double,3> normal){
     const Dune::FieldVector<double,6> stress;

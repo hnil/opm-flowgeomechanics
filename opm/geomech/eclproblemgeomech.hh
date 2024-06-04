@@ -39,8 +39,6 @@ namespace Opm{
     class EclProblemGeoMech: public FlowProblem<TypeTag>{
     public:
         using Parent = FlowProblem<TypeTag>;
-
-
         using Simulator = GetPropType<TypeTag, Properties::Simulator>;
         using TimeStepper = AdaptiveTimeStepping<TypeTag>;
         using Scalar = GetPropType<TypeTag, Properties::Scalar>;
@@ -52,6 +50,7 @@ namespace Opm{
         enum { dim = GridView::dimension };
         enum { dimWorld = GridView::dimensionworld };
         using Toolbox = MathToolbox<Evaluation>;
+        using SymTensor = Dune::FieldVector<double,6>;
         EclProblemGeoMech(Simulator& simulator):
             FlowProblem<TypeTag>(simulator),
             geomechModel_(simulator)
@@ -179,6 +178,7 @@ namespace Opm{
                                 initstress[4] = 0.0;
                                 initstress[5] = 0.0;
                                 // NB share stress not set to zero
+                                // we operate with stress = C \grad d + \grad d^T in the matematics
                                 initstress_[cellIdx] = initstress;
                                 // functors.push_back([&]{
 
@@ -270,6 +270,10 @@ namespace Opm{
             return initstress_[dofIdx][comp];
         }
 
+        const SymTensor& initStress(unsigned dofIdx) const{
+            return initstress_[dofIdx];
+        }
+
         double biotCoef(unsigned globalIdx) const{
             return biotcoef_[globalIdx];
         }
@@ -289,6 +293,9 @@ namespace Opm{
             return bc_nodes_;
         }
 
+        Dune::FieldVector<double,6> stress(size_t globalIdx) const{
+            return geomechModel_.stress(globalIdx);
+        }
         // double getFieldProps(const std::string& field, unsigned globalIdx) const{
         //     const auto& eclState = this->simulator().vanguard().eclState();
         //     const auto& fp = eclState.fieldProps();
@@ -311,7 +318,7 @@ namespace Opm{
         std::vector<double> initpressure_;
         std::vector<double> inittemperature_;
         std::vector<std::tuple<size_t,MechBCValue>> bc_nodes_;
-        Dune::BlockVector<Dune::FieldVector<double,6>> initstress_;
+        Dune::BlockVector< SymTensor > initstress_;
         //std::vector<Opm::Elasticity::Material> elasticparams_;
         std::vector<std::shared_ptr<Opm::Elasticity::Material>> elasticparams_;
 

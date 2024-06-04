@@ -1241,7 +1241,7 @@ vector<int> consistent_face_ordering(const int* const faces,
 // ----------------------------------------------------------------------------
 {
   vector<int> result(faces, faces + accumulate(num_face_edges, num_face_edges + num_faces, 0));
-  //return result;
+  return result;
   vector<int> sorted_facenodes(result); // we need to sort the facenodes for quicker set operations
   for (int f = 0, fpos=0; f != num_faces; fpos += num_face_edges[f++])
     sort(&sorted_facenodes[fpos], &sorted_facenodes[fpos] + num_face_edges[f]);
@@ -1264,7 +1264,7 @@ vector<int> consistent_face_ordering(const int* const faces,
     // check which faces that can be oriented based on the current reference face
     vector<int> isect;
     for (int i = 0; i != num_faces; ++i, isect.clear()) {
-      if (!ordered[i]) {
+      if (!ordered[i]) { 
         //std::cout << "Fix ordering of face" << std::endl;
         set_intersection(sorted_fnode_ptrs[ref_face], sorted_fnode_ptrs[ref_face] + num_face_edges[ref_face],
                          sorted_fnode_ptrs[i], sorted_fnode_ptrs[i] + num_face_edges[i], back_inserter(isect));
