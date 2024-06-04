@@ -92,15 +92,17 @@ TDStrainFS(const Dune::FieldVector<double, 3>& obs,
 
 double traceSymTensor(const Dune::FieldVector<double,6> symtensor);
 
+Dune::FieldMatrix<double,3,3> symTensor2Matrix(const Dune::FieldVector<double,6> symtensor);
+
 // compute the stress tensor (6 components) from the strain tensor (6 components)
 Dune::FieldVector<double,6>
 strainToStress(const double E,const double nu,const Dune::FieldVector<double,6> strain);
 
 double
 tractionSymTensor(const Dune::FieldVector<double,6> symtensor, Dune::FieldVector<double,3> normal);
-inline void
+
 //assembleMatrix(Dune::DynamicMatrix<Dune::FieldMatrix<double,1,1>>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid)
-assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);
+void assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);
 
 } // namespace ddm
 

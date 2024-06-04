@@ -16,13 +16,19 @@ namespace Opm{
         grid_ = factory.createGrid();
     }
 
-    FractureWell::FractureWell(std::string name,
+    FractureWell::FractureWell(std::string outputprefix, 
+                           std::string name,
                            const std::vector<Point3D>& points,
-                           const std::vector<Segment>& segments){
+                           const std::vector<Segment>& segments,
+                           const std::vector<int>& res_cells){
+                            outputprefix_ = outputprefix;
         name_ = name;
         this->init(points, segments);
         vtkwriter_ =
             std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>
             (grid_->leafGridView(), Dune::VTK::nonconforming);
+        reservoir_cells_ = res_cells;
+        reservoir_stress_.resize(res_cells.size());
+        std::fill(reservoir_stress_.begin(),reservoir_stress_.end(),100e5);// random initialization    
     }
 }

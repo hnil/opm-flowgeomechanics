@@ -29,6 +29,7 @@ namespace Opm{
         using ElementContext = GetPropType<TypeTag, Properties::ElementContext>;
         enum { waterPhaseIdx = FluidSystem::waterPhaseIdx };
         using Toolbox = MathToolbox<Evaluation>;
+        using SymTensor = Dune::FieldVector<double,6>;
     public:
         EclGeoMechModel(Simulator& simulator):
             //           Parent(simulator)
@@ -88,10 +89,19 @@ namespace Opm{
                     fracturemodel_ = std::make_unique<FractureModel>(grid,
                                                                      wells,
                                                                      eclgrid,
-                                                                     param
+                                                                     param,
+                                                                     /*default fracture*/false
                         );
+                    // not to get the reservoir properties along the well before initialising the well
+                    // most important stress    
+                    fracturemodel_->updateReservoirWellProperties(problem);
+                    // add fractures along the wells    
+                    fracturemodel_->addFractures();
+                    fracturemodel_->updateFractureReservoirCells(grid,eclgrid);    
                 }
-                fracturemodel_->updateReservoirProperties();
+                // get reservoir properties on fractures
+                // simulator need
+                fracturemodel_->updateReservoirProperties<TypeTag,Simulator>(simulator_);
                 fracturemodel_->solve();
                 // update and change well indices
                 // std::vector<std::vector<double>> WI = this->getFractureWI()
@@ -110,15 +120,15 @@ namespace Opm{
                 if(reportStepIdx==1){
                     fracturemodel_->write(reportStepIdx);
                 }
+            
+                double time = simulator_.time();
+                fracturemodel_->writemulti(time);
             }
-            double time = simulator_.time();
-            fracturemodel_->writemulti(time);
 
         }
 
-        void solveGeomechanics(){
-            OPM_TIMEBLOCK(endTimeStepMech);
-            std::cout << "Geomech end iteration" << std::endl;
+        void updaterPotentialForces(){
+            std::cout << "Update Forces" << std::endl;
             size_t numDof = simulator_.model().numGridDof();
             const auto& problem = simulator_.problem();
             for(size_t dofIdx=0; dofIdx < numDof; ++dofIdx){
@@ -153,8 +163,13 @@ namespace Opm{
                 //NB check sign !!
                 mechPotentialForce_[dofIdx] *= 1.0;
             }
-            // for now assemble and set up solver her
+        }
 
+        void solveGeomechanics(){
+            OPM_TIMEBLOCK(endTimeStepMech);
+            this->updaterPotentialForces();
+            // for now assemble and set up solver her
+            const auto& problem = simulator_.problem();
             if(first_solve_){
                 OPM_TIMEBLOCK(SetupMechSolver);
                 bool do_matrix = true;//assemble matrix
@@ -226,10 +241,8 @@ namespace Opm{
             }
             size_t lsdim = 6;
             for(size_t i = 0; i < stress_.size(); ++i){
-                for(size_t j = 0; j < lsdim; ++j){
-                    stress_[i][j] += problem.initStress(i,j);
-                }
-            }
+                     stress_[i] += problem.initStress(i);
+             }
             //NB ssume initial strain is 0
 
             bool verbose = false;
@@ -265,9 +278,7 @@ namespace Opm{
             const auto& gv = simulator_.vanguard().grid().leafGridView();
             displacement_.resize(gv.indexSet().size(3));
         };
-        double pressureDiff(unsigned dofIx) const{
-            return mechPotentialForce_[dofIx];
-        }
+
         void setMaterial(const std::vector<std::shared_ptr<Opm::Elasticity::Material>>& materials){
             elacticitysolver_.setMaterial(materials);
         }
@@ -289,6 +300,37 @@ namespace Opm{
         {
             return mechPotentialPressForce_[globalDofIdx];
         }
+        
+        const Dune::FieldVector<double,3>& disp(size_t globalIdx) const{
+            return celldisplacement_[globalIdx];
+        }
+
+        const SymTensor& delstress(size_t globalIdx) const{
+            return delstress_[globalIdx];
+        }
+
+        const SymTensor& strain(size_t globalIdx) const{
+            return strain_[globalIdx];
+        }
+
+        const SymTensor& stress(size_t globalIdx) const{
+            return stress_[globalIdx];
+        }
+        SymTensor effStress(size_t globalIdx) const{
+            Dune::FieldVector<double,6> effStress = stress_[globalIdx];
+            double effPress = this->mechPotentialForce(globalIdx);
+            for(int i=0; i < 3; ++i){
+                effStress[i] += effPress;
+
+            }
+            return effStress;
+        }
+
+        // NB used in output should be eliminated
+        double pressureDiff(unsigned dofIx) const{
+            return mechPotentialForce_[dofIx];
+        }
+
         const double& disp(unsigned globalDofIdx, unsigned dim) const
         {
             return celldisplacement_[globalDofIdx][dim];
@@ -297,6 +339,7 @@ namespace Opm{
         {
             return stress_[globalDofIdx][dim];
         }
+
         const double& delstress(unsigned globalDofIdx, unsigned dim) const
         {
             return delstress_[globalDofIdx][dim];
@@ -306,7 +349,8 @@ namespace Opm{
             return strain_[globalDofIdx][dim];
         }
 
-        void setStress(const Dune::BlockVector<Dune::FieldVector<double,6> >& stress){
+
+        void setStress(const Dune::BlockVector<SymTensor >& stress){
             stress_ = stress;
         }
         void makeDisplacement(const Opm::Elasticity::Vector& field) {
@@ -334,7 +378,7 @@ namespace Opm{
                 celldisplacement_[cellindex] /= vertices.size();
             }
         }
-
+        
     private:
         bool first_solve_;
         Simulator& simulator_;
