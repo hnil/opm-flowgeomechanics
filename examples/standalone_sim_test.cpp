@@ -37,6 +37,7 @@ template<class M, class X, class Y> class ReducedMatrixAdapter; // forward decla
   
 using Grid = Dune::FoamGrid<2, 3>;
 using Vector = Dune::BlockVector<double>;
+using VectorHP = FieldVector<Vector, 2>;
 using HTrans = std::tuple<size_t,size_t, double, double>;
   
 using FullMatrix = Dune::DynamicMatrix<double>;
@@ -294,10 +295,74 @@ void updateTrans(SparseMatrix& mat, const std::vector<HTrans>& htransvec,
 }
 
 // ----------------------------------------------------------------------------
-void solveCoupled(Vector& p, Vector& h, const EquationSystem& eqsys,
-                  const std::vector<size_t> bhpcells, const double bhp,
-                  const std::vector<size_t> ratecells, const double rate, 
-                  const double convergence_tol=1e-4, const int max_nonlin_iter=400)
+class FlowSystemMatrices
+{
+
+};
+// ----------------------------------------------------------------------------
+
+// ----------------------------------------------------------------------------
+VectorHP& computeIncrementAndResidual(const FullMatrix& A,
+                                      const FlowSystemMatrices& SFM, // will be updated
+                                      const VectorHP& hp,
+                                      VectorHP& dhp, // increment (to be computed)
+                                      VectorHP& residual) // residual (to be computed)
+// ----------------------------------------------------------------------------
+{
+
+}
+
+// ----------------------------------------------------------------------------
+int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
+                       const std::vector<size_t> bhpcells, const double bhp,
+                       const ::vector<size_t> ratecells, const double rate, 
+                       const double convergence_tol=1e-4, const int max_nonlin_iter=40)
+// ----------------------------------------------------------------------------
+{
+  // We consider the nonlinear system:
+  // | A          -I |  | h |   | 0 |   (mechanics equation)
+  // |               |  |   | = |   |
+  // | C(h, p)  M(h) |  | p |   | q |   ( flow equation)
+
+  const FullMatrix&          A         = *std::get<0>(eqsys);
+  const SparseMatrix&        M         = *std::get<1>(eqsys);
+  const std::vector<HTrans>& htransvec =  std::get<2>(eqsys);
+  const std::vector<double>& leakvec   =  std::get<3>(eqsys);
+
+  VectorHP hp(h, p); // solution vector, grouping aperture 'h' and pressure 'p'
+
+  FlowSystemMatrices FSM(hp, M, htransvec, leakvec);
+  FSM.setBHPCells(bhpcells, bhp);
+  FSM.setRateCells(ratecells, rate);
+
+  auto converged = [&](const VectorHP& res) { return res.infinity_norm() < convergence_tol; };
+  
+  VectorHP residual, dhp;
+  int iter = 0;
+
+  // nonlinear solve loop
+  while (!converged( computeIncrementAndResidual(A, FSM, hp, dhp, residual) )) {
+    
+    hp += dhp;
+
+    if (++iter > max_nonlin_iter) {
+      std::cout << "System did not converge in max allowed number of iterations." << std::endl;
+      return -1;
+    }
+  }
+  // system converged, unpacking results  
+  h = hp[0];
+  p = hp[1];
+
+  return 0;
+};    
+  
+
+// ----------------------------------------------------------------------------
+void solveCoupledSplit(Vector& p, Vector& h, const EquationSystem& eqsys,
+                       const std::vector<size_t> bhpcells, const double bhp,
+                       const std::vector<size_t> ratecells, const double rate, 
+                       const double convergence_tol=1e-4, const int max_nonlin_iter=400)
 // ----------------------------------------------------------------------------
 {
   // NB: there should be no overlap between the cells in 'bhpcells' and 'ratecells'
@@ -392,7 +457,11 @@ void solveCoupled(Vector& p, Vector& h, const EquationSystem& eqsys,
     if (converged(h, htmp))
       break;
 
-    h = htmp;
+    //h = htmp;
+    h *= 0.0;
+    htmp *= 1.0;
+    h += htmp;
+    
     
   }
     
@@ -440,12 +509,12 @@ int main(int varnum, char** vararg)
   const double rate = -0.1;
 
   // solve fixed pressure system  
-  // solveCoupled(pressure, aperture, eqsys,
+  // solveCoupledSplit(pressure, aperture, eqsys,
   //              std::vector<size_t>(wellcells.begin(), wellcells.end()), bhp,
   //              std::vector<size_t>(), rate);
 
   // solve fixed rate system
-  solveCoupled(pressure, aperture, eqsys,
+  solveCoupledSplit(pressure, aperture, eqsys,
                std::vector<size_t>(), bhp,
                std::vector<size_t>(wellcells.begin(), wellcells.end()), rate);
 
