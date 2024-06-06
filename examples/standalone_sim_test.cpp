@@ -4,6 +4,7 @@
 #include <fstream>
 #include <vector>
 #include <assert.h>
+#include <stdexcept>
 
 #include <dune/istl/matrixmarket.hh>
 #include <dune/istl/preconditioners.hh>
@@ -295,11 +296,116 @@ void updateTrans(SparseMatrix& mat, const std::vector<HTrans>& htransvec,
 }
 
 // ----------------------------------------------------------------------------
-class FlowSystemMatrices
-{
-
-};
+// Note: 'elim' and 'keep' should both be sorted, complementary, and together
+// contain all the indices from 0 to M.N() and/or M.M().
+// The matrix 'M' will be reduced, and any columns extracted will be collected and
+// retuerned. (Rows will just be removed).
+SparseMatrix reduceMatrix(SparseMatrix& M, bool rows, bool cols,
+                          const std::vector<size_t> elim,
+                          const std::vector<size_t> keep)
 // ----------------------------------------------------------------------------
+{
+  if (cols) assert(elim.size() + keep.size() == M.N());
+  if (rows) assert(elim.size() + keep.size() == M.M());
+
+  SparseMatrix Mreduced, cols;
+
+  Mreduced.setBuildMode(SparseMatrix::implicit);
+  Mreduced.setImplicitBuildModeParameters(3 * 6 - 3 - 2, 0.4);
+  Mreduced.setSize(rows ? keep.size() : M.M(),
+                   cols ? keep.size() : M.N());
+
+  cols.setBuildMode(SparseMatrix::implicit);
+  cols.setImplicitBuildModeParameters(3*6-3-2, 0.4);
+  cols.setSize(rows ? elim.size() : M.M(),
+               cols ? elim.size() : 0);
+
+  vector<size_t> mapping(keep.size() + elim.size(), 0);
+  for (size_t i = 0; i != keep.size(); ++i)  mapping[keep[i]] = i;
+  for (size_t i = 0; i != elim.size(); ++i)  mapping[elim[i]] = -(i+1);
+  
+  for (auto rowIt = M.begin(); rowIt != M.end(); ++ rowIt) {
+    const size_t i = rowIt->index();
+    if (rows && mapping[i] < 0)
+      continue; // this row should be eliminated, nothing further to do
+    
+    for (auto colIt = rowIt->begin(); colIt != rowIt->end(); ++colIt) {
+      const size_t j = colIt->index();
+      const bool elim_col = cols && mapping[j] < 0;
+      
+      if (cols && mapping[j] < 0)
+        // this column should be eliminated
+        cols.entry(rows ? mapping[i] : i, -mapping[i] - 1) = M[i][j];
+      else 
+        // this column should be kept
+        Mreduced.entry(i, mapping[j]) = M[i][j];
+    }
+  }
+  
+  Mreduced.compress();
+  cols.compress();
+  M.swap(Mreduced);
+  return cols;
+}
+
+  
+// ----------------------------------------------------------------------------
+class FlowSystemMatrices
+// ----------------------------------------------------------------------------
+{
+public:
+  FlowSystemMatrices(const SparseMatrix& M,
+                     const std::vector<HTrans>& htransvec,
+                     const std::vector<double>& leakvec) :
+    M_(M), C_(M), rhs_(), htransvec_(htransvec), kept_indices_(M.N()),
+    fixed_bhp_(0), fixed_rate_(0)
+  { std::iota(kept_indices_.begin(), kept_indices_.end(), 0); }
+
+  void setBHPCells(const std::vector<size_t>& bhp_cells, const double bhp)
+  {
+    if (!eliminated_indices_.empty())
+      throw std::runtime_error("System has already been reduced.  Cannot re-set BHP cells"); 
+
+    eliminated_indices_ = sorted_(bhp_cells);
+    kept_indices_ = noneliminated_(eliminated_indices_, M_.M());
+
+    rhs_ = reduceMatrixReducedMatrixAdapter<class M, class X, class Y>(M_, eliminated_indices_, kept_indices_);
+    eliminate_rows(C, eliminated_indices_);
+    
+    bhp_ = bhp;
+  }
+  
+  void setRateCells(const std::vector<size_t>& rate_cells, const double rate);
+
+private:
+
+  static std::vector<size_t> sorted_(const std::vector<size_t>& vec)
+  {
+    std::vector<size_t> result(vec);
+    std::sort(result.begin(), result.end());
+    return result;
+  }
+  static std::vector<size_t> noneliminated_(const std::vector<size_t>& elim, size_t nc)
+  {
+    // return vector with all incides that are _not_ found in elim
+    std::vector<size_t> all_ixs(nc);
+    std::iota(all_ixs.begin(), all_ixs.end(), 0);
+    std::vector<size_t> nonelim;
+    std::set_difference(all_ixs.begin(), all_ixs.end(), elim.begin(), elim.end(),
+                        std::back_inserter(nonelim));
+    return nonelim;
+  }
+
+  SparseMatrix M_;
+  SparseMatrix C_;
+  SparseMatrix rhs_; // used to compute rhs correction for reduced systems
+  const std::vector<HTrans>& htransvec_;
+  const std::vector<double>& leakvec_;
+  std::vector<size_t> eliminated_indices_;
+  std::vector<size_t> kept_indices_;
+  double fixed_bhp_;
+  double fixed_rate_;
+};
 
 // ----------------------------------------------------------------------------
 VectorHP& computeIncrementAndResidual(const FullMatrix& A,
@@ -315,7 +421,7 @@ VectorHP& computeIncrementAndResidual(const FullMatrix& A,
 // ----------------------------------------------------------------------------
 int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
                        const std::vector<size_t> bhpcells, const double bhp,
-                       const ::vector<size_t> ratecells, const double rate, 
+                       const std::vector<size_t> ratecells, const double rate, 
                        const double convergence_tol=1e-4, const int max_nonlin_iter=40)
 // ----------------------------------------------------------------------------
 {
