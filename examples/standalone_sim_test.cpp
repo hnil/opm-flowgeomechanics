@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <dune/common/exceptions.hh>
 #include <dune/istl/solvercategory.hh>
 #include <iostream>
@@ -357,9 +358,10 @@ public:
   FlowSystemMatrices(const SparseMatrix& M,
                      const std::vector<HTrans>& htransvec,
                      const std::vector<double>& leakvec) :
-    M_(M), C_(M), rhs_(), htransvec_(htransvec), kept_indices_(M.N()),
-    fixed_bhp_(0), fixed_rate_(0), ratecells_()
-  { std::iota(kept_indices_.begin(), kept_indices_.end(), 0); }
+    M_(M), C_(M), rhs_(), htransvec_(htransvec), eliminated_indices_(),
+    kept_indices_(M.N()), remapping_(), fixed_bhp_(0), fixed_rate_(0), ratecells_()
+  { std::iota(kept_indices_.begin(), kept_indices_.end(), 0);
+    std::iota(remapping_.begin(), remapping_.end(), 0); }
 
   void setBHPCells(const std::vector<size_t>& bhp_cells, const double bhp)  {
     if (!eliminated_indices_.empty())
@@ -367,10 +369,12 @@ public:
 
     eliminated_indices_ = sorted_(bhp_cells);
     kept_indices_ = noneliminated_(eliminated_indices_, M_.M());
+    remapping_ = compute_remapping_(eliminated_indices_, kept_indices_, M_.M());
 
-    rhs_ = reduceMatrix(M, true, true, eliminated_indices_, kept_indices_);
+    reduceMatrix(M, true, true, eliminated_indices_, kept_indices_);
     reduceMatrix(C, true, false, eliminated_indices_, kept_indices_);
-        
+
+    rhs_.resize(M.N());
     fixed_bhp_ = bhp;
   }
   void setRateCells(const std::vector<size_t>& rate_cells, const double rate) {
@@ -379,21 +383,27 @@ public:
   }
   size_t pnum() const { return M_.N(); } // number of (remaining) pressure values
   size_t hnum() const { return C_.N(); } // number of aperture values
+  void update(const VectorHP& hp) {
+    update_M_and_rhs_(hp);
+    update_C_(hp);
+  } 
   const SparseMatrix& M() const {return M_;}
   const SparseMatrix& C() const {return C_;}
-  VectorHP rhs() const {};
-  void update(const VectorHP& hp) {};
-
+  Vector rhs() const { return rhs_;} // should only be called after update
+  Vector reduceP(const Vector& p) {
+    Vector result(pnum()); result = 0;
+    for (size_t i = 0; i != pnum(); ++i)
+      result[i] = p[kept_indices_[i]];
+    return result;
+  }
 private:
 
-  static std::vector<size_t> sorted_(const std::vector<size_t>& vec)
-  {
+  static std::vector<size_t> sorted_(const std::vector<size_t>& vec)  {
     std::vector<size_t> result(vec);
     std::sort(result.begin(), result.end());
     return result;
   }
-  static std::vector<size_t> noneliminated_(const std::vector<size_t>& elim, size_t nc)
-  {
+  static std::vector<size_t> noneliminated_(const std::vector<size_t>& elim, size_t nc)  {
     // return vector with all incides that are _not_ found in elim
     std::vector<size_t> all_ixs(nc);
     std::iota(all_ixs.begin(), all_ixs.end(), 0);
@@ -402,14 +412,97 @@ private:
                         std::back_inserter(nonelim));
     return nonelim;
   }
+  static std::vector<int> compute_remapping_(const std::vector<size_t>& eliminated,
+                                                const std::vector<size_t>& kept,
+                                                const size_t nc) {
+    std::vector<int> result(nc);
+    for (size_t i = 0; i != eliminated.size(); ++i) result[eliminated[i]] = -i;
+    for (size_t i = 0; i != kept.size(); ++i) result[kept[i]] = i;
+    return result;
+  }
+  void update_M_and_rhs_(const VectorHP& hp) {
+    // update M_ and rhs_reduct_
+    M_ = 0; rhs_ = 0;
+    for (const auto& e : htransvec_) {
+      const size_t i = std::get<0>(e);
+      const size_t j = std::get<1>(e);
+      assert(i != j);
+      const double t1 = std::get<2>(e);
+      const double t2 = std::get<3>(e);
+      const double h1 = hp[0][i];
+      const double h2 = hp[0][j];
+      
+      const double trans1 = h1 * h1 * t1 / 12.0;
+      const double trans2 = h2 * h2 * t2 / 12.0;
+      
+      const double T = hmean(trans1, trans2);
+
+      // remapped indices
+      const int ir = remapping_[i];
+      const int jr = remapping_[j];
+
+      // update diagonal
+      (ir > 0) && M_[ir][ir] += T; 
+      (jr > 0) && M_[jr][jr] += T; 
+
+      // update off-diagonal terms, and the reduction terms of rhs_reduct_
+      if (ir > 0) if (jr > 0) M_[ir, jr] += T; else rhs_[ir] -= T * bhp_;
+      if (jr > 0) if (ir > 0) M_[jr, ir] += T; else rhs_[jr] -= T * bhp_;
+    }
+
+    // // update the rest of the contribution of M on rhs
+    // Vector p_reduced(M.N()); p_reduced = 0;
+    // for (size_t i = 0; i != p_reduced.size(); ++i)
+    //   p_reduced[i] = hp[1][kept_indices_[i]];
+    
+    // M_.mmv(p_reduced, rhs_); // rhs_ = rhs_ - M * p_reduced
+    // // NB: note that update_C_ must also be called before rhs_ is complete
+  }
+  void update_C_(const VectorHP& hp) {
+    C_ = 0;
+    // intermediary matrices for computing the partial derivatives
+    SparseMatrix Q(C_), R(C_), dQ(C_), dR(C_);
+    Q = 0; R = 0; dQ = 0; dR = 0;
+
+    for (const auto& e : htransvec_) {
+      const size_t i = std::get<0>(e);
+      const size_t j = std::get<1>(e); assert(i != j);
+
+      const int ir = remapping_[i];
+      if (ir < 0) continue; // this equation was eliminated
+      
+      const double t1 = std::get<2>(e);
+      const double t2 = std::get<3>(e);
+      const double h1 = hp[0][i];
+      const double h2 = hp[0][j];
+      const double p1 = hp[1][i];
+      const double p2 = hp[1][j];
+
+      const double q   = h1 * h1 * h2 * h2 * t1 * t2;
+      const double d1q = 2 * h1 * h2 * h2 * t1 * t2;
+      const double d2q = h1 * h1 * 2 * h2 * t1 * t2;
+
+      const double r   = 12 * (h1 * h1 * t1 + h2 * h2 * t2);
+      const double d1r = 24 * h1 * t1;
+      const double d2r = 24 * h2 * t2;
+      
+      C_[i][j] = (d1q * r - q * d1r) / (r * r) * (p1 - p2);
+      C_[j][i] = (d2q * r - q * d2r) / (r * r) * (p2 - p1);
+      
+    }
+
+    // // add contribution to rhs
+    // C_.mmv(hp[0], rhs_); // rhs_ = rhs_ - C_ * hp[0]
+  }
 
   SparseMatrix M_;
   SparseMatrix C_;
-  SparseMatrix rhs_; // used to compute rhs correction for reduced systems
+  Vector rhs_;
   const std::vector<HTrans>& htransvec_;
   const std::vector<double>& leakvec_;
   std::vector<size_t> eliminated_indices_;
   std::vector<size_t> kept_indices_;
+  std::vector<int> remapping_ ;
   double fixed_bhp_;
   double fixed_rate_;
   std::vector<size_t> ratecells_;
@@ -451,7 +544,10 @@ VectorHP& computeIncrementAndResidual(const FullMatrix& A,
   residual[0] = 0;
   residual[1] = SFM.rhs();
 
-  residual -= S * hp;
+  Vector hp_reduced = hp;
+  hp_reduced[1] = SFM.reduceP(hp[1]);
+
+  S.mmv(hp_reduced, residual); // residual = residual - S * hp_reduced
 
   // solve system equations
   Dune::UMFPack psolver(S);
