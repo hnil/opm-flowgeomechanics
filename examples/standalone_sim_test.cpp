@@ -11,7 +11,7 @@
 #include <dune/istl/preconditioners.hh>
 //#include <dune/istl/paamg/amg.hh>
 
-@@ there must be a more correct way to ensure UMFpack is included here
+//@@ there must be a more correct way to ensure UMFpack is included here
 #define HAVE_SUITESPARSE_UMFPACK 1
 #include <dune/istl/umfpack.hh>
 
@@ -39,7 +39,7 @@ template<class M, class X, class Y> class ReducedMatrixAdapter; // forward decla
   
 using Grid = Dune::FoamGrid<2, 3>;
 using Vector = Dune::BlockVector<double>;
-using VectorHP = FieldVector<Vector, 2>;
+using VectorHP = Dune::FieldVector<Vector, 2>;
 using HTrans = std::tuple<size_t,size_t, double, double>;
   
 using FullMatrix = Dune::DynamicMatrix<double>;
@@ -309,34 +309,33 @@ SparseMatrix reduceMatrix(SparseMatrix& M, bool rows, bool cols,
   if (cols) assert(elim.size() + keep.size() == M.N());
   if (rows) assert(elim.size() + keep.size() == M.M());
 
-  SparseMatrix Mreduced, cols;
+  SparseMatrix Mreduced, reduced_cols;
 
   Mreduced.setBuildMode(SparseMatrix::implicit);
   Mreduced.setImplicitBuildModeParameters(3 * 6 - 3 - 2, 0.4);
   Mreduced.setSize(rows ? keep.size() : M.M(),
                    cols ? keep.size() : M.N());
 
-  cols.setBuildMode(SparseMatrix::implicit);
-  cols.setImplicitBuildModeParameters(3*6-3-2, 0.4);
-  cols.setSize(rows ? elim.size() : M.M(),
-               cols ? elim.size() : 0);
+  reduced_cols.setBuildMode(SparseMatrix::implicit);
+  reduced_cols.setImplicitBuildModeParameters(3*6-3-2, 0.4);
+  reduced_cols.setSize(rows ? elim.size() : M.M(),
+                       cols ? elim.size() : 0);
 
-  vector<size_t> mapping(keep.size() + elim.size(), 0);
+  std::vector<int> mapping(keep.size() + elim.size(), 0);
   for (size_t i = 0; i != keep.size(); ++i)  mapping[keep[i]] = i;
   for (size_t i = 0; i != elim.size(); ++i)  mapping[elim[i]] = -(i+1);
   
   for (auto rowIt = M.begin(); rowIt != M.end(); ++ rowIt) {
-    const size_t i = rowIt->index();
+    const size_t i = rowIt.index();
     if (rows && mapping[i] < 0)
       continue; // this row should be eliminated, nothing further to do
     
     for (auto colIt = rowIt->begin(); colIt != rowIt->end(); ++colIt) {
-      const size_t j = colIt->index();
-      const bool elim_col = cols && mapping[j] < 0;
+      const size_t j = colIt.index();
       
       if (cols && mapping[j] < 0)
         // this column should be eliminated
-        cols.entry(rows ? mapping[i] : i, -mapping[i] - 1) = M[i][j];
+        reduced_cols.entry(rows ? mapping[i] : i, -mapping[i] - 1) = M[i][j];
       else 
         // this column should be kept
         Mreduced.entry(i, mapping[j]) = M[i][j];
@@ -344,9 +343,9 @@ SparseMatrix reduceMatrix(SparseMatrix& M, bool rows, bool cols,
   }
   
   Mreduced.compress();
-  cols.compress();
-  M.swap(Mreduced);
-  return cols;
+  reduced_cols.compress();
+  std::swap(M, Mreduced);
+  return reduced_cols;
 }
 
   
@@ -358,7 +357,7 @@ public:
   FlowSystemMatrices(const SparseMatrix& M,
                      const std::vector<HTrans>& htransvec,
                      const std::vector<double>& leakvec) :
-    M_(M), C_(M), rhs_(), htransvec_(htransvec), eliminated_indices_(),
+    M_(M), C_(M), rhs_(), htransvec_(htransvec), leakvec_(leakvec), eliminated_indices_(),
     kept_indices_(M.N()), remapping_(), fixed_bhp_(0), fixed_rate_(0), ratecells_()
   { std::iota(kept_indices_.begin(), kept_indices_.end(), 0);
     std::iota(remapping_.begin(), remapping_.end(), 0); }
@@ -371,10 +370,10 @@ public:
     kept_indices_ = noneliminated_(eliminated_indices_, M_.M());
     remapping_ = compute_remapping_(eliminated_indices_, kept_indices_, M_.M());
 
-    reduceMatrix(M, true, true, eliminated_indices_, kept_indices_);
-    reduceMatrix(C, true, false, eliminated_indices_, kept_indices_);
+    reduceMatrix(M_, true, true, eliminated_indices_, kept_indices_);
+    reduceMatrix(C_, true, false, eliminated_indices_, kept_indices_);
 
-    rhs_.resize(M.N());
+    rhs_.resize(M_.N());
     fixed_bhp_ = bhp;
   }
   void setRateCells(const std::vector<size_t>& rate_cells, const double rate) {
@@ -396,6 +395,14 @@ public:
       result[i] = p[kept_indices_[i]];
     return result;
   }
+  Vector expandP(const Vector& p) {
+    assert (p.size() == kept_indices_.size());
+    Vector result(remapping_.size()); result = fixed_bhp_;
+    for (size_t i = 0; i != p.size(); ++i)
+      result[kept_indices_[i]] = p[i];
+    return result;
+  }
+  
 private:
 
   static std::vector<size_t> sorted_(const std::vector<size_t>& vec)  {
@@ -416,7 +423,7 @@ private:
                                                 const std::vector<size_t>& kept,
                                                 const size_t nc) {
     std::vector<int> result(nc);
-    for (size_t i = 0; i != eliminated.size(); ++i) result[eliminated[i]] = -i;
+    for (size_t i = 0; i != eliminated.size(); ++i) result[eliminated[i]] = -i-1;
     for (size_t i = 0; i != kept.size(); ++i) result[kept[i]] = i;
     return result;
   }
@@ -442,21 +449,24 @@ private:
       const int jr = remapping_[j];
 
       // update diagonal
-      (ir > 0) && M_[ir][ir] += T; 
-      (jr > 0) && M_[jr][jr] += T; 
+      if (ir >= 0) M_[ir][ir] += T; 
+      if (jr >= 0) M_[jr][jr] += T; 
 
       // update off-diagonal terms, and the reduction terms of rhs_reduct_
-      if (ir > 0) if (jr > 0) M_[ir, jr] += T; else rhs_[ir] -= T * bhp_;
-      if (jr > 0) if (ir > 0) M_[jr, ir] += T; else rhs_[jr] -= T * bhp_;
+      if (ir >= 0) {if (jr >= 0) M_[ir][jr] += T; else rhs_[ir] -= T * fixed_bhp_; }
+      if (jr >= 0) {if (ir >= 0) M_[jr][ir] += T; else rhs_[jr] -= T * fixed_bhp_; }
+      
     }
 
-    // // update the rest of the contribution of M on rhs
-    // Vector p_reduced(M.N()); p_reduced = 0;
-    // for (size_t i = 0; i != p_reduced.size(); ++i)
-    //   p_reduced[i] = hp[1][kept_indices_[i]];
+    // add leakage terms
+    for (size_t ix = 0; ix != leakvec_.size(); ++ix)
+      if (remapping_[ix] >= 0)
+        M_[remapping_[ix]][remapping_[ix]] += leakvec_[ix];
     
-    // M_.mmv(p_reduced, rhs_); // rhs_ = rhs_ - M * p_reduced
-    // // NB: note that update_C_ must also be called before rhs_ is complete
+    // add source terms
+    for (const auto& ix : ratecells_)
+      if (remapping_[ix] >= 0)
+        rhs_[remapping_[ix]] = fixed_rate_;
   }
   void update_C_(const VectorHP& hp) {
     C_ = 0;
@@ -525,7 +535,7 @@ SparseMatrix makeIdentity(size_t num)
   
 // ----------------------------------------------------------------------------
 VectorHP& computeIncrementAndResidual(const FullMatrix& A,
-                                      const FlowSystemMatrices& SFM, // will be updated
+                                      FlowSystemMatrices& SFM, // will be updated
                                       const VectorHP& hp,
                                       VectorHP& dhp, // increment (to be computed)
                                       VectorHP& residual) // residual (to be computed)
@@ -544,15 +554,27 @@ VectorHP& computeIncrementAndResidual(const FullMatrix& A,
   residual[0] = 0;
   residual[1] = SFM.rhs();
 
-  Vector hp_reduced = hp;
+  VectorHP hp_reduced = hp;
   hp_reduced[1] = SFM.reduceP(hp[1]);
 
   S.mmv(hp_reduced, residual); // residual = residual - S * hp_reduced
 
   // solve system equations
-  Dune::UMFPack psolver(S);
-  Dune::InverseOperatorResult r;  
-  psolver.apply(dhp, residual, r);
+  Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP> S_linop(S);
+  Dune::Richardson<VectorHP, VectorHP> precond(1); // "no" preconditioner
+  Dune::InverseOperatorResult iores;    
+  auto psolver = Dune::CGSolver<VectorHP>(S_linop,
+                                          precond,
+                                          1e-7, // desired residual reduction factor
+                                          100, // max number of iterations
+                                          1); // verbose
+  psolver.apply(dhp, residual, iores);
+  
+  dhp[1] = SFM.expandP(dhp[1]);
+  
+  // Dune::UMFPack psolver(S);
+  // Dune::InverseOperatorResult r;  
+  // psolver.apply(dhp, residual, r);
 
   // compute residual
   VectorHP tmp(hp);
@@ -579,13 +601,13 @@ int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
   const std::vector<HTrans>& htransvec =  std::get<2>(eqsys);
   const std::vector<double>& leakvec   =  std::get<3>(eqsys);
 
-  VectorHP hp(h, p); // solution vector, grouping aperture 'h' and pressure 'p'
+  VectorHP hp {h, p }; // solution vector, grouping aperture 'h' and pressure 'p'
 
-  FlowSystemMatrices FSM(hp, M, htransvec, leakvec);
+  FlowSystemMatrices FSM(M, htransvec, leakvec);
   FSM.setBHPCells(bhpcells, bhp);
   FSM.setRateCells(ratecells, rate);
 
-  auto converged = [&](const VectorHP& res) { return res.infinity_norm() < convergence_tol; };
+  auto converged = [&](const VectorHP& res) { return std::max(res[0].infinity_norm(), res[1].infinity_norm()) < convergence_tol; };
   
   VectorHP residual, dhp;
   int iter = 0;
@@ -746,10 +768,11 @@ int main(int varnum, char** vararg)
   std::cout << std::endl;
   
   // compute equation system
-  const double young = 1e9; // Young's modulus
+  const double young = 1e9; // fYoung's modulus
   const double poisson = 0.25; // Poisson's ratio
-  const double leakoff_fac = 1e-6; //1e-13; // a bit heuristic; conceptually rock perm divided by distance  
+  const double leakoff_fac = 1e-6; //1e-13; // a bit heuristic; conceptufally rock perm divided by distance  
   const auto eqsys = computeEquationSystem(*grid, young, poisson, leakoff_fac);
+  
   
   // solve fixed pressure system
   const size_t nc = grid->leafGridView().size(0);
@@ -764,7 +787,7 @@ int main(int varnum, char** vararg)
   //              std::vector<size_t>(), rate);
 
   // solve fixed rate system
-  solveCoupledSplit(pressure, aperture, eqsys,
+  solveCoupledFull(pressure, aperture, eqsys,
                std::vector<size_t>(), bhp,
                std::vector<size_t>(wellcells.begin(), wellcells.end()), rate);
 
