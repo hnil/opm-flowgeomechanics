@@ -10,7 +10,7 @@
 #include <dune/istl/preconditioners.hh>
 //#include <dune/istl/paamg/amg.hh>
 
-//@@ there must be a more correct way to ensure UMFpack is included here
+@@ there must be a more correct way to ensure UMFpack is included here
 #define HAVE_SUITESPARSE_UMFPACK 1
 #include <dune/istl/umfpack.hh>
 
@@ -358,24 +358,31 @@ public:
                      const std::vector<HTrans>& htransvec,
                      const std::vector<double>& leakvec) :
     M_(M), C_(M), rhs_(), htransvec_(htransvec), kept_indices_(M.N()),
-    fixed_bhp_(0), fixed_rate_(0)
+    fixed_bhp_(0), fixed_rate_(0), ratecells_()
   { std::iota(kept_indices_.begin(), kept_indices_.end(), 0); }
 
-  void setBHPCells(const std::vector<size_t>& bhp_cells, const double bhp)
-  {
+  void setBHPCells(const std::vector<size_t>& bhp_cells, const double bhp)  {
     if (!eliminated_indices_.empty())
       throw std::runtime_error("System has already been reduced.  Cannot re-set BHP cells"); 
 
     eliminated_indices_ = sorted_(bhp_cells);
     kept_indices_ = noneliminated_(eliminated_indices_, M_.M());
 
-    rhs_ = reduceMatrixReducedMatrixAdapter<class M, class X, class Y>(M_, eliminated_indices_, kept_indices_);
-    eliminate_rows(C, eliminated_indices_);
-    
-    bhp_ = bhp;
+    rhs_ = reduceMatrix(M, true, true, eliminated_indices_, kept_indices_);
+    reduceMatrix(C, true, false, eliminated_indices_, kept_indices_);
+        
+    fixed_bhp_ = bhp;
   }
-  
-  void setRateCells(const std::vector<size_t>& rate_cells, const double rate);
+  void setRateCells(const std::vector<size_t>& rate_cells, const double rate) {
+    fixed_rate_ = rate;
+    ratecells_ = rate_cells;
+  }
+  size_t pnum() const { return M_.N(); } // number of (remaining) pressure values
+  size_t hnum() const { return C_.N(); } // number of aperture values
+  const SparseMatrix& M() const {return M_;}
+  const SparseMatrix& C() const {return C_;}
+  VectorHP rhs() const {};
+  void update(const VectorHP& hp) {};
 
 private:
 
@@ -405,8 +412,24 @@ private:
   std::vector<size_t> kept_indices_;
   double fixed_bhp_;
   double fixed_rate_;
+  std::vector<size_t> ratecells_;
 };
 
+// ----------------------------------------------------------------------------
+SparseMatrix makeIdentity(size_t num)
+// ----------------------------------------------------------------------------
+{
+  //build a sparse matrix to represent the identity matrix of a given size
+  SparseMatrix M;
+  M.setBuildMode(SparseMatrix::implicit);
+  M.setImplicitBuildModeParameters(1, 0.1);
+  M.setSize(num, num);
+  for (size_t i = 0; i != num; ++i)
+    M.entry(i,i) = 1;
+  M.compress();
+  return M;
+}
+  
 // ----------------------------------------------------------------------------
 VectorHP& computeIncrementAndResidual(const FullMatrix& A,
                                       const FlowSystemMatrices& SFM, // will be updated
@@ -415,7 +438,32 @@ VectorHP& computeIncrementAndResidual(const FullMatrix& A,
                                       VectorHP& residual) // residual (to be computed)
 // ----------------------------------------------------------------------------
 {
+  using SystemMatrix =
+    Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<FullMatrix,   SparseMatrix>,
+                               Dune::MultiTypeBlockVector<SparseMatrix, SparseMatrix>>;
 
+  SFM.update(hp);
+
+  SystemMatrix S { { A      , makeIdentity(SFM.pnum()) },
+                   { SFM.C(), SFM.M()                  } };
+
+  // we use the 'residual' vector also to represent the right-hand-side
+  residual[0] = 0;
+  residual[1] = SFM.rhs();
+
+  residual -= S * hp;
+
+  // solve system equations
+  Dune::UMFPack psolver(S);
+  Dune::InverseOperatorResult r;  
+  psolver.apply(dhp, residual, r);
+
+  // compute residual
+  VectorHP tmp(hp);
+  tmp += dhp;
+  S.mmv(tmp, residual);
+  
+  return residual;
 }
 
 // ----------------------------------------------------------------------------
@@ -447,15 +495,15 @@ int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
   int iter = 0;
 
   // nonlinear solve loop
-  while (!converged( computeIncrementAndResidual(A, FSM, hp, dhp, residual) )) {
-    
+  while (!converged( computeIncrementAndResidual(A, FSM, hp, dhp, residual) ) &&
+         ++iter < max_nonlin_iter) 
     hp += dhp;
 
-    if (++iter > max_nonlin_iter) {
+  if (iter == max_nonlin_iter) {
       std::cout << "System did not converge in max allowed number of iterations." << std::endl;
       return -1;
-    }
   }
+
   // system converged, unpacking results  
   h = hp[0];
   p = hp[1];
