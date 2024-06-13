@@ -20,6 +20,7 @@
 #include <dune/grid/common/mcmgmapper.hh> // mapper class
 #include <dune/grid/io/file/vtk/vtkwriter.hh>
 #include <dune/common/filledarray.hh> // needed for printSparseMatrix??
+#include <dune/common/indices.hh>          // needed for _0, _1, etc.
 #include <dune/istl/io.hh> // needed for printSparseMatrix??
 
 
@@ -36,10 +37,14 @@
 
 namespace {
 template<class M, class X, class Y> class ReducedMatrixAdapter; // forward declaration
-  
+
+using Dune::Indices::_0;
+using Dune::Indices::_1;
 using Grid = Dune::FoamGrid<2, 3>;
 using Vector = Dune::BlockVector<double>;
-using VectorHP = Dune::FieldVector<Vector, 2>;
+  //using VectorHP = Dune::FieldVector<Vector, 2>;
+  //using VectorHP = Dune::BlockVector<Vector>;
+using VectorHP = Dune::MultiTypeBlockVector<Vector, Vector>;
 using HTrans = std::tuple<size_t,size_t, double, double>;
   
 using FullMatrix = Dune::DynamicMatrix<double>;
@@ -63,6 +68,45 @@ std::unique_ptr<const Grid> readgrid(const char* const name)
   }
   return result;
 }
+
+// ----------------------------------------------------------------------------
+template<class MatrixType> void dump_matrix(const MatrixType& m, const char* const name)
+// ----------------------------------------------------------------------------
+{
+  const size_t rows = m.N();
+  const size_t cols = m.M();
+  std::ofstream os(name);
+  for (size_t i = 0; i != rows; ++i)
+    for (size_t j = 0; j != cols; ++j)
+      os << m[i][j] << ((j == cols-1) ? "\n" : " ");
+  os.close();
+}
+
+// ----------------------------------------------------------------------------
+template<> void dump_matrix(const SparseMatrix& m, const char* const name)
+// ----------------------------------------------------------------------------
+{
+  std::ofstream os(name);
+  for (auto rowIt = m.begin(); rowIt != m.end(); ++ rowIt) {
+    const size_t i = rowIt.index();
+    for (auto colIt = rowIt->begin(); colIt != rowIt->end(); ++colIt) {
+      const size_t j = colIt.index();
+      os << i << " " << j << " " << m[i][j] << "\n";
+    }
+  }
+  os.close();
+}
+
+// ----------------------------------------------------------------------------
+void dump_vector(const Vector& v, const char* const name)
+// ----------------------------------------------------------------------------
+{
+  std::ofstream os(name);
+  for (size_t i = 0; i != v.size(); ++i)
+    os << v[i] << " ";
+  os.close();
+}
+
 
 // ----------------------------------------------------------------------------
 template<int N>
@@ -256,8 +300,12 @@ private:
 };
 
 // ----------------------------------------------------------------------------  
-template<typename T> inline T hmean(const T a, const T b) {return T(1) / ( T(1)/a + T(1)/b);};
+template<typename T> inline T hmean(const T a, const T b) 
 // ----------------------------------------------------------------------------
+{
+  T tmp = T(1) / ( T(1)/a + T(1)/b);
+  return isnan(tmp) ? 0.0 : tmp;
+}
   
 // ----------------------------------------------------------------------------
 void updateTrans(SparseMatrix& mat, const std::vector<HTrans>& htransvec,
@@ -318,7 +366,7 @@ SparseMatrix reduceMatrix(SparseMatrix& M, bool rows, bool cols,
 
   reduced_cols.setBuildMode(SparseMatrix::implicit);
   reduced_cols.setImplicitBuildModeParameters(3*6-3-2, 0.4);
-  reduced_cols.setSize(rows ? elim.size() : M.M(),
+  reduced_cols.setSize(Mreduced.M(), 
                        cols ? elim.size() : 0);
 
   std::vector<int> mapping(keep.size() + elim.size(), 0);
@@ -436,8 +484,8 @@ private:
       assert(i != j);
       const double t1 = std::get<2>(e);
       const double t2 = std::get<3>(e);
-      const double h1 = hp[0][i];
-      const double h2 = hp[0][j];
+      const double h1 = hp[_0][i];
+      const double h2 = hp[_0][j];
       
       const double trans1 = h1 * h1 * t1 / 12.0;
       const double trans2 = h2 * h2 * t2 / 12.0;
@@ -483,22 +531,22 @@ private:
       
       const double t1 = std::get<2>(e);
       const double t2 = std::get<3>(e);
-      const double h1 = hp[0][i];
-      const double h2 = hp[0][j];
-      const double p1 = hp[1][i];
-      const double p2 = hp[1][j];
+      const double h1 = hp[_0][i];
+      const double h2 = hp[_0][j];
+      const double p1 = hp[_1][i];
+      const double p2 = hp[_1][j];
 
-      const double q   = h1 * h1 * h2 * h2 * t1 * t2;
+      const double q   = h1 * h1 * h2 * h2 * t1 * t2; // numerator
       const double d1q = 2 * h1 * h2 * h2 * t1 * t2;
       const double d2q = h1 * h1 * 2 * h2 * t1 * t2;
 
-      const double r   = 12 * (h1 * h1 * t1 + h2 * h2 * t2);
+      const double r   = 12 * (h1 * h1 * t1 + h2 * h2 * t2); // denominator
       const double d1r = 24 * h1 * t1;
       const double d2r = 24 * h2 * t2;
       
-      C_[i][j] = (d1q * r - q * d1r) / (r * r) * (p1 - p2);
-      C_[j][i] = (d2q * r - q * d2r) / (r * r) * (p2 - p1);
-      
+      C_[i][j] = (r == 0) ? 0.0 : (d1q * r - q * d1r) / (r * r) * (p1 - p2);
+      C_[j][i] = (r == 0) ? 0.0 : (d2q * r - q * d2r) / (r * r) * (p2 - p1);
+
     }
 
     // // add contribution to rhs
@@ -519,7 +567,7 @@ private:
 };
 
 // ----------------------------------------------------------------------------
-SparseMatrix makeIdentity(size_t num)
+SparseMatrix makeIdentity(size_t num, double fac = 1)
 // ----------------------------------------------------------------------------
 {
   //build a sparse matrix to represent the identity matrix of a given size
@@ -528,7 +576,7 @@ SparseMatrix makeIdentity(size_t num)
   M.setImplicitBuildModeParameters(1, 0.1);
   M.setSize(num, num);
   for (size_t i = 0; i != num; ++i)
-    M.entry(i,i) = 1;
+    M.entry(i,i) = fac;
   M.compress();
   return M;
 }
@@ -547,30 +595,48 @@ VectorHP& computeIncrementAndResidual(const FullMatrix& A,
 
   SFM.update(hp);
 
-  SystemMatrix S { { A      , makeIdentity(SFM.pnum()) },
-                   { SFM.C(), SFM.M()                  } };
+  SystemMatrix S { { A      , makeIdentity(SFM.pnum(), -1) },
+                   { SFM.C(), SFM.M()                    } };
 
   // we use the 'residual' vector also to represent the right-hand-side
-  residual[0] = 0;
-  residual[1] = SFM.rhs();
+  residual[_0].resize(A.M());
+  residual[_0] = 0;
+  residual[_1] = SFM.rhs();
+
+  dhp = residual; // ensure it has the right number of elements
+  // auto dill = residual[_0]; // @@
+  // auto dall = residual[_1]; // @@
+  // auto SFMC = SFM.C(); // @@
+  // auto SFMM = SFM.M(); // @@
+  // auto S1 = S[_0][_0];
+  // auto S2 = S[_0][_1];
+  // auto S3 = S[_1][_0];
+  // auto S4 = S[_1][_1];
+  // dump_matrix(S1, "S1");
+  // dump_matrix(S2, "S2");
+  // dump_matrix(S3, "S3");
+  // dump_matrix(S4, "S4");
 
   VectorHP hp_reduced = hp;
-  hp_reduced[1] = SFM.reduceP(hp[1]);
+  hp_reduced[_1] = SFM.reduceP(hp[_1]);
 
   S.mmv(hp_reduced, residual); // residual = residual - S * hp_reduced
+
+  //dump_vector(residual[_0], "res0"); // @@
+  //dump_vector(residual[_1], "res1"); // @@
 
   // solve system equations
   Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP> S_linop(S);
   Dune::Richardson<VectorHP, VectorHP> precond(1); // "no" preconditioner
   Dune::InverseOperatorResult iores;    
-  auto psolver = Dune::CGSolver<VectorHP>(S_linop,
-                                          precond,
-                                          1e-7, // desired residual reduction factor
-                                          100, // max number of iterations
-                                          1); // verbose
+  auto psolver = Dune::BiCGSTABSolver<VectorHP>(S_linop,
+                                                precond,
+                                                1e-7, // desired residual reduction factor
+                                                100, // max number of iterations
+                                                1); // verbose
   psolver.apply(dhp, residual, iores);
   
-  dhp[1] = SFM.expandP(dhp[1]);
+  dhp[_1] = SFM.expandP(dhp[_1]);
   
   // Dune::UMFPack psolver(S);
   // Dune::InverseOperatorResult r;  
@@ -607,7 +673,7 @@ int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
   FSM.setBHPCells(bhpcells, bhp);
   FSM.setRateCells(ratecells, rate);
 
-  auto converged = [&](const VectorHP& res) { return std::max(res[0].infinity_norm(), res[1].infinity_norm()) < convergence_tol; };
+  auto converged = [&](const VectorHP& res) { return std::max(res[_0].infinity_norm(), res[_1].infinity_norm()) < convergence_tol; };
   
   VectorHP residual, dhp;
   int iter = 0;
@@ -623,8 +689,8 @@ int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
   }
 
   // system converged, unpacking results  
-  h = hp[0];
-  p = hp[1];
+  h = hp[_0];
+  p = hp[_1];
 
   return 0;
 };    
@@ -671,6 +737,8 @@ void solveCoupledSplit(Vector& p, Vector& h, const EquationSystem& eqsys,
     p = 1e6; // we need something to get started without h being 0.
       
   // solve for aperture
+  // dump_matrix(M_h, "M_h.txt"); // @@
+  // dump_vector(p, "p.txt"); // @@
   M_h.solve(h, p); // solve for aperture (h) given pressure (p)
 
   Vector htmp(h.N()); htmp = 0;
@@ -779,9 +847,9 @@ int main(int varnum, char** vararg)
   Vector pressure(nc), aperture(nc);
   pressure = 0;
   const double bhp = 1e7; // in Pascal
-  const double rate = -0.1;
+  const double rate = 0.1; // positive value is _injection_
 
-  // solve fixed pressure system  
+  // // solve fixed pressure system  
   // solveCoupledSplit(pressure, aperture, eqsys,
   //              std::vector<size_t>(wellcells.begin(), wellcells.end()), bhp,
   //              std::vector<size_t>(), rate);
