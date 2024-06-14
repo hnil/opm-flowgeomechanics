@@ -350,19 +350,19 @@ SparseMatrix reduceMatrix(SparseMatrix& M, bool rows, bool cols,
                           const std::vector<size_t> keep)
 // ----------------------------------------------------------------------------
 {
-  if (cols) assert(elim.size() + keep.size() == M.N());
-  if (rows) assert(elim.size() + keep.size() == M.M());
+  if (cols) assert(elim.size() + keep.size() == M.M());
+  if (rows) assert(elim.size() + keep.size() == M.N());
 
   SparseMatrix Mreduced, reduced_cols;
 
   Mreduced.setBuildMode(SparseMatrix::implicit);
   Mreduced.setImplicitBuildModeParameters(3 * 6 - 3 - 2, 0.4);
-  Mreduced.setSize(rows ? keep.size() : M.M(),
-                   cols ? keep.size() : M.N());
+  Mreduced.setSize(rows ? keep.size() : M.N(),
+                   cols ? keep.size() : M.M());
 
   reduced_cols.setBuildMode(SparseMatrix::implicit);
   reduced_cols.setImplicitBuildModeParameters(3*6-3-2, 0.4);
-  reduced_cols.setSize(Mreduced.M(), 
+  reduced_cols.setSize(Mreduced.N(), 
                        cols ? elim.size() : 0);
 
   std::vector<int> mapping(keep.size() + elim.size(), 0);
@@ -382,7 +382,8 @@ SparseMatrix reduceMatrix(SparseMatrix& M, bool rows, bool cols,
         reduced_cols.entry(rows ? mapping[i] : i, -mapping[i] - 1) = M[i][j];
       else 
         // this column should be kept
-        Mreduced.entry(i, mapping[j]) = M[i][j];
+        Mreduced.entry(rows ? mapping[i] : i,
+                       cols ? mapping[j] : j) = M[i][j];
     }
   }
   
@@ -439,14 +440,16 @@ public:
       result[i] = p[kept_indices_[i]];
     return result;
   }
-  Vector expandP(const Vector& p) {
+  Vector expandP(const Vector& p, bool insert_bhp = false) {
     assert (p.size() == kept_indices_.size());
-    Vector result(remapping_.size()); result = fixed_bhp_;
+    Vector result(remapping_.size()); result = insert_bhp ? fixed_bhp_ : 0;
     for (size_t i = 0; i != p.size(); ++i)
       result[kept_indices_[i]] = p[i];
     return result;
   }
-  
+  const std::vector<size_t>& elim() { return eliminated_indices_; }
+  const std::vector<size_t>& kept() { return kept_indices_; }
+  const double fixedBHP() { return fixed_bhp_;}
 private:
 
   static std::vector<size_t> sorted_(const std::vector<size_t>& vec)  {
@@ -511,6 +514,7 @@ private:
     for (const auto& ix : ratecells_)
       if (remapping_[ix] >= 0)
         rhs_[remapping_[ix]] = fixed_rate_;
+    
   }
   void update_C_(const VectorHP& hp) {
     C_ = 0;
@@ -523,7 +527,7 @@ private:
       const size_t j = std::get<1>(e); assert(i != j);
 
       const int ir = remapping_[i];
-      if (ir < 0) continue; // this equation was eliminated
+      const int jr = remapping_[j];
       
       const double t1 = std::get<2>(e);
       const double t2 = std::get<3>(e);
@@ -539,10 +543,11 @@ private:
       const double r   = 12 * (h1 * h1 * t1 + h2 * h2 * t2); // denominator
       const double d1r = 24 * h1 * t1;
       const double d2r = 24 * h2 * t2;
-      
-      C_[i][j] = (r == 0) ? 0.0 : (d1q * r - q * d1r) / (r * r) * (p1 - p2);
-      C_[j][i] = (r == 0) ? 0.0 : (d2q * r - q * d2r) / (r * r) * (p2 - p1);
 
+      if (ir >= 0)
+        C_[ir][j] = (r == 0) ? 0.0 : (d1q * r - q * d1r) / (r * r) * (p1 - p2);
+      if (jr >= 0)
+        C_[jr][i] = (r == 0) ? 0.0 : (d2q * r - q * d2r) / (r * r) * (p2 - p1);
     }
 
     // // add contribution to rhs
@@ -637,23 +642,29 @@ bool nonlinearIteration(const FullMatrix& A,
 {
   SFM.update(hp);
 
-  SystemMatrix S { { A      , makeIdentity(SFM.pnum(), -1) },
-                   { SFM.C(), SFM.M()                    } };
+  auto negI = makeIdentity(A.N(), -1);
+  auto negI_rhs = reduceMatrix(negI, false, true, SFM.elim(), SFM.kept());
+  
+  SystemMatrix S { { A       , negI    },
+                   { SFM.C() , SFM.M() } };
 
-  // we use the 'residual' vector also to represent the right-hand-side
-  VectorHP residual;
-  residual[_0].resize(A.M());
-  residual[_0] = 0;
-  residual[_1] = SFM.rhs();
 
-  dhp = residual; // ensure it has the right number of elements
+  VectorHP rhs;
+  rhs[_0].resize(A.N());
+  Vector tmp(SFM.elim().size());
+  for (size_t i = 0; i != SFM.elim().size(); ++i)
+    tmp[i] = SFM.fixedBHP() * -1; // sign flip, since we are moving to right-hand side
+  negI_rhs.mv(tmp, rhs[_0]); // accounting for eliminated pressure values
+  rhs[_1] = SFM.rhs();
+
+  dhp = rhs; // ensure it has the right number of elements
 
   VectorHP hp_reduced = hp;
   hp_reduced[_1] = SFM.reduceP(hp[_1]);
 
-  S.mmv(hp_reduced, residual); // residual = residual - S * hp_reduced
+  S.mmv(hp_reduced, rhs); // rhs = rhs - S * hp_reduced
 
-  if (converged_pred(residual))
+  if (converged_pred(rhs))
     return true; // system converged
 
   // solve system equations
@@ -663,14 +674,15 @@ bool nonlinearIteration(const FullMatrix& A,
   Dune::InverseOperatorResult iores;    
   auto psolver = Dune::BiCGSTABSolver<VectorHP>(S_linop,
                                                 precond,
-                                                1e-7, // desired residual reduction factor
+                                                1e-7, // desired rhs reduction factor
                                                 100, // max number of iterations
                                                 1); // verbose
-  VectorHP res_copy = residual; // we need to keep the original residual unmodified
+  VectorHP res_copy = rhs; // we need to keep the original rhs unmodified
   psolver.apply(dhp, res_copy, iores);
   
-  dhp[_1] = SFM.expandP(dhp[_1]);
+  dhp[_1] = SFM.expandP(dhp[_1], false);
 
+  dhp *= 0.5; // @@ necessary to "cut timestep" for convergence..?
   return false; // system has not yet been shown to have converged
 }
 
@@ -678,7 +690,7 @@ bool nonlinearIteration(const FullMatrix& A,
 int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
                        const std::vector<size_t> bhpcells, const double bhp,
                        const std::vector<size_t> ratecells, const double rate, 
-                       const double convergence_tol=1e-4, const int max_nonlin_iter=40)
+                       const double convergence_tol=1e-5, const int max_nonlin_iter=40)
 // ----------------------------------------------------------------------------
 {
   // We consider the nonlinear system:
@@ -692,6 +704,9 @@ int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
   const std::vector<double>& leakvec   =  std::get<3>(eqsys);
 
   VectorHP hp {h, p }; // solution vector, grouping aperture 'h' and pressure 'p'
+  h = 0; p = 0;
+  for (size_t i = 0; i != bhpcells.size(); ++i)
+    hp[_1][bhpcells[i]] = bhp; // these are the fixed values
 
   FlowSystemMatrices FSM(M, htransvec, leakvec);
   FSM.setBHPCells(bhpcells, bhp);
@@ -701,7 +716,7 @@ int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
     std::cout << res[_0].infinity_norm() << ", " << res[_1].infinity_norm() << std::endl;
     return std::max(res[_0].infinity_norm(), res[_1].infinity_norm()) < convergence_tol;
   };
-  
+
   VectorHP dhp;
   int iter = 0;
 
@@ -713,12 +728,14 @@ int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
   if (iter == max_nonlin_iter) {
       std::cout << "System did not converge in max allowed number of iterations." << std::endl;
       return -1;
+  } else {
+    std:: cout << "Converged in " << iter << " iterations." << std::endl;
   }
 
   // system converged, unpacking results  
   h = hp[_0];
   p = hp[_1];
-
+  std::cout << p.infinity_norm() << std::endl;
   return 0;
 };    
   
@@ -873,7 +890,7 @@ int main(int varnum, char** vararg)
   const size_t nc = grid->leafGridView().size(0);
   Vector pressure(nc), aperture(nc);
   pressure = 0;
-  const double bhp = 1e7; // in Pascal
+  const double bhp = 1e6; // in Pascal
   const double rate = 0.1; // positive value is _injection_
 
   // // solve fixed pressure system  
@@ -882,9 +899,13 @@ int main(int varnum, char** vararg)
   //              std::vector<size_t>(), rate);
 
   // solve fixed rate system
-  solveCoupledFull(pressure, aperture, eqsys,
-               std::vector<size_t>(), bhp,
-               std::vector<size_t>(wellcells.begin(), wellcells.end()), rate);
+  // const auto pressure_cells = std::vector<size_t>();
+  // const auto rate_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
+
+  const auto pressure_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
+  const auto rate_cells = std::vector<size_t>();
+  
+  solveCoupledFull(pressure, aperture, eqsys, pressure_cells, bhp, rate_cells, rate);
 
 
   // write output
