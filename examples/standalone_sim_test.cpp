@@ -500,8 +500,8 @@ private:
       if (jr >= 0) M_[jr][jr] += T; 
 
       // update off-diagonal terms, and the reduction terms of rhs_reduct_
-      if (ir >= 0) {if (jr >= 0) M_[ir][jr] += T; else rhs_[ir] -= T * fixed_bhp_; }
-      if (jr >= 0) {if (ir >= 0) M_[jr][ir] += T; else rhs_[jr] -= T * fixed_bhp_; }
+      if (ir >= 0) {if (jr >= 0) M_[ir][jr] -= T; else rhs_[ir] += T * fixed_bhp_; }
+      if (jr >= 0) {if (ir >= 0) M_[jr][ir] -= T; else rhs_[jr] += T * fixed_bhp_; }
       
     }
 
@@ -686,6 +686,12 @@ bool nonlinearIteration(const FullMatrix& A,
   return false; // system has not yet been shown to have converged
 }
 
+void cap_zero(VectorHP& v) {
+  for (size_t i = 0; i != v[_0].size(); ++i) v[_0][i] = (v[_0][i] >= 0) ? v[_0][i] : 0;
+  for (size_t i = 0; i != v[_1].size(); ++i) v[_1][i] = (v[_1][i] >= 0) ? v[_1][i] : 0;
+}
+
+
 // ----------------------------------------------------------------------------
 int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
                        const std::vector<size_t> bhpcells, const double bhp,
@@ -704,7 +710,7 @@ int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
   const std::vector<double>& leakvec   =  std::get<3>(eqsys);
 
   VectorHP hp {h, p }; // solution vector, grouping aperture 'h' and pressure 'p'
-  h = 0; p = 0;
+
   for (size_t i = 0; i != bhpcells.size(); ++i)
     hp[_1][bhpcells[i]] = bhp; // these are the fixed values
 
@@ -722,8 +728,10 @@ int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
 
   // nonlinear solve loop
   while ( !nonlinearIteration(A, FSM, hp, dhp, converged_pred) &&
-          ++iter < max_nonlin_iter) 
+          ++iter < max_nonlin_iter) {
     hp += dhp;
+    cap_zero(hp);
+  }
 
   if (iter == max_nonlin_iter) {
       std::cout << "System did not converge in max allowed number of iterations." << std::endl;
@@ -882,7 +890,7 @@ int main(int varnum, char** vararg)
   // compute equation system
   const double young = 1e9; // fYoung's modulus
   const double poisson = 0.25; // Poisson's ratio
-  const double leakoff_fac = 1e-6; //1e-13; // a bit heuristic; conceptufally rock perm divided by distance  
+  const double leakoff_fac = 0.0; //1e-6; //1e-13; // a bit heuristic; conceptufally rock perm divided by distance  
   const auto eqsys = computeEquationSystem(*grid, young, poisson, leakoff_fac);
   
   
@@ -899,11 +907,11 @@ int main(int varnum, char** vararg)
   //              std::vector<size_t>(), rate);
 
   // solve fixed rate system
-  // const auto pressure_cells = std::vector<size_t>();
-  // const auto rate_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
+  const auto pressure_cells = std::vector<size_t>();
+  const auto rate_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
 
-  const auto pressure_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
-  const auto rate_cells = std::vector<size_t>();
+  //const auto pressure_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
+  //const auto rate_cells = std::vector<size_t>();
   
   solveCoupledFull(pressure, aperture, eqsys, pressure_cells, bhp, rate_cells, rate);
 
