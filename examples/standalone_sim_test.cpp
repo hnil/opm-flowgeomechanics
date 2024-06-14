@@ -11,10 +11,6 @@
 #include <dune/istl/preconditioners.hh>
 //#include <dune/istl/paamg/amg.hh>
 
-//@@ there must be a more correct way to ensure UMFpack is included here
-//#define HAVE_SUITESPARSE_UMFPACK 1
-//#include <dune/istl/umfpack.hh>
-
 //#include "opm/geomech/Fracture.hpp"
 #include <dune/foamgrid/foamgrid.hh>
 #include <dune/grid/common/mcmgmapper.hh> // mapper class
@@ -42,8 +38,6 @@ using Dune::Indices::_0;
 using Dune::Indices::_1;
 using Grid = Dune::FoamGrid<2, 3>;
 using Vector = Dune::BlockVector<double>;
-  //using VectorHP = Dune::FieldVector<Vector, 2>;
-  //using VectorHP = Dune::BlockVector<Vector>;
 using VectorHP = Dune::MultiTypeBlockVector<Vector, Vector>;
 using HTrans = std::tuple<size_t,size_t, double, double>;
   
@@ -594,11 +588,11 @@ template<typename Mat> Vector diagvec(const Mat& M)
 }
 
 // ----------------------------------------------------------------------------
-class TailoredPrecond : public Dune::Preconditioner<VectorHP, VectorHP>
+class TailoredPrecondFull : public Dune::Preconditioner<VectorHP, VectorHP>
 // ----------------------------------------------------------------------------
 {
 public:
-  TailoredPrecond(const SystemMatrix& S) : A_(S[_0][_0]), M_diag_(diagvec(S[_1][_1])) {}
+  TailoredPrecondFull(const SystemMatrix& S) : A_(S[_0][_0]), M_diag_(diagvec(S[_1][_1])) {}
   virtual void apply(VectorHP& v, const VectorHP& d) {
     A_.solve(v[_0], d[_0]);
     for (size_t i = 0; i != M_diag_.size(); ++i)
@@ -613,11 +607,32 @@ private:
 };
 
 // ----------------------------------------------------------------------------
-VectorHP& computeIncrementAndResidual(const FullMatrix& A,
-                                      FlowSystemMatrices& SFM, // will be updated
-                                      const VectorHP& hp,
-                                      VectorHP& dhp, // increment (to be computed)
-                                      VectorHP& residual) // residual (to be computed)
+class TailoredPrecondDiag : public Dune::Preconditioner<VectorHP, VectorHP>
+// ----------------------------------------------------------------------------
+{
+public:
+  TailoredPrecondDiag(const SystemMatrix& S) :
+    A_diag_(diagvec(S[_0][_0])), M_diag_(diagvec(S[_1][_1])) {}
+  virtual void apply(VectorHP& v, const VectorHP& d) {
+    for (size_t i = 0; i != A_diag_.size(); ++i)
+      v[_0][i] = d[_0][i]/A_diag_[i];
+    for (size_t i = 0; i != M_diag_.size(); ++i)
+      v[_1][i] = d[_1][i]/M_diag_[i];
+  };
+  virtual void post(VectorHP& v) {};
+  virtual void pre(VectorHP& x, VectorHP& b) {};
+  virtual Dune::SolverCategory::Category category() const {return Dune::SolverCategory::sequential;}
+private:
+  const Vector A_diag_;
+  const Vector M_diag_;
+};
+
+// ----------------------------------------------------------------------------
+bool nonlinearIteration(const FullMatrix& A,
+                        FlowSystemMatrices& SFM, // will be updated
+                        const VectorHP& hp,
+                        VectorHP& dhp, // increment (to be computed)
+                        const std::function<bool(const VectorHP&)>& converged_pred)
 // ----------------------------------------------------------------------------
 {
   SFM.update(hp);
@@ -626,52 +641,37 @@ VectorHP& computeIncrementAndResidual(const FullMatrix& A,
                    { SFM.C(), SFM.M()                    } };
 
   // we use the 'residual' vector also to represent the right-hand-side
+  VectorHP residual;
   residual[_0].resize(A.M());
   residual[_0] = 0;
   residual[_1] = SFM.rhs();
 
   dhp = residual; // ensure it has the right number of elements
-  // auto dill = residual[_0]; // @@
-  // auto dall = residual[_1]; // @@
-  // auto SFMC = SFM.C(); // @@
-  // auto SFMM = SFM.M(); // @@
-  // auto S1 = S[_0][_0];
-  // auto S2 = S[_0][_1];
-  // auto S3 = S[_1][_0];
-  // auto S4 = S[_1][_1];
-  // dump_matrix(S1, "S1");
-  // dump_matrix(S2, "S2");
-  // dump_matrix(S3, "S3");
-  // dump_matrix(S4, "S4");
 
   VectorHP hp_reduced = hp;
   hp_reduced[_1] = SFM.reduceP(hp[_1]);
 
   S.mmv(hp_reduced, residual); // residual = residual - S * hp_reduced
 
-  // dump_vector(residual[_0], "res0"); // @@
-  // dump_vector(residual[_1], "res1"); // @@
+  if (converged_pred(residual))
+    return true; // system converged
 
   // solve system equations
   Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP> S_linop(S);
   //Dune::Richardson<VectorHP, VectorHP> precond(1); // "no" preconditioner
-  TailoredPrecond precond(S);
+  TailoredPrecondDiag precond(S);
   Dune::InverseOperatorResult iores;    
   auto psolver = Dune::BiCGSTABSolver<VectorHP>(S_linop,
                                                 precond,
                                                 1e-7, // desired residual reduction factor
                                                 100, // max number of iterations
                                                 1); // verbose
-  psolver.apply(dhp, residual, iores);
+  VectorHP res_copy = residual; // we need to keep the original residual unmodified
+  psolver.apply(dhp, res_copy, iores);
   
   dhp[_1] = SFM.expandP(dhp[_1]);
-  
-  // compute residual
-  VectorHP tmp(hp);
-  tmp += dhp;
-  S.mmv(tmp, residual);
-  
-  return residual;
+
+  return false; // system has not yet been shown to have converged
 }
 
 // ----------------------------------------------------------------------------
@@ -697,14 +697,17 @@ int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
   FSM.setBHPCells(bhpcells, bhp);
   FSM.setRateCells(ratecells, rate);
 
-  auto converged = [&](const VectorHP& res) { return std::max(res[_0].infinity_norm(), res[_1].infinity_norm()) < convergence_tol; };
+  std::function<bool(const VectorHP&)> converged_pred = [&](const VectorHP& res) {
+    std::cout << res[_0].infinity_norm() << ", " << res[_1].infinity_norm() << std::endl;
+    return std::max(res[_0].infinity_norm(), res[_1].infinity_norm()) < convergence_tol;
+  };
   
-  VectorHP residual, dhp;
+  VectorHP dhp;
   int iter = 0;
 
   // nonlinear solve loop
-  while (!converged( computeIncrementAndResidual(A, FSM, hp, dhp, residual) ) &&
-         ++iter < max_nonlin_iter) 
+  while ( !nonlinearIteration(A, FSM, hp, dhp, converged_pred) &&
+          ++iter < max_nonlin_iter) 
     hp += dhp;
 
   if (iter == max_nonlin_iter) {
