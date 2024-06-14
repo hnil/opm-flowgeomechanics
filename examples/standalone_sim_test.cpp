@@ -12,8 +12,8 @@
 //#include <dune/istl/paamg/amg.hh>
 
 //@@ there must be a more correct way to ensure UMFpack is included here
-#define HAVE_SUITESPARSE_UMFPACK 1
-#include <dune/istl/umfpack.hh>
+//#define HAVE_SUITESPARSE_UMFPACK 1
+//#include <dune/istl/umfpack.hh>
 
 //#include "opm/geomech/Fracture.hpp"
 #include <dune/foamgrid/foamgrid.hh>
@@ -22,7 +22,7 @@
 #include <dune/common/filledarray.hh> // needed for printSparseMatrix??
 #include <dune/common/indices.hh>          // needed for _0, _1, etc.
 #include <dune/istl/io.hh> // needed for printSparseMatrix??
-
+#include <dune/istl/solvers.hh>
 
 #include <dune/grid/io/file/gmshreader.hh>
 #include <dune/grid/uggrid.hh>
@@ -53,7 +53,9 @@ using EquationSystem = std::tuple<std::shared_ptr<FullMatrix>,    // aperture ma
                                   std::shared_ptr<SparseMatrix>,  // pressure matrix
                                   std::vector<HTrans>,            // inter-cell transmissibility factors
                                   std::vector<double>>;           // leakoff factors
-
+using SystemMatrix =
+  Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<FullMatrix,   SparseMatrix>,
+                             Dune::MultiTypeBlockVector<SparseMatrix, SparseMatrix>>;
 using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView>;
 using RMAdapter = ReducedMatrixAdapter<SparseMatrix, Vector, Vector>;
 // ----------------------------------------------------------------------------
@@ -91,7 +93,7 @@ template<> void dump_matrix(const SparseMatrix& m, const char* const name)
     const size_t i = rowIt.index();
     for (auto colIt = rowIt->begin(); colIt != rowIt->end(); ++colIt) {
       const size_t j = colIt.index();
-      os << i << " " << j << " " << m[i][j] << "\n";
+      os << i+1 << " " << j+1 << " " << m[i][j] << "\n";
     }
   }
   os.close();
@@ -304,7 +306,7 @@ template<typename T> inline T hmean(const T a, const T b)
 // ----------------------------------------------------------------------------
 {
   T tmp = T(1) / ( T(1)/a + T(1)/b);
-  return isnan(tmp) ? 0.0 : tmp;
+  return std::isnan(tmp) ? 0.0 : tmp;
 }
   
 // ----------------------------------------------------------------------------
@@ -580,7 +582,36 @@ SparseMatrix makeIdentity(size_t num, double fac = 1)
   M.compress();
   return M;
 }
-  
+
+// ----------------------------------------------------------------------------
+template<typename Mat> Vector diagvec(const Mat& M)
+// ----------------------------------------------------------------------------
+{
+  Vector res(M.M());
+  for (size_t i = 0; i != res.size(); ++i)
+    res[i] = M[i][i];
+  return res;
+}
+
+// ----------------------------------------------------------------------------
+class TailoredPrecond : public Dune::Preconditioner<VectorHP, VectorHP>
+// ----------------------------------------------------------------------------
+{
+public:
+  TailoredPrecond(const SystemMatrix& S) : A_(S[_0][_0]), M_diag_(diagvec(S[_1][_1])) {}
+  virtual void apply(VectorHP& v, const VectorHP& d) {
+    A_.solve(v[_0], d[_0]);
+    for (size_t i = 0; i != M_diag_.size(); ++i)
+      v[_1][i] = d[_1][i]/M_diag_[i];
+  };
+  virtual void post(VectorHP& v) {};
+  virtual void pre(VectorHP& x, VectorHP& b) {};
+  virtual Dune::SolverCategory::Category category() const {return Dune::SolverCategory::sequential;}
+private:
+  const FullMatrix& A_;
+  const Vector M_diag_;
+};
+
 // ----------------------------------------------------------------------------
 VectorHP& computeIncrementAndResidual(const FullMatrix& A,
                                       FlowSystemMatrices& SFM, // will be updated
@@ -589,10 +620,6 @@ VectorHP& computeIncrementAndResidual(const FullMatrix& A,
                                       VectorHP& residual) // residual (to be computed)
 // ----------------------------------------------------------------------------
 {
-  using SystemMatrix =
-    Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<FullMatrix,   SparseMatrix>,
-                               Dune::MultiTypeBlockVector<SparseMatrix, SparseMatrix>>;
-
   SFM.update(hp);
 
   SystemMatrix S { { A      , makeIdentity(SFM.pnum(), -1) },
@@ -622,12 +649,13 @@ VectorHP& computeIncrementAndResidual(const FullMatrix& A,
 
   S.mmv(hp_reduced, residual); // residual = residual - S * hp_reduced
 
-  //dump_vector(residual[_0], "res0"); // @@
-  //dump_vector(residual[_1], "res1"); // @@
+  // dump_vector(residual[_0], "res0"); // @@
+  // dump_vector(residual[_1], "res1"); // @@
 
   // solve system equations
   Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP> S_linop(S);
-  Dune::Richardson<VectorHP, VectorHP> precond(1); // "no" preconditioner
+  //Dune::Richardson<VectorHP, VectorHP> precond(1); // "no" preconditioner
+  TailoredPrecond precond(S);
   Dune::InverseOperatorResult iores;    
   auto psolver = Dune::BiCGSTABSolver<VectorHP>(S_linop,
                                                 precond,
@@ -638,10 +666,6 @@ VectorHP& computeIncrementAndResidual(const FullMatrix& A,
   
   dhp[_1] = SFM.expandP(dhp[_1]);
   
-  // Dune::UMFPack psolver(S);
-  // Dune::InverseOperatorResult r;  
-  // psolver.apply(dhp, residual, r);
-
   // compute residual
   VectorHP tmp(hp);
   tmp += dhp;
