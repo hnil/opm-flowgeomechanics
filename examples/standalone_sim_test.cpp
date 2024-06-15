@@ -66,7 +66,8 @@ std::unique_ptr<const Grid> readgrid(const char* const name)
 }
 
 // ----------------------------------------------------------------------------
-template<class MatrixType> void dump_matrix(const MatrixType& m, const char* const name)
+//template<class MatrixType> void dump_matrix(const MatrixType& m, const char* const name)
+void dump_matrix(const FullMatrix& m, const char* const name)
 // ----------------------------------------------------------------------------
 {
   const size_t rows = m.N();
@@ -79,7 +80,8 @@ template<class MatrixType> void dump_matrix(const MatrixType& m, const char* con
 }
 
 // ----------------------------------------------------------------------------
-template<> void dump_matrix(const SparseMatrix& m, const char* const name)
+//template<>
+void dump_matrix(const SparseMatrix& m, const char* const name)
 // ----------------------------------------------------------------------------
 {
   std::ofstream os(name);
@@ -644,26 +646,41 @@ bool nonlinearIteration(const FullMatrix& A,
 
   auto negI = makeIdentity(A.N(), -1);
   auto negI_rhs = reduceMatrix(negI, false, true, SFM.elim(), SFM.kept());
+  auto& C = SFM.C();  //@@
+  //  C = 0;
   
-  SystemMatrix S { { A       , negI    },
-                   { SFM.C() , SFM.M() } };
+  SystemMatrix S { { A , negI    },
+                   { C , SFM.M() } };
 
-
+  dump_matrix(A, "A");
+  dump_matrix(negI, "negI");
+  dump_matrix(C, "C");
+  dump_matrix(SFM.M(), "M");
+  
   VectorHP rhs;
-  rhs[_0].resize(A.N());
+
   Vector tmp(SFM.elim().size());
   for (size_t i = 0; i != SFM.elim().size(); ++i)
     tmp[i] = SFM.fixedBHP() * -1; // sign flip, since we are moving to right-hand side
+  
+  rhs[_0].resize(A.N());
   negI_rhs.mv(tmp, rhs[_0]); // accounting for eliminated pressure values
+
   rhs[_1] = SFM.rhs();
 
   dhp = rhs; // ensure it has the right number of elements
 
+  dump_vector(rhs[_0], "rhs0_before");
+  dump_vector(rhs[_1], "rhs1_before");
+  
   VectorHP hp_reduced = hp;
   hp_reduced[_1] = SFM.reduceP(hp[_1]);
 
   S.mmv(hp_reduced, rhs); // rhs = rhs - S * hp_reduced
 
+  dump_vector(rhs[_0], "rhs0_after");
+  dump_vector(rhs[_1], "rhs1_after");  
+  
   if (converged_pred(rhs))
     return true; // system converged
 
@@ -671,10 +688,11 @@ bool nonlinearIteration(const FullMatrix& A,
   Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP> S_linop(S);
   //Dune::Richardson<VectorHP, VectorHP> precond(1); // "no" preconditioner
   TailoredPrecondDiag precond(S);
+  //TailoredPrecondFull precond(S);
   Dune::InverseOperatorResult iores;    
   auto psolver = Dune::BiCGSTABSolver<VectorHP>(S_linop,
                                                 precond,
-                                                1e-7, // desired rhs reduction factor
+                                                1e-15, // desired rhs reduction factor
                                                 100, // max number of iterations
                                                 1); // verbose
   VectorHP res_copy = rhs; // we need to keep the original rhs unmodified
@@ -682,6 +700,9 @@ bool nonlinearIteration(const FullMatrix& A,
   
   dhp[_1] = SFM.expandP(dhp[_1], false);
 
+  dump_vector(dhp[_0], "dhp0");
+  dump_vector(dhp[_1], "dhp1");
+  
   dhp *= 0.5; // @@ necessary to "cut timestep" for convergence..?
   return false; // system has not yet been shown to have converged
 }
@@ -720,7 +741,10 @@ int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
 
   std::function<bool(const VectorHP&)> converged_pred = [&](const VectorHP& res) {
     std::cout << res[_0].infinity_norm() << ", " << res[_1].infinity_norm() << std::endl;
-    return std::max(res[_0].infinity_norm(), res[_1].infinity_norm()) < convergence_tol;
+    const double aperture_tol = (bhpcells.size() > 0) ? convergence_tol * bhp : convergence_tol;
+    const double flow_tol = convergence_tol;
+    return res[_0].infinity_norm() < aperture_tol &&
+      res[_1].infinity_norm() < flow_tol;
   };
 
   VectorHP dhp;
@@ -730,6 +754,7 @@ int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
   while ( !nonlinearIteration(A, FSM, hp, dhp, converged_pred) &&
           ++iter < max_nonlin_iter) {
     hp += dhp;
+    //std::cout << hp[_1][116] << std::endl;
     cap_zero(hp);
   }
 
@@ -764,6 +789,8 @@ void solveCoupledSplit(Vector& p, Vector& h, const EquationSystem& eqsys,
   const std::vector<HTrans>& htransvec =  std::get<2>(eqsys);
   const std::vector<double>& leakvec   =  std::get<3>(eqsys);
 
+  dump_matrix(M_p, "Mp");
+  
   const RMAdapter MA_p(M_p, bhpcells); // allows reducing the system without creating new matrices
 
   // define convergence criterion
@@ -881,6 +908,7 @@ int main(int varnum, char** vararg)
     return -1;
 
   // identify well cells
+  //const std::vector<size_t> wellcells {116};
   const auto wellcells = n_closest<2>(*grid);
 
   std::cout << "Identified wellcells: ";
@@ -890,7 +918,7 @@ int main(int varnum, char** vararg)
   // compute equation system
   const double young = 1e9; // fYoung's modulus
   const double poisson = 0.25; // Poisson's ratio
-  const double leakoff_fac = 0.0; //1e-6; //1e-13; // a bit heuristic; conceptufally rock perm divided by distance  
+  const double leakoff_fac = 1e-6; //1e-13; // a bit heuristic; conceptufally rock perm divided by distance  
   const auto eqsys = computeEquationSystem(*grid, young, poisson, leakoff_fac);
   
   
@@ -903,15 +931,15 @@ int main(int varnum, char** vararg)
 
   // // solve fixed pressure system  
   // solveCoupledSplit(pressure, aperture, eqsys,
-  //              std::vector<size_t>(wellcells.begin(), wellcells.end()), bhp,
-  //              std::vector<size_t>(), rate);
+  //                   std::vector<size_t>(wellcells.begin(), wellcells.end()), bhp,
+  //                   std::vector<size_t>(), rate);
 
   // solve fixed rate system
-  const auto pressure_cells = std::vector<size_t>();
-  const auto rate_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
+  //const auto pressure_cells = std::vector<size_t>();
+  //const auto rate_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
 
-  //const auto pressure_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
-  //const auto rate_cells = std::vector<size_t>();
+  const auto pressure_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
+  const auto rate_cells = std::vector<size_t>();
   
   solveCoupledFull(pressure, aperture, eqsys, pressure_cells, bhp, rate_cells, rate);
 
