@@ -646,17 +646,9 @@ bool nonlinearIteration(const FullMatrix& A,
 
   auto negI = makeIdentity(A.N(), -1);
   auto negI_rhs = reduceMatrix(negI, false, true, SFM.elim(), SFM.kept());
-  auto& C = SFM.C();  //@@
-  //  C = 0;
   
-  SystemMatrix S { { A , negI    },
-                   { C , SFM.M() } };
-
-  dump_matrix(A, "A");
-  dump_matrix(negI, "negI");
-  dump_matrix(C, "C");
-  dump_matrix(SFM.M(), "M");
-  
+  SystemMatrix S { { A       , negI    },
+                   { SFM.C() , SFM.M() } };
   VectorHP rhs;
 
   Vector tmp(SFM.elim().size());
@@ -670,17 +662,11 @@ bool nonlinearIteration(const FullMatrix& A,
 
   dhp = rhs; // ensure it has the right number of elements
 
-  dump_vector(rhs[_0], "rhs0_before");
-  dump_vector(rhs[_1], "rhs1_before");
-  
   VectorHP hp_reduced = hp;
   hp_reduced[_1] = SFM.reduceP(hp[_1]);
 
   S.mmv(hp_reduced, rhs); // rhs = rhs - S * hp_reduced
 
-  dump_vector(rhs[_0], "rhs0_after");
-  dump_vector(rhs[_1], "rhs1_after");  
-  
   if (converged_pred(rhs))
     return true; // system converged
 
@@ -692,7 +678,7 @@ bool nonlinearIteration(const FullMatrix& A,
   Dune::InverseOperatorResult iores;    
   auto psolver = Dune::BiCGSTABSolver<VectorHP>(S_linop,
                                                 precond,
-                                                1e-15, // desired rhs reduction factor
+                                                1e-20, //1e-15, // desired rhs reduction factor
                                                 100, // max number of iterations
                                                 1); // verbose
   VectorHP res_copy = rhs; // we need to keep the original rhs unmodified
@@ -700,9 +686,6 @@ bool nonlinearIteration(const FullMatrix& A,
   
   dhp[_1] = SFM.expandP(dhp[_1], false);
 
-  dump_vector(dhp[_0], "dhp0");
-  dump_vector(dhp[_1], "dhp1");
-  
   dhp *= 0.5; // @@ necessary to "cut timestep" for convergence..?
   return false; // system has not yet been shown to have converged
 }
@@ -754,7 +737,6 @@ int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
   while ( !nonlinearIteration(A, FSM, hp, dhp, converged_pred) &&
           ++iter < max_nonlin_iter) {
     hp += dhp;
-    //std::cout << hp[_1][116] << std::endl;
     cap_zero(hp);
   }
 
@@ -768,7 +750,6 @@ int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
   // system converged, unpacking results  
   h = hp[_0];
   p = hp[_1];
-  std::cout << p.infinity_norm() << std::endl;
   return 0;
 };    
   
@@ -789,8 +770,6 @@ void solveCoupledSplit(Vector& p, Vector& h, const EquationSystem& eqsys,
   const std::vector<HTrans>& htransvec =  std::get<2>(eqsys);
   const std::vector<double>& leakvec   =  std::get<3>(eqsys);
 
-  dump_matrix(M_p, "Mp");
-  
   const RMAdapter MA_p(M_p, bhpcells); // allows reducing the system without creating new matrices
 
   // define convergence criterion
@@ -816,8 +795,6 @@ void solveCoupledSplit(Vector& p, Vector& h, const EquationSystem& eqsys,
     p = 1e6; // we need something to get started without h being 0.
       
   // solve for aperture
-  // dump_matrix(M_h, "M_h.txt"); // @@
-  // dump_vector(p, "p.txt"); // @@
   M_h.solve(h, p); // solve for aperture (h) given pressure (p)
 
   Vector htmp(h.N()); htmp = 0;
@@ -918,7 +895,7 @@ int main(int varnum, char** vararg)
   // compute equation system
   const double young = 1e9; // fYoung's modulus
   const double poisson = 0.25; // Poisson's ratio
-  const double leakoff_fac = 1e-6; //1e-13; // a bit heuristic; conceptufally rock perm divided by distance  
+  const double leakoff_fac = 1e-10; //1e-12; //1e-6; //1e-13; // a bit heuristic; conceptufally rock perm divided by distance  
   const auto eqsys = computeEquationSystem(*grid, young, poisson, leakoff_fac);
   
   
@@ -941,8 +918,7 @@ int main(int varnum, char** vararg)
   const auto pressure_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
   const auto rate_cells = std::vector<size_t>();
   
-  solveCoupledFull(pressure, aperture, eqsys, pressure_cells, bhp, rate_cells, rate);
-
+  solveCoupledFull(pressure, aperture, eqsys, pressure_cells, bhp, rate_cells, rate, 1e-5, 1000);
 
   // write output
   Dune::VTKWriter<Grid::LeafGridView> vtkwriter(grid->leafGridView(), Dune::VTK::nonconforming);
