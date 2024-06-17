@@ -679,7 +679,7 @@ bool nonlinearIteration(const FullMatrix& A,
   auto psolver = Dune::BiCGSTABSolver<VectorHP>(S_linop,
                                                 precond,
                                                 1e-20, //1e-15, // desired rhs reduction factor
-                                                100, // max number of iterations
+                                                200, // max number of iterations
                                                 1); // verbose
   VectorHP res_copy = rhs; // we need to keep the original rhs unmodified
   psolver.apply(dhp, res_copy, iores);
@@ -690,9 +690,13 @@ bool nonlinearIteration(const FullMatrix& A,
   return false; // system has not yet been shown to have converged
 }
 
-void cap_zero(VectorHP& v) {
-  for (size_t i = 0; i != v[_0].size(); ++i) v[_0][i] = (v[_0][i] >= 0) ? v[_0][i] : 0;
-  for (size_t i = 0; i != v[_1].size(); ++i) v[_1][i] = (v[_1][i] >= 0) ? v[_1][i] : 0;
+void cap_vals(VectorHP& v, double low_h, double low_p, double high_h, double high_p) {
+  for (size_t i = 0; i != v[_0].size(); ++i) v[_0][i] = std::min(std::max(v[_0][i], low_h), high_h); 
+  for (size_t i = 0; i != v[_1].size(); ++i) v[_1][i] = std::min(std::max(v[_1][i], low_p), high_p);
+
+  //(v[_1][i] >= low_p) ? v[_1][i] : low_p;
+  //(v[_0][i] >= low_h) ? v[_0][i] : low_h;  
+
 }
 
 
@@ -737,7 +741,7 @@ int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
   while ( !nonlinearIteration(A, FSM, hp, dhp, converged_pred) &&
           ++iter < max_nonlin_iter) {
     hp += dhp;
-    cap_zero(hp);
+    cap_vals(hp, 0, 0, 1000, 1e12);
   }
 
   if (iter == max_nonlin_iter) {
@@ -895,7 +899,8 @@ int main(int varnum, char** vararg)
   // compute equation system
   const double young = 1e9; // fYoung's modulus
   const double poisson = 0.25; // Poisson's ratio
-  const double leakoff_fac = 1e-10; //1e-12; //1e-6; //1e-13; // a bit heuristic; conceptufally rock perm divided by distance  
+  //const double leakoff_fac = 1e-13;// this breaks for rate
+  const double leakoff_fac = 1e-9; //1e-6; //1e-13; // a bit heuristic; conceptufally rock perm divided by distance  
   const auto eqsys = computeEquationSystem(*grid, young, poisson, leakoff_fac);
   
   
@@ -903,6 +908,7 @@ int main(int varnum, char** vararg)
   const size_t nc = grid->leafGridView().size(0);
   Vector pressure(nc), aperture(nc);
   pressure = 0;
+  aperture = 1e-2;
   const double bhp = 1e6; // in Pascal
   const double rate = 0.1; // positive value is _injection_
 
@@ -912,11 +918,11 @@ int main(int varnum, char** vararg)
   //                   std::vector<size_t>(), rate);
 
   // solve fixed rate system
-  //const auto pressure_cells = std::vector<size_t>();
-  //const auto rate_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
+  const auto pressure_cells = std::vector<size_t>();
+  const auto rate_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
 
-  const auto pressure_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
-  const auto rate_cells = std::vector<size_t>();
+  //const auto pressure_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
+  //const auto rate_cells = std::vector<size_t>();
   
   solveCoupledFull(pressure, aperture, eqsys, pressure_cells, bhp, rate_cells, rate, 1e-5, 1000);
 
