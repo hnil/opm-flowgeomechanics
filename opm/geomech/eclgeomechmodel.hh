@@ -48,7 +48,7 @@ namespace Opm{
         };
         void applyInitial(){
             std::cout << "Geomech applyInitial" << std::endl;
-        };
+         };
         unsigned numDofs() const{return 0;};
         void linearize(SparseMatrixAdapter&, GlobalEqVector&) {
             std::cout << "Geomech Dummy Linearize" << std::endl;
@@ -73,6 +73,7 @@ namespace Opm{
             this->solveGeomechanics();
             if(problem.hasFractures()){
                 if(!fracturemodel_){
+                    //NB could probably be moved to some initialization
                     // let fracture contain all wells
                     Opm::PropertyTree param = problem.getFractureParam();
                     //param.read("fractureparam.json");
@@ -97,19 +98,18 @@ namespace Opm{
                     fracturemodel_->updateReservoirWellProperties(problem);
                     // add fractures along the wells    
                     fracturemodel_->addFractures();
-                    fracturemodel_->updateFractureReservoirCells(grid,eclgrid);    
+                    
+                    fracturemodel_->updateFractureReservoirCells(grid,eclgrid);
+                    fracturemodel_->initReservoirProperties<TypeTag,Simulator>(simulator_);
+                    fracturemodel_->updateReservoirProperties<TypeTag,Simulator>(simulator_);
+                    fracturemodel_->initFractureStates();
                 }
                 // get reservoir properties on fractures
                 // simulator need
                 fracturemodel_->updateReservoirProperties<TypeTag,Simulator>(simulator_);
-                fracturemodel_->solve();
-                // update and change well indices
-                // std::vector<std::vector<double>> WI = this->getFractureWI()
-                // std::vector<std::string> well_names = this->wellnames()
-                // simulator_->problem().updateWI()
-
+                fracturemodel_->solve(); 
+                // copy from apply action
             }
-
         }
 
         void writeFractureSolution(){
@@ -127,7 +127,11 @@ namespace Opm{
 
         }
 
-        void updaterPotentialForces(){
+        std::vector<std::tuple<int,double,double>> getExtraWellIndices(std::string wellname){
+            return fracturemodel_->getExtraWellIndices(wellname);
+        }
+
+        void updatePotentialForces(){
             std::cout << "Update Forces" << std::endl;
             size_t numDof = simulator_.model().numGridDof();
             const auto& problem = simulator_.problem();
@@ -167,7 +171,7 @@ namespace Opm{
 
         void solveGeomechanics(){
             OPM_TIMEBLOCK(endTimeStepMech);
-            this->updaterPotentialForces();
+            this->updatePotentialForces();
             // for now assemble and set up solver her
             const auto& problem = simulator_.problem();
             if(first_solve_){
@@ -235,14 +239,14 @@ namespace Opm{
                 // add initial stress
                 assert(cellindex == gv.indexSet().index(cell));
                 //auto cellindex2 = gv.indexSet().index(cell);
-                stress_[cellindex] = linstress[cellindex];
+                //stress_[cellindex] = linstress[cellindex];
                 strain_[cellindex] = linstrain[cellindex];
                 delstress_[cellindex] = linstress[cellindex];
             }
-            size_t lsdim = 6;
-            for(size_t i = 0; i < stress_.size(); ++i){
-                     stress_[i] += problem.initStress(i);
-             }
+            //size_t lsdim = 6;
+            //for(size_t i = 0; i < stress_.size(); ++i){
+            //         stress_[i] += problem.initStress(i);
+            //}
             //NB ssume initial strain is 0
 
             bool verbose = false;
@@ -271,10 +275,14 @@ namespace Opm{
             mechPotentialForce_.resize(numDof);
             mechPotentialTempForce_.resize(numDof);
             mechPotentialPressForce_.resize(numDof);
+            // hopefully temperature and pressure initilized
             celldisplacement_.resize(numDof);
-            stress_.resize(numDof);
+            std::fill(celldisplacement_.begin(),celldisplacement_.end(),0.0);
+            //stress_.resize(numDof);
             delstress_.resize(numDof);
+            std::fill(delstress_.begin(),delstress_.end(),0.0);
             strain_.resize(numDof);
+            std::fill(strain_.begin(),strain_.end(),0.0);
             const auto& gv = simulator_.vanguard().grid().leafGridView();
             displacement_.resize(gv.indexSet().size(3));
         };
@@ -313,19 +321,17 @@ namespace Opm{
             return strain_[globalIdx];
         }
 
-        const SymTensor& stress(size_t globalIdx) const{
-            return stress_[globalIdx];
-        }
-        SymTensor effStress(size_t globalIdx) const{
-            Dune::FieldVector<double,6> effStress = stress_[globalIdx];
+        const SymTensor stress(size_t globalIdx) const{
+            Dune::FieldVector<double,6> effStress = delstress_[globalIdx];
+            effStress += simulator_.problem().initStress(globalIdx);
             double effPress = this->mechPotentialForce(globalIdx);
             for(int i=0; i < 3; ++i){
                 effStress[i] += effPress;
 
             }
             return effStress;
-        }
-
+         }
+ 
         // NB used in output should be eliminated
         double pressureDiff(unsigned dofIx) const{
             return mechPotentialForce_[dofIx];
@@ -337,7 +343,10 @@ namespace Opm{
         }
         const double& stress(unsigned globalDofIdx, unsigned dim) const
         {
-            return stress_[globalDofIdx][dim];
+            // not efficient
+            auto stress = this->stress(globalDofIdx);
+            return stress[dim];
+            //return stress_[globalDofIdx][dim];
         }
 
         const double& delstress(unsigned globalDofIdx, unsigned dim) const
@@ -350,9 +359,9 @@ namespace Opm{
         }
 
 
-        void setStress(const Dune::BlockVector<SymTensor >& stress){
-            stress_ = stress;
-        }
+        // void setStress(const Dune::BlockVector<SymTensor >& stress){
+        //     stress_ = stress;
+        // }
         void makeDisplacement(const Opm::Elasticity::Vector& field) {
             // make displacement on all nodes used for output to vtk
             const auto& grid = simulator_.vanguard().grid();
@@ -378,7 +387,7 @@ namespace Opm{
                 celldisplacement_[cellindex] /= vertices.size();
             }
         }
-        
+        const FractureModel& fractureModel() const{return *fracturemodel_;}
     private:
         bool first_solve_;
         Simulator& simulator_;
@@ -388,7 +397,7 @@ namespace Opm{
         //Dune::BlockVector<Dune::FieldVector<double,1> > solution_;
         Dune::BlockVector<Dune::FieldVector<double,3> > celldisplacement_;
         Dune::BlockVector<Dune::FieldVector<double,3> > displacement_;
-        Dune::BlockVector<Dune::FieldVector<double,6> > stress_;//NB is also stored in esolver
+        //Dune::BlockVector<Dune::FieldVector<double,6> > stress_;//NB is also stored in esolver
         Dune::BlockVector<Dune::FieldVector<double,6> > delstress_;//NB is also stored in esolver
         Dune::BlockVector<Dune::FieldVector<double,6> > strain_;
         //Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1> > A_;

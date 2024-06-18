@@ -88,7 +88,8 @@ namespace Opm {
         using ScalarBuffer = typename ParentType::ScalarBuffer;
         using VectorBuffer = typename ParentType::VectorBuffer;
         using TensorBuffer = typename ParentType::TensorBuffer;
-
+        using Tensor = Dune::DynamicMatrix<double>;
+        using SymTensor = Dune::FieldVector<double,6>;
     public:
         VtkGeoMechModule(const Simulator& simulator)
             : ParentType(simulator)
@@ -116,6 +117,8 @@ namespace Opm {
                 this->resizeScalarBuffer_(pressDiff_);
                 this->resizeVectorBuffer_(disp_,ParentType::BufferType::VertexBuffer);
                 this->resizeTensorBuffer_(stress_);
+                this->resizeTensorBuffer_(delstress_);
+                this->resizeTensorBuffer_(strain_);
                 //this->resizeVectorBuffer_(symstress_,ParentType::BufferType::ElementBuffer, 6);
             }
 
@@ -125,6 +128,25 @@ namespace Opm {
      * \brief Modify the internal buffers according to the intensive quantities relevant for
      *        an element
      */
+        void setTensor(Tensor& tensor,const SymTensor& symtensor) const{
+                for(int i=0; i< 3; ++i){
+                    tensor[i][i] = symtensor[i];
+                }
+                // voit notation converion
+                tensor[0][1] = symtensor[5];//xy
+                tensor[0][2] = symtensor[4];//xz
+                tensor[1][2] = symtensor[3];//yz
+                // fix symmetry of tensor
+                for(int i=0; i< 3; ++i){
+                    for(int j=0; j < 3; ++j){
+                        if(i > j){
+                            tensor[i][j] = tensor[j][i];
+                        }
+                    }
+                }
+        }   
+
+
         void processElement(const ElementContext& elemCtx)
         {
             if (!Parameters::get<TypeTag, Properties::EnableVtkOutput>())
@@ -135,23 +157,21 @@ namespace Opm {
                 unsigned globalDofIdx = elemCtx.globalSpaceIndex(dofIdx, /*timeIdx=*/0);
                 pressDiff_[globalDofIdx] = geoMechModel.pressureDiff(globalDofIdx);
                 //
-                auto& stress = stress_[globalDofIdx];
-                for(int i=0; i< 3; ++i){
-                    stress[i][i] =geoMechModel.stress(globalDofIdx,i);
+                {
+                    const SymTensor& symtensor = geoMechModel.stress(globalDofIdx);
+                    Tensor& stress = stress_[globalDofIdx];
+                    this->setTensor(stress, symtensor);
                 }
-                // voit notation converion
-                stress[0][1] = geoMechModel.stress(globalDofIdx,5); //xy
-                stress[0][2] = geoMechModel.stress(globalDofIdx,4); //xz
-                stress[1][2] = geoMechModel.stress(globalDofIdx,3); //yz
-                // fix symmetry of tensor
-                for(int i=0; i< 3; ++i){
-                    for(int j=0; j < 3; ++j){
-                        if(i > j){
-                            stress[i][j] = stress[j][i];
-                        }
-                    }
+                {
+                    const SymTensor& symtensor = geoMechModel.delstress(globalDofIdx);
+                    Tensor& delstress = delstress_[globalDofIdx];
+                    this->setTensor(delstress, symtensor);
                 }
-                    
+                {
+                    const SymTensor& symtensor = geoMechModel.strain(globalDofIdx);
+                    Tensor& strain = strain_[globalDofIdx];
+                    this->setTensor(strain, symtensor);
+                }   
             }
             // all vertices proably do it to many times for now
             auto gv  = elemCtx.gridView();
@@ -191,6 +211,19 @@ namespace Opm {
                                               stress_,
                                               ParentType::BufferType::ElementBuffer);
                 }
+                {
+                    const std::string tmp = "delstress"; 
+                    this->commitTensorBuffer_(baseWriter,tmp.c_str(),
+                                              delstress_,
+                                              ParentType::BufferType::ElementBuffer);
+                }
+                {
+                    const std::string tmp = "strain"; 
+                    this->commitTensorBuffer_(baseWriter,tmp.c_str(),
+                                              strain_,
+                                              ParentType::BufferType::ElementBuffer);
+                }
+
             }
         }
 
@@ -207,6 +240,8 @@ namespace Opm {
         VectorBuffer disp_;
         VectorBuffer symstress_;
         TensorBuffer stress_;
+        TensorBuffer delstress_;
+        TensorBuffer strain_;
         
     };
 } // namespace Opm
