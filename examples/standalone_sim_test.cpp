@@ -101,7 +101,7 @@ void dump_vector(const Vector& v, const char* const name)
 {
   std::ofstream os(name);
   for (size_t i = 0; i != v.size(); ++i)
-    os << v[i] << " ";
+    os << v[i] << "\n";
   os.close();
 }
 
@@ -166,8 +166,8 @@ std::shared_ptr<FullMatrix> computeApertureMatrix(const Grid& G,
         const auto ncenter = is.outside().geometry().center() - iscenter;
         const auto ecenter = geom.center() - iscenter;
         const double area = igeom.volume();
-        const double h1 = ecenter.two_norm() / area;
-        const double h2 = ncenter.two_norm() / area;
+        const double h1 = area / ecenter.two_norm();
+        const double h2 = area / ncenter.two_norm();
 
         htransvec.push_back({nIdx, eIdx, h1, h2});
       }
@@ -546,10 +546,17 @@ private:
       const double d1r = 24 * h1 * t1;
       const double d2r = 24 * h2 * t2;
 
-      if (ir >= 0)
-        C_[ir][j] = (r == 0) ? 0.0 : (d1q * r - q * d1r) / (r * r) * (p1 - p2);
-      if (jr >= 0)
-        C_[jr][i] = (r == 0) ? 0.0 : (d2q * r - q * d2r) / (r * r) * (p2 - p1);
+      const double dTdh1 = (r == 0) ? 0.0 : (d1q * r - q * d1r) / (r * r);
+      const double dTdh2 = (r == 0) ? 0.0 : (d2q * r - q * d2r) / (r * r);
+      
+      // diagonal elements
+      if (ir >= 0) C_[ir][i] += dTdh1 * (p1-p2);
+      if (jr >= 0) C_[jr][j] += dTdh2 * (p2-p1); 
+
+      // off-diagonal elements
+      if (ir >= 0) C_[ir][j] += dTdh2 * (p1-p2);
+      if (jr >= 0) C_[jr][i] += dTdh1 * (p2-p1);
+      
     }
 
     // // add contribution to rhs
@@ -646,10 +653,18 @@ bool nonlinearIteration(const FullMatrix& A,
 
   auto negI = makeIdentity(A.N(), -1);
   auto negI_rhs = reduceMatrix(negI, false, true, SFM.elim(), SFM.kept());
-  
+
   SystemMatrix S { { A       , negI    },
                    { SFM.C() , SFM.M() } };
+  //S[_1][_0] *= 0; //@@@
   VectorHP rhs;
+
+  dump_matrix(A, "A");
+  dump_matrix(negI, "negI");
+  dump_matrix(SFM.C(), "C");
+  dump_matrix(SFM.M(), "M");
+  dump_vector(hp[_0], "hvec");
+  dump_vector(hp[_1], "pvec");
 
   Vector tmp(SFM.elim().size());
   for (size_t i = 0; i != SFM.elim().size(); ++i)
@@ -662,11 +677,19 @@ bool nonlinearIteration(const FullMatrix& A,
 
   dhp = rhs; // ensure it has the right number of elements
 
+  // dump_vector(rhs[_0], "rhsh_before");
+  // dump_vector(rhs[_1], "rhsp_before");
+  
   VectorHP hp_reduced = hp;
   hp_reduced[_1] = SFM.reduceP(hp[_1]);
 
-  S.mmv(hp_reduced, rhs); // rhs = rhs - S * hp_reduced
+  auto S0 = S;
+  S0[_1][_0] = 0; // The C-matrix should be zero here
+  S0.mmv(hp_reduced, rhs); // rhs = rhs - S0 * hp_reduced
 
+  dump_vector(rhs[_0], "rhsh_after");
+  dump_vector(rhs[_1], "rhsp_after");
+  
   if (converged_pred(rhs))
     return true; // system converged
 
@@ -686,19 +709,19 @@ bool nonlinearIteration(const FullMatrix& A,
   
   dhp[_1] = SFM.expandP(dhp[_1], false);
 
-  dhp *= 0.5; // @@ necessary to "cut timestep" for convergence..?
+  // dump_vector(dhp[_0], "dh");
+  // dump_vector(dhp[_1], "dp");
+    
+  dhp *= 1.0; // @@ necessary to "cut timestep" for convergence..?
   return false; // system has not yet been shown to have converged
 }
 
 void cap_vals(VectorHP& v, double low_h, double low_p, double high_h, double high_p) {
-  for (size_t i = 0; i != v[_0].size(); ++i) v[_0][i] = std::min(std::max(v[_0][i], low_h), high_h); 
-  for (size_t i = 0; i != v[_1].size(); ++i) v[_1][i] = std::min(std::max(v[_1][i], low_p), high_p);
-
-  //(v[_1][i] >= low_p) ? v[_1][i] : low_p;
-  //(v[_0][i] >= low_h) ? v[_0][i] : low_h;  
-
+  for (size_t i = 0; i != v[_0].size(); ++i) {
+    v[_0][i] = std::min(std::max(v[_0][i], low_h), high_h); 
+    v[_1][i] = std::min(std::max(v[_1][i], low_p), high_p);
+  }
 }
-
 
 // ----------------------------------------------------------------------------
 int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
@@ -741,7 +764,8 @@ int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
   while ( !nonlinearIteration(A, FSM, hp, dhp, converged_pred) &&
           ++iter < max_nonlin_iter) {
     hp += dhp;
-    cap_vals(hp, 0, 0, 1000, 1e12);
+    cap_vals(hp, 1e-4, 0, 1e99, 1e99);
+    std::cout << "Completed iteration: " << iter << std::endl;
   }
 
   if (iter == max_nonlin_iter) {
@@ -918,11 +942,11 @@ int main(int varnum, char** vararg)
   //                   std::vector<size_t>(), rate);
 
   // solve fixed rate system
-  const auto pressure_cells = std::vector<size_t>();
-  const auto rate_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
+  //const auto pressure_cells = std::vector<size_t>();
+  //const auto rate_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
 
-  //const auto pressure_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
-  //const auto rate_cells = std::vector<size_t>();
+  const auto pressure_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
+  const auto rate_cells = std::vector<size_t>();
   
   solveCoupledFull(pressure, aperture, eqsys, pressure_cells, bhp, rate_cells, rate, 1e-5, 1000);
 
