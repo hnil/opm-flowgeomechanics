@@ -220,7 +220,7 @@ int run(Params& p, const std::string& name)
     Opm::PropertyTree prmtmp;
     prm.put("hasfracture",true);
     prm.put("fractureparam.radius",10);
-    Opm::FractureModel fracturemodel(grid, wells, eclgrid, prm);
+    Opm::FractureModel fracturemodel(grid, wells, eclgrid, prm,/*default_fractures*/ true);
     fracturemodel.updateReservoirProperties();
     fracturemodel.solve();
     fracturemodel.write();

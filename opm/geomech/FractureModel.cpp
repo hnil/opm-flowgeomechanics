@@ -78,7 +78,14 @@ namespace Opm{
         }
     }
 
-
+    void FractureModel::initFractureStates(){
+        for(size_t i=0; i < wells_.size(); ++i){
+            std::vector<Fracture>& fractures = well_fractures_[i];
+            for(size_t j=0; j < fractures.size(); ++j){
+                fractures[j].initFractureStates();
+            }
+        }
+    }
 
 
     void FractureModel::write(int reportStep) const{
@@ -114,5 +121,28 @@ namespace Opm{
                 fractures[j].updateReservoirProperties();
             }
         }
+    }
+    std::vector<std::tuple<int,double,double>> 
+    FractureModel::getExtraWellIndices(std::string wellname) const{
+        // for now just do a search
+        bool addconnections = prm_.get<bool>("addconnections");
+        if (addconnections) {
+            for (size_t i = 0; i < wells_.size(); ++i) {
+                if (wells_[i].name() == wellname) {
+                    // collect all from a well
+                    std::vector<std::tuple<int, double, double>> wellindices;
+                    for (const auto& frac : well_fractures_[i]) {
+                        auto perfs = frac.wellIndices();
+                        wellindices.insert(wellindices.begin(),perfs.begin(), perfs.end());
+                    }
+                    return wellindices;
+                }
+            }
+            std::string message = "Now fractures on this well found";
+            message += wellname;
+            OPM_THROW(std::runtime_error, message.c_str());
+        }
+        std::vector<std::tuple<int, double, double>> empty; 
+        return empty;
     }
 }

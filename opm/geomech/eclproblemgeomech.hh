@@ -51,6 +51,7 @@ namespace Opm{
         enum { dimWorld = GridView::dimensionworld };
         using Toolbox = MathToolbox<Evaluation>;
         using SymTensor = Dune::FieldVector<double,6>;
+        using GeomechModel = EclGeoMechModel<TypeTag>;  
         EclProblemGeoMech(Simulator& simulator):
             FlowProblem<TypeTag>(simulator),
             geomechModel_(simulator)
@@ -72,6 +73,7 @@ namespace Opm{
             }
 
             hasFractures_ = fracture_param_.get<bool>("hasfractures");
+            addPerfsToSchedule_ = fracture_param_.get<bool>("add_perfs_to_schedule");
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 this->model().addOutputModule(new VtkGeoMechModule<TypeTag>(simulator));
             }
@@ -190,7 +192,7 @@ namespace Opm{
                         recnum +=1;
                     }
                     // NB setting initial stress
-                    this->geomechModel_.setStress(initstress_);
+                    //this->geomechModel_.setStress(initstress_);
                 }else{
                     OPM_THROW(std::runtime_error, "Missing stress initialization keywords");
                 }
@@ -216,7 +218,10 @@ namespace Opm{
             if(simulator.vanguard().eclState().runspec().mech()){
                 //this->geomechModel_.setMaterial(elasticparams_);
                 this->geomechModel_.setMaterial(ymodule_,pratio_);
+                this->geomechModel_.updatePotentialForces();
+                
             }
+
         }
         void timeIntegration()
         {
@@ -244,8 +249,95 @@ namespace Opm{
             Parent::endTimeStep();
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 geomechModel_.endTimeStep();
+                if(this->hasFractures()){
+                    // method for handling extra connections from fractures
+                    // it is options for not including them in fractures i.e. addconnections
+                    if(addPerfsToSchedule_){
+                        this->addConnectionsToSchedual();
+                    }else{
+                    // not not working ... more work...
+                        this->addConnectionsToWell();
+                    }
+                }
             }
         }
+
+        void addConnectionsToWell(){
+        // add extra connections from fractures direclty to the well structure
+            auto& wellcontainer = this->wellModel().localNonshutWells();
+            for (auto& wellPtr : wellcontainer) {
+                auto wellName = wellPtr->name();
+                const auto& wellcons = geomechModel_.getExtraWellIndices(wellName);
+                wellPtr->addPerforations(wellcons);
+            }
+        }
+
+        void addConnectionsToSchedual()
+        {
+        // add extra connections to schedule and use the action framework to handle it
+            //const auto& problem = simulator_.problem();
+            auto& simulator = this->simulator();
+            auto& schedule = simulator.vanguard().schedule();
+            const int reportStep = this->episodeIndex();
+            // const auto sim_time = simulator_.time() + simulator_.timeStepSize();
+            //  const auto now = TimeStampUTC {schedule_.getStartTime()} + std::chrono::duration<double>(sim_time);
+            // const auto ts = formatActionDate(now, reportStep);
+            std::map<std::string, std::vector<Opm::Connection>> extra_perfs;
+            
+            auto mapper = simulator.vanguard().cartesianMapper();
+            auto& wellcontainer = this->wellModel().localNonshutWells();
+            for (auto& wellPtr : wellcontainer) {
+                auto wellName = wellPtr->name();
+                const auto& wellcons = geomechModel_.getExtraWellIndices(wellName);
+                for (const auto& cons : wellcons) {
+                    // simple calculated with upscaling
+                    const auto [cell, WI, depth] = cons;
+                    // map to cartesian
+                    const auto cartesianIdx = simulator.vanguard().cartesianIndex(cell);
+                    // get ijk
+                    std::array<int, 3> ijk;
+                    simulator.vanguard().cartesianCoordinate(cell, ijk);
+                    // makeing preliminary connection to be added in schedual with correct numbering
+
+                    Opm::Connection::CTFProperties ctfprop;
+                    Opm::Connection connection(ijk[0],
+                                               ijk[1],
+                                               ijk[2],
+                                               cartesianIdx,
+                                               /*complnum*/ -1,
+                                               Opm::Connection::State::OPEN,
+                                               Opm::Connection::Direction::Z,
+                                               Opm::Connection::CTFKind::Defaulted,
+                                               /*sort_value*/ -1,
+                                               depth,
+                                               ctfprop,
+                                               /*sort_value*/ -1,
+                                               /*defaut sattable*/ true);
+                    connection.setCF(WI);
+                    extra_perfs[wellName].push_back(connection);
+                }
+            }
+            bool commit_wellstate = false;
+            auto sim_update = schedule.modifyCompletions(reportStep, extra_perfs);
+            // shouldnot be used
+            auto updateTrans = [this](const bool global)
+            {
+                this->transmissibilities_
+                    .update(global, [&vg = this->simulator().vanguard()]
+                            (const unsigned int i)
+                    {
+                        return vg.gridIdxToEquilGridIdx(i);
+                    });
+            };
+            this->actionHandler_.applySimulatorUpdate(reportStep, 
+                                                      sim_update, 
+                                                      commit_wellstate, 
+                                                      updateTrans);
+            if (commit_wellstate) {
+                this->wellModel().commitWGState();
+            }
+        }
+
 
         void endEpisode(){
             Parent::endEpisode();
@@ -304,8 +396,11 @@ namespace Opm{
         // }
         bool hasFractures() const{ return hasFractures_;}
         Opm::PropertyTree getFractureParam() const{return fracture_param_.get_child("fractureparam");};
+        const GeomechModel& geomechModel() const{return geomechModel_;}
+        // used for fracture model
+        double yModule(size_t idx) const {return ymodule_[idx];}
+        double pRatio(size_t idx) const {return pratio_[idx];}
     private:
-        using GeomechModel = EclGeoMechModel<TypeTag>;
         GeomechModel geomechModel_;
 
         std::vector<double> ymodule_;
@@ -324,6 +419,7 @@ namespace Opm{
 
         // for fracture calculation
         bool hasFractures_;
+        bool addPerfsToSchedule_;
         Opm::PropertyTree fracture_param_;
 
         //private:

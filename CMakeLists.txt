@@ -199,7 +199,7 @@ opm_add_test(flow_energy_geomech_polygrid
 	ONLY_COMPILE
 	ALWAYS_ENABLE
 	DEPENDS opmsimulators opmupscaling
-	LIBRARIES opmsimulators opmupscaling vem
+	LIBRARIES opmsimulators opmupscaling vem fracture
 	SOURCES
 	examples/flow_energy_geomech_polygrid.cpp examples/FlexibleSolverMech.cpp
 	$<TARGET_OBJECTS:moduleVersionGeoMech>
@@ -312,30 +312,30 @@ opm_add_test(single_fracture_sim
 	 $<TARGET_OBJECTS:moduleVersionGeoMech>
 )
 
-opm_add_test(make_test_disk
-   ONLY_COMPILE
-	 ALWAYS_ENABLE
-	 DEPENDS opmsimulators opmupscaling
-	 LIBRARIES gmsh
-	 SOURCES
-	 examples/make_test_disk.cpp
-	 $<TARGET_OBJECTS:moduleVersionGeoMech>
-)
+# opm_add_test(make_test_disk
+#    ONLY_COMPILE
+#		 ALWAYS_ENABLE
+#		 DEPENDS opmsimulators opmupscaling
+#		 LIBRARIES gmsh
+#		 SOURCES
+#		 examples/make_test_disk.cpp
+#		 $<TARGET_OBJECTS:moduleVersionGeoMech>
+# )
 
 opm_add_test(coupled_standalone_test
-   ONLY_COMPILE
+	 ONLY_COMPILE
 	 ALWAYS_ENABLE
-	 DEPENDS opmsimulators opmupscaling 
-	 LIBRARIES opmsimulators opmupscaling fracture gmsh
+	 DEPENDS opmsimulators opmupscaling
+	 LIBRARIES opmsimulators opmupscaling fracture
 	 SOURCES
 	 examples/coupled_standalone_test.cpp
 	 $<TARGET_OBJECTS:moduleVersionGeoMech>
 )
 
 opm_add_test(standalone_sim_test
-   ONLY_COMPILE
+	 ONLY_COMPILE
 	 ALWAYS_ENABLE
-	 DEPENDS opmsimulators opmupscaling 
+	 DEPENDS opmsimulators opmupscaling
 	 LIBRARIES opmsimulators opmupscaling fracture gmsh
 	 SOURCES
 	 examples/standalone_sim_test.cpp

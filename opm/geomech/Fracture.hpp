@@ -49,6 +49,7 @@
 #include <opm/simulators/linalg/PropertyTree.hpp>
 // #include <opm/models/utils/parametersystem.hh>
 #include <opm/material/fluidsystems/BlackOilFluidSystem.hpp>
+#include <dune/istl/matrixmarket.hh>
 namespace Opm
 {
 struct WellInfo {
@@ -56,7 +57,6 @@ struct WellInfo {
     int perf;
     int well_cell;
 };
-
 
 /// This class carries all parameters for the NewtonIterationBlackoilInterleaved class.
 class Fracture
@@ -77,7 +77,7 @@ public:
     void updateReservoirProperties();
     void removeCells();
     template <class TypeTag, class Simulator>
-    void updateReservoirProperties(const Simulator& simulator)
+    void initReservoirProperties(const Simulator& simulator)
     {
         using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
         const auto& problem = simulator.problem();
@@ -85,21 +85,46 @@ public:
         // NB reservoir dist not calculated
         size_t ncf = reservoir_cells_.size();
         reservoir_perm_.resize(ncf);
+        // should be calcualted
+        double dist = prm_.get<double>("reservoir.dist");
+        reservoir_dist_.resize(ncf, dist);
+        double numax = -1e99;
+        double Emax = -1e99;
+        assert(ncf>0);
+        for (size_t i = 0; i < ncf; ++i) {
+            size_t cell = reservoir_cells_[i];
+            auto normal = this->cell_normals_[i];
+            {
+                auto permmat = problem.intrinsicPermeability(cell);
+                auto np = normal;
+                permmat.mv(normal, np);
+                double value = np.dot(normal);
+                reservoir_perm_[i] = value;
+            }
+            Emax = std::max(Emax,problem.yModule(cell));
+            numax = std::max(numax,problem.pRatio(cell));
+        }
+        E_ = Emax;
+        nu_ = numax;
+        assert(E_ > 0);
+        assert(nu_>0 && nu_ < 1);
+    }
+
+    template <class TypeTag, class Simulator>
+    void updateReservoirProperties(const Simulator& simulator)
+    {
+        using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
+        const auto& problem = simulator.problem();
+        // NB burde truleg interpolere
+        // NB reservoir dist not calculated
+        size_t ncf = reservoir_cells_.size();
         reservoir_pressure_.resize(ncf);
         reservoir_stress_.resize(ncf);
         reservoir_mobility_.resize(ncf);
-        reservoir_dist_.resize(ncf, 10);
         for (size_t i = 0; i < ncf; ++i) {
             int cell = reservoir_cells_[i];
             if (!(cell < 0)) {
-                auto normal = this->cell_normals_[i];
-                {
-                    auto permmat = problem.intrinsicPermeability(cell);
-                    auto np = normal;
-                    permmat.mv(normal, np);
-                    double value = np.dot(normal);
-                    reservoir_perm_[i] = value;
-                }
+                //auto normal = this->cell_normals_[i];
                 const auto& intQuants = simulator.model().intensiveQuantities(cell, /*timeIdx*/ 0);
                 const auto& fs = intQuants.fluidState();
                 {
@@ -130,6 +155,8 @@ public:
             // assume reservoir distance is calculated
         }
     }
+    void initFracturePressureFromReservoir();
+    void initFractureStates();
     void initFractureWidth();
     void solveFractureWidth();
     void solvePressure();
@@ -137,9 +164,13 @@ public:
 
     void printPressureMatrix() const; // debug purposes
     void printMechMatrix() const; // debug purposes
+    void writeFractureSystem()  const;
+    void writePressureSystem()  const;
     void setFractureGrid(std::unique_ptr<Fracture::Grid>& gptr); // a hack to allow use of another grid
-    std::vector<std::tuple<int, double>> wellIndices() const;
-
+    std::vector<std::tuple<int, double, double>> wellIndices() const;
+    WellInfo& wellInfo(){return wellinfo_;}
+    std::vector<double> leakOfRate() const;
+    double injectionPressure() const;
 private:
     void resetWriters();
     // helpers for growing grid
@@ -174,7 +205,7 @@ private:
     std::vector<double> stressIntensityK1() const;
 
 
-    double well_pressure_;
+    //double well_pressure_;// for now using prm object for definition
     std::vector<int> well_source_;
     // for reservoir
     std::vector<int> reservoir_cells_;

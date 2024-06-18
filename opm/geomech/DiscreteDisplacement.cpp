@@ -50,8 +50,8 @@ symTensor2Matrix(const Dune::FieldVector<double,6> symtensor){
     for(int i=0; i < 3; ++i){
         mat[i][i] = symtensor[i];
     }
-    mat[2][1] = symtensor[4]; mat[1][2] = mat[2][1];
-    mat[2][0] = symtensor[5]; mat[0][2] = mat[2][0];
+    mat[2][1] = symtensor[3]; mat[1][2] = mat[2][1];
+    mat[2][0] = symtensor[4]; mat[0][2] = mat[2][0];
     mat[1][0] = symtensor[5]; mat[0][1] = mat[1][0];
     return mat;
 }
@@ -67,7 +67,7 @@ tractionSymTensor(const Dune::FieldVector<double,6> symtensor, Dune::FieldVector
     }
     traction += 2*symtensor[3]*normal[0]*normal[1];// xy*nx*ny;
     traction += 2*symtensor[4]*normal[0]*normal[2];// xz*nx*nz
-    traction += 2*symtensor[6]*normal[1]*normal[2];// yz*ny*nz
+    traction += 2*symtensor[5]*normal[1]*normal[2];// yz*ny*nz
     return traction;
 }
 void

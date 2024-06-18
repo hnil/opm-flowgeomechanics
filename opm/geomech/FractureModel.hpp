@@ -43,6 +43,16 @@ public:
     void writemulti(double time) const;
     void solve();
     void updateReservoirProperties();
+    void initFractureStates();
+    template <class TypeTag, class Simulator>
+    void initReservoirProperties(const Simulator& simulator)
+    {
+        for (size_t i=0; i < wells_.size(); ++i) {
+            for (auto& fracture : well_fractures_[i]){
+                fracture.initReservoirProperties<TypeTag, Simulator>(simulator);
+            }
+        }
+    }
 
     template <class TypeTag, class Simulator>
     void updateReservoirProperties(const Simulator& simulator)
@@ -60,6 +70,8 @@ public:
              well.updateReservoirStress(problem);
         }
     }
+    std::vector<std::tuple<int,double,double>> getExtraWellIndices(std::string wellname) const;
+    bool addPertsToSchedule(){return prm_.get<bool>("addperfs_to_schedule");}
 private:
     std::vector<FractureWell> wells_;
     std::vector<std::vector<Fracture>> well_fractures_;
