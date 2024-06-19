@@ -521,9 +521,6 @@ private:
   void update_C_(const VectorHP& hp) {
     C_ = 0;
     // intermediary matrices for computing the partial derivatives
-    SparseMatrix Q(C_), R(C_), dQ(C_), dR(C_);
-    Q = 0; R = 0; dQ = 0; dR = 0;
-
     for (const auto& e : htransvec_) {
       const size_t i = std::get<0>(e);
       const size_t j = std::get<1>(e); assert(i != j);
@@ -555,7 +552,7 @@ private:
 
       // off-diagonal elements
       if (ir >= 0) C_[ir][j] += dTdh2 * (p1-p2);
-      if (jr >= 0) C_[jr][i] += dTdh1 * (p2-p1);
+      if (jr >= 0) C_[jr][i] += dTdh1 * (p2-p1); 
       
     }
 
@@ -642,6 +639,25 @@ private:
 };
 
 // ----------------------------------------------------------------------------
+double estimate_step_fac(const VectorHP& x, const VectorHP& dx)
+// ----------------------------------------------------------------------------  
+{
+  // estimate what might be a safe step size to avoid exiting the convergence radius
+
+  //const double trivial_pressure = 1e5;
+  
+  const double f1 = dx[_0].infinity_norm() / x[_0].infinity_norm();
+  //const double f2 = dx[_1].infinity_norm() / std::max(x[_1].infinity_norm(), trivial_pressure);
+  const double f2 = dx[_1].infinity_norm() / x[_1].infinity_norm();
+  const double fmax = std::max(f1, f2);
+  const double threshold = 0.95;
+  const double fac_min = 1e-2; //1e-2;
+  const double fac = (fmax < threshold) ? 1.0 : std::max(threshold / fmax, fac_min);
+  //const double fac = (fmax < threshold) ? 1.0 : threshold / fmax;
+  return fac;
+}
+
+// ----------------------------------------------------------------------------
 bool nonlinearIteration(const FullMatrix& A,
                         FlowSystemMatrices& SFM, // will be updated
                         const VectorHP& hp,
@@ -656,15 +672,15 @@ bool nonlinearIteration(const FullMatrix& A,
 
   SystemMatrix S { { A       , negI    },
                    { SFM.C() , SFM.M() } };
-  //S[_1][_0] *= 0; //@@@
+  //  S[_1][_0] *= 0.0; //@@@
   VectorHP rhs;
 
-  dump_matrix(A, "A");
-  dump_matrix(negI, "negI");
-  dump_matrix(SFM.C(), "C");
-  dump_matrix(SFM.M(), "M");
-  dump_vector(hp[_0], "hvec");
-  dump_vector(hp[_1], "pvec");
+  // dump_matrix(A, "A");
+  // dump_matrix(negI, "negI");
+  // dump_matrix(SFM.C(), "C");
+  // dump_matrix(SFM.M(), "M");
+  // dump_vector(hp[_0], "hvec");
+  // dump_vector(hp[_1], "pvec");
 
   Vector tmp(SFM.elim().size());
   for (size_t i = 0; i != SFM.elim().size(); ++i)
@@ -687,8 +703,8 @@ bool nonlinearIteration(const FullMatrix& A,
   S0[_1][_0] = 0; // The C-matrix should be zero here
   S0.mmv(hp_reduced, rhs); // rhs = rhs - S0 * hp_reduced
 
-  dump_vector(rhs[_0], "rhsh_after");
-  dump_vector(rhs[_1], "rhsp_after");
+  // dump_vector(rhs[_0], "rhsh_after");
+  // dump_vector(rhs[_1], "rhsp_after");
   
   if (converged_pred(rhs))
     return true; // system converged
@@ -697,7 +713,7 @@ bool nonlinearIteration(const FullMatrix& A,
   Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP> S_linop(S);
   //Dune::Richardson<VectorHP, VectorHP> precond(1); // "no" preconditioner
   TailoredPrecondDiag precond(S);
-  //TailoredPrecondFull precond(S);
+  //  TailoredPrecondFull precond(S);
   Dune::InverseOperatorResult iores;    
   auto psolver = Dune::BiCGSTABSolver<VectorHP>(S_linop,
                                                 precond,
@@ -711,8 +727,15 @@ bool nonlinearIteration(const FullMatrix& A,
 
   // dump_vector(dhp[_0], "dh");
   // dump_vector(dhp[_1], "dp");
-    
-  dhp *= 1.0; // @@ necessary to "cut timestep" for convergence..?
+  std::cout << "hp:  " << hp[_0].infinity_norm() << " " << hp[_1].infinity_norm() << std::endl;
+  std::cout << "dhp: " << dhp[_0].infinity_norm() << " " << dhp[_1].infinity_norm() << std::endl;
+
+  // the following is a heuristic way to try to limit stepsize to stay within convergence radius
+  const double step_fac = estimate_step_fac(hp, dhp);
+  std::cout << "fac: " << step_fac << std::endl;
+  dhp *= step_fac;
+
+  //  dhp *= 0.5; //0.6; // @@ necessary to "cut timestep" for convergence..?
   return false; // system has not yet been shown to have converged
 }
 
@@ -764,7 +787,7 @@ int solveCoupledFull(Vector& p, Vector&h, const EquationSystem& eqsys,
   while ( !nonlinearIteration(A, FSM, hp, dhp, converged_pred) &&
           ++iter < max_nonlin_iter) {
     hp += dhp;
-    cap_vals(hp, 1e-4, 0, 1e99, 1e99);
+    cap_vals(hp, 1e-12, 0, 1e99, 1e99);
     std::cout << "Completed iteration: " << iter << std::endl;
   }
 
@@ -924,7 +947,7 @@ int main(int varnum, char** vararg)
   const double young = 1e9; // fYoung's modulus
   const double poisson = 0.25; // Poisson's ratio
   //const double leakoff_fac = 1e-13;// this breaks for rate
-  const double leakoff_fac = 1e-9; //1e-6; //1e-13; // a bit heuristic; conceptufally rock perm divided by distance  
+  const double leakoff_fac = 1e-13; //1e-9; //1e-6; //1e-13; // a bit heuristic; conceptually rock perm divided by distance  
   const auto eqsys = computeEquationSystem(*grid, young, poisson, leakoff_fac);
   
   
