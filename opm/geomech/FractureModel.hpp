@@ -60,14 +60,31 @@ public:
         for (size_t i=0; i < wells_.size(); ++i) {
             for (auto& fracture : well_fractures_[i]){
                 fracture.updateReservoirProperties<TypeTag, Simulator>(simulator);
+                // set well properties
+                WellInfo wellinfo = fracture.wellInfo();
+                // need to be double checked how to assosiate correct perforation/segment
+                int perf_index_frac = wellinfo.perf;
+                int cell_index_frac = wellinfo.well_cell;
+                std::size_t well_index = simulator.problem().wellModel().wellState().index(wellinfo.name).value();
+                const auto& wellstate = simulator.problem().wellModel().wellState().well(well_index);
+                const auto& perf_data = wellstate.perf_data;
+                auto it = std::find(perf_data.cell_index.begin(),
+                                    perf_data.cell_index.end(),
+                                    cell_index_frac);
+                int perf_index = it- perf_data.cell_index.begin();
+                std::cout << "Perf index flow " << perf_index << " fracture " << perf_index_frac << std::endl;
+                double perf_pressure = perf_data.pressure[perf_index];
+                fracture.setPerfPressure(perf_pressure);
+                wells_[i].setPerfPressure(perf_index_frac, perf_pressure);
+                //NB do we need some rates? need to be summed over "peforations of the fractures"
             }
         }
     }
 
-    template<class Problem>
-    void updateReservoirWellProperties(const Problem& problem) {
+    template<class TypeTag, class Simulator>
+    void updateReservoirWellProperties(const Simulator& simulator) {
         for(auto& well : wells_){
-             well.updateReservoirStress(problem);
+             well.updateReservoirProperties<TypeTag,Simulator>(simulator);
         }
     }
     std::vector<std::tuple<int,double,double>> getExtraWellIndices(std::string wellname) const;

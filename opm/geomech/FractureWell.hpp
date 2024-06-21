@@ -12,23 +12,66 @@ public:
                  const std::vector<Point3D>& points,
                  const std::vector<Segment>& segments,
                  const std::vector<int>& res_cells);
+
     void init(const std::vector<Point3D>& points,
               const std::vector<Segment>& segments);
 
-    template<class Problem>
-    void updateReservoirStress(const Problem& problem){
+    template<class TypeTag, class Simulator>
+    void updateReservoirProperties(const Simulator& simulator)
+    {
+        using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
         assert(grid_->leafGridView().size(0) == reservoir_cells_.size());
+        const auto& problem = simulator.problem();
         reservoir_stress_.resize(reservoir_cells_.size());
+        reservoir_pressure_.resize(reservoir_cells_.size());
+        reservoir_temperature_.resize(reservoir_cells_.size());
+        int water_index = 0;
         for(size_t i=0;i < reservoir_cells_.size(); ++i){
             reservoir_stress_[i] = problem.stress(reservoir_cells_[i]);
+            {
+                const auto& intQuants = 
+                    simulator.model().intensiveQuantities(reservoir_cells_[i], /*timeIdx*/ 0);
+                const auto& fs = intQuants.fluidState();
+                auto val = fs.pressure(FluidSystem::waterPhaseIdx);
+                reservoir_pressure_[i] = Opm::getValue(val);
+                unsigned dummy = 0;
+                reservoir_temperature_[i] = Opm::getValue(fs.temperature(dummy));
+            }
+            
         }
     }
-
+    void setPerfPressure(int perf_index, double pressure){perf_pressure_[perf_index] = pressure;}
     const Grid& grid() const{return *grid_;}
     std::string name() const{return name_;};
     void write() const{
         std::string filename = outputprefix_ + "/" + this->name();
         vtkwriter_->write(filename.c_str());
+    }
+    void writemulti(double time) const{
+        std::vector<double> reservoir_pressure = reservoir_pressure_;
+        //std::vector<double> reservoir_cells = reservoir_cells_;
+        std::vector<double> perf_pressure = perf_pressure_;
+        vtkmultiwriter_->beginWrite(time);
+        if (perf_pressure.size() > 0) {
+            vtkmultiwriter_->attachScalarElementData(perf_pressure, "PerfPressure");
+        }
+        if (reservoir_pressure.size() > 0) {
+            vtkmultiwriter_->attachScalarElementData(reservoir_pressure, "PerfPressure");
+        }
+        vtkmultiwriter_->endWrite(); 
+    }
+    void resetWriters(){
+        // nead to be reseat if grid is changed ??
+        vtkwriter_ = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(), Dune::VTK::nonconforming);
+        std::string outputdir = outputprefix_;
+        std::string simName = " ";
+        std::string multiFileName =  "";
+        vtkmultiwriter_ = std::make_unique< Opm::VtkMultiWriter<Grid::LeafGridView, VTKFormat > >(/*async*/ false,
+                                                                                              grid_->leafGridView(),
+                                                                                              outputdir,
+                                                                                              simName,
+                                                                                              multiFileName
+        );
     }
     int reservoirCell(int wellcell) const {return reservoir_cells_[wellcell];};
     Dune::FieldVector<double,6> reservoirStress(int wellcell) const{return reservoir_stress_[wellcell];};
@@ -39,6 +82,14 @@ private:
     std::unique_ptr<Dune::VTKWriter<Grid::LeafGridView>> vtkwriter_;
     // should probably be separated for easier testing
     std::vector<int> reservoir_cells_;  
-    std::vector<Dune::FieldVector<double,6>> reservoir_stress_;    
+    // reservoir data
+    std::vector<Dune::FieldVector<double,6>> reservoir_stress_;
+    std::vector<double> reservoir_pressure_;
+    std::vector<double> reservoir_temperature_;
+    // well data
+    std::vector<double> perf_pressure_;
+
+    static constexpr int VTKFormat = Dune::VTK::ascii;
+    std::unique_ptr<Opm::VtkMultiWriter<Grid::LeafGridView, VTKFormat>> vtkmultiwriter_;
 };
 }

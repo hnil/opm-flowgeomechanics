@@ -14,6 +14,7 @@ namespace Opm{
             factory.insertElement(Dune::GeometryTypes::line, seg); // std::move(mapping));
         }
         grid_ = factory.createGrid();
+        this->resetWriters();
     }
 
     FractureWell::FractureWell(std::string outputprefix, 

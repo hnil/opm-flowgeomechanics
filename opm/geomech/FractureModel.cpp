@@ -99,7 +99,7 @@ namespace Opm{
     }
     void FractureModel::writemulti(double time) const{
         for(size_t i=0; i < wells_.size(); ++i){
-            //wells_[i].write();
+            wells_[i].writemulti(time);
             const std::vector<Fracture>& fractures = well_fractures_[i];
             for(size_t j=0; j < fractures.size(); ++j){
                 fractures[j].writemulti(time);

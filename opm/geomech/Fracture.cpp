@@ -41,11 +41,11 @@ Fracture::init(std::string well,
     layers_ = 0;
     nlinear_ = 0;
     initFracture();
-    grow(3, 0);
-    nlinear_ = layers_;
-    grow(4, 1);
-    grid_->grow();
-    grid_->postGrow();
+    // grow(3, 0);
+    // nlinear_ = layers_;
+    // grow(4, 1);
+    // grid_->grow();
+    // grid_->postGrow();
 
     size_t nc = grid_->leafGridView().size(0);
     reservoir_cells_ = std::vector<int>(nc, -1);
@@ -74,6 +74,7 @@ void Fracture::resetWriters(){
 
 void Fracture::setupPressureSolver(){
     Opm::FlowLinearSolverParameters p;
+    p.linsolver_ = prm_.get<std::string>("pressuresolver");
     prmpressure_ = Opm::setupPropertyTree(p, true, true);
     {
         std::size_t pressureIndex; // Dummy
@@ -567,13 +568,19 @@ Fracture::setSource()
         for (auto cell : well_source_) {
             rhs_pressure_[cell] += rate / scale;
         }
-    } else if (control_type == "bhp") {
-        double bhp = control.get<double>("bhp");
-        for (const auto& bhpinj : bhpinj_) {
-            int cell = std::get<0>(bhpinj);
-            double value = std::get<1>(bhpinj);
-            rhs_pressure_[cell] += value * bhp;
+    } else if (control_type == "pressure") {
+        double pressure = control.get<double>("pressure");
+        for (const auto& perfinj : perfinj_) {
+            int cell = std::get<0>(perfinj);
+            double value = std::get<1>(perfinj);
+            rhs_pressure_[cell] += value * pressure;
         }
+    } else if (control_type == "perf_pressure") {
+        for (const auto& perfinj : perfinj_) {
+            int cell = std::get<0>(perfinj);
+            double value = std::get<1>(perfinj);
+            rhs_pressure_[cell] += value * perf_pressure_;
+        }    
     } else {
         OPM_THROW(std::runtime_error, "Unknowns control");
     }
@@ -756,7 +763,7 @@ Fracture::initPressureMatrix()
     //
     double fWI = prm_.get<double>("fractureWI");
     for(int cell : well_source_){
-        bhpinj_.push_back({cell,fWI});
+        perfinj_.push_back({cell,fWI});
     }
 
     size_t nc = grid_->leafGridView().size(0);
@@ -863,10 +870,10 @@ Fracture::assemblePressure()
     }
     if (control_type == "rate") {
         // no extra tings in matrix
-    } else if (control_type == "bhp") {
-        for (const auto& bhpinj : bhpinj_) {
-            int cell = std::get<0>(bhpinj);
-            double value = std::get<1>(bhpinj);
+    } else if (control_type == "pressure" || "perf_pressure") {
+        for (const auto& perfinj : perfinj_) {
+            int cell = std::get<0>(perfinj);
+            double value = std::get<1>(perfinj);
             matrix[cell][cell] += value;
         }
     }else{

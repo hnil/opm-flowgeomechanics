@@ -171,6 +171,7 @@ public:
     WellInfo& wellInfo(){return wellinfo_;}
     std::vector<double> leakOfRate() const;
     double injectionPressure() const;
+    void setPerfPressure(double perfpressure){perf_pressure_ = perfpressure;}
 private:
     void resetWriters();
     // helpers for growing grid
@@ -229,8 +230,8 @@ private:
     using Htrans = std::tuple<size_t, size_t, double, double>;
     std::vector<Htrans> htrans_;
     std::vector<double> leakof_;
-    std::vector<std::tuple<int,double>> bhpinj_;
-    double bhp_;
+    std::vector<std::tuple<int,double>> perfinj_;
+    double perf_pressure_;
     //
     Opm::PropertyTree prmpressure_;
     using Vector = Dune::BlockVector<Dune::FieldVector<double, 1>>;
