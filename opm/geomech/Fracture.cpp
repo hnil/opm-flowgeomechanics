@@ -12,6 +12,7 @@
 #include<string>
 #include <dune/common/fmatrixev.hh>
 #include <dune/grid/utility/persistentcontainer.hh>
+#include <opm/grid/polyhedralgrid.hh>
 
 namespace Opm
 {
