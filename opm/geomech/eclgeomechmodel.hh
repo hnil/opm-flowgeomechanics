@@ -95,7 +95,7 @@ namespace Opm{
                         );
                     // not to get the reservoir properties along the well before initialising the well
                     // most important stress    
-                    fracturemodel_->updateReservoirWellProperties(problem);
+                    fracturemodel_->updateReservoirWellProperties<TypeTag,Simulator>(simulator_);
                     // add fractures along the wells    
                     fracturemodel_->addFractures();
                     

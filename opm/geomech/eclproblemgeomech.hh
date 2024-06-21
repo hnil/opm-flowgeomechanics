@@ -284,7 +284,7 @@ namespace Opm{
             // const auto ts = formatActionDate(now, reportStep);
             std::map<std::string, std::vector<Opm::Connection>> extra_perfs;
             
-            auto mapper = simulator.vanguard().cartesianMapper();
+            //auto mapper = simulator.vanguard().cartesianMapper();
             auto& wellcontainer = this->wellModel().localNonshutWells();
             for (auto& wellPtr : wellcontainer) {
                 auto wellName = wellPtr->name();

@@ -1,0 +1,35 @@
+{
+    "hasfractures":true,
+    "add_perfs_to_schedule":true,
+    "fractureparam":{
+        "addconnections":true,
+        "config":{
+            "type":"perp_well",
+            "initial_fracture_width":3e-3,
+            "axis_scale": 1.75
+        },
+        "solver":{
+            "method":"only_pressure",
+            "max_iter":10,
+            "min_width":1e-10,
+            "max_width":5e+100,
+            "max_change":1e-3
+        },
+        "reservoir":{
+            "dist":0.0001,
+            "mobility":1e-3,
+            "perm":1e-13
+        },
+        "control":{
+            "type":"rate",
+            "rate":1e2,
+            "bhp":200e5
+        },
+        "extended_fractures":false,
+        "fractureWI":0.1,
+        "write_pressure_system":true,
+        "write_fra_system":false,
+        "pressuresolver": "umfpack",
+        "fracturesolver": "notused"
+    }
+}
