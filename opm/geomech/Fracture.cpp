@@ -507,6 +507,9 @@ Fracture::updateReservoirProperties()
     reservoir_dist_.resize(nc, dist);
     reservoir_mobility_.resize(nc, 1000);
     reservoir_pressure_.resize(nc, 100.0e5);
+    //reservoir_stress_.resize(nc);
+    //for (size_t i = 0; i != nc; ++i) reservoir_stress_[i] = Dune::FieldVector<double, 6> {0, 0, 0, 0, 0, 0};
+    //cell_normals_.resize(grid_->leafGridView().size(0)); // @@
     nu_ = 0.25;
     E_ = 1e9;
     this->initFractureWidth();
@@ -543,7 +546,18 @@ Fracture::solve()
             }
             changed = (max_change < tol);
         }
-    }else if(method == "if"){
+    } else if (method == "if") {
+      const double rate = ;
+      const std::vector<size_t> ratecells = ;
+      const double bhp = ;
+      const std::vector<size_t> bhpcells = ;
+
+      // fracture_pressure_ and fracture_width_ are the two unknowns, which will
+      // be computed/updated inside the function
+      solve_fully_coupled(fracture_pressure_, fracture_width_, // the two unknowns
+                          pressure_matrix_, fracture_matrix_,
+                          htrans_, rate, ratecells, bhp, bhpcells);
+                          
         OPM_THROW(std::runtime_error,"if: fully implicite not implemented");
     }else{
         OPM_THROW(std::runtime_error,"Unknowns solution method");
@@ -705,8 +719,10 @@ Fracture::solvePressure() {
         std::cerr << "exception thrown " << e << std::endl;
     }
 }
-void
-Fracture::solveFractureWidth()
+
+// based on the (given) values of fracture_pressure__, compute rhs_width_ and
+// fracture_width_
+void Fracture::solveFractureWidth()
 {
     this->assembleFracture();
     fracture_matrix_->solve(fracture_width_,rhs_width_);
@@ -883,16 +899,18 @@ Fracture::assemblePressure()
 
 void  Fracture::assembleFracture(){
     size_t nc = grid_->leafGridView().size(0);
-    //rhs_width_.resize(nc);
+    //rhs_width_ [h.resize(nc);
     rhs_width_ = fracture_pressure_;
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
-    for (auto elem : elements(grid_->leafGridView())) {
+    if (reservoir_stress_.size() > 0) {
+      for (auto elem : elements(grid_->leafGridView())) {
         int idx = mapper.index(elem);
         //auto geom = elem.geometry();
         rhs_width_[idx] -= reservoir_pressure_[idx];//*geom.volume();
         // using compressible stress ??
         rhs_width_[idx] -= ddm::tractionSymTensor(reservoir_stress_[idx],cell_normals_[idx]);
         // temperature
+      }
     }
     // Do we need to ad thermal "forces"
 

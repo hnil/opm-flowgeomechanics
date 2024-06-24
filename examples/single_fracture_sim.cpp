@@ -59,12 +59,15 @@ int main(int argc, char** argv) {
   prm.put("config.initial_fracture_width", 1e-6);
   prm.put("outputdir", std::string("."));
   prm.put("casename", std::string("testcase"));
+  prm.put("solver.method", std::string("if"));
 
   //double perm = prm.get<double>("reservoir.perm");
   //  std::cout << "Perm: " << perm << std::endl;
   
   frac.init("testwell", perf, wellcell, origo, normal, prm);
   frac.setFractureGrid(grid);
+
+  frac.solve();
   
   // frac.updateReservoirProperties();
 
