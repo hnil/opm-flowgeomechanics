@@ -14,6 +14,8 @@
 #include <dune/grid/utility/persistentcontainer.hh>
 #include <opm/grid/polyhedralgrid.hh>
 
+#include <opm/geomech/coupledsolver.hpp>
+
 namespace Opm
 {
 void
@@ -547,18 +549,22 @@ Fracture::solve()
             changed = (max_change < tol);
         }
     } else if (method == "if") {
-      const double rate = ;
-      const std::vector<size_t> ratecells = ;
-      const double bhp = ;
-      const std::vector<size_t> bhpcells = ;
+      const auto ctrl = prm_.get_child("control");
+      const std::string ctrl_type(ctrl.get<std::string>("type"));
+
+      const std::vector<size_t> ratecells = (ctrl_type == "rate") ?
+        std::vector<size_t>(well_source_.begin(), well_source_.end()) : std::vector<size_t>();
+      const double rate = ratecells.empty() ? 0.0 : ctrl.get<double>("rate") / ratecells.size();
+
+      const std::vector<size_t> bhpcells = (ctrl_type == "rate") ?
+        std::vector<size_t>() : std::vector<size_t>(well_source_.begin(), well_source_.end());
+      const double bhp = (ctrl_type == "pressure") ? ctrl.get<double>("pressure") : perf_pressure_;
 
       // fracture_pressure_ and fracture_width_ are the two unknowns, which will
       // be computed/updated inside the function
       solve_fully_coupled(fracture_pressure_, fracture_width_, // the two unknowns
-                          pressure_matrix_, fracture_matrix_,
+                          *pressure_matrix_, *fracture_matrix_,
                           htrans_, rate, ratecells, bhp, bhpcells);
-                          
-        OPM_THROW(std::runtime_error,"if: fully implicite not implemented");
     }else{
         OPM_THROW(std::runtime_error,"Unknowns solution method");
     }
