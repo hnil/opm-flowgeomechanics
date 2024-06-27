@@ -13,6 +13,7 @@ namespace // anonymous namespace
   using ResVector = Dune::BlockVector<Dune::FieldVector<double, 1>>;
   using SMatrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>;   // sparse matrix
   using FMatrix = Dune::DynamicMatrix<double>; // full matrix
+
 };  // end anonoymous namespace
 
 
@@ -28,6 +29,8 @@ void solve_fully_coupled(ResVector& pvec, // output: fracture pressure
                          const double rate,
                          const std::vector<size_t> ratecells,
                          const double bhp,
-                         const std::vector<size_t> bhpcells);
+                         const std::vector<size_t> bhpcells,
+                         const int max_nonlin_iter = 100,
+                         const double conv_tol=1e-5);
 
 }; // end namespace Opm
