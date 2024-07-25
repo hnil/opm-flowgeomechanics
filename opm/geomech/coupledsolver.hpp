@@ -27,9 +27,10 @@ void solve_fully_coupled(ResVector& pvec, // output: fracture pressure
                          const FMatrix& amat, // aperture matrix (full)
                          const std::vector<Htrans>& htrans,
                          const double rate,
-                         const std::vector<size_t> ratecells,
+                         const std::vector<size_t>& ratecells,
                          const double bhp,
-                         const std::vector<size_t> bhpcells,
+                         const std::vector<size_t>& bhpcells,
+                         const std::vector<double>& leakoff_fac,  
                          const int max_nonlin_iter = 100,
                          const double conv_tol=1e-5);
 

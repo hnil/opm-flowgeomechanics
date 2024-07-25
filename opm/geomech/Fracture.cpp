@@ -562,9 +562,17 @@ Fracture::solve()
 
       // fracture_pressure_ and fracture_width_ are the two unknowns, which will
       // be computed/updated inside the function
+      if (!pressure_matrix_) initPressureMatrix();
+
+      // -- temporary debug measure
+      std::vector<size_t> rcells_dummy {27, 29};
+      fracture_pressure_ = 0; 
+      fracture_width_ = 1e-2; 
+      auto fmat = *fracture_matrix_;
+      fmat *= -1;
       solve_fully_coupled(fracture_pressure_, fracture_width_, // the two unknowns
-                          *pressure_matrix_, *fracture_matrix_,
-                          htrans_, rate, ratecells, bhp, bhpcells);
+                          *pressure_matrix_, fmat,
+                          htrans_, rate, ratecells, bhp, bhpcells, leakof_);
     }else{
         OPM_THROW(std::runtime_error,"Unknowns solution method");
     }
@@ -794,11 +802,10 @@ Fracture::initPressureMatrix()
     for (auto& element : Dune::elements(grid_->leafGridView())) {
         int eIdx = mapper.index(element);
         auto geom = element.geometry();
-        auto eCenter = geom.center();
         // iterator over all intersections
         for (auto& is : Dune::intersections(grid_->leafGridView(),element)) {
-
             if (!is.boundary()) {
+                auto eCenter = geom.center();
                 int nIdx = mapper.index(is.outside());
                 if (eIdx < nIdx) {
                     // calculate distance between the midpoints

@@ -154,12 +154,12 @@ std::shared_ptr<FullMatrix> computeApertureMatrix(const Grid& G,
 
   const ElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
   for (const auto& element : Dune::elements(grid.leafGridView())) {
-    const int eIdx = mapper.index(element);
+    const int eIdx = mapper.index(element); // element index
     const auto geom = element.geometry();
     for (const auto& is : Dune::intersections(grid.leafGridView(), element)) {
       if (is.boundary())
         continue;
-      const int nIdx = mapper.index(is.outside());
+      const int nIdx = mapper.index(is.outside()); // neighbor element index
       const auto igeom = is.geometry();
       if( eIdx < nIdx) {
         const auto iscenter = igeom.center();
@@ -947,7 +947,7 @@ int main(int varnum, char** vararg)
   const double young = 1e9; // fYoung's modulus
   const double poisson = 0.25; // Poisson's ratio
   //const double leakoff_fac = 1e-13;// this breaks for rate
-  const double leakoff_fac = 1e-13; //1e-9; //1e-6; //1e-13; // a bit heuristic; conceptually rock perm divided by distance  
+  const double leakoff_fac = 1e-7; //1e-9; //1e-6; //1e-13; // a bit heuristic; conceptually rock perm divided by distance  
   const auto eqsys = computeEquationSystem(*grid, young, poisson, leakoff_fac);
   
   
@@ -965,11 +965,12 @@ int main(int varnum, char** vararg)
   //                   std::vector<size_t>(), rate);
 
   // solve fixed rate system
-  //const auto pressure_cells = std::vector<size_t>();
-  //const auto rate_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
+  const auto pressure_cells = std::vector<size_t>();
+  const auto rate_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
 
-  const auto pressure_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
-  const auto rate_cells = std::vector<size_t>();
+  // solve fixed pressure system
+  //const auto pressure_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
+  //const auto rate_cells = std::vector<size_t>();
   
   solveCoupledFull(pressure, aperture, eqsys, pressure_cells, bhp, rate_cells, rate, 1e-5, 1000);
 
