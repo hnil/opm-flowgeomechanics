@@ -64,6 +64,10 @@ class Fracture
 public:
     using Grid = Dune::FoamGrid<2, 3>;
     using Point3D = Dune::FieldVector<double, 3>;
+    using Vector = Dune::BlockVector<Dune::FieldVector<double, 1>>;
+    using Matrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>;
+    using DynamicMatrix = Dune::DynamicMatrix<double>;
+  
     void init(std::string well, int perf, int well_cell, Point3D origo, Point3D normal, Opm::PropertyTree prm);
     void grow(int layers, int method);
     std::string name() const;
@@ -201,6 +205,8 @@ private:
     void initPressureMatrix();
     void setupPressureSolver();
 
+    // one nonlinear iteration of fully coupled system.  Returns 'true' if converged
+    bool fullSystemIteration(const double tol);
 
     void assembleFracture();
     std::vector<double> stressIntensityK1() const;
@@ -234,18 +240,17 @@ private:
     double perf_pressure_;
     //
     Opm::PropertyTree prmpressure_;
-    using Vector = Dune::BlockVector<Dune::FieldVector<double, 1>>;
-    using Matrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>;
     using PressureOperatorType = Dune::MatrixAdapter<Matrix, Vector, Vector>;
     using FlexibleSolverType = Dune::FlexibleSolver<PressureOperatorType>;
     std::unique_ptr<Matrix> pressure_matrix_;
     std::unique_ptr<PressureOperatorType> pressure_operator_;
     std::unique_ptr<FlexibleSolverType> pressure_solver_;
+    std::unique_ptr<Matrix> coupling_matrix_; // will be updated by `fullSystemIteration`
+  
     using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView>;
     // using DenseMatrix = Dune::DynamicMatrix<Dune::FieldMatrix<double,1,1>>;
     // using DenseMatrix = Dune::DynamicMatrix<Dune::FieldMatrix<double,1,1>>;
     // using DynamicMatrix = Dune::DynamicMatrix<Dune::FieldMatrix<double,1,1>>;
-    using DynamicMatrix = Dune::DynamicMatrix<double>;
     std::unique_ptr<DynamicMatrix> fracture_matrix_;
 
     double E_;

@@ -151,6 +151,7 @@ add_library(fracture OBJECT
 	opm/geomech/CutDe.cpp
 	opm/geomech/DiscreteDisplacement.cpp
 	opm/geomech/coupledsolver.cpp
+	opm/geomech/Fracture_fullSystemIteration.cpp
 	examples/FlexibleSolverMech.cpp)
 # target_link_libraries( vem PUBLIC Tracy::TracyClient)
 # Strictly we only depend on the update-version target,

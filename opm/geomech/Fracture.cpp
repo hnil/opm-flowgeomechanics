@@ -14,7 +14,7 @@
 #include <dune/grid/utility/persistentcontainer.hh>
 #include <opm/grid/polyhedralgrid.hh>
 
-#include <opm/geomech/coupledsolver.hpp>
+//#include <opm/geomech/coupledsolver.hpp>
 
 namespace Opm
 {
@@ -549,30 +549,46 @@ Fracture::solve()
             changed = (max_change < tol);
         }
     } else if (method == "if") {
-      const auto ctrl = prm_.get_child("control");
-      const std::string ctrl_type(ctrl.get<std::string>("type"));
-
-      const std::vector<size_t> ratecells = (ctrl_type == "rate") ?
-        std::vector<size_t>(well_source_.begin(), well_source_.end()) : std::vector<size_t>();
-      const double rate = ratecells.empty() ? 0.0 : ctrl.get<double>("rate") / ratecells.size();
-
-      const std::vector<size_t> bhpcells = (ctrl_type == "rate") ?
-        std::vector<size_t>() : std::vector<size_t>(well_source_.begin(), well_source_.end());
-      const double bhp = (ctrl_type == "pressure") ? ctrl.get<double>("pressure") : perf_pressure_;
-
-      // fracture_pressure_ and fracture_width_ are the two unknowns, which will
-      // be computed/updated inside the function
+      // ensure system matrices exist 
       if (!pressure_matrix_) initPressureMatrix();
+      assembleFracture();
 
-      // -- temporary debug measure
-      std::vector<size_t> rcells_dummy {27, 29};
-      fracture_pressure_ = 0; 
-      fracture_width_ = 1e-2; 
-      auto fmat = *fracture_matrix_;
-      fmat *= -1;
-      solve_fully_coupled(fracture_pressure_, fracture_width_, // the two unknowns
-                          *pressure_matrix_, fmat,
-                          htrans_, rate, ratecells, bhp, bhpcells, leakof_);
+      // iterate full nonlinear system until convergence
+      fracture_width_ = 1e-2;   // Ensure not completely closed
+      fracture_pressure_ = 0.0;
+      const int max_iter = 100; // @@ move elsewhere
+      const double tol = 1e-5;
+      int iter = 0;
+
+      while (!fullSystemIteration(tol) && iter++ < max_iter) {};
+
+      // report on result
+      if (iter == max_iter)
+        std::cout << "WARNING: Did not converge in " << max_iter << " iterations." << std::endl;
+      else
+        std::cout << "System converged in " << max_iter << " iterations." << std::endl;
+
+      
+      // const auto ctrl = prm_.get_child("control");
+      // const std::string ctrl_type(ctrl.get<std::string>("type"));
+
+      // const std::vector<size_t> ratecells = (ctrl_type == "rate") ?
+      //   std::vector<size_t>(well_source_.begin(), well_source_.end()) : std::vector<size_t>();
+      // const double rate = ratecells.empty() ? 0.0 : ctrl.get<double>("rate") / ratecells.size();
+
+      // const std::vector<size_t> bhpcells = (ctrl_type == "rate") ?
+      //   std::vector<size_t>() : std::vector<size_t>(well_source_.begin(), well_source_.end());
+      // const double bhp = (ctrl_type == "pressure") ? ctrl.get<double>("pressure") : perf_pressure_;
+
+      // // fracture_pressure_ and fracture_width_ are the two unknowns, which will
+      // // be computed/updated inside the function
+      // if (!pressure_matrix_) initPressureMatrix();
+
+      // auto fmat = *fracture_matrix_;
+      // fmat *= -1;
+      // solve_fully_coupled(fracture_pressure_, fracture_width_, // the two unknowns
+      //                     *pressure_matrix_, fmat,
+      //                     htrans_, rate, ratecells, bhp, bhpcells, leakof_);
     }else{
         OPM_THROW(std::runtime_error,"Unknowns solution method");
     }
@@ -876,7 +892,7 @@ Fracture::assemblePressure()
         double h1 = fracture_width_[i];
         double h2 = fracture_width_[j];
         // harmonic mean of surface flow
-        double value = 12. / (h1 *h1 * h1 * t1) + 12. / (h2*h2*h2 * t2);
+        double value = 12. / (h1 * h1 * t1) + 12. / (h2 * h2 * t2);
         value = 1 / value;
         value *= mobility;
         // matrix.entry(i, j) -= value;
