@@ -491,7 +491,7 @@ void Fracture::setFractureGrid(std::unique_ptr<Fracture::Grid>& gptr)
 
   size_t nc = grid_->leafGridView().size(0);
   fracture_pressure_.resize(nc); fracture_pressure_ = 1e5;
-  reservoir_pressure_.resize(nc, 1.0e5);
+  // reservoir_pressure_.resize(nc, 1.0e5); @@ will be done in 'updateReservoirProperties' below
   updateReservoirProperties();
   this->assembleFracture();
 }
@@ -508,6 +508,7 @@ Fracture::updateReservoirProperties()
     reservoir_perm_.resize(nc, perm);
     reservoir_dist_.resize(nc, dist);
     reservoir_mobility_.resize(nc, 1000);
+    //reservoir_pressure_.resize(nc, 0.0); // @@ 
     reservoir_pressure_.resize(nc, 100.0e5);
     //reservoir_stress_.resize(nc);
     //for (size_t i = 0; i != nc; ++i) reservoir_stress_[i] = Dune::FieldVector<double, 6> {0, 0, 0, 0, 0, 0};
@@ -563,10 +564,10 @@ Fracture::solve()
       while (!fullSystemIteration(tol) && iter++ < max_iter) {};
 
       // report on result
-      if (iter == max_iter)
+      if (iter >= max_iter)
         std::cout << "WARNING: Did not converge in " << max_iter << " iterations." << std::endl;
       else
-        std::cout << "System converged in " << max_iter << " iterations." << std::endl;
+        std::cout << "System converged in " << iter << " iterations." << std::endl;
 
       
       // const auto ctrl = prm_.get_child("control");
@@ -883,7 +884,8 @@ void
 Fracture::assemblePressure()
 {
     auto& matrix = *pressure_matrix_;
-    double mobility=1e4;
+    matrix = 0; // reset matrix, in case it has already been computed before
+    double mobility=1; // @@ 1e4;
     for (auto matel : htrans_) {
         size_t i = std::get<0>(matel);
         size_t j = std::get<1>(matel);

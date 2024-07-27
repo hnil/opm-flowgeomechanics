@@ -62,7 +62,7 @@ int main(int argc, char** argv) {
   prm.put("solver.method", std::string("if"));
 
   prm.put("control.type", std::string("rate"));;
-  prm.put("control.rate", 1e2);
+  prm.put("control.rate", 1e2); // @@1e2);
   prm.put("control.bhp", 200e5);
   prm.put("fractureWI", 0.1);
   //double perm = prm.get<double>("reservoir.perm");

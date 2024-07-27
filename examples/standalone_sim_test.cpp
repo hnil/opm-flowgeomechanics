@@ -705,7 +705,8 @@ bool nonlinearIteration(const FullMatrix& A,
 
   // dump_vector(rhs[_0], "rhsh_after");
   // dump_vector(rhs[_1], "rhsp_after");
-  
+
+  std::cout << "Residual norm is: " << rhs.infinity_norm() << std::endl;
   if (converged_pred(rhs))
     return true; // system converged
 
@@ -936,8 +937,8 @@ int main(int varnum, char** vararg)
     return -1;
 
   // identify well cells
-  //const std::vector<size_t> wellcells {116};
-  const auto wellcells = n_closest<2>(*grid);
+  const std::vector<size_t> wellcells {0, 1, 2, 3, 4, 5};
+  // const auto wellcells = n_closest<2>(*grid); @@
 
   std::cout << "Identified wellcells: ";
   std::copy(wellcells.begin(), wellcells.end(), std::ostream_iterator<size_t>(std::cout, " "));
@@ -957,7 +958,7 @@ int main(int varnum, char** vararg)
   pressure = 0;
   aperture = 1e-2;
   const double bhp = 1e6; // in Pascal
-  const double rate = 0.1; // positive value is _injection_
+  const double rate = 0.1 / wellcells.size(); // positive value is _injection_
 
   // // solve fixed pressure system  
   // solveCoupledSplit(pressure, aperture, eqsys,

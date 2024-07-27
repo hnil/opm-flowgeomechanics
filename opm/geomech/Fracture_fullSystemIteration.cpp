@@ -15,108 +15,194 @@
 
 #include "config.h"
 #include <opm/geomech/Fracture.hpp>
-//#include <opm/models/blackoil/blackoilmodel.hh>
-//#include <opm/models/discretization/common/fvbaseprimaryvariables.hh>
 #include <opm/common/ErrorMacros.hpp>
 
 
 
-// namespace {
-// // ========================== Convenience definitions ==========================
-// using Dune::Indices::_0;
-// using Dune::Indices::_1;
+namespace {
+// ========================== Convenience definitions ==========================
+using Dune::Indices::_0;
+using Dune::Indices::_1;
 
-// using ResVector = Dune::BlockVector<Dune::FieldVector<double, 1>>;
-//   //using ResVector = Opm::Fracture::Vector; @@
-// using VectorHP = Dune::MultiTypeBlockVector<ResVector, ResVector>;
+  //using ResVector = Dune::BlockVector<Dune::FieldVector<double, 1>>;
+using ResVector = Opm::Fracture::Vector; 
+using VectorHP = Dune::MultiTypeBlockVector<ResVector, ResVector>;
 
-//   using Krull = Dune::MultiTypeBlockVector<Dune::BlockVector<double>>;
-//   Dune::MultiTypeBlockVector<Dune::BlockVector<double, std::allocator<double>>> dill;
-//   Krull tull(2);  
+  // using Krull = Dune::MultiTypeBlockVector<Dune::BlockVector<double>>;
+  // Dune::MultiTypeBlockVector<Dune::BlockVector<double, std::allocator<double>>> dill;
+  // Krull tull(2);  
   
-// using SMatrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>; // sparse matrix
-// using FMatrix = Dune::DynamicMatrix<double>;                       // full matrix
+using SMatrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>; // sparse matrix
+using FMatrix = Dune::DynamicMatrix<double>;                       // full matrix
 
-// using SystemMatrix =
-//   Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<FMatrix, SMatrix>,
-//                              Dune::MultiTypeBlockVector<SMatrix, SMatrix>>;
+using SystemMatrix =
+  Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<FMatrix, SMatrix>,
+                             Dune::MultiTypeBlockVector<SMatrix, SMatrix>>;
 
-//   SystemMatrix krull;
-// using Htrans = std::tuple<size_t, size_t, double, double>;
+using Htrans = std::tuple<size_t, size_t, double, double>;
+
+// ============================ Debugging functions ============================
+// ----------------------------------------------------------------------------
+//template<class MatrixType> void dump_matrix(const MatrixType& m, const char* const name)
+void dump_matrix(const FMatrix& m, const char* const name)
+// ----------------------------------------------------------------------------
+{
+  const size_t rows = m.N();
+  const size_t cols = m.M();
+  std::ofstream os(name);
+  for (size_t i = 0; i != rows; ++i)
+    for (size_t j = 0; j != cols; ++j)
+      os << m[i][j] << ((j == cols-1) ? "\n" : " ");
+  os.close();
+}
+
+// ----------------------------------------------------------------------------
+//template<>
+void dump_matrix(const SMatrix& m, const char* const name)
+// ----------------------------------------------------------------------------
+{
+  std::ofstream os(name);
+  for (auto rowIt = m.begin(); rowIt != m.end(); ++ rowIt) {
+    const size_t i = rowIt.index();
+    for (auto colIt = rowIt->begin(); colIt != rowIt->end(); ++colIt) {
+      const size_t j = colIt.index();
+      os << i+1 << " " << j+1 << " " << m[i][j] << "\n";
+    }
+  }
+  os.close();
+}
+
+// ----------------------------------------------------------------------------
+void dump_vector(const ResVector& v, const char* const name)
+// ----------------------------------------------------------------------------
+{
+  std::ofstream os(name);
+  for (size_t i = 0; i != v.size(); ++i)
+    os << v[i] << "\n";
+  os.close();
+}
+
+
   
-// // ============================= Helper functions =============================
+// ============================= Helper functions =============================
 
-// // ----------------------------------------------------------------------------  
-// SMatrix makeIdentity(size_t num, double fac = 1)
-// // ----------------------------------------------------------------------------
-// {
-//   //build a sparse matrix to represent the identity matrix of a given size
-//   SMatrix M;
-//   M.setBuildMode(SMatrix::implicit);
-//   M.setImplicitBuildModeParameters(1, 0.1);
-//   M.setSize(num, num);
-//   for (size_t i = 0; i != num; ++i)
-//     M.entry(i,i) = fac;
-//   M.compress();
-//   return M;
-// }
+// ----------------------------------------------------------------------------  
+SMatrix makeIdentity(size_t num, double fac = 1)
+// ----------------------------------------------------------------------------
+{
+  //build a sparse matrix to represent the identity matrix of a given size
+  SMatrix M;
+  M.setBuildMode(SMatrix::implicit);
+  M.setImplicitBuildModeParameters(1, 0.1);
+  M.setSize(num, num);
+  for (size_t i = 0; i != num; ++i)
+    M.entry(i,i) = fac;
+  M.compress();
+  return M;
+}
 
-// // ----------------------------------------------------------------------------
-// void updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
-//                           const std::unique_ptr<Opm::Fracture::Matrix>& M, 
-//                           const std::vector<Htrans>& htrans,
-//                           const ResVector& pressure,
-//                           const ResVector& aperture)
-// {
-//   // create C if not done already
-//   if (!Cptr) Cptr = std::make_unique<Opm::Fracture::Matrix>(*M); // copy sparsity of M
+// ----------------------------------------------------------------------------
+void updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
+                          const std::unique_ptr<Opm::Fracture::Matrix>& M, 
+                          const std::vector<Htrans>& htrans,
+                          const ResVector& pressure,
+                          const ResVector& aperture)
+{
+  // create C if not done already
+  if (!Cptr) Cptr = std::make_unique<Opm::Fracture::Matrix>(*M); // copy sparsity of M
 
-//   // @@ NB: If the implementation of the pressure matrix changes (i.e. `assemblePressure()`),
-//   //        the code below might need to be updated accordingly as well.
-//   auto& C = *Cptr;
-//   C = 0;
-//   for (const auto& e : htrans) {
-//     const size_t i = std::get<0>(e);
-//     const size_t j = std::get<1>(e); assert(i != j);
+  // @@ NB: If the implementation of the pressure matrix changes (i.e. `assemblePressure()`),
+  //        the code below might need to be updated accordingly as well.
+  auto& C = *Cptr;
+  C = 0;
+  for (const auto& e : htrans) {
+    const size_t i = std::get<0>(e);
+    const size_t j = std::get<1>(e); assert(i != j);
     
-//     const double t1 = std::get<2>(e);
-//     const double t2 = std::get<3>(e);
-//     const double h1 = aperture[i];
-//     const double h2 = aperture[j];
-//     const double p1 = pressure[i];
-//     const double p2 = pressure[j];
+    const double t1 = std::get<2>(e);
+    const double t2 = std::get<3>(e);
+    const double h1 = aperture[i];
+    const double h2 = aperture[j];
+    const double p1 = pressure[i];
+    const double p2 = pressure[j];
     
-//     const double q   = h1 * h1 * h2 * h2 * t1 * t2; // numerator
-//     const double d1q = 2 * h1 * h2 * h2 * t1 * t2;
-//     const double d2q = h1 * h1 * 2 * h2 * t1 * t2;
+    const double q   = h1 * h1 * h2 * h2 * t1 * t2; // numerator
+    const double d1q = 2 * h1 * h2 * h2 * t1 * t2;
+    const double d2q = h1 * h1 * 2 * h2 * t1 * t2;
     
-//     const double r   = 12 * (h1 * h1 * t1 + h2 * h2 * t2); // denominator
-//     const double d1r = 24 * h1 * t1;
-//     const double d2r = 24 * h2 * t2;
+    const double r   = 12 * (h1 * h1 * t1 + h2 * h2 * t2); // denominator
+    const double d1r = 24 * h1 * t1;
+    const double d2r = 24 * h2 * t2;
     
-//     const double dTdh1 = (r == 0) ? 0.0 : (d1q * r - q * d1r) / (r * r);
-//     const double dTdh2 = (r == 0) ? 0.0 : (d2q * r - q * d2r) / (r * r);
+    const double dTdh1 = (r == 0) ? 0.0 : (d1q * r - q * d1r) / (r * r);
+    const double dTdh2 = (r == 0) ? 0.0 : (d2q * r - q * d2r) / (r * r);
     
-//     // diagonal elements
-//     C[i][i] += dTdh1 * (p1-p2);
-//     C[j][j] += dTdh2 * (p2-p1); 
+    // diagonal elements
+    C[i][i] += dTdh1 * (p1-p2);
+    C[j][j] += dTdh2 * (p2-p1); 
     
-//     // off-diagonal elements
-//     C[i][j] += dTdh2 * (p1-p2);
-//     C[j][i] += dTdh1 * (p2-p1); 
+    // off-diagonal elements
+    C[i][j] += dTdh2 * (p1-p2);
+    C[j][i] += dTdh1 * (p2-p1); 
     
-//   }
+  }
   
-// }
+}
 
-// // ----------------------------------------------------------------------------  
-// inline bool convergence_test(const VectorHP& res, const double tol)
-// // ----------------------------------------------------------------------------
-// {
-//   return true; //@@@@ res.infinity_norm() < tol;
-// }
+// ----------------------------------------------------------------------------  
+inline bool convergence_test(const VectorHP& res, const double tol)
+// ----------------------------------------------------------------------------
+{
+  return res.infinity_norm() < tol;
+}
 
-// }; // end anonymous namespace
+// ----------------------------------------------------------------------------
+template<typename Mat> ResVector diagvec(const Mat& M)
+// ----------------------------------------------------------------------------
+{
+  ResVector res(M.M());
+  for (size_t i = 0; i != res.size(); ++i)
+    res[i] = M[i][i];
+  return res;
+}
+
+  
+// ----------------------------------------------------------------------------
+class TailoredPrecondDiag : public Dune::Preconditioner<VectorHP, VectorHP>
+// ----------------------------------------------------------------------------
+{
+public:
+  TailoredPrecondDiag(const SystemMatrix& S) :
+    A_diag_(diagvec(S[_0][_0])), M_diag_(diagvec(S[_1][_1])) {}
+  virtual void apply(VectorHP& v, const VectorHP& d) {
+    for (size_t i = 0; i != A_diag_.size(); ++i) v[_0][i] = d[_0][i]/A_diag_[i];
+    for (size_t i = 0; i != M_diag_.size(); ++i) v[_1][i] = d[_1][i]/M_diag_[i];
+  };
+  virtual void post(VectorHP& v) {};
+  virtual void pre(VectorHP& x, VectorHP& b) {};
+  virtual Dune::SolverCategory::Category category() const {return Dune::SolverCategory::sequential;}
+private:
+  const ResVector A_diag_;
+  const ResVector M_diag_;
+};
+  
+
+// ----------------------------------------------------------------------------
+double estimate_step_fac(const VectorHP& x, const VectorHP& dx)
+// ----------------------------------------------------------------------------  
+{
+  // estimate what might be a safe step size to avoid exiting the convergence radius
+  const double f1 = dx[_0].infinity_norm() / x[_0].infinity_norm();
+  const double f2 = dx[_1].infinity_norm() / x[_1].infinity_norm();
+  const double fmax = std::max(f1, f2);
+  const double threshold = 0.95;
+  const double fac_min = 1e-2; 
+  return (fmax < threshold) ? 1.0 : std::max(threshold / fmax, fac_min);
+}
+
+
+  
+}; // end anonymous namespace
 
 namespace Opm
 {
@@ -125,62 +211,67 @@ namespace Opm
 bool Fracture::fullSystemIteration(const double tol)
 // ----------------------------------------------------------------------------
 {
-  // // update pressure matrix (fracture matrix is constant and does not need updating)
-  // assemblePressure(); 
-  // updateCouplingMatrix(coupling_matrix_, pressure_matrix_,
-  //                      htrans_, fracture_pressure_, fracture_width_);
+  // update pressure matrix with the current values of `fracture_width_` and
+  // `fracture_pressure_` 
+  assemblePressure(); // update pressure matrix
+  setSource();         // update right-hand side of pressure system;
 
-  // const auto& A = *fracture_matrix_;
-  // const auto& M = *pressure_matrix_;
-  // const auto& C = *coupling_matrix_;
-  // const auto I = makeIdentity(A.N());
+  // update the coupling matrix (possibly create it if not already initialized)
+  updateCouplingMatrix(coupling_matrix_, pressure_matrix_,
+                       htrans_, fracture_pressure_, fracture_width_);
 
-  // // system Jacobian (with cross term)  @@ should S be included as a member variable of Fracture?
-  // SystemMatrix S { {A, I},   // mechanics system
-  //                  {C, M} }; // flow system
+  const auto& A = *fracture_matrix_;
+  const auto& M = *pressure_matrix_;
+  const auto& C = *coupling_matrix_;
+  const auto I = makeIdentity(A.N());
 
-  // // system equations
-  // SystemMatrix S0 = S; S0[_1][_0] = 0; // the equations themselves have no cross term
+  // system Jacobian (with cross term)  @@ should S be included as a member variable of Fracture?
+  SystemMatrix S { {A, I},   // mechanics system (since A is negative, we leave I positive here)
+                   {C, M} }; // flow system
 
-  // VectorHP x {fracture_width_, fracture_pressure_};
-  // vectorHP dx = x; dx = 0; // gradient of 'x' (which we aim to compute
+  // system equations
+  SystemMatrix S0 = S; S0[_1][_0] = 0; // the equations themselves have no cross term
 
-  // // initialize right-hand aide
-  // VectorHP rhs {x}; rhs = 0; // same size as x, but initially just with zeros
+  VectorHP x {fracture_width_, fracture_pressure_};
+  VectorHP dx = x; dx = 0; // gradient of 'x' (which we aim to compute below)
 
-  // rhs[_0] = 0; // @@ we currently do not use rhs_width_ here, but include p through the I block
-  // rhs[_1] = rhs_pressure_; // should have been updated in call to `assemblePressure` above
+  // initialize right-hand aide
+  VectorHP rhs {x}; rhs = 0; // same size as x, but initially just with zeros
 
-  // S0.mmv(x, rhs); // rhs = rhs - S0 * x;   (we are working in the tanget plane)
+  rhs[_0] = 0; // @@ we currently do not use rhs_width_ here, but include p through the I block
+  rhs[_1] = rhs_pressure_; // should have been updated in call to `assemblePressure` above
 
-  // // check if system is already at a converged state (in which case we return immediately)
-  // if (convergence_test(rhs, tol))
-  //   return true;
+  S0.mmv(x, rhs); // rhs = rhs - S0 * x;   (we are working in the tanget plane)
+
+  // check if system is already at a converged state (in which case we return immediately)
+  std::cout << "Residual norm is: " << rhs.infinity_norm() << std::endl;
+  if (convergence_test(rhs, tol))
+    return true;
                          
-  // // solve system equations
-  // const Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP> S_linop(S); 
-  // TailoredPrecondDiag precond(S); // cannot be 'const' due to BiCGstabsolver interface
-  // Dune::InverseOperatorResult iores; // cannot be 'const' due to BiCGstabsolver interface
-  // auto psolver = Dune::BiCGSTABSolver<VectorHP>(S_linop,
-  //                                               precond,
-  //                                               1e-20, // desired rhs reduction factor
-  //                                               200, // max number of iterations
-  //                                               1); // verbose
-  // psolver.apply(dx, rhs, iores); // NB: will modify 'rhs'
+  // solve system equations
+  const Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP> S_linop(S); 
+  TailoredPrecondDiag precond(S); // cannot be 'const' due to BiCGstabsolver interface
+  Dune::InverseOperatorResult iores; // cannot be 'const' due to BiCGstabsolver interface
+  auto psolver = Dune::BiCGSTABSolver<VectorHP>(S_linop,
+                                                precond,
+                                                1e-20, // desired rhs reduction factor
+                                                200, // max number of iterations
+                                                1); // verbose
+  psolver.apply(dx, rhs, iores); // NB: will modify 'rhs'
 
-  // std::cout << "x:  " << x[_0].infinity_norm() << " " << x[_1].infinity_norm() << std::endl;
-  // std::cout << "dx: " << dx[_0].infinity_norm() << " " << dx[_1].infinity_norm() << std::endl;
+  std::cout << "x:  " << x[_0].infinity_norm() << " " << x[_1].infinity_norm() << std::endl;
+  std::cout << "dx: " << dx[_0].infinity_norm() << " " << dx[_1].infinity_norm() << std::endl;
   
-  // // the following is a heuristic way to limit stepsize to stay within convergence radius
-  // const double step_fac = estimate_step_fac(x, dx);
-  // std::cout << "fac: " << step_fac << std::endl;
+  // the following is a heuristic way to limit stepsize to stay within convergence radius
+  const double step_fac = estimate_step_fac(x, dx);
+  std::cout << "fac: " << step_fac << std::endl;
 
-  // dx *= step_fac;
-  // x += dx;
+  dx *= step_fac;
+  x += dx;
 
-  // // copying modified variables back to member variables
-  // fracture_width_ = x[_0];
-  // fracture_pressure_ = x[_1];
+  // copying modified variables back to member variables
+  fracture_width_ = x[_0];
+  fracture_pressure_ = x[_1];
   
   return false;
 }
