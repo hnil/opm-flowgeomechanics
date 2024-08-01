@@ -270,7 +270,7 @@ bool finitevolumeadapt (Grid& grid, Mapper& mapper, std::vector<double>& tempera
     {
       grid.mark( 1, element );
       ++marked;
-tracessy      for(auto&& intersection : intersections(leafGridView, element))
+      for(auto&& intersection : intersections(leafGridView, element))
       {
         if( !intersection.neighbor() )
           continue;

@@ -1,4 +1,5 @@
 #include "config.h"
+#include <opm/grid/polyhedralgrid.hh>
 #include <opm/geomech/Fracture.hpp>
 #include <opm/geomech/Math.hpp>
 #include <opm/simulators/linalg/setupPropertyTree.hpp>
@@ -579,7 +580,7 @@ Fracture::setSource()
             int cell = std::get<0>(perfinj);
             double value = std::get<1>(perfinj);
             rhs_pressure_[cell] += value * perf_pressure_;
-        }    
+        }
     } else {
         OPM_THROW(std::runtime_error, "Unknowns control");
     }
@@ -691,7 +692,7 @@ Fracture::solvePressure() {
     this->assemblePressure();
     this->setSource(); // probably include reservoir pressure
     this->writePressureSystem();
-    
+
     try {
         if(!pressure_solver_){
             this->setupPressureSolver();
