@@ -149,6 +149,9 @@ namespace Opm{
                 double fac = (1-2*pratio)/(1-pratio);
                 double pcoeff = poelCoef*fac;
                 mechPotentialForce_[dofIdx] = diffpress*pcoeff;
+                mechPotentialPressForce_[dofIdx] = diffpress*pcoeff;
+                assert(pcoeff<1.0);
+                mechPotentialPressForceFracture_[dofIdx] = diffpress*(1.0-pcoeff);
                 bool thermal_expansion = getPropValue<TypeTag, Properties::EnableEnergy>();
 
                 if(thermal_expansion){
@@ -275,6 +278,7 @@ namespace Opm{
             mechPotentialForce_.resize(numDof);
             mechPotentialTempForce_.resize(numDof);
             mechPotentialPressForce_.resize(numDof);
+            mechPotentialPressForceFracture_.resize(numDof);
             // hopefully temperature and pressure initilized
             celldisplacement_.resize(numDof);
             std::fill(celldisplacement_.begin(),celldisplacement_.end(),0.0);
@@ -332,7 +336,21 @@ namespace Opm{
             return effStress;
          }
 
+         const SymTensor fractureStress(size_t globalIdx) const{
+            // tresagi stress
+            Dune::FieldVector<double,6> effStress = delstress_[globalIdx];
+            effStress += simulator_.problem().initStress(globalIdx);
+            double effPress = this->mechPotentialTempForce(globalIdx);
+            effPress += mechPotentialPressForceFracture_[globalIdx];
+            for(int i=0; i < 3; ++i){
+                effStress[i] += effPress;
+
+            }
+            return effStress;
+         }
+
         // NB used in output should be eliminated
+
         double pressureDiff(unsigned dofIx) const{
             return mechPotentialForce_[dofIx];
         }
@@ -393,6 +411,7 @@ namespace Opm{
         Simulator& simulator_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialForce_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialPressForce_;
+        Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialPressForceFracture_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialTempForce_;
         //Dune::BlockVector<Dune::FieldVector<double,1> > solution_;
         Dune::BlockVector<Dune::FieldVector<double,3> > celldisplacement_;

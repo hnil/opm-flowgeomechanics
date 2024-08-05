@@ -41,11 +41,11 @@ Fracture::init(std::string well,
     layers_ = 0;
     nlinear_ = 0;
     initFracture();
-    // grow(3, 0);
-    // nlinear_ = layers_;
-    // grow(4, 1);
-    // grid_->grow();
-    // grid_->postGrow();
+    grow(1, 0);
+    nlinear_ = layers_;
+    //grow(4, 1);
+    grid_->grow();
+    grid_->postGrow();
 
     size_t nc = grid_->leafGridView().size(0);
     reservoir_cells_ = std::vector<int>(nc, -1);
@@ -256,16 +256,19 @@ void Fracture::writemulti(double time) const
     for(size_t i=0; i < rhs_width_.size(); ++i){
         rhs_width[i] = rhs_width_[i][0];
     }
-    for(size_t i=0; i < rhs_pressure_.size(); ++i){
-         // maybe slow
-        well_index[i] = wellIndMap[reservoir_cells[i]];
-    }
+
     for(size_t i=0; i < fracture_width_.size(); ++i){
         fracture_width[i] = fracture_width_[i][0];
         fracture_pressure[i] = fracture_pressure_[i][0];
         reservoir_cells[i] = reservoir_cells_[i];// only converts to double
         reservoir_traction[i] = ddm::tractionSymTensor(reservoir_stress_[i],cell_normals_[i]);
     }
+
+    for(size_t i=0; i < rhs_pressure_.size(); ++i){
+         // maybe slow
+        well_index[i] = wellIndMap[reservoir_cells_[i]];
+    }
+    
 
     vtkmultiwriter_->beginWrite(time);
 
@@ -552,11 +555,12 @@ Fracture::solve()
 void
 Fracture::setSource()
 {
+    rhs_pressure_ = 0;
     if (rhs_pressure_.size() == 0) {
         size_t nc = grid_->leafGridView().size(0);
         rhs_pressure_.resize(nc);
     }
-    rhs_pressure_ = 0;
+
     for(size_t i=0; i< reservoir_pressure_.size(); ++i){
         rhs_pressure_[i] += leakof_[i]*reservoir_pressure_[i];
     }
@@ -596,8 +600,11 @@ double Fracture::injectionPressure() const{
             bhp += fracture_pressure_[cell] / scale;
         }
         return bhp;
-    } else if (control_type == "bhp") {
-        double bhp = prm_.get<double>("control.bhp");
+    } else if (control_type == "pressure") {
+        double bhp = prm_.get<double>("control.pressure");
+        return bhp;
+    } else if (control_type == "perf_pressure") {
+        double bhp = perf_pressure_;
         return bhp;
     } else {
         OPM_THROW(std::runtime_error, "Unknowns control");
@@ -782,13 +789,13 @@ Fracture::initPressureMatrix()
                     // calculate distance between the midpoints
                     auto nCenter = is.outside().geometry().center();
                     auto isCenter = is.geometry().center();
-                    eCenter -= isCenter;
-                    nCenter -= isCenter;
+                    auto d_inside = eCenter - isCenter;
+                    auto d_outside = nCenter - isCenter;
                     // probably should use projected distenace
                     auto igeom = is.geometry();
                     double area = igeom.volume();
-                    double h1 = area/eCenter.two_norm();
-                    double h2 = area/nCenter.two_norm();
+                    double h1 = area/d_inside.two_norm();
+                    double h2 = area/d_outside.two_norm();
 
                     {
                         Htrans matel(nIdx, eIdx, h1, h2);
@@ -838,6 +845,7 @@ void
 Fracture::assemblePressure()
 {
     auto& matrix = *pressure_matrix_;
+    matrix = 0.0;
     double mobility=1e4;
     for (auto matel : htrans_) {
         size_t i = std::get<0>(matel);
@@ -900,6 +908,7 @@ void  Fracture::assembleFracture(){
         fracture_matrix_ = std::make_unique<DynamicMatrix>();
     }
     fracture_matrix_->resize(nc,nc);
+    *fracture_matrix_ = 0.0;
     ddm::assembleMatrix(*fracture_matrix_,E_, nu_,*grid_);
 }
 

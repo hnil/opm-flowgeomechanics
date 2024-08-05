@@ -8,6 +8,7 @@ class FractureWell
 public:
     using Grid = Dune::FoamGrid<1,3>;
     FractureWell(std::string outputprefix,
+                 std::string casename,
                  std::string name,
                  const std::vector<Point3D>& points,
                  const std::vector<Segment>& segments,
@@ -44,40 +45,14 @@ public:
     void setPerfPressure(int perf_index, double pressure){perf_pressure_[perf_index] = pressure;}
     const Grid& grid() const{return *grid_;}
     std::string name() const{return name_;};
-    void write() const{
-        std::string filename = outputprefix_ + "/" + this->name();
-        vtkwriter_->write(filename.c_str());
-    }
-    void writemulti(double time) const{
-        std::vector<double> reservoir_pressure = reservoir_pressure_;
-        //std::vector<double> reservoir_cells = reservoir_cells_;
-        std::vector<double> perf_pressure = perf_pressure_;
-        vtkmultiwriter_->beginWrite(time);
-        if (perf_pressure.size() > 0) {
-            vtkmultiwriter_->attachScalarElementData(perf_pressure, "PerfPressure");
-        }
-        if (reservoir_pressure.size() > 0) {
-            vtkmultiwriter_->attachScalarElementData(reservoir_pressure, "PerfPressure");
-        }
-        vtkmultiwriter_->endWrite();
-    }
-    void resetWriters(){
-        // nead to be reseat if grid is changed ??
-        vtkwriter_ = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(), Dune::VTK::nonconforming);
-        std::string outputdir = outputprefix_;
-        std::string simName = " ";
-        std::string multiFileName =  "";
-        vtkmultiwriter_ = std::make_unique< Opm::VtkMultiWriter<Grid::LeafGridView, VTKFormat > >(/*async*/ false,
-                                                                                              grid_->leafGridView(),
-                                                                                              outputdir,
-                                                                                              simName,
-                                                                                              multiFileName
-        );
-    }
+    void write() const;
+    void writemulti(double time) const;
+    void resetWriters();
     int reservoirCell(int wellcell) const {return reservoir_cells_[wellcell];};
     Dune::FieldVector<double,6> reservoirStress(int wellcell) const{return reservoir_stress_[wellcell];};
 private:
     std::string outputprefix_;
+    std::string casename_;
     std::string name_;
     std::unique_ptr<Grid> grid_;
     std::unique_ptr<Dune::VTKWriter<Grid::LeafGridView>> vtkwriter_;

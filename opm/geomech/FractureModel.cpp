@@ -7,8 +7,9 @@ namespace Opm{
                            const std::vector<Point3D>& points,
                            const std::vector<Segment>& segments,
                            const std::vector<int>& res_cells){
-        std::string outputdir = prm_.get<std::string>("outputdir");                   
-        wells_.push_back(FractureWell(outputdir,name,points,segments, res_cells));
+        std::string outputdir = prm_.get<std::string>("outputdir");
+        std::string casename = prm_.get<std::string>("casename"); 
+        wells_.push_back(FractureWell(outputdir,casename, name,points,segments, res_cells));
         // add witth no fractures
         well_fractures_.push_back(std::vector<Fracture>());
     }
