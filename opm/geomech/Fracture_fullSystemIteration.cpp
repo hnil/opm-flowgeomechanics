@@ -126,13 +126,13 @@ void updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
     const double p1 = pressure[i];
     const double p2 = pressure[j];
     
-    const double q   = h1 * h1 * h2 * h2 * t1 * t2; // numerator
-    const double d1q = 2 * h1 * h2 * h2 * t1 * t2;
-    const double d2q = h1 * h1 * 2 * h2 * t1 * t2;
+    const double q   = (h1 * h1 * h1) * (h2 * h2 * h2) * (t1 * t2); // numerator
+    const double d1q = 3 * (h1 * h1) * (h2 * h2 * h2) * (t1 * t2);
+    const double d2q = 3 * (h1 * h1 * h1) * (h2 * h2) * (t1 * t2);
     
     const double r   = 12 * (h1 * h1 * t1 + h2 * h2 * t2); // denominator
-    const double d1r = 24 * h1 * t1;
-    const double d2r = 24 * h2 * t2;
+    const double d1r = 36 * (h1 * h1) * t1;
+    const double d2r = 36 * (h2 * h2) * t2;
     
     const double dTdh1 = (r == 0) ? 0.0 : (d1q * r - q * d1r) / (r * r);
     const double dTdh2 = (r == 0) ? 0.0 : (d2q * r - q * d2r) / (r * r);
