@@ -560,7 +560,7 @@ Fracture::solve()
       fracture_width_ = 1e-2;   // Ensure not completely closed
       fracture_pressure_ = 0.0;
       const int max_iter = 100; // @@ move elsewhere
-      const double tol = 1e-5;
+      const double tol = 1e-5; //1e-5; // @@
       int iter = 0;
 
       while (!fullSystemIteration(tol) && iter++ < max_iter) {};
@@ -893,7 +893,7 @@ Fracture::assemblePressure()
 {
     auto& matrix = *pressure_matrix_;
     matrix = 0.0;
-    double mobility=1e4; // @@ 1.0
+    double mobility=1.e3; //1e4; // @@ 1.0
 
     for (auto matel : htrans_) {
         size_t i = std::get<0>(matel);

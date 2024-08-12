@@ -136,24 +136,31 @@ void updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
     
     const double dTdh1 = (r == 0) ? 0.0 : (d1q * r - q * d1r) / (r * r);
     const double dTdh2 = (r == 0) ? 0.0 : (d2q * r - q * d2r) / (r * r);
-    
+
+    const double krull = 3e0; // @@
     // diagonal elements
-    C[i][i] += dTdh1 * (p1-p2);
-    C[j][j] += dTdh2 * (p2-p1); 
+    C[i][i] += dTdh1 * (p1-p2) *krull;
+    C[j][j] += dTdh2 * (p2-p1) *krull;
     
     // off-diagonal elements
-    C[i][j] += dTdh2 * (p1-p2);
-    C[j][i] += dTdh1 * (p2-p1); 
+    C[i][j] += dTdh2 * (p1-p2) *krull;
+    C[j][i] += dTdh1 * (p2-p1) *krull; 
     
   }
-  
 }
 
 // ----------------------------------------------------------------------------  
-inline bool convergence_test(const VectorHP& res, const double tol)
+inline bool convergence_test(const VectorHP& res, const double tol_flow, double tol_mech)
 // ----------------------------------------------------------------------------
 {
-  return res.infinity_norm() < tol;
+  // std::cout << "Residual norm[0] is " << res[_0].infinity_norm()<<std::endl;
+  // std::cout << "Residual norm[1] is " << res[_1].infinity_norm()<<std::endl;
+
+  // std::cout << "tol mech is: " << tol_mech << std::endl;
+  // std::cout << "tol flow is: " << tol_flow << std::endl;
+  
+  return res[_0].infinity_norm() < tol_mech && res[_1].infinity_norm() < tol_flow;
+  //return res.infinity_norm() < tol;
 }
 
 // ----------------------------------------------------------------------------
@@ -241,11 +248,21 @@ bool Fracture::fullSystemIteration(const double tol)
   rhs[_0] = 0; // @@ we currently do not use rhs_width_ here, but include p through the I block
   rhs[_1] = rhs_pressure_; // should have been updated in call to `assemblePressure` above
 
+  VectorHP S0x = dx;
+  S0.mv(x, S0x);
+  std::cout << "yo!" << std::endl;
+  std::cout << "S0x[0]: " << S0x[_0].infinity_norm() << std::endl;
+  std::cout << "S0x[1]: " << S0x[_1].infinity_norm() << std::endl;
+  std::cout << "rhs[0]: " << rhs[_0].infinity_norm() << std::endl;
+  std::cout << "rhs[1]: " << rhs[_1].infinity_norm() << std::endl;
+    
   S0.mmv(x, rhs); // rhs = rhs - S0 * x;   (we are working in the tanget plane)
 
   // check if system is already at a converged state (in which case we return immediately)
+  std::cout << "Residual norm[0] is " << rhs[_0].infinity_norm()<<std::endl;
+  std::cout << "Residual norm[1] is " << rhs[_1].infinity_norm()<<std::endl;
   std::cout << "Residual norm is: " << rhs.infinity_norm() << std::endl;
-  if (convergence_test(rhs, tol))
+  if (convergence_test(rhs, tol, tol));// * std::max(fracture_pressure_.infinity_norm(), 1.0)))
     return true;
                          
   // solve system equations
@@ -254,7 +271,7 @@ bool Fracture::fullSystemIteration(const double tol)
   Dune::InverseOperatorResult iores; // cannot be 'const' due to BiCGstabsolver interface
   auto psolver = Dune::BiCGSTABSolver<VectorHP>(S_linop,
                                                 precond,
-                                                1e-20, // desired rhs reduction factor
+                                                1e-20, //1e-20, // desired rhs reduction factor
                                                 200, // max number of iterations
                                                 1); // verbose
   psolver.apply(dx, rhs, iores); // NB: will modify 'rhs'
