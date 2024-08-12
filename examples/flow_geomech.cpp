@@ -47,137 +47,21 @@
 // the trick is to be able to recalculate the residual from here.
 // unsure where the timestepping is done from suggestedtime??
 // suggestTimeStep is taken from newton solver in problem.limitTimestep
+#include "MechTypeTag.hpp"
 namespace Opm {
 namespace Properties {
 namespace TTag {
-struct EclFlowProblemMech {
-    using InheritsFrom = std::tuple<FlowProblem,VtkGeoMech,FlowGeomechIstlSolverParams>;
+struct EclFlowProblemMechNoTemp {
+    using InheritsFrom = std::tuple<EclFlowProblemMech>;
 };
 }
+        template <class TypeTag>
+        struct EnableEnergy<TypeTag, TTag::EclFlowProblemMechNoTemp> {
+            static constexpr bool value = true;
+        };
 
-// Set the problem class
-template<class TypeTag>
-struct Problem<TypeTag, TTag::EclFlowProblemMech> {
-    using type = EclProblemGeoMech<TypeTag>;
-};
-
-template<class TypeTag>
-struct Grid<TypeTag, TTag::EclFlowProblemMech> {
-    static const int dim = 3;
-    //using type = Dune::ALUGrid<dim, dim, Dune::cube, Dune::nonconforming,Dune::ALUGridMPIComm>;
-    //using type = Dune::PolyhedralGrid<3, 3>;
-    using type = Dune::CpGrid;
-};
-// need to be cpgrid for alugrid
-template<class TypeTag>
-struct EquilGrid<TypeTag, TTag::EclFlowProblemMech> {
-    //using type = Dune::CpGrid;
-    using type = GetPropType<TypeTag, Properties::Grid>;
-};
-// template<class TypeTag>
-// struct EnableExperiments<TypeTag, TTag::EclFlowProblemMech> {
-//     static constexpr bool value = true;
-// }
-
-template<class TypeTag>
-struct Vanguard<TypeTag, TTag::EclFlowProblemMech> {
-    //using type = Opm::AluGridVanguard<TypeTag>;
-    //using type = Opm::PolyhedralGridVanguard<TypeTag>;
-   using type = Opm::CpGridVanguard<TypeTag>;
-};
-// template<class TypeTag>
-// struct Model<TypeTag, TTag::EclFlowProblemMech> {
-//     using type = BlackOilModelFvLocal<TypeTag>;
-// };
-
-
-// template<class TypeTag>
-// struct EclWellModel<TypeTag, TTag::EclFlowProblemMech> {
-//     using type = BlackoilWellModelFvExtra<TypeTag>;
-// };
-
-// template<class TypeTag>
-// struct NewtonMethod<TypeTag, TTag::EclFlowProblemMech> {
-//     using type = EclNewtonMethodLinesearch<TypeTag>;
-// };
-template<class TypeTag>
-struct EnableMech<TypeTag, TTag::EclFlowProblemMech> {
-    static constexpr bool value = true;
-};
-
-template<class TypeTag>
-struct VtkWriteMoleFractions<TypeTag, TTag::EclFlowProblemMech> {
-    static constexpr bool value = false;
-};
-
-template<class TypeTag>
-struct EnableVtkOutput<TypeTag, TTag::EclFlowProblemMech> {
-    static constexpr bool value = true;
-};
-
-template<class TypeTag>
-struct EnableOpmRstFile<TypeTag, TTag::EclFlowProblemMech> {
-    static constexpr bool value = true;
-};
-
-template<class TypeTag>
-struct ThreadsPerProcess<TypeTag, TTag::EclFlowProblemMech> {
-    static constexpr int value = 1;
-};
-
-template<class TypeTag>
-struct ContinueOnConvergenceError<TypeTag, TTag::EclFlowProblemMech> {
-    static constexpr bool value = false;
-};
-
-// the default for the allowed volumetric error for oil per second
-template<class TypeTag>
-struct NewtonTolerance<TypeTag, TTag::EclFlowProblemMech> {
-    using type = GetPropType<TypeTag, Scalar>;
-    static constexpr type value = 1e-2;
-};
-
-// template<class TypeTag>
-// struct IntensiveQuantities<TypeTag, TTag::EclFlowProblemMech> {
-//     //using type = EclBlackOilIntensiveQuantities<TypeTag>;
-//     using type = BlackOilIntensiveQuantitiesSimple<TypeTag>;
-//     //using type = BlackOilIntensiveQuantities<TypeTag>;
-//     //using type = BlackOilIntensiveQuantitiesDryGas<TypeTag>;
-// };
-
-template<class TypeTag>
-struct Linearizer<TypeTag, TTag::EclFlowProblemMech> { using type = TpfaLinearizer<TypeTag>; };
-
-template<class TypeTag>
-struct LocalResidual<TypeTag, TTag::EclFlowProblemMech> { using type = BlackOilLocalResidualTPFA<TypeTag>; };
-
-template<class TypeTag>
-struct EnableDiffusion<TypeTag, TTag::EclFlowProblemMech> { static constexpr bool value = false; };
-
-template<class TypeTag>
-struct EnableDisgasInWater<TypeTag, TTag::EclFlowProblemMech> { static constexpr bool value = false; };
-
-//static constexpr bool has_disgas_in_water = getPropValue<TypeTag, Properties::EnableDisgasInWater>();
-
-template<class TypeTag>
-struct Simulator<TypeTag, TTag::EclFlowProblemMech> { using type = Opm::Simulator<TypeTag>; };
-
-template<class TypeTag>
-struct EnableExperiments<TypeTag, TTag::EclFlowProblemMech> {
-    static constexpr bool value = false;
-};
 
 }
-
-// template<>
-// class SupportsFaceTag<Dune::PolyhedralGrid<3, 3>>
-//     : public std::bool_constant<true>
-// {};
-// template<>
-// class SupportsFaceTag<Dune::ALUGrid<3, 3, Dune::cube, Dune::nonconforming>>
-//     : public std::bool_constant<true>
-// {};
-
 }
 
 
@@ -185,7 +69,7 @@ int main(int argc, char** argv)
 {
 
     OPM_TIMEBLOCK(fullSimulation);
-    using TypeTag = Opm::Properties::TTag::EclFlowProblemMech;
+    using TypeTag = Opm::Properties::TTag::EclFlowProblemMechNoTemp;
     auto mainObject = Opm::Main(argc, argv);
     return mainObject.runStatic<TypeTag>();
     //return Opm::start<TypeTag>(argc, argv);

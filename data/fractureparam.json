@@ -2,7 +2,7 @@
     "hasfractures":true,
     "add_perfs_to_schedule":true,
     "fractureparam":{
-        "addconnections":true,
+        "addconnections":false,
         "config":{
             "type":"perp_well",
             "initial_fracture_width":3e-3,
@@ -27,7 +27,7 @@
         },
         "extended_fractures":false,
         "fractureWI":0.1,
-        "write_pressure_system":true,
+        "write_pressure_system":false,
         "write_fra_system":false,
         "pressuresolver": "umfpack",
         "fracturesolver": "notused"

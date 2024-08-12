@@ -36,11 +36,12 @@ template<class M, class X, class Y> class ReducedMatrixAdapter; // forward decla
 
 using Dune::Indices::_0;
 using Dune::Indices::_1;
+
 using Grid = Dune::FoamGrid<2, 3>;
 using Vector = Dune::BlockVector<double>;
 using VectorHP = Dune::MultiTypeBlockVector<Vector, Vector>;
 using HTrans = std::tuple<size_t,size_t, double, double>;
-  
+
 using FullMatrix = Dune::DynamicMatrix<double>;
 using SparseMatrix = Dune::BCRSMatrix<double>;
 using EquationSystem = std::tuple<std::shared_ptr<FullMatrix>,    // aperture matrix
@@ -54,7 +55,7 @@ using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridVi
 using RMAdapter = ReducedMatrixAdapter<SparseMatrix, Vector, Vector>;
 // ----------------------------------------------------------------------------
 std::unique_ptr<const Grid> readgrid(const char* const name)
-// ----------------------------------------------------------------------------  
+// ----------------------------------------------------------------------------
 {
   std::unique_ptr<const Grid> result;
   try {
@@ -122,19 +123,19 @@ std::array<size_t, N> n_closest(const Grid& grid)
 
   std::sort(distances.begin(), distances.end(),
             [](Elem& a, Elem& b) {return std::get<1>(a) < std::get<1>(b);});
-  
+
   std::array<size_t, N> result;
   for (int i = 0; i != N; ++i)
     result[i] = std::get<0>(distances[i]);
-  
+
   return result;
 }
 
-// ----------------------------------------------------------------------------  
+// ----------------------------------------------------------------------------
 std::shared_ptr<FullMatrix> computeApertureMatrix(const Grid& G,
                                                   const double young,
                                                   const double poisson)
-// ----------------------------------------------------------------------------  
+// ----------------------------------------------------------------------------
 {
   const int nc = G.leafGridView().size(0);
   std::shared_ptr<FullMatrix> result(new FullMatrix(nc, nc));
@@ -177,7 +178,7 @@ std::shared_ptr<FullMatrix> computeApertureMatrix(const Grid& G,
   return {htransvec, leakvec};
 }
 
-  
+
 // ----------------------------------------------------------------------------
 std::tuple<std::shared_ptr<SparseMatrix>, std::vector<HTrans>, std::vector<double>>
 computePressureMatrix(const Grid& G, const double leakoff_fac)
@@ -203,11 +204,11 @@ computePressureMatrix(const Grid& G, const double leakoff_fac)
     mat->entry(ix, ix) = 0.0;
   }
   mat->compress();
-  
-  return std::tuple_cat(std::make_tuple(mat), hvec); 
+
+  return std::tuple_cat(std::make_tuple(mat), hvec);
 }
-  
-  
+
+
 // ----------------------------------------------------------------------------
 EquationSystem computeEquationSystem(const Grid& G,
                                      const double young, const double poisson,
@@ -220,7 +221,7 @@ EquationSystem computeEquationSystem(const Grid& G,
 
 // ----------------------------------------------------------------------------
 template<class M, class X, class Y>
-class ReducedMatrixAdapter : public Dune::LinearOperator<X, Y> 
+class ReducedMatrixAdapter : public Dune::LinearOperator<X, Y>
 // ----------------------------------------------------------------------------
 {
 public:
@@ -246,9 +247,9 @@ public:
     expand(x, tmpX_); // expand x into tmpX_
     expand(y, tmpY_); // expand y into tmpY_
     mat_.usmv(alpha, tmpX_, tmpY_);
-    contract(tmpY_, y); //contract tmpY_ into y    
+    contract(tmpY_, y); //contract tmpY_ into y
   }
-  
+
   virtual Dune::SolverCategory::Category category() const
   {
     return Dune::SolverCategory::sequential;
@@ -289,13 +290,14 @@ private:
                         std::back_inserter(nonelim));
     return nonelim;
   }
-      
+
   const M& mat_;
   const std::vector<size_t> elim_;
   const std::vector<size_t> keep_;
   mutable X tmpX_;
   mutable Y tmpY_;
 };
+
 
 // ----------------------------------------------------------------------------  
 template<typename T> inline T hmean(const T a, const T b) 
@@ -323,7 +325,7 @@ void updateTrans(SparseMatrix& mat, const std::vector<HTrans>& htransvec,
 
     const double trans1 = h1 * h1 * t1 / 12.0;
     const double trans2 = h2 * h2 * t2 / 12.0;
-    
+
     const double T = hmean(trans1, trans2);
 
     // update diagonal
@@ -333,13 +335,13 @@ void updateTrans(SparseMatrix& mat, const std::vector<HTrans>& htransvec,
     // update off-diagonal terms
     mat[i][j] -= T;
     mat[j][i] -= T;
-    
+
   }
 
   // add-in leakage term on diagonal
   for (size_t ix = 0; ix != mat.N(); ++ix)
     mat[ix][ix] += leakvec[ix];
-  
+
 }
 
 // ----------------------------------------------------------------------------
@@ -822,7 +824,7 @@ void solveCoupledSplit(Vector& p, Vector& h, const EquationSystem& eqsys,
   const std::vector<HTrans>& htransvec =  std::get<2>(eqsys);
   const std::vector<double>& leakvec   =  std::get<3>(eqsys);
 
-  const RMAdapter MA_p(M_p, bhpcells); // allows reducing the system without creating new matrices
+  RMAdapter MA_p(M_p, bhpcells); // allows reducing the system without creating new matrices
 
   // define convergence criterion
   auto converged = [&](const Vector& v1, const Vector& v2) {
@@ -838,39 +840,39 @@ void solveCoupledSplit(Vector& p, Vector& h, const EquationSystem& eqsys,
   auto setvals = [](Vector& v, const std::vector<size_t>& ixs, const double val) {
     for (auto i : ixs) v[i] = val;
   };
-    
+
   // initialize pressure
   p = 0;
   if (bhpcells.size() > 0)
     setvals(p, bhpcells, bhp);
   else
     p = 1e6; // we need something to get started without h being 0.
-      
+
   // solve for aperture
   M_h.solve(h, p); // solve for aperture (h) given pressure (p)
 
   Vector htmp(h.N()); htmp = 0;
   Vector rhs_full_rate(p.N()), rhs_full(p.N());
   Vector rhs;
-  Dune::InverseOperatorResult iores;  
+  Dune::InverseOperatorResult iores;
   rhs_full_rate = 0; setvals(rhs_full_rate, ratecells, rate);
 
   int i;
   for (i = 0; i != max_nonlin_iter; ++i) {
-  
+
     // update pressure matrix entries
     updateTrans(M_p, htransvec, h, leakvec);
 
     // determine right-hand side modifications from eliminated degrees of freedom
-    
+
     M_p.mv(p, rhs_full); // only imposed values of p should be nonzero here.
     rhs_full *= -1;
     rhs_full += rhs_full_rate;
-    
+
     MA_p.contract(rhs_full, rhs); // remove entries corresponding to eliminated equations
-  
+
     // solve for pressure
-    Dune::Richardson<Vector, Vector> precond(1); // "no" preconditioner 
+    Dune::Richardson<Vector, Vector> precond(1); // "no" preconditioner
     //Dune::SeqJac<SparseMatrix, Vector, Vector> precond(M_p, 3, 0.3);
     // using Smoother = Dune::SeqSSOR<SparseMatrix, Vector, Vector>;
     // Dune::Amg::SmootherTraits<Smoother>::Arguments smootherArgs;
@@ -889,11 +891,11 @@ void solveCoupledSplit(Vector& p, Vector& h, const EquationSystem& eqsys,
     // AMG precond(MA_p, criterion, smootherArgs);
 
     auto psolver = Dune::CGSolver<Vector>(MA_p,
-                                          precond, 
+                                          precond,
                                           1e-7, // desired residual reduction factor
                                           100, // max number of iterations
                                           1); // verbose
-                                          
+
     Vector p_reduced(MA_p.reducedSize());
     psolver.apply(p_reduced, rhs, iores);
     MA_p.expand(p_reduced, p);
@@ -910,15 +912,14 @@ void solveCoupledSplit(Vector& p, Vector& h, const EquationSystem& eqsys,
     htmp *= 1.0;
     h += htmp;
     
-    
   }
-    
+
   if (i == max_nonlin_iter)
     std::cout << "Warning, did not converge in max number of nonlinear iterations." << std::endl;
   else
     std::cout << "Converged in: " << i << " iterations." << std::endl;
 }
-  
+
 }; // end anonymous namespace
 
 // ============================================================================
@@ -930,7 +931,7 @@ int main(int varnum, char** vararg)
     std::cout << "Grid file name must be given as argument." << std::endl;
     return -1;
   }
-  
+
   // read grid
   const auto grid = readgrid(vararg[1]);
   if (!grid)
@@ -943,14 +944,13 @@ int main(int varnum, char** vararg)
   std::cout << "Identified wellcells: ";
   std::copy(wellcells.begin(), wellcells.end(), std::ostream_iterator<size_t>(std::cout, " "));
   std::cout << std::endl;
-  
+
   // compute equation system
   const double young = 1e9; // fYoung's modulus
   const double poisson = 0.25; // Poisson's ratio
   //const double leakoff_fac = 1e-13;// this breaks for rate
   const double leakoff_fac = 1e-7; //1e-9; //1e-6; //1e-13; // a bit heuristic; conceptually rock perm divided by distance  
   const auto eqsys = computeEquationSystem(*grid, young, poisson, leakoff_fac);
-  
   
   // solve fixed pressure system
   const size_t nc = grid->leafGridView().size(0);
@@ -960,10 +960,16 @@ int main(int varnum, char** vararg)
   const double bhp = 1e6; // in Pascal
   const double rate = 0.1 / wellcells.size(); // positive value is _injection_
 
+
   // // solve fixed pressure system  
   // solveCoupledSplit(pressure, aperture, eqsys,
   //                   std::vector<size_t>(wellcells.begin(), wellcells.end()), bhp,
   //                   std::vector<size_t>(), rate);
+
+  // solve fixed pressure system
+  // solveCoupled(pressure, aperture, eqsys,
+  //              std::vector<size_t>(wellcells.begin(), wellcells.end()), bhp,
+  //              std::vector<size_t>(), rate);
 
   // solve fixed rate system
   const auto pressure_cells = std::vector<size_t>();
@@ -980,5 +986,5 @@ int main(int varnum, char** vararg)
   vtkwriter.addCellData(aperture, "aperture");
   vtkwriter.addCellData(pressure, "pressure");
   vtkwriter.write("output");
-  
+
 }; // end main

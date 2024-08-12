@@ -17,7 +17,7 @@
 
 #include <opm/simulators/flow/FlowProblem.hpp>
 #include <opm/simulators/linalg/PropertyTree.hpp>
-
+#include <opm/simulators/flow/Transmissibility.hpp>
 #include <array>
 #include <functional>
 #include <iostream>
@@ -46,12 +46,13 @@ namespace Opm{
         using Evaluation = GetPropType<TypeTag, Properties::Evaluation>;
         using GridView = GetPropType<TypeTag, Properties::GridView>;
         using Grid = GetPropType<TypeTag, Properties::Grid>;
+        using Vanguard = GetPropType<TypeTag, Properties::Vanguard>;
         enum { waterPhaseIdx = FluidSystem::waterPhaseIdx };
         enum { dim = GridView::dimension };
         enum { dimWorld = GridView::dimensionworld };
         using Toolbox = MathToolbox<Evaluation>;
         using SymTensor = Dune::FieldVector<double,6>;
-        using GeomechModel = EclGeoMechModel<TypeTag>;  
+        using GeomechModel = EclGeoMechModel<TypeTag>;
         EclProblemGeoMech(Simulator& simulator):
             FlowProblem<TypeTag>(simulator),
             geomechModel_(simulator)
@@ -219,7 +220,6 @@ namespace Opm{
                 //this->geomechModel_.setMaterial(elasticparams_);
                 this->geomechModel_.setMaterial(ymodule_,pratio_);
                 this->geomechModel_.updatePotentialForces();
-                
             }
 
         }
@@ -283,7 +283,6 @@ namespace Opm{
             //  const auto now = TimeStampUTC {schedule_.getStartTime()} + std::chrono::duration<double>(sim_time);
             // const auto ts = formatActionDate(now, reportStep);
             std::map<std::string, std::vector<Opm::Connection>> extra_perfs;
-            
             //auto mapper = simulator.vanguard().cartesianMapper();
             auto& wellcontainer = this->wellModel().localNonshutWells();
             for (auto& wellPtr : wellcontainer) {
@@ -322,16 +321,17 @@ namespace Opm{
             // shouldnot be used
             auto updateTrans = [this](const bool global)
             {
+                using TransUpdateQuantities = typename Vanguard::TransmissibilityType::TransUpdateQuantities;
                 this->transmissibilities_
-                    .update(global, [&vg = this->simulator().vanguard()]
+                    .update(global, TransUpdateQuantities::All, [&vg = this->simulator().vanguard()]
                             (const unsigned int i)
                     {
                         return vg.gridIdxToEquilGridIdx(i);
                     });
             };
-            this->actionHandler_.applySimulatorUpdate(reportStep, 
-                                                      sim_update, 
-                                                      commit_wellstate, 
+            this->actionHandler_.applySimulatorUpdate(reportStep,
+                                                      sim_update,
+                                                      commit_wellstate,
                                                       updateTrans);
             if (commit_wellstate) {
                 this->wellModel().commitWGState();

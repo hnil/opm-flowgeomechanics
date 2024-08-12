@@ -82,7 +82,7 @@ namespace Opm{
                     const std::vector<Opm::Well>& wells = schedule.getWells(reportStepIdx);
                     const Opm::EclipseGrid& eclgrid = simulator_.vanguard().eclState().getInputGrid();
                     const auto& grid = simulator_.vanguard().grid();
-                    std::string outputDir = Parameters::get<TypeTag, Properties::OutputDir>();
+                    std::string outputDir = Parameters::get<TypeTag, Parameters::OutputDir>();
                     std::string caseName  = simulator_.vanguard().caseName();
                     param.put("outputdir", outputDir);
                     param.put("casename", caseName);
@@ -94,11 +94,11 @@ namespace Opm{
                                                                      /*default fracture*/false
                         );
                     // not to get the reservoir properties along the well before initialising the well
-                    // most important stress    
+                    // most important stress
                     fracturemodel_->updateReservoirWellProperties<TypeTag,Simulator>(simulator_);
-                    // add fractures along the wells    
+                    // add fractures along the wells
                     fracturemodel_->addFractures();
-                    
+
                     fracturemodel_->updateFractureReservoirCells(grid,eclgrid);
                     fracturemodel_->initReservoirProperties<TypeTag,Simulator>(simulator_);
                     fracturemodel_->updateReservoirProperties<TypeTag,Simulator>(simulator_);
@@ -107,7 +107,7 @@ namespace Opm{
                 // get reservoir properties on fractures
                 // simulator need
                 fracturemodel_->updateReservoirProperties<TypeTag,Simulator>(simulator_);
-                fracturemodel_->solve(); 
+                fracturemodel_->solve();
                 // copy from apply action
             }
         }
@@ -120,7 +120,6 @@ namespace Opm{
                 if(reportStepIdx==1){
                     fracturemodel_->write(reportStepIdx);
                 }
-            
                 double time = simulator_.time();
                 fracturemodel_->writemulti(time);
             }
@@ -149,6 +148,9 @@ namespace Opm{
                 double fac = (1-2*pratio)/(1-pratio);
                 double pcoeff = poelCoef*fac;
                 mechPotentialForce_[dofIdx] = diffpress*pcoeff;
+                mechPotentialPressForce_[dofIdx] = diffpress*pcoeff;
+                assert(pcoeff<1.0);
+                mechPotentialPressForceFracture_[dofIdx] = diffpress*(1.0-pcoeff);
                 bool thermal_expansion = getPropValue<TypeTag, Properties::EnableEnergy>();
 
                 if(thermal_expansion){
@@ -275,6 +277,7 @@ namespace Opm{
             mechPotentialForce_.resize(numDof);
             mechPotentialTempForce_.resize(numDof);
             mechPotentialPressForce_.resize(numDof);
+            mechPotentialPressForceFracture_.resize(numDof);
             // hopefully temperature and pressure initilized
             celldisplacement_.resize(numDof);
             std::fill(celldisplacement_.begin(),celldisplacement_.end(),0.0);
@@ -308,7 +311,6 @@ namespace Opm{
         {
             return mechPotentialPressForce_[globalDofIdx];
         }
-        
         const Dune::FieldVector<double,3>& disp(size_t globalIdx) const{
             return celldisplacement_[globalIdx];
         }
@@ -331,8 +333,22 @@ namespace Opm{
             }
             return effStress;
          }
- 
+
+         const SymTensor fractureStress(size_t globalIdx) const{
+            // tresagi stress
+            Dune::FieldVector<double,6> effStress = delstress_[globalIdx];
+            effStress += simulator_.problem().initStress(globalIdx);
+            double effPress = this->mechPotentialTempForce(globalIdx);
+            effPress += mechPotentialPressForceFracture_[globalIdx];
+            for(int i=0; i < 3; ++i){
+                effStress[i] += effPress;
+
+            }
+            return effStress;
+         }
+
         // NB used in output should be eliminated
+
         double pressureDiff(unsigned dofIx) const{
             return mechPotentialForce_[dofIx];
         }
@@ -393,6 +409,7 @@ namespace Opm{
         Simulator& simulator_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialForce_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialPressForce_;
+        Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialPressForceFracture_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialTempForce_;
         //Dune::BlockVector<Dune::FieldVector<double,1> > solution_;
         Dune::BlockVector<Dune::FieldVector<double,3> > celldisplacement_;

@@ -113,7 +113,7 @@ namespace Opm {
         void allocBuffers()
         {
             if (geoMechOutput_()){
-                //pressDiff_.resize(geoMechModel.numCells);                
+                //pressDiff_.resize(geoMechModel.numCells);
                 this->resizeScalarBuffer_(pressDiff_);
                 this->resizeVectorBuffer_(disp_,ParentType::BufferType::VertexBuffer);
                 this->resizeTensorBuffer_(stress_);
@@ -144,12 +144,11 @@ namespace Opm {
                         }
                     }
                 }
-        }   
-
+        }
 
         void processElement(const ElementContext& elemCtx)
         {
-            if (!Parameters::get<TypeTag, Properties::EnableVtkOutput>())
+            if (!Parameters::get<TypeTag, Parameters::EnableVtkOutput>())
                 return;
 
             const auto& geoMechModel = elemCtx.problem().geoMechModel();
@@ -181,8 +180,8 @@ namespace Opm {
                 auto index = gv.indexSet().index(vertex);
                 disp_[index] = geoMechModel.displacement(index);
             }
-            
-            
+
+
         }
 
         /*!
@@ -196,29 +195,29 @@ namespace Opm {
 
             if (geoMechOutput_()){
                 {
-                    const std::string tmp = "pressureDiff"; 
+                    const std::string tmp = "pressureDiff";
                     this->commitScalarBuffer_(baseWriter,tmp.c_str(),
                                               pressDiff_);
                 }
                 {
-                    const std::string tmp = "disp"; 
+                    const std::string tmp = "disp";
                     this->commitVectorBuffer_(baseWriter,tmp.c_str(),
                                               disp_, ParentType::BufferType::VertexBuffer);
                 }
                 {
-                    const std::string tmp = "stress"; 
+                    const std::string tmp = "stress";
                     this->commitTensorBuffer_(baseWriter,tmp.c_str(),
                                               stress_,
                                               ParentType::BufferType::ElementBuffer);
                 }
                 {
-                    const std::string tmp = "delstress"; 
+                    const std::string tmp = "delstress";
                     this->commitTensorBuffer_(baseWriter,tmp.c_str(),
                                               delstress_,
                                               ParentType::BufferType::ElementBuffer);
                 }
                 {
-                    const std::string tmp = "strain"; 
+                    const std::string tmp = "strain";
                     this->commitTensorBuffer_(baseWriter,tmp.c_str(),
                                               strain_,
                                               ParentType::BufferType::ElementBuffer);
@@ -229,7 +228,7 @@ namespace Opm {
 
 
 
-    
+
 
     private:
         static bool geoMechOutput_(){
@@ -242,7 +241,6 @@ namespace Opm {
         TensorBuffer stress_;
         TensorBuffer delstress_;
         TensorBuffer strain_;
-        
     };
 } // namespace Opm
 

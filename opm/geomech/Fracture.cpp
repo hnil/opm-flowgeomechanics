@@ -1,4 +1,5 @@
 #include "config.h"
+#include <opm/grid/polyhedralgrid.hh>
 #include <opm/geomech/Fracture.hpp>
 #include <opm/geomech/Math.hpp>
 #include <opm/simulators/linalg/setupPropertyTree.hpp>
@@ -12,9 +13,8 @@
 #include<string>
 #include <dune/common/fmatrixev.hh>
 #include <dune/grid/utility/persistentcontainer.hh>
-#include <opm/grid/polyhedralgrid.hh>
 
-//#include <opm/geomech/coupledsolver.hpp>
+#include <opm/grid/polyhedralgrid.hh>
 
 namespace Opm
 {
@@ -43,11 +43,11 @@ Fracture::init(std::string well,
     layers_ = 0;
     nlinear_ = 0;
     initFracture();
-    // grow(3, 0);
-    // nlinear_ = layers_;
-    // grow(4, 1);
-    // grid_->grow();
-    // grid_->postGrow();
+    grow(1, 0);
+    nlinear_ = layers_;
+    //grow(4, 1);
+    grid_->grow();
+    grid_->postGrow();
 
     size_t nc = grid_->leafGridView().size(0);
     reservoir_cells_ = std::vector<int>(nc, -1);
@@ -258,10 +258,7 @@ void Fracture::writemulti(double time) const
     for(size_t i=0; i < rhs_width_.size(); ++i){
         rhs_width[i] = rhs_width_[i][0];
     }
-    for(size_t i=0; i < rhs_pressure_.size(); ++i){
-         // maybe slow
-        well_index[i] = wellIndMap[reservoir_cells[i]];
-    }
+
     for(size_t i=0; i < fracture_width_.size(); ++i){
         fracture_width[i] = fracture_width_[i][0];
         fracture_pressure[i] = fracture_pressure_[i][0];
@@ -269,6 +266,11 @@ void Fracture::writemulti(double time) const
         reservoir_traction[i] = ddm::tractionSymTensor(reservoir_stress_[i],cell_normals_[i]);
     }
 
+    for(size_t i=0; i < rhs_pressure_.size(); ++i){
+         // maybe slow
+        well_index[i] = wellIndMap[reservoir_cells_[i]];
+    }
+    
     vtkmultiwriter_->beginWrite(time);
 
 
@@ -508,7 +510,6 @@ Fracture::updateReservoirProperties()
     reservoir_perm_.resize(nc, perm);
     reservoir_dist_.resize(nc, dist);
     reservoir_mobility_.resize(nc, 1000);
-    //reservoir_pressure_.resize(nc, 0.0); // @@ 
     reservoir_pressure_.resize(nc, 100.0e5);
     //reservoir_stress_.resize(nc);
     //for (size_t i = 0; i != nc; ++i) reservoir_stress_[i] = Dune::FieldVector<double, 6> {0, 0, 0, 0, 0, 0};
@@ -549,6 +550,7 @@ Fracture::solve()
             }
             changed = (max_change < tol);
         }
+
     } else if (method == "if") {
       // ensure system matrices exist 
       if (!pressure_matrix_) initPressureMatrix();
@@ -602,6 +604,7 @@ Fracture::setSource()
         rhs_pressure_.resize(nc);
     }
     rhs_pressure_ = 0;
+
     for(size_t i=0; i< reservoir_pressure_.size(); ++i){
         rhs_pressure_[i] += leakof_[i]*reservoir_pressure_[i];
     }
@@ -625,7 +628,7 @@ Fracture::setSource()
             int cell = std::get<0>(perfinj);
             double value = std::get<1>(perfinj);
             rhs_pressure_[cell] += value * perf_pressure_;
-        }    
+        }
     } else {
         OPM_THROW(std::runtime_error, "Unknowns control");
     }
@@ -641,8 +644,13 @@ double Fracture::injectionPressure() const{
             bhp += fracture_pressure_[cell] / scale;
         }
         return bhp;
-    } else if (control_type == "bhp") {
-        double bhp = prm_.get<double>("control.bhp");
+    // } else if (control_type == "bhp") {
+    //     double bhp = prm_.get<double>("control.bhp");
+    } else if (control_type == "pressure") {
+        double bhp = prm_.get<double>("control.pressure");
+        return bhp;
+    } else if (control_type == "perf_pressure") {
+        double bhp = perf_pressure_;
         return bhp;
     } else {
         OPM_THROW(std::runtime_error, "Unknowns control");
@@ -737,7 +745,6 @@ Fracture::solvePressure() {
     this->assemblePressure();
     this->setSource(); // probably include reservoir pressure
     this->writePressureSystem();
-    
     try {
         if(!pressure_solver_){
             this->setupPressureSolver();
@@ -821,6 +828,7 @@ Fracture::initPressureMatrix()
         auto geom = element.geometry();
         // iterator over all intersections
         for (auto& is : Dune::intersections(grid_->leafGridView(),element)) {
+
             if (!is.boundary()) {
                 auto eCenter = geom.center();
                 int nIdx = mapper.index(is.outside());
@@ -828,13 +836,13 @@ Fracture::initPressureMatrix()
                     // calculate distance between the midpoints
                     auto nCenter = is.outside().geometry().center();
                     auto isCenter = is.geometry().center();
-                    eCenter -= isCenter;
-                    nCenter -= isCenter;
+                    auto d_inside = eCenter - isCenter;
+                    auto d_outside = nCenter - isCenter;
                     // probably should use projected distenace
                     auto igeom = is.geometry();
                     double area = igeom.volume();
-                    double h1 = area/eCenter.two_norm();
-                    double h2 = area/nCenter.two_norm();
+                    double h1 = area/d_inside.two_norm();
+                    double h2 = area/d_outside.two_norm();
 
                     {
                         Htrans matel(nIdx, eIdx, h1, h2);
@@ -884,8 +892,9 @@ void
 Fracture::assemblePressure()
 {
     auto& matrix = *pressure_matrix_;
-    matrix = 0; // reset matrix, in case it has already been computed before
-    double mobility=1; // @@ 1e4;
+    matrix = 0.0;
+    double mobility=1e4; // @@ 1.0
+
     for (auto matel : htrans_) {
         size_t i = std::get<0>(matel);
         size_t j = std::get<1>(matel);
@@ -894,7 +903,8 @@ Fracture::assemblePressure()
         double h1 = fracture_width_[i];
         double h2 = fracture_width_[j];
         // harmonic mean of surface flow
-        double value = 12. / (h1 * h1 * t1) + 12. / (h2 * h2 * t2);
+        double value = 12. / (h1 * h1 * h1 * t1) + 12. / (h2 * h2 * h2 * t2);
+
         value = 1 / value;
         value *= mobility;
         // matrix.entry(i, j) -= value;
@@ -930,7 +940,7 @@ Fracture::assemblePressure()
 
 void  Fracture::assembleFracture(){
     size_t nc = grid_->leafGridView().size(0);
-    //rhs_width_ [h.resize(nc);
+    //rhs_width_.resize(nc);
     rhs_width_ = fracture_pressure_;
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     if (reservoir_stress_.size() > 0) {
@@ -949,6 +959,7 @@ void  Fracture::assembleFracture(){
         fracture_matrix_ = std::make_unique<DynamicMatrix>();
     }
     fracture_matrix_->resize(nc,nc);
+    *fracture_matrix_ = 0.0;
     ddm::assembleMatrix(*fracture_matrix_,E_, nu_,*grid_);
 }
 
