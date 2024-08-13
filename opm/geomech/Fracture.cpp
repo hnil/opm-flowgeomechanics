@@ -571,27 +571,6 @@ Fracture::solve()
       else
         std::cout << "System converged in " << iter << " iterations." << std::endl;
 
-      
-      // const auto ctrl = prm_.get_child("control");
-      // const std::string ctrl_type(ctrl.get<std::string>("type"));
-
-      // const std::vector<size_t> ratecells = (ctrl_type == "rate") ?
-      //   std::vector<size_t>(well_source_.begin(), well_source_.end()) : std::vector<size_t>();
-      // const double rate = ratecells.empty() ? 0.0 : ctrl.get<double>("rate") / ratecells.size();
-
-      // const std::vector<size_t> bhpcells = (ctrl_type == "rate") ?
-      //   std::vector<size_t>() : std::vector<size_t>(well_source_.begin(), well_source_.end());
-      // const double bhp = (ctrl_type == "pressure") ? ctrl.get<double>("pressure") : perf_pressure_;
-
-      // // fracture_pressure_ and fracture_width_ are the two unknowns, which will
-      // // be computed/updated inside the function
-      // if (!pressure_matrix_) initPressureMatrix();
-
-      // auto fmat = *fracture_matrix_;
-      // fmat *= -1;
-      // solve_fully_coupled(fracture_pressure_, fracture_width_, // the two unknowns
-      //                     *pressure_matrix_, fmat,
-      //                     htrans_, rate, ratecells, bhp, bhpcells, leakof_);
     }else{
         OPM_THROW(std::runtime_error,"Unknowns solution method");
     }
@@ -893,7 +872,7 @@ Fracture::assemblePressure()
 {
     auto& matrix = *pressure_matrix_;
     matrix = 0.0;
-    double mobility=1.e3; //1e4; // @@ 1.0
+    double mobility=1e4; //1e4; // @@ 1.0
 
     for (auto matel : htrans_) {
         size_t i = std::get<0>(matel);

@@ -9,7 +9,7 @@
             "axis_scale": 1.75
         },
         "solver":{
-            "method":"only_pressure",
+            "method":"if",
             "max_iter":10,
             "min_width":1e-10,
             "max_width":5e+100,
