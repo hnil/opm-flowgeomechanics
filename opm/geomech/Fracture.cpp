@@ -930,11 +930,19 @@ void  Fracture::assembleFracture(){
       for (auto elem : elements(grid_->leafGridView())) {
         int idx = mapper.index(elem);
         //auto geom = elem.geometry();
-        rhs_width_[idx] -= reservoir_pressure_[idx];//*geom.volume();
+
+        // @@ Odd: we should not subtract reservoir pressure here
+        //rhs_width_[idx] -= reservoir_pressure_[idx];//*geom.volume();
+
         // using compressible stress ??
         rhs_width_[idx] -= ddm::tractionSymTensor(reservoir_stress_[idx],cell_normals_[idx]);
-        // temperature
+        
+        // @@ not entirely accurate, but will avoid unphysical negative normal displacements
+        if (rhs_width_[idx] < 0)
+          rhs_width_[idx] = 0;
       }
+
+      
     }
     // Do we need to ad thermal "forces"
 
