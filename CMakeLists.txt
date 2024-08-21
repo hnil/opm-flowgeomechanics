@@ -151,6 +151,7 @@ add_library(fracture OBJECT
 	opm/geomech/CutDe.cpp
 	opm/geomech/DiscreteDisplacement.cpp
 	opm/geomech/coupledsolver.cpp
+	opm/geomech/param_interior.cpp
 	opm/geomech/Fracture_fullSystemIteration.cpp
 	examples/FlexibleSolverMech.cpp)
 # target_link_libraries( vem PUBLIC Tracy::TracyClient)
@@ -311,6 +312,16 @@ opm_add_test(single_fracture_sim
 	 LIBRARIES opmsimulators opmupscaling fracture
 	 SOURCES
 	 examples/single_fracture_sim.cpp
+	 $<TARGET_OBJECTS:moduleVersionGeoMech>
+)
+
+opm_add_test(paramtest
+	 ONLY_COMPILE
+	 ALWAYS_ENABLE
+	 DEPENDS opmsimulators opmupscaling
+	 LIBRARIES opmsimulators opmupscaling fracture
+	 SOURCES
+	 examples/paramtest.cpp
 	 $<TARGET_OBJECTS:moduleVersionGeoMech>
 )
 
