@@ -567,7 +567,12 @@ Fracture::solve()
 
       while (!fullSystemIteration(tol) && iter++ < max_iter) {};
 
-      // report on result
+      const auto K1 = stressIntensityK1();
+      for (int i = 0; i != K1.size(); ++i)
+        std::cout << K1[i] << " ";
+      std::cout << std::endl;
+      
+        // report on result
       if (iter >= max_iter)
         std::cout << "WARNING: Did not converge in " << max_iter << " iterations." << std::endl;
       else
