@@ -4,7 +4,7 @@ double fractureK1(double dist,double width, double E, double nu){
     double K1;
     double mu = E/(2*(1+nu));//??
     K1 = (mu*sqrt(M_PI)/(2*std::sqrt(dist)*(1.0-nu)))*width;
-    K1 *= 1.834; //factor found numerically
+    K1 /= 1.834; //factor found numerically //@@ Odd: changed this from '*' to '/'
     return K1;
 }
 /*
