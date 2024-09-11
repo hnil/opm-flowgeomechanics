@@ -152,6 +152,7 @@ add_library(fracture OBJECT
 	opm/geomech/DiscreteDisplacement.cpp
 	opm/geomech/coupledsolver.cpp
 	opm/geomech/param_interior.cpp
+	opm/geomech/GridStretcher.cpp
 	opm/geomech/Fracture_fullSystemIteration.cpp
 	examples/FlexibleSolverMech.cpp)
 # target_link_libraries( vem PUBLIC Tracy::TracyClient)
