@@ -1,4 +1,5 @@
 #include "opm/geomech/param_interior.hpp"
+#include "opm/geomech/GridStretcher.hpp"
 
 #include <dune/common/hybridutilities.hh>
 #include <dune/grid/common/grid.hh>
@@ -151,6 +152,8 @@ int meshtest(const string& fname)
 {
   std::unique_ptr grid = Dune::GmshReader<Grid>::read(fname);
 
+  GridStretcher gs(*grid); // @@ just for debug
+  
   // extract coordinates
 
   auto view = grid->leafGridView();

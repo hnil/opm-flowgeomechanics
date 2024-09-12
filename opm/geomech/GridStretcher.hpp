@@ -1,24 +1,30 @@
 #pragma once
 
 #include <dune/foamgrid/foamgrid.hh>
+#include <dune/grid/common/entityseed.hh>
+
 #include <vector>
 #include <algorithm>
 #include <map>
+#include <tuple>
 
 
 namespace Opm {
 
 class GridStretcher
 {
-  using Grid = Dune::FoamGrid<2, 3>;
-  using CellBnodeMap = std::map<size_t, std::pair<size_t, size_t>>;
-  
 public:
+
+  using Grid = Dune::FoamGrid<2, 3>;
+  using CellSeed = Grid::Codim<0>::EntitySeed;
+  //using NodeSeed = Grid::Codim<2>::EntitySeed;
+  using CellBnodeMap = std::map<size_t,std::tuple<CellSeed, size_t, size_t>>;
+  using CoordType = Dune::FieldVector<double, 3>;
   
   GridStretcher(Grid& grid) :
     grid_(grid),
     bnindices_(boundary_node_indices(grid_)),
-    iindices_(complement_of(bnindices_, vertices(grid_.leafGridView()).size())),
+    iindices_(complement_of(bnindices_, grid_.leafGridView().size(2))), 
     iparam_(interior_parametrization(bnindices_, iindices_, nodecoords(grid_))),
     c2bix_(compute_cell_2_bindices_mapping(grid_, bnindices_)),
     bcindices_(keyvec(c2bix_)) {}
@@ -28,8 +34,11 @@ public:
 
   // the vector should have one entry per boundary cell, expressing the distance
   // the boundary of that cell should be expanded outwards
-  void expandBoundaryCells(const std::vector<double>& amounts); // will modify grid_
-  
+  void expandBoundaryCells(const std::vector<double>& amounts); // will modify grid
+
+  // the vector should have two enties per boundary node, specifying its displacement
+  // in the x and y direction
+  void applyBoundaryNodeDisplacements(const std::vector<CoordType>& disp); // will modify grid
   
 private:
 
@@ -58,7 +67,7 @@ private:
   const std::vector<double> iparam_; // parametrization of internal nodes in
                                      // terms of boundary nodes
   const CellBnodeMap c2bix_; // map cell -> bindices
-  
+  const std::vector<size_t> bcindices_; // indices of boundary cells
 };
   
   
