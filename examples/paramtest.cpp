@@ -152,7 +152,6 @@ int meshtest(const string& fname)
 {
   std::unique_ptr grid = Dune::GmshReader<Grid>::read(fname);
 
-  GridStretcher gs(*grid); // @@ just for debug
   
   // extract coordinates
 
@@ -170,7 +169,7 @@ int meshtest(const string& fname)
     coords.push_back(vertex.geometry().corner(0)[0]);
     coords.push_back(vertex.geometry().corner(0)[1]);
   }
-
+  
   // identify boundary nodes
   const auto bindices = boundary_node_indices(*grid);
 
@@ -266,24 +265,32 @@ int meshtest(const string& fname)
   
   vtkwriter->write("deformed");  
 
+  // repeat deformation, this time using a grid stretcher
+  std::unique_ptr grid2 = Dune::GmshReader<Grid>::read(fname);
+
+  GridStretcher gs(*grid2);
+
+  vector<double> coords2;
+  for (const auto& vertex : vertices(grid2->leafGridView())) {
+    coords2.push_back(vertex.geometry().corner(0)[0]);
+    coords2.push_back(vertex.geometry().corner(0)[1]);
+  }
 
   
-  // 
+  std::vector<GridStretcher::CoordType> disp(Nb, {0, 0, 0});
+  for (int i = 0; i != Nb; ++i) {
+    disp[i][0] += 6; // translate in x direction
+    if (i < Nb/3)
+      disp[i][1] = coords2[2*i+1];//bcoords[2*i+1]/2; // stretch in y direction
+  }
   
-  // for (const auto& vertex : vertices(view)) {
-  //   std::cout << "(" << vertex.geometry().corner(0)[0] << ", ";
-  //   std::cout << vertex.geometry().corner(0)[1] << ")" << std::endl;
-  //   std::cout << "Index: " <<  view.indexSet().index(vertex) << endl;
-  //   //std::cout << Dune::intersections(view, vertex).size() << endl;
+  gs.applyBoundaryNodeDisplacements(disp);
+  
+  auto vtkwriter2 =
+    std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid2->leafGridView(),
+                                                          Dune::VTK::nonconforming);
+  vtkwriter2->write("deformed2");
 
-  // }
-  
-  // const auto bindices = boundary_node_indices(*grid);
-  // for (const auto& bi : bindices)
-  //   cout << bi << endl;
-  // //for (auto it = view.begin(); it != view.end(); ++it);
-  
-  // cout << "Unimplemented" << endl;
   return 0;
 } 
 // ============================================================================

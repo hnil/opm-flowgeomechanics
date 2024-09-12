@@ -301,10 +301,11 @@ void GridStretcher::applyBoundaryNodeDisplacements(const vector<CoordType>& disp
     ncoords[iix] = 0; 
   
   // compute new coordinates for internal nodes
+  auto ipiter = iparam_.begin();
   for (size_t iix : iindices_)
     for (size_t bix = 0; bix != bnindices_.size(); ++bix)
       ncoords[iix] +=
-        ncoords[bnindices_[bix]] * iparam_[iix * bnindices_.size() + bnindices_[bix]];
+        ncoords[bnindices_[bix]] * (*ipiter++);//iparam_[iix * bnindices_.size() + bnindices_[bix]];
 
   // write all new node positions to mesh
   size_t vcount = 0;
