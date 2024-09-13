@@ -118,6 +118,7 @@ const vector<CoordType> compute_bnode_displacements(const vector<double>& amount
   vector<vector<tuple<double, CoordType>>> disp(N); // node displacements
   
   const auto nodecoords = node_coordinates(grid); // @@
+  auto aiter = amounts.begin();
   for (size_t bc = 0; bc != amounts.size(); ++bc) {
     // compute directional vector
     const auto entry = c2bix.find(bcindices[bc])->second;
@@ -125,8 +126,8 @@ const vector<CoordType> compute_bnode_displacements(const vector<double>& amount
     const auto ccenter = elem.geometry().center();
     const auto ecenter = (nodecoords[get<1>(entry)] + nodecoords[get<2>(entry)]) / 2;
     const auto nvec = normalize(ecenter - ccenter);
-    disp[get<1>(entry)].push_back({amounts[bc], nvec});
-    disp[get<2>(entry)].push_back({amounts[bc], nvec});
+    disp[get<1>(entry)].push_back({*aiter, nvec});
+    disp[get<2>(entry)].push_back({*aiter++, nvec});
   }
 
   // check that every boundary node has got two displacements associated with it
@@ -136,7 +137,6 @@ const vector<CoordType> compute_bnode_displacements(const vector<double>& amount
     
   // combine displacement vectors
   vector<CoordType> result(N);
-  return result;
   for (size_t i = 0; i != N; ++i) {
     const auto& entry = disp[i];
     const double a1 = get<0>(entry[0]);
@@ -146,7 +146,10 @@ const vector<CoordType> compute_bnode_displacements(const vector<double>& amount
     
     const auto dir = normalize(v1 + v2);
 
-    result[i] = dir * max(dir.dot(v1) * a1, dir.dot(v2) * a2);
+    //result[i] = dir * max(dir.dot(v1) * a1, dir.dot(v2) * a2);
+    result[i] = dir *
+      ((fabs(dir.dot(v1) * a1) > fabs(dir.dot(v2) * a2)) ? dir.dot(v1) * a1 :
+                                                           dir.dot(v2) * a2);
   }
   return result;
 }

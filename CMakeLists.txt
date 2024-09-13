@@ -326,6 +326,16 @@ opm_add_test(paramtest
 	 $<TARGET_OBJECTS:moduleVersionGeoMech>
 )
 
+opm_add_test(test_gridstretch
+	 ONLY_COMPILE
+	 ALWAYS_ENABLE
+	 DEPENDS opmsimulators opmupscaling
+	 LIBRARIES opmsimulators opmupscaling fracture
+	 SOURCES
+	 examples/test_gridstretch.cpp
+	 $<TARGET_OBJECTS:moduleVersionGeoMech>
+)
+
 # opm_add_test(make_test_disk
 #    ONLY_COMPILE
 #		 ALWAYS_ENABLE
