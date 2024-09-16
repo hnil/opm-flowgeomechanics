@@ -1,4 +1,5 @@
 #include "config.h"
+#include "opm/geomech/GridStretcher.hpp"
 #include <opm/grid/polyhedralgrid.hh>
 #include <opm/geomech/Fracture.hpp>
 #include <opm/geomech/Math.hpp>
@@ -15,6 +16,21 @@
 #include <dune/grid/utility/persistentcontainer.hh>
 
 #include <opm/grid/polyhedralgrid.hh>
+
+namespace {
+
+inline double compute_target_expansion(const double K1_target,
+                                       const double aperture,
+                                       const double E, // young 
+                                       const double nu) // poisson
+{
+  const double mu = E / (2 * (1+nu)); // shear modulus
+  const double fac = mu * std::sqrt(M_PI) /
+                     (2 * (1-nu) * 1.834);
+  return pow(fac * aperture / K1_target, 2);
+};
+  
+}; // end anonymous namespace
 
 namespace Opm
 {
@@ -55,23 +71,39 @@ Fracture::init(std::string well,
     this->initFractureWidth();
     //fracture_width_.resize(nc); fracture_width_ = 1e-3;
     //
+
+    updateReservoirProperties(); // default, in case not called using Simulator
+    updateGridDiscretizations(); // assemble mechanics and pressure matrices
+    setGridStretcher();
+
     this->resetWriters();
+    
+    
 }
 
+
+void Fracture::setGridStretcher()
+{
+  grid_stretcher_ = std::unique_ptr<GridStretcher>(new GridStretcher(*grid_));
+}
+
+  
 void Fracture::resetWriters(){
     // nead to be reseat if grid is changed ??
-    vtkwriter_ = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(), Dune::VTK::nonconforming);
+    vtkwriter_ =
+      std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(),
+                                                            Dune::VTK::nonconforming);
 
     std::string outputdir = prm_.get<std::string>("outputdir");
     std::string simName = prm_.get<std::string>("casename") + this->name();
     std::string multiFileName =  "";
-    vtkmultiwriter_ = std::make_unique< Opm::VtkMultiWriter<Grid::LeafGridView, VTKFormat > >(/*async*/ false,
-                                                                                              grid_->leafGridView(),
-                                                                                              outputdir,
-                                                                                              simName,
-                                                                                              multiFileName
-        );
-
+    vtkmultiwriter_ =
+      std::make_unique< Opm::VtkMultiWriter<Grid::LeafGridView, VTKFormat > >(
+          /*async*/ false,
+          grid_->leafGridView(),
+          outputdir,
+          simName,
+          multiFileName );
 }
 
 void Fracture::setupPressureSolver(){
@@ -493,9 +525,13 @@ void Fracture::setFractureGrid(std::unique_ptr<Fracture::Grid>& gptr)
 
   size_t nc = grid_->leafGridView().size(0);
   fracture_pressure_.resize(nc); fracture_pressure_ = 1e5;
-  // reservoir_pressure_.resize(nc, 1.0e5); @@ will be done in 'updateReservoirProperties' below
+  reservoir_cells_ = std::vector<int>(nc, -1);
+  
   updateReservoirProperties();
-  this->assembleFracture();
+  updateGridDiscretizations(); // assemble mechanics and pressure matrices
+  setGridStretcher();
+
+  this->resetWriters();
 }
 
 void
@@ -555,28 +591,51 @@ Fracture::solve()
 
     } else if (method == "if") {
       // ensure system matrices exist 
-      if (!pressure_matrix_) initPressureMatrix();
-      assembleFracture();
+      // if (!pressure_matrix_) initPressureMatrix(); @@ should have been taken care of
+      //assembleFracture(); @@ should already have been taken care of
 
       // iterate full nonlinear system until convergence
       fracture_width_ = 1e-2;   // Ensure not completely closed
       fracture_pressure_ = 0.0;
       const int max_iter = 100; // @@ move elsewhere
       const double tol = 1e-5; //1e-5; // @@
-      int iter = 0;
+      const double K1max = 3.7e8; // @@ for testing.  Should be added as a proper data member
+      const std::vector<size_t> boundary_cells = grid_stretcher_->boundaryCellIndices();
+      std::vector<double> expand(boundary_cells.size(), 0);
+      
+      while (true) {
+        int iter = 0;
 
-      while (!fullSystemIteration(tol) && iter++ < max_iter) {};
+        // solve flow-mechanical system
+        while (!fullSystemIteration(tol) && iter++ < max_iter) {};
 
-      const auto K1 = stressIntensityK1();
-      for (int i = 0; i != K1.size(); ++i)
-        std::cout << K1[i] << " ";
-      std::cout << std::endl;
+        // report on convergence
+        if (iter >= max_iter)
+          std::cout << "WARNING: Did not converge in " << max_iter << " iterations." << std::endl;
+        else
+          std::cout << "System converged in " << iter << " iterations." << std::endl;
+        
+        // resolve crack propagation
+        std::fill(expand.begin(), expand.end(), 0);
+
+        const auto K1 = stressIntensityK1();
+        const auto dist = grid_stretcher_->centroidEdgeDist();
+        for (int i = 0; i != expand.size(); ++i)
+          expand[i] = max(
+            compute_target_expansion(K1max, fracture_width_[boundary_cells[i]], E_, nu_) - dist[i],
+            0);
+
+        if (*std::max_element(expand.begin(), expand.end()) == 0)
+          break;
+
+        // it is necessary to propagate crack
+        grid_stretcher_->expandBoundaryCells(expand);
+
+        // grid has changed its geometry, so we have to recompute discretizations
+        updateGridDiscretizations(); 
+      }
       
         // report on result
-      if (iter >= max_iter)
-        std::cout << "WARNING: Did not converge in " << max_iter << " iterations." << std::endl;
-      else
-        std::cout << "System converged in " << iter << " iterations." << std::endl;
 
     }else{
         OPM_THROW(std::runtime_error,"Unknowns solution method");
@@ -727,9 +786,10 @@ Fracture::solvePressure() {
     size_t nc = grid_->leafGridView().size(0);
     fracture_pressure_.resize(nc);
     fracture_pressure_ = 1e5;
-    if(!pressure_matrix_){
-        this->initPressureMatrix();
-    }
+    assert(pressure_matrix_);// should always be constructed at this pointn
+    // if(!pressure_matrix_){
+    //     this->initPressureMatrix();
+    // }
     this->assemblePressure();
     this->setSource(); // probably include reservoir pressure
     this->writePressureSystem();
@@ -750,7 +810,7 @@ Fracture::solvePressure() {
 // fracture_width_
 void Fracture::solveFractureWidth()
 {
-    this->assembleFracture();
+    //this->assembleFracture(); @@ should already have been taken care of
     fracture_matrix_->solve(fracture_width_,rhs_width_);
     double max_width = prm_.get<double>("solver.max_width");
     double min_width = prm_.get<double>("solver.min_width");

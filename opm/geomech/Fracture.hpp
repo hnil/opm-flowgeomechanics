@@ -50,6 +50,9 @@
 // #include <opm/models/utils/parametersystem.hh>
 #include <opm/material/fluidsystems/BlackOilFluidSystem.hpp>
 #include <dune/istl/matrixmarket.hh>
+
+#include <opm/geomech/GridStretcher.hpp>
+
 namespace Opm
 {
 struct WellInfo {
@@ -184,6 +187,12 @@ private:
     void initFracture();
     Point3D surfaceMap(double x, double y);
 
+    // should be called every time a grid is updated/changed
+    void updateGridDiscretizations() {assembleFracture(); initPressureMatrix();}
+    void setGridStretcher();
+
+    std::unique_ptr<GridStretcher> grid_stretcher_;
+  
     std::unique_ptr<Grid> grid_;
     Point3D origo_;
     std::array<Point3D, 3> axis_;
@@ -196,8 +205,6 @@ private:
     // should probably not be needed
     int layers_;
     int nlinear_;
-
-
 
     // help function for solving
     void assemblePressure();

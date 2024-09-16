@@ -316,5 +316,25 @@ void GridStretcher::applyBoundaryNodeDisplacements(const vector<CoordType>& disp
     grid_.setPosition(vertex, ncoords[vcount++]);
 }
 
+
+// ----------------------------------------------------------------------------
+std::vector<double> GridStretcher::centroidEdgeDist() const
+// ----------------------------------------------------------------------------  
+{
+  const size_t N = size(bcindices_);
+  vector<double> result(N);
+  const auto nodecoords = node_coordinates(grid_);
   
+  for (size_t bc = 0; bc != N; ++bc) { 
+    const auto entry = c2bix_.find(bcindices_[bc])->second;
+    const auto elem = grid_.entity(get<0>(entry));
+    const auto ccenter = elem.geometry().center();
+    const auto ecenter = (nodecoords[get<1>(entry)] + nodecoords[get<2>(entry)]) / 2;
+    result[bc] = (ccenter - ecenter).two_norm();
+  }
+  return result;
+}
+
+
 }; // end namespace Opm
+

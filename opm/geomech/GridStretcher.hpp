@@ -39,6 +39,9 @@ public:
   // the vector should have two enties per boundary node, specifying its displacement
   // in the x and y direction
   void applyBoundaryNodeDisplacements(const std::vector<CoordType>& disp); // will modify grid
+
+  std::vector<double> centroidEdgeDist() const;
+
   
 private:
 
