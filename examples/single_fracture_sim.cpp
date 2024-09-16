@@ -71,11 +71,11 @@ int main(int argc, char** argv) {
   frac.init("testwell", perf, wellcell, origo, normal, prm);
   frac.setFractureGrid(grid);
 
-    frac.solve();
+  frac.solve();
   
   // frac.updateReservoirProperties();
 
-  frac.solve();
+  frac.write();
 
 
 
@@ -83,9 +83,4 @@ int main(int argc, char** argv) {
   // frac.printMechMatrix();
   
   return 0;
-}
-
-
-
-
-  
+} 
