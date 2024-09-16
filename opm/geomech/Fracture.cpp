@@ -19,7 +19,7 @@
 
 namespace {
 
-inline double compute_target_expansion(const double K1_target,
+ double compute_target_expansion(const double K1_target,
                                        const double aperture,
                                        const double E, // young 
                                        const double nu) // poisson
@@ -27,7 +27,7 @@ inline double compute_target_expansion(const double K1_target,
   const double mu = E / (2 * (1+nu)); // shear modulus
   const double fac = mu * std::sqrt(M_PI) /
                      (2 * (1-nu) * 1.834);
-  return pow(fac * aperture / K1_target, 2);
+  return pow(fac * aperture / K1_target, 2); 
 };
   
 }; // end anonymous namespace
@@ -611,9 +611,11 @@ Fracture::solve()
 
         // report on convergence
         if (iter >= max_iter)
-          std::cout << "WARNING: Did not converge in " << max_iter << " iterations." << std::endl;
+          std::cout << "WARNING: Did not converge in " << max_iter
+                    << " iterations." << std::endl;
         else
-          std::cout << "System converged in " << iter << " iterations." << std::endl;
+          std::cout << "System converged in " << iter
+                    << " iterations." << std::endl;
         
         // resolve crack propagation
         std::fill(expand.begin(), expand.end(), 0);
@@ -621,9 +623,13 @@ Fracture::solve()
         const auto K1 = stressIntensityK1();
         const auto dist = grid_stretcher_->centroidEdgeDist();
         for (int i = 0; i != expand.size(); ++i)
+          // we multiply by 4 since the centroid will move as well > 2/3 of the
+          // way during expansion
           expand[i] = max(
-            compute_target_expansion(K1max, fracture_width_[boundary_cells[i]], E_, nu_) - dist[i],
-            0);
+              6 * (compute_target_expansion(K1max,
+                                            fracture_width_[boundary_cells[i]],
+                                            E_, nu_) - dist[i]),
+              0);
 
         if (*std::max_element(expand.begin(), expand.end()) == 0)
           break;
