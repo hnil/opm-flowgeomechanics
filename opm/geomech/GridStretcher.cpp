@@ -17,16 +17,6 @@ namespace // anonymous
   using CoordType = Opm::GridStretcher::CoordType;
 
 // ----------------------------------------------------------------------------
-vector<CoordType> node_coordinates(const Opm::GridStretcher::Grid& g)
-// ----------------------------------------------------------------------------
-{
-  vector<CoordType> result;
-  for (auto v : vertices(g.leafGridView()))
-    result.push_back(v.geometry().corner(0));
-  return result;
-}
-
-// ----------------------------------------------------------------------------
 template <typename T>
 vector<T> extract_elements(const vector<T>& vec, const vector<size_t>& ixs)
 // ----------------------------------------------------------------------------
@@ -61,17 +51,17 @@ vector<double> pick_nodes(const vector<size_t>& ixs, const vector<double>& coord
 }
   
 // ----------------------------------------------------------------------------
-vector<double> pickCoords2D(const vector<double>& coords3D)
+vector<double> pickCoords2D(const vector<CoordType>& coords3D)
 // ----------------------------------------------------------------------------
 {
   // pick the two coordinate axes with the largest spread
-  const size_t N = coords3D.size() / 3; // total number of nodes (interior and boundary)
+  const size_t N = coords3D.size(); // total number of nodes (interior and boundary)
 
-  array<double, 3> low {coords3D[0], coords3D[1], coords3D[2]}, high {low};
+  array<double, 3> low {coords3D[0][0], coords3D[0][1], coords3D[0][2]}, high {low};
   for (size_t i = 0; i != N; ++i) {
     for (int d = 0; d != 3; ++d) {
-      low[d] = std::min(low[d], coords3D[3*i + d]);
-      high[d] = std::max(high[d], coords3D[3*i + d]);
+      low[d] = std::min(low[d], coords3D[i][d]);
+      high[d] = std::max(high[d], coords3D[i][d]);
     }
   }
   const array<double, 3> span {high[0] - low[0], high[1] - low[1], high[2] - low[2] };
@@ -81,8 +71,8 @@ vector<double> pickCoords2D(const vector<double>& coords3D)
 
   vector<double> coords2D;
   for (size_t i = 0; i != N; ++i) {
-    coords2D.push_back(coords3D[i*3 + ix1]);
-    coords2D.push_back(coords3D[i*3 + ix2]);
+    coords2D.push_back(coords3D[i][ix1]);
+    coords2D.push_back(coords3D[i][ix2]);
   }
   return coords2D;
 }
@@ -109,7 +99,8 @@ CoordType normalize(const CoordType& vec) { return vec / vec.two_norm(); }
 const vector<CoordType> compute_bnode_displacements(const vector<double>& amounts,
                                                     const vector<size_t>& bcindices,
                                                     const Opm::GridStretcher::CellBnodeMap& c2bix,
-                                                    const Opm::GridStretcher::Grid& grid)
+                                                    const Opm::GridStretcher::Grid& grid,
+                                                    const vector<CoordType>& nodecoords)
 // ----------------------------------------------------------------------------
 {
   const size_t N = size(bcindices);
@@ -117,7 +108,6 @@ const vector<CoordType> compute_bnode_displacements(const vector<double>& amount
   assert(amounts.size() == N); // one scalar per boundary cell
   vector<vector<tuple<double, CoordType>>> disp(N); // node displacements
   
-  const auto nodecoords = node_coordinates(grid); // @@
   auto aiter = amounts.begin();
   for (size_t bc = 0; bc != amounts.size(); ++bc) {
     // compute directional vector
@@ -216,24 +206,28 @@ vector<size_t> GridStretcher::complement_of(const vector<size_t>& vec,
   return result;
 }
 
-// ----------------------------------------------------------------------------  
-vector<double> GridStretcher::nodecoords(const Grid& grid)
-// ----------------------------------------------------------------------------  
+// ----------------------------------------------------------------------------
+vector<CoordType> GridStretcher::node_coordinates(const Grid& g)
+// ----------------------------------------------------------------------------
 {
-  // store coordinates as [x1, y1, z1, ...., xn, yn, zn, .... xlast, ylast, zlast]
-  vector<double> coords;
-  for (const auto& vertex : vertices(grid.leafGridView()))
-    for (int dim = 0; dim != 3; ++dim)
-      coords.push_back(vertex.geometry().corner(0)[dim]);
+  vector<CoordType> result;
+  for (const auto& v : vertices(g.leafGridView()))
+    result.push_back(v.geometry().corner(0));
+  return result;
+}
 
-  return coords;
+// ----------------------------------------------------------------------------
+  vector<CoordType> GridStretcher::boundary_normals(const Grid& grid,
+                                                    const std::vector<size_t> bcindices)
+// ----------------------------------------------------------------------------
+{
+  // @@ unimplemented
 }
   
-
 // ----------------------------------------------------------------------------  
 vector<double> GridStretcher::interior_parametrization(const vector<size_t>& bindices,
                                                               const vector<size_t>& iindices,
-                                                              const vector<double>& coords3D)
+                                                              const vector<CoordType>& coords3D)
 // ----------------------------------------------------------------------------  
 {
   // pick two out of the three coordinate axes to use for computing the 2D parametrization
@@ -284,7 +278,8 @@ void GridStretcher::expandBoundaryCells(const vector<double>& amounts)
   applyBoundaryNodeDisplacements(compute_bnode_displacements(amounts,
                                                              bcindices_,
                                                              c2bix_,
-                                                             grid_));
+                                                             grid_,
+                                                             nodecoords_));
 }
 
 // ----------------------------------------------------------------------------
@@ -314,6 +309,10 @@ void GridStretcher::applyBoundaryNodeDisplacements(const vector<CoordType>& disp
   size_t vcount = 0;
   for (auto& vertex : vertices(grid_.leafGridView()))
     grid_.setPosition(vertex, ncoords[vcount++]);
+
+  // recompute stored geometric information
+  nodecoords_ = node_coordinates(grid_);
+  bnode_normals_ = boundary_normals(grid_, bcindices_);
 }
 
 
@@ -323,13 +322,12 @@ std::vector<double> GridStretcher::centroidEdgeDist() const
 {
   const size_t N = size(bcindices_);
   vector<double> result(N);
-  const auto nodecoords = node_coordinates(grid_);
   
   for (size_t bc = 0; bc != N; ++bc) { 
     const auto entry = c2bix_.find(bcindices_[bc])->second;
     const auto elem = grid_.entity(get<0>(entry));
     const auto ccenter = elem.geometry().center();
-    const auto ecenter = (nodecoords[get<1>(entry)] + nodecoords[get<2>(entry)]) / 2;
+    const auto ecenter = (nodecoords_[get<1>(entry)] + nodecoords_[get<2>(entry)]) / 2;
     result[bc] = (ccenter - ecenter).two_norm();
   }
   return result;

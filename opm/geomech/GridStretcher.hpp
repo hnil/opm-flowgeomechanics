@@ -23,11 +23,13 @@ public:
   
   GridStretcher(Grid& grid) :
     grid_(grid),
+    nodecoords_(node_coordinates(grid_)), 
     bnindices_(boundary_node_indices(grid_)),
     iindices_(complement_of(bnindices_, grid_.leafGridView().size(2))), 
-    iparam_(interior_parametrization(bnindices_, iindices_, nodecoords(grid_))),
+    iparam_(interior_parametrization(bnindices_, iindices_, nodecoords_)),
     c2bix_(compute_cell_2_bindices_mapping(grid_, bnindices_)),
-    bcindices_(keyvec(c2bix_)) {}
+    bcindices_(keyvec(c2bix_)),
+    bnode_normals_(boundary_normals(grid_, bcindices_)) {}
 
   const std::vector<size_t>& boundaryNodeIndices() const { return bnindices_; }
   const std::vector<size_t>& boundaryCellIndices() const { return bcindices_; }
@@ -42,17 +44,21 @@ public:
 
   std::vector<double> centroidEdgeDist() const;
 
+  const std::vector<CoordType>& nodecoords() const {return nodecoords_;}
+  const std::vector<CoordType>& bnodenormals() const {return bnode_normals_;}
   
 private:
 
   // ----------------------- functions used by constructor -----------------------
 
+  static std::vector<CoordType> boundary_normals(const Grid& grid,
+                                                 const std::vector<size_t> bcindices);
+  static std::vector<CoordType> node_coordinates(const Grid& grid);
   static std::vector<size_t> boundary_node_indices(const Grid& grid);
   static std::vector<size_t> complement_of(const std::vector<size_t>& vec, const size_t N);
-  static std::vector<double> nodecoords(const Grid& grid);
   static std::vector<double> interior_parametrization(const std::vector<size_t>& bix,
                                                       const std::vector<size_t>& iix,
-                                                      const std::vector<double>& coords);
+                                                      const std::vector<CoordType>& coords);
   static CellBnodeMap compute_cell_2_bindices_mapping(const Grid& grid,
                                                       const std::vector<size_t>& bindices);
   template<typename Key, typename Value>
@@ -65,12 +71,17 @@ private:
   // ------------------------------- internal data -------------------------------
 
   Grid& grid_; // NB: mutable reference to externally owned grid!
+  std::vector<CoordType> nodecoords_; // NB! should be updated when grid is updated.
+    
   const std::vector<size_t> bnindices_; // indices of boundary gridnodes
   const std::vector<size_t> iindices_; // indices of internal gridnodes
   const std::vector<double> iparam_; // parametrization of internal nodes in
                                      // terms of boundary nodes
   const CellBnodeMap c2bix_; // map cell -> bindices
   const std::vector<size_t> bcindices_; // indices of boundary cells
+
+  std::vector<CoordType> bnode_normals_; // NB! should be updated when grid is updated.
+  
 };
   
   
