@@ -62,6 +62,9 @@ int main(int varnum, char** vararg)
   vector<CoordType> bcoords;
   for (auto b : bindices) bcoords.push_back(coords[b]);
 
+  gs.bcentroid_param_mat();
+  return 0;
+  
   switch (choice) {
   case 1: 
     // test boundary node displacements
