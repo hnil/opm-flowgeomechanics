@@ -18,6 +18,7 @@ public:
   using Grid = Dune::FoamGrid<2, 3>;
   using CellSeed = Grid::Codim<0>::EntitySeed;
   //using NodeSeed = Grid::Codim<2>::EntitySeed;
+  // cell index -> {cell seed, boundary node ix 1, boundary node ix 2}
   using CellBnodeMap = std::map<size_t,std::tuple<CellSeed, size_t, size_t>>;
   using CoordType = Dune::FieldVector<double, 3>;
   
@@ -29,7 +30,8 @@ public:
     iparam_(interior_parametrization(bnindices_, iindices_, nodecoords_)),
     c2bix_(compute_cell_2_bindices_mapping(grid_, bnindices_)),
     bcindices_(keyvec(c2bix_)),
-    bnode_normals_(boundary_normals(grid_, bcindices_)) {}
+    bcentroid_param_(bcentroid_param_mat(grid_, bnindices_, iindices_, iparam_, c2bix_)),
+    bnode_normals_(boundary_normals(grid_, c2bix_, bcindices_, nodecoords_)) {}
 
   const std::vector<size_t>& boundaryNodeIndices() const { return bnindices_; }
   const std::vector<size_t>& boundaryCellIndices() const { return bcindices_; }
@@ -46,13 +48,17 @@ public:
 
   const std::vector<CoordType>& nodecoords() const {return nodecoords_;}
   const std::vector<CoordType>& bnodenormals() const {return bnode_normals_;}
+
+  
   
 private:
 
   // ----------------------- functions used by constructor -----------------------
 
   static std::vector<CoordType> boundary_normals(const Grid& grid,
-                                                 const std::vector<size_t> bcindices);
+                                                 const CellBnodeMap& c2bix,
+                                                 const std::vector<size_t>& bcindices,
+                                                 const std::vector<CoordType>& nodecoords);
   static std::vector<CoordType> node_coordinates(const Grid& grid);
   static std::vector<size_t> boundary_node_indices(const Grid& grid);
   static std::vector<size_t> complement_of(const std::vector<size_t>& vec, const size_t N);
@@ -61,6 +67,11 @@ private:
                                                       const std::vector<CoordType>& coords);
   static CellBnodeMap compute_cell_2_bindices_mapping(const Grid& grid,
                                                       const std::vector<size_t>& bindices);
+  static std::vector<double> bcentroid_param_mat(const Grid& grid,
+                                                 const std::vector<size_t>& bnindices,
+                                                 const std::vector<size_t>& iindices,
+                                                 const std::vector<double>& iparam,
+                                                 const CellBnodeMap& c2bix);
   template<typename Key, typename Value>
   static std::vector<Key> keyvec(std::map<Key, Value> map) {
     std::vector<Key> result;
@@ -68,6 +79,11 @@ private:
     return result;
   }
 
+  // ------ functions used for defining objective function and derivatives ------
+  double objective(const std::vector<double>& bndisp,
+                   const std::vector<double>& dtarget,
+                   std::vector<double>& grad);
+    
   // ------------------------------- internal data -------------------------------
 
   Grid& grid_; // NB: mutable reference to externally owned grid!
@@ -79,7 +95,8 @@ private:
                                      // terms of boundary nodes
   const CellBnodeMap c2bix_; // map cell -> bindices
   const std::vector<size_t> bcindices_; // indices of boundary cells
-
+  const std::vector<size_t> bcentroid_param_; // parametrization of boundary cell centroids
+  
   std::vector<CoordType> bnode_normals_; // NB! should be updated when grid is updated.
   
 };

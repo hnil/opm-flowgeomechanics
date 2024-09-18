@@ -121,9 +121,6 @@ const vector<CoordType> compute_bnode_displacements(const vector<double>& amount
   }
 
   // check that every boundary node has got two displacements associated with it
-  assert(std::all_of(disp.begin(), disp.end(),
-                     [](const vector<tuple<double, CoordType>>& v)
-                     { return v.size() == 2;}));
     
   // combine displacement vectors
   vector<CoordType> result(N);
@@ -217,12 +214,133 @@ vector<CoordType> GridStretcher::node_coordinates(const Grid& g)
 }
 
 // ----------------------------------------------------------------------------
-  vector<CoordType> GridStretcher::boundary_normals(const Grid& grid,
-                                                    const std::vector<size_t> bcindices)
+vector<CoordType> GridStretcher::boundary_normals(const Grid& grid,
+                                                  const CellBnodeMap& c2bix,
+                                                  const std::vector<size_t>& bcindices,
+                                                  const vector<CoordType>& nodecoords)
+// ----------------------------------------------------------------------------
+{ 
+  const size_t N = size(bcindices);
+  // map amounts to displacement vectors for each boundary point
+
+  vector<CoordType> result {N, {0, 0, 0}};
+  
+  for (size_t bix : bcindices) {
+    // compute directional vector
+    const auto entry = c2bix.find(bix)->second;
+    const auto elem = grid.entity(get<0>(entry));
+    const auto ccenter = elem.geometry().center();
+    const auto ecenter = (nodecoords[get<1>(entry)] + nodecoords[get<2>(entry)]) / 2;
+    const auto nvec = normalize(ecenter - ccenter);
+      
+    result[get<1>(entry)] += nvec;
+    result[get<2>(entry)] += nvec; 
+  }
+
+  // each entry is the sum of two normals, so we need to normalize again
+  transform(result.begin(), result.end(), result.begin(),
+            [](const CoordType& c) {return normalize(c);});
+  
+  return result;
+}
+
+// ----------------------------------------------------------------------------  
+std::vector<double>
+GridStretcher::bcentroid_param_mat(const Grid& grid,
+                                   const std::vector<size_t>& bnindices,
+                                   const std::vector<size_t>& iindices,
+                                   const std::vector<double>& iparam,
+                                   const CellBnodeMap& c2bix)
+// ----------------------------------------------------------------------------    
+{
+  const auto view = grid.leafGridView();
+
+  // helper function to identify the internal node and two boundary nodes of a
+  // given boundary triangle
+  auto corner_nodes = [&] (const CellBnodeMap::value_type& pair) {
+    const size_t bn1 = get<1>(pair.second); // boundary node 1
+    const size_t bn2 = get<2>(pair.second); // boundary node 2
+    const auto elem = grid_.entity(get<0>(pair.second));
+    
+    assert(elem.subEntities(2) == 3); // should have three corners
+    size_t in(0);
+    for (int i = 0; i != 3; ++i) {
+      in = view.indexSet().index(elem.subEntity<2>(i));
+      if (in != bn1 && in != bn2) break;
+    }
+    return array<size_t, 3> {in, bn1, bn2};
+  };
+
+  // computing the bcentroid parameter matrix
+  vector<double> result;
+  const size_t Nb = bnindices.size();
+  for (const auto& pair : c2bix) {
+
+    const auto cnodes = corner_nodes(pair);
+    const size_t iix =
+      find(iindices.begin(), iindices.end(), cnodes[0]) - iindices.begin();
+
+    // write in one-third of the parameterization of the internal point
+    transform(&iparam[iix * Nb], &iparam[(iix+1) * Nb], back_inserter(result),
+              [] (const double p) {return p/3;});
+
+    // add one-third of each of the two boundary points
+    for (int i = 1; i != 3; ++i)
+      result[result.size() - Nb + cnodes[i]] += 1.0/3.0;
+    
+  }
+  return result;
+}
+
+// ----------------------------------------------------------------------------
+double GridStretcher::objective(const std::vector<double>& bndisp,
+                                const std::vector<double>& dtarget,
+                                std::vector<double& grad)
 // ----------------------------------------------------------------------------
 {
-  // @@ unimplemented
+  const vector<CoordType>& ncoords = nodecoords();
+  const vector<CoordType>& normals = bnodenormals();
+  const size_t Nb = bnindices_.size(); // number of boundary nodes (and cells)
+  
+  // compute boundary node positions
+  vector<CoordType> bnodes;
+  auto disp_iter = bndisp.begin();
+  for (auto bix : bnindices_)
+    bnodes.push_back(ncoords[bix] + normals[bix] * disp_iter++);
+                     
+  // compute cell and face centroid positions, and distance vector
+  vector<CoordType> cell_centroids;
+  vector<CoordType> face_centroids;
+  vector<CoordType> distance;
+  for (const auto& pair : c2bix) {
+    const size_t cn = pair.first; // (boundary) cell number
+    const size_t bn1 = get<1>(pair.second); // boundary node 1
+    const size_t bn2 = get<2>(pair.second); // boundary node 2
+
+    // compute cell centroid as a linear combination of all boundary nodes
+    CoordType cc {0, 0, 0};
+    auto iter = bcentroid_param_.begin() + (cn * Nb);
+    for (size_t i = 0; i != Nb; ++i)
+      cc += bnodes[i] * iter++;
+    cc /= Nb;
+    cell_centroids.push_back(cc);
+
+    // compute face centroid
+    face_centroids.push_back(0.5 * (ncoords[bnindices_[bn1]] +
+                                    ncoords[bnindices_[bn2]]));
+
+    // compute distance vector between face and cell centroid
+    distance.push_back(face_centroids.back() - cell_centroids.back());
+  }
+
+  double objval = 0;
+  for (size_t i = 0; i != distance.size(); ++i)
+    // o = o + (d^2 - dtarget^2) ^ 2
+    objval += pow(pow(distance[i].two_norm(), 2) - pow(dtarget[i], 2), 2);
+
+  return objval;
 }
+
   
 // ----------------------------------------------------------------------------  
 vector<double> GridStretcher::interior_parametrization(const vector<size_t>& bindices,
@@ -271,6 +389,9 @@ GridStretcher::compute_cell_2_bindices_mapping(const Grid& grid,
   return result;
 }
 
+
+
+  
 // ----------------------------------------------------------------------------  
 void GridStretcher::expandBoundaryCells(const vector<double>& amounts)
 // ----------------------------------------------------------------------------
@@ -303,7 +424,7 @@ void GridStretcher::applyBoundaryNodeDisplacements(const vector<CoordType>& disp
   for (size_t iix : iindices_)
     for (size_t bix = 0; bix != bnindices_.size(); ++bix)
       ncoords[iix] +=
-        ncoords[bnindices_[bix]] * (*ipiter++);//iparam_[iix * bnindices_.size() + bnindices_[bix]];
+        ncoords[bnindices_[bix]] * (*ipiter++);
 
   // write all new node positions to mesh
   size_t vcount = 0;
@@ -312,7 +433,7 @@ void GridStretcher::applyBoundaryNodeDisplacements(const vector<CoordType>& disp
 
   // recompute stored geometric information
   nodecoords_ = node_coordinates(grid_);
-  bnode_normals_ = boundary_normals(grid_, bcindices_);
+  bnode_normals_ = boundary_normals(grid_, c2bix_, bcindices_, nodecoords_);
 }
 
 
