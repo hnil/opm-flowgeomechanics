@@ -20,9 +20,9 @@
 namespace {
 
  double compute_target_expansion(const double K1_target,
-                                       const double aperture,
-                                       const double E, // young 
-                                       const double nu) // poisson
+                                 const double aperture,
+                                 const double E, // young 
+                                 const double nu) // poisson
 {
   const double mu = E / (2 * (1+nu)); // shear modulus
   const double fac = mu * std::sqrt(M_PI) /
@@ -599,9 +599,12 @@ Fracture::solve()
       fracture_pressure_ = 0.0;
       const int max_iter = 100; // @@ move elsewhere
       const double tol = 1e-5; //1e-5; // @@
+      const double efac = 4;
+      //const double expand_tol = 1e-2; // @@
       const double K1max = 3.7e8; // @@ for testing.  Should be added as a proper data member
       const std::vector<size_t> boundary_cells = grid_stretcher_->boundaryCellIndices();
-      std::vector<double> expand(boundary_cells.size(), 0);
+
+      std::vector<double> total_expand(boundary_cells.size(), 0), expand(total_expand.size(), 0);
       
       while (true) {
         int iter = 0;
@@ -617,21 +620,41 @@ Fracture::solve()
           std::cout << "System converged in " << iter
                     << " iterations." << std::endl;
         
-        // resolve crack propagation
-        std::fill(expand.begin(), expand.end(), 0);
-
         const auto K1 = stressIntensityK1();
         const auto dist = grid_stretcher_->centroidEdgeDist();
-        for (int i = 0; i != expand.size(); ++i)
-          // we multiply by 4 since the centroid will move as well > 2/3 of the
-          // way during expansion
-          expand[i] = max(
-              6 * (compute_target_expansion(K1max,
-                                            fracture_width_[boundary_cells[i]],
-                                            E_, nu_) - dist[i]),
-              0);
 
-        if (*std::max_element(expand.begin(), expand.end()) == 0)
+        for (size_t i = 0; i != K1.size(); ++i) {
+          double krull = compute_target_expansion(K1[i],
+                                                  fracture_width_[boundary_cells[i]],
+                                                  E_, nu_) - dist[i];
+          std::cout << krull << std::endl;
+        }
+        
+        
+        fill(expand.begin(), expand.end(), 0.0);
+
+        for (int i = 0; i != expand.size(); ++i) {
+          expand[i] = max(
+             efac * (compute_target_expansion(K1max,
+                                              fracture_width_[boundary_cells[i]],
+                                              E_, nu_) - dist[i]),
+             -1 * total_expand[i]); // ensure total change will never be below 0
+
+          expand[i] = expand[i] > 0 ?  expand[i] : 0; //expand[i]; // @@@
+          total_expand[i] += expand[i];
+        }
+
+        double krull = expand[0];
+        double maxK = 0;
+        for (int i = 0; i != expand.size(); ++i) {
+          krull = max(krull, abs(expand[i]));
+          maxK = std::isnan(K1[i]) ? maxK :
+                      maxK > K1[i] ? maxK : K1[i];
+        }
+        std::cout << "max change: " << krull << std::endl;
+        std::cout << "Max K: " << maxK << std::endl;
+        
+        if (*std::max_element(expand.begin(), expand.end()) <= 0)
           break;
 
         // it is necessary to propagate crack
