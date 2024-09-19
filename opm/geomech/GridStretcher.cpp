@@ -260,7 +260,7 @@ GridStretcher::bcentroid_param_mat(const Grid& grid,
   auto corner_nodes = [&] (const CellBnodeMap::value_type& pair) {
     const size_t bn1 = get<1>(pair.second); // boundary node 1
     const size_t bn2 = get<2>(pair.second); // boundary node 2
-    const auto elem = grid_.entity(get<0>(pair.second));
+    const auto elem = grid.entity(get<0>(pair.second));
     
     assert(elem.subEntities(2) == 3); // should have three corners
     size_t in(0);
@@ -295,49 +295,68 @@ GridStretcher::bcentroid_param_mat(const Grid& grid,
 // ----------------------------------------------------------------------------
 double GridStretcher::objective(const std::vector<double>& bndisp,
                                 const std::vector<double>& dtarget,
-                                std::vector<double& grad)
+                                std::vector<double>& grad)
 // ----------------------------------------------------------------------------
 {
   const vector<CoordType>& ncoords = nodecoords();
   const vector<CoordType>& normals = bnodenormals();
   const size_t Nb = bnindices_.size(); // number of boundary nodes (and cells)
+  assert(bndisp.size() == Nb);
   
   // compute boundary node positions
   vector<CoordType> bnodes;
   auto disp_iter = bndisp.begin();
   for (auto bix : bnindices_)
-    bnodes.push_back(ncoords[bix] + normals[bix] * disp_iter++);
+    bnodes.push_back(ncoords[bix] + normals[bix] * *disp_iter++);
                      
   // compute cell and face centroid positions, and distance vector
   vector<CoordType> cell_centroids;
   vector<CoordType> face_centroids;
   vector<CoordType> distance;
-  for (const auto& pair : c2bix) {
-    const size_t cn = pair.first; // (boundary) cell number
+  auto cpar_iter = bcentroid_param_.begin();
+  for (const auto& pair : c2bix_) {
     const size_t bn1 = get<1>(pair.second); // boundary node 1
     const size_t bn2 = get<2>(pair.second); // boundary node 2
 
     // compute cell centroid as a linear combination of all boundary nodes
     CoordType cc {0, 0, 0};
-    auto iter = bcentroid_param_.begin() + (cn * Nb);
     for (size_t i = 0; i != Nb; ++i)
-      cc += bnodes[i] * iter++;
-    cc /= Nb;
+      cc += bnodes[i] * *cpar_iter++;
     cell_centroids.push_back(cc);
 
     // compute face centroid
-    face_centroids.push_back(0.5 * (ncoords[bnindices_[bn1]] +
-                                    ncoords[bnindices_[bn2]]));
+    face_centroids.push_back(0.5 * (bnodes[bn1] + bnodes[bn2]));
 
     // compute distance vector between face and cell centroid
     distance.push_back(face_centroids.back() - cell_centroids.back());
   }
 
+  // compute objective value
   double objval = 0;
   for (size_t i = 0; i != distance.size(); ++i)
     // o = o + (d^2 - dtarget^2) ^ 2
-    objval += pow(pow(distance[i].two_norm(), 2) - pow(dtarget[i], 2), 2);
+    objval += pow(distance[i].two_norm() - dtarget[i], 2);
 
+  objval /= 2; 
+
+  // compute gradient
+  grad.resize(Nb);
+  fill(grad.begin(), grad.end(), 0);
+  auto c2bix_iter = c2bix_.begin();
+  for (size_t i = 0; i != Nb; ++i, ++c2bix_iter) { // loop over cells
+    const double dfac = (distance[i].two_norm() - dtarget[i]) / distance[i].two_norm();
+    for (size_t j = 0; j != Nb; ++j) {// loop over boundary nodes
+      // efac is zero unless this boundary node is part of the current cell
+      const double efac = (j == get<1>(c2bix_iter->second) ||
+                           j == get<2>(c2bix_iter->second)) ? 0.5 : 0.0;
+      // derivative of centroid position with respect to boundary node 'j'
+      const double cpar = bcentroid_param_[i*Nb + j]; //d(d_i)/d(b_j);
+      const double m = (efac - cpar);
+      for (size_t d = 0; d != 3; ++d) // loop over dimensions
+        grad[j] += dfac * distance[i][d] * m * normals[j][d];
+    }
+  }
+  
   return objval;
 }
 

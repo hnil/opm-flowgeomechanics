@@ -49,7 +49,11 @@ public:
   const std::vector<CoordType>& nodecoords() const {return nodecoords_;}
   const std::vector<CoordType>& bnodenormals() const {return bnode_normals_;}
 
-  
+  // objective function and derivatives, when trying to stretch grid to a particular
+  // target (in terms of distances between cell and edge centroids for boundary cells)
+  double objective(const std::vector<double>& bndisp,
+                   const std::vector<double>& dtarget,
+                   std::vector<double>& grad);
   
 private:
 
@@ -79,10 +83,6 @@ private:
     return result;
   }
 
-  // ------ functions used for defining objective function and derivatives ------
-  double objective(const std::vector<double>& bndisp,
-                   const std::vector<double>& dtarget,
-                   std::vector<double>& grad);
     
   // ------------------------------- internal data -------------------------------
 
@@ -95,7 +95,7 @@ private:
                                      // terms of boundary nodes
   const CellBnodeMap c2bix_; // map cell -> bindices
   const std::vector<size_t> bcindices_; // indices of boundary cells
-  const std::vector<size_t> bcentroid_param_; // parametrization of boundary cell centroids
+  const std::vector<double> bcentroid_param_; // parametrization of boundary cell centroids
   
   std::vector<CoordType> bnode_normals_; // NB! should be updated when grid is updated.
   
