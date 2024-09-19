@@ -295,7 +295,8 @@ GridStretcher::bcentroid_param_mat(const Grid& grid,
 // ----------------------------------------------------------------------------
 double GridStretcher::objective(const std::vector<double>& bndisp,
                                 const std::vector<double>& dtarget,
-                                std::vector<double>& grad)
+                                std::vector<double>& grad,
+                                bool fixed_cell_centroids)
 // ----------------------------------------------------------------------------
 {
   const vector<CoordType>& ncoords = nodecoords();
@@ -304,11 +305,13 @@ double GridStretcher::objective(const std::vector<double>& bndisp,
   assert(bndisp.size() == Nb);
   
   // compute boundary node positions
-  vector<CoordType> bnodes;
+  vector<CoordType> bnodes, bnodes0;
   auto disp_iter = bndisp.begin();
-  for (auto bix : bnindices_)
+  for (auto bix : bnindices_) {
+    bnodes0.push_back(ncoords[bix]);
     bnodes.push_back(ncoords[bix] + normals[bix] * *disp_iter++);
-                     
+  }
+  const vector<CoordType>& bnodes_for_centroids = fixed_cell_centroids ? bnodes0 : bnodes;
   // compute cell and face centroid positions, and distance vector
   vector<CoordType> cell_centroids;
   vector<CoordType> face_centroids;
@@ -321,7 +324,7 @@ double GridStretcher::objective(const std::vector<double>& bndisp,
     // compute cell centroid as a linear combination of all boundary nodes
     CoordType cc {0, 0, 0};
     for (size_t i = 0; i != Nb; ++i)
-      cc += bnodes[i] * *cpar_iter++;
+      cc += bnodes_for_centroids[i] * *cpar_iter++;
     cell_centroids.push_back(cc);
 
     // compute face centroid
@@ -350,7 +353,7 @@ double GridStretcher::objective(const std::vector<double>& bndisp,
       const double efac = (j == get<1>(c2bix_iter->second) ||
                            j == get<2>(c2bix_iter->second)) ? 0.5 : 0.0;
       // derivative of centroid position with respect to boundary node 'j'
-      const double cpar = bcentroid_param_[i*Nb + j]; //d(d_i)/d(b_j);
+      const double cpar = fixed_cell_centroids ? 0 : bcentroid_param_[i*Nb + j]; //d(d_i)/d(b_j);
       const double m = (efac - cpar);
       for (size_t d = 0; d != 3; ++d) // loop over dimensions
         grad[j] += dfac * distance[i][d] * m * normals[j][d];
