@@ -133,10 +133,13 @@ const vector<CoordType> compute_bnode_displacements(const vector<double>& amount
     
     const auto dir = normalize(v1 + v2);
 
-    //result[i] = dir * max(dir.dot(v1) * a1, dir.dot(v2) * a2);
-    result[i] = dir *
-      ((fabs(dir.dot(v1) * a1) > fabs(dir.dot(v2) * a2)) ? dir.dot(v1) * a1 :
-                                                           dir.dot(v2) * a2);
+    assert(dir.dot(v1) >= 0);
+    assert(dir.dot(v2) >= 0);
+    result[i] = dir * max(dir.dot(v1) * a1, dir.dot(v2) * a2);
+
+    // result[i] = dir *
+    //   ((fabs(dir.dot(v1) * a1) > fabs(dir.dot(v2) * a2)) ? dir.dot(v1) * a1 :
+    //                                                        dir.dot(v2) * a2);
   }
   return result;
 }
