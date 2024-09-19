@@ -53,7 +53,8 @@ public:
   // target (in terms of distances between cell and edge centroids for boundary cells)
   double objective(const std::vector<double>& bndisp,
                    const std::vector<double>& dtarget,
-                   std::vector<double>& grad);
+                   std::vector<double>& grad,
+                   bool fixed_cell_centroids = false);
   
 private:
 

@@ -108,23 +108,24 @@ int main(int varnum, char** vararg)
     vector<double> grad;
     //vector<double> disp(gs.boundaryNodeIndices().size(), 1);
     vector<double> disp(gs.boundaryNodeIndices().size(), 0);
-    disp[0] = 1;
-    disp[10] = 2;
+    //disp[0] = 1;
+    //disp[10] = 2;
     vector<double> target(gs.centroidEdgeDist());
     //target[0] *= 2;
-    //for (int i = 0; i != target.size(); ++i) target[i] *= 2;
-    const double obj = gs.objective(disp, target, grad);
+    for (int i = 0; i != target.size(); ++i) target[i] *= 2;
+    const double obj = gs.objective(disp, target, grad, false);
     cout << "Objective value: " << obj << endl;
     cout << "Analytical gradient: ";
     copy(grad.begin(), grad.end(), ostream_iterator<double>(cout, " "));
     cout << endl;
 
     // computing numerical gradient
-    double delta = 1e-5;
+    double delta = 1e-6;
+    vector<double> grad_dummy;
     for (int i = 0; i != disp.size(); ++i) {
       vector<double> dispDelta = disp;
       dispDelta[i] += delta;
-      double obj2 = gs.objective(dispDelta, target, grad);
+      double obj2 = gs.objective(dispDelta, target, grad_dummy, false);
       cout << (obj2-obj) / delta << " " << grad[i] << endl;;
       //cout << i << " : " << (obj2-obj) / delta << endl;
     }
@@ -132,6 +133,81 @@ int main(int varnum, char** vararg)
     
     return 0;
   }
+
+  case 4: // test optimization
+  {
+    bool fixed_centroids = true;
+    const auto normals(gs.bnodenormals());
+    vector<double> target(gs.centroidEdgeDist());
+    //for (size_t i = 0; i != target.size(); ++i) target[i] *= 1.1;
+    const double dispfac = 3;
+    target[0] *= dispfac;
+    target[7] *= dispfac;
+    target[17] *= dispfac;
+    target[11] *= dispfac;
+    //target[5] *= dispfac;
+    //target[14] *= dispfac;
+    //target[4] *= dispfac;
+    
+    vector<double> disp(normals.size(), 0);
+    vector<double> grad;
+
+    double delta = 1;
+    double fac = 2;
+
+    double objprev = gs.objective(disp, target, grad, fixed_centroids);
+    const int MAX_ITER = 100;
+    const double tol = 1e-5;
+    for (size_t i = 0; i != MAX_ITER; ++i) {
+
+      const auto disp_backup(disp);
+      const auto grad_backup(grad);
+      
+      // compute norm of gradient
+      double gradnorm = 0;
+      for (size_t j = 0; j != grad.size(); ++j)
+        gradnorm += grad[j] * grad[j];
+      gradnorm = sqrt(gradnorm);
+
+      // compute steplength
+      double alpha = delta / gradnorm;
+
+      // modify disp
+      
+      for (size_t j = 0; j != disp.size(); ++j) {
+        disp[j] -= alpha * grad[j];
+        disp[j] = std::max(disp[j], 0.0);
+      }
+
+      double obj = gs.objective(disp, target, grad, fixed_centroids);  
+
+      if (fabs(obj-objprev)/obj < tol)
+        break;
+                 
+      
+      if (obj < objprev) {
+        delta *= fac;
+        objprev = obj;
+        cout << i << " : " << obj << endl;
+      } else {
+        //reset disp and grad, retry with smaller delta
+        disp = disp_backup;
+        grad = grad_backup;
+        delta /= fac;
+        obj = objprev;
+        i--;
+      }
+      
+    }
+    // compute the deformed grid geometry
+    vector<CoordType> mov;
+    for (size_t i = 0; i != disp.size(); ++i)
+      mov.push_back(normals[i] * disp[i]);
+
+    gs.applyBoundaryNodeDisplacements(mov);
+    
+    break;
+  }  
   
   default:
     cout << "Choice was not provided.  Must be 1 (displacement) or 2 (expansion).\n";
