@@ -11,6 +11,13 @@
 
 namespace Opm {
 
+struct BoundaryNormals {
+  std::vector<Dune::FieldVector<double, 3>> bnode_normals;
+  std::vector<Dune::FieldVector<double, 3>> bcell_normals;
+};
+
+
+  
 class GridStretcher
 {
 public:
@@ -31,7 +38,7 @@ public:
     c2bix_(compute_cell_2_bindices_mapping(grid_, bnindices_)),
     bcindices_(keyvec(c2bix_)),
     bcentroid_param_(bcentroid_param_mat(grid_, bnindices_, iindices_, iparam_, c2bix_)),
-    bnode_normals_(boundary_normals(grid_, c2bix_, bcindices_, nodecoords_)) {}
+    boundary_normals_(boundary_normals(grid_, c2bix_, bcindices_, nodecoords_)) {}
 
   const std::vector<size_t>& boundaryNodeIndices() const { return bnindices_; }
   const std::vector<size_t>& boundaryCellIndices() const { return bcindices_; }
@@ -39,15 +46,22 @@ public:
   // the vector should have one entry per boundary cell, expressing the distance
   // the boundary of that cell should be expanded outwards
   void expandBoundaryCells(const std::vector<double>& amounts); // will modify grid
+                           
 
   // the vector should have two enties per boundary node, specifying its displacement
   // in the x and y direction
   void applyBoundaryNodeDisplacements(const std::vector<CoordType>& disp); // will modify grid
-
+                                      
+  std::vector<double>
+  computeBoundaryNodeDisplacements(
+         const std::vector<double>& amounts,
+         const std::vector<CoordType> bnodenormals = std::vector<CoordType>()) const;
+  
   std::vector<double> centroidEdgeDist() const;
 
   const std::vector<CoordType>& nodecoords() const {return nodecoords_;}
-  const std::vector<CoordType>& bnodenormals() const {return bnode_normals_;}
+  const std::vector<CoordType>& bnodenormals() const {return boundary_normals_.bnode_normals;}
+  const std::vector<CoordType>& bcellnormals() const {return boundary_normals_.bcell_normals;}
 
   // objective function and derivatives, when trying to stretch grid to a particular
   // target (in terms of distances between cell and edge centroids for boundary cells)
@@ -60,10 +74,10 @@ private:
 
   // ----------------------- functions used by constructor -----------------------
 
-  static std::vector<CoordType> boundary_normals(const Grid& grid,
-                                                 const CellBnodeMap& c2bix,
-                                                 const std::vector<size_t>& bcindices,
-                                                 const std::vector<CoordType>& nodecoords);
+  static BoundaryNormals boundary_normals(const Grid& grid,
+                                          const CellBnodeMap& c2bix,
+                                          const std::vector<size_t>& bcindices,
+                                          const std::vector<CoordType>& nodecoords);
   static std::vector<CoordType> node_coordinates(const Grid& grid);
   static std::vector<size_t> boundary_node_indices(const Grid& grid);
   static std::vector<size_t> complement_of(const std::vector<size_t>& vec, const size_t N);
@@ -97,9 +111,9 @@ private:
   const CellBnodeMap c2bix_; // map cell -> bindices
   const std::vector<size_t> bcindices_; // indices of boundary cells
   const std::vector<double> bcentroid_param_; // parametrization of boundary cell centroids
-  
-  std::vector<CoordType> bnode_normals_; // NB! should be updated when grid is updated.
-  
+
+  BoundaryNormals boundary_normals_; // NB! should be updated when grid is updated.
+    
 };
   
   

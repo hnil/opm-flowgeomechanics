@@ -94,10 +94,14 @@ int main(int varnum, char** vararg)
       // amounts[10] = -0.1;
 
       std::vector<double> amounts(bindices.size(), 0);
-      amounts[0] = 0.1;
-      amounts[1] = 0.2;
-      //amounts[23] = 0.3;
-      //amounts[20] = 0.4;
+      amounts[0] = 0.05;
+      amounts[1] = 0.1;
+      amounts[3] = 0.1;
+      amounts[4] = 0.12;
+      amounts[5] = 0.1;
+      amounts[11] = 0.05;
+      amounts[17] = 0.1;
+      amounts[22] = 0.2;
       
       gs.expandBoundaryCells(amounts);
     break;
