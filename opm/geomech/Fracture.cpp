@@ -11,7 +11,7 @@
 #include <cmath>
 #include <iostream>
 #include <sstream>
-#include<string>
+#include <string>
 #include <dune/common/fmatrixev.hh>
 #include <dune/grid/utility/persistentcontainer.hh>
 
@@ -596,15 +596,26 @@ Fracture::solve()
       fracture_width_ = 1e-2;   // Ensure not completely closed
       fracture_pressure_ = 0.0;
       const int max_iter = 100; // @@ move elsewhere
-      const double tol = 1e-5; //1e-5; // @@
-      const double efac = 4;
+
+      const double diameter = 2; // @@ compute this from boundary nodes
+      const double tol = 1e-3 * diameter; //1e-5; //1e-5; // @@
+      const double efac = 2;
       //const double expand_tol = 1e-2; // @@
       const double K1max = 3.7e8; // @@ for testing.  Should be added as a proper data member
       const std::vector<size_t> boundary_cells = grid_stretcher_->boundaryCellIndices();
+      const size_t N = boundary_cells.size(); // number of boundary nodes and boundary cells
 
-      std::vector<double> total_expand(boundary_cells.size(), 0), expand(total_expand.size(), 0);
-      
+      std::vector<double> total_bnode_disp(N, 0), bnode_disp(N, 0), cell_disp(N, 0);
+      const std::vector<GridStretcher::CoordType>
+        bnode_normals_orig = grid_stretcher_->bnodenormals();
+
+      std::vector<GridStretcher::CoordType> displacements(N, {0, 0, 0});
+      std::ofstream k1log("k1log");
+      std::ofstream texplog("texplog");
+      std::ofstream distlog("distlog");
+      int count = 0;
       while (true) {
+        count++;
         int iter = 0;
 
         // solve flow-mechanical system
@@ -618,49 +629,83 @@ Fracture::solve()
           std::cout << "System converged in " << iter
                     << " iterations." << std::endl;
         
-        const auto K1 = stressIntensityK1();
         const auto dist = grid_stretcher_->centroidEdgeDist();
 
-        for (size_t i = 0; i != K1.size(); ++i) {
-          double krull = compute_target_expansion(K1[i],
-                                                  fracture_width_[boundary_cells[i]],
-                                                  E_, nu_) - dist[i];
-          std::cout << krull << std::endl;
-        }
+        fill(bnode_disp.begin(), bnode_disp.end(), 0.0);
+
+        std::vector<double> tull= Fracture::stressIntensityK1(); // @@
+        std::vector<double> K1;
+        for (size_t i = 0; i != tull.size(); ++i)
+          if (!std::isnan(tull[i]))
+            K1.push_back(tull[i]);
+
+        // loop over cells, determine how much they should be expanded or contracted
+        for (size_t i = 0; i != N; ++i) 
+          cell_disp[i] = 
+            efac * (compute_target_expansion(K1max,
+                                             fracture_width_[boundary_cells[i]],
+                                             E_, nu_) - dist[i]);
+        bnode_disp =
+          grid_stretcher_->computeBoundaryNodeDisplacements(cell_disp, bnode_normals_orig);
+
+        for (size_t i = 0; i != N; ++i)
+          if (bnode_disp[i] + total_bnode_disp[i] < 0)
+            bnode_disp[i] = -total_bnode_disp[i];
+
+        for (size_t i = 0; i != N; ++i)
+          total_bnode_disp[i] += bnode_disp[i];
         
+        for (size_t i = 0; i != N; ++i)
+          displacements[i] = bnode_normals_orig[i] * bnode_disp[i];
         
-        fill(expand.begin(), expand.end(), 0.0);
-
-        for (int i = 0; i != expand.size(); ++i) {
-          expand[i] = max(
-             efac * (compute_target_expansion(K1max,
-                                              fracture_width_[boundary_cells[i]],
-                                              E_, nu_) - dist[i]),
-             -1 * total_expand[i]); // ensure total change will never be below 0
-
-          expand[i] = expand[i] > 0 ?  expand[i] : 0; //expand[i]; // @@@
-          total_expand[i] += expand[i];
+        for (int i = 0; i != K1.size(); ++i){
+          //std::cout << "K1 size: " << K1.size() << std::endl;
+          k1log << K1[i] << " ";
+          texplog << total_bnode_disp[i] << " ";
+          distlog << dist[i] << " " ;
         }
+        std::cout << "Count: " << count << std::endl;
+        if (count > 100) // @@@
+          break;
 
-        double krull = expand[0];
-        double maxK = 0;
-        for (int i = 0; i != expand.size(); ++i) {
-          krull = max(krull, abs(expand[i]));
-          maxK = std::isnan(K1[i]) ? maxK :
-                      maxK > K1[i] ? maxK : K1[i];
+        
+        double krull = bnode_disp[0];
+        //double maxK = 0;
+        for (int i = 0; i != bnode_disp.size(); ++i) {
+          krull = abs(krull) < abs(bnode_disp[i]) ? bnode_disp[i] : krull;
+          // maxK = std::isnan(K1[i]) ? maxK :
+          //             maxK > K1[i] ? maxK : K1[i];
         }
         std::cout << "max change: " << krull << std::endl;
-        std::cout << "Max K: " << maxK << std::endl;
+        //        std::cout << "Max K: " << maxK << std::endl;
+
+        std::cout << "Max K: " << *max_element(K1.begin(), K1.end()) << std::endl;
+        std::cout << "Min d: " << *min_element(bnode_disp.begin(), bnode_disp.end()) << std::endl;
         
-        if (*std::max_element(expand.begin(), expand.end()) <= 0)
+        bool finished =
+          (*max_element(K1.begin(), K1.end()) <= K1max) &&
+          (*min_element(bnode_disp.begin(), bnode_disp.end()) >= -tol);
+        
+        // bool finished = true;
+        // for (const auto& e : bnode_disp)
+        //   if (abs(e) > tol)
+        //     finished = false;
+        // std::cout << "Total displacement is: " << std::endl;
+        // for (const auto & d : total_bnode_disp)
+        //   std::cout << d <<  " ";
+        // std::cout << std::endl;
+          
+        if (finished)
           break;
 
         // it is necessary to propagate crack
-        grid_stretcher_->expandBoundaryCells(expand);
+        //grid_stretcher_->expandBoundaryCells(bnode_disp); // keep original normals
+        grid_stretcher_->applyBoundaryNodeDisplacements(displacements);
 
         // grid has changed its geometry, so we have to recompute discretizations
         updateGridDiscretizations(); 
       }
+      std::cout << "Yay! " << count << std::endl;
       
         // report on result
 

@@ -1,6 +1,7 @@
 #include <opm/geomech/GridStretcher.hpp>
 #include <opm/geomech/param_interior.hpp>
 #include <array>
+#include <limits>
 #include <assert.h>
 #include <dune/common/fvector.hh> // FieldVector
 #include <dune/grid/common/mcmgmapper.hh> // for element mapper
@@ -95,55 +96,55 @@ size_t find_coord_in(const CoordType& c, const vector<CoordType>& cvec)
 CoordType normalize(const CoordType& vec) { return vec / vec.two_norm(); }
 // ----------------------------------------------------------------------------  
 
-// ----------------------------------------------------------------------------
-const vector<CoordType> compute_bnode_displacements(const vector<double>& amounts,
-                                                    const vector<size_t>& bcindices,
-                                                    const Opm::GridStretcher::CellBnodeMap& c2bix,
-                                                    const Opm::GridStretcher::Grid& grid,
-                                                    const vector<CoordType>& nodecoords)
-// ----------------------------------------------------------------------------
-{
-  const size_t N = size(bcindices);
-  // map amounts to displacement vectors for each boundary point
-  assert(amounts.size() == N); // one scalar per boundary cell
-  vector<vector<tuple<double, CoordType>>> disp(N); // node displacements
+// // ----------------------------------------------------------------------------
+// const vector<CoordType> compute_bnode_displacements(const vector<double>& amounts,
+//                                                     const vector<size_t>& bcindices,
+//                                                     const Opm::GridStretcher::CellBnodeMap& c2bix,
+//                                                     const Opm::GridStretcher::Grid& grid,
+//                                                     const vector<CoordType>& nodecoords,
+//                                                     const BoundaryNormals& bnormals)
+// // ----------------------------------------------------------------------------
+// {
+//   const size_t N = size(bcindices);
+//   // map amounts to displacement vectors for each boundary point
+//   assert(amounts.size() == N); // one scalar per boundary cell
+//   vector<vector<tuple<double, CoordType>>> disp(N); // node displacements
   
-  auto aiter = amounts.begin();
-  for (size_t bc = 0; bc != amounts.size(); ++bc) {
-    // compute directional vector
-    const auto entry = c2bix.find(bcindices[bc])->second;
-    const auto elem = grid.entity(get<0>(entry));
-    const auto ccenter = elem.geometry().center();
-    const auto ecenter = (nodecoords[get<1>(entry)] + nodecoords[get<2>(entry)]) / 2;
-    const auto nvec = normalize(ecenter - ccenter);
-    disp[get<1>(entry)].push_back({*aiter, nvec});
-    disp[get<2>(entry)].push_back({*aiter++, nvec});
-  }
+//   auto aiter = amounts.begin();
+//   for (size_t bc = 0; bc != amounts.size(); ++bc) {
+//     // compute directional vector
+//     const auto entry = c2bix.find(bcindices[bc])->second;
+//     const auto elem = grid.entity(get<0>(entry));
+//     const auto ccenter = elem.geometry().center();
+//     const auto ecenter = (nodecoords[get<1>(entry)] + nodecoords[get<2>(entry)]) / 2;
+//     const auto nvec = normalize(ecenter - ccenter);
+//     disp[get<1>(entry)].push_back({*aiter, nvec});
+//     disp[get<2>(entry)].push_back({*aiter++, nvec});
+//   }
 
-  // check that every boundary node has got two displacements associated with it
+//   // check that every boundary node has got two displacements associated with it
     
-  // combine displacement vectors
-  vector<CoordType> result(N);
-  for (size_t i = 0; i != N; ++i) {
-    const auto& entry = disp[i];
-    const double a1 = get<0>(entry[0]);
-    const double a2 = get<0>(entry[1]);
-    const auto& v1 = get<1>(entry[0]);
-    const auto& v2 = get<1>(entry[1]);
+//   // combine displacement vectors
+//   vector<CoordType> result(N);
+//   for (size_t i = 0; i != N; ++i) {
+//     const auto& entry = disp[i];
+//     const double a1 = get<0>(entry[0]);
+//     const double a2 = get<0>(entry[1]);
+//     const auto& v1 = get<1>(entry[0]);
+//     const auto& v2 = get<1>(entry[1]);
     
-    const auto dir = normalize(v1 + v2);
+//     //const auto dir = normalize(v1 + v2);
+//     const auto& dir = bnnormals[i];
 
-    assert(dir.dot(v1) >= 0);
-    assert(dir.dot(v2) >= 0);
-    result[i] = dir * max(dir.dot(v1) * a1, dir.dot(v2) * a2);
+//     assert(dir.dot(v1) >= 0);
+//     assert(dir.dot(v2) >= 0);
+//     result[i] = dir * max(dir.dot(v1) * a1, dir.dot(v2) * a2);
 
-    // result[i] = dir *
-    //   ((fabs(dir.dot(v1) * a1) > fabs(dir.dot(v2) * a2)) ? dir.dot(v1) * a1 :
-    //                                                        dir.dot(v2) * a2);
-  }
-  return result;
-}
-  
+//   }
+//   return result;
+// }
+
+    
 }; // end anonymous namespace
 
 // ============================================================================
@@ -217,17 +218,18 @@ vector<CoordType> GridStretcher::node_coordinates(const Grid& g)
 }
 
 // ----------------------------------------------------------------------------
-vector<CoordType> GridStretcher::boundary_normals(const Grid& grid,
-                                                  const CellBnodeMap& c2bix,
-                                                  const std::vector<size_t>& bcindices,
-                                                  const vector<CoordType>& nodecoords)
+BoundaryNormals GridStretcher::boundary_normals(const Grid& grid,
+                                                const CellBnodeMap& c2bix,
+                                                const std::vector<size_t>& bcindices,
+                                                const vector<CoordType>& nodecoords)
 // ----------------------------------------------------------------------------
 { 
   const size_t N = size(bcindices);
   // map amounts to displacement vectors for each boundary point
 
-  vector<CoordType> result {N, {0, 0, 0}};
-  
+  BoundaryNormals result {vector<CoordType> {N, {0, 0, 0}},
+                          vector<CoordType> {N, {0, 0, 0}}};
+  int pos = 0;
   for (size_t bix : bcindices) {
     // compute directional vector
     const auto entry = c2bix.find(bix)->second;
@@ -235,13 +237,14 @@ vector<CoordType> GridStretcher::boundary_normals(const Grid& grid,
     const auto ccenter = elem.geometry().center();
     const auto ecenter = (nodecoords[get<1>(entry)] + nodecoords[get<2>(entry)]) / 2;
     const auto nvec = normalize(ecenter - ccenter);
-      
-    result[get<1>(entry)] += nvec;
-    result[get<2>(entry)] += nvec; 
+    result.bcell_normals[pos++] = nvec;
+    result.bnode_normals[get<1>(entry)] += nvec;
+    result.bnode_normals[get<2>(entry)] += nvec;
   }
 
   // each entry is the sum of two normals, so we need to normalize again
-  transform(result.begin(), result.end(), result.begin(),
+  transform(result.bnode_normals.begin(), result.bnode_normals.end(),
+            result.bnode_normals.begin(),
             [](const CoordType& c) {return normalize(c);});
   
   return result;
@@ -414,18 +417,57 @@ GridStretcher::compute_cell_2_bindices_mapping(const Grid& grid,
   return result;
 }
 
+// ----------------------------------------------------------------------------
+vector<double>
+GridStretcher::computeBoundaryNodeDisplacements(const vector<double>& amounts,
+                                                const vector<CoordType> bnodenormals) const
+// ----------------------------------------------------------------------------
+{
+  const size_t N = bcindices_.size();
 
+  const vector<CoordType>& bnnorm = bnodenormals.empty() ?
+                                    boundary_normals_.bnode_normals :
+                                    bnodenormals;
+  assert(bnnorm.size() == N);
+  
+  vector<double> node_amounts(N, -1 * std::numeric_limits<double>::infinity());
 
+  size_t cur_bcell_ix = 0;
+  for (const size_t bix : bcindices_) {
+    const auto entry = c2bix_.find(bix)->second;
+    const size_t bnodeix1 = get<1>(entry);
+    const size_t bnodeix2 = get<2>(entry);
+    
+    const auto& cnorm = boundary_normals_.bcell_normals[cur_bcell_ix];
+    const auto& bn1 = bnnorm[bnodeix1];
+    const auto& bn2 = bnnorm[bnodeix2];
+    
+    const double l1 = amounts[cur_bcell_ix] / bn1.dot(cnorm);
+    const double l2 = amounts[cur_bcell_ix] / bn2.dot(cnorm);
+    
+    node_amounts[bnodeix1] = max(node_amounts[bnodeix1], l1);
+    node_amounts[bnodeix2] = max(node_amounts[bnodeix2], l2);
+    cur_bcell_ix++;
+  }
+
+  return node_amounts;
+}
   
 // ----------------------------------------------------------------------------  
 void GridStretcher::expandBoundaryCells(const vector<double>& amounts)
+                                        
 // ----------------------------------------------------------------------------
 {
-  applyBoundaryNodeDisplacements(compute_bnode_displacements(amounts,
-                                                             bcindices_,
-                                                             c2bix_,
-                                                             grid_,
-                                                             nodecoords_));
+  vector<double> distance =
+    computeBoundaryNodeDisplacements(amounts,
+                                    boundary_normals_.bnode_normals);
+
+  vector<CoordType> displacements;
+  for (size_t i = 0; i != amounts.size(); ++i)
+    displacements.push_back(distance[i] * boundary_normals_.bnode_normals[i]);
+
+  applyBoundaryNodeDisplacements(displacements);
+
 }
 
 // ----------------------------------------------------------------------------
@@ -458,7 +500,7 @@ void GridStretcher::applyBoundaryNodeDisplacements(const vector<CoordType>& disp
 
   // recompute stored geometric information
   nodecoords_ = node_coordinates(grid_);
-  bnode_normals_ = boundary_normals(grid_, c2bix_, bcindices_, nodecoords_);
+  boundary_normals_ = boundary_normals(grid_, c2bix_, bcindices_, nodecoords_);
 }
 
 
