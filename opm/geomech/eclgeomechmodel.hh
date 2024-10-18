@@ -316,7 +316,7 @@ namespace Opm{
         }
 
         const SymTensor delstress(size_t globalIdx) const{
-	  Dune::FieldVector<double,6> delStress = linstress_[globalIdx];
+	  Dune::FieldVector<double,6> delStress = this->effstress(globalIdx);
 	  double effPress = this->mechPotentialForce(globalIdx);
 	  for(int i=0; i < 3; ++i){
 	    delStress[i] += effPress;
@@ -329,12 +329,17 @@ namespace Opm{
 	  return linstress_[globalIdx];
         }
 
+        const SymTensor effstress(size_t globalIdx) const{
+	  // make stress in with positive with compression
+	  return -1.0*linstress_[globalIdx];
+        }
+
         const SymTensor& strain(size_t globalIdx) const{
             return strain_[globalIdx];
         }
 
         const SymTensor stress(size_t globalIdx) const{
-            Dune::FieldVector<double,6> effStress = linstress_[globalIdx];
+            Dune::FieldVector<double,6> effStress = this->effstress(globalIdx);
             effStress += simulator_.problem().initStress(globalIdx);
             double effPress = this->mechPotentialForce(globalIdx);
             for(int i=0; i < 3; ++i){
@@ -346,7 +351,7 @@ namespace Opm{
 
          const SymTensor fractureStress(size_t globalIdx) const{
             // tresagi stress
-            Dune::FieldVector<double,6> effStress = linstress_[globalIdx];
+            Dune::FieldVector<double,6> effStress = this->effstress(globalIdx);
             effStress += simulator_.problem().initStress(globalIdx);
             double effPress = this->mechPotentialTempForce(globalIdx);
             effPress += mechPotentialPressForceFracture_[globalIdx];
