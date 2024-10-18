@@ -58,7 +58,29 @@ namespace Elasticity {
 //       }
 //   }
 // }
-
+  IMPL_FUNC(void,assignToVoigt(Dune::BlockVector< Dune::FieldVector<double,6> >& voigt_stress, const Dune::BlockVector< Dune::FieldVector<double,1> >& vemstress)){
+    for (size_t i = 0; i < voigt_stress.size(); ++i) {
+                for (size_t k = 0; k < 3; ++k) {
+		  voigt_stress[i][k] = vemstress[i * 6 + k];
+                }
+		// transforming from xx,yy,zz,xy,xz,yz ordring to voigt i.e. xx,yy,zz,zy,zx,xy
+		voigt_stress[i][3] = vemstress[i * 6 + 5]; 
+		voigt_stress[i][5] = vemstress[i * 6 + 3];
+		voigt_stress[i][4] = vemstress[i * 6 + 4];
+    }
+  }
+  IMPL_FUNC(void,assignToVoigtSymMat(Dune::BlockVector< Dune::FieldVector<double,6> >& voigt_stress, const std::vector< std::array<double,6> >& vemstress)){
+    for (size_t i = 0; i < voigt_stress.size(); ++i) {
+      for (size_t k = 0; k < 3; ++k) {
+	voigt_stress[i][k] = vemstress[i][k];
+      }
+      // transforming from xx,yy,zz,xy,xz,yz ordring to voigt i.e. xx,yy,zz,zy,zx,xy
+      voigt_stress[i][3] = vemstress[i][5]; 
+      voigt_stress[i][5] = vemstress[i][3];
+      voigt_stress[i][4] = vemstress[i][4];
+    }
+  }
+  
     IMPL_FUNC(void, calculateStress(bool precomputed))
     {
         if (precomputed) {
@@ -71,11 +93,7 @@ namespace Elasticity {
             Vector stress(6 * grid_.leafGridView().size(0));
             stressmat_.mv(dispalldune,stress);
             stress_.resize(num_cells_);
-            for (int i = 0; i < num_cells_; ++i) {
-                for (size_t k = 0; k < 6; ++k) {
-                    stress_[i][k] = stress[i * 6 + k];
-                }
-            }
+	    assignToVoigt(stress_,stress);
         } else {
             OPM_TIMEBLOCK(calculateStressFull);
             // assumes the grid structure is made
@@ -115,11 +133,7 @@ namespace Elasticity {
                 );
             // copy to dune definitions
             stress_.resize(num_cells_);
-            for (int i = 0; i < num_cells_; ++i) {
-                for (size_t k = 0; k < 6; ++k) {
-                    stress_[i][k] = stress[i][k];
-                }
-            }
+	    assignToVoigtSymMat(stress_,stress);
         }
     }
 
@@ -135,11 +149,7 @@ namespace Elasticity {
             Vector strain(6 * grid_.leafGridView().size(0));
             strainmat_.mv(dispalldune,strain);
             strain_.resize(num_cells_);
-            for (int i = 0; i < num_cells_; ++i) {
-                for (size_t k = 0; k < 6; ++k) {
-                    strain_[i][k] = strain[i * 6 + k];
-                }
-            }
+	    assignToVoigt(strain_,strain);
         } else {
             OPM_TIMEBLOCK(calculateStressFull);
             // assumes the grid structure is made
@@ -179,11 +189,7 @@ namespace Elasticity {
                 );
             // copy to dune definitions
             strain_.resize(num_cells_);
-            for (int i = 0; i < num_cells_; ++i) {
-                for (size_t k = 0; k < 6; ++k) {
-                    strain_[i][k] = strain[i][k];
-                }
-            }
+	    assignToVoigtSymMat(strain_,strain);
         }
     }
 

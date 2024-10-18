@@ -335,7 +335,9 @@ class VemElasticitySolver
     const Dune::BlockVector<Dune::FieldVector<ctype,6>>& stress() const{return stress_;}
     const Dune::BlockVector<Dune::FieldVector<ctype,6>>& strain() const{return strain_;}
 
-  private:
+private:
+  void assignToVoigt(Dune::BlockVector< Dune::FieldVector<double,6> >& voigt_stress, const Dune::BlockVector< Dune::FieldVector<double,1> >& vemstress);
+  void assignToVoigtSymMat(Dune::BlockVector< Dune::FieldVector<double,6> >& voigt_stress, const std::vector< std::array<double,6> >& vemstress);
     using AbstractSolverType = Dune::InverseOperator<Vector, Vector>;
     using AbstractOperatorType = Dune::AssembledLinearOperator<Matrix, Vector, Vector>;
     using AbstractPreconditionerType = Dune::PreconditionerWithUpdate<Vector, Vector>;

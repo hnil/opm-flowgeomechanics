@@ -1,4 +1,5 @@
 #pragma once
+#include <opm/simulators/linalg/PropertyTree.hpp>
 namespace Opm{
     template<class Grid>
     FractureModel::FractureModel(const Grid& grid,
@@ -9,6 +10,34 @@ namespace Opm{
         ):
         prm_(param)
     {
+      using CartesianIndexMapper = Dune::CartesianIndexMapper<Grid>;
+      CartesianIndexMapper cartmapper(grid);
+      const auto& cartdim = cartmapper.cartesianDimensions();
+      std::vector<int> cart(cartdim[0]*cartdim[1]*cartdim[2], -1);
+      using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<typename Grid::LeafGridView>;
+      ElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
+      for (const auto& elem : elements(grid.leafGridView())) {
+	int eIdx = mapper.index(elem);
+	cart[ cartmapper.cartesianIndex( eIdx ) ] = eIdx;
+      }
+      const auto& config = prm_.get_child("config");
+      std::string type = config.get<std::string>("type");
+      if( type  == "well_seed"){
+	auto config_bst = prm_.getBoostParamPtr();
+	std::vector<int> cell_ijk = as_vector<int>(*config_bst, "config.cell_ijk");
+	std::array<int, 3> ijk;
+	   assert(cell_ijk.size() == 3);
+	for(int i=0; i < 3; ++i){
+	  // map to 0 based
+	  ijk[i] = cell_ijk[i]-1;
+	}
+	int cartIdx =  ijk[0]+(cartdim[0])*ijk[1]+(cartdim[0]*cartdim[1])*ijk[2];//NB assumes ijk ordering
+	int reservoir_cell = cart[cartIdx];
+	assert(cartIdx>=0);
+	prm_.put("config.cell",reservoir_cell);
+      }
+      
+     
         //using CartesianIndexMapper = Dune::CartesianIndexMapper<Grid>;
         //CartesianIndexMapper cartmapper(grid);
         //const std::array<int, dimension>
