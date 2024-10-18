@@ -2,6 +2,8 @@
 #include <opm/geomech/FractureModel.hpp>
 #include <dune/common/fmatrixev.hh>
 #include <opm/geomech/DiscreteDisplacement.hpp>
+#include <opm/simulators/linalg/PropertyTree.hpp>
+
 namespace Opm{
     void FractureModel::addWell(std::string name,
                            const std::vector<Point3D>& points,
@@ -31,44 +33,65 @@ namespace Opm{
                 // auto origo = geo.center();
                 Dune::FieldVector<double, 3> origo, normal;
                 int perf = eIdx;
-                assert(eIdx == well_fractures_[i].size());
+                
                 int well_cell = well.reservoirCell(eIdx);
 
                 if (type == "perp_well") {
-                    origo = geo.corner(1); // assume this is cell center
-                    normal = geo.corner(1) - geo.corner(0);
-                    // perf = well_fractures_[i].size();
+		  origo = geo.corner(1); // assume this is cell center
+		  normal = geo.corner(1) - geo.corner(0);
+		  // perf = well_fractures_[i].size();
+		} else if (type == "well_seed") {
+		  if( config.get<std::string>("well") == well.name()){
+		    std::cout << "Fracure added for well " << well.name() << std::endl;
+		    //std::vector<int> cell_ijk = config.get< std::vector<int> > ("cell_ijk");
+		    int cell = config.get< int> ("cell");
+		    if(well.reservoirCell(eIdx) == cell){
+		      origo = geo.corner(1);
+		      auto config_bst = config.getBoostParamPtr();
+		      //double tmp = config_bst->get<double > ("normal",1);
+		      //for (auto i : as_vector<int>(pt, "a")) std::cout << i << ' ';
+		      std::vector<double> tmp_normal = as_vector<double>(*config_bst,"normal");
+		      assert(tmp_normal.size() == 3); // wrong use of tmpmal.
+		      for(int i=0; i < 3; ++i){
+			normal[i] = tmp_normal[i];
+		      }
+		    }else{
+		      continue;
+		    }
+		  }else{
+		    continue;
+		  }
                 } else if (type == "tensile_fracture") {
-                    // https://link.springer.com/article/10.1007/s40948-023-00694-1
-                    double fractureThoughness = 1.0e6; // reservoir_fractureThoughness_[eIdx]; // ca 1.0 MPa m^1/2
-                    double tensilestrength = 5e6; // reservoir_tensilestrength_[eIdx]; //  5 MPa
-                    double criticallength = (fractureThoughness / tensilestrength); // ca (1/5)^2 5 mm.
-                    criticallength *= criticallength;
-                    auto stressmat = ddm::symTensor2Matrix(well.reservoirStress(eIdx));
-                    Dune::FieldMatrix<double, 3, 3> eigenVectors;
-                    Dune::FieldVector<double, 3> eigenValues;
-                    Dune::FMatrixHelp::eigenValuesVectors(stressmat, eigenValues, eigenVectors);
-                    int min_dir = -1;
-                    int max_dir = -1;
-                    double min_eig = 1e99;
-                    double max_eig = -1e99;
-                    for (int i = 0; i < 3; ++i) {
-                        if (eigenValues[i] < min_eig) {
-                            min_dir = i;
-                            min_eig = eigenValues[i];
-                        }
-                        if (eigenValues[i] > max_eig) {
-                            max_dir = i;
-                            max_eig = eigenValues[i];
-                        }
-                    }
-                    normal = eigenVectors[min_dir];
-                    // take midpoint
-                    origo = geo.corner(1); //-geo.corner(0);
-                    // origo /= 2.0;
-                    //  expression for size;
+		  // https://link.springer.com/article/10.1007/s40948-023-00694-1
+		  double fractureThoughness = 1.0e6; // reservoir_fractureThoughness_[eIdx]; // ca 1.0 MPa m^1/2
+		  double tensilestrength = 5e6; // reservoir_tensilestrength_[eIdx]; //  5 MPa
+		  double criticallength = (fractureThoughness / tensilestrength); // ca (1/5)^2 5 mm.
+		  criticallength *= criticallength;
+		  auto stressmat = ddm::symTensor2Matrix(well.reservoirStress(eIdx));
+		  Dune::FieldMatrix<double, 3, 3> eigenVectors;
+		  Dune::FieldVector<double, 3> eigenValues;
+		  Dune::FMatrixHelp::eigenValuesVectors(stressmat, eigenValues, eigenVectors);
+		  int min_dir = -1;
+		  int max_dir = -1;
+		  double min_eig = 1e99;
+		  double max_eig = -1e99;
+		  for (int i = 0; i < 3; ++i) {
+		    if (eigenValues[i] < min_eig) {
+		      min_dir = i;
+		      min_eig = eigenValues[i];
+		    }
+		    if (eigenValues[i] > max_eig) {
+		      max_dir = i;
+		      max_eig = eigenValues[i];
+		    }
+		  }
+		  normal = eigenVectors[min_dir];
+		  // take midpoint
+		  origo = geo.corner(1); //-geo.corner(0);
+		  // origo /= 2.0;
+		  //  expression for size;
                 } else {
-                    OPM_THROW(std::runtime_error, "Invalid fracture type");
+		  OPM_THROW(std::runtime_error, "Invalid fracture type");
                 }
 
 

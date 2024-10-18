@@ -12,6 +12,25 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <boost/property_tree/ptree.hpp>
+using ptree = boost::property_tree::ptree;
+template <typename T>
+std::vector<T> as_vector(ptree const& pt, ptree::key_type const& key)
+{
+    std::vector<T> r;
+    for (auto& item : pt.get_child(key))
+        r.push_back(item.second.get_value<T>());
+    return r;
+}
+
+// template <typename T>
+// std::vector<T> opm_as_vector(const Opm::PropertyTree& pt, const std::string& key)
+// {
+//     std::vector<T> r;
+//     for (auto& item : pt.get_child(key))
+//       r.push_back(item.second.get_value<T>());
+//     return r;
+// }
 namespace Opm{
 class FractureModel{
     //using CartesianIndexMapper = Dune::CartesianIndexMapper<Dune::CpGrid>;

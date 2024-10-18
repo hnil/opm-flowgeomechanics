@@ -144,9 +144,10 @@ namespace Opm{
                 //Properties::EnableTemperature
                 const auto& poelCoef = problem.poelCoef(dofIdx);
                 double diffpress = (Toolbox::value(press) - problem.initPressure(dofIdx));
-                const auto& pratio = problem.pRatio(dofIdx);
-                double fac = (1-2*pratio)/(1-pratio);
+		const auto& pratio = problem.pRatio(dofIdx);
+                double fac = (1-pratio)/(1-2*pratio);
                 double pcoeff = poelCoef*fac;
+		//assert pcoeff == biot
                 mechPotentialForce_[dofIdx] = diffpress*pcoeff;
                 mechPotentialPressForce_[dofIdx] = diffpress*pcoeff;
                 assert(pcoeff<1.0);
@@ -158,9 +159,8 @@ namespace Opm{
                     const auto& temp = fs.temperature(waterPhaseIdx);//NB all phases have equal temperature
                     const auto& thelcoef = problem.thelCoef(dofIdx);
                     // const auto& termExpr = problem.termExpr(dofIdx); //NB not used
-
-                    double tcoeff = thelcoef*fac;//+ youngs*tempExp;
-
+		    // tcoeff = (youngs*tempExp/(1-pratio))*fac;
+                    double tcoeff = thelcoef*fac;
                     // assume difftemp = 0 for non termal runs
                     double difftemp = (Toolbox::value(temp) - problem.initTemperature(dofIdx));
                     mechPotentialForce_[dofIdx] += difftemp*tcoeff;
@@ -243,7 +243,7 @@ namespace Opm{
                 //auto cellindex2 = gv.indexSet().index(cell);
                 //stress_[cellindex] = linstress[cellindex];
                 strain_[cellindex] = linstrain[cellindex];
-                delstress_[cellindex] = linstress[cellindex];
+                linstress_[cellindex] = linstress[cellindex];
             }
             //size_t lsdim = 6;
             //for(size_t i = 0; i < stress_.size(); ++i){
@@ -282,8 +282,8 @@ namespace Opm{
             celldisplacement_.resize(numDof);
             std::fill(celldisplacement_.begin(),celldisplacement_.end(),0.0);
             //stress_.resize(numDof);
-            delstress_.resize(numDof);
-            std::fill(delstress_.begin(),delstress_.end(),0.0);
+            linstress_.resize(numDof);
+            std::fill(linstress_.begin(),linstress_.end(),0.0);
             strain_.resize(numDof);
             std::fill(strain_.begin(),strain_.end(),0.0);
             const auto& gv = simulator_.vanguard().grid().leafGridView();
@@ -315,8 +315,18 @@ namespace Opm{
             return celldisplacement_[globalIdx];
         }
 
-        const SymTensor& delstress(size_t globalIdx) const{
-            return delstress_[globalIdx];
+        const SymTensor delstress(size_t globalIdx) const{
+	  Dune::FieldVector<double,6> delStress = linstress_[globalIdx];
+	  double effPress = this->mechPotentialForce(globalIdx);
+	  for(int i=0; i < 3; ++i){
+	    delStress[i] += effPress;
+	    
+	  }
+	  return delStress;  
+        }
+
+        const SymTensor linstress(size_t globalIdx) const{
+	  return linstress_[globalIdx];
         }
 
         const SymTensor& strain(size_t globalIdx) const{
@@ -324,7 +334,7 @@ namespace Opm{
         }
 
         const SymTensor stress(size_t globalIdx) const{
-            Dune::FieldVector<double,6> effStress = delstress_[globalIdx];
+            Dune::FieldVector<double,6> effStress = linstress_[globalIdx];
             effStress += simulator_.problem().initStress(globalIdx);
             double effPress = this->mechPotentialForce(globalIdx);
             for(int i=0; i < 3; ++i){
@@ -336,7 +346,7 @@ namespace Opm{
 
          const SymTensor fractureStress(size_t globalIdx) const{
             // tresagi stress
-            Dune::FieldVector<double,6> effStress = delstress_[globalIdx];
+            Dune::FieldVector<double,6> effStress = linstress_[globalIdx];
             effStress += simulator_.problem().initStress(globalIdx);
             double effPress = this->mechPotentialTempForce(globalIdx);
             effPress += mechPotentialPressForceFracture_[globalIdx];
@@ -357,22 +367,22 @@ namespace Opm{
         {
             return celldisplacement_[globalDofIdx][dim];
         }
-        const double& stress(unsigned globalDofIdx, unsigned dim) const
-        {
-            // not efficient
-            auto stress = this->stress(globalDofIdx);
-            return stress[dim];
-            //return stress_[globalDofIdx][dim];
-        }
+        // const double stress(unsigned globalDofIdx, unsigned dim) const
+        // {
+        //     // not efficient
+        //     auto stress = this->stress(globalDofIdx);
+        //     return stress[dim];
+        //     //return stress_[globalDofIdx][dim];
+        // }
 
-        const double& delstress(unsigned globalDofIdx, unsigned dim) const
-        {
-            return delstress_[globalDofIdx][dim];
-        }
-        const double& strain(unsigned globalDofIdx, unsigned dim) const
-        {
-            return strain_[globalDofIdx][dim];
-        }
+        // const double& delstress(unsigned globalDofIdx, unsigned dim) const
+        // {
+        //     return linstress_[globalDofIdx][dim];
+        // }
+        // const double& strain(unsigned globalDofIdx, unsigned dim) const
+        // {
+        //     return strain_[globalDofIdx][dim];
+        // }
 
 
         // void setStress(const Dune::BlockVector<SymTensor >& stress){
@@ -415,7 +425,7 @@ namespace Opm{
         Dune::BlockVector<Dune::FieldVector<double,3> > celldisplacement_;
         Dune::BlockVector<Dune::FieldVector<double,3> > displacement_;
         //Dune::BlockVector<Dune::FieldVector<double,6> > stress_;//NB is also stored in esolver
-        Dune::BlockVector<Dune::FieldVector<double,6> > delstress_;//NB is also stored in esolver
+        Dune::BlockVector<Dune::FieldVector<double,6> > linstress_;//NB is also stored in esolver
         Dune::BlockVector<Dune::FieldVector<double,6> > strain_;
         //Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1> > A_;
         Opm::Elasticity::VemElasticitySolver<Grid> elacticitysolver_;

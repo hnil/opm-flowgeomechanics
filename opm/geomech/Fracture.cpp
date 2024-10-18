@@ -521,8 +521,10 @@ Fracture::updateReservoirProperties()
 void
 Fracture::solve()
 {
+    std::cout << "Solve Fracture Pressure" << std::endl; 
     std::string method = prm_.get<std::string>("solver.method");
-    if(method == "simple"){
+    if(method == "nothing"){
+    }else if(method == "simple"){
         this->solveFractureWidth();
         this->solvePressure();
     }else if(method == "only_pressure"){
@@ -691,6 +693,8 @@ std::vector<std::tuple<int,double,double>> Fracture::wellIndices() const{
         // simplest possible approach
         // assumes leakof is assumed to be calculated with reservoir cell as reference
         double well_index = q_cells[i]/dp;
+        //assert(well_index>0);
+        assert(std::isfinite(well_index));
         wellIndices[i] = {res_cells[i],well_index, origo_[3]};
         //wellIndices[i] = std::tuple<int,double>({res_cells[i],well_index});
     }

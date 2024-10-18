@@ -174,8 +174,8 @@ namespace Opm{
                             const auto& region = equilRegionData[cartesianIndexMapper.cartesianIndex(cellIdx)];
                             if(region == recnum){
                                 Dune::FieldVector<double, 6> initstress;
-                                initstress[0] = STRESSXX +  STRESSXXGRAD*(center[0] - datum_depth);
-                                initstress[1] = STRESSYY +  STRESSYYGRAD*(center[1] - datum_depth);
+                                initstress[0] = STRESSXX +  STRESSXXGRAD*(center[2] - datum_depth);
+                                initstress[1] = STRESSYY +  STRESSYYGRAD*(center[2] - datum_depth);
                                 initstress[2] = STRESSZZ +  STRESSZZGRAD*(center[2] - datum_depth);
                                 initstress[3] = 0.0;
                                 initstress[4] = 0.0;
