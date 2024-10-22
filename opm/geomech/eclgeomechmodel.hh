@@ -350,16 +350,24 @@ namespace Opm{
          }
 
          const SymTensor fractureStress(size_t globalIdx) const{
-            // tresagi stress
-            Dune::FieldVector<double,6> effStress = this->effstress(globalIdx);
-            effStress += simulator_.problem().initStress(globalIdx);
-            double effPress = this->mechPotentialTempForce(globalIdx);
-            effPress += mechPotentialPressForceFracture_[globalIdx];
+            // need to know effect of absolute pressure
+	   // const auto& pratio = simulator_.problem.pRatio(globalIdx);
+	   // double fac = (1-pratio)/(1-2*pratio);
+	   // const auto& poelCoef = simulator_.problem.poelCoef(globalIdx);
+	   // double pcoeff = poelCoef*fac;
+	   const auto& iq = simulator_.model().intensiveQuantities(globalIdx,0);
+	   const auto& fs = iq.fluidState();
+	   const auto& press = Toolbox::value(fs.pressure(waterPhaseIdx));
+	   //
+            Dune::FieldVector<double,6> fracStress = this->stress(globalIdx);
+            // effStress += simulator_.problem().initStress(globalIdx);
+            // double effPress = this->mechPotentialTempForce(globalIdx);
+            // effPress += mechPotentialPressForceFracture_[globalIdx];
+	    // effPress -= press;
             for(int i=0; i < 3; ++i){
-                effStress[i] += effPress;
-
+                fracStress[i] -= press;
             }
-            return effStress;
+            return fracStress;
          }
 
         // NB used in output should be eliminated
