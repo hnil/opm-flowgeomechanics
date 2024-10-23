@@ -43,7 +43,6 @@ set (opm-flowgeomechanics_DEPS
   # OPM dependency
   "opm-common REQUIRED"
   "opm-grid REQUIRED"
-  "opm-models REQUIRED"
   "opm-simulators REQUIRED"
   "opm-upscaling REQUIRED"
   "Damaris 1.7"

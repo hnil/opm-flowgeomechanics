@@ -16,7 +16,7 @@ namespace Opm
         namespace TTag
         {
             struct EclFlowProblemMech {
-                using InheritsFrom = std::tuple<FlowProblem, VtkGeoMech, FlowGeomechIstlSolverParams>;
+	      using InheritsFrom = std::tuple<FlowProblem> ;
             };
         }
 
@@ -58,16 +58,16 @@ namespace Opm
         };
 
 
-        template <class TypeTag>
-        struct VtkWriteMoleFractions<TypeTag, TTag::EclFlowProblemMech> {
-            static constexpr bool value = false;
-        };
+        // template <class TypeTag>
+        // struct VtkWriteMoleFractions<TypeTag, TTag::EclFlowProblemMech> {
+        //     static constexpr bool value = false;
+        // };
 
 
-        template <class TypeTag>
-        struct EnableOpmRstFile<TypeTag, TTag::EclFlowProblemMech> {
-            static constexpr bool value = true;
-        };
+        // template <class TypeTag>
+        // struct EnableOpmRstFile<TypeTag, TTag::EclFlowProblemMech> {
+        //     static constexpr bool value = true;
+        // };
 
         // the default for the allowed volumetric error for oil per second
 
@@ -103,33 +103,33 @@ namespace Opm
         };
         // simpler debugging
 
-        template <class TypeTag>
-        struct EnableAsyncEclOutput<TypeTag, TTag::EclFlowProblemMech> {
-            static constexpr bool value = false;
-        };
+        // template <class TypeTag>
+        // struct EnableAsyncEclOutput<TypeTag, TTag::EclFlowProblemMech> {
+        //     static constexpr bool value = false;
+        // };
 
     }
 }
 namespace Opm {
 namespace Parameters {
-    template <class TypeTag>
-        struct EnableVtkOutput<TypeTag, Properties::TTag::EclFlowProblemMech> {
-            static constexpr bool value = true;
-        };
-    template <class TypeTag>
-    struct ThreadsPerProcess<TypeTag, Properties::TTag::EclFlowProblemMech> {
-        static constexpr int value = 1;
-    };
+    // template <class TypeTag>
+    //     struct EnableVtkOutput<TypeTag, Properties::TTag::EclFlowProblemMech> {
+    //         static constexpr bool value = true;
+    //     };
+    // template <class TypeTag>
+    // struct ThreadsPerProcess<TypeTag, Properties::TTag::EclFlowProblemMech> {
+    //     static constexpr int value = 1;
+    // };
 
-    template <class TypeTag>
-    struct NewtonTolerance<TypeTag, Properties::TTag::EclFlowProblemMech> {
-        using type = GetPropType<TypeTag, Properties::Scalar>;
-        static constexpr type value = 1e-2;
-    };
-    template <class TypeTag>
-    struct EnableAsyncVtkOutput<TypeTag, Properties::TTag::EclFlowProblemMech> {
-        static constexpr bool value = false;
-    };
+    // template <class TypeTag>
+    // struct NewtonTolerance<TypeTag, Properties::TTag::EclFlowProblemMech> {
+    //     using type = GetPropType<TypeTag, Properties::Scalar>;
+    //     static constexpr type value = 1e-2;
+    // };
+    // template <class TypeTag>
+    // struct EnableAsyncVtkOutput<TypeTag, Properties::TTag::EclFlowProblemMech> {
+    //     static constexpr bool value = false;
+    // };
 }
 }
 

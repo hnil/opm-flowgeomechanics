@@ -25,60 +25,38 @@
 #define OPM_FLOW_GEOMECH_LINEARSOLVERPARAMETERS_HEADER_INCLUDED
 
 #include "opm/simulators/linalg/FlowLinearSolverParameters.hpp"
-#include <opm/models/utils/basicproperties.hh>
-#include <opm/models/utils/parametersystem.hh>
-#include <opm/models/utils/propertysystem.hh>
+//#include <opm/models/utils/basicproperties.hh>
+//#include <opm/models/utils/parametersystem.hh>
+//#include <opm/models/utils/propertysystem.hh>
 
 
-namespace Opm::Properties {
+namespace Opm::Parameters {
 
-namespace TTag {
-struct FlowGeomechIstlSolverParams {};
-}
 
-template<class TypeTag, class MyTypeTag>
+  //template<class TypeTag>
 struct LinearSolverMechReduction {
-    using type = UndefinedProperty;
-};
-template<class TypeTag, class MyTypeTag>
-struct LinearSolverMechMaxIter {
-    using type = UndefinedProperty;
-};
-template<class TypeTag, class MyTypeTag>
-struct LinearSolverMech {
-    using type = UndefinedProperty;
-};
-template<class TypeTag, class MyTypeTag>
-struct LinearSolverMechPrintJsonDefinition {
-    using type = UndefinedProperty;
-};
-template<class TypeTag, class MyTypeTag>
-struct LinearSolverMechVerbosity {
-    using type = UndefinedProperty;
-};
-template<class TypeTag>
-struct LinearSolverMechReduction<TypeTag, TTag::FlowGeomechIstlSolverParams> {
-    using type = GetPropType<TypeTag, Scalar>;
+  //using type = GetPropType<TypeTag, Scalar>;
+  using type = double;
     static constexpr type value = 1e-6;
 };
-template<class TypeTag>
-struct LinearSolverMechMaxIter<TypeTag, TTag::FlowGeomechIstlSolverParams> {
+
+struct LinearSolverMechMaxIter {
     static constexpr int value = 200;
 };
-template<class TypeTag>
-struct LinearSolverMechVerbosity<TypeTag, TTag::FlowGeomechIstlSolverParams> {
+
+struct LinearSolverMechVerbosity{
     static constexpr int value = 0;
 };
-template<class TypeTag>
-struct LinearSolverMech<TypeTag, TTag::FlowGeomechIstlSolverParams> {
+
+struct LinearSolverMech{
     static constexpr auto value = "ilu0";
 };
-template<class TypeTag>
-struct LinearSolverMechPrintJsonDefinition<TypeTag, TTag::FlowGeomechIstlSolverParams> {
+
+struct LinearSolverMechPrintJsonDefinition {
     static constexpr auto value = true;
 };
 
-} // namespace Opm::Properties
+} 
 
 namespace Opm {
 
@@ -89,22 +67,22 @@ namespace Opm {
         void init()
         {
             // TODO: these parameters have undocumented non-trivial dependencies
-            linear_solver_reduction_ = Parameters::get<TypeTag, Properties::LinearSolverMechReduction>();
-            linear_solver_maxiter_ = Parameters::get<TypeTag, Properties::LinearSolverMechMaxIter>();
-            linear_solver_verbosity_ = Parameters::get<TypeTag, Properties::LinearSolverMechVerbosity>();
-            linsolver_ = Parameters::get<TypeTag, Properties::LinearSolverMech>();
-            linear_solver_print_json_definition_ = Parameters::get<TypeTag, Properties::LinearSolverMechPrintJsonDefinition>();            
-            linsolver_ = Parameters::get<TypeTag, Properties::LinearSolverMech>();
+            linear_solver_reduction_ = Parameters::Get< Parameters::LinearSolverMechReduction>();
+            linear_solver_maxiter_ = Parameters::Get< Parameters::LinearSolverMechMaxIter>();
+            linear_solver_verbosity_ = Parameters::Get< Parameters::LinearSolverMechVerbosity>();
+            linsolver_ = Parameters::Get< Parameters::LinearSolverMech>();
+            linear_solver_print_json_definition_ = Parameters::Get< Parameters::LinearSolverMechPrintJsonDefinition>();            
+            linsolver_ = Parameters::Get< Parameters::LinearSolverMech>();
         }
 
         template <class TypeTag>
         static void registerParameters()
         {
-          Parameters::registerParam<TypeTag, Properties::LinearSolverMechReduction>("The minimum reduction of the residual which the linear solver must achieve");
-          Parameters::registerParam<TypeTag, Properties::LinearSolverMechMaxIter>("The maximum number of iterations of the linear solver");
-          Parameters::registerParam<TypeTag, Properties::LinearSolverMechVerbosity>("The verbosity level of the linear solver (0: off, 2: all)");
-          Parameters::registerParam<TypeTag, Properties::LinearSolverMech>("Configuration of solver. Valid options are: ilu0 (default), amg or umfpack. Alternatively, you can request a configuration to be read from a JSON file by giving the filename here, ending with '.json.'");
-          Parameters::registerParam<TypeTag, Properties::LinearSolverMechPrintJsonDefinition>("Write the JSON definition of the linear solver setup to the DBG file.");
+          Parameters::Register< Parameters::LinearSolverMechReduction>("The minimum reduction of the residual which the linear solver must achieve");
+          Parameters::Register< Parameters::LinearSolverMechMaxIter>("The maximum number of iterations of the linear solver");
+          Parameters::Register< Parameters::LinearSolverMechVerbosity>("The verbosity level of the linear solver (0: off, 2: all)");
+          Parameters::Register< Parameters::LinearSolverMech>("Configuration of solver. Valid options are: ilu0 (default), amg or umfpack. Alternatively, you can request a configuration to be read from a JSON file by giving the filename here, ending with '.json.'");
+          Parameters::Register< Parameters::LinearSolverMechPrintJsonDefinition>("Write the JSON definition of the linear solver setup to the DBG file.");
         }
 
         FlowLinearSolverParametersGeoMech() { reset(); }
