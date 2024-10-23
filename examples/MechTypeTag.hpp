@@ -1,4 +1,4 @@
-#include <opm/simulators/flow/FlowProblem.hpp>
+#include <opm/simulators/flow/FlowProblemBlackoil.hpp>
 //#include <opm/simulators/flow/Main.hpp>
 
 #include <opm/models/blackoil/blackoillocalresidualtpfa.hh>
@@ -16,7 +16,7 @@ namespace Opm
         namespace TTag
         {
             struct EclFlowProblemMech {
-	      using InheritsFrom = std::tuple<FlowProblem> ;
+	      using InheritsFrom = std::tuple<FlowProblem> ;//?? should it be blackoil
             };
         }
 
