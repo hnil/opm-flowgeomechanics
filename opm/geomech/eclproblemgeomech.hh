@@ -37,7 +37,7 @@ namespace Opm{
     template<typename TypeTag>
     class EclProblemGeoMech: public FlowProblemBlackoil<TypeTag>{
     public:
-        using Parent = FlowProblem<TypeTag>;
+        using Parent = FlowProblemBlackoil<TypeTag>;
         using Simulator = GetPropType<TypeTag, Properties::Simulator>;
         using TimeStepper = AdaptiveTimeStepping<TypeTag>;
         using Scalar = GetPropType<TypeTag, Properties::Scalar>;
@@ -84,6 +84,11 @@ namespace Opm{
             VtkGeoMechModule<TypeTag>::registerParameters();
             FlowLinearSolverParametersGeoMech::registerParameters<TypeTag>();
             Parameters::Register<Parameters::FractureParamFile>("json file defining fracture setting");
+	    Opm::Parameters::SetDefault<Opm::Parameters::EnableOpmRstFile>(true);
+	    Opm::Parameters::SetDefault<Opm::Parameters::EnableVtkOutput>(true);
+	    Opm::Parameters::SetDefault<Opm::Parameters::ThreadsPerProcess>(1);
+	    Opm::Parameters::SetDefault<Opm::Parameters::EnableAsyncVtkOutput>(false);
+	    Opm::Parameters::SetDefault<Opm::Parameters::EnableAsyncEclOutput>(false);
         }
 
         void finishInit(){
