@@ -105,11 +105,6 @@ int main(int argc, char** argv)
 {
 
     OPM_TIMEBLOCK(fullSimulation);
-    Opm::Parameters::SetDefault<Opm::Parameters::EnableOpmRstFile>(true);
-    Opm::Parameters::SetDefault<Opm::Parameters::EnableVtkOutput>(true);
-    Opm::Parameters::SetDefault<Opm::Parameters::ThreadsPerProcess>(1);
-    Opm::Parameters::SetDefault<Opm::Parameters::EnableAsyncVtkOutput>(false);
-    Opm::Parameters::SetDefault<Opm::Parameters::EnableAsyncEclOutput>(false);
     using TypeTag = Opm::Properties::TTag::EclFlowProblemMechTemp;
     auto mainObject = Opm::Main(argc, argv);
     return mainObject.runStatic<TypeTag>();
