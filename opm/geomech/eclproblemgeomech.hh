@@ -26,8 +26,7 @@
 #include <string>
 #include <tuple>
 #include <vector>
-namespace Opm::Properties {
-    template<class TypeTag, class MyTypeTag>
+namespace Opm::Parameters {
     struct FractureParamFile {
         inline static std::string value{"notafile"};
     };
@@ -36,7 +35,7 @@ namespace Opm::Properties {
 
 namespace Opm{
     template<typename TypeTag>
-    class EclProblemGeoMech: public FlowProblem<TypeTag>{
+    class EclProblemGeoMech: public FlowProblemBlackoil<TypeTag>{
     public:
         using Parent = FlowProblem<TypeTag>;
         using Simulator = GetPropType<TypeTag, Properties::Simulator>;
@@ -54,10 +53,10 @@ namespace Opm{
         using SymTensor = Dune::FieldVector<double,6>;
         using GeomechModel = EclGeoMechModel<TypeTag>;
         EclProblemGeoMech(Simulator& simulator):
-            FlowProblem<TypeTag>(simulator),
+            FlowProblemBlackoil<TypeTag>(simulator),
             geomechModel_(simulator)
         {
-            std::string filename = Parameters::get<TypeTag, Properties::FractureParamFile>();
+            std::string filename = Parameters::Get<Parameters::FractureParamFile>();
             try{
                 Opm::PropertyTree fracture_param(filename);
                 fracture_param_ = fracture_param;
@@ -84,9 +83,7 @@ namespace Opm{
             Parent::registerParameters();
             VtkGeoMechModule<TypeTag>::registerParameters();
             FlowLinearSolverParametersGeoMech::registerParameters<TypeTag>();
-            Parameters::registerParam<TypeTag, Properties::FractureParamFile>
-                ("json file defining fracture setting");
-
+            Parameters::Register<Parameters::FractureParamFile>("json file defining fracture setting");
         }
 
         void finishInit(){

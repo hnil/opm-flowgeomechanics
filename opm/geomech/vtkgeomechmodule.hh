@@ -32,7 +32,7 @@
 #include <opm/models/io/baseoutputmodule.hh>
 
 #include <opm/models/utils/propertysystem.hh>
-#include <opm/models/utils/parametersystem.hh>
+//#include <opm/models/utils/parametersystem.hh>
 #include <opm/models/blackoil/blackoilproperties.hh>
 
 
@@ -40,22 +40,13 @@
 
 #include <cstdio>
 
-namespace Opm::Properties {
+namespace Opm::Parameters {
 
 // create new type tag for the VTK tracer output
-namespace TTag {
-struct VtkGeoMech {};
-}
-
 // create the property tags needed for the tracer model
-template<class TypeTag, class MyTypeTag>
-struct VtkWriteGeoMech {
-    using type = UndefinedProperty;
-};
-
 // set default values for what quantities to output
-template<class TypeTag>
-struct VtkWriteGeoMech<TypeTag, TTag::VtkGeoMech> {
+
+struct VtkWriteGeoMech {
     static constexpr bool value = true;
 };
 
@@ -101,8 +92,8 @@ namespace Opm {
      */
         static void registerParameters()
         {
-            Parameters::registerParam<TypeTag, Properties::VtkWriteGeoMech>(
-                                 "Include the tracer concentration "
+            Parameters::Register<Parameters::VtkWriteGeoMech>(
+                                 "Include geomech quentities "
                                  "in the VTK output files");
         }
 
@@ -148,7 +139,7 @@ namespace Opm {
 
         void processElement(const ElementContext& elemCtx)
         {
-            if (!Parameters::get<TypeTag, Parameters::EnableVtkOutput>())
+            if (!Parameters::Get<Parameters::EnableVtkOutput>())
                 return;
 
             const auto& geoMechModel = elemCtx.problem().geoMechModel();
@@ -232,7 +223,7 @@ namespace Opm {
 
     private:
         static bool geoMechOutput_(){
-            static bool val = Parameters::get<TypeTag, Properties::VtkWriteGeoMech>();
+            static bool val = Parameters::Get<Parameters::VtkWriteGeoMech>();
             return val;
         }
         ScalarBuffer pressDiff_;

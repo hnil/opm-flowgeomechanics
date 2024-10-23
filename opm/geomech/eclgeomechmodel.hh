@@ -82,7 +82,7 @@ namespace Opm{
                     const std::vector<Opm::Well>& wells = schedule.getWells(reportStepIdx);
                     const Opm::EclipseGrid& eclgrid = simulator_.vanguard().eclState().getInputGrid();
                     const auto& grid = simulator_.vanguard().grid();
-                    std::string outputDir = Parameters::get<TypeTag, Parameters::OutputDir>();
+                    std::string outputDir = Parameters::Get<Parameters::OutputDir>();
                     std::string caseName  = simulator_.vanguard().caseName();
                     param.put("outputdir", outputDir);
                     param.put("casename", caseName);

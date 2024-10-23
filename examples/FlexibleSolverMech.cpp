@@ -23,13 +23,15 @@
 #include <opm/simulators/linalg/PreconditionerFactory_impl.hpp>
 template <int N>
 using OBMMec = Dune::BCRSMatrix<Dune::FieldMatrix<double, N, N>>;
-
+template <int N>
+using BVMec = Dune::BlockVector<Dune::FieldVector<double, N>>;;
+using CommMec = Dune::OwnerOverlapCopyCommunication<int, int>;
 // Sequential operators.
 template <int N>
-using SeqOpMec = Dune::MatrixAdapter<OBMMec<N>, BV<N>, BV<N>>;
+using SeqOpMec = Dune::MatrixAdapter<OBMMec<N>, BVMec<N>, BVMec<N>>;
 
 template <int N>
-using ParOpMec = Dune::OverlappingSchwarzOperator<OBMMec<N>, BV<N>, BV<N>, Comm>;
+using ParOpMec = Dune::OverlappingSchwarzOperator<OBMMec<N>, BVMec<N>, BVMec<N>, CommMec>;
 
 INSTANTIATE_FLEXIBLESOLVER_OP(SeqOpMec<1>);
 INSTANTIATE_FLEXIBLESOLVER_OP(ParOpMec<1>);
