@@ -534,8 +534,7 @@ void Fracture::setFractureGrid(std::unique_ptr<Fracture::Grid>& gptr)
   this->resetWriters();
 }
 
-void
-Fracture::updateReservoirProperties()
+void Fracture::updateReservoirProperties()
 {
     // updater for standalone test
     double perm = prm_.get<double>("reservoir.perm");
@@ -553,6 +552,9 @@ Fracture::updateReservoirProperties()
     nu_ = 0.25;
     E_ = 1e9;
     this->initFractureWidth();
+
+    updateFractureRHS();
+    updateLeakoff();
 }
 void
 Fracture::solve()
@@ -593,13 +595,24 @@ Fracture::solve()
       // iterate full nonlinear system until convergence
 
       fracture_width_ = 1e-2;   // Ensure not completely closed
-      fracture_pressure_ = 0.0;
+      normalFractureTraction(fracture_pressure_); // start by assuming pressure equal to confining stress//0.0;
+      
       const double tol = 1e-5; // @@
       const int max_iter = 100;
       int iter = 0;
       
       // solve flow-mechanical system
       while (!fullSystemIteration(tol) && iter++ < max_iter) {};
+
+      // @@ debug
+      const std::vector<double> K1_not_nan = Fracture::stressIntensityK1(); 
+      std::vector<double> K1;
+      for (size_t i = 0; i != K1_not_nan.size(); ++i)
+        if (!std::isnan(K1_not_nan[i]))
+          K1.push_back(K1_not_nan[i]);
+
+      // std::cout << "K1: ";
+      copy(K1.begin(), K1.end(), std::ostream_iterator<double>(std::cout, " "));
       
     } else if (method == "if_propagate") {
       // iterate full nonlinear system until convergence, and expand fracture if necessary
@@ -944,10 +957,9 @@ Fracture::solvePressure() {
 }
 
 // based on the (given) values of fracture_pressure__, compute rhs_width_ and
-// fracture_width_
+// fracture_width_  
 void Fracture::solveFractureWidth()
 {
-    //this->assembleFracture(); @@ should already have been taken care of
     fracture_matrix_->solve(fracture_width_,rhs_width_);
     double max_width = prm_.get<double>("solver.max_width");
     double min_width = prm_.get<double>("solver.min_width");
@@ -994,8 +1006,21 @@ Fracture::initFracturePressureFromReservoir(){
         fracture_pressure_[i] = reservoir_pressure_[i];
     }
 }
-void
-Fracture::initPressureMatrix()
+
+void Fracture::updateLeakoff()
+{
+    const size_t nc = grid_->leafGridView().size(0);
+    leakof_.resize(nc,0.0);
+    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+    for (auto& element : Dune::elements(grid_->leafGridView())) {
+        const int eIdx = mapper.index(element);
+        const auto geom = element.geometry();
+        leakof_[eIdx] = reservoir_mobility_[eIdx] * reservoir_perm_[eIdx] * geom.volume() /
+                        reservoir_dist_[eIdx];
+    }
+}
+
+void Fracture::initPressureMatrix()
 {
     // size_t num_columns = 0;
     //  index of the neighbour
@@ -1006,7 +1031,7 @@ Fracture::initPressureMatrix()
     }
 
     size_t nc = grid_->leafGridView().size(0);
-    leakof_.resize(nc,0.0);
+    //leakof_.resize(nc,0.0);
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     for (auto& element : Dune::elements(grid_->leafGridView())) {
         int eIdx = mapper.index(element);
@@ -1035,17 +1060,6 @@ Fracture::initPressureMatrix()
                     }
                 }
             }
-        }
-        {
-            //auto normal = ddm::normalOfElement(element);
-            //auto permmatrix =  reservoir_perm_[eIdx];
-            //auto pn = permmatrix.mv(normal);
-            //double permval  = pn.dot(normal);
-
-            // keap reservoir perm as n'K'n
-            double value = reservoir_mobility_[eIdx]*(reservoir_perm_[eIdx] * geom.volume()) ;
-            value /= reservoir_dist_[eIdx];
-            leakof_[eIdx] = value;
         }
     }
 
@@ -1123,31 +1137,33 @@ Fracture::assemblePressure()
     }
 }
 
-void  Fracture::assembleFracture(){
-    size_t nc = grid_->leafGridView().size(0);
-    //rhs_width_.resize(nc);
+double Fracture::normalFractureTraction(size_t eIdx) const
+{
+  return ddm::tractionSymTensor(reservoir_stress_[eIdx], cell_normals_[eIdx]);
+}
+  
+void Fracture::normalFractureTraction(Dune::BlockVector<Dune::FieldVector<double, 1>>& traction) const
+{
+  const size_t nc = grid_->leafGridView().size(0);
+  traction.resize(nc);
+  
+  for (size_t eIdx = 0; eIdx < nc; ++eIdx) 
+    traction[eIdx] = normalFractureTraction(eIdx);
+}
+
+void Fracture::updateFractureRHS() {
     rhs_width_ = fracture_pressure_;
-    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
-    if (reservoir_stress_.size() > 0) {
-      for (auto elem : elements(grid_->leafGridView())) {
-        int idx = mapper.index(elem);
-        //auto geom = elem.geometry();
-
-        // @@ Odd: we should not subtract reservoir pressure here
-        //rhs_width_[idx] -= reservoir_pressure_[idx];//*geom.volume();
-
-        // using compressible stress ??
-        rhs_width_[idx] -= ddm::tractionSymTensor(reservoir_stress_[idx],cell_normals_[idx]);
-        
-        // @@ not entirely accurate, but will avoid unphysical negative normal displacements
-        if (rhs_width_[idx] < 0)
-          rhs_width_[idx] = 0;
-      }
-
-      
+    for (size_t i = 0; i < rhs_width_.size(); ++i) {
+      rhs_width_[i] = rhs_width_[i] - normalFractureTraction(i);
+      if (rhs_width_[i] < 0.0)
+        rhs_width_[i] = 0.0; // @@ not entirely accurate, but will avoid
+                             // unphysical negative normal displacements
     }
-    // Do we need to ad thermal "forces"
+}
 
+void Fracture::assembleFractureMatrix() {
+
+    size_t nc = grid_->leafGridView().size(0);
     if(!fracture_matrix_){
         fracture_matrix_ = std::make_unique<DynamicMatrix>();
     }

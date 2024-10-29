@@ -244,7 +244,8 @@ bool Fracture::fullSystemIteration(const double tol)
   // initialize right-hand aide
   VectorHP rhs {x}; rhs = 0; // same size as x, but initially just with zeros
 
-  rhs[_0] = 0; // @@ we currently do not use rhs_width_ here, but include p through the I block
+  //rhs[_0] = 0; // @@ we currently do not use rhs_width_ here, but include p through the I block
+  normalFractureTraction(rhs[_0]); // right-hand side equals the normal fracture traction
   rhs[_1] = rhs_pressure_; // should have been updated in call to `assemblePressure` above
 
   S0.mmv(x, rhs); // rhs = rhs - S0 * x;   (we are working in the tanget plane)

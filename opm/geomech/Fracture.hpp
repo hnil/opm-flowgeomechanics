@@ -161,6 +161,9 @@ public:
             }
             // assume reservoir distance is calculated
         }
+
+        updateFractureRHS();
+        updateLeakoff();
     }
     void initFracturePressureFromReservoir();
     void initFractureStates();
@@ -188,7 +191,7 @@ private:
     Point3D surfaceMap(double x, double y);
 
     // should be called every time a grid is updated/changed
-    void updateGridDiscretizations() {assembleFracture(); initPressureMatrix();}
+    void updateGridDiscretizations() {assembleFractureMatrix(); initPressureMatrix();}
     void setGridStretcher();
 
     std::unique_ptr<GridStretcher> grid_stretcher_;
@@ -211,11 +214,15 @@ private:
     void setSource();
     void initPressureMatrix();
     void setupPressureSolver();
+    void updateFractureRHS();
+    void updateLeakoff();
+    void normalFractureTraction(Dune::BlockVector<Dune::FieldVector<double, 1>>& traction) const;
+    double normalFractureTraction(size_t ix) const;
 
     // one nonlinear iteration of fully coupled system.  Returns 'true' if converged
     bool fullSystemIteration(const double tol);
 
-    void assembleFracture();
+    void assembleFractureMatrix();
     std::vector<double> stressIntensityK1() const;
 
 
