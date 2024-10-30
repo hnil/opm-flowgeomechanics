@@ -71,7 +71,8 @@ public:
     using Matrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>;
     using DynamicMatrix = Dune::DynamicMatrix<double>;
   
-    void init(std::string well, int perf, int well_cell, Point3D origo, Point3D normal, Opm::PropertyTree prm);
+    void init(std::string well, int perf, int well_cell, Point3D origo,
+              Point3D normal, Opm::PropertyTree prm, const Opm::EclipseGrid& eclgrid);
     void grow(int layers, int method);
     std::string name() const;
     void write(int reportStep = -1) const;
@@ -86,6 +87,7 @@ public:
     template <class TypeTag, class Simulator>
     void initReservoirProperties(const Simulator& simulator)
     {
+      std::cout << "initReservoirProperties (simulator)" << std::endl;
         using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
         const auto& problem = simulator.problem();
         // NB burde truleg interpolere
@@ -120,6 +122,7 @@ public:
     template <class TypeTag, class Simulator>
     void updateReservoirProperties(const Simulator& simulator)
     {
+      std::cout << "updateReservoirProperties (simulator)" << std::endl;
         using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
         const auto& problem = simulator.problem();
         // NB burde truleg interpolere
@@ -176,7 +179,7 @@ public:
     void printMechMatrix() const; // debug purposes
     void writeFractureSystem()  const;
     void writePressureSystem()  const;
-    void setFractureGrid(std::unique_ptr<Fracture::Grid>& gptr); // a hack to allow use of another grid
+    void setFractureGrid(std::unique_ptr<Fracture::Grid> gptr = nullptr); // a hack to allow use of another grid
     std::vector<std::tuple<int, double, double>> wellIndices() const;
     WellInfo& wellInfo(){return wellinfo_;}
     std::vector<double> leakOfRate() const;
@@ -187,11 +190,11 @@ private:
     // helpers for growing grid
     void insertLinear(const std::vector<unsigned int>& inner_indices);
     void insertExp(const std::vector<unsigned int>& inner_indices);
-    void initFracture();
+    void initFracture(); // create a new fracture grid from scratch
     Point3D surfaceMap(double x, double y);
 
     // should be called every time a grid is updated/changed
-    void updateGridDiscretizations() {assembleFractureMatrix(); initPressureMatrix();}
+    //void updateGridDiscretizations() {assembleFractureMatrix(); initPressureMatrix();}
     void setGridStretcher();
 
     std::unique_ptr<GridStretcher> grid_stretcher_;
@@ -216,6 +219,7 @@ private:
     void setupPressureSolver();
     void updateFractureRHS();
     void updateLeakoff();
+    void updateCellNormals();
     void normalFractureTraction(Dune::BlockVector<Dune::FieldVector<double, 1>>& traction) const;
     double normalFractureTraction(size_t ix) const;
 
@@ -240,11 +244,11 @@ private:
     // only for radom access need to be updater after trid change
     Dune::BlockVector<Dune::FieldVector<double, 3>> cell_normals_;
 
-    // solution variables
-    Dune::BlockVector<Dune::FieldVector<double, 1>> fracture_width_;
-    Dune::BlockVector<Dune::FieldVector<double, 1>> rhs_width_;
-    Dune::BlockVector<Dune::FieldVector<double, 1>> fracture_pressure_;
-    Dune::BlockVector<Dune::FieldVector<double, 1>> rhs_pressure_;
+    // solution variables (only to avoid memory allocation, do not trust their state)
+    mutable Dune::BlockVector<Dune::FieldVector<double, 1>> fracture_width_;
+    mutable Dune::BlockVector<Dune::FieldVector<double, 1>> rhs_width_;
+    mutable Dune::BlockVector<Dune::FieldVector<double, 1>> fracture_pressure_;
+    mutable Dune::BlockVector<Dune::FieldVector<double, 1>> rhs_pressure_;
 
     // transmissibilities
     using Htrans = std::tuple<size_t, size_t, double, double>;

@@ -40,7 +40,9 @@ Fracture::init(std::string well,
                int well_cell,
                Fracture::Point3D origo,
                Fracture::Point3D normal,
-               Opm::PropertyTree prm
+               Opm::PropertyTree prm,
+               const Opm::EclipseGrid& eclgrid)
+               
     )
 {
     prm_ = prm;
@@ -56,28 +58,13 @@ Fracture::init(std::string well,
         axis_[i] /= axis_[i].two_norm();
         axis_[i] *= init_scale;
     }
+
     layers_ = 0;
     nlinear_ = 0;
-    initFracture();
-    grow(1, 0);
-    nlinear_ = layers_;
-    //grow(4, 1);
-    grid_->grow();
-    grid_->postGrow();
 
-    size_t nc = grid_->leafGridView().size(0);
-    reservoir_cells_ = std::vector<int>(nc, -1);
-    fracture_pressure_.resize(nc); fracture_pressure_ = 1e5;
-    this->initFractureWidth();
-    //fracture_width_.resize(nc); fracture_width_ = 1e-3;
-    //
+    setFractureGrid();
 
-    updateReservoirProperties(); // default, in case not called using Simulator
-    updateGridDiscretizations(); // assemble mechanics and pressure matrices
-    setGridStretcher();
-
-    this->resetWriters();
-    
+    // set mapping to reservoir cells
     
 }
 
@@ -158,6 +145,45 @@ Fracture::name() const
     std::string name = "Fracure_on_" + wellinfo_.name + "_perf_" + std::to_string(wellinfo_.perf) + "_nr" ;
     return name;
 }
+
+void Fracture::updateCellNormals() {
+  cell_normals_.resize(grid_->leafGridView().size(0));
+  for (auto& element : elements(grid_->leafGridView()))
+    cell_normals_[elemMapper.index(element)] = ddm::normalOfElement(element);
+}
+
+void Fracture::setFractureGrid(std::unique_ptr<Fracture::Grid> gptr)
+{
+  if (gptr == nullptr) {
+    // create a new grid 
+    initFracture();
+    grow(1, 0);
+    nlinear_ = layers_;
+    grid_->grow();
+    grid_->postGrow();
+  } else {
+    // use grid provided by user
+    grid_ = std::move(gptr);
+    // @@ NB: we have not initialized the out_indices_ vector, which would be
+    // necessary if we plan to grow the user-provided grid
+  }
+
+  // compute the cell normals
+  updateCellNormals();
+  
+  // set object to allow stretching of the grid
+  setGridStretcher();
+
+  // set sparsity of pressure matrix, but do not compute its entries
+  initPressureMatrix(); 
+
+  // Since the grid has been created/updated/changed, any previous mapping
+  // to reservoir cells has been invalidated.
+  reservoir_cells_.clear();
+  
+  this->resetWriters();
+}
+
 void
 Fracture::initFracture()
 {
@@ -442,7 +468,6 @@ template <class Grid3D>
 void
 Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,const Grid3D& grid3D)
 {
-    cell_normals_.resize(grid_->leafGridView().size(0));
     reservoir_cells_.resize(grid_->leafGridView().size(0));
     using GridView = typename Grid::LeafGridView;
     using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
@@ -498,9 +523,6 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
             // std::cout << "Fallback Search" << std::endl;
             // int cell = Opm::findCell(grid3D,geom.center());
         }
-        auto normal = ddm::normalOfElement(element);
-        cell_normals_[elemIdx] = normal;
-
     }
     std::cout << "For Fracture : " << this->name() << " : " << tri_divide << " triangles should be devided"
               << std::endl;
@@ -516,26 +538,9 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
     }
 }
 
-
-void Fracture::setFractureGrid(std::unique_ptr<Fracture::Grid>& gptr)
-{
-  grid_ = std::move(gptr);
-  layers_ = 0;
-  nlinear_ = 0;
-
-  size_t nc = grid_->leafGridView().size(0);
-  fracture_pressure_.resize(nc); fracture_pressure_ = 1e5;
-  reservoir_cells_ = std::vector<int>(nc, -1);
-  
-  updateReservoirProperties();
-  updateGridDiscretizations(); // assemble mechanics and pressure matrices
-  setGridStretcher();
-
-  this->resetWriters();
-}
-
 void Fracture::updateReservoirProperties()
 {
+    std::cout << "Update Reservoir Properties (dummy)" << std::endl;
     // updater for standalone test
     double perm = prm_.get<double>("reservoir.perm");
     double dist = prm_.get<double>("reservoir.dist");
@@ -546,15 +551,14 @@ void Fracture::updateReservoirProperties()
     reservoir_dist_.resize(nc, dist);
     reservoir_mobility_.resize(nc, 1000);
     reservoir_pressure_.resize(nc, 100.0e5);
-    //reservoir_stress_.resize(nc);
-    //for (size_t i = 0; i != nc; ++i) reservoir_stress_[i] = Dune::FieldVector<double, 6> {0, 0, 0, 0, 0, 0};
-    //cell_normals_.resize(grid_->leafGridView().size(0)); // @@
-    nu_ = 0.25;
+    reservoir_stress_.resize(nc);
+    for (size_t i = 0; i != nc; ++i)
+      reservoir_stress_[i] = Dune::FieldVector<double, 6> {0, 0, 0, 0, 0, 0};
+    
+    nu_ = 0.25; 
     E_ = 1e9;
     this->initFractureWidth();
 
-    updateFractureRHS();
-    updateLeakoff();
 }
 void
 Fracture::solve()
@@ -593,7 +597,7 @@ Fracture::solve()
 
     } else if (method == "if") {
       // iterate full nonlinear system until convergence
-
+      std::cout << "Solve Fracture Pressure using Iterative Fracture" << std::endl;
       fracture_width_ = 1e-2;   // Ensure not completely closed
       normalFractureTraction(fracture_pressure_); // start by assuming pressure equal to confining stress//0.0;
       
@@ -1026,6 +1030,7 @@ void Fracture::initPressureMatrix()
     //  index of the neighbour
     //
     double fWI = prm_.get<double>("fractureWI");
+    perfinj_.clear();
     for(int cell : well_source_){
         perfinj_.push_back({cell,fWI});
     }
@@ -1139,6 +1144,11 @@ Fracture::assemblePressure()
 
 double Fracture::normalFractureTraction(size_t eIdx) const
 {
+  std::cout << "Normal Fracture Traction" << std::endl;
+  std::cout << eIdx << " " << reservoir_stress_.size() << cell_normals_.size() << std::endl;
+  std::cout << "Reservoir stress: " << reservoir_stress_[eIdx] << std::endl;
+  
+  std::cout << "Cell normal: " << cell_normals_[eIdx] << std::endl;
   return ddm::tractionSymTensor(reservoir_stress_[eIdx], cell_normals_[eIdx]);
 }
   
@@ -1152,8 +1162,10 @@ void Fracture::normalFractureTraction(Dune::BlockVector<Dune::FieldVector<double
 }
 
 void Fracture::updateFractureRHS() {
+    std::cout << "Update Fracture RHS" << std::endl;
     rhs_width_ = fracture_pressure_;
     for (size_t i = 0; i < rhs_width_.size(); ++i) {
+      std::cout << i << " " << rhs_width_[i] << std::endl;
       rhs_width_[i] = rhs_width_[i] - normalFractureTraction(i);
       if (rhs_width_[i] < 0.0)
         rhs_width_[i] = 0.0; // @@ not entirely accurate, but will avoid
@@ -1162,7 +1174,7 @@ void Fracture::updateFractureRHS() {
 }
 
 void Fracture::assembleFractureMatrix() {
-
+    std::cout << "Assemble Fracture Matrix" << std::endl;
     size_t nc = grid_->leafGridView().size(0);
     if(!fracture_matrix_){
         fracture_matrix_ = std::make_unique<DynamicMatrix>();
