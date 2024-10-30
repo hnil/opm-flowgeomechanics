@@ -40,10 +40,7 @@ Fracture::init(std::string well,
                int well_cell,
                Fracture::Point3D origo,
                Fracture::Point3D normal,
-               Opm::PropertyTree prm,
-               const Opm::EclipseGrid& eclgrid)
-               
-    )
+               Opm::PropertyTree prm)
 {
     prm_ = prm;
     wellinfo_ = WellInfo({well, perf, well_cell});
@@ -64,18 +61,20 @@ Fracture::init(std::string well,
 
     setFractureGrid();
 
-    // set mapping to reservoir cells
-    
+    setPerfPressure(0.0); // This can be changed by subsequently calling this
+                          // function when the fracture is connected to the
+                          // reservoir
+
+    // NB: The Fracture object is still not fully initialized, since there is
+    // not yet any connection with a surrounding reservoir. The following
+    // needs to be done before the fracture can be used:
+    // 1) Call `updateReservoirCells` to establish the mapping between frature grid
+    //    cells and the cells in the reservoir grid (sets `reservoir_cells_`)
+    // 2) Then, call `updateReservoirProperties` to import relevant reservoir properties
+    //    to the fracture (`reservoir_XXX_` vectors, as well as `E_` and `nu_`)
 }
 
-
-void Fracture::setGridStretcher()
-{
-  grid_stretcher_ = std::unique_ptr<GridStretcher>(new GridStretcher(*grid_));
-}
-
-  
-void Fracture::resetWriters(){
+void Fracture::resetWriters() {
     // nead to be reseat if grid is changed ??
     vtkwriter_ =
       std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(),
@@ -148,6 +147,7 @@ Fracture::name() const
 
 void Fracture::updateCellNormals() {
   cell_normals_.resize(grid_->leafGridView().size(0));
+  ElementMapper elemMapper(grid_->leafGridView(), Dune::mcmgElementLayout());  
   for (auto& element : elements(grid_->leafGridView()))
     cell_normals_[elemMapper.index(element)] = ddm::normalOfElement(element);
 }
@@ -172,14 +172,16 @@ void Fracture::setFractureGrid(std::unique_ptr<Fracture::Grid> gptr)
   updateCellNormals();
   
   // set object to allow stretching of the grid
-  setGridStretcher();
+  grid_stretcher_ = std::unique_ptr<GridStretcher>(new GridStretcher(*grid_));
 
   // set sparsity of pressure matrix, but do not compute its entries
   initPressureMatrix(); 
 
-  // Since the grid has been created/updated/changed, any previous mapping
-  // to reservoir cells has been invalidated.
+  // Since the grid has been created/updated/changed, any previous mapping to
+  // reservoir cells has been invalidated, and the fracture matrix (for
+  // mechanics) is obsolete.
   reservoir_cells_.clear();
+  fracture_matrix_ = nullptr;
   
   this->resetWriters();
 }
@@ -578,6 +580,8 @@ Fracture::solve()
         int it=0;
          bool changed = true;
         while(changed && (it < max_it)){
+            initFractureStates(); // ensure initial fracture_width and fracture_pressure
+                                  // set to something reasonable
             auto fracture_width = fracture_width_;
             auto fracture_pressure = fracture_pressure_;
             this->solveFractureWidth();
@@ -671,7 +675,9 @@ Fracture::solve()
         grid_stretcher_->applyBoundaryNodeDisplacements(displacements);
 
         // grid has changed its geometry, so we have to recompute discretizations
-        updateGridDiscretizations();
+        updateCellNormals();
+        initPressureMatrix();
+        fracture_matrix_ = nullptr;
         
       }
     }else{
@@ -964,7 +970,7 @@ Fracture::solvePressure() {
 // fracture_width_  
 void Fracture::solveFractureWidth()
 {
-    fracture_matrix_->solve(fracture_width_,rhs_width_);
+    fractureMatrix().solve(fracture_width_,rhs_width_);
     double max_width = prm_.get<double>("solver.max_width");
     double min_width = prm_.get<double>("solver.min_width");
     for(int i=0; i < fracture_width_.size(); ++i){
@@ -1173,7 +1179,7 @@ void Fracture::updateFractureRHS() {
     }
 }
 
-void Fracture::assembleFractureMatrix() {
+void Fracture::assembleFractureMatrix() const {
     std::cout << "Assemble Fracture Matrix" << std::endl;
     size_t nc = grid_->leafGridView().size(0);
     if(!fracture_matrix_){
@@ -1191,7 +1197,7 @@ void Fracture::printPressureMatrix() const // debug purposes
 
 void Fracture::printMechMatrix() const // debug purposes
 {
-  Dune::printmatrix(std::cout, *fracture_matrix_, "matname", "linameo");
+    Dune::printmatrix(std::cout, fractureMatrix(), "matname", "linameo");
 }
 
 // bool sortcsr(const tuple<size_t,size_t,double>& a,

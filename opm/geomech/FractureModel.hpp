@@ -67,8 +67,8 @@ public:
     void initReservoirProperties(const Simulator& simulator)
     {
         for (size_t i=0; i < wells_.size(); ++i) {
-            for (auto& fracture : well_fractures_[i]){
-                fracture.initReservoirProperties<TypeTag, Simulator>(simulator);
+            for (auto& fracture : well_fractures_[i]) {
+                fracture.updateReservoirProperties<TypeTag, Simulator>(simulator, true);
             }
         }
     }
