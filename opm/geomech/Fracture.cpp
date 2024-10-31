@@ -542,7 +542,6 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
 
 void Fracture::updateReservoirProperties()
 {
-    std::cout << "Update Reservoir Properties (dummy)" << std::endl;
     // updater for standalone test
     double perm = prm_.get<double>("reservoir.perm");
     double dist = prm_.get<double>("reservoir.dist");
@@ -565,7 +564,6 @@ void Fracture::updateReservoirProperties()
 void
 Fracture::solve()
 {
-    std::cout << "Solve Fracture Pressure" << std::endl; 
     std::string method = prm_.get<std::string>("solver.method");
     if(method == "nothing"){
     }else if(method == "simple"){
@@ -603,7 +601,9 @@ Fracture::solve()
       // iterate full nonlinear system until convergence
       std::cout << "Solve Fracture Pressure using Iterative Fracture" << std::endl;
       fracture_width_ = 1e-2;   // Ensure not completely closed
-      normalFractureTraction(fracture_pressure_); // start by assuming pressure equal to confining stress//0.0;
+
+      // start by assuming pressure equal to confining stress//0.0;      
+      normalFractureTraction(fracture_pressure_); 
       
       const double tol = 1e-5; // @@
       const int max_iter = 100;
@@ -976,7 +976,7 @@ void Fracture::solveFractureWidth()
     for(int i=0; i < fracture_width_.size(); ++i){
         assert(std::isfinite(fracture_width_[i]));
         if(fracture_width_[i]> max_width){
-            std::cout << "Limit Fracture width" << std::endl;
+          std::cout << "Limit Fracture width" << std::endl;
             fracture_width_[i] = max_width;
         }
         if(fracture_width_[i] < min_width){
@@ -1101,6 +1101,8 @@ void Fracture::initPressureMatrix()
 void
 Fracture::assemblePressure()
 {
+    updateLeakoff();
+  
     auto& matrix = *pressure_matrix_;
     matrix = 0.0;
     double mobility=1e4; //1e4; // @@ 1.0
@@ -1150,11 +1152,6 @@ Fracture::assemblePressure()
 
 double Fracture::normalFractureTraction(size_t eIdx) const
 {
-  std::cout << "Normal Fracture Traction" << std::endl;
-  std::cout << eIdx << " " << reservoir_stress_.size() << cell_normals_.size() << std::endl;
-  std::cout << "Reservoir stress: " << reservoir_stress_[eIdx] << std::endl;
-  
-  std::cout << "Cell normal: " << cell_normals_[eIdx] << std::endl;
   return ddm::tractionSymTensor(reservoir_stress_[eIdx], cell_normals_[eIdx]);
 }
   
@@ -1168,7 +1165,6 @@ void Fracture::normalFractureTraction(Dune::BlockVector<Dune::FieldVector<double
 }
 
 void Fracture::updateFractureRHS() {
-    std::cout << "Update Fracture RHS" << std::endl;
     rhs_width_ = fracture_pressure_;
     for (size_t i = 0; i < rhs_width_.size(); ++i) {
       std::cout << i << " " << rhs_width_[i] << std::endl;
@@ -1180,7 +1176,6 @@ void Fracture::updateFractureRHS() {
 }
 
 void Fracture::assembleFractureMatrix() const {
-    std::cout << "Assemble Fracture Matrix" << std::endl;
     size_t nc = grid_->leafGridView().size(0);
     if(!fracture_matrix_){
         fracture_matrix_ = std::make_unique<DynamicMatrix>();

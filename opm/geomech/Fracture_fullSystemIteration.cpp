@@ -226,7 +226,7 @@ bool Fracture::fullSystemIteration(const double tol)
   updateCouplingMatrix(coupling_matrix_, pressure_matrix_,
                        htrans_, fracture_pressure_, fracture_width_);
 
-  const auto& A = *fracture_matrix_;
+  const auto& A = fractureMatrix(); // will be created if not already existing
   const auto& M = *pressure_matrix_;
   const auto& C = *coupling_matrix_;
   const auto I = makeIdentity(A.N());
@@ -248,6 +248,11 @@ bool Fracture::fullSystemIteration(const double tol)
   normalFractureTraction(rhs[_0]); // right-hand side equals the normal fracture traction
   rhs[_1] = rhs_pressure_; // should have been updated in call to `assemblePressure` above
 
+  std::cout << "rhs[0]: " << rhs[_0].infinity_norm() << std::endl;
+  std::cout << "pressure: ";
+  std::copy(fracture_pressure_.begin(), fracture_pressure_.end(), std::ostream_iterator<double>(std::cout, " "));
+  std::cout << std::endl;
+  
   S0.mmv(x, rhs); // rhs = rhs - S0 * x;   (we are working in the tanget plane)
 
   // check if system is already at a converged state (in which case we return immediately)
