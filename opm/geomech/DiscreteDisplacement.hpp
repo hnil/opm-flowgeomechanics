@@ -1,6 +1,7 @@
 #pragma once
 #include <dune/common/dynmatrix.hh>
 #include <dune/common/fvector.hh>
+#include <dune/istl/bvector.hh>
 #include "CutDe.hpp"
 #include <opm/geomech/Math.hpp>
 #include <dune/grid/common/entity.hh>
@@ -103,6 +104,21 @@ tractionSymTensor(const Dune::FieldVector<double,6> symtensor, Dune::FieldVector
 
 //assembleMatrix(Dune::DynamicMatrix<Dune::FieldMatrix<double,1,1>>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid)
 void assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);
+
+Dune::FieldVector<double, 6>
+strain(const Dune::FieldVector<double, 3>& obs,
+       const Dune::BlockVector<Dune::FieldVector<double, 3>>& slips,
+       const Dune::FoamGrid<2, 3>& grid,
+       const double E,
+       const double nu);
+
+Dune::FieldVector<double, 3>
+disp(const Dune::FieldVector<double, 3>& obs,
+       const Dune::BlockVector<Dune::FieldVector<double, 3>>& slips,
+       const Dune::FoamGrid<2, 3>& grid,
+       const double E,
+       const double nu);
+
 
 } // namespace ddm
 

@@ -10,6 +10,7 @@
 
 #include <opm/geomech/FlowGeomechLinearSolverParameters.hpp>
 #include <opm/geomech/FractureModel.hpp>
+#include <opm/simulators/linalg/WriteSystemMatrixHelper.hpp>
 //#include <opm/geomech/ElasticitySolverUpscale.hpp>
 namespace Opm{
     template<typename TypeTag>
@@ -34,9 +35,12 @@ namespace Opm{
         EclGeoMechModel(Simulator& simulator):
             //           Parent(simulator)
             first_solve_(true),
+            write_system_(false),
+            reduce_boundary_(false),
             simulator_(simulator),
             elacticitysolver_(simulator.vanguard().grid())
         {
+
             //const auto& eclstate = simulator_.vanguard().eclState();
         };
         //ax model things
@@ -76,6 +80,7 @@ namespace Opm{
                     //NB could probably be moved to some initialization
                     // let fracture contain all wells
                     Opm::PropertyTree param = problem.getFractureParam();
+                    include_fracture_contributions_ = param.get<bool>("include_fracture_contributions");
                     //param.read("fractureparam.json");
                     const auto& schedule =  this->simulator_.vanguard().schedule();
                     int reportStepIdx = simulator_.episodeIndex();
@@ -177,6 +182,8 @@ namespace Opm{
             // for now assemble and set up solver her
             const auto& problem = simulator_.problem();
             if(first_solve_){
+                Opm::PropertyTree param = problem.getFractureParam();
+                reduce_boundary_ = param.get<bool>("reduce_boundary");
                 OPM_TIMEBLOCK(SetupMechSolver);
                 bool do_matrix = true;//assemble matrix
                 bool do_vector = true;//assemble matrix
@@ -185,20 +192,24 @@ namespace Opm{
                 elacticitysolver_.fixNodes(problem.bcNodes());
                 //
                 elacticitysolver_.initForAssembly();
-                elacticitysolver_.assemble(mechPotentialForce_, do_matrix, do_vector);
+                elacticitysolver_.assemble(mechPotentialForce_, do_matrix, do_vector,reduce_boundary_);
                 FlowLinearSolverParametersGeoMech p;
                 p.init<TypeTag>();
                 // Print parameters to PRT/DBG logs.
 
                 PropertyTree prm = setupPropertyTree(p, true, true);
                 if (p.linear_solver_print_json_definition_) {
-                    std::ostringstream os;
-                    os << "Property tree for mech linear solver:\n";
-                    prm.write_json(os, true);
-                    OpmLog::note(os.str());
+                    if(simulator_.gridView().comm().rank() == 0){
+                        std::ostringstream os;
+                        os << "Property tree for mech linear solver:\n";
+                        prm.write_json(os, true);
+                        OpmLog::note(os.str());
+                    }
                 }
                 elacticitysolver_.setupSolver(prm);
+                elacticitysolver_.comm()->communicator().barrier();
                 first_solve_ = false;
+                write_system_ = prm.get<int>("verbosity") > 10;
             }else{
                 OPM_TIMEBLOCK(AssembleRhs);
 
@@ -215,6 +226,30 @@ namespace Opm{
             {
                 OPM_TIMEBLOCK(SolveMechanicalSystem);
                 elacticitysolver_.solve();
+                if(write_system_){
+                    Opm::Helper::writeMechSystem(simulator_,
+                    elacticitysolver_.A.getOperator(),
+                    elacticitysolver_.A.getLoadVector(),
+                    elacticitysolver_.comm());
+                    {
+                        int num_points = simulator_.vanguard().grid().size(3);
+                        Dune::BlockVector<Dune::FieldVector<double,1>> fixed(3*num_points);
+                        fixed  = 0.0;
+                        const auto& bcnodes = problem.bcNodes();
+                        for(const auto& node: bcnodes){
+                            int node_idx = std::get<0>(node);
+                            auto bcnode = std::get<1>(node);
+                            auto fixdir = bcnode.fixeddir;
+                            for(int i = 0; i < 3; ++i){ 
+                                fixed[3*node_idx+i][0] = fixdir[i];
+                            }
+                        }
+                        Opm::Helper::writeVector(simulator_,
+                                                fixed,
+                                                "fixed_values_",
+                                                elacticitysolver_.comm());
+                    }
+                }
             }
             {
             OPM_TIMEBLOCK(CalculateOutputQuantitesMech);
@@ -223,15 +258,20 @@ namespace Opm{
             const auto& gv = grid.leafGridView();
             static constexpr int dim = Grid::dimension;
             field.resize(grid.size(dim)*dim);
-            elacticitysolver_.expandSolution(field,elacticitysolver_.u);
+            if(reduce_boundary_){
+                elacticitysolver_.expandSolution(field,elacticitysolver_.u);
+            }else{
+              assert(field.size() == elacticitysolver_.u.size());
+              field =  elacticitysolver_.u;   
+            }
 
             this->makeDisplacement(field);
             // update variables used for output to resinsight
             // NB TO DO
             {
             OPM_TIMEBLOCK(calculateStress);
-            elacticitysolver_.calculateStress(true);
-            elacticitysolver_.calculateStrain(true);
+            elacticitysolver_.calculateStressPrecomputed(field);
+            elacticitysolver_.calculateStrainPrecomputed(field);
             }
             const auto& linstress = elacticitysolver_.stress();
             const auto& linstrain = elacticitysolver_.strain();
@@ -311,8 +351,19 @@ namespace Opm{
         {
             return mechPotentialPressForce_[globalDofIdx];
         }
-        const Dune::FieldVector<double,3>& disp(size_t globalIdx) const{
-            return celldisplacement_[globalIdx];
+        const Dune::FieldVector<double,3> disp(size_t globalIdx,bool with_fracture = false) const{
+            auto disp =  celldisplacement_[globalIdx];
+            if(include_fracture_contributions_ && with_fracture){
+                for(auto& elem: Dune::elements(simulator_.vanguard().grid().leafGridView())){
+                    size_t globalIdx = simulator_.problem().elementMapper().index(elem);
+                    auto geom = elem.geometry();
+                    auto center = geom.center();
+                    Dune::FieldVector<double,3> obs = {center[0],center[1],center[2]};
+                    // check if this is correct stress
+                    disp += fracturemodel_->disp(obs);
+                }
+            }
+            return disp;
         }
 
         const SymTensor delstress(size_t globalIdx) const{
@@ -334,11 +385,22 @@ namespace Opm{
 	  return -1.0*linstress_[globalIdx];
         }
 
-        const SymTensor& strain(size_t globalIdx) const{
+        const SymTensor strain(size_t globalIdx,bool with_fracture = false) const{
+            auto strain = strain_[globalIdx];
+            if(include_fracture_contributions_ && with_fracture){
+                for(auto& elem: Dune::elements(simulator_.vanguard().grid().leafGridView())){
+                    size_t globalIdx = simulator_.problem().elementMapper().index(elem);
+                    auto geom = elem.geometry();
+                    auto center = geom.center();
+                    Dune::FieldVector<double,3> obs = {center[0],center[1],center[2]};
+                    // check if this is correct stress
+                    strain += fracturemodel_->strain(obs);
+                }
+            }
             return strain_[globalIdx];
-        }
+        }   
 
-        const SymTensor stress(size_t globalIdx) const{
+        const SymTensor stress(size_t globalIdx,bool with_fracture = false) const{
             Dune::FieldVector<double,6> effStress = this->effstress(globalIdx);
             effStress += simulator_.problem().initStress(globalIdx);
             double effPress = this->mechPotentialForce(globalIdx);
@@ -346,6 +408,17 @@ namespace Opm{
                 effStress[i] += effPress;
 
             }
+            if(include_fracture_contributions_ && with_fracture){
+                for(auto& elem: Dune::elements(simulator_.vanguard().grid().leafGridView())){
+                    size_t globalIdx = simulator_.problem().elementMapper().index(elem);
+                    auto geom = elem.geometry();
+                    auto center = geom.center();
+                    Dune::FieldVector<double,3> obs = {center[0],center[1],center[2]};
+                    // check if this is correct stress
+                    effStress += fracturemodel_->stress(obs);
+                }
+            }
+
             return effStress;
          }
 
@@ -376,10 +449,11 @@ namespace Opm{
             return mechPotentialForce_[dofIx];
         }
 
-        const double& disp(unsigned globalDofIdx, unsigned dim) const
-        {
-            return celldisplacement_[globalDofIdx][dim];
-        }
+        // const double& disp(unsigned globalDofIdx, unsigned dim) const
+        // {
+        //     return celldisplacement_[globalDofIdx][dim];
+            
+        // }
         // const double stress(unsigned globalDofIdx, unsigned dim) const
         // {
         //     // not efficient
@@ -428,7 +502,10 @@ namespace Opm{
         }
         const FractureModel& fractureModel() const{return *fracturemodel_;}
     private:
-        bool first_solve_;
+        bool first_solve_{true};
+        bool write_system_{false};
+        bool reduce_boundary_{false};
+        bool include_fracture_contributions_{false};
         Simulator& simulator_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialForce_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialPressForce_;

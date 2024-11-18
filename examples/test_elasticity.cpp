@@ -306,8 +306,8 @@ int run(Params& p, const std::string& name)
      std::vector<double> stresslin(num_cells*6,0.0);
      std::vector<double> strainlin(num_cells*6,0.0);
 
-     esolver.calculateStress(true);
-     esolver.calculateStrain(true);
+     esolver.calculateStressPrecomputed(field);
+     esolver.calculateStrainPrecomputed(field);
 
      const Dune::BlockVector<Dune::FieldVector<double,6>>& stress = esolver.stress();
      const Dune::BlockVector<Dune::FieldVector<double,6>>& strain = esolver.strain();

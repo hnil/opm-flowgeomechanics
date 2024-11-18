@@ -179,7 +179,11 @@ public:
     std::vector<double> leakOfRate() const;
     double injectionPressure() const;
     void setPerfPressure(double perfpressure){perf_pressure_ = perfpressure;}
+    Dune::FieldVector<double, 6> stress(Dune::FieldVector<double, 3> obs) const;
+    Dune::FieldVector<double, 6> strain(Dune::FieldVector<double, 3> obs) const;
+    Dune::FieldVector<double, 3> disp(Dune::FieldVector<double, 3> obs) const;
 private:
+     Dune::BlockVector<Dune::FieldVector<double, 3>> all_slips() const;
     void resetWriters();
     // helpers for growing grid
     void insertLinear(const std::vector<unsigned int>& inner_indices);

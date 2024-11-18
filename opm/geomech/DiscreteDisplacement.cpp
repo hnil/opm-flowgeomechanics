@@ -100,5 +100,43 @@ assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double
         }
     }
 }
+Dune::FieldVector<double, 6>
+strain(const Dune::FieldVector<double, 3>& obs,
+       const Dune::BlockVector<Dune::FieldVector<double, 3>>& slips,
+       const Dune::FoamGrid<2, 3>& grid,
+       const double /*E*/,
+       const double nu)
+{
+    Dune::FieldVector<double, 6> strain;
+    strain = 0.0;
+    using Grid = Dune::FoamGrid<2, 3>;
+    using GridView = typename Grid::LeafGridView;
+    using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
+    ElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
+    for (auto elem1 : elements(grid.leafGridView())) {
+        int idx1 = mapper.index(elem1);
+        strain += TDStrainFS(obs, elem1, slips[idx1], nu);
+    }
+    return strain;
+}
 
+Dune::FieldVector<double, 3>
+disp(const Dune::FieldVector<double, 3>& obs,
+       const Dune::BlockVector<Dune::FieldVector<double, 3>>& slips,
+       const Dune::FoamGrid<2, 3>& grid,
+       const double /*E*/,
+       const double nu)
+{
+    Dune::FieldVector<double, 3> disp;
+    disp = 0.0;
+    using Grid = Dune::FoamGrid<2, 3>;
+    using GridView = typename Grid::LeafGridView;
+    using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
+    ElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
+    for (auto elem1 : elements(grid.leafGridView())) {
+        int idx1 = mapper.index(elem1);
+        disp += TDDispFS(obs, elem1, slips[idx1], nu);
+    }
+    return disp;
+}
 }

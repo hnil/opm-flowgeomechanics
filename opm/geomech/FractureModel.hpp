@@ -108,6 +108,10 @@ public:
     }
     std::vector<std::tuple<int,double,double>> getExtraWellIndices(std::string wellname) const;
     bool addPertsToSchedule(){return prm_.get<bool>("addperfs_to_schedule");}
+    // probably this should be collected in one loop since all do full loop over fracture ++ well
+    Dune::FieldVector<double,6> stress(Dune::FieldVector<double,3> obs) const;
+    Dune::FieldVector<double,6> strain(Dune::FieldVector<double,3> obs) const;
+    Dune::FieldVector<double,3> disp(Dune::FieldVector<double,3> obs) const;
 private:
     std::vector<FractureWell> wells_;
     std::vector<std::vector<Fracture>> well_fractures_;

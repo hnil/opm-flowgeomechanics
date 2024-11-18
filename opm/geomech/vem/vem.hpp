@@ -80,7 +80,8 @@ int assemble_mech_system_2D(const double* const points,
                             const double* const neumann_forces, // 2 * number of neumann faces
                             std::vector<std::tuple<int, int, double>>& A_entries,
                             std::vector<double>& b,
-                            const StabilityChoice stability_choice = D_RECIPE);
+                            const StabilityChoice stability_choice,
+                            bool reduce_system);
 // -----------------------------------------------------------------------------------------------
 
 
@@ -156,7 +157,8 @@ int assemble_mech_system_3D(const double* const points,
                             const double* const neumann_forces, // 3 * number of neumann faces
                             std::vector<std::tuple<int, int, double>>& A_entries,
                             std::vector<double>& b,
-                            const StabilityChoice stability_choice = D_RECIPE);
+                            const StabilityChoice stability_choice,
+                            bool reduce_system);
 // -----------------------------------------------------------------------------------------------
 
 

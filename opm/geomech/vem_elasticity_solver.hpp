@@ -46,6 +46,7 @@
 #include <opm/input/eclipse/Deck/Deck.hpp>
 #include <opm/input/eclipse/Schedule/BCProp.hpp>
 #include <opm/simulators/linalg/FlexibleSolver.hpp>
+#include <opm/geomech/DuneCommunicationHelpers.hpp>
 //#include <opm/simulators/linalg/FlexibleSolver_impl.hpp>
 namespace Opm {
 namespace Elasticity {
@@ -77,12 +78,16 @@ class VemElasticitySolver
     typedef Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1> > Matrix;
     //! \brief The linear operator
     ASMHandler<GridType> A;//NB NB names have to change
-
+    //Matrix stiffnessMatrix_;
     //! \brief The solution vectors
     Vector u;//NB NB names have to change
     //! \brief The load vectors
     //Vector rhs;//NB NB names have to change
-
+#if HAVE_MPI
+        using CommunicationType = Dune::OwnerOverlapCopyCommunication<int,int>;
+#else
+        using CommunicationType = Dune::Communication<int>;
+#endif
     //! \brief Main constructor
     //! \param[in] gv_ The grid to operate on
     //! \param[in] tol_ The tolerance to use when deciding whether or not a coordinate falls on a plane/line/point. \sa tol
@@ -147,29 +152,65 @@ class VemElasticitySolver
     //! \brief Assemble (optionally) stiffness matrix A and load vector
     //! \param[in] loadcase The strain load case. Set to -1 to skip
     //! \param[in] matrix Whether or not to assemble the matrix
-    void assemble(const Vector& pressure, bool matrix,bool vector);
+    void assemble(const Vector& pressure, bool matrix,bool vector, bool reduce_system);
 
 
     //! \brief Solve Au = b for u
     //! \param[in] loadcase The load case to solve
     void solve();
 
+    const CommunicationType* comm() const { return comm_.get(); }
+    
+    void setCopyRowsToZero(){
+        auto& matrix =  A.getOperator();
+        assert(matrix.N() == matrix.M());
+        assert(matrix.N() == dofParallelIndexSet_->size());
+            for(auto index: *dofParallelIndexSet_){
+                auto lind = index.local().local();
+                auto at = index.local().attribute();
+                if(at == Dune::OwnerOverlapCopyAttributeSet::copy){
+                    matrix[lind] = 0.0;// set full row to searo
+                    matrix[lind][lind] = 1.0; // set diagonal to 1 (a bit slow due to seach)
+                }
+            }
+    }
+
     // //! \param[in] params The linear solver parameters
     void setupSolver(const Opm::PropertyTree& prm){
         OPM_TIMEBLOCK(setupLinearSolver);
-        // bool parallel=false;
-        // if(parallel){
-        //     OPM_THROW(std::runtime_error,"Parallel for mechanics not implemented");
-        //     const std::function<Vector()> weightsCalculator;
-        //     std::size_t pressureIndex;
-        //     //NB NB ! need other operator in parallel
-        //     using ParOperatorType = Dune::OverlappingSchwarzOperator<Matrix, Vector, Vector, Comm>;
-        //     auto pop = std::make_unique<ParOperatorType>(A.getOperator(), comm);
-        //     using FlexibleSolverType = Dune::FlexibleSolver<ParOperatorType>;
-        //     tsolver = std::make_shared<FlexibleSolverType>(*pop, comm, prm,
-        //                                                    weightsCalculator,
-        //                                                     pressureIndex);
-        // }else{
+#if HAVE_MPI
+// grid_.comm() is something like collective communication
+// comm_ here is the entity communication
+
+            comm_.reset( new CommunicationType( grid_.comm(), Dune::SolverCategory::overlapping,/*free*/false) );
+#endif       
+        bool parallel= comm_->communicator().size() > 1;
+        if(parallel){
+	  vertexParallelIndexSet_.reset( new CommunicationType::ParallelIndexSet(Opm::makeEntityEntityCommunication<3>(grid_)));
+        assert(grid_.size(3) == vertexParallelIndexSet_->size());
+      dofParallelIndexSet_.reset( new CommunicationType::ParallelIndexSet(Opm::entityToDofIndexSet(*vertexParallelIndexSet_, 3)));
+            //vertexRemoteIndexSet_.new( RemotePallelIndexSet(vertex_parallindex,vertex_parallindex, grid_.comm()));
+            //vertexRemoteIndexSet_->rebuid<false>();
+	  //auto dofParallelIndexSet = Opm::entityToDofIndexSet(*vertexParallelIndexSet_, 3);
+            comm_->indexSet() = *dofParallelIndexSet_;   
+            assert(grid_.size(3)*3 == dofParallelIndexSet_->size());
+            comm_->remoteIndices().rebuild<false>();// = *vertexRemoteParallelIndexSet_;   
+            //OPM_THROW(std::runtime_error,"Parallel for mechanics not implemented");
+            const std::function<Vector()> weightsCalculator;
+            std::size_t pressureIndex;
+            //NB NB ! need other operator in parallel
+            setCopyRowsToZero();    
+            std::cout << "Make parallel solver" << std::endl;
+            comm_->communicator().barrier();
+            using ParOperatorType = Dune::OverlappingSchwarzOperator<Matrix, Vector, Vector, CommunicationType>;
+            auto pop = std::make_unique<ParOperatorType>(A.getOperator(), *comm_);
+            using FlexibleSolverType = Dune::FlexibleSolver<ParOperatorType>;
+            auto tsolver = std::make_unique<FlexibleSolverType>(*pop, *comm_, prm,
+                                                           weightsCalculator,
+                                                            pressureIndex);
+	    pop_ = std::move(pop);
+            tsolver_ = std::move(tsolver);
+        }else{
             std::size_t pressureIndex;//Dummy
             const std::function<Vector()> weightsCalculator;//Dummy
             auto sop = std::make_unique<SeqOperatorType>(A.getOperator());
@@ -181,7 +222,8 @@ class VemElasticitySolver
             tsolver_ = std::move(tsolver);
             //NB names have to change.
             //b = A.getLoadVector();
-            //}
+            //
+        }
     }
     template<int comp>
     void averageStress(Dune::BlockVector<Dune::FieldVector<ctype,comp>>& sigmacells,
@@ -311,7 +353,7 @@ class VemElasticitySolver
             MAT.setSize(nrows, ncols);
             makeDuneMatrixCompressed(A_entries,MAT);
             //    for (auto matel: A_entries) {
-            //         int i = std::get<0>(matel);
+            //         int i = std::get<0>(matel);            
             //         int j = std::get<1>(matel);
             //         MAT.entry(i,j)=0;
             //     }
@@ -329,13 +371,17 @@ class VemElasticitySolver
             // }
         }
     }
-    void calculateStress(bool precalculated);
-    void calculateStrain(bool precalculated);
+    void calculateStressPrecomputed(const Vector& dispalldune);
+    void calculateStrainPrecomputed(const Vector& dispalldune);
+    void calculateStrain();// bool precalculated);
+    void calculateStress();// bool precalculated);
+
     //const std::vector<std::array<double,6>>& stress(){return stress_;}
     const Dune::BlockVector<Dune::FieldVector<ctype,6>>& stress() const{return stress_;}
     const Dune::BlockVector<Dune::FieldVector<ctype,6>>& strain() const{return strain_;}
 
 private:
+  void expandDisp(std::vector<double>& dispall,bool expand);
   void assignToVoigt(Dune::BlockVector< Dune::FieldVector<double,6> >& voigt_stress, const Dune::BlockVector< Dune::FieldVector<double,1> >& vemstress);
   void assignToVoigtSymMat(Dune::BlockVector< Dune::FieldVector<double,6> >& voigt_stress, const std::vector< std::array<double,6> >& vemstress);
     using AbstractSolverType = Dune::InverseOperator<Vector, Vector>;
@@ -345,6 +391,11 @@ private:
     using SeqOperatorType = Dune::MatrixAdapter<Matrix, Vector, Vector>;
     std::unique_ptr<SeqOperatorType> sop_;
 
+    using ParOperatorType = Dune::OverlappingSchwarzOperator<Matrix, Vector, Vector, CommunicationType>;
+    std::unique_ptr<ParOperatorType> pop_;
+
+  
+  
         //! \brief Linear solver
     typedef std::unique_ptr<Dune::InverseOperator<Vector, Vector> > SolverPtr;
     SolverPtr tsolver_;
@@ -373,10 +424,15 @@ private:
     Matrix strainmat_;
     Matrix divmat_;   // from cell pressure to active dofs
     //std::vector<std::array<double,6>> stress_;
+    std::shared_ptr< CommunicationType > comm_;
+    std::shared_ptr< CommunicationType::ParallelIndexSet > vertexParallelIndexSet_;
+    std::shared_ptr< CommunicationType::ParallelIndexSet > dofParallelIndexSet_;
+  //std::shared_ptr< CommunicationType::RemoteIndices> vertexRemoteIndexSet_;
 
 };
 
-}} // namespace Opm, Elasticity
+}
+} // namespace Opm, Elasticity
 
 #include "vem_elasticity_solver_impl.hpp"
 

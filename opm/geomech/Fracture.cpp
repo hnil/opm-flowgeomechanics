@@ -19,7 +19,20 @@
 
 namespace {
 
- double compute_target_expansion(const double K1_target,
+/**
+ * @brief Computes the target expansion for a fracture.
+ *
+ * This function calculates the target expansion based on the given parameters:
+ * the target stress intensity factor (K1_target), the fracture aperture, 
+ * Young's modulus (E), and Poisson's ratio (nu).
+ *
+ * @param K1_target The target stress intensity factor.
+ * @param aperture The fracture aperture.
+ * @param E Young's modulus.
+ * @param nu Poisson's ratio.
+ * @return The computed target expansion.
+ */
+double compute_target_expansion(const double K1_target,
                                  const double aperture,
                                  const double E, // young 
                                  const double nu) // poisson
@@ -122,6 +135,17 @@ void Fracture::setupPressureSolver(){
         pressure_solver_ = std::move(psolver);
     }
 }
+/**
+ * @brief Removes cells from the grid if they are out side reservoir.
+ *
+ * This function performs the following steps:
+ * 1. Copies the current fracture width data to a persistent container.
+ * 2. Iterates over all elements in the grid's leaf view and removes elements where the reservoir cell index is negative.
+ * 3. Grows the grid and performs post-growth operations.
+ * 4. Resizes the fracture width array to match the new grid size.
+ * 5. Copies the fracture width data back from the persistent container to the resized array.
+ * 6. Resets the writers associated with the Fracture object.
+ */
 void Fracture::removeCells(){
     // copy all to presistent container
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout()); // used id sets interally
@@ -140,6 +164,7 @@ void Fracture::removeCells(){
             grid_->removeElement(elem);
         }
     }
+
     grid_->grow();
     grid_->postGrow();
     // resize array
@@ -152,6 +177,40 @@ void Fracture::removeCells(){
     }
     this->resetWriters();
 }
+
+Dune::BlockVector<Dune::FieldVector<double, 3>> Fracture::all_slips() const{
+    Dune::BlockVector<Dune::FieldVector<double, 3>> slips(grid_->leafGridView().size(0));
+    slips = 0;
+    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+    for(const auto& elem: Dune::elements(grid_->leafGridView())){
+        size_t eIdx = mapper.index(elem);
+        //only normal slip for now
+        slips[eIdx][0] = fracture_width_[eIdx];
+    }
+    return slips;
+}
+
+Dune::FieldVector<double, 3> Fracture::disp(Dune::FieldVector<double, 3> obs) const{
+    auto slips = all_slips();
+    Dune::FieldVector<double, 3> disp = ddm::disp(obs, slips, *grid_, E_, nu_);
+    return disp;
+}
+
+Dune::FieldVector<double, 6> Fracture::strain(Dune::FieldVector<double, 3> obs) const{
+    // for now use full slip in interface even we only calculate normal slip
+    Dune::BlockVector<Dune::FieldVector<double, 3>> slips = all_slips();
+    Dune::FieldVector<double, 6> strain = ddm::strain(obs, slips, *grid_, E_, nu_);
+    return strain;
+}
+
+Dune::FieldVector<double, 6> Fracture::stress(Dune::FieldVector<double, 3> obs) const{
+    // for now use full slip in interface even we only calculate normal slip
+    Dune::BlockVector<Dune::FieldVector<double, 3>> slips = all_slips();
+    Dune::FieldVector<double, 6> strain = ddm::strain(obs, slips, *grid_, E_, nu_);
+    Dune::FieldVector<double, 6> stress = ddm::strainToStress(E_, nu_, strain);
+    return stress;
+}
+
 std::string
 Fracture::name() const
 {
