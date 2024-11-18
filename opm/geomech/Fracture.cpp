@@ -619,8 +619,20 @@ Fracture::solve()
         if (!std::isnan(K1_not_nan[i]))
           K1.push_back(K1_not_nan[i]);
 
-      // std::cout << "K1: ";
-      copy(K1.begin(), K1.end(), std::ostream_iterator<double>(std::cout, " "));
+      std::cout << "K1: ";
+      std::cout <<  *std::min_element(K1.begin(), K1.end()) << ", "
+                << *std::max_element(K1.begin(), K1.end()) << std::endl;
+      std::cout << "Pressure: ";
+      std::cout <<  *std::min_element(fracture_pressure_.begin(), fracture_pressure_.end()) << ", "
+                << *std::max_element(fracture_pressure_.begin(), fracture_pressure_.end()) << std::endl;
+      std::cout << "Normal traction: ";
+      Dune::BlockVector<Dune::FieldVector<double, 1>> krull(fracture_pressure_);
+      normalFractureTraction(krull);
+      std::cout <<  *std::min_element(krull.begin(), krull.end()) << ", "
+                << *std::max_element(krull.begin(), krull.end()) << std::endl;
+      std::cout << "Aperture: ";
+        std::cout <<  *std::min_element(fracture_width_.begin(), fracture_width_.end()) << ", "
+                    << *std::max_element(fracture_width_.begin(), fracture_width_.end()) << std::endl;
       
     } else if (method == "if_propagate") {
       // iterate full nonlinear system until convergence, and expand fracture if necessary
