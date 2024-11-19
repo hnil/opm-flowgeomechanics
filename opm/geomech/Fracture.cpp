@@ -1023,7 +1023,7 @@ Fracture::initFractureWidth()
 void
 Fracture::initFracturePressureFromReservoir(){
     size_t nc = reservoir_cells_.size();
-    fracture_pressure_.resize(nc);
+    fracture_pressure_.resize(nc + numWellEquations(), 0.0);
     for(size_t i=0; i < nc; ++i){
         fracture_pressure_[i] = reservoir_pressure_[i];
     }
@@ -1177,6 +1177,7 @@ void Fracture::normalFractureTraction(Dune::BlockVector<Dune::FieldVector<double
 }
 
 void Fracture::updateFractureRHS() {
+  std::assert(numWellEquations() == 0); // @@ not implemented/tested for rate-controlled systems
     rhs_width_ = fracture_pressure_;
     for (size_t i = 0; i < rhs_width_.size(); ++i) {
       std::cout << i << " " << rhs_width_[i] << std::endl;

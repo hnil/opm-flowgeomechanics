@@ -243,8 +243,10 @@ private:
 
     void assembleFractureMatrix() const;
     std::vector<double> stressIntensityK1() const;
-
-
+    int numWellEquations() const {
+      return prm_.get_child("control").get<std::string>("type") == "rate_well" ? 1 : 0;
+    }
+  
     //double well_pressure_;// for now using prm object for definition
     std::vector<int> well_source_;
     // for reservoir

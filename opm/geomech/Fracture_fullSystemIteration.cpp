@@ -137,7 +137,7 @@ void updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
     const double dTdh1 = (r == 0) ? 0.0 : (d1q * r - q * d1r) / (r * r);
     const double dTdh2 = (r == 0) ? 0.0 : (d2q * r - q * d2r) / (r * r);
 
-    const double krull = 1e4; // @@
+    const double krull = 0; // 1e4; // @@ Not sure if this should be removed?
     // diagonal elements
     C[i][i] += dTdh1 * (p1-p2) *krull;
     C[j][j] += dTdh2 * (p2-p1) *krull;
