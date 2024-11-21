@@ -602,8 +602,12 @@ Fracture::solve()
       std::cout << "Solve Fracture Pressure using Iterative Fracture" << std::endl;
       fracture_width_ = 1e-2;   // Ensure not completely closed
 
-      // start by assuming pressure equal to confining stress//0.0;      
-      normalFractureTraction(fracture_pressure_); 
+      // start by assuming pressure equal to confining stress (will also set
+      // fracture_pressure_ to its correct size
+      normalFractureTraction(fracture_pressure_);
+      if (numWellEquations() > 0) // @@ it is implicitly assumed for now that
+                                  // there is just one well equation
+        fracture_pressure_.push_back(fracture_pressure_[0]); // init with any existing value
       
       const double tol = 1e-5; // @@
       const int max_iter = 100;
@@ -846,6 +850,13 @@ Fracture::setSource()
             double value = std::get<1>(perfinj);
             rhs_pressure_[cell] += value * perf_pressure_;
         }
+    } else if (control_type == "rate_well") {
+      assert(numWellEquations() == 1); // @@ for now, we assume there is just one well equation
+      const double r = control.get<double>("rate");
+      const double WI = control.get<double>("WI");
+      const int cell = std::get<0>(perfinj_[0]); // @@ will this be the correct index?
+      const double pres = reservoir_pressure_[cell];
+      rhs_pressure_.push_back(r + WI * pres); // size should be nc+1 now (last is for well equation)
     } else {
         OPM_THROW(std::runtime_error, "Unknowns control");
     }
@@ -956,7 +967,8 @@ Fracture::writeFractureSystem() const{
 void
 Fracture::solvePressure() {
     size_t nc = grid_->leafGridView().size(0);
-    fracture_pressure_.resize(nc);
+    assert(numWellEquations() == 0); // @@ not implemented/tested for "rate_well" control
+    fracture_pressure_.resize(nc); 
     fracture_pressure_ = 1e5;
     assert(pressure_matrix_);// should always be constructed at this pointn
     // if(!pressure_matrix_){
@@ -1047,13 +1059,15 @@ void Fracture::initPressureMatrix()
     // size_t num_columns = 0;
     //  index of the neighbour
     //
+    // Flow from wells to fracture cells
     double fWI = prm_.get<double>("fractureWI");
     perfinj_.clear();
     for(int cell : well_source_){
         perfinj_.push_back({cell,fWI});
     }
-
-    size_t nc = grid_->leafGridView().size(0);
+    
+    // flow between fracture cells
+    const size_t nc = grid_->leafGridView().size(0) + numWellEquations();
     //leakof_.resize(nc,0.0);
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     for (auto& element : Dune::elements(grid_->leafGridView())) {
@@ -1071,7 +1085,7 @@ void Fracture::initPressureMatrix()
                     auto isCenter = is.geometry().center();
                     auto d_inside = eCenter - isCenter;
                     auto d_outside = nCenter - isCenter;
-                    // probably should use projected distenace
+                    // probably should use projected distance
                     auto igeom = is.geometry();
                     double area = igeom.volume();
                     double h1 = area/d_inside.two_norm();
@@ -1092,23 +1106,34 @@ void Fracture::initPressureMatrix()
     //if (pressure_matrix_.bu == 0){
     //size_t nc = grid_->leafGridView().size(0);
     pressure_matrix_ = std::make_unique<Matrix>(nc,nc, 4, 0.4, Matrix::implicit);
-        auto& matrix = *pressure_matrix_;
-        //matrix.setBuildMode(Matrix::implicit);
-        // map from dof=3*nodes at a cell (ca 3*3*3) to cell
-        //matrix.setImplicitBuildModeParameters(3 * 6 - 3 - 2, 0.4);
-        //size_t nc = grid_->leafGridView().size(0);
-        //matrix.setSize(nc, nc);
-        for (auto matel : htrans_) {
-            size_t i = std::get<0>(matel);
-            size_t j = std::get<1>(matel);
-            double zero_entry = 0.0; //1e-11;
-            matrix.entry(i, j) = zero_entry; //0;
-            matrix.entry(j, i) = zero_entry; //0;
-            matrix.entry(j, j) = zero_entry; //0;
-            matrix.entry(i, i) = zero_entry; //0;
-        }
-        matrix.compress();
-    //}
+    auto& matrix = *pressure_matrix_;
+    //matrix.setBuildMode(Matrix::implicit);
+    // map from dof=3*nodes at a cell (ca 3*3*3) to cell
+    //matrix.setImplicitBuildModeParameters(3 * 6 - 3 - 2, 0.4);
+    //size_t nc = grid_->leafGridView().size(0);
+    //matrix.setSize(nc, nc);
+    for (auto matel : htrans_) {
+      size_t i = std::get<0>(matel);
+      size_t j = std::get<1>(matel);
+      double zero_entry = 0.0; //1e-11;
+      matrix.entry(i, j) = zero_entry; //0;
+      matrix.entry(j, i) = zero_entry; //0;
+      matrix.entry(j, j) = zero_entry; //0;
+      matrix.entry(i, i) = zero_entry; //0;
+    }
+
+    if (numWellEquations() > 0) {
+      assert(numWellEquations() == 1); // @@ for now, we assume there is just one well equation
+      // add elements for last row and column
+      for (int i : well_source_) {
+        matrix.entry(i, nc) = 0.0;
+        matrix.entry(nc, i) = 0.0;
+      }
+      matrix.entry(nc, nc) = 0.0;
+    }
+    
+    matrix.compress();
+
 }
 void
 Fracture::assemblePressure()
@@ -1157,7 +1182,21 @@ Fracture::assemblePressure()
             double value = std::get<1>(perfinj);
             matrix[cell][cell] += value;
         }
-    }else{
+    } else if (control_type == "rate_well") {
+      assert(numWellEquations() == 1); // @@ for now, we assume there is just one well equation
+      const int nc = grid_->leafGridView().size(0) + numWellEquations();
+      const double WI = control.get<double>("WI");
+      matrix[nc][nc] = WI;
+      // NB: well_source_[i] is assumed to be the same as get<0>(perfinj_[i])
+      for (const auto pi : perfinj_) {
+        const int cell = std::get<0>(pi);
+        const double value = std::get<1>(pi);
+        matrix[i][nc] = -value;
+        matrix[nc][i] = -value;
+        matrix[i][i] += value;
+        matrix[nc][nc] += value;
+      }
+    } else{
         OPM_THROW(std::runtime_error,"Unknown control of injection into Fracture");
     }
 }
@@ -1188,7 +1227,7 @@ void Fracture::updateFractureRHS() {
     }
 }
 
-void Fracture::assembleFractureMatrix() const {
+void Fracture:<:assembleFractureMatrix() const {
     size_t nc = grid_->leafGridView().size(0);
     if(!fracture_matrix_){
         fracture_matrix_ = std::make_unique<DynamicMatrix>();
