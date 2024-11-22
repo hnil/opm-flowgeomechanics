@@ -235,7 +235,7 @@ private:
     void updateFractureRHS();
     void updateLeakoff();
     void updateCellNormals();
-    void normalFractureTraction(Dune::BlockVector<Dune::FieldVector<double, 1>>& traction) const;
+    void normalFractureTraction(Dune::BlockVector<Dune::FieldVector<double, 1>>& traction, bool resize=true) const;
     double normalFractureTraction(size_t ix) const;
 
     // one nonlinear iteration of fully coupled system.  Returns 'true' if converged

@@ -1161,12 +1161,13 @@ void Fracture::initPressureMatrix()
       std::cout << "prunng" << std::endl;
       assert(numWellEquations() == 1); // @@ for now, we assume there is just one well equation
       // add elements for last row and column
+      const int weqix = nc - 1; // index of well equation
       for (int i : well_source_) {
         std::cout << "poffbardoff " << i << std::endl;
-        matrix.entry(i, nc) = 0.0;
-        matrix.entry(nc, i) = 0.0;
+        matrix.entry(i, weqix) = 0.0;
+        matrix.entry(weqix, i) = 0.0;
       }
-      matrix.entry(nc, nc) = 0.0;
+      matrix.entry(weqix, weqix) = 0.0;
     }
     std::cout << "vrææææææl!" << std::endl;
     matrix.compress();
@@ -1214,7 +1215,8 @@ Fracture::assemblePressure()
     }
     if (control_type == "rate") {
         // no extra tings in matrix
-    } else if (control_type == "pressure" || "perf_pressure") {
+    } else if (control_type == "pressure" ||
+               control_type == "perf_pressure") {
         for (const auto& perfinj : perfinj_) {
             int cell = std::get<0>(perfinj);
             double value = std::get<1>(perfinj);
@@ -1224,15 +1226,15 @@ Fracture::assemblePressure()
       assert(numWellEquations() == 1); // @@ for now, we assume there is just one well equation
       const int nc = grid_->leafGridView().size(0) + numWellEquations();
       const double WI = control.get<double>("WI");
-      matrix[nc][nc] = WI;
+      matrix[nc-1][nc-1] = WI;
       // NB: well_source_[i] is assumed to be the same as get<0>(perfinj_[i])
       for (const auto& pi : perfinj_) {
         const int i = std::get<0>(pi);
         const double value = std::get<1>(pi);
-        matrix[i][nc] = -value;
-        matrix[nc][i] = -value;
+        matrix[i][nc-1] = -value;
+        matrix[nc-1][i] = -value;
         matrix[i][i] += value;
-        matrix[nc][nc] += value;
+        matrix[nc-1][nc-1] += value;
       }
     } else{
         OPM_THROW(std::runtime_error,"Unknown control of injection into Fracture");
@@ -1245,11 +1247,13 @@ double Fracture::normalFractureTraction(size_t eIdx) const
   return ddm::tractionSymTensor(reservoir_stress_[eIdx], cell_normals_[eIdx]);
 }
   
-void Fracture::normalFractureTraction(Dune::BlockVector<Dune::FieldVector<double, 1>>& traction) const
+void Fracture::normalFractureTraction(Dune::BlockVector<Dune::FieldVector<double, 1>>& traction,
+                                      bool resize) const
 {
   std::cout << "normalFractureTraction" << std::endl;
   const size_t nc = grid_->leafGridView().size(0);
-  traction.resize(nc + numWellEquations());
+  if (resize)
+    traction.resize(nc + numWellEquations());
   
   for (size_t eIdx = 0; eIdx < nc; ++eIdx) 
     traction[eIdx] = normalFractureTraction(eIdx);

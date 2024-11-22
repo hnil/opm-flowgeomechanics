@@ -82,19 +82,25 @@ void dump_vector(const ResVector& v, const char* const name)
   os.close();
 }
 
-
+// ----------------------------------------------------------------------------
+void dump_vector(const VectorHP& v, const char* const name1, const char* const name2)
+// ----------------------------------------------------------------------------
+{
+  dump_vector(v[_0], name1);
+  dump_vector(v[_1], name2);
+}
   
 // ============================= Helper functions =============================
 
 // ----------------------------------------------------------------------------  
-SMatrix makeIdentity(size_t num, double fac = 1)
+SMatrix makeIdentity(size_t num, double right_padding = 0, double fac = 1)
 // ----------------------------------------------------------------------------
 {
   //build a sparse matrix to represent the identity matrix of a given size
   SMatrix M;
   M.setBuildMode(SMatrix::implicit);
   M.setImplicitBuildModeParameters(1, 0.1);
-  M.setSize(num, num);
+  M.setSize(num, num + right_padding);
   for (size_t i = 0; i != num; ++i)
     M.entry(i,i) = fac;
   M.compress();
@@ -102,14 +108,37 @@ SMatrix makeIdentity(size_t num, double fac = 1)
 }
 
 // ----------------------------------------------------------------------------
+std::unique_ptr<Opm::Fracture::Matrix>
+initCouplingMatrixSparsity(const std::vector<Htrans>& htrans, size_t num_cells, size_t num_wells)
+// ----------------------------------------------------------------------------
+{
+  auto C = std::make_unique<Opm::Fracture::Matrix>(num_cells + num_wells,
+                                                   num_cells,
+                                                   4, 0.4,
+                                                   Opm::Fracture::Matrix::implicit);
+  for (const auto& e : htrans) {
+    const size_t i = std::get<0>(e);
+    const size_t j = std::get<1>(e); assert(i != j);
+    C->entry(i, j) = 0;
+    C->entry(j, i) = 0;
+    C->entry(i,i) = 0;
+    C->entry(j,j) = 0;
+  }
+  C->compress();
+  return C;
+}
+  
+// ----------------------------------------------------------------------------
 void updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
-                          const std::unique_ptr<Opm::Fracture::Matrix>& M, 
+                          const size_t num_cells,
+                          const size_t num_wells,
                           const std::vector<Htrans>& htrans,
                           const ResVector& pressure,
                           const ResVector& aperture)
 {
   // create C if not done already
-  if (!Cptr) Cptr = std::make_unique<Opm::Fracture::Matrix>(*M); // copy sparsity of M
+  if (!Cptr) Cptr = initCouplingMatrixSparsity(htrans, num_cells, num_wells);
+  // if (!Cptr) Cptr = std::make_unique<Opm::Fracture::Matrix>(*M); // copy sparsity of M
 
   // @@ NB: If the implementation of the pressure matrix changes (i.e. `assemblePressure()`),
   //        the code below might need to be updated accordingly as well.
@@ -137,7 +166,7 @@ void updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
     const double dTdh1 = (r == 0) ? 0.0 : (d1q * r - q * d1r) / (r * r);
     const double dTdh2 = (r == 0) ? 0.0 : (d2q * r - q * d2r) / (r * r);
 
-    const double krull = 0; // 1e4; // @@ Not sure if this should be removed?
+    const double krull = 1; // 1e4; // @@ Not sure if this should be removed?
     // diagonal elements
     C[i][i] += dTdh1 * (p1-p2) *krull;
     C[j][j] += dTdh2 * (p2-p1) *krull;
@@ -223,13 +252,15 @@ bool Fracture::fullSystemIteration(const double tol)
   setSource();         // update right-hand side of pressure system;
 
   // update the coupling matrix (possibly create it if not already initialized)
-  updateCouplingMatrix(coupling_matrix_, pressure_matrix_,
+  updateCouplingMatrix(coupling_matrix_,
+                       pressure_matrix_->N() - numWellEquations(), // num cells
+                       numWellEquations(),                         // num wells
                        htrans_, fracture_pressure_, fracture_width_);
 
   const auto& A = fractureMatrix(); // will be created if not already existing
   const auto& M = *pressure_matrix_;
   const auto& C = *coupling_matrix_;
-  const auto I = makeIdentity(A.N());
+  const auto I = makeIdentity(A.N(), numWellEquations());
 
   // system Jacobian (with cross term)  @@ should S be included as a member variable of Fracture?
   SystemMatrix S { {A, I},   // mechanics system (since A is negative, we leave I positive here)
@@ -245,7 +276,7 @@ bool Fracture::fullSystemIteration(const double tol)
   VectorHP rhs {x}; rhs = 0; // same size as x, but initially just with zeros
 
   //rhs[_0] = 0; // @@ we currently do not use rhs_width_ here, but include p through the I block
-  normalFractureTraction(rhs[_0]); // right-hand side equals the normal fracture traction
+  normalFractureTraction(rhs[_0], false); // right-hand side equals the normal fracture traction
   rhs[_1] = rhs_pressure_; // should have been updated in call to `assemblePressure` above
 
   std::cout << "rhs[0]: " << rhs[_0].infinity_norm() << std::endl;
