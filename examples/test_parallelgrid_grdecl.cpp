@@ -279,6 +279,7 @@ int run(Params& p, const std::string& name, Dune::MPIHelper& mpihelper)
 
     auto cell_parallindex = Opm::makeEntityEntityCommunication<0>(grid,false);
     auto vertex_parallindex = Opm::makeEntityEntityCommunication<3>(grid,false);
+    auto dof_parallel_index = Opm::entityToDofIndexSet(vertex_parallindex, 3);
     //Opm::makeEntityEntityCommunication<3>(grid, mpihelper);
     if (!p.output.empty()){
         writeOutput(p, watch, grid.size(0));

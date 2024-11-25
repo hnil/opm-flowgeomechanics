@@ -382,21 +382,28 @@ namespace Opm {
     auto indexset = gv.indexSet();
     auto gidSet = gv.grid().globalIdSet();
       
-    Vector myranks(gv.size(codim), world_comm.rank());
+    Vector maxranks_tmp_ib(gv.size(codim), world_comm.rank());
     using GridType = Dune::CpGrid;
     using GridView =  typename GridType::LeafGridView;
-    Dune::MaxEntityVectorVectorDataHandle<GridView,Vector> datahandle(myranks, gv, codim);
-    gv.communicate(datahandle, Dune::InteriorBorder_InteriorBorder_Interface, Dune::ForwardCommunication);
+    Dune::MaxEntityVectorVectorDataHandle<GridView,Vector> datahandle_ib(maxranks_tmp_ib, gv, codim);
+    gv.communicate(datahandle_ib, Dune::InteriorBorder_InteriorBorder_Interface, Dune::ForwardCommunication);
     //gv.communicate(datahandle, Dune::All_All_Interface, Dune::ForwardCommunication);
-    auto allranks = datahandle.all_data();
+    const auto& allranks_ib = datahandle_ib.all_data();
     int myrank = world_comm.rank();
-    std::vector<int> maxrank(gv.size(codim), myrank);
-    for(size_t j=0; j<allranks.size(); ++j){
-         const auto& all = allranks[j];  
+    std::vector<int> maxrank_ib(gv.size(codim), myrank);
+    for(size_t j=0; j<allranks_ib.size(); ++j){
+         const auto& all = allranks_ib[j];  
         for(size_t i=0; i<all.size(); ++i){
-            maxrank[j] = std::max(maxrank[j], all[i]);
+            maxrank_ib[j] = std::max(maxrank_ib[j], all[i]);
         }
     }
+    Vector maxranks_tmp_all(gv.size(codim), world_comm.rank());
+    Dune::MaxEntityVectorVectorDataHandle<GridView,Vector> datahandle_all(maxranks_tmp_all, gv, codim);
+    // //gv.communicate(datahandle, Dune::InteriorBorder_InteriorBorder_Interface, Dune::ForwardCommunication);
+    gv.communicate(datahandle_all, Dune::All_All_Interface, Dune::ForwardCommunication);
+    const auto& allranks_all = datahandle_all.all_data();
+
+
     std::cout << "Getting max rank of node " << std::endl;
     world_comm.barrier();
     std::cout << "Finnish max rank of node " << std::endl;
@@ -418,7 +425,7 @@ namespace Opm {
               // entity_indexset.add(gidset.id(elem),
               //            ParallelIndexSet::LocalIndex(index, AttributeSet::owner, true));
           } else if (entity.partitionType() == Dune::PartitionType::BorderEntity) {
-            if(myrank == maxrank[index]){
+            if(myrank == maxrank_ib[index]){
                 entity_indexset.add(gid, ParallelIndexSet::LocalIndex(index, AttributeSet::owner, true));
             }else{
                 entity_indexset.add(gid, ParallelIndexSet::LocalIndex(index, AttributeSet::copy, true));
@@ -456,19 +463,42 @@ namespace Opm {
       Dune::BufferedCommunicator all_entity_entity_comm;
       all_entity_entity_comm.template build<Vector>(all_cominterface);
       all_entity_entity_comm.template forward<Dune::FreeAddGatherScatter<Vector>>(numpros, numpros);
-      for (const auto& ind : entity_indexset) {
-        if(numpros[ind.local().local()] != 1) {
+      //for (const auto& ind : entity_indexset) {
+      bool ok = true;
+      for (auto& entity : Dune::entities(gv, mycodim)) {
+          auto index = entity.index();
+          auto gid = gidSet.id(entity);
+          auto ind = entity_indexset.at(gid);
+          assert(index == ind.local().local());
+          if(numpros[ind.local().local()] != 1) {
            if(!verbose){
-             DUNE_THROW(Dune::Exception, "Owner is not a partition of unity");
-           }
-          //std::cout << "Grid size: " << gv.size(0) << " on rank " << world_comm.rank() << std::endl;
-          if(false){
-          std::cout << "Num procs " << numpros[ind.local().local()]; 
-          std::cout << " Global " << ind.global(); 
-          std::cout << " Local " << ind.local().local() << " Attribute " << ind.local().attribute();// << std::endl;
-          std::cout << " rank " << world_comm.rank() << std::endl;
-        }
-        }
+              std::cout << "Num procs " << numpros[ind.local().local()]; 
+              std::cout << " Global " << ind.global(); 
+              std::cout << " Local " << ind.local().local() << " Attribute " << ind.local().attribute();// << std::endl;
+              std::cout << " rank " << world_comm.rank();
+              std::cout << " enity is " << entity.partitionType();
+              std::cout << " max_rank " << maxrank_ib[ind.local().local()];
+              std::cout << " all ranks ib ";
+              for(auto other:allranks_ib[ind.local().local()]){
+                  std::cout << other << " ";
+              }
+              std::cout << " all ranks all ";
+              for(auto other:allranks_all[ind.local().local()]){
+                  std::cout << other << " ";
+              }
+              std::cout << std::endl;
+              ok = false;
+              DUNE_THROW(Dune::Exception, "Owner is not a partition of unity");
+           } 
+          }
+      }
+      world_comm.barrier();
+      bool all_ok = true;
+      //bool* all_ok = &ok;
+      int not_ok = !ok;
+      not_ok = world_comm.sum(not_ok);
+      if(not_ok > 0){
+          DUNE_THROW(Dune::Exception, "Owner is not a partition of unity");
       }
       if(verbose){
       for (int rank = 0; rank < world_comm.size(); ++rank) {
@@ -478,7 +508,8 @@ namespace Opm {
                 std::cout << "Global " << ind.global(); 
                 std::cout << " Local " << ind.local().local() << " Attribute " << ind.local().attribute();// << std::endl;
                 std::cout << " rank " << world_comm.rank();
-                std::cout << " max_rank " << maxrank[ind.local().local()];
+                std::cout << " max_rank ib" << maxrank_ib[ind.local().local()];
+                //std::cout << " max_rank all " << maxrank_all[ind.local().local()];
                   if (ind.local().attribute() == Dune::OwnerOverlapCopyAttributeSet::owner) {
                       if (numpros[ind.local().local()] != 1) {
                           //DUNE_THROW(Dune::Exception, "Owner entity has more than one owner");
@@ -504,7 +535,7 @@ namespace Opm {
   }
   
   Dune::OwnerOverlapCopyCommunication<int, int>::ParallelIndexSet
-  entityToDofIndexSet(const Dune::OwnerOverlapCopyCommunication<int, int>::ParallelIndexSet& entity_indexset, int ndof)
+  entityToDofIndexSet(const Dune::OwnerOverlapCopyCommunication<int, int>::ParallelIndexSet& entity_indexset, int ndof, bool verbose = false)
   {
     
     using ParallelIndexSet = Dune::OwnerOverlapCopyCommunication<int, int>::ParallelIndexSet;
@@ -515,10 +546,16 @@ namespace Opm {
       auto at = ind.local().attribute();
       auto gid = ind.global();
       for(int dof=0; dof<ndof; ++dof){
-        dof_indexset.add(ndof*gid, ParallelIndexSet::LocalIndex(ndof*lind+dof, at, true));
+        dof_indexset.add(ndof*gid+dof, ParallelIndexSet::LocalIndex(ndof*lind+dof, at, true));
       }
     }
     dof_indexset.endResize();
+    if(verbose){
+     for (const auto& ind : dof_indexset) {
+          std::cout << " Global " << ind.global(); 
+          std::cout << " Local " << ind.local().local() << " Attribute " << ind.local().attribute();// << std::endl;
+      }
+    }
     return dof_indexset;
   }
 
