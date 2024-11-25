@@ -265,11 +265,12 @@ int run(Params& p, const std::string& name)
     }else{
         esolver.setBodyForce(0.0);
     }
+    const auto reduce_boundary = true;
     bool do_matrix = true;//assemble matrix
     bool do_vector = true;//assemble matrix
     esolver.fixNodes(bc_nodes);
     esolver.initForAssembly();
-    esolver.assemble(pressforce, do_matrix, do_vector);
+    esolver.assemble(pressforce, do_matrix, do_vector, reduce_boundary);
     esolver.updateRhsWithGrad(pressforce);
     Opm::PropertyTree prm("mechsolver.json");
     esolver.setupSolver(prm);
