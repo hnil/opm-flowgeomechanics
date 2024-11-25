@@ -1,13 +1,10 @@
+#include <config.h>
+
 #include "opm/geomech/GridStretcher.hpp"
 
 #include <dune/grid/io/file/gmshreader.hh>
 #include <dune/foamgrid/foamgrid.hh>
 #include <dune/grid/io/file/vtk/vtkwriter.hh>
-
-#include <vector>
-#include <string>
-#include <iostream>
-#include <iterator>
 
 #include "opm/geomech/param_interior.hpp"
 #include "opm/geomech/GridStretcher.hpp"
@@ -21,7 +18,10 @@
 
 #include <dune/grid/io/file/vtk/vtkwriter.hh>
 
-
+#include <iostream>
+#include <iterator>
+#include <string>
+#include <vector>
 
 using namespace std;
 using namespace Opm;
