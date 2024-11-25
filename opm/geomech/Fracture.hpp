@@ -95,7 +95,6 @@ public:
             initReservoirProperties<TypeTag, Simulator>(simulator);
         }
       
-        std::cout << "updateReservoirProperties (simulator)" << std::endl;
         using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
         const auto& problem = simulator.problem();
         // NB burde truleg interpolere
@@ -167,10 +166,11 @@ public:
     void setPerfPressure(double perfpressure){perf_pressure_ = perfpressure;}
 private:
 
+    size_t numFractureCells() const { return grid_->leafGridView().size(0); }
+  
     template <class TypeTag, class Simulator>
     void initReservoirProperties(const Simulator& simulator)
     {
-      std::cout << "initReservoirProperties (simulator)" << std::endl;
         using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
         const auto& problem = simulator.problem();
         // NB burde truleg interpolere

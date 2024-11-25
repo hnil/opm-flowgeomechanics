@@ -76,6 +76,11 @@ void dump_matrix(const SMatrix& m, const char* const name)
 void dump_vector(const ResVector& v, const char* const name)
 // ----------------------------------------------------------------------------
 {
+  if (!name)
+    for (size_t i = 0; i != v.size(); ++i)
+      std::cout << v[i] << "\n";
+  if (!name) return;
+    
   std::ofstream os(name);
   for (size_t i = 0; i != v.size(); ++i)
     os << v[i] << "\n";
