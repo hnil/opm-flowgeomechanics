@@ -862,11 +862,12 @@ Fracture::setSource()
         }
     } else if (control_type == "rate_well") {
       assert(numWellEquations() == 1); // @@ for now, we assume there is just one well equation
-      const double r = control.get<double>("rate");
+      const double r = control.get<double>("rate") / 24 / 60 / 60; // convert to m3/sec
       const double WI = control.get<double>("WI");
       const int cell = std::get<0>(perfinj_[0]); // @@ will this be the correct index?
       const double pres = reservoir_pressure_[cell];
-      rhs_pressure_[rhs_pressure_.size()-1] = r + WI * pres; // well source term
+      const double lambda = reservoir_mobility_[0]; // @@ only correct if mobility is constant!
+      rhs_pressure_[rhs_pressure_.size()-1] = r + WI * lambda * pres; // well source term
     } else {
         OPM_THROW(std::runtime_error, "Unknowns control");
     }
@@ -1154,7 +1155,7 @@ Fracture::assemblePressure()
   
     auto& matrix = *pressure_matrix_;
     matrix = 0.0;
-    double mobility=1e4; //1e4; // @@ 1.0
+    //double mobility=1e4; //1e4; // @@ 1.0
 
     for (auto matel : htrans_) {
         size_t i = std::get<0>(matel);
@@ -1166,6 +1167,7 @@ Fracture::assemblePressure()
         // harmonic mean of surface flow
         double value = 12. / (h1 * h1 * h1 * t1) + 12. / (h2 * h2 * h2 * t2);
 
+        const double mobility = 0.5 * (reservoir_mobility_[i] + reservoir_mobility_[j]);
         value = 1 / value;
         value *= mobility;
         // matrix.entry(i, j) -= value;
@@ -1198,16 +1200,17 @@ Fracture::assemblePressure()
     } else if (control_type == "rate_well") {
       assert(numWellEquations() == 1); // @@ for now, we assume there is just one well equation
       const int nc = numFractureCells() + numWellEquations();
-      const double WI = control.get<double>("WI");
-      matrix[nc-1][nc-1] = WI;
+      const double lambda = reservoir_mobility_[0]; // @@ If not constant, this might be wrong
+      const double WI_lambda = control.get<double>("WI") * lambda;
+      matrix[nc-1][nc-1] = WI_lambda;
       // NB: well_source_[i] is assumed to be the same as get<0>(perfinj_[i])
       for (const auto& pi : perfinj_) {
         const int i = std::get<0>(pi);
-        const double value = std::get<1>(pi);
-        matrix[i][nc-1] = -value;
-        matrix[nc-1][i] = -value;
+        const double value = std::get<1>(pi) * lambda;
+        matrix[nc-1][i] = -value;     // well equation
+        matrix[nc-1][nc-1] += value;  // well equation
+        matrix[i][nc-1] = -value;     
         matrix[i][i] += value;
-        matrix[nc-1][nc-1] += value;
       }
     } else{
         OPM_THROW(std::runtime_error,"Unknown control of injection into Fracture");

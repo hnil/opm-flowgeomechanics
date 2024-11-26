@@ -123,6 +123,7 @@ public:
                   reservoir_pressure_[i] = val.value();
                 }
                 enum { numPhases = getPropValue<TypeTag, Properties::NumPhases>() };
+                reservoir_mobility_[i] = 0.0;
                 for (unsigned phaseIdx = 0; phaseIdx < numPhases; ++phaseIdx) {
                   if (FluidSystem::phaseIsActive(phaseIdx)) {
                     // assume sum should only be water;
