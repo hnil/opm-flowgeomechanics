@@ -233,6 +233,25 @@ opm_add_test(test_grid
 	examples/test_grid.cpp
 	$<TARGET_OBJECTS:moduleVersionGeoMech>
 )
+
+opm_add_test(test_parallelgrid
+	ONLY_COMPILE
+	ALWAYS_ENABLE
+	DEPENDS opmsimulators opmupscaling
+	LIBRARIES opmsimulators opmupscaling
+	SOURCES
+	examples/test_parallelgrid.cpp
+	$<TARGET_OBJECTS:moduleVersionGeoMech>
+)
+opm_add_test(test_parallelgrid_grdecl
+	ONLY_COMPILE
+	ALWAYS_ENABLE
+	DEPENDS opmsimulators opmupscaling
+	LIBRARIES opmsimulators opmupscaling
+	SOURCES
+	examples/test_parallelgrid_grdecl.cpp
+	$<TARGET_OBJECTS:moduleVersionGeoMech>
+)
 if(USE_TRACY_PROFILER AND Tracy_FOUND)
 	target_link_libraries(test_grid Tracy::TracyClient)
 endif()

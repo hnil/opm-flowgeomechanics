@@ -790,6 +790,75 @@ reduce_system(vector<tuple<int, int, double>>& A,
     cout << "Reducing system: FINISHED" << endl;
 }
 
+void
+set_boundary_conditions(vector<tuple<int, int, double>>& A,
+              vector<double>& b,
+              const int num_fixed_dofs,
+              const int* const fixed_dof_ixs,
+              const double* const fixed_dof_values)
+// ----------------------------------------------------------------------------
+{
+    // check input
+    if (!is_sorted(fixed_dof_ixs, fixed_dof_ixs + num_fixed_dofs))
+        throw invalid_argument("The indices of fixed degrees of freedom must be "
+                               "provided in ascending order.");
+
+    // sort entries of A into columns
+    cout << "Setboundary conditions: by trivial equations" << endl;
+
+    sort(A.begin(), A.end(), [](const auto& aa, const auto& bb) { return get<1>(aa) < get<1>(bb); });
+
+    // eliminate columns associated with fixed dofs (move value to b)
+    // not changing the matrix, just the right hand side??
+    auto cur_end = A.begin();
+    for (int i = 0; i != num_fixed_dofs; ++i) {
+        const int dof = fixed_dof_ixs[i];
+        // find the range of the elements whose column index equal 'dof'
+        auto start = lower_bound(cur_end, A.end(), dof, [](const auto& a, int value) { return get<1>(a) < value; });
+        if (start != A.end() && get<1>(*start) == dof) {
+            cur_end = find_if(start, A.end(), [dof](const auto& a) { return get<1>(a) != dof; });
+            for (; start != cur_end; ++start){
+                b[get<0>(*start)] -= get<2>(*start) * fixed_dof_values[i];
+                get<2>(*start) = 0;// set matrix element to zero
+            }
+        }    
+    }
+    
+
+    // determine renumbering
+    cout << "Sett boundary condititions in matrix and rhs" << endl;
+    vector<int> keep(b.size());
+    iota(keep.begin(), keep.end(), 0);
+    vector<int> renum;
+    renum.reserve(b.size());
+
+    set_difference(keep.begin(), keep.end(), fixed_dof_ixs, fixed_dof_ixs + num_fixed_dofs, back_inserter(renum));
+
+    const int discard_flag = b.size() + 1;
+    vector<int> renum_inv(b.size(), discard_flag);
+    for (int i = 0; i != int(renum.size()); ++i)
+        renum_inv[renum[i]] = i;
+
+    // eliminate rows associated with fixed dofs and renumber
+    for(auto& el: A){
+        bool is_diag = get<0>(el) == get<1>(el);
+        bool is_dof = (renum_inv[get<0>(el)] == discard_flag) || (renum_inv[get<1>(el)] == discard_flag);
+        if(is_dof){
+            if(is_diag){
+                get<2>(el) = 1;
+             } else {
+                get<2>(el) = 0;
+            } 
+        }
+    }
+    for (int i = 0; i != num_fixed_dofs; ++i) {
+        const int dof = fixed_dof_ixs[i];
+        b[dof] = fixed_dof_values[i];
+    }
+
+    cout << "Setting boudnary conditions in matrix and rhs: FINISHED" << endl;
+}
+
 // ----------------------------------------------------------------------------
 // Create a local indexing of the subset of nodes that are referenced by the
 // given faces (which refer to the global indexing of the nodes).
@@ -1517,7 +1586,8 @@ assemble_mech_system_2D(const double* const points,
                         const double* const neumann_forces, // 2 * number of neumann faces
                         vector<tuple<int, int, double>>& A_entries,
                         vector<double>& b,
-                        const StabilityChoice stability_choice)
+                        const StabilityChoice stability_choice,
+                        bool reduce_boundary)
 // ----------------------------------------------------------------------------
 {
     // preliminary computations
@@ -1567,8 +1637,13 @@ assemble_mech_system_2D(const double* const points,
     }
 
     // reduce system by eliminating Dirichlet degrees of freedom, and returning
-    reduce_system(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
-
+    if(reduce_boundary){
+        cout << "Reducing system" << endl;
+        reduce_system(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
+    }else{
+        cout << "Set boundary conditions without reducing system" << endl;
+        set_boundary_conditions(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
+    }
     return b.size();
 };
 
@@ -1590,7 +1665,9 @@ assemble_mech_system_3D(const double* const points,
                         const double* const neumann_forces, // 3 * number of neumann faces
                         std::vector<std::tuple<int, int, double>>& A_entries,
                         std::vector<double>& b,
-                        const StabilityChoice stability_choice)
+                        const StabilityChoice stability_choice,
+                        bool reduce_boundary
+                        )
 // ----------------------------------------------------------------------------
 {
     // preliminary computations
@@ -1657,8 +1734,13 @@ assemble_mech_system_3D(const double* const points,
     compute_applied_forces_3D(
         points, num_face_corners, face_corners, num_neumann_faces, neumann_faces, neumann_forces, &b[0]);
 
-    cout << "Reducing system" << endl;
-    reduce_system(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
+    if(reduce_boundary){
+        cout << "Reducing system" << endl;
+        reduce_system(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
+    }else{
+        cout << "Set boundary conditions reducing system" << endl;
+        set_boundary_conditions(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
+    }
 
     cout << "Finished assembly.  Returning." << endl;
 

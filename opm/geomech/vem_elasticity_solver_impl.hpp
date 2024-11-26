@@ -82,20 +82,40 @@ namespace Elasticity {
     }
   }
   
-    IMPL_FUNC(void, calculateStress(bool precomputed))
+  IMPL_FUNC(void, calculateStressPrecomputed(const Vector& dispalldune))
     {
-        if (precomputed) {
+        
             OPM_TIMEBLOCK(calculateStressPrecomputed);
             //NB stressmat is defined in linear indices not block linear indices
-            Vector dispalldune;
-            dispalldune.resize(3 * grid_.leafGridView().size(3));
-            this->expandSolution(dispalldune, this->u);
+            //Vector dispalldune;
+            //dispalldune.resize(3 * grid_.leafGridView().size(3));
+            //this->expandSolution(dispalldune, this->u);
             // Dune::BlockVector< DuneFieldVector<double,1> >
             Vector stress(6 * grid_.leafGridView().size(0));
             stressmat_.mv(dispalldune,stress);
             stress_.resize(num_cells_);
-	    assignToVoigt(stress_,stress);
-        } else {
+            assignToVoigt(stress_,stress);
+        
+    }
+    IMPL_FUNC(void, expandDisp(std::vector<double>& dispall,bool expand))
+    {
+        dispall.resize(3 * grid_.leafGridView().size(3));
+            {
+                if (expand) {
+                    Vector dispalldune;
+                    dispalldune.resize(3 * grid_.leafGridView().size(3));
+                    this->expandSolution(dispalldune, this->u);
+                    for (size_t i = 0; i < dispall.size(); ++i) {
+                        dispall[i] = dispalldune[i]; // fieldvector<double,1> can be converted to double
+                    }
+                } else {
+                    dispall = this->u;
+                }
+            }
+    }
+    IMPL_FUNC(void, calculateStress())
+    {
+        bool expand = true;
             OPM_TIMEBLOCK(calculateStressFull);
             // assumes the grid structure is made
             num_cells_ = grid_.leafGridView().size(0); // entities of codim 0
@@ -107,17 +127,8 @@ namespace Elasticity {
             stress_.resize(num_cells_);
             std::vector<std::array<double, 6>> stress;
             stress.resize(num_cells_);
-
             std::vector<double> dispall;
-            dispall.resize(3 * grid_.leafGridView().size(3));
-            {
-                Vector dispalldune;
-                dispalldune.resize(3 * grid_.leafGridView().size(3));
-                this->expandSolution(dispalldune, this->u);
-                for (size_t i = 0; i < dispall.size(); ++i) {
-                    dispall[i] = dispalldune[i]; // fieldvector<double,1> can be converted to double
-                }
-            }
+            this->expandDisp(dispall,expand);
             std::vector<std::tuple<int, int, double>> stressmat;
             vem::compute_stress_3D(&coords_[0],
                                    num_cells_,
@@ -135,23 +146,26 @@ namespace Elasticity {
             // copy to dune definitions
             stress_.resize(num_cells_);
 	    assignToVoigtSymMat(stress_,stress);
-        }
+        
     }
 
-    IMPL_FUNC(void, calculateStrain(bool precomputed))
+    IMPL_FUNC(void, calculateStrainPrecomputed(const Vector& dispalldune))
     {
-        if (precomputed) {
+        
             OPM_TIMEBLOCK(calculateStrainPrecomputed);
             //NB stressmat is defined in linear indices not block linear indices
-            Vector dispalldune;
-            dispalldune.resize(3 * grid_.leafGridView().size(3));
-            this->expandSolution(dispalldune, this->u);
+            //Vector dispalldune;
+            //dispalldune.resize(3 * grid_.leafGridView().size(3));
+            //this->expandSolution(dispalldune, this->u);
             // Dune::BlockVector< DuneFieldVector<double,1> >
             Vector strain(6 * grid_.leafGridView().size(0));
             strainmat_.mv(dispalldune,strain);
             strain_.resize(num_cells_);
 	    assignToVoigt(strain_,strain);
-        } else {
+    }
+    IMPL_FUNC(void, calculateStrain())
+    {
+        bool expand = true;// assumes that matrices is caculated with reduced_boundary = true        
             OPM_TIMEBLOCK(calculateStressFull);
             // assumes the grid structure is made
             num_cells_ = grid_.leafGridView().size(0); // entities of codim 0
@@ -165,15 +179,7 @@ namespace Elasticity {
             strain.resize(num_cells_);
 
             std::vector<double> dispall;
-            dispall.resize(3 * grid_.leafGridView().size(3));
-            {
-                Vector dispalldune;
-                dispalldune.resize(3 * grid_.leafGridView().size(3));
-                this->expandSolution(dispalldune, this->u);
-                for (size_t i = 0; i < dispall.size(); ++i) {
-                    dispall[i] = dispalldune[i]; // fieldvector<double,1> can be converted to double
-                }
-            }
+            this->expandDisp(dispall,expand);
             std::vector<std::tuple<int, int, double>> stressmat;
             vem::compute_stress_3D(&coords_[0],
                                    num_cells_,
@@ -190,11 +196,11 @@ namespace Elasticity {
                 );
             // copy to dune definitions
             strain_.resize(num_cells_);
-	    assignToVoigtSymMat(strain_,strain);
-        }
+	        assignToVoigtSymMat(strain_,strain);
+        
     }
 
-    IMPL_FUNC(void, assemble(const Vector& pressure, bool do_matrix, bool do_vector))
+    IMPL_FUNC(void, assemble(const Vector& pressure, bool do_matrix, bool do_vector,bool reduce_boundary))
 {
     OPM_TIMEBLOCK(assemble);
     using namespace std;
@@ -226,7 +232,7 @@ namespace Elasticity {
                        &face_corners_[0], &ymodule_[0], &pratio_[0], &body_force_[0],
                        num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0],
                        num_neumann_faces, nullptr, nullptr,
-                       A_entries, rhs_force_, stability_choice);
+                       A_entries, rhs_force_, stability_choice,reduce_boundary);
         }
 
 
@@ -257,14 +263,18 @@ namespace Elasticity {
         //      [](const auto& aa, const auto& bb) { return std::get<1>(aa) < std::get<1>(bb); });
         std::vector<int> global_to_dof(grid_.leafGridView().size(3)*3,-1);
         for(size_t i=0; i< idx_free_.size(); ++i){
-            global_to_dof[idx_free_[i]] = i;
+            if(reduce_boundary){
+                //new numbering of dofs
+                global_to_dof[idx_free_[i]] = i;
+            }else{
+                global_to_dof[idx_free_[i]] = idx_free_[i];
+            }
         }
         //renumber and eliminate dof fized
         vector<tuple<int, int, double>> divmatdof;
         for(const auto& elem: divmat){
             int I = global_to_dof[std::get<0>(elem)];
             if(I>-1){
-                // renumber
                 int J = get<1>(elem);
                 double val = std::get<2>(elem);
                 divmatdof.push_back(std::tuple<int, int, double>(I,J,val));
@@ -274,7 +284,12 @@ namespace Elasticity {
         divmat_.setBuildMode(Matrix::implicit);
         // map from dof=3*nodes at a cell (ca 3*3*3) to cell
         divmat_.setImplicitBuildModeParameters (3*3*3, 0.4);
-        divmat_.setSize(idx_free_.size(), num_cells_);
+        if(reduce_boundary){
+            divmat_.setSize(idx_free_.size(), num_cells_);
+        }else{
+            divmat_.setSize(grid_.leafGridView().size(3)*3, num_cells_);
+        }
+
         makeDuneMatrixCompressed(divmatdof,divmat_);
         // also make stress matrix
         std::vector<std::tuple<int, int, double>> stressmat;
@@ -342,10 +357,19 @@ namespace Elasticity {
 
         //Sign is added here  i.e \div \sigma =
         vector<double> rhs(rhs_force_);
+        if(reduce_boundary){
         assert(rhs_force_.size() == idx_free_.size());
         for(size_t i=0; i< idx_free_.size(); ++i){
             rhs[i] += rhs_pressure[idx_free_[i]];
         }
+        }else{
+            assert(rhs_force_.size() == grid_.leafGridView().size(3)*3);
+            assert(rhs.size() == rhs_pressure.size());
+            for(size_t i=0; i< rhs_pressure.size(); ++i){
+              rhs[i] += rhs_pressure[i];
+            }   
+        }
+        
         b.resize(rhs.size());
         // end initialization
         for (std::size_t i = 0; i < rhs.size(); ++i) {

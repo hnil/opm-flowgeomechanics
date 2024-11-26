@@ -2,7 +2,9 @@
     "hasfractures":false,
     "add_perfs_to_schedule":true,
     "fractureparam":{
+        "reduce_boundary":false,
         "addconnections":false,
+        "include_fracture_contributions":false,
         "config":{
             "type":"perp_well",
             "initial_fracture_width":1e-6,

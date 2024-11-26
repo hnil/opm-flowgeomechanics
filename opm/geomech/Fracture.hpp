@@ -165,6 +165,9 @@ public:
     std::vector<double> leakOfRate() const;
     double injectionPressure() const;
     void setPerfPressure(double perfpressure){perf_pressure_ = perfpressure;}
+    Dune::FieldVector<double, 6> stress(Dune::FieldVector<double, 3> obs) const;
+    Dune::FieldVector<double, 6> strain(Dune::FieldVector<double, 3> obs) const;
+    Dune::FieldVector<double, 3> disp(Dune::FieldVector<double, 3> obs) const;  
 private:
 
     size_t numFractureCells() const { return grid_->leafGridView().size(0); }
@@ -203,15 +206,13 @@ private:
         assert(nu_>0 && nu_ < 1);
     }
 
-  void resetWriters();
+    void resetWriters();
+    Dune::BlockVector<Dune::FieldVector<double, 3>> all_slips() const;
     // helpers for growing grid
     void insertLinear(const std::vector<unsigned int>& inner_indices);
     void insertExp(const std::vector<unsigned int>& inner_indices);
     void initFracture(); // create a new fracture grid from scratch
     Point3D surfaceMap(double x, double y);
-
-    // should be called every time a grid is updated/changed
-    //void updateGridDiscretizations() {assembleFractureMatrix(); initPressureMatrix();}
 
     std::unique_ptr<GridStretcher> grid_stretcher_;
   

@@ -1,0 +1,22 @@
+{
+    
+    "tol": "1e-6",
+    "maxiter": "200",
+    "verbosity": "3",
+    "solver": "bicgstab",
+    "preconditioner": {
+        "type": "amg",
+	"amg": {
+                "maxlevel": "5",
+                "coarsenTarget": "1000",
+                "smoother": "ILU0",
+                "alpha": "0.2",
+                "beta": "0.0001",
+                "verbosity": "3",
+                "n": "1",
+                "w": "1"
+        },
+        "relaxation": "0.90000000000000002",
+        "ilulevel": "0"
+    }
+}

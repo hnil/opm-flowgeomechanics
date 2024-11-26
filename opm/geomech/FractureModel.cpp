@@ -110,7 +110,41 @@ namespace Opm{
             }
         }
     }
+    // probably this should be collected in one loop
+    Dune::FieldVector<double,6> FractureModel::stress(Dune::FieldVector<double,3> obs) const{
+        Dune::FieldVector<double,6> stress;
+        for(size_t i=0; i < wells_.size(); ++i){
+            const std::vector<Fracture>& fractures = well_fractures_[i];
+            for(size_t j=0; j < fractures.size(); ++j){
+                Dune::FieldVector<double,6> tmp = fractures[j].stress(obs);
+                stress += tmp;
+            }
+        }
+        return stress;
+    }
+    Dune::FieldVector<double,6> FractureModel::strain(Dune::FieldVector<double,3> obs) const{
+        Dune::FieldVector<double,6> strain;
+        for(size_t i=0; i < wells_.size(); ++i){
+            const std::vector<Fracture>& fractures = well_fractures_[i];
+            for(size_t j=0; j < fractures.size(); ++j){
+                Dune::FieldVector<double,6> tmp = fractures[j].strain(obs);
+                strain += tmp;
+            }
+        }
+        return strain;
+    }
+    Dune::FieldVector<double,3> FractureModel::disp(Dune::FieldVector<double,3> obs) const{
+        Dune::FieldVector<double,3> disp;
+        for(size_t i=0; i < wells_.size(); ++i){
+            const std::vector<Fracture>& fractures = well_fractures_[i];
+            for(size_t j=0; j < fractures.size(); ++j){
+                Dune::FieldVector<double,3> tmp = fractures[j].disp(obs);
+                disp += tmp;
+            }
+        }
+        return disp;
 
+    }
 
     void FractureModel::write(int reportStep) const{
         for(size_t i=0; i < wells_.size(); ++i){
