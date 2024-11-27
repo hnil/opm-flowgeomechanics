@@ -232,8 +232,11 @@ double estimate_step_fac(const VectorHP& x, const VectorHP& dx)
 // ----------------------------------------------------------------------------  
 {
   // estimate what might be a safe step size to avoid exiting the convergence radius
-  const double f1 = dx[_0].infinity_norm() / x[_0].infinity_norm();
-  const double f2 = dx[_1].infinity_norm() / x[_1].infinity_norm();
+  const double x0_norm = x[_0].infinity_norm();
+  const double x1_norm = x[_1].infinity_norm();
+  
+  const double f1 = x0_norm == 0 ? 1 : dx[_0].infinity_norm() / x0_norm;
+  const double f2 = x1_norm == 0 ? 1 : dx[_1].infinity_norm() / x1_norm;
   const double fmax = std::max(f1, f2);
   const double threshold = 0.95;
   const double fac_min = 1e-2; 
@@ -322,6 +325,9 @@ bool Fracture::fullSystemIteration(const double tol)
 
   // copying modified variables back to member variables
   fracture_width_ = x[_0];
+  for (int i = 0; i != fracture_width_.size(); ++i)
+    fracture_width_[i] = std::max(0.0, fracture_width_[i][0]); // ensure non-negativity
+  
   fracture_pressure_ = x[_1];
   
   return false;
