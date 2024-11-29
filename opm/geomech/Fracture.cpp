@@ -679,7 +679,7 @@ Fracture::solve()
                                   // it with an existing value.
         fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
       
-      const double tol = 1e-5; // @@
+      const double tol = 1e-8; //1e-5; // @@
       const int max_iter = 100;
       int iter = 0;
       

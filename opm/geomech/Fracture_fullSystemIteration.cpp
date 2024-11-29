@@ -239,7 +239,7 @@ double estimate_step_fac(const VectorHP& x, const VectorHP& dx)
   const double f2 = x1_norm == 0 ? 1 : dx[_1].infinity_norm() / x1_norm;
   const double fmax = std::max(f1, f2);
   const double threshold = 0.95;
-  const double fac_min = 1e-2; 
+  const double fac_min = 1e-1; // @@ 1e-2; 
   return (fmax < threshold) ? 1.0 : std::max(threshold / fmax, fac_min);
 }
 
@@ -294,6 +294,11 @@ bool Fracture::fullSystemIteration(const double tol)
   
   S0.mmv(x, rhs); // rhs = rhs - S0 * x;   (we are working in the tanget plane)
 
+  // Account for the fact that if fracture pressure is insufficient to open the
+  // fracture, the system is satisfied if the aperture is zero
+  for (size_t i = 0; i != fracture_width_.size(); ++i)
+    if (rhs[_0][i] >= 0.0 && x[_0][i] <= 0.0) rhs[_0][i] = 0.0;
+  
   // check if system is already at a converged state (in which case we return immediately)
   //
   // for convergence, we use 'tol' directly for the mechanics system (where
