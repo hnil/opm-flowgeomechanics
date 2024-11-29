@@ -58,6 +58,7 @@ Fracture::init(std::string well,
 {
     prm_ = prm;
     wellinfo_ = WellInfo({well, perf, well_cell});
+
     origo_ = origo;
     axis_[2] = normal;
     axis_[0] = Point3D({std::copysign(normal[2], normal[0]),
@@ -87,7 +88,7 @@ Fracture::init(std::string well,
 
     updateReservoirProperties(); // default, in case not called using Simulator
     updateGridDiscretizations(); // assemble mechanics and pressure matrices
-    setGridStretcher();
+    //setGridStretcher();
 
     this->resetWriters();
     
@@ -883,7 +884,7 @@ std::vector<std::tuple<int,double,double>> Fracture::wellIndices() const{
         double well_index = q_cells[i]/dp;
         //assert(well_index>0);
         assert(std::isfinite(well_index));
-        wellIndices[i] = {res_cells[i],well_index, origo_[3]};
+        wellIndices[i] = {res_cells[i],well_index, origo_[2]};
         //wellIndices[i] = std::tuple<int,double>({res_cells[i],well_index});
     }
     return wellIndices;

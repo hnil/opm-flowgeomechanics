@@ -6,6 +6,7 @@
 #include <dune/geometry/referenceelements.hh>
 #include <dune/grid/common/mcmgmapper.hh>
 #include <dune/grid/common/gridenums.hh>
+#include <opm/grid/CpGrid.hpp>
 
 // for resinsight search
 #include <opm/input/eclipse/EclipseState/Grid/EclipseGrid.hpp>
@@ -123,5 +124,6 @@ namespace external{
 
     // copy from RigEclipseWellLogExtractor
     void buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, const Opm::EclipseGrid& m_grid);
+    void buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, const Dune::CpGrid& grid);
 
 }

@@ -150,8 +150,31 @@ CoordType normalize(const CoordType& vec) { return vec / vec.two_norm(); }
 // ============================================================================
 namespace Opm
 // ============================================================================
+//#include <dune/geometry/referenceelements.hh>
 {    
-
+vector<size_t> GridStretcher::boundary_node_indices_new(const Grid& grid){
+  //typedef ReferenceElement< typename Grid::ctype, dimGrid > RefElement;
+  //typedef ReferenceElements< typename Grid::ctype, dimGrid > RefElements;
+  vector<size_t> bix;
+  auto gv = grid.leafGridView();
+  for(const auto& el : Dune::elements(gv)){
+    if(!el.hasBoundaryIntersection()) 
+       continue;
+    const auto& refEl = el.referenceElement();
+    const auto dimW = 2;
+    for(auto& is : Dune::intersections(gv,el)){
+      if(is.boundary()){
+        auto inside = is.indexInInside();
+        auto faceSize = refEl.size(index,/*face*/ 1,/*griddim*/ dimW);
+        for( using i = 0; i < faceSize; ++i){
+          auto corner = refEl.corner(inside,1,i, dimW);
+          auto cornerIndex = refEl.cornerIndex
+          bix.push_back(cornerIndex);
+        }
+      }
+    }
+  }
+}
   // ----------------------------------------------------------------------------
 vector<size_t> GridStretcher::boundary_node_indices(const Grid& grid)
 // ----------------------------------------------------------------------------  
@@ -174,16 +197,19 @@ vector<size_t> GridStretcher::boundary_node_indices(const Grid& grid)
 
   int ix = 0;
   set<size_t> bix;
-  for (auto ep = view.begin<1>(); ep != view.end<1>(); ++ep, ++ix)
-    if (count[ix] < 2)
+  for(const auto& ep : Dune::edges(view)){
+  //for (auto ep = view.begin<1>(); ep != view.end<1>(); ++ep, ++ix)
+    int edge_index = view.indexSet().index(ep);
+    if (count[edge_index] < 2){
       for (int i = 0; i != 2; ++i) {
-        const auto pt = ep->geometry().corner(i);
+        const auto pt = ep.geometry().corner(i);
         const size_t pt_ix = find_coord_in(pt, vcoords);
 
-        if (pt_ix < vcoords.size())
-          bix.insert(pt_ix);
+        assert(pt_ix < vcoords.size());
+        bix.insert(pt_ix);
       }
-
+    }
+  }
   return vector<size_t>(bix.begin(), bix.end());
 
 }

@@ -63,7 +63,8 @@ private:
     std::vector<double> reservoir_temperature_;
     // well data
     std::vector<double> perf_pressure_;
-
+  //
+  // welldata : state, WI, ?
     static constexpr int VTKFormat = Dune::VTK::ascii;
     std::unique_ptr<Opm::VtkMultiWriter<Grid::LeafGridView, VTKFormat>> vtkmultiwriter_;
 };

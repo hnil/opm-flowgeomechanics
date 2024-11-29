@@ -40,11 +40,15 @@ public:
     template<class Grid>
     FractureModel(const Grid& grid,
                   const std::vector<Opm::Well>& wells,
-                  const Opm::EclipseGrid& eclgrid,
-                  const Opm::PropertyTree& param,
-                  const bool default_fractures
+                   const Opm::PropertyTree&
         );
     void addFractures();
+
+    template <class Grid>
+    void addFractures(const Grid& grid, const Opm::EclipseGrid& eclgrid);
+
+    template <class Grid>
+    void addDefaultsWells(const Grid& grid, const Opm::EclipseGrid& eclgrid);
 
     template <class Grid>
     void updateFractureReservoirCells(const Grid& grid, const Opm::EclipseGrid& eclgrid)
@@ -54,6 +58,17 @@ public:
         for (auto& well_fracture : well_fractures_) {
             for (auto& fracture : well_fracture) {
                 fracture.updateReservoirCells(cellSearchTree, grid);
+            }
+        }
+    }
+
+    void updateFractureReservoirCells(const Dune::CpGrid& cpgrid)
+    {
+        external::cvf::ref<external::cvf::BoundingBoxTree> cellSearchTree;
+        external::buildBoundingBoxTree(cellSearchTree, cpgrid);
+        for (auto& well_fracture : well_fractures_) {
+            for (auto& fracture : well_fracture) {
+                fracture.updateReservoirCells(cellSearchTree, cpgrid);
             }
         }
     }

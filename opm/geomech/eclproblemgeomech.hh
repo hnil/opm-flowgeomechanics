@@ -173,7 +173,9 @@ namespace Opm{
                         for(const auto& cell : elements(gv)){
                             const auto& center = cell.geometry().center();
                             const auto& cellIdx = gv.indexSet().index(cell);
-                            const auto& region = equilRegionData[cartesianIndexMapper.cartesianIndex(cellIdx)];
+                            assert(cellIdx < equilRegionData.size());
+                            const auto& region = equilRegionData[cellIdx];//cartesianIndexMapper.cartesianIndex(cellIdx)];
+                            assert(region <= stressequil.size());
                             if(region == recnum){
                                 Dune::FieldVector<double, 6> initstress;
                                 initstress[0] = STRESSXX +  STRESSXXGRAD*(center[2] - datum_depth);

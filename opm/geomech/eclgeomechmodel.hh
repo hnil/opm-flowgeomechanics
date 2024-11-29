@@ -84,8 +84,9 @@ namespace Opm{
                     //param.read("fractureparam.json");
                     const auto& schedule =  this->simulator_.vanguard().schedule();
                     int reportStepIdx = simulator_.episodeIndex();
-                    const std::vector<Opm::Well>& wells = schedule.getWells(reportStepIdx);
-                    const Opm::EclipseGrid& eclgrid = simulator_.vanguard().eclState().getInputGrid();
+                    const std::vector<Opm::Well>& wells = problem.wellModel().getLocalWells(reportStepIdx);
+                    //const std::vector<Opm::Well>& wells = schedule.getWells(reportStepIdx);
+                    //const Opm::EclipseGrid& eclgrid = simulator_.vanguard().eclState().getInputGrid();
                     const auto& grid = simulator_.vanguard().grid();
                     std::string outputDir = Parameters::Get<Parameters::OutputDir>();
                     std::string caseName  = simulator_.vanguard().caseName();
@@ -94,9 +95,7 @@ namespace Opm{
 
                     fracturemodel_ = std::make_unique<FractureModel>(grid,
                                                                      wells,
-                                                                     eclgrid,
-                                                                     param,
-                                                                     /*default fracture*/false
+                                                                     param
                         );
                     // not to get the reservoir properties along the well before initialising the well
                     // most important stress
@@ -104,7 +103,8 @@ namespace Opm{
                     // add fractures along the wells
                     fracturemodel_->addFractures();
 
-                    fracturemodel_->updateFractureReservoirCells(grid,eclgrid);
+                    //fracturemodel_->updateFractureReservoirCells(grid, eclgrid);
+                    fracturemodel_->updateFractureReservoirCells(grid);
                     fracturemodel_->initReservoirProperties<TypeTag,Simulator>(simulator_);
                     fracturemodel_->updateReservoirProperties<TypeTag,Simulator>(simulator_);
                     fracturemodel_->initFractureStates();
