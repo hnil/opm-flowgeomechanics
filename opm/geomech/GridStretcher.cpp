@@ -158,24 +158,29 @@ vector<size_t> GridStretcher::boundary_node_indices_new(const Grid& grid){
   vector<size_t> bix;
   auto gv = grid.leafGridView();
   for(const auto& el : Dune::elements(gv)){
-    if(!el.hasBoundaryIntersection()) 
+    if(!el.hasBoundaryIntersections()) 
        continue;
-    const auto& refEl = el.referenceElement();
-    const auto dimW = 2;
+    const auto& refEl = Dune::referenceElement(el);
+    //const auto dimW = 2;
     for(auto& is : Dune::intersections(gv,el)){
       if(is.boundary()){
         auto inside = is.indexInInside();
-        auto faceSize = refEl.size(index,/*face*/ 1,/*griddim*/ dimW);
-        for( using i = 0; i < faceSize; ++i){
-          auto corner = refEl.corner(inside,1,i, dimW);
-          auto cornerIndex = refEl.cornerIndex
+        auto faceSize = refEl.size(inside,/*face*/ 1,/*node*/ 2);
+        for(int i = 0; i < faceSize; ++i){
+          // this is a 2 grid where faces=cells=codim 1 nodes is of codim 2
+          auto corner = refEl.subEntity(/*facenr*/inside,/*face*/1, /*nodenum*/i, /*node*/2);
+          auto cornerIndex = gv.indexSet().subIndex(el,corner,2);
           bix.push_back(cornerIndex);
         }
       }
     }
   }
+  // make unique
+  std::sort(bix.begin(), bix.end());
+  bix.erase( unique( bix.begin(), bix.end() ), bix.end() );
+  return bix;
 }
-  // ----------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------- 
 vector<size_t> GridStretcher::boundary_node_indices(const Grid& grid)
 // ----------------------------------------------------------------------------  
 {
@@ -195,7 +200,6 @@ vector<size_t> GridStretcher::boundary_node_indices(const Grid& grid)
   // @@ This is suboptimal and brittle - there must be a better way to identify
   // boundary nodes than by geometric comparison!
 
-  int ix = 0;
   set<size_t> bix;
   for(const auto& ep : Dune::edges(view)){
   //for (auto ep = view.begin<1>(); ep != view.end<1>(); ++ep, ++ix)

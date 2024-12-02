@@ -79,6 +79,7 @@ private:
                                           const std::vector<size_t>& bcindices,
                                           const std::vector<CoordType>& nodecoords);
   static std::vector<CoordType> node_coordinates(const Grid& grid);
+  static std::vector<size_t> boundary_node_indices_new(const Grid& grid);
   static std::vector<size_t> boundary_node_indices(const Grid& grid);
   static std::vector<size_t> complement_of(const std::vector<size_t>& vec, const size_t N);
   static std::vector<double> interior_parametrization(const std::vector<size_t>& bix,

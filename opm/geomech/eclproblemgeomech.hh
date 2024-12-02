@@ -250,7 +250,7 @@ namespace Opm{
                 std::cout << "----------------------Start endTimeStep-------------------\n"
                 << std::flush;
             }
-            Parent::endTimeStep();
+            Parent::FlowProblemType::endTimeStep();
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 geomechModel_.endTimeStep();
                 if(this->hasFractures()){
@@ -260,10 +260,14 @@ namespace Opm{
                         this->addConnectionsToSchedual();
                     }else{
                     // not not working ... more work...
+                        assert(false);
                         this->addConnectionsToWell();
                     }
                 }
             }
+            
+            Parent::endStepApplyAction();
+ 
         }
 
         void addConnectionsToWell(){
@@ -333,6 +337,8 @@ namespace Opm{
                         return vg.gridIdxToEquilGridIdx(i);
                     });
             };
+            // alwas rebuild wells
+            sim_update.well_structure_changed = true;
             this->actionHandler_.applySimulatorUpdate(reportStep,
                                                       sim_update,
                                                       commit_wellstate,
