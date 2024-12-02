@@ -700,8 +700,8 @@ Fracture::solve()
       std::cout <<  *std::min_element(fracture_pressure_.begin(), fracture_pressure_.end()) << ", "
                 << *std::max_element(fracture_pressure_.begin(), fracture_pressure_.end()) << std::endl;
       std::cout << "Normal traction: ";
-      Dune::BlockVector<Dune::FieldVector<double, 1>> krull(fracture_pressure_);
-      normalFractureTraction(krull);
+      Dune::BlockVector<Dune::FieldVector<double, 1>> krull(fracture_width_);
+      normalFractureTraction(krull, false);
       std::cout <<  *std::min_element(krull.begin(), krull.end()) << ", "
                 << *std::max_element(krull.begin(), krull.end()) << std::endl;
       std::cout << "Aperture: ";

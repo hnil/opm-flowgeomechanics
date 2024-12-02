@@ -2,7 +2,7 @@
     "hasfractures":true,
     "add_perfs_to_schedule":true,
     "fractureparam":{
-	"reduce_boundary":false,
+	"reduce_boundary":true,
         "addconnections":true,
 	"include_fracture_contributions":false,
         "config":{
