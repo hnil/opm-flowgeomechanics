@@ -216,7 +216,7 @@ void Fracture::setFractureGrid(std::unique_ptr<Fracture::Grid> gptr)
   if (gptr == nullptr) {
     // create a new grid 
     initFracture();
-    grow(1, 0);
+    grow(3, 0);
     nlinear_ = layers_;
     grid_->grow();
     grid_->postGrow();
