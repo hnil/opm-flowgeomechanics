@@ -304,7 +304,8 @@ bool Fracture::fullSystemIteration(const double tol)
   // for convergence, we use 'tol' directly for the mechanics system (where
   // residuals are expected to scale with pressure), and 'tol * ||M||' for the
   // flow system (where residuals scale with M*p)
-  if (convergence_test(rhs, tol * M.infinity_norm(), tol)) 
+  if (convergence_test(rhs, tol * M.infinity_norm(),
+                       std::max(tol, A.infinity_norm() * std::numeric_limits<double>::epsilon()))) 
     return true;
                          
   // solve system equations
