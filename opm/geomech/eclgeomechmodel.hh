@@ -176,6 +176,7 @@ namespace Opm{
             }
         }
         void setupMechSolver(){
+                const auto& problem = simulator_.problem();
                 Opm::PropertyTree param = problem.getFractureParam();
                 reduce_boundary_ = param.get<bool>("reduce_boundary");
                 OPM_TIMEBLOCK(SetupMechSolver);
@@ -206,6 +207,7 @@ namespace Opm{
                 write_system_ = prm.get<int>("verbosity") > 10;
         }
         void writeMechSystem(){
+                    const auto& problem = simulator_.problem();
                     Opm::Helper::writeMechSystem(simulator_,
                     elacticitysolver_.A.getOperator(),
                     elacticitysolver_.A.getLoadVector(),
