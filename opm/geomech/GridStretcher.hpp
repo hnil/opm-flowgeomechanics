@@ -38,10 +38,10 @@ public:
     c2bix_(compute_cell_2_bindices_mapping(grid_, bnindices_)),
     bcindices_(keyvec(c2bix_)),
     bcentroid_param_(bcentroid_param_mat(grid_, bnindices_, iindices_, iparam_, c2bix_)),
-    boundary_normals_(boundary_normals(grid_, c2bix_, bcindices_, nodecoords_)) {}
+    boundary_normals_(boundary_normals(grid_, c2bix_, bcindices_, bnindices_, nodecoords_)) {}
 
   const std::vector<size_t>& boundaryNodeIndices() const { return bnindices_; }
-  const std::vector<size_t>& boundaryCellIndices() const { return bcindices_; }
+    const std::vector<size_t>& boundaryCellIndices() const { return bcindices_; }
 
   // the vector should have one entry per boundary cell, expressing the distance
   // the boundary of that cell should be expanded outwards
@@ -77,9 +77,11 @@ private:
   static BoundaryNormals boundary_normals(const Grid& grid,
                                           const CellBnodeMap& c2bix,
                                           const std::vector<size_t>& bcindices,
+                                          const std::vector<size_t>& bnindices,
                                           const std::vector<CoordType>& nodecoords);
   static std::vector<CoordType> node_coordinates(const Grid& grid);
   static std::vector<size_t> boundary_node_indices(const Grid& grid);
+  static std::vector<size_t> boundary_node_indices_new(const Grid& grid); // @@
   static std::vector<size_t> complement_of(const std::vector<size_t>& vec, const size_t N);
   static std::vector<double> interior_parametrization(const std::vector<size_t>& bix,
                                                       const std::vector<size_t>& iix,
@@ -108,7 +110,7 @@ private:
   const std::vector<size_t> iindices_; // indices of internal gridnodes
   const std::vector<double> iparam_; // parametrization of internal nodes in
                                      // terms of boundary nodes
-  const CellBnodeMap c2bix_; // map cell -> bindices
+  const CellBnodeMap c2bix_; // map cell -> bindices (local indexing for boundary nodes)
   const std::vector<size_t> bcindices_; // indices of boundary cells
   const std::vector<double> bcentroid_param_; // parametrization of boundary cell centroids
 

@@ -28,14 +28,15 @@ vector<T> extract_elements(const vector<T>& vec, const vector<size_t>& ixs)
   return result;
 }
 
-  // ----------------------------------------------------------------------------    
-double dist2D(const Dune::FieldVector<double, 3>& p1,
+// ----------------------------------------------------------------------------    
+double dist3D(const Dune::FieldVector<double, 3>& p1,
               const Dune::FieldVector<double, 3>& p2)
 // ----------------------------------------------------------------------------    
 {
   double dx = p1[0] - p2[0];
   double dy = p1[1] - p2[1];
-  return sqrt(dx*dx + dy*dy);
+  double dz = p1[2] - p2[2];
+  return sqrt(dx*dx + dy*dy + dz*dz);
 }
 
   
@@ -87,7 +88,7 @@ size_t find_coord_in(const CoordType& c, const vector<CoordType>& cvec)
   return
     find_if(cvec.begin(),
             cvec.end(),
-            [&] (const CoordType& el) {return dist2D(el, c) < TOL;})
+            [&] (const CoordType& el) {return dist3D(el, c) < TOL;})
     - cvec.begin();
 
 }
@@ -152,6 +153,37 @@ namespace Opm
 // ============================================================================
 {    
 
+
+vector<size_t> GridStretcher::boundary_node_indices_new(const Grid& grid){
+  //typedef ReferenceElement< typename Grid::ctype, dimGrid > RefElement;
+  //typedef ReferenceElements< typename Grid::ctype, dimGrid > RefElements;
+  vector<size_t> bix;
+  auto gv = grid.leafGridView();
+  for(const auto& el : Dune::elements(gv)){
+    if(!el.hasBoundaryIntersections()) 
+       continue;
+    const auto& refEl = Dune::referenceElement(el);
+    //const auto dimW = 2;
+    for(auto& is : Dune::intersections(gv,el)){
+      if(is.boundary()){
+        auto inside = is.indexInInside();
+        auto faceSize = refEl.size(inside,/*face*/ 1,/*node*/ 2);
+        for(int i = 0; i < faceSize; ++i){
+          // this is a 2 grid where faces=cells=codim 1 nodes is of codim 2
+          auto corner = refEl.subEntity(/*facenr*/inside,/*face*/1, /*nodenum*/i, /*node*/2);
+          auto cornerIndex = gv.indexSet().subIndex(el,corner,2);
+          bix.push_back(cornerIndex);
+        }
+      }
+    }
+  }
+  // make unique
+  std::sort(bix.begin(), bix.end());
+  bix.erase( unique( bix.begin(), bix.end() ), bix.end() );
+  return bix;
+}
+
+  
   // ----------------------------------------------------------------------------
 vector<size_t> GridStretcher::boundary_node_indices(const Grid& grid)
 // ----------------------------------------------------------------------------  
@@ -221,6 +253,7 @@ vector<CoordType> GridStretcher::node_coordinates(const Grid& g)
 BoundaryNormals GridStretcher::boundary_normals(const Grid& grid,
                                                 const CellBnodeMap& c2bix,
                                                 const std::vector<size_t>& bcindices,
+                                                const std::vector<size_t>& bnindices,
                                                 const vector<CoordType>& nodecoords)
 // ----------------------------------------------------------------------------
 { 
@@ -235,7 +268,8 @@ BoundaryNormals GridStretcher::boundary_normals(const Grid& grid,
     const auto entry = c2bix.find(bix)->second;
     const auto elem = grid.entity(get<0>(entry));
     const auto ccenter = elem.geometry().center();
-    const auto ecenter = (nodecoords[get<1>(entry)] + nodecoords[get<2>(entry)]) / 2;
+    const auto ecenter = (nodecoords[bnindices[get<1>(entry)]] +
+                          nodecoords[bnindices[get<2>(entry)]]) / 2;
     const auto nvec = normalize(ecenter - ccenter);
     result.bcell_normals[pos++] = nvec;
     result.bnode_normals[get<1>(entry)] += nvec;
@@ -264,8 +298,8 @@ GridStretcher::bcentroid_param_mat(const Grid& grid,
   // helper function to identify the internal node and two boundary nodes of a
   // given boundary triangle
   auto corner_nodes = [&] (const CellBnodeMap::value_type& pair) {
-    const size_t bn1 = get<1>(pair.second); // boundary node 1
-    const size_t bn2 = get<2>(pair.second); // boundary node 2
+    const size_t bn1 = bnindices[get<1>(pair.second)]; // boundary node 1
+    const size_t bn2 = bnindices[get<2>(pair.second)]; // boundary node 2
     const auto elem = grid.entity(get<0>(pair.second));
     
     assert(elem.subEntities(2) == 3); // should have three corners
@@ -500,7 +534,7 @@ void GridStretcher::applyBoundaryNodeDisplacements(const vector<CoordType>& disp
 
   // recompute stored geometric information
   nodecoords_ = node_coordinates(grid_);
-  boundary_normals_ = boundary_normals(grid_, c2bix_, bcindices_, nodecoords_);
+  boundary_normals_ = boundary_normals(grid_, c2bix_, bcindices_, bnindices_, nodecoords_);
 }
 
 
@@ -515,7 +549,8 @@ std::vector<double> GridStretcher::centroidEdgeDist() const
     const auto entry = c2bix_.find(bcindices_[bc])->second;
     const auto elem = grid_.entity(get<0>(entry));
     const auto ccenter = elem.geometry().center();
-    const auto ecenter = (nodecoords_[get<1>(entry)] + nodecoords_[get<2>(entry)]) / 2;
+    const auto ecenter = (nodecoords_[bnindices_[get<1>(entry)]] +
+                          nodecoords_[bnindices_[get<2>(entry)]]) / 2;
     result[bc] = (ccenter - ecenter).two_norm();
   }
   return result;

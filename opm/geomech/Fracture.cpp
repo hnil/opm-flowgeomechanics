@@ -698,7 +698,7 @@ Fracture::solve()
                 << *std::max_element(K1.begin(), K1.end()) << std::endl;
       std::cout << "Pressure: ";
       std::cout <<  *std::min_element(fracture_pressure_.begin(), fracture_pressure_.end()) << ", "
-                << *std::max_element(fracture_pressure_.begin(), fracture_pressure_.end()) << std::endl;
+          << *std::max_element(fracture_pressure_.begin(), fracture_pressure_.end()) << std::endl;
       std::cout << "Normal traction: ";
       Dune::BlockVector<Dune::FieldVector<double, 1>> krull(fracture_width_);
       normalFractureTraction(krull, false);
@@ -706,20 +706,28 @@ Fracture::solve()
                 << *std::max_element(krull.begin(), krull.end()) << std::endl;
       std::cout << "Aperture: ";
         std::cout <<  *std::min_element(fracture_width_.begin(), fracture_width_.end()) << ", "
-                    << *std::max_element(fracture_width_.begin(), fracture_width_.end()) << std::endl;
+               << *std::max_element(fracture_width_.begin(), fracture_width_.end()) << std::endl;
       
     } else if (method == "if_propagate") {
       // iterate full nonlinear system until convergence, and expand fracture if necessary
 
       fracture_width_ = 1e-2;   // Ensure not completely closed
       fracture_pressure_ = 0.0;
-      const double diameter = 2; // @@ compute this from boundary nodes
-      const double tol = 1e-3 * diameter; // @@
+
+      // start by assuming pressure equal to confining stress (will also set
+      // fracture_pressure_ to its correct size
+      normalFractureTraction(fracture_pressure_);
+      if (numWellEquations() > 0) // @@ it is implicitly assumed for now that
+                                  // there is just one well equation.  We initializze
+                                  // it with an existing value.
+        fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
+      
+      const double tol = 1e-8; //1e-5; // @@      
       const int max_iter = 100;
       int iter = 0;
       
-      const double K1max = 3.7e8; // @@ for testing.  Should be added as a proper data member
-      const double efac = 2; // @@ heuristic
+      const double K1max = 1e6; // @@ for testing.  Should be added as a proper data member
+      const double efac = 1; // 2; // @@ heuristic
       const std::vector<size_t> boundary_cells = grid_stretcher_->boundaryCellIndices();
       const size_t N = boundary_cells.size(); // number of boundary nodes and boundary cells
 
@@ -747,7 +755,7 @@ Fracture::solve()
           break;
         
         // loop over cells, determine how much they should be expanded or contracted
-        for (size_t i = 0; i != N; ++i) 
+        for (size_t i = 0; i != N; ++i)
           cell_disp[i] = 
             efac * (compute_target_expansion(K1max,
                                              fracture_width_[boundary_cells[i]],

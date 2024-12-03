@@ -11,10 +11,10 @@
 	    "cell_ijk": [6,6,10],
 	    "normal": [0,1,0],
             "initial_fracture_width":0.3048e-4,
-            "axis_scale": 0.61
+            "axis_scale": 0.25
         },
         "solver":{
-            "method":"if",
+            "method":"if_propagate",
             "max_iter":1,
             "min_width":1e-10,
             "max_width":5e+100,
