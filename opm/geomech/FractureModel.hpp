@@ -46,21 +46,29 @@ public:
         );
     void addFractures();
 
-    template <class Grid>
-    void updateFractureReservoirCells(const Grid& grid, const Opm::EclipseGrid& eclgrid)
+    void updateFractureReservoirCells(const Opm::EclipseGrid& eclgrid)
     {
-        external::cvf::ref<external::cvf::BoundingBoxTree> cellSearchTree;
-        external::buildBoundingBoxTree(cellSearchTree, eclgrid);
         for (auto& well_fracture : well_fractures_) {
             for (auto& fracture : well_fracture) {
-                fracture.updateReservoirCells(cellSearchTree, grid);
+                fracture.updateReservoirCells(cell_search_tree_);
             }
         }
     }
-    void addWell(std::string name, const std::vector<Point3D>& points,const std::vector<std::array<unsigned,2>>& segments,const std::vector<int>& reservoir_cells );
+    void addWell(std::string name,
+                 const std::vector<Point3D>& points,
+                 const std::vector<std::array<unsigned,2>>& segments,
+                 const std::vector<int>& reservoir_cells );
     void write(int ReportStep = -1) const;
     void writemulti(double time) const;
-    void solve();
+
+  template <class TypeTag, class Simulator> void solve(const Simulator& simulator) {
+      for(size_t i=0; i < wells_.size(); ++i){
+        std::vector<Fracture>& fractures = well_fractures_[i];
+        for(size_t j=0; j < fractures.size(); ++j){
+          fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, simulator);
+        }
+      }
+    }
     void updateReservoirProperties();
     void initFractureStates();
     template <class TypeTag, class Simulator>
@@ -116,6 +124,7 @@ private:
     std::vector<FractureWell> wells_;
     std::vector<std::vector<Fracture>> well_fractures_;
     Opm::PropertyTree prm_;
+    external::cvf::ref<external::cvf::BoundingBoxTree> cell_search_tree_;
 };
 }
 #include "FractureModel_impl.hpp"

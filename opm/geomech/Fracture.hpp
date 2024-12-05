@@ -77,9 +77,7 @@ public:
     std::string name() const;
     void write(int reportStep = -1) const;
     void writemulti(double time) const;
-    template <class Grid3D>
-    void updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
-                              const Grid3D& grid3D);
+    void updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree);
 
     // solver related
     void updateReservoirProperties();
@@ -153,7 +151,10 @@ public:
     void initFractureWidth();
     void solveFractureWidth();
     void solvePressure();
-    void solve();
+
+    template <class TypeTag, class Simulator>
+    void solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& cell_search_tree,
+               const Simulator& simulator);
 
     void printPressureMatrix() const; // debug purposes
     void printMechMatrix() const; // debug purposes
@@ -302,4 +303,6 @@ private:
     Opm::PropertyTree prm_;
 };
 } // namespace Opm
+
+#include "Fracture_impl.hpp"
 #endif

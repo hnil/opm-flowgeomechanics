@@ -104,7 +104,7 @@ namespace Opm{
                     // add fractures along the wells
                     fracturemodel_->addFractures();
 
-                    fracturemodel_->updateFractureReservoirCells(grid,eclgrid);
+                    fracturemodel_->updateFractureReservoirCells(eclgrid);
                     fracturemodel_->initReservoirProperties<TypeTag,Simulator>(simulator_);
                     fracturemodel_->updateReservoirProperties<TypeTag,Simulator>(simulator_);
                     fracturemodel_->initFractureStates();
@@ -112,7 +112,7 @@ namespace Opm{
                 // get reservoir properties on fractures
                 // simulator need
                 fracturemodel_->updateReservoirProperties<TypeTag,Simulator>(simulator_);
-                fracturemodel_->solve();
+                fracturemodel_->solve<TypeTag, Simulator>(simulator_);
                 // copy from apply action
             }
         }

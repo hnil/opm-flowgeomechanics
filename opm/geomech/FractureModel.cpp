@@ -164,14 +164,14 @@ namespace Opm{
             }
         }
     }
-    void FractureModel::solve() {
-        for(size_t i=0; i < wells_.size(); ++i){
-            std::vector<Fracture>& fractures = well_fractures_[i];
-            for(size_t j=0; j < fractures.size(); ++j){
-                fractures[j].solve();
-            }
-        }
-    }
+    // void FractureModel::solve() {
+    //     for(size_t i=0; i < wells_.size(); ++i){
+    //         std::vector<Fracture>& fractures = well_fractures_[i];
+    //         for(size_t j=0; j < fractures.size(); ++j){
+    //             fractures[j].solve(cell_search_tree_);
+    //         }
+    //     }
+    // }
     void FractureModel::updateReservoirProperties() {
         for(size_t i=0; i < wells_.size(); ++i){
             std::vector<Fracture>& fractures = well_fractures_[i];

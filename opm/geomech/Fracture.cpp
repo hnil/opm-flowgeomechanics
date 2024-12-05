@@ -32,16 +32,16 @@ namespace {
  * @param nu Poisson's ratio.
  * @return The computed target expansion.
  */
-double compute_target_expansion(const double K1_target,
-                                 const double aperture,
-                                 const double E, // young 
-                                 const double nu) // poisson
-{
-  const double mu = E / (2 * (1+nu)); // shear modulus
-  const double fac = mu * std::sqrt(M_PI) /
-                     (2 * (1-nu) * 1.834);
-  return pow(fac * aperture / K1_target, 2); 
-};
+// double compute_target_expansion(const double K1_target,
+//                                  const double aperture,
+//                                  const double E, // young 
+//                                  const double nu) // poisson
+// {
+//   const double mu = E / (2 * (1+nu)); // shear modulus
+//   const double fac = mu * std::sqrt(M_PI) /
+//                      (2 * (1-nu) * 1.834);
+//   return pow(fac * aperture / K1_target, 2); 
+// };
   
 }; // end anonymous namespace
 
@@ -534,9 +534,9 @@ Fracture::surfaceMap(double x, double y)
     vec += origo_;
     return vec;
 }
-template <class Grid3D>
+
 void
-Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,const Grid3D& grid3D)
+Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree)
 {
     reservoir_cells_.resize(numFractureCells());
     using GridView = typename Grid::LeafGridView;
@@ -604,7 +604,7 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
         std::cout << "Remove fracture outside of model" << std::endl;
         // remove fracture outside of model
         this->removeCells();
-        this->updateReservoirCells(cellSearchTree, grid3D);
+        this->updateReservoirCells(cellSearchTree);
     }
 }
 
@@ -627,157 +627,159 @@ void Fracture::updateReservoirProperties()
     nu_ = 0.25; 
     E_ = 1e9;
     this->initFractureWidth();
-
 }
-void
-Fracture::solve()
-{
-    std::cout << "Solve Fracture Pressure" << std::endl; 
-    std::string method = prm_.get<std::string>("solver.method");
-    if(method == "nothing"){
-    }else if(method == "simple"){
-        this->solveFractureWidth();
-        this->solvePressure();
-    }else if(method == "only_pressure"){
-        this->solvePressure();
-    }else if(method == "only_width"){
-        this->solveFractureWidth();
-    }else if(method == "iterative"){
-        int max_it = prm_.get<int>("max_iter");
-        int it=0;
-         bool changed = true;
-        while(changed && (it < max_it)){
-            initFractureStates(); // ensure initial fracture_width and fracture_pressure
-                                  // set to something reasonable
-            auto fracture_width = fracture_width_;
-            auto fracture_pressure = fracture_pressure_;
-            this->solveFractureWidth();
-            // grow fracture
-            this->solvePressure();
-            it +=1;
-            double tol = prm_.get<double>("solver.max_change");
-            double max_change=0;
-            for(int i=0;fracture_width_.size(); ++i){
-                double diff_width = fracture_width_[i] - fracture_width[i];
-                double diff_press = fracture_pressure_[i] - fracture_pressure[i];
-                max_change = std::max(max_change,diff_width/1e-2);
-                max_change = std::max(max_change,diff_press/1e5);
-            }
-            changed = (max_change < tol);
-        }
 
-    } else if (method == "if") {
-      // iterate full nonlinear system until convergence
-      std::cout << "Solve Fracture Pressure using Iterative Fracture" << std::endl;
-      fracture_width_ = 1e-2;   // Ensure not completely closed
+// void
+// Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& cell_search_tree)
+// {
+//     std::cout << "Solve Fracture Pressure" << std::endl; 
+//     std::string method = prm_.get<std::string>("solver.method");
+//     if(method == "nothing"){
+//     }else if(method == "simple"){
+//         this->solveFractureWidth();
+//         this->solvePressure();
+//     }else if(method == "only_pressure"){
+//         this->solvePressure();
+//     }else if(method == "only_width"){
+//         this->solveFractureWidth();
+//     }else if(method == "iterative"){
+//         int max_it = prm_.get<int>("max_iter");
+//         int it=0;
+//          bool changed = true;
+//         while(changed && (it < max_it)){
+//             initFractureStates(); // ensure initial fracture_width and fracture_pressure
+//                                   // set to something reasonable
+//             auto fracture_width = fracture_width_;
+//             auto fracture_pressure = fracture_pressure_;
+//             this->solveFractureWidth();
+//             // grow fracture
+//             this->solvePressure();
+//             it +=1;
+//             double tol = prm_.get<double>("solver.max_change");
+//             double max_change=0;
+//             for(int i=0;fracture_width_.size(); ++i){
+//                 double diff_width = fracture_width_[i] - fracture_width[i];
+//                 double diff_press = fracture_pressure_[i] - fracture_pressure[i];
+//                 max_change = std::max(max_change,diff_width/1e-2);
+//                 max_change = std::max(max_change,diff_press/1e5);
+//             }
+//             changed = (max_change < tol);
+//         }
 
-      // start by assuming pressure equal to confining stress (will also set
-      // fracture_pressure_ to its correct size
-      normalFractureTraction(fracture_pressure_);
-      if (numWellEquations() > 0) // @@ it is implicitly assumed for now that
-                                  // there is just one well equation.  We initializze
-                                  // it with an existing value.
-        fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
+//     } else if (method == "if") {
+//       // iterate full nonlinear system until convergence
+//       std::cout << "Solve Fracture Pressure using Iterative Fracture" << std::endl;
+//       fracture_width_ = 1e-2;   // Ensure not completely closed
+
+//       // start by assuming pressure equal to confining stress (will also set
+//       // fracture_pressure_ to its correct size
+//       normalFractureTraction(fracture_pressure_);
+//       if (numWellEquations() > 0) // @@ it is implicitly assumed for now that
+//                                   // there is just one well equation.  We initializze
+//                                   // it with an existing value.
+//         fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
       
-      const double tol = 1e-8; //1e-5; // @@
-      const int max_iter = 100;
-      int iter = 0;
+//       const double tol = 1e-8; //1e-5; // @@
+//       const int max_iter = 100;
+//       int iter = 0;
       
-      // solve flow-mechanical system
-      while (!fullSystemIteration(tol) && iter++ < max_iter) {};
+//       // solve flow-mechanical system
+//       while (!fullSystemIteration(tol) && iter++ < max_iter) {};
 
-      // @@ debug
-      const std::vector<double> K1_not_nan = Fracture::stressIntensityK1(); 
-      std::vector<double> K1;
-      for (size_t i = 0; i != K1_not_nan.size(); ++i)
-        if (!std::isnan(K1_not_nan[i]))
-          K1.push_back(K1_not_nan[i]);
+//       // @@ debug
+//       const std::vector<double> K1_not_nan = Fracture::stressIntensityK1(); 
+//       std::vector<double> K1;
+//       for (size_t i = 0; i != K1_not_nan.size(); ++i)
+//         if (!std::isnan(K1_not_nan[i]))
+//           K1.push_back(K1_not_nan[i]);
 
-      std::cout << "K1: ";
-      std::cout <<  *std::min_element(K1.begin(), K1.end()) << ", "
-                << *std::max_element(K1.begin(), K1.end()) << std::endl;
-      std::cout << "Pressure: ";
-      std::cout <<  *std::min_element(fracture_pressure_.begin(), fracture_pressure_.end()) << ", "
-          << *std::max_element(fracture_pressure_.begin(), fracture_pressure_.end()) << std::endl;
-      std::cout << "Normal traction: ";
-      Dune::BlockVector<Dune::FieldVector<double, 1>> krull(fracture_width_);
-      normalFractureTraction(krull, false);
-      std::cout <<  *std::min_element(krull.begin(), krull.end()) << ", "
-                << *std::max_element(krull.begin(), krull.end()) << std::endl;
-      std::cout << "Aperture: ";
-        std::cout <<  *std::min_element(fracture_width_.begin(), fracture_width_.end()) << ", "
-               << *std::max_element(fracture_width_.begin(), fracture_width_.end()) << std::endl;
+//       std::cout << "K1: ";
+//       std::cout <<  *std::min_element(K1.begin(), K1.end()) << ", "
+//                 << *std::max_element(K1.begin(), K1.end()) << std::endl;
+//       std::cout << "Pressure: ";
+//       std::cout <<  *std::min_element(fracture_pressure_.begin(), fracture_pressure_.end()) << ", "
+//           << *std::max_element(fracture_pressure_.begin(), fracture_pressure_.end()) << std::endl;
+//       std::cout << "Normal traction: ";
+//       Dune::BlockVector<Dune::FieldVector<double, 1>> krull(fracture_width_);
+//       normalFractureTraction(krull, false);
+//       std::cout <<  *std::min_element(krull.begin(), krull.end()) << ", "
+//                 << *std::max_element(krull.begin(), krull.end()) << std::endl;
+//       std::cout << "Aperture: ";
+//         std::cout <<  *std::min_element(fracture_width_.begin(), fracture_width_.end()) << ", "
+//                << *std::max_element(fracture_width_.begin(), fracture_width_.end()) << std::endl;
       
-    } else if (method == "if_propagate") {
-      // iterate full nonlinear system until convergence, and expand fracture if necessary
+//     } else if (method == "if_propagate") {
+//       // iterate full nonlinear system until convergence, and expand fracture if necessary
 
-      fracture_width_ = 1e-2;   // Ensure not completely closed
-      fracture_pressure_ = 0.0;
+//       fracture_width_ = 1e-2;   // Ensure not completely closed
+//       fracture_pressure_ = 0.0;
 
-      // start by assuming pressure equal to confining stress (will also set
-      // fracture_pressure_ to its correct size
-      normalFractureTraction(fracture_pressure_);
-      if (numWellEquations() > 0) // @@ it is implicitly assumed for now that
-                                  // there is just one well equation.  We initializze
-                                  // it with an existing value.
-        fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
+//       // start by assuming pressure equal to confining stress (will also set
+//       // fracture_pressure_ to its correct size
+//       normalFractureTraction(fracture_pressure_);
+//       if (numWellEquations() > 0) // @@ it is implicitly assumed for now that
+//                                   // there is just one well equation.  We initializze
+//                                   // it with an existing value.
+//         fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
       
-      const double tol = 1e-8; //1e-5; // @@      
-      const int max_iter = 100;
-      int iter = 0;
+//       const double tol = 1e-8; //1e-5; // @@      
+//       const int max_iter = 100;
+//       int iter = 0;
       
-      const double K1max = 1e6; // @@ for testing.  Should be added as a proper data member
-      const double efac = 1; // 2; // @@ heuristic
-      const std::vector<size_t> boundary_cells = grid_stretcher_->boundaryCellIndices();
-      const size_t N = boundary_cells.size(); // number of boundary nodes and boundary cells
+//       const double K1max = 1e6; // @@ for testing.  Should be added as a proper data member
+//       const double efac = 1; // 2; // @@ heuristic
+//       const std::vector<size_t> boundary_cells = grid_stretcher_->boundaryCellIndices();
+//       const size_t N = boundary_cells.size(); // number of boundary nodes and boundary cells
 
-      std::vector<double> total_bnode_disp(N, 0), bnode_disp(N, 0), cell_disp(N, 0);
-      const std::vector<GridStretcher::CoordType>
-        bnode_normals_orig = grid_stretcher_->bnodenormals();
+//       std::vector<double> total_bnode_disp(N, 0), bnode_disp(N, 0), cell_disp(N, 0);
+//       const std::vector<GridStretcher::CoordType>
+//         bnode_normals_orig = grid_stretcher_->bnodenormals();
 
-      std::vector<GridStretcher::CoordType> displacements(N, {0, 0, 0});
-      while (true) {
-        // solve flow-mechanical system
-        while (!fullSystemIteration(tol) && iter++ < max_iter) {};
+//       std::vector<GridStretcher::CoordType> displacements(N, {0, 0, 0});
+//       while (true) {
+//         // solve flow-mechanical system
+//         while (!fullSystemIteration(tol) && iter++ < max_iter) {};
 
-        // identify where max stress intensity is exceeded and propagation is needed
-        const auto dist = grid_stretcher_->centroidEdgeDist();
-        fill(bnode_disp.begin(), bnode_disp.end(), 0.0);
+//         // identify where max stress intensity is exceeded and propagation is needed
+//         const auto dist = grid_stretcher_->centroidEdgeDist();
+//         fill(bnode_disp.begin(), bnode_disp.end(), 0.0);
 
-        const std::vector<double> K1_not_nan = Fracture::stressIntensityK1(); 
-        std::vector<double> K1;
-        for (size_t i = 0; i != K1_not_nan.size(); ++i)
-          if (!std::isnan(K1_not_nan[i]))
-            K1.push_back(K1_not_nan[i]);
+//         const std::vector<double> K1_not_nan = Fracture::stressIntensityK1(); 
+//         std::vector<double> K1;
+//         for (size_t i = 0; i != K1_not_nan.size(); ++i)
+//           if (!std::isnan(K1_not_nan[i]))
+//             K1.push_back(K1_not_nan[i]);
 
-        // if no more expansion of the fracture grid is needed, we are finished
-        if (*max_element(K1.begin(), K1.end()) <= K1max)
-          break;
+//         // if no more expansion of the fracture grid is needed, we are finished
+//         if (*max_element(K1.begin(), K1.end()) <= K1max)
+//           break;
         
-        // loop over cells, determine how much they should be expanded or contracted
-        for (size_t i = 0; i != N; ++i)
-          cell_disp[i] = 
-            efac * (compute_target_expansion(K1max,
-                                             fracture_width_[boundary_cells[i]],
-                                             E_, nu_) - dist[i]);
-        bnode_disp =
-          grid_stretcher_->computeBoundaryNodeDisplacements(cell_disp, bnode_normals_orig);
+//         // loop over cells, determine how much they should be expanded or contracted
+//         for (size_t i = 0; i != N; ++i)
+//           cell_disp[i] = 
+//             efac * (compute_target_expansion(K1max,
+//                                              fracture_width_[boundary_cells[i]],
+//                                              E_, nu_) - dist[i]);
+//         bnode_disp =
+//           grid_stretcher_->computeBoundaryNodeDisplacements(cell_disp, bnode_normals_orig);
 
-        for (size_t i = 0; i != N; ++i)
-          displacements[i] = bnode_normals_orig[i] * bnode_disp[i];
+//         for (size_t i = 0; i != N; ++i)
+//           displacements[i] = bnode_normals_orig[i] * bnode_disp[i];
 
-        grid_stretcher_->applyBoundaryNodeDisplacements(displacements);
+//         grid_stretcher_->applyBoundaryNodeDisplacements(displacements);
 
-        // grid has changed its geometry, so we have to recompute discretizations
-        updateCellNormals();
-        initPressureMatrix();
-        fracture_matrix_ = nullptr;
+//         // grid has changed its geometry, so we have to recompute discretizations
+//         updateCellNormals();
+//         updateReservoirCells(cell_search_tree);
+//         //updateReservoirProperties(simulator, true); @@@@@
+//         initPressureMatrix();
+//         fracture_matrix_ = nullptr;
         
-      }
-    }else{
-        OPM_THROW(std::runtime_error,"Unknowns solution method");
-    }
-}
+//       }
+//     }else{
+//         OPM_THROW(std::runtime_error,"Unknowns solution method");
+//     }
+// }
 
     // }
 
@@ -1363,10 +1365,10 @@ void Fracture::printMechMatrix() const // debug purposes
 
 
 
-template void
-Fracture::updateReservoirCells<Dune::CpGrid>(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
-                                             const Dune::CpGrid& grid3D);
-template void
-Fracture::updateReservoirCells<Dune::PolyhedralGrid<3,3,double>>(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
-                                             const Dune::PolyhedralGrid<3,3,double>& grid3D);
+// template void
+// Fracture::updateReservoirCells<Dune::CpGrid>(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
+//                                              const Dune::CpGrid& grid3D);
+// template void
+// Fracture::updateReservoirCells<Dune::PolyhedralGrid<3,3,double>>(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
+//                                              const Dune::PolyhedralGrid<3,3,double>& grid3D);
 } // namespace Opm

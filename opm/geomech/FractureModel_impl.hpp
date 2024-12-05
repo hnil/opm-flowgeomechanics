@@ -79,7 +79,9 @@ namespace Opm{
         }
         if (default_fractures) {
             this->addFractures();
-            this->updateFractureReservoirCells(grid,eclgrid);
+            this->updateFractureReservoirCells(eclgrid);
         }
+
+        external::buildBoundingBoxTree(cell_search_tree_, eclgrid);
     }
 }
