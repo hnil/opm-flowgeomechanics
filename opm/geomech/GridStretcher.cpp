@@ -154,7 +154,7 @@ namespace Opm
 {    
 
 
-vector<size_t> GridStretcher::boundary_node_indices_new(const Grid& grid){
+vector<size_t> GridStretcher::boundary_node_indices(const Grid& grid){
   //typedef ReferenceElement< typename Grid::ctype, dimGrid > RefElement;
   //typedef ReferenceElements< typename Grid::ctype, dimGrid > RefElements;
   vector<size_t> bix;
@@ -185,7 +185,7 @@ vector<size_t> GridStretcher::boundary_node_indices_new(const Grid& grid){
 
   
   // ----------------------------------------------------------------------------
-vector<size_t> GridStretcher::boundary_node_indices(const Grid& grid)
+vector<size_t> GridStretcher::boundary_node_indices_old(const Grid& grid)
 // ----------------------------------------------------------------------------  
 {
   const auto view = grid.leafGridView();
@@ -556,6 +556,25 @@ std::vector<double> GridStretcher::centroidEdgeDist() const
   return result;
 }
 
+// ----------------------------------------------------------------------------
+double GridStretcher::maxBoxLength() const
+// ----------------------------------------------------------------------------  
+{
+  assert(nodecoords_.size() > 0);
+  std::array<double, 3> low {nodecoords_[0][0], nodecoords_[0][1], nodecoords_[0][2]};
+  std::array<double, 3> high {low};
+
+  for(const auto n : nodecoords_)
+    for (int d = 0; d != 3; ++d) {
+      low[d] = std::min(low[d], n[d]);
+      high[d] = std::max(high[d], n[d]);
+    }
+
+  for (int d = 0; d != 3; ++d)
+    high[d] = high[d] - low[d];
+
+  return *std::max_element(high.begin(), high.end());
+}  
 
 }; // end namespace Opm
 

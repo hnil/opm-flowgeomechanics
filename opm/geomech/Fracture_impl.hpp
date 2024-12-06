@@ -10,8 +10,48 @@ inline double compute_target_expansion(const double K1_target,
   const double mu = E / (2 * (1+nu)); // shear modulus
   const double fac = mu * std::sqrt(M_PI) /
                      (2 * (1-nu) * 1.834);
-  return pow(fac * aperture / K1_target, 2); 
-};
+  return pow(fac * aperture / K1_target, 2);
+}
+
+// template<class CoordType> inline void ensure_convexity(const CoordType& ipoint,
+//                                                        std::vector<CoordType>& pts) {
+//   while(true) {
+//     bool modified = false;
+//     for (int ix = 0; ix != pts.size(); ++ix) {
+//         const int ixp = (ix + 1) % pts.size();
+//         const int ixm = (ix + pts.size() - 1) % pts.size();
+
+//         CoordType& p = pts[ix];
+//         const CoordType& pp = pts[ixp];
+//         const CoordType& pm = pts[ixm];
+
+//         const CoordType v1 = pp - p;
+//         const CoordType v2 = pm - p;
+//         const CoordType vi = p - ipoint;
+
+//         const CoordType cross1 { v1[1] * v2[2] - v1[2] * v2[1],
+//                                  v1[2] * v2[0] - v1[0] * v2[2],
+//                                  v1[0] * v2[1] - v1[1] * v2[0] };
+
+//         const CoordType cross2 { v1[1] * vi[2] - v1[2] * vi[1],
+//                                  v1[2] * vi[0] - v1[0] * vi[2],
+//                                  v1[0] * vi[1] - v1[1] * vi[0] };
+        
+//         const double sprod = cross1[0] * cross2[0] +
+//                              cross1[1] * cross2[1] +
+//                              cross1[2] * cross2[2];
+
+//         if (sprod < 0) {
+//           // concave corner
+//           p = 0.5 * (pp + pm);
+//           modified = true;
+//         }
+//     }
+//     if (!modified)
+//       break;
+//   }
+   
+// };
 
 
 // ----------------------------------------------------------------------------
@@ -115,7 +155,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
     
     const double K1max = 1e6; // @@ for testing.  Should be added as a proper data member
     const double efac = 1; // 2; // @@ heuristic
-    const std::vector<size_t> boundary_cells = grid_stretcher_->boundaryCellIndices();
+        const std::vector<size_t> boundary_cells = grid_stretcher_->boundaryCellIndices();
     const size_t N = boundary_cells.size(); // number of boundary nodes and boundary cells
     
     std::vector<double> total_bnode_disp(N, 0), bnode_disp(N, 0), cell_disp(N, 0);
@@ -143,14 +183,49 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         break;
       
       // loop over cells, determine how much they should be expanded or contracted
-      for (size_t i = 0; i != N; ++i)
-        cell_disp[i] = 
-          efac * (compute_target_expansion(K1max,
-                                           fracture_width_[boundary_cells[i]],
-                                           E_, nu_) - dist[i]);
+      const double maxgrow = 0.1 * grid_stretcher_->maxBoxLength();
+      for (size_t i = 0; i != N; ++i) {
+        cell_disp[i] = efac * (compute_target_expansion(K1max,
+                                                   fracture_width_[boundary_cells[i]],
+                                                        E_, nu_) - dist[i]);
+        cell_disp[i] = std::max(std::min(cell_disp[i], maxgrow), -maxgrow);
+      }
+
       bnode_disp =
         grid_stretcher_->computeBoundaryNodeDisplacements(cell_disp, bnode_normals_orig);
-      
+
+      // ensure no boundary node moved inwards further than starting point
+      for (size_t i = 0; i != N; ++i) {
+        bnode_disp[i] = std::max(bnode_disp[i], -total_bnode_disp[i]);
+        total_bnode_disp[i] += bnode_disp[i];
+      }
+
+      // enforce convexity (@@ does this always work?)
+      std::vector<double> swap(N, 0);
+      bool modif = true;
+      const double ceps = 1e-4;
+      while(modif) {
+        modif = false;
+        std::cout<< " ............ " << std::endl;
+        for (size_t i = 0; i != N; ++i) {
+          const double prev = total_bnode_disp[(i-1+N)%N];
+          const double next = total_bnode_disp[(i+1)%N];
+          const double cur = total_bnode_disp[i];
+          const bool concave = (cur + ceps < next) && (cur + ceps < prev);
+          if (concave) {
+            std::cout << "Pushing out point " << i << std::endl;
+            swap[i] = (prev + next) / 2;
+            const double advance = swap[i] - cur;
+            bnode_disp[i] += advance;
+            modif = true;
+          } else {
+            swap[i] = total_bnode_disp[i];
+          }
+        }
+        for (size_t i = 0; i != N; ++i)
+          total_bnode_disp[i] = swap[i];
+      }
+
       for (size_t i = 0; i != N; ++i)
         displacements[i] = bnode_normals_orig[i] * bnode_disp[i];
       

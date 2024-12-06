@@ -63,6 +63,8 @@ public:
   const std::vector<CoordType>& bnodenormals() const {return boundary_normals_.bnode_normals;}
   const std::vector<CoordType>& bcellnormals() const {return boundary_normals_.bcell_normals;}
 
+  double maxBoxLength() const;
+
   // objective function and derivatives, when trying to stretch grid to a particular
   // target (in terms of distances between cell and edge centroids for boundary cells)
   double objective(const std::vector<double>& bndisp,
@@ -81,7 +83,7 @@ private:
                                           const std::vector<CoordType>& nodecoords);
   static std::vector<CoordType> node_coordinates(const Grid& grid);
   static std::vector<size_t> boundary_node_indices(const Grid& grid);
-  static std::vector<size_t> boundary_node_indices_new(const Grid& grid); // @@
+  static std::vector<size_t> boundary_node_indices_old(const Grid& grid); // @@
   static std::vector<size_t> complement_of(const std::vector<size_t>& vec, const size_t N);
   static std::vector<double> interior_parametrization(const std::vector<size_t>& bix,
                                                       const std::vector<size_t>& iix,
