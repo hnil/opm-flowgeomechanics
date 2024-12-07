@@ -71,7 +71,10 @@ public:
                    const std::vector<double>& dtarget,
                    std::vector<double>& grad,
                    bool fixed_cell_centroids = false);
-  
+
+  void adjustToConvex(std::vector<double>& disp,
+                      std::vector<double>& total_disp,
+                      const std::vector<CoordType>& dirs) const;
 private:
 
   // ----------------------- functions used by constructor -----------------------

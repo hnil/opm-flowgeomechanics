@@ -200,32 +200,11 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         total_bnode_disp[i] += bnode_disp[i];
       }
 
-      // enforce convexity (@@ does this always work?)
-      std::vector<double> swap(N, 0);
-      bool modif = true;
-      const double ceps = 1e-4;
-      while(modif) {
-        modif = false;
-        std::cout<< " ............ " << std::endl;
-        for (size_t i = 0; i != N; ++i) {
-          const double prev = total_bnode_disp[(i-1+N)%N];
-          const double next = total_bnode_disp[(i+1)%N];
-          const double cur = total_bnode_disp[i];
-          const bool concave = (cur + ceps < next) && (cur + ceps < prev);
-          if (concave) {
-            std::cout << "Pushing out point " << i << std::endl;
-            swap[i] = (prev + next) / 2;
-            const double advance = swap[i] - cur;
-            bnode_disp[i] += advance;
-            modif = true;
-          } else {
-            swap[i] = total_bnode_disp[i];
-          }
-        }
-        for (size_t i = 0; i != N; ++i)
-          total_bnode_disp[i] = swap[i];
-      }
-
+      // ensure convexity
+      grid_stretcher_->adjustToConvex(bnode_disp,
+                                      total_bnode_disp,
+                                      bnode_normals_orig);
+      
       for (size_t i = 0; i != N; ++i)
         displacements[i] = bnode_normals_orig[i] * bnode_disp[i];
       

@@ -28,8 +28,8 @@ std::array<int, 2> best2Dplane(const std::vector<Point3D>& pts)
 {
   assert(pts.size() > 0);
   const size_t N = pts.size();
-  std::array<double, 3> min_coords { pts[0] };
-  std::array<double, 3> max_coords { pts[0] };
+  std::array<double, 3> min_coords { pts[0][0], pts[0][1], pts[0][2]};
+  std::array<double, 3> max_coords { pts[0][0], pts[0][1], pts[0][2]};
 
   for (size_t i = 0; i != N; ++i) {
     for (size_t d = 0; d != 3; ++d) {
@@ -75,9 +75,9 @@ void search_cv_points(const size_t& start,
 {
   const double x0 = pts2D[2*start], y0 = pts2D[2*start+1];
   const double x1 = pts2D[2*end], y1 = pts2D[2*end+1];
-  const double dx = x1 - x0, dy = y1 - y0;
-  const double norm = std::sqrt(dx*dx + dy*dy);
-  const double nx = dx / norm, ny = dy / norm;
+  const double dx0 = x1 - x0, dy0 = y1 - y0;
+  const double norm = std::sqrt(dx0*dx0 + dy0*dy0);
+  const double nx = dx0 / norm, ny = dy0 / norm;
   
   double max_dist = 0;
 

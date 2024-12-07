@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <dune/common/fvector.hh> // FieldVector
 #include <dune/grid/common/mcmgmapper.hh> // for element mapper
+#include <opm/geomech/convex_boundary.hpp>
 
 using namespace std;
 using namespace Dune;
@@ -13,9 +14,30 @@ using namespace Dune;
 namespace // anonymous
 // ============================================================================
 {
-  using GridView = typename Opm::GridStretcher::Grid::LeafGridView;
-  using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
-  using CoordType = Opm::GridStretcher::CoordType;
+
+using GridView = typename Opm::GridStretcher::Grid::LeafGridView;
+using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
+using CoordType = Opm::GridStretcher::CoordType;
+
+
+// ----------------------------------------------------------------------------  
+double adjust_disp_to_convex(const double* const startpt,
+                             const double* const endpt,
+                             const double* const pt,
+                             const double* const dir)
+// ----------------------------------------------------------------------------  
+{
+  // solve for alpha in the equation:
+  // alpha * dir + t * (endpt-startpt) = enpt - pt
+  // This will ensure that pt + dir * alpha lies on the edge between startpt and
+  // endpt.
+  const double vx = endpt[0] - startpt[0];
+  const double vy = endpt[1] - startpt[1];
+  const double dx = endpt[0] - pt[0];
+  const double dy = endpt[1] - pt[1];
+
+  return (vy * dx - vx * dy) / (dir[0] * vy - dir[1] * vx);
+}
 
 // ----------------------------------------------------------------------------
 template <typename T>
@@ -180,7 +202,21 @@ vector<size_t> GridStretcher::boundary_node_indices(const Grid& grid){
   // make unique
   std::sort(bix.begin(), bix.end());
   bix.erase( unique( bix.begin(), bix.end() ), bix.end() );
-  return bix;
+
+  // ensure correct order (we use convex hull algorithm for that)
+  const vector<CoordType> ncoords = node_coordinates(grid);
+  std::array<int, 2> plane = best2Dplane(ncoords);
+  vector<CoordType> bcoords;
+  for(auto i : bix)
+    bcoords.push_back(ncoords[i]);
+
+  vector<double> bpts2D = projectPointsTo2DPlane(bcoords, plane);
+  vector<size_t> bix_ordered = convex_hull(bpts2D);
+  assert(bix_ordered.size() == bix.size()); // should be the case if boundary is convex
+  for (auto& i : bix_ordered)
+    i = bix[i];
+  
+  return bix_ordered;
 }
 
   
@@ -574,7 +610,56 @@ double GridStretcher::maxBoxLength() const
     high[d] = high[d] - low[d];
 
   return *std::max_element(high.begin(), high.end());
-}  
+}
+
+// ----------------------------------------------------------------------------
+void GridStretcher::adjustToConvex(std::vector<double>& disp,
+                                   std::vector<double>& total_disp,
+                                   const std::vector<CoordType>& dirs) const
+// ----------------------------------------------------------------------------
+{
+  const size_t N = bnindices_.size();
+  assert(dirs.size() == N);
+  assert(disp.size() == N);
+  assert(total_disp.size() == N);
+
+  // compute new boundary node coordinates, before convexity is enforced
+  vector<CoordType> old_bcoords(dirs.size()), new_bcoords(dirs.size());
+  for (size_t i = 0; i != N; ++i) {
+    old_bcoords[i] = nodecoords_[bnindices_[i]];
+    new_bcoords[i] = old_bcoords[i] + dirs[i] * disp[i];
+  }
+
+  // reduce geometry to 2D, to allow convex hull algorithm to work
+  const array<int, 2> plane = best2Dplane(new_bcoords);
+  const vector<double> bpts2D = projectPointsTo2DPlane(new_bcoords, plane);
+  const vector<double> bpts2D_old = projectPointsTo2DPlane(old_bcoords, plane);
+  const vector<double> dirs2D = projectPointsTo2DPlane(dirs, plane);
+
+  // compute convex hull of boundary points
+  const vector<size_t> cvhull_pts = convex_hull(bpts2D);
+  assert(cvhull_pts.size() > 2);
+
+  // adjust positions of points that are inside the convex hull so that they
+  // reach the convex hull boundary, ensuring that the fracture outline will be
+  // convex
+  for (size_t i = 0; i != cvhull_pts.size(); ++i) {
+    const size_t cstart = cvhull_pts[i];
+    const size_t cend = cvhull_pts[(i+1) % cvhull_pts.size()];
+
+    // adjust boundary points in the interval between bp_start_ix and bp_end_ix
+    for (size_t j = (cstart + 1)%N; j != cend; j = (j + 1) % N) {
+      const double alpha = adjust_disp_to_convex(&bpts2D[2*cstart],
+                                                 &bpts2D[2*cend],
+                                                 &bpts2D_old[2*j],
+                                                 &dirs2D[2*j]);
+      const double diff = alpha - disp[j];
+      disp[j] = alpha;
+      total_disp[j] += diff;
+    }
+  }
+}
+
 
 }; // end namespace Opm
 
