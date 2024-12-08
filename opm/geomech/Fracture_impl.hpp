@@ -163,7 +163,11 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       bnode_normals_orig = grid_stretcher_->bnodenormals();
     
     std::vector<GridStretcher::CoordType> displacements(N, {0, 0, 0});
+    int count = 0; // @@
     while (true) {
+      std::ofstream os("boundary"); // @@
+      
+      std::cout << "Iteration: " << ++count << std::endl;
       // solve flow-mechanical system
       int iter = 0;
       while (!fullSystemIteration(tol) && iter++ < max_iter) {};
@@ -188,12 +192,14 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         cell_disp[i] = efac * (compute_target_expansion(K1max,
                                                    fracture_width_[boundary_cells[i]],
                                                         E_, nu_) - dist[i]);
-        cell_disp[i] = std::max(std::min(cell_disp[i], maxgrow), -maxgrow);
+        //cell_disp[i] = std::max(std::min(cell_disp[i], maxgrow), -maxgrow);
       }
 
       bnode_disp =
         grid_stretcher_->computeBoundaryNodeDisplacements(cell_disp, bnode_normals_orig);
-
+      for (size_t i = 0; i != N; ++i)
+        bnode_disp[i] = std::max(std::min(bnode_disp[i], maxgrow), -maxgrow);
+      
       // ensure no boundary node moved inwards further than starting point
       for (size_t i = 0; i != N; ++i) {
         bnode_disp[i] = std::max(bnode_disp[i], -total_bnode_disp[i]);
@@ -216,6 +222,12 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       updateReservoirProperties<TypeTag, Simulator>(simulator, true);
       initPressureMatrix();
       fracture_matrix_ = nullptr;
+
+      const auto& pts = grid_stretcher_->nodecoords();
+      const auto bix = grid_stretcher_->boundaryNodeIndices();
+      for(auto i : bix)
+        os << pts[i][0] << " " << pts[i][1] << " " << pts[i][2] << "\n";
+      os.close();
       
     }
   } else {
