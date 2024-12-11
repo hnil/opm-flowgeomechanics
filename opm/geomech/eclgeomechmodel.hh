@@ -84,8 +84,9 @@ namespace Opm{
                     //param.read("fractureparam.json");
                     const auto& schedule =  this->simulator_.vanguard().schedule();
                     int reportStepIdx = simulator_.episodeIndex();
-                    const std::vector<Opm::Well>& wells = schedule.getWells(reportStepIdx);
-                    const Opm::EclipseGrid& eclgrid = simulator_.vanguard().eclState().getInputGrid();
+                    const std::vector<Opm::Well>& wells = problem.wellModel().getLocalWells(reportStepIdx);
+                    //const std::vector<Opm::Well>& wells = schedule.getWells(reportStepIdx);
+                    //const Opm::EclipseGrid& eclgrid = simulator_.vanguard().eclState().getInputGrid();
                     const auto& grid = simulator_.vanguard().grid();
                     std::string outputDir = Parameters::Get<Parameters::OutputDir>();
                     std::string caseName  = simulator_.vanguard().caseName();
@@ -94,9 +95,7 @@ namespace Opm{
 
                     fracturemodel_ = std::make_unique<FractureModel>(grid,
                                                                      wells,
-                                                                     eclgrid,
-                                                                     param,
-                                                                     /*default fracture*/false
+                                                                     param
                         );
                     // not to get the reservoir properties along the well before initialising the well
                     // most important stress
@@ -175,13 +174,8 @@ namespace Opm{
                 mechPotentialForce_[dofIdx] *= 1.0;
             }
         }
-
-        void solveGeomechanics(){
-            OPM_TIMEBLOCK(endTimeStepMech);
-            this->updatePotentialForces();
-            // for now assemble and set up solver her
-            const auto& problem = simulator_.problem();
-            if(first_solve_){
+        void setupMechSolver(){
+                const auto& problem = simulator_.problem();
                 Opm::PropertyTree param = problem.getFractureParam();
                 reduce_boundary_ = param.get<bool>("reduce_boundary");
                 OPM_TIMEBLOCK(SetupMechSolver);
@@ -210,23 +204,9 @@ namespace Opm{
                 elacticitysolver_.comm()->communicator().barrier();
                 first_solve_ = false;
                 write_system_ = prm.get<int>("verbosity") > 10;
-            }else{
-                OPM_TIMEBLOCK(AssembleRhs);
-
-                // need "static boundary conditions is changing"
-                //bool do_matrix = false;//assemble matrix
-                //bool do_vector = true;//assemble matrix
-                //elacticitysolver_.A.initForAssembly();
-                //elacticitysolver_.assemble(mechPotentialForce_, do_matrix, do_vector);
-
-                // need precomputed divgrad operator
-                elacticitysolver_.updateRhsWithGrad(mechPotentialForce_);
-            }
-
-            {
-                OPM_TIMEBLOCK(SolveMechanicalSystem);
-                elacticitysolver_.solve();
-                if(write_system_){
+        }
+        void writeMechSystem(){
+                    const auto& problem = simulator_.problem();
                     Opm::Helper::writeMechSystem(simulator_,
                     elacticitysolver_.A.getOperator(),
                     elacticitysolver_.A.getLoadVector(),
@@ -249,9 +229,9 @@ namespace Opm{
                                                 "fixed_values_",
                                                 elacticitysolver_.comm());
                     }
-                }
-            }
-            {
+        }
+
+        void calculateOutputQuantitiesMech(){
             OPM_TIMEBLOCK(CalculateOutputQuantitesMech);
             Opm::Elasticity::Vector field;
             const auto& grid = simulator_.vanguard().grid();
@@ -301,7 +281,38 @@ namespace Opm{
                 Dune::storeMatrixMarket(field, "field.mtx");
                 Dune::storeMatrixMarket(mechPotentialForce_, "pressforce.mtx");
             }
+        }
+
+
+        void solveGeomechanics(){
+            OPM_TIMEBLOCK(endTimeStepMech);
+            this->updatePotentialForces();
+            // for now assemble and set up solver her
+            const auto& problem = simulator_.problem();
+            if(first_solve_){
+                this->setupMechSolver();
             }
+            //else
+            {
+                // reset the rhs even in the first iteration maybe bug in rhs for reduce_boundary=false;
+                OPM_TIMEBLOCK(AssembleRhs);
+                // need "static boundary conditions is changing"
+                //bool do_matrix = false;//assemble matrix
+                //bool do_vector = true;//assemble matrix
+                //elacticitysolver_.A.initForAssembly();
+                //elacticitysolver_.assemble(mechPotentialForce_, do_matrix, do_vector);
+                // need precomputed divgrad operator
+                elacticitysolver_.updateRhsWithGrad(mechPotentialForce_);
+            }
+
+            {
+                OPM_TIMEBLOCK(SolveMechanicalSystem);
+                elacticitysolver_.solve();
+                if(write_system_){
+                    this->writeMechSystem();
+                }
+            }
+            this->calculateOutputQuantitiesMech();// and properties used for fracturing
         }
         template<class Serializer>
         void serializeOp(Serializer&)

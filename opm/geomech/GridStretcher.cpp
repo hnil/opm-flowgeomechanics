@@ -173,9 +173,8 @@ CoordType normalize(const CoordType& vec) { return vec / vec.two_norm(); }
 // ============================================================================
 namespace Opm
 // ============================================================================
+//#include <dune/geometry/referenceelements.hh>
 {    
-
-
 vector<size_t> GridStretcher::boundary_node_indices(const Grid& grid){
   //typedef ReferenceElement< typename Grid::ctype, dimGrid > RefElement;
   //typedef ReferenceElements< typename Grid::ctype, dimGrid > RefElements;
@@ -218,7 +217,6 @@ vector<size_t> GridStretcher::boundary_node_indices(const Grid& grid){
   
   return bix_ordered;
 }
-
   
   // ----------------------------------------------------------------------------
 vector<size_t> GridStretcher::boundary_node_indices_old(const Grid& grid)
@@ -240,18 +238,20 @@ vector<size_t> GridStretcher::boundary_node_indices_old(const Grid& grid)
   // @@ This is suboptimal and brittle - there must be a better way to identify
   // boundary nodes than by geometric comparison!
 
-  int ix = 0;
   set<size_t> bix;
-  for (auto ep = view.begin<1>(); ep != view.end<1>(); ++ep, ++ix)
-    if (count[ix] < 2)
+  for(const auto& ep : Dune::edges(view)){
+  //for (auto ep = view.begin<1>(); ep != view.end<1>(); ++ep, ++ix)
+    int edge_index = view.indexSet().index(ep);
+    if (count[edge_index] < 2){
       for (int i = 0; i != 2; ++i) {
-        const auto pt = ep->geometry().corner(i);
+        const auto pt = ep.geometry().corner(i);
         const size_t pt_ix = find_coord_in(pt, vcoords);
 
-        if (pt_ix < vcoords.size())
-          bix.insert(pt_ix);
+        assert(pt_ix < vcoords.size());
+        bix.insert(pt_ix);
       }
-
+    }
+  }
   return vector<size_t>(bix.begin(), bix.end());
 
 }
