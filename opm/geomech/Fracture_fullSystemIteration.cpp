@@ -28,10 +28,6 @@ using Dune::Indices::_1;
 using ResVector = Opm::Fracture::Vector; 
 using VectorHP = Dune::MultiTypeBlockVector<ResVector, ResVector>;
 
-  // using Krull = Dune::MultiTypeBlockVector<Dune::BlockVector<double>>;
-  // Dune::MultiTypeBlockVector<Dune::BlockVector<double, std::allocator<double>>> dill;
-  // Krull tull(2);  
-  
 using SMatrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>; // sparse matrix
 using FMatrix = Dune::DynamicMatrix<double>;                       // full matrix
 
@@ -332,8 +328,14 @@ bool Fracture::fullSystemIteration(const double tol)
   // copying modified variables back to member variables
   fracture_width_ = x[_0];
   for (int i = 0; i != fracture_width_.size(); ++i)
-    fracture_width_[i] = std::max(0.0, fracture_width_[i][0]); // ensure non-negativity
-  
+     fracture_width_[i] = std::max(0.0, fracture_width_[i][0]); // ensure non-negativity
+  // for (int i = 0; i != fracture_width_.size(); ++i) {
+  //   if (fracture_width_[i] < 0.0) {
+  //     const double tmp = (fracture_width_[i] - dx[_0][i]) / 10;
+  //     fracture_width_[i] = tmp;
+  //   }
+  // }
+
   fracture_pressure_ = x[_1];
   
   return false;

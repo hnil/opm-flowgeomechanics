@@ -53,7 +53,6 @@ inline double compute_target_expansion(const double K1_target,
    
 // };
 
-
 // ----------------------------------------------------------------------------
 template <class TypeTag, class Simulator>
 void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& cell_search_tree,
@@ -166,6 +165,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
     int count = 0; // @@
     while (true) {
       std::ofstream os("boundary"); // @@
+      auto traction_debug(fracture_pressure_); normalFractureTraction(traction_debug); //@@
       
       std::cout << "Iteration: " << ++count << std::endl;
       // solve flow-mechanical system
@@ -225,7 +225,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
 
       const auto& pts = grid_stretcher_->nodecoords();
       const auto bix = grid_stretcher_->boundaryNodeIndices();
-      for(auto i : bix)
+      for(auto i : bix) // @@
         os << pts[i][0] << " " << pts[i][1] << " " << pts[i][2] << "\n";
       os.close();
       

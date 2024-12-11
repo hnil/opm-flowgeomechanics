@@ -46,7 +46,8 @@ namespace {
 }; // end anonymous namespace
 
 namespace Opm
-{
+{    
+
 void
 Fracture::init(std::string well,
                int perf,
