@@ -4,10 +4,8 @@ namespace Opm{
     template<class Grid>
     FractureModel::FractureModel(const Grid& grid,
                   const std::vector<Opm::Well>& wells,
-                  const Opm::EclipseGrid& eclgrid,
-                  const Opm::PropertyTree& param,
-                  bool default_fractures
-        ):
+                  const Opm::PropertyTree& param)
+                  :
         prm_(param)
     {
       using CartesianIndexMapper = Dune::CartesianIndexMapper<Grid>;
@@ -43,6 +41,7 @@ namespace Opm{
         //const std::array<int, dimension>
         //auto cartdims = cartmapper.cartesianDimensions();
         GeometryHelper geomhelp(grid);
+	// NB: need to be carefull in parallel
         for(int wellIdx=0; wellIdx < wells.size(); ++wellIdx){
             std::vector<Point3D> vertices;
             std::vector<Segment> wellsegment;
@@ -78,10 +77,16 @@ namespace Opm{
             }
         }
         if (default_fractures) {
-            this->addFractures();
-            this->updateFractureReservoirCells(eclgrid);
+          this->addFractures();
+          this->updateFractureReservoirCells(eclgrid);
         }
 
         external::buildBoundingBoxTree(cell_search_tree_, eclgrid);
+    }
+
+  template<class Grid>
+  void FractureModel::addDefaultsWells(const Grid& grid, const Opm::EclipseGrid& eclgrid){
+            this->addFractures();
+            this->updateFractureReservoirCells(eclgrid);
     }
 }
