@@ -76,11 +76,13 @@ namespace Opm{
             this->addWell(well.name(),vertices, segments, cells);
             }
         }
+
+        external::buildBoundingBoxTree(cell_search_tree_, grid);
     }
+  
     template<class Grid>
     void FractureModel::addDefaultsWells(const Grid& grid, const Opm::EclipseGrid& eclgrid) {
-            this->addFractures();
-            this->updateFractureReservoirCells(eclgrid);
-        }
+      this->addFractures();
+      this->updateFractureReservoirCells();
     }
 }

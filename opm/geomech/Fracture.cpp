@@ -78,8 +78,6 @@ Fracture::init(std::string well,
     setPerfPressure(0.0); // This can be changed by subsequently calling this
                           // function when the fracture is connected to the
                           // reservoir
-    updateReservoirProperties(); // default, in case not called using Simulator
-    updateGridDiscretizations(); // assemble mechanics and pressure matrices
 
     // NB: The Fracture object is still not fully initialized, since there is
     // not yet any connection with a surrounding reservoir. The following

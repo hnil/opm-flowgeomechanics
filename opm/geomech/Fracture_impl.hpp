@@ -165,7 +165,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
     std::vector<GridStretcher::CoordType> displacements(N, {0, 0, 0});
     int count = 0; // @@
     while (true) {
-      std::ofstream os("boundary"); // @@
+      //std::ofstream os("boundary"); // @@
       
       std::cout << "Iteration: " << ++count << std::endl;
       // solve flow-mechanical system
@@ -225,9 +225,9 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
 
       const auto& pts = grid_stretcher_->nodecoords();
       const auto bix = grid_stretcher_->boundaryNodeIndices();
-      for(auto i : bix)
-        os << pts[i][0] << " " << pts[i][1] << " " << pts[i][2] << "\n";
-      os.close();
+      // for(auto i : bix)
+      //   os << pts[i][0] << " " << pts[i][1] << " " << pts[i][2] << "\n";
+      // os.close();
       
     }
   } else {

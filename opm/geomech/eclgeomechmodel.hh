@@ -103,7 +103,7 @@ namespace Opm{
                     // add fractures along the wells
                     fracturemodel_->addFractures();
 
-                    fracturemodel_->updateFractureReservoirCells(eclgrid);
+                    fracturemodel_->updateFractureReservoirCells();
                     fracturemodel_->initReservoirProperties<TypeTag,Simulator>(simulator_);
                     fracturemodel_->updateReservoirProperties<TypeTag,Simulator>(simulator_);
                     fracturemodel_->initFractureStates();
