@@ -62,7 +62,10 @@ public:
         }
     }
 
-    void updateFractureReservoirCells(const Dune::CpGrid& cpgrid)
+  
+  //void updateFractureReservoirCells(const Dune::CpGrid& cpgrid)
+  template<class Grid>
+  void updateFractureReservoirCells(const Grid& cpgrid)
     {
         external::cvf::ref<external::cvf::BoundingBoxTree> cellSearchTree;
         external::buildBoundingBoxTree(cellSearchTree, cpgrid);
