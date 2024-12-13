@@ -340,9 +340,9 @@ namespace Opm{
             // alwas rebuild wells
             sim_update.well_structure_changed = true;
             this->actionHandler_.applySimulatorUpdate(reportStep,
-                                                      sim_update,
-                                                      commit_wellstate,
-                                                      updateTrans);
+                                                      sim_update,                  
+                                                      updateTrans,
+						      commit_wellstate);
             if (commit_wellstate) {
                 this->wellModel().commitWGState();
             }
