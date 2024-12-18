@@ -1,3 +1,5 @@
+#include <config.h>
+
 #include "opm/geomech/param_interior.hpp"
 #include "opm/geomech/GridStretcher.hpp"
 

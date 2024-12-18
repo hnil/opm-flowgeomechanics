@@ -43,7 +43,6 @@
 #include <opm/simulators/flow/GenericThresholdPressure_impl.hpp>
 #include <opm/simulators/flow/GenericTracerModel_impl.hpp>
 #include <opm/simulators/flow/Transmissibility_impl.hpp>
-#include <opm/simulators/utils/GridDataOutput_impl.hpp>
 
 #include "MechTypeTag.hpp"
 

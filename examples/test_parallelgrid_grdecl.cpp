@@ -12,11 +12,14 @@
 #ifdef HAVE_CONFIG_H
 # include "config.h"
 #endif
+
 # define DISABLE_ALUGRID_SFC_ORDERING 1
+
 #include <opm/common/utility/platform_dependent/disable_warnings.h>
 
 #include <dune/common/exceptions.hh> // We use exceptions
 #include <dune/common/version.hh>
+
 #include <dune/grid/utility/structuredgridfactory.hh>
 #include <dune/grid/io/file/vtk/vtkwriter.hh>
 //#include <dune/grid/io/file/vtk/subsampleingvtkwriter.hh>
@@ -30,19 +33,25 @@
 
 #include <dune/common/version.hh>
 #include <dune/common/parallel/mpihelper.hh>
+
 #include <opm/grid/polyhedralgrid.hh>
+
 #include <opm/input/eclipse/Deck/Deck.hpp>
 #include <opm/input/eclipse/EclipseState/Grid/EclipseGrid.hpp>
 #include <opm/input/eclipse/EclipseState/EclipseState.hpp>
 #include <opm/input/eclipse/Parser/Parser.hpp>
 #include <opm/input/eclipse/EclipseState/SimulationConfig/BCConfig.hpp>
+
 #include <opm/common/utility/platform_dependent/reenable_warnings.h>
+
 #include <opm/input/eclipse/Python/Python.hpp>
 #include <opm/input/eclipse/Schedule/Schedule.hpp>
+
 #if HAVE_ALUGRID
 #include <dune/alugrid/grid.hh>
 #include <dune/alugrid/common/fromtogridfactory.hh>
 #endif
+
 #include <opm/grid/utility/StopWatch.hpp>
 #include <opm/common/utility/parameters/ParameterGroup.hpp>
 
@@ -52,13 +61,12 @@
 #include <opm/elasticity/matrixops.hpp>
 #include <dune/grid/utility/globalindexset.hh>
 
+#include "vectorfunctions.hh"
 #include <cstring>
 #include <iostream>
-#include "vectorfunctions.hh"
-#include <unistd.h>
-#include <opm/geomech/boundaryutils.hh>
 #include <unistd.h>
 
+#include <opm/geomech/boundaryutils.hh>
 #include <opm/geomech/dune_utilities.hpp>
 #include <opm/geomech/DuneCommunicationHelpers.hpp>
 
