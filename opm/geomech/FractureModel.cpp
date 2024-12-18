@@ -7,6 +7,9 @@
 
 #include <opm/simulators/linalg/PropertyTree.hpp>
 
+#include <opm/simulators/wells/SingleWellState.hpp>
+#include <opm/simulators/wells/WellState.hpp>
+
 #include <algorithm>
 #include <cassert>
 #include <iostream>
@@ -254,4 +257,39 @@ namespace Opm{
 
         return wellindices;
     }
+
+    template <typename Scalar>
+    void FractureModel::assignGeomechWellState(WellState<Scalar>& wellState) const
+    {
+        const auto nWells = this->wells_.size();
+        for (auto i = 0*nWells; i < nWells; ++i) {
+            const auto wsIx = wellState.index(this->wells_[i].name());
+            if (! wsIx.has_value()) { continue; }
+
+            auto& perfData = wellState[*wsIx].perf_data;
+
+            if (perfData.connFracStatistics.size() != perfData.cell_index.size()) {
+                perfData.connFracStatistics.resize(perfData.cell_index.size());
+            }
+
+            for (const auto& fracture : this->well_fractures_[i]) {
+                auto perfPos = std::find(perfData.cell_index.begin(),
+                                         perfData.cell_index.end(),
+                                         fracture.wellInfo().well_cell);
+                if (perfPos == perfData.cell_index.end()) { continue; }
+
+                // Possibly just "fracture.wellInfo().perf" instead.
+                const auto perfIx = std::distance(perfData.cell_index.begin(), perfPos);
+
+                fracture.assignGeomechWellState(perfData.connFracStatistics[perfIx]);
+            }
+        }
+    }
 }
+
+// ===========================================================================
+// Explicit specialisations.  No other code below separator.
+// ===========================================================================
+
+template void Opm::FractureModel::assignGeomechWellState(WellState<float>&) const;
+template void Opm::FractureModel::assignGeomechWellState(WellState<double>&) const;

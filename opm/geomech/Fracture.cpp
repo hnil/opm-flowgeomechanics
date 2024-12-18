@@ -11,6 +11,7 @@
 
 #include <opm/simulators/linalg/FlowLinearSolverParameters.hpp>
 #include <opm/simulators/linalg/setupPropertyTree.hpp>
+#include <opm/simulators/wells/ConnFracStatistics.hpp>
 
 #include <opm/geomech/DiscreteDisplacement.hpp>
 #include <opm/geomech/GridStretcher.hpp>
@@ -959,6 +960,34 @@ std::vector<std::tuple<int,double,double>> Fracture::wellIndices() const
     return wellIndices;
 }
 
+template <typename Scalar>
+void Fracture::assignGeomechWellState(ConnFracStatistics<Scalar>& stats) const
+{
+    using Quantity = typename ConnFracStatistics<Scalar>::Quantity;
+
+    constexpr auto pressIx = static_cast<std::underlying_type_t<Quantity>>(Quantity::Pressure);
+    constexpr auto rateIx  = static_cast<std::underlying_type_t<Quantity>>(Quantity::FlowRate);
+    constexpr auto widthIx = static_cast<std::underlying_type_t<Quantity>>(Quantity::Width);
+
+    const auto nCells = this->reservoir_cells_.size();
+
+    stats.reset();
+
+    for (auto cellIx = 0*nCells; cellIx < nCells; ++cellIx) {
+        auto samplePoint = typename ConnFracStatistics<Scalar>::SamplePoint{};
+
+        samplePoint[pressIx] = this->fracture_pressure_[cellIx][0];
+
+        samplePoint[rateIx] = this->leakof_[cellIx]
+            * (this->fracture_pressure_[cellIx][0] -
+               this->reservoir_pressure_[cellIx]);
+
+        samplePoint[widthIx] = this->fracture_width_[cellIx][0];
+
+        stats.addSamplePoint(samplePoint);
+    }
+}
+
 void Fracture::writePressureSystem() const
 {
     if(prm_.get<bool>("write_pressure_system")){
@@ -1254,5 +1283,8 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
 template void
 Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
                                const Dune::PolyhedralGrid<3,3,double>& grid3D);
+
+template void Fracture::assignGeomechWellState(ConnFracStatistics<float>&) const;
+template void Fracture::assignGeomechWellState(ConnFracStatistics<double>&) const;
 
 } // namespace Opm
