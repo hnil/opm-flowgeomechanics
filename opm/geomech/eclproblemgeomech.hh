@@ -263,6 +263,9 @@ namespace Opm{
                         assert(false);
                         this->addConnectionsToWell();
                     }
+
+                    this->geomechModel_.fractureModel()
+                        .assignGeomechWellState(this->wellModel_.wellState());
                 }
             }
             

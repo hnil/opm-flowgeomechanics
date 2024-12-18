@@ -50,6 +50,11 @@
 
 #include <opm/geomech/GridStretcher.hpp>
 
+namespace Opm {
+    template <typename Scalar>
+    class ConnFracStatistics;
+}
+
 namespace Opm::Properties {
     template <class TypeTag, class MyType>
     struct FluidSystem;
@@ -170,12 +175,17 @@ public:
     void setFractureGrid(std::unique_ptr<Fracture::Grid> gptr = nullptr); // a hack to allow use of another grid
     std::vector<RuntimePerforation> wellIndices() const;
     WellInfo& wellInfo(){return wellinfo_;}
+    const WellInfo& wellInfo() const { return wellinfo_; }
     std::vector<double> leakOfRate() const;
     double injectionPressure() const;
     void setPerfPressure(double perfpressure){perf_pressure_ = perfpressure;}
     Dune::FieldVector<double, 6> stress(Dune::FieldVector<double, 3> obs) const;
     Dune::FieldVector<double, 6> strain(Dune::FieldVector<double, 3> obs) const;
-    Dune::FieldVector<double, 3> disp(Dune::FieldVector<double, 3> obs) const;  
+    Dune::FieldVector<double, 3> disp(Dune::FieldVector<double, 3> obs) const;
+
+    template <typename Scalar>
+    void assignGeomechWellState(ConnFracStatistics<Scalar>& stats) const;
+
 private:
 
     size_t numFractureCells() const { return grid_->leafGridView().size(0); }
