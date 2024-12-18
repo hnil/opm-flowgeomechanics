@@ -83,35 +83,32 @@ namespace Opm{
                     include_fracture_contributions_ = param.get<bool>("include_fracture_contributions");
                     //param.read("fractureparam.json");
                     const auto& schedule =  this->simulator_.vanguard().schedule();
-                    int reportStepIdx = simulator_.episodeIndex();
+                    const int reportStepIdx = simulator_.episodeIndex();
                     const std::vector<Opm::Well>& wells = problem.wellModel().getLocalWells(reportStepIdx);
                     //const std::vector<Opm::Well>& wells = schedule.getWells(reportStepIdx);
                     //const Opm::EclipseGrid& eclgrid = simulator_.vanguard().eclState().getInputGrid();
                     const auto& grid = simulator_.vanguard().grid();
-                    std::string outputDir = Parameters::Get<Parameters::OutputDir>();
-                    std::string caseName  = simulator_.vanguard().caseName();
+                    const std::string outputDir = Parameters::Get<Parameters::OutputDir>();
+                    const std::string caseName  = simulator_.vanguard().caseName();
                     param.put("outputdir", outputDir);
                     param.put("casename", caseName);
 
-                    fracturemodel_ = std::make_unique<FractureModel>(grid,
-                                                                     wells,
-                                                                     param
-                        );
+                    fracturemodel_ = std::make_unique<FractureModel>
+                        (grid, wells, param);
                     // not to get the reservoir properties along the well before initialising the well
                     // most important stress
-                    fracturemodel_->updateReservoirWellProperties<TypeTag,Simulator>(simulator_);
+                    fracturemodel_->updateReservoirWellProperties<TypeTag>(simulator_);
                     // add fractures along the wells
                     fracturemodel_->addFractures();
 
                     //fracturemodel_->updateFractureReservoirCells(grid, eclgrid);
                     fracturemodel_->updateFractureReservoirCells(grid);
-                    fracturemodel_->initReservoirProperties<TypeTag,Simulator>(simulator_);
-                    fracturemodel_->updateReservoirProperties<TypeTag,Simulator>(simulator_);
+                    fracturemodel_->initReservoirProperties<TypeTag>(simulator_);
+                    fracturemodel_->updateReservoirProperties<TypeTag>(simulator_);
                     fracturemodel_->initFractureStates();
                 }
-                // get reservoir properties on fractures
-                // simulator need
-                fracturemodel_->updateReservoirProperties<TypeTag,Simulator>(simulator_);
+                // get reservoir properties on fractures simulator need
+                fracturemodel_->updateReservoirProperties<TypeTag>(simulator_);
                 fracturemodel_->solve();
                 // copy from apply action
             }
@@ -131,7 +128,9 @@ namespace Opm{
 
         }
 
-        std::vector<std::tuple<int,double,double>> getExtraWellIndices(std::string wellname){
+        std::vector<std::tuple<int,double,double>>
+        getExtraWellIndices(const std::string& wellname) const
+        {
             return fracturemodel_->getExtraWellIndices(wellname);
         }
 
@@ -213,6 +212,7 @@ namespace Opm{
                     elacticitysolver_.A.getLoadVector(),
                     elacticitysolver_.comm());
                     {
+                        const auto& problem = simulator_.problem();
                         int num_points = simulator_.vanguard().grid().size(3);
                         Dune::BlockVector<Dune::FieldVector<double,1>> fixed(3*num_points);
                         fixed  = 0.0;
