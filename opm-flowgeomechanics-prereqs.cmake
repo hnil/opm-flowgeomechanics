@@ -27,7 +27,7 @@ set (opm-flowgeomechanics_DEPS
   # DUNE prerequisites
   "dune-common REQUIRED"
   "dune-istl REQUIRED"
-  "dune-pdelab REQUIRED"
+  "dune-pdelab"
   "dune-foamgrid REQUIRED"
   # matrix library
   "BLAS REQUIRED"

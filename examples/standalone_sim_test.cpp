@@ -1,3 +1,5 @@
+#include <config.h>
+
 #include <cstddef>
 #include <dune/common/exceptions.hh>
 #include <dune/istl/solvercategory.hh>

@@ -131,6 +131,8 @@ int main(int argc, char** argv)
   const int num_neumann_faces = 0;
   
   // assemble the mechanical system
+  const auto reduce_boundary = true;
+
   vector<tuple<int, int, double>> A_entries;
   vector<double> b;
   const int numdof =
@@ -138,7 +140,7 @@ int main(int argc, char** argv)
                                  &face_corners[0], &young[0], &poisson[0], &body_force[0],
                                  num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0],
                                  num_neumann_faces, nullptr, nullptr,
-                                 A_entries, b);
+                                 A_entries, b, reduce_boundary);
   
   // view matrix
 

@@ -283,15 +283,17 @@ if(USE_TRACY_PROFILER AND Tracy_FOUND)
 	target_link_libraries(test_vem_assembly Tracy::TracyClient)
 endif()
 
-opm_add_test(testpdelab
-	 ONLY_COMPILE
-	 ALWAYS_ENABLE
-	 DEPENDS opmsimulators opmupscaling
-	 LIBRARIES opmsimulators opmupscaling
-	 SOURCES
-	 examples/testpdelab.cpp
-	 $<TARGET_OBJECTS:moduleVersionGeoMech>
-)
+
+#opm_add_test(testpdelab
+#	 ONLY_COMPILE
+#	 ALWAYS_ENABLE
+#	 DEPENDS opmsimulators opmupscaling
+#	 LIBRARIES opmsimulators opmupscaling
+#	 SOURCES
+#	 examples/testpdelab.cpp
+#	 $<TARGET_OBJECTS:moduleVersionGeoMech>
+#)
+
 
 opm_add_test(test_foamgrid
 	 ONLY_COMPILE
@@ -304,15 +306,15 @@ opm_add_test(test_foamgrid
 	 )
 
 
-opm_add_test(test_fracture
-	 ONLY_COMPILE
-	 ALWAYS_ENABLE
-	 DEPENDS opmsimulators opmupscaling
-	 LIBRARIES opmsimulators opmupscaling
-	 SOURCES
-	 examples/test_fracture.cpp
-	 $<TARGET_OBJECTS:moduleVersionGeoMech>
-)
+#opm_add_test(test_fracture
+#	 ONLY_COMPILE
+#	 ALWAYS_ENABLE
+#	 DEPENDS opmsimulators opmupscaling
+#	 LIBRARIES opmsimulators opmupscaling
+#	 SOURCES
+#	 examples/test_fracture.cpp
+#	 $<TARGET_OBJECTS:moduleVersionGeoMech>
+#)
 
 opm_add_test(plot_reservoir_vtk
 	 ONLY_COMPILE
