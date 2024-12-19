@@ -7,9 +7,9 @@ class FractureWell
     using Segment = std::array<unsigned,2>;
 public:
     using Grid = Dune::FoamGrid<1,3>;
-    FractureWell(std::string outputprefix,
-                 std::string casename,
-                 std::string name,
+    FractureWell(const std::string& outputprefix,
+                 const std::string& casename,
+                 const std::string& name,
                  const std::vector<Point3D>& points,
                  const std::vector<Segment>& segments,
                  const std::vector<int>& res_cells);
@@ -43,12 +43,18 @@ public:
     }
     void setPerfPressure(int perf_index, double pressure){perf_pressure_[perf_index] = pressure;}
     const Grid& grid() const{return *grid_;}
-    std::string name() const{return name_;};
+    const std::string& name() const{return name_;};
     void write() const;
     void writemulti(double time) const;
     void resetWriters();
-    int reservoirCell(int wellcell) const {return reservoir_cells_[wellcell];};
-    Dune::FieldVector<double,6> reservoirStress(int wellcell) const{return reservoir_stress_[wellcell];};
+    int reservoirCell(int wellcell) const {return reservoir_cells_[wellcell];}
+
+    const Dune::FieldVector<double,6>&
+    reservoirStress(int wellcell) const
+    {
+        return reservoir_stress_[wellcell];
+    }
+
 private:
     std::string outputprefix_;
     std::string casename_;

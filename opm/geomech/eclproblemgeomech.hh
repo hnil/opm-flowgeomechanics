@@ -267,7 +267,6 @@ namespace Opm{
             }
             
             Parent::endStepApplyAction();
- 
         }
 
         void addConnectionsToWell(){
@@ -294,11 +293,9 @@ namespace Opm{
             //auto mapper = simulator.vanguard().cartesianMapper();
             auto& wellcontainer = this->wellModel().localNonshutWells();
             for (auto& wellPtr : wellcontainer) {
-                auto wellName = wellPtr->name();
-                const auto& wellcons = geomechModel_.getExtraWellIndices(wellName);
-                for (const auto& cons : wellcons) {
-                    // simple calculated with upscaling
-                    const auto [cell, WI, depth] = cons;
+                const auto& wellName = wellPtr->name();
+                auto& ePerfs = extra_perfs[wellName];
+                for (const auto& [cell, WI, depth] : geomechModel_.getExtraWellIndices(wellName)) {
                     // map to cartesian
                     const auto cartesianIdx = simulator.vanguard().cartesianIndex(cell);
                     // get ijk
@@ -321,7 +318,7 @@ namespace Opm{
                                                /*sort_value*/ -1,
                                                /*defaut sattable*/ true);
                     connection.setCF(WI);
-                    extra_perfs[wellName].push_back(connection);
+                    ePerfs.push_back(connection);
                 }
             }
             bool commit_wellstate = false;
