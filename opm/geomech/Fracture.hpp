@@ -53,6 +53,11 @@
 
 #include <opm/geomech/GridStretcher.hpp>
 
+namespace Opm {
+    template <typename Scalar>
+    class ConnFracStatistics;
+}
+
 namespace Opm
 {
 struct WellInfo {
@@ -183,6 +188,9 @@ public:
     Dune::FieldVector<double, 6> stress(const Dune::FieldVector<double, 3>& obs) const;
     Dune::FieldVector<double, 6> strain(const Dune::FieldVector<double, 3>& obs) const;
     Dune::FieldVector<double, 3> disp(const Dune::FieldVector<double, 3>& obs) const;
+
+    template <typename Scalar>
+    void assignGeomechWellState(ConnFracStatistics<Scalar>& stats) const;
 
 private:
      Dune::BlockVector<Dune::FieldVector<double, 3>> all_slips() const;

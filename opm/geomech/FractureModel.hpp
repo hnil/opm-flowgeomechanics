@@ -31,6 +31,11 @@ std::vector<T> as_vector(ptree const& pt, ptree::key_type const& key)
     return r;
 }
 
+namespace Opm {
+    template <typename Scalar>
+    class WellState;
+}
+
 // template <typename T>
 // std::vector<T> opm_as_vector(const Opm::PropertyTree& pt, const std::string& key)
 // {
@@ -142,6 +147,9 @@ public:
 
     std::vector<std::tuple<int,double,double>>
     getExtraWellIndices(const std::string& wellname) const;
+
+    template <typename Scalar>
+    void assignGeomechWellState(WellState<Scalar>& wellState) const;
 
     bool addPertsToSchedule(){return prm_.get<bool>("addperfs_to_schedule");}
 
