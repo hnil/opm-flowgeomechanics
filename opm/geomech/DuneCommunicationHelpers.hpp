@@ -370,8 +370,13 @@ namespace Opm {
       }
   }
 
-  template <class Grid, int codim>
+  template <int codim>
+  Dune::OwnerOverlapCopyCommunication<int, int>::ParallelIndexSet
+  makeEntityEntityCommunication(const Dune::CpGrid& grid, bool verbose = false);
+
+  template <int codim, class Grid>
   Dune::OwnerOverlapCopyCommunication<int, int>::ParallelIndexSet makeEntityEntityCommunication(const Grid& grid, bool verbose = false){
+    //static_assert(false);
     assert(false);// dummy to get polygrid which is not prallel to compile
     Dune::OwnerOverlapCopyCommunication<int, int>::ParallelIndexSet entity_indexset;
     return entity_indexset;
@@ -380,7 +385,7 @@ namespace Opm {
 
   template <int codim>
   Dune::OwnerOverlapCopyCommunication<int, int>::ParallelIndexSet
-  makeEntityEntityCommunication(const Dune::CpGrid& grid, bool verbose = false)
+  makeEntityEntityCommunication(const Dune::CpGrid& grid, bool verbose) // = false)
   {
      //first find maximum rank of entity to ensure unique owner
     Dune::Codim<codim> mycodim;

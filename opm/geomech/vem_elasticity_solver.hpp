@@ -186,7 +186,7 @@ class VemElasticitySolver
 #endif       
         bool parallel= comm_->communicator().size() > 1;
         if(parallel){
-	  vertexParallelIndexSet_.reset( new CommunicationType::ParallelIndexSet(Opm::makeEntityEntityCommunication<GridType,3>(grid_)));
+	  vertexParallelIndexSet_.reset( new CommunicationType::ParallelIndexSet(Opm::makeEntityEntityCommunication<3>(grid_)));
         assert(grid_.size(3) == vertexParallelIndexSet_->size());
       dofParallelIndexSet_.reset( new CommunicationType::ParallelIndexSet(Opm::entityToDofIndexSet(*vertexParallelIndexSet_, 3)));
             //vertexRemoteIndexSet_.new( RemotePallelIndexSet(vertex_parallindex,vertex_parallindex, grid_.comm()));
