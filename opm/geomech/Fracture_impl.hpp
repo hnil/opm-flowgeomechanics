@@ -153,9 +153,11 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
     const double tol = 1e-8; //1e-5; // @@      
     const int max_iter = 100;
     
-    const double K1max = 1e6; // @@ for testing.  Should be added as a proper data member
-    const double efac = 1; // 2; // @@ heuristic
-        const std::vector<size_t> boundary_cells = grid_stretcher_->boundaryCellIndices();
+    
+    const double efac = prm_.get<double>("solver.efac"); // 2; // @@ heuristic
+    const double rfac = prm_.get<double>("solver.rfac"); // 2; // @@ heuristic
+    const double K1max = prm_.get<double>("KMax"); // @@ for testing.  Should be added as a proper data member
+    const std::vector<size_t> boundary_cells = grid_stretcher_->boundaryCellIndices();
     const size_t N = boundary_cells.size(); // number of boundary nodes and boundary cells
     
     std::vector<double> total_bnode_disp(N, 0), bnode_disp(N, 0), cell_disp(N, 0);
@@ -187,12 +189,12 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         break;
       
       // loop over cells, determine how much they should be expanded or contracted
-      const double maxgrow = 0.1 * grid_stretcher_->maxBoxLength();
+      const double maxgrow = rfac * grid_stretcher_->maxBoxLength();
       for (size_t i = 0; i != N; ++i) {
         cell_disp[i] = efac * (compute_target_expansion(K1max,
                                                    fracture_width_[boundary_cells[i]],
                                                         E_, nu_) - dist[i]);
-        //cell_disp[i] = std::max(std::min(cell_disp[i], maxgrow), -maxgrow);
+        cell_disp[i] = std::max(std::min(cell_disp[i], maxgrow), -maxgrow);
       }
 
       bnode_disp =
