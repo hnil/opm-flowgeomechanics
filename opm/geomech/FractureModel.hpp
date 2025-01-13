@@ -23,6 +23,11 @@ std::vector<T> as_vector(ptree const& pt, ptree::key_type const& key)
     return r;
 }
 
+namespace Opm {
+    template <typename Scalar>
+    class WellState;
+}
+
 // template <typename T>
 // std::vector<T> opm_as_vector(const Opm::PropertyTree& pt, const std::string& key)
 // {
@@ -135,7 +140,13 @@ public:
              well.updateReservoirProperties<TypeTag,Simulator>(simulator);
         }
     }
-    std::vector<std::tuple<int,double,double>> getExtraWellIndices(std::string wellname) const;
+
+    std::vector<std::tuple<int,double,double>>
+    getExtraWellIndices(const std::string& wellname) const;
+
+    template <typename Scalar>
+    void assignGeomechWellState(WellState<Scalar>& wellState) const;
+
     bool addPertsToSchedule(){return prm_.get<bool>("addperfs_to_schedule");}
     // probably this should be collected in one loop since all do full loop over fracture ++ well
     Dune::FieldVector<double,6> stress(Dune::FieldVector<double,3> obs) const;
