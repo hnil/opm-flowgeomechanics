@@ -209,9 +209,9 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       }
 
       // ensure convexity
-      grid_stretcher_->adjustToConvex(bnode_disp,
-                                      total_bnode_disp,
-                                      bnode_normals_orig);
+      // grid_stretcher_->adjustToConvex(bnode_disp,
+      //                                 total_bnode_disp,
+      //                                 bnode_normals_orig);
       
       for (size_t i = 0; i != N; ++i)
         displacements[i] = bnode_normals_orig[i] * bnode_disp[i];

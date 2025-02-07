@@ -91,6 +91,7 @@ void dump_vector(const ResVector& v, const char* const name)
 void dump_vector(const VectorHP& v, const char* const name1, const char* const name2)
 // ----------------------------------------------------------------------------
 {
+
   dump_vector(v[_0], name1);
   dump_vector(v[_1], name2);
 }

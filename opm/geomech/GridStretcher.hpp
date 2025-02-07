@@ -8,7 +8,6 @@
 #include <map>
 #include <tuple>
 
-
 namespace Opm {
 
 struct BoundaryNormals {
@@ -75,6 +74,9 @@ public:
   void adjustToConvex(std::vector<double>& disp,
                       std::vector<double>& total_disp,
                       const std::vector<CoordType>& dirs) const;
+
+  void dumpToVTK(const char* filename) const;
+  
 private:
 
   // ----------------------- functions used by constructor -----------------------

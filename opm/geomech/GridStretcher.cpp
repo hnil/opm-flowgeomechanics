@@ -7,6 +7,9 @@
 #include <dune/grid/common/mcmgmapper.hh> // for element mapper
 #include <opm/geomech/convex_boundary.hpp>
 
+#include <dune/grid/io/file/vtk.hh>
+#include <dune/grid/io/file/vtk/vtkwriter.hh>
+
 using namespace std;
 using namespace Dune;
 
@@ -661,5 +664,17 @@ void GridStretcher::adjustToConvex(std::vector<double>& disp,
 }
 
 
+// ----------------------------------------------------------------------------
+void GridStretcher::dumpToVTK(const char* filename) const
+// ----------------------------------------------------------------------------  
+{
+  //std::cout << "Hello" << std::endl;
+  auto vtkwriter =
+    std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_.leafGridView(),
+                                                          Dune::VTK::nonconforming);
+  vtkwriter->write(filename);
+}
+
+  
 }; // end namespace Opm
 

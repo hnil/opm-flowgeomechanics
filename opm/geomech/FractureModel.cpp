@@ -47,13 +47,14 @@ namespace Opm{
 		    int cell = config.get< int> ("cell");
 		    if(well.reservoirCell(eIdx) == cell){
 		      origo = geo.corner(1);
-		      auto config_bst = config.getBoostParamPtr();
+		      //auto config_bst = config.getBoostParamPtr();
 		      //double tmp = config_bst->get<double > ("normal",1);
 		      //for (auto i : as_vector<int>(pt, "a")) std::cout << i << ' ';
-		      std::vector<double> tmp_normal = as_vector<double>(*config_bst,"normal");
-		      assert(tmp_normal.size() == 3); // wrong use of tmpmal.
+		      //std::vector<double> tmp_normal = as_vector<double>(*config_bst,"normal");
+                      auto tmp_normal = config.get_child_items_as_vector<double>("normal");
+		      assert(tmp_normal->size() == 3); // wrong use of tmpmal.
 		      for(int i=0; i < 3; ++i){
-			normal[i] = tmp_normal[i];
+			normal[i] = (*tmp_normal)[i];
 		      }
 		    }else{
 		      continue;
