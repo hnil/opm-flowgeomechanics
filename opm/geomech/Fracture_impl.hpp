@@ -217,6 +217,9 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         displacements[i] = bnode_normals_orig[i] * bnode_disp[i];
       
       grid_stretcher_->applyBoundaryNodeDisplacements(displacements);
+
+      // debug stuff
+      grid_stretcher_->dumpToVTK("stretchedgrid");
       
       // grid has changed its geometry, so we have to recompute discretizations
       updateCellNormals();

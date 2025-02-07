@@ -298,7 +298,7 @@ bool Fracture::fullSystemIteration(const double tol)
   // Account for the fact that if fracture pressure is insufficient to open the
   // fracture, the system is satisfied if the aperture is zero
   for (size_t i = 0; i != fracture_width_.size(); ++i)
-    if (rhs[_0][i] >= 0.0 && x[_0][i] <= 0.0) rhs[_0][i] = 0.0;
+    if (rhs[_0][i] >= 0.0 && x[_0][i] <= 0.0) { rhs[_0][i] = 0.0; std::cout << "Setting cell " <<i<< " to zero" << std::endl; }
   
   // check if system is already at a converged state (in which case we return immediately)
   //
@@ -341,3 +341,4 @@ bool Fracture::fullSystemIteration(const double tol)
 }
     
 }; // end namespace Opm
+
