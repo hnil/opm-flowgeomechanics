@@ -183,20 +183,21 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       // solve flow-mechanical system
       int iter = 0;
       // open file "width" for appending data
-      std::ofstream width_debug("width", std::ios::app);
-      std::ofstream pressure_debug("pressure", std::ios::app);
       while (!fullSystemIteration(tol) && iter++ < max_iter) {
-        if (count==15) {
-          auto fw = make_vector(fracture_width_);
-          auto fp = make_vector(fracture_pressure_, fracture_pressure_.size()-1);
+        // if (count==15) { 
+        //   std::ofstream width_debug("width", std::ios::app);
+        //   std::ofstream pressure_debug("pressure", std::ios::app);
           
-          std::copy(fw.begin(), fw.end(), std::ostream_iterator<double>(width_debug, " "));
-          std::copy(fp.begin(), fp.end(), std::ostream_iterator<double>(pressure_debug, " "));
+        //   auto fw = make_vector(fracture_width_);
+        //   auto fp = make_vector(fracture_pressure_, fracture_pressure_.size()-1);
+          
+        //   std::copy(fw.begin(), fw.end(), std::ostream_iterator<double>(width_debug, " "));
+        //   std::copy(fp.begin(), fp.end(), std::ostream_iterator<double>(pressure_debug, " "));
         
-          grid_stretcher_->dumpToVTK("stretchedgrid", { fw, fp });
+        //   grid_stretcher_->dumpToVTK("stretchedgrid", { fw, fp });
           
-          int krull=0;
-        }
+        //   int krull=0;
+        // }
       };
       
       // identify where max stress intensity is exceeded and propagation is needed

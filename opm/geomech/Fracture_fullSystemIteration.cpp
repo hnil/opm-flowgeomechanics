@@ -244,7 +244,21 @@ double estimate_step_fac(const VectorHP& x, const VectorHP& dx)
   return (fmax < threshold) ? 1.0 : std::max(threshold / fmax, fac_min);
 }
 
+// ----------------------------------------------------------------------------
+vector<int>
+identify_closed(const Dune::DynamicMatrix& A, const VectorHP& x, const ResVector& rhs)
+// ----------------------------------------------------------------------------
+{
 
+}
+
+// ----------------------------------------------------------------------------
+Dune::DynamicMatrix modified_fracture_matrix(const Dune::DynamicMatrix& A,
+                                             const vector<int>& closed_cells)
+// ----------------------------------------------------------------------------
+{
+
+}
   
 }; // end anonymous namespace
 
@@ -260,17 +274,30 @@ bool Fracture::fullSystemIteration(const double tol)
   assemblePressure(); // update pressure matrix
   setSource();         // update right-hand side of pressure system;
 
+  // initialize vector of unknown, and vector represnting direction in tangent space
+  VectorHP x {fracture_width_, fracture_pressure_};
+  VectorHP dx = x; dx = 0; // gradient of 'x' (which we aim to compute below)
+
+  // set right hand side
+  VectorHP rhs {x}; // same size as system, content set below
+  normalFractureTraction(rhs[_0], false); // right-hand side equals the normal fracture traction
+  rhs[_1] = rhs_pressure_; // should have been updated in call to `assemblePressure` above
+
+  // make a version of the fracture matrix that has trivial equations for closed cells
+  const vector<int> closed_cells = identify_closed(fractureMatrix(), x, rhs[_0]);
+  const auto A = modified_fracture_matrix(fractureMatrix(), closed_cells);
+  
   // update the coupling matrix (possibly create it if not already initialized)
   updateCouplingMatrix(coupling_matrix_,
                        pressure_matrix_->N() - numWellEquations(), // num cells
                        numWellEquations(),                         // num wells
-                       htrans_, fracture_pressure_, fracture_width_);
-
-  const auto& A = fractureMatrix(); // will be created if not already existing
+                       htrans_, fracture_pressure_, fracture_width_,
+                       closed_cells);
+  // setup the full system
   const auto& M = *pressure_matrix_;
   const auto& C = *coupling_matrix_;
   const auto I = makeIdentity(A.N(), numWellEquations());
-
+  
   // system Jacobian (with cross term)  @@ should S be included as a member variable of Fracture?
   SystemMatrix S { {A, I},   // mechanics system (since A is negative, we leave I positive here)
                    {C, M} }; // flow system
@@ -278,27 +305,11 @@ bool Fracture::fullSystemIteration(const double tol)
   // system equations
   SystemMatrix S0 = S; S0[_1][_0] = 0; // the equations themselves have no cross term
 
-  VectorHP x {fracture_width_, fracture_pressure_};
-  VectorHP dx = x; dx = 0; // gradient of 'x' (which we aim to compute below)
-
-  // initialize right-hand aide
-  VectorHP rhs {x}; rhs = 0; // same size as x, but initially just with zeros
-
-  //rhs[_0] = 0; // @@ we currently do not use rhs_width_ here, but include p through the I block
-  normalFractureTraction(rhs[_0], false); // right-hand side equals the normal fracture traction
-  rhs[_1] = rhs_pressure_; // should have been updated in call to `assemblePressure` above
-
-  std::cout << "rhs[0]: " << rhs[_0].infinity_norm() << std::endl;
-  std::cout << "pressure: ";
-  std::copy(fracture_pressure_.begin(), fracture_pressure_.end(), std::ostream_iterator<double>(std::cout, " "));
-  std::cout << std::endl;
-  
   S0.mmv(x, rhs); // rhs = rhs - S0 * x;   (we are working in the tanget plane)
 
-  // Account for the fact that if fracture pressure is insufficient to open the
-  // fracture, the system is satisfied if the aperture is zero
+  // Verify that equations have been chosen correctly
   for (size_t i = 0; i != fracture_width_.size(); ++i)
-    if (rhs[_0][i] >= 0.0 && x[_0][i] <= 0.0) { rhs[_0][i] = 0.0; std::cout << "Setting cell " <<i<< " to zero" << std::endl; }
+    assert( !(rhs[_0][i] >= 0.0 && x[_0][i] <= 0.0));
   
   // check if system is already at a converged state (in which case we return immediately)
   //
