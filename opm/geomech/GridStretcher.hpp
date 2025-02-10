@@ -75,7 +75,8 @@ public:
                       std::vector<double>& total_disp,
                       const std::vector<CoordType>& dirs) const;
 
-  void dumpToVTK(const char* filename) const;
+  void dumpToVTK(const char* filename,
+                 const std::vector<std::vector<double>> = std::vector<std::vector<double>>()) const;
   
 private:
 
