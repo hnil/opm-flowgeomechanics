@@ -246,10 +246,21 @@ double estimate_step_fac(const VectorHP& x, const VectorHP& dx)
 
 // ----------------------------------------------------------------------------
 vector<int>
-identify_closed(const Dune::DynamicMatrix& A, const VectorHP& x, const ResVector& rhs)
+identify_closed(const Dune::DynamicMatrix& A, const VectorHP& x, const ResVector& rhs, const int nwells)
 // ----------------------------------------------------------------------------
 {
+  ResVector tmp(rhs);
+  const auto I = makeIdentity(A.N(), nwells);
+  // computing rhs - A x[0] - I x[1]
+  A.mmv(x[_0], rhs);
+  I.mmw(x[_1], rhs);
 
+  vector<int> result;
+  for (i = 0; i != A.N(); ++i)
+    result.push_back(rhs[i] >= 0);
+
+  return result;
+    
 }
 
 // ----------------------------------------------------------------------------
@@ -284,7 +295,7 @@ bool Fracture::fullSystemIteration(const double tol)
   rhs[_1] = rhs_pressure_; // should have been updated in call to `assemblePressure` above
 
   // make a version of the fracture matrix that has trivial equations for closed cells
-  const vector<int> closed_cells = identify_closed(fractureMatrix(), x, rhs[_0]);
+  const vector<int> closed_cells = identify_closed(fractureMatrix(), x, rhs[_0], numWellEquations());
   const auto A = modified_fracture_matrix(fractureMatrix(), closed_cells);
   
   // update the coupling matrix (possibly create it if not already initialized)
