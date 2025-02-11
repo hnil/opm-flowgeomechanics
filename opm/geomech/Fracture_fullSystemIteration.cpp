@@ -99,7 +99,10 @@ void dump_vector(const VectorHP& v, const char* const name1, const char* const n
 // ============================= Helper functions =============================
 
 // ----------------------------------------------------------------------------  
-SMatrix makeIdentity(size_t num, double right_padding = 0, double fac = 1)
+SMatrix makeIdentity(size_t num,
+                     double right_padding = 0,
+                     double fac = 1,
+                     std::vector<int> zero_rows = std::vector<int>())
 // ----------------------------------------------------------------------------
 {
   //build a sparse matrix to represent the identity matrix of a given size
@@ -109,6 +112,12 @@ SMatrix makeIdentity(size_t num, double right_padding = 0, double fac = 1)
   M.setSize(num, num + right_padding);
   for (size_t i = 0; i != num; ++i)
     M.entry(i,i) = fac;
+
+  // set zero rows, if applicable
+  for (size_t i = 0; i != zero_rows.size(); ++i)
+    if (zero_rows[i])
+      M.entry(i, i) = 0;
+  
   M.compress();
   return M;
 }
@@ -140,7 +149,8 @@ void updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
                           const size_t num_wells,
                           const std::vector<Htrans>& htrans,
                           const ResVector& pressure,
-                          const ResVector& aperture)
+                          const ResVector& aperture,
+                          const std::vector<int>& closed_cells)
 {
   // create C if not done already
   if (!Cptr) Cptr = initCouplingMatrixSparsity(htrans, num_cells, num_wells);
@@ -174,14 +184,20 @@ void updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
 
     const double krull = 1; // 1e4; // @@ Not sure if this should be removed?
     // diagonal elements
-    C[i][i] += dTdh1 * (p1-p2) *krull;
-    C[j][j] += dTdh2 * (p2-p1) *krull;
+    C[i][i] += dTdh1 * (p1-p2) * krull;
+    C[j][j] += dTdh2 * (p2-p1) * krull;
     
     // off-diagonal elements
-    C[i][j] += dTdh2 * (p1-p2) *krull;
-    C[j][i] += dTdh1 * (p2-p1) *krull; 
+    C[i][j] += dTdh2 * (p1-p2) * krull;
+    C[j][i] += dTdh1 * (p2-p1) * krull; 
     
   }
+  // zeroing out columns corresponding to closed cells
+  for (size_t col = 0; col != closed_cells.size(); ++col)
+    if (closed_cells[col])
+      for (size_t row = 0; row != C.N(); ++row)
+        if (C.exists(row, col))
+          C[row][col] = 0;
 }
 
 // ----------------------------------------------------------------------------  
@@ -245,30 +261,42 @@ double estimate_step_fac(const VectorHP& x, const VectorHP& dx)
 }
 
 // ----------------------------------------------------------------------------
-vector<int>
-identify_closed(const Dune::DynamicMatrix& A, const VectorHP& x, const ResVector& rhs, const int nwells)
+std::vector<int> identify_closed(const FMatrix& A,
+                                 const VectorHP& x,
+                                 const ResVector& rhs,
+                                 const int nwells)
 // ----------------------------------------------------------------------------
 {
   ResVector tmp(rhs);
   const auto I = makeIdentity(A.N(), nwells);
+
   // computing rhs - A x[0] - I x[1]
-  A.mmv(x[_0], rhs);
-  I.mmw(x[_1], rhs);
+  const ResVector& h = x[_0];
+  const ResVector& p = x[_1];
+  A.mmv(h, tmp);
+  I.mmv(p, tmp);
 
-  vector<int> result;
-  for (i = 0; i != A.N(); ++i)
-    result.push_back(rhs[i] >= 0);
+  std::vector<int> result;
+  for (size_t i = 0; i != A.N(); ++i)
+    result.push_back(tmp[i] >= 0 && h[i] <= 0);
 
+  //std::fill(result.begin(), result.end(), 1); // @@@
   return result;
     
 }
 
 // ----------------------------------------------------------------------------
-Dune::DynamicMatrix modified_fracture_matrix(const Dune::DynamicMatrix& A,
-                                             const vector<int>& closed_cells)
+FMatrix modified_fracture_matrix(const FMatrix& A,
+                                 const std::vector<int>& closed_cells)
 // ----------------------------------------------------------------------------
 {
+  Dune::DynamicMatrix result(A);
 
+  for (size_t row = 0; row != A.N(); ++row)
+    if (closed_cells[row])
+      for (size_t col = 0; col != A.N(); ++col)
+        result[row][col] = (row == col);
+  return result;
 }
   
 }; // end anonymous namespace
@@ -281,7 +309,7 @@ bool Fracture::fullSystemIteration(const double tol)
 // ----------------------------------------------------------------------------
 {
   // update pressure matrix with the current values of `fracture_width_` and
-  // `fracture_pressure_` 
+  // `fracture_pressure_`
   assemblePressure(); // update pressure matrix
   setSource();         // update right-hand side of pressure system;
 
@@ -295,8 +323,13 @@ bool Fracture::fullSystemIteration(const double tol)
   rhs[_1] = rhs_pressure_; // should have been updated in call to `assemblePressure` above
 
   // make a version of the fracture matrix that has trivial equations for closed cells
-  const vector<int> closed_cells = identify_closed(fractureMatrix(), x, rhs[_0], numWellEquations());
+  const std::vector<int> closed_cells = identify_closed(fractureMatrix(), x, rhs[_0],
+                                                   numWellEquations());
   const auto A = modified_fracture_matrix(fractureMatrix(), closed_cells);
+
+  // also modify right hand side for closed cells
+  for (size_t i = 0; i != closed_cells.size(); ++i)
+    if (closed_cells[i]) rhs[_0][i] = 0;
   
   // update the coupling matrix (possibly create it if not already initialized)
   updateCouplingMatrix(coupling_matrix_,
@@ -307,7 +340,7 @@ bool Fracture::fullSystemIteration(const double tol)
   // setup the full system
   const auto& M = *pressure_matrix_;
   const auto& C = *coupling_matrix_;
-  const auto I = makeIdentity(A.N(), numWellEquations());
+  const auto I = makeIdentity(A.N(), numWellEquations(),  1, closed_cells);
   
   // system Jacobian (with cross term)  @@ should S be included as a member variable of Fracture?
   SystemMatrix S { {A, I},   // mechanics system (since A is negative, we leave I positive here)
@@ -319,8 +352,8 @@ bool Fracture::fullSystemIteration(const double tol)
   S0.mmv(x, rhs); // rhs = rhs - S0 * x;   (we are working in the tanget plane)
 
   // Verify that equations have been chosen correctly
-  for (size_t i = 0; i != fracture_width_.size(); ++i)
-    assert( !(rhs[_0][i] >= 0.0 && x[_0][i] <= 0.0));
+  // for (size_t i = 0; i != fracture_width_.size(); ++i)
+  //   assert( !(rhs[_0][i] >= 0.0 && x[_0][i] <= 0.0));
   
   // check if system is already at a converged state (in which case we return immediately)
   //
