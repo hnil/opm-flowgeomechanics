@@ -11,11 +11,10 @@
 namespace Opm {
 
 struct BoundaryNormals {
-  std::vector<Dune::FieldVector<double, 3>> bnode_normals;
-  std::vector<Dune::FieldVector<double, 3>> bcell_normals;
+  std::vector<Dune::FieldVector<double, 3>> bnode_normals; // outward, unitary normals of boundary nodes
+  std::vector<Dune::FieldVector<double, 3>> bcell_normals; // direction from cell centroid to boundary centroid
+  std::vector<Dune::FieldVector<double, 3>> bedge_normals; // normal to boundary edge
 };
-
-
   
 class GridStretcher
 {
@@ -61,6 +60,7 @@ public:
   const std::vector<CoordType>& nodecoords() const {return nodecoords_;}
   const std::vector<CoordType>& bnodenormals() const {return boundary_normals_.bnode_normals;}
   const std::vector<CoordType>& bcellnormals() const {return boundary_normals_.bcell_normals;}
+  const std::vector<CoordType>& bedgenormals() const {return boundary_normals_.bedge_normals;}
 
   double maxBoxLength() const;
 

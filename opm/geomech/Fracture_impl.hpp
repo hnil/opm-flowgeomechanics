@@ -177,30 +177,29 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
     std::vector<GridStretcher::CoordType> displacements(N, {0, 0, 0});
     int count = 0; // @@
     while (true) {
-      //std::ofstream os("boundary"); // @@
       
       std::cout << "Iteration: " << ++count << std::endl;
       // solve flow-mechanical system
       int iter = 0;
       // open file "width" for appending data
       while (!fullSystemIteration(tol) && iter++ < max_iter) {
+        // @@@@
+        auto fw = make_vector(fracture_width_);
+        auto fp = make_vector(fracture_pressure_, fracture_pressure_.size()-1);
+        grid_stretcher_->dumpToVTK("stretchedgrid", { fw, fp });
+        
         if (iter > 20) { 
           std::ofstream width_debug("width", std::ios::app);
           std::ofstream pressure_debug("pressure", std::ios::app);
           
-          auto fw = make_vector(fracture_width_);
-          auto fp = make_vector(fracture_pressure_, fracture_pressure_.size()-1);
-          
           std::copy(fw.begin(), fw.end(), std::ostream_iterator<double>(width_debug, " "));
           std::copy(fp.begin(), fp.end(), std::ostream_iterator<double>(pressure_debug, " "));
-        
-          grid_stretcher_->dumpToVTK("stretchedgrid", { fw, fp });
           
           int krull=0;
         }
       };
       std::cout << "Iterations needed: " << iter << std::endl;
-        
+      
       
       // identify where max stress intensity is exceeded and propagation is needed
       const auto dist = grid_stretcher_->centroidEdgeDist();
@@ -220,11 +219,12 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       const double maxgrow = rfac * grid_stretcher_->maxBoxLength();
       for (size_t i = 0; i != N; ++i) {
         cell_disp[i] = efac * (compute_target_expansion(K1max,
-                                                   fracture_width_[boundary_cells[i]],
+                                                        fracture_width_[boundary_cells[i]],
                                                         E_, nu_) - dist[i]);
         cell_disp[i] = std::max(std::min(cell_disp[i], maxgrow), -maxgrow);
       }
 
+      //bnode_normals_orig = grid_stretcher_->bnodenormals(); // @@@@
       bnode_disp =
         grid_stretcher_->computeBoundaryNodeDisplacements(cell_disp, bnode_normals_orig);
       for (size_t i = 0; i != N; ++i)
@@ -237,9 +237,9 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       }
 
       // ensure convexity
-      // grid_stretcher_->adjustToConvex(bnode_disp,
-      //                                 total_bnode_disp,
-      //                                 bnode_normals_orig);
+      grid_stretcher_->adjustToConvex(bnode_disp,
+                                      total_bnode_disp,
+                                      bnode_normals_orig);
       
       for (size_t i = 0; i != N; ++i)
         displacements[i] = bnode_normals_orig[i] * bnode_disp[i];

@@ -122,6 +122,16 @@ size_t find_coord_in(const CoordType& c, const vector<CoordType>& cvec)
 CoordType normalize(const CoordType& vec) { return vec / vec.two_norm(); }
 // ----------------------------------------------------------------------------  
 
+// ----------------------------------------------------------------------------
+  CoordType cross(const CoordType& v1, const CoordType& v2) 
+// ----------------------------------------------------------------------------    
+{
+  return CoordType {v1[1] * v2[2] - v1[2] * v2[1],
+                    v1[2] * v2[0] - v1[0] * v2[2],
+                    v1[0] * v2[1] - v1[1] * v2[0]};
+}
+
+    
 // // ----------------------------------------------------------------------------
 // const vector<CoordType> compute_bnode_displacements(const vector<double>& amounts,
 //                                                     const vector<size_t>& bcindices,
@@ -299,20 +309,31 @@ BoundaryNormals GridStretcher::boundary_normals(const Grid& grid,
   const size_t N = size(bcindices);
   // map amounts to displacement vectors for each boundary point
 
-  BoundaryNormals result {vector<CoordType> {N, {0, 0, 0}},
-                          vector<CoordType> {N, {0, 0, 0}}};
+  BoundaryNormals result {vector<CoordType> {N, {0, 0, 0}},    // nodenormals
+                          vector<CoordType> {N, {0, 0, 0}},    // cell "normals"
+                          vector<CoordType> {N, {0, 0, 0}}};   // edge normals
   int pos = 0;
   for (size_t bix : bcindices) {
-    // compute directional vector
+    // compute directional vector from cell centroid to edge centroid
     const auto entry = c2bix.find(bix)->second;
     const auto elem = grid.entity(get<0>(entry));
     const auto ccenter = elem.geometry().center();
     const auto ecenter = (nodecoords[bnindices[get<1>(entry)]] +
                           nodecoords[bnindices[get<2>(entry)]]) / 2;
-    const auto nvec = normalize(ecenter - ccenter);
-    result.bcell_normals[pos++] = nvec;
-    result.bnode_normals[get<1>(entry)] += nvec;
-    result.bnode_normals[get<2>(entry)] += nvec;
+    const auto dvec = normalize(ecenter - ccenter); // cell centroid to edge centroid
+    result.bcell_normals[pos] = dvec;
+
+    // compute outward edge normal
+    const auto tangent = nodecoords[bnindices[get<1>(entry)]] -
+                         nodecoords[bnindices[get<2>(entry)]];
+    const auto enormal = normalize(cross(cross(tangent, dvec), tangent));
+    result.bedge_normals[pos] = enormal;
+
+    // accumulate result for average node normal
+    result.bnode_normals[get<1>(entry)] += enormal;
+    result.bnode_normals[get<2>(entry)] += enormal;
+
+    pos++;
   }
 
   // each entry is the sum of two normals, so we need to normalize again
@@ -511,14 +532,15 @@ GridStretcher::computeBoundaryNodeDisplacements(const vector<double>& amounts,
     const size_t bnodeix1 = get<1>(entry);
     const size_t bnodeix2 = get<2>(entry);
     
+    const auto& enorm = boundary_normals_.bedge_normals[cur_bcell_ix];
     const auto& cnorm = boundary_normals_.bcell_normals[cur_bcell_ix];
     const auto& bn1 = bnnorm[bnodeix1];
     const auto& bn2 = bnnorm[bnodeix2];
     
-    const double l1 = amounts[cur_bcell_ix] / bn1.dot(cnorm);
-    const double l2 = amounts[cur_bcell_ix] / bn2.dot(cnorm);
+    const double l1 = amounts[cur_bcell_ix] * enorm.dot(cnorm) / enorm.dot(bn1);
+    const double l2 = amounts[cur_bcell_ix] * enorm.dot(cnorm) / enorm.dot(bn2);
     
-    node_amounts[bnodeix1] = max(node_amounts[bnodeix1], l1);
+    node_amounts[bnodeix1] = max(node_amounts[bnodeix1], l1); // @@ correct for negative values?
     node_amounts[bnodeix2] = max(node_amounts[bnodeix2], l2);
     cur_bcell_ix++;
   }

@@ -12,7 +12,7 @@
 	    "normal": [0,1,0],
             "initial_fracture_width":0.3048e-4,
             "axis_scale": 0.25,
-            "num_exp": 2,
+            "num_exp": 3,
             "num_lin": 0
         },
         "solver":{
@@ -21,7 +21,7 @@
             "min_width":1e-10,
             "max_width":5e+100,
             "max_change":1e-3,
-            "efac": 0.1,
+            "efac": 0.5,
             "rfac": 0.1
         },
         "reservoir":{
