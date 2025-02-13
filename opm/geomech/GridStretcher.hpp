@@ -44,12 +44,15 @@ public:
   // the vector should have one entry per boundary cell, expressing the distance
   // the boundary of that cell should be expanded outwards
   void expandBoundaryCells(const std::vector<double>& amounts); // will modify grid
-                           
 
   // the vector should have two enties per boundary node, specifying its displacement
   // in the x and y direction
-  void applyBoundaryNodeDisplacements(const std::vector<CoordType>& disp); // will modify grid
+  void applyBoundaryNodeDisplacements(const std::vector<CoordType>& disp);
                                       
+
+  // make boundary nodes equidistant
+  void rebalanceBoundary(); // will modify grid
+  
   std::vector<double>
   computeBoundaryNodeDisplacements(
          const std::vector<double>& amounts,
@@ -77,7 +80,8 @@ public:
 
   void dumpToVTK(const char* filename,
                  const std::vector<std::vector<double>> = std::vector<std::vector<double>>()) const;
-  
+
+  void updateAfterBoundaryChange(const std::vector<CoordType>& new_bcoords);
 private:
 
   // ----------------------- functions used by constructor -----------------------

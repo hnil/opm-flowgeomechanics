@@ -294,7 +294,122 @@ int meshtest(const string& fname)
   vtkwriter2->write("deformed2");
 
   return 0;
-} 
+}
+
+// ----------------------------------------------------------------------------
+int projectiontest(const string& fname, const string& ftarget)
+  // ----------------------------------------------------------------------------
+{
+  // open file and read 3D points to a std::vector<double>
+  ifstream is(fname);
+  if (!is.is_open()) {
+    cout << "Failed to open file" << endl;
+    return 1;
+  }
+  vector<double> points;
+  while (!is.eof()) {
+    double x, y, z;
+    is >> x >> y >> z;
+    if (is.eof())
+      break;
+    points.push_back(x);
+    points.push_back(y);
+    points.push_back(z);
+  }
+
+  // call projection function
+  const int N = points.size() / 3;
+  vector<double> result(N * 2);
+  const Axis3D axis = project_to_2D(points, result);
+
+  // write axis, then result to file
+  ofstream os(ftarget);
+  os.precision(16);
+  for (int i = 0; i != 3; ++i) {
+    for (int dim = 0; dim != 3; ++dim)  {
+      os << axis[i][dim] << " ";
+    }
+    os << endl;
+  }
+  for (int i = 0; i != N; ++i) {
+    os << result[2*i] << " " << result[2*i+1] << endl;
+  }
+  
+  return 0;
+}
+
+//----------------------------------------------------------------------------
+int lifttest(const string& fname, const string& target)
+//----------------------------------------------------------------------------
+{
+  // reading axis and 2D points from file
+  ifstream is(fname);
+  if (!is.is_open()) {
+    cout << "Failed to open file" << endl;
+    return 1;
+  }
+  Axis3D axis;
+  for (int i = 0; i != 3; ++i)
+    for (int dim = 0; dim != 3; ++dim)
+      is >> axis[i][dim];
+
+  vector<double> points;
+  while (!is.eof()) {
+    double x, y;
+    is >> x >> y;
+    if (is.eof())
+      break;
+    points.push_back(x);
+    points.push_back(y);
+  }
+
+  // lift the points to 3D, using the axis
+  std::vector<double> result;
+  lift_to_3D(points, axis, result);
+
+  // write result to file, using high precision
+  ofstream os(target);
+  os.precision(16);
+  for (int i = 0; i != result.size() / 3; ++i) {
+    os << result[3*i] << " " << result[3*i+1] << " " << result[3*i+2] << endl;
+  }
+        
+  return 0;
+}
+
+//----------------------------------------------------------------------------
+int loop_repar_test(const string& fname, const string& target)
+// ----------------------------------------------------------------------------
+{
+  // reading 2D points from dfile
+  ifstream is(fname);
+  if (!is.is_open()) {
+    cout << "Failed to open file" << endl;
+    return 1;
+  }
+  vector<double> points;
+  while (!is.eof()) {
+    double x, y;
+    is >> x >> y;
+    if (is.eof())
+      break;
+    points.push_back(x);
+    points.push_back(y);
+  }
+  
+  // redistribute points
+  vector<double> result;
+  redistribute_2D(points, result);
+
+  // write result to file
+  ofstream os(target);
+  for (int i = 0; i != result.size() / 2; ++i) {
+    os << result[2*i] << " " << result[2*i+1] << endl;
+  }
+          
+  return 0;
+}
+
 // ============================================================================
 int main(int varnum, char** vararg)
 // ============================================================================
@@ -306,7 +421,13 @@ int main(int varnum, char** vararg)
     return simpletest(fname);
   else if (ftype == "msh")
     return meshtest(fname);
-           
+  else if (ftype == "p3d")
+    return projectiontest(fname, string(vararg[2]));
+  else if (ftype == "p2d")
+    return lifttest(fname, string(vararg[2]));
+  else if (ftype == "lop")
+    return loop_repar_test(fname, string(vararg[2]));
+
   return 0;
 }
 

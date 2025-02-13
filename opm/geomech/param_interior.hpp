@@ -5,7 +5,7 @@
 
 namespace Opm{
 
-  typedef std::array<std::array<double, 3>> Axis3D;
+  typedef std::array<std::array<double, 3>, 3> Axis3D;
 
   // project a set of points on a 2D plane embedded in 3D down to that plane in
   // a 2D representation

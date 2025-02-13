@@ -550,7 +550,6 @@ GridStretcher::computeBoundaryNodeDisplacements(const vector<double>& amounts,
   
 // ----------------------------------------------------------------------------  
 void GridStretcher::expandBoundaryCells(const vector<double>& amounts)
-                                        
 // ----------------------------------------------------------------------------
 {
   vector<double> distance =
@@ -566,21 +565,49 @@ void GridStretcher::expandBoundaryCells(const vector<double>& amounts)
 }
 
 // ----------------------------------------------------------------------------
-void GridStretcher::applyBoundaryNodeDisplacements(const vector<CoordType>& disp)
-// ----------------------------------------------------------------------------  
+void GridStretcher::rebalanceBoundary()
+// ----------------------------------------------------------------------------
 {
-  assert(disp.size() == bnindices_.size());
+  // prepare vector with boundary node coordinates @@ are these always in right order?
+  const vector<CoordType> ncoords(node_coordinates(grid_));
+  vector<double> bnodes3D(bnindices_.size() * 3);
+  for (size_t i = 0; i != bnindices_.size(); ++i)
+    for (size_t d = 0; d != 3; ++d)
+      bnodes3D[i*3 + d] = ncoords[bnindices_[i]][d];
 
-  vector<CoordType> ncoords(node_coordinates(grid_)); 
-  
-  // compute new boundary node coordinates
-  for (size_t i = 0; i != bnindices_.size(); ++i) 
-    ncoords[bnindices_[i]] += disp[i];
+  // project coordinates to suitable 2D plane
+  vector<double> bnodes2D; // will be filled in the call to project_to_2D
+  Axis3D ax = project_to_2D(bnodes3D, bnodes2D);
+
+  vector<double> bnodes2D_redist;
+  redistribute_2D(bnodes2D, bnodes2D_redist);
+
+  // project back to 3D
+  lift_to_3D(bnodes2D_redist, ax, bnodes3D);
+
+  // reformat data to vector of CoordType
+  vector<CoordType> new_bnode_pos;
+  for(size_t i = 0; i != bnindices_.size(); ++i)
+    new_bnode_pos.push_back({bnodes3D[i*3], bnodes3D[i*3+1], bnodes3D[i*3+2]});
+
+  // update all other information after boundary node change
+  updateAfterBoundaryChange(new_bnode_pos);
+
+}
+// ----------------------------------------------------------------------------
+void GridStretcher::updateAfterBoundaryChange(const vector<CoordType>& new_bcoords)
+// ----------------------------------------------------------------------------
+{
+  vector<CoordType> ncoords(nodecoords());
+
+  // write in new boundary node positions
+  for (size_t i = 0; i != bnindices_.size(); ++i)
+    ncoords[bnindices_[i]] = new_bcoords[i];
 
   // reset all internal nodes to zero
   for (size_t iix : iindices_)
     ncoords[iix] = 0; 
-  
+
   // compute new coordinates for internal nodes
   auto ipiter = iparam_.begin();
   for (size_t iix : iindices_)
@@ -596,6 +623,22 @@ void GridStretcher::applyBoundaryNodeDisplacements(const vector<CoordType>& disp
   // recompute stored geometric information
   nodecoords_ = node_coordinates(grid_);
   boundary_normals_ = boundary_normals(grid_, c2bix_, bcindices_, bnindices_, nodecoords_);
+  
+}
+  
+// ----------------------------------------------------------------------------
+void GridStretcher::applyBoundaryNodeDisplacements(const vector<CoordType>& disp)
+// ----------------------------------------------------------------------------  
+{
+  assert(disp.size() == bnindices_.size());
+
+  vector<CoordType> new_bnode_pos;
+  // compute new boundary node coordinates
+  for (size_t i = 0; i != bnindices_.size(); ++i) 
+    new_bnode_pos.push_back(nodecoords()[bnindices_[i]] + disp[i]);
+
+  updateAfterBoundaryChange(new_bnode_pos);
+
 }
 
 

@@ -171,8 +171,8 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
     const size_t N = boundary_cells.size(); // number of boundary nodes and boundary cells
     
     std::vector<double> total_bnode_disp(N, 0), bnode_disp(N, 0), cell_disp(N, 0);
-    const std::vector<GridStretcher::CoordType>
-      bnode_normals_orig = grid_stretcher_->bnodenormals();
+    // const std::vector<GridStretcher::CoordType>
+    //   bnode_normals_orig = grid_stretcher_->bnodenormals();
     
     std::vector<GridStretcher::CoordType> displacements(N, {0, 0, 0});
     int count = 0; // @@
@@ -224,27 +224,31 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         cell_disp[i] = std::max(std::min(cell_disp[i], maxgrow), -maxgrow);
       }
 
-      //bnode_normals_orig = grid_stretcher_->bnodenormals(); // @@@@
       bnode_disp =
-        grid_stretcher_->computeBoundaryNodeDisplacements(cell_disp, bnode_normals_orig);
+        grid_stretcher_->computeBoundaryNodeDisplacements(cell_disp); //@@
+      // bnode_disp =
+      //   grid_stretcher_->computeBoundaryNodeDisplacements(cell_disp, bnode_normals_orig);
       for (size_t i = 0; i != N; ++i)
         bnode_disp[i] = std::max(std::min(bnode_disp[i], maxgrow), -maxgrow);
       
-      // ensure no boundary node moved inwards further than starting point
-      for (size_t i = 0; i != N; ++i) {
-        bnode_disp[i] = std::max(bnode_disp[i], -total_bnode_disp[i]);
-        total_bnode_disp[i] += bnode_disp[i];
-      }
+      // // ensure no boundary node moved inwards further than starting point
+      // for (size_t i = 0; i != N; ++i) {
+      //   bnode_disp[i] = std::max(bnode_disp[i], -total_bnode_disp[i]);
+      //   total_bnode_disp[i] += bnode_disp[i];
+      // } // @@@ no longer works after rebalanceBoundary introduced()
 
       // ensure convexity
       grid_stretcher_->adjustToConvex(bnode_disp,
                                       total_bnode_disp,
-                                      bnode_normals_orig);
+                                      grid_stretcher_->bnodenormals());
+                                      //bnode_normals_orig);
       
       for (size_t i = 0; i != N; ++i)
-        displacements[i] = bnode_normals_orig[i] * bnode_disp[i];
-      
+        displacements[i] = grid_stretcher_->bnodenormals()[i] * bnode_disp[i];        
+      //displacements[i] = bnode_normals_orig[i] * bnode_disp[i];
+
       grid_stretcher_->applyBoundaryNodeDisplacements(displacements);
+      grid_stretcher_->rebalanceBoundary();
 
       // debug stuff
       grid_stretcher_->dumpToVTK("stretchedgrid");
