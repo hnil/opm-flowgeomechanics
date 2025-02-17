@@ -21,11 +21,9 @@ namespace Opm{
       const auto& config = prm_.get_child("config");
       std::string type = config.get<std::string>("type");
       if( type  == "well_seed"){
-	//auto config_bst = prm_.getBoostParamPtr();
-	//std::vector<int> cell_ijk = as_vector<int>(*config_bst, "config.cell_ijk");
-        auto cell_ijk = prm_.get_child_items_as_vector<int>("config.cell_ijk");
+	const auto cell_ijk = config.get_child_items_as_vector<int>("cell_ijk");
 	std::array<int, 3> ijk;
-        //assert(cell_ijk.size() == 3);
+	   assert(cell_ijk.has_value() && cell_ijk->size() == 3);
 	for(int i=0; i < 3; ++i){
 	  // map to 0 based
 	  ijk[i] = (*cell_ijk)[i]-1;

@@ -34,10 +34,9 @@ public:
                 const auto& intQuants =
                     simulator.model().intensiveQuantities(reservoir_cells_[i], /*timeIdx*/ 0);
                 const auto& fs = intQuants.fluidState();
-                auto val = fs.pressure(FluidSystem::waterPhaseIdx);
-                reservoir_pressure_[i] = Opm::getValue(val);
+                reservoir_pressure_[i] = fs.pressure(FluidSystem::waterPhaseIdx).value();
                 unsigned dummy = 0;
-                reservoir_temperature_[i] = Opm::getValue(fs.temperature(dummy));
+                reservoir_temperature_[i] = fs.temperature(dummy).value();
             }
         }
     }
