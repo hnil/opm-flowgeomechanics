@@ -5,6 +5,7 @@
 #include <opm/geomech/Math.hpp>
 #include <opm/simulators/linalg/setupPropertyTree.hpp>
 #include <opm/simulators/linalg/FlowLinearSolverParameters.hpp>
+#include <opm/simulators/wells/RuntimePerforation.hpp>
 #include <opm/geomech/DiscreteDisplacement.hpp>
 #include <dune/common/filledarray.hh> // needed for printSparseMatrix??
 #include <dune/istl/io.hh> // needed for printSparseMatrix??
@@ -383,11 +384,8 @@ void Fracture::writemulti(double time) const
     //assert(leakofrate.size() == fracture_pressure_.size());
     {
         //make map to do it easy
-        auto wellIndices = this->wellIndices();
-        for(const auto& wind: wellIndices){
-            int res_cell = std::get<0>(wind);
-            double WI = std::get<1>(wind);
-            wellIndMap[res_cell] = WI;
+        for(const auto& wind: this->wellIndices()){
+            wellIndMap.insert_or_assign(wind.cell, wind.ctf);
         }
     }
     // loop for need things only with fracture
@@ -995,12 +993,11 @@ std::vector<double> Fracture::leakOfRate() const{
     return leakofrate;
 }
 
-std::vector<std::tuple<int,double,double>> Fracture::wellIndices() const{
+std::vector<RuntimePerforation> Fracture::wellIndices() const{
     // find unique reservoir cells
     if(leakof_.size() == 0){
         // if pressure is not assembled return empty
-        std::vector<std::tuple<int,double, double>> wellind;
-        return wellind;
+        return {};
     }
     std::vector<int> res_cells = reservoir_cells_;
     std::sort(res_cells.begin(),res_cells.end());
@@ -1025,17 +1022,14 @@ std::vector<std::tuple<int,double,double>> Fracture::wellIndices() const{
         q_cells[ind_wellIdx] += q;
         p_cells[ind_wellIdx] = reservoir_pressure_[eIdx];// is set multiple times
     }
-    std::vector<std::tuple<int,double, double>> wellIndices(res_cells.size());
+    std::vector<RuntimePerforation> wellIndices(res_cells.size());
     double inj_press = injectionPressure();
     for(size_t i=0; i < res_cells.size(); ++i){
-        double dp = inj_press - p_cells[i];
-        // simplest possible approach
-        // assumes leakof is assumed to be calculated with reservoir cell as reference
-        double well_index = q_cells[i]/dp;
-        //assert(well_index>0);
-        assert(std::isfinite(well_index));
-        wellIndices[i] = {res_cells[i],well_index, origo_[2]};
-        //wellIndices[i] = std::tuple<int,double>({res_cells[i],well_index});
+        auto& perf = wellIndices[i];
+
+        perf.cell  = res_cells[i];
+        perf.ctf   = q_cells[i] / (inj_press - p_cells[i]);
+        perf.depth = this->origo_[2];
     }
     return wellIndices;
 }

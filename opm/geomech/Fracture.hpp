@@ -42,16 +42,21 @@
 #include <dune/grid/yaspgrid/partitioning.hh>
 
 // for linear solve
-#include <opm/models/blackoil/blackoilmodel.hh>
 #include <opm/models/io/vtkmultiwriter.hh>
 #include <opm/models/utils/propertysystem.hh>
 #include <opm/simulators/linalg/FlexibleSolver.hpp>
 #include <opm/simulators/linalg/PropertyTree.hpp>
-// #include <opm/models/utils/parametersystem.hh>
-#include <opm/material/fluidsystems/BlackOilFluidSystem.hpp>
 #include <dune/istl/matrixmarket.hh>
 
 #include <opm/geomech/GridStretcher.hpp>
+
+namespace Opm::Properties {
+    template <class TypeTag, class MyType>
+    struct FluidSystem;
+
+    template <class TypeTag, class MyType>
+    struct NumPhases;
+} // namespace Opm::Properties
 
 namespace Opm
 {
@@ -60,6 +65,8 @@ struct WellInfo {
     int perf;
     int well_cell;
 };
+
+struct RuntimePerforation;
 
 /// This class carries all parameters for the NewtonIterationBlackoilInterleaved class.
 class Fracture
@@ -161,7 +168,7 @@ public:
     void writeFractureSystem()  const;
     void writePressureSystem()  const;
     void setFractureGrid(std::unique_ptr<Fracture::Grid> gptr = nullptr); // a hack to allow use of another grid
-    std::vector<std::tuple<int, double, double>> wellIndices() const;
+    std::vector<RuntimePerforation> wellIndices() const;
     WellInfo& wellInfo(){return wellinfo_;}
     std::vector<double> leakOfRate() const;
     double injectionPressure() const;
