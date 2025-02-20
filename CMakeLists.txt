@@ -152,6 +152,7 @@ add_library(fracture OBJECT
 	opm/geomech/coupledsolver.cpp
 	opm/geomech/param_interior.cpp
 	opm/geomech/GridStretcher.cpp
+	opm/geomech/RegularTrimesh.cpp
 	opm/geomech/Fracture_fullSystemIteration.cpp
 	examples/FlexibleSolverMech.cpp)
 # target_link_libraries( vem PUBLIC Tracy::TracyClient)
@@ -343,6 +344,16 @@ opm_add_test(paramtest
 	 LIBRARIES opmsimulators opmupscaling fracture
 	 SOURCES
 	 examples/paramtest.cpp
+	 $<TARGET_OBJECTS:moduleVersionGeoMech>
+)
+
+opm_add_test(test_trimesh
+	 ONLY_COMPILE
+	 ALWAYS_ENABLE
+	 DEPENDS opmsimulators opmupscaling
+	 LIBRARIES opmsimulators opmupscaling fracture
+	 SOURCES
+	 examples/test_trimesh.cpp
 	 $<TARGET_OBJECTS:moduleVersionGeoMech>
 )
 
