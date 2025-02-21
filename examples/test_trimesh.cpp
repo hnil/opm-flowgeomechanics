@@ -8,27 +8,6 @@
 using namespace Opm;
 using namespace std;
 
-// // code to dump edges as vtu
-void dumpEdges(const vector<pair<Coord3D, Coord3D>>& edges,
-               const string& filename)
-{
-  ofstream file(filename);
-  file << "# vtk DataFile Version 3.0\n";
-  file << "Edges\n";
-  file << "ASCII\n";
-  file << "DATASET POLYDATA\n";
-  file << "POINTS " << edges.size() * 2 << " float\n";
-  for (const auto& edge : edges) {
-    file << edge.first[0] << " " << edge.first[1] << " " << edge.first[2] << "\n";
-    file << edge.second[0] << " " << edge.second[1] << " " << edge.second[2] << "\n";
-  }
-  file << "LINES " << edges.size() << " " << edges.size() * 3 << "\n";
-  for (size_t i = 0; i < edges.size(); ++i) {
-    file << "2 " << 2 * i << " " << 2 * i + 1 << "\n";
-  }
-  file.close();
-}
-  
 
 // write a test progam
 int main() {
@@ -89,21 +68,23 @@ int main() {
   mesh.writeMatlabTriangulation(file);
   file.close();
   
-  const auto grid = mesh.createDuneGrid();
+  //  const auto grid = mesh.createDuneGrid();
 
   // write grid to file
-  auto vtkwriter =
-    std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(
-                                           grid->leafGridView(),
-                                           Dune::VTK::nonconforming);
-  vtkwriter->write("mesh");
+  // auto vtkwriter =
+  //   std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(
+  //                                          grid->leafGridView(),
+  //                                          Dune::VTK::nonconforming);
+  // vtkwriter->write("mesh");
 
   // write outer boundary edges to file
   vector<pair<Coord3D, Coord3D>> outer_boundary_edges;
   for (const auto& e : boundary_edges) 
     outer_boundary_edges.push_back(mesh.edgeNodeCoords(e));
     
-  dumpEdges(outer_boundary_edges, "outer_boundary_edges.vtk");
+  //dumpEdges(outer_boundary_edges, "outer_boundary_edges.vtk");
 
+  Opm::writeMeshBoundaryToVTK(mesh, "boundary.vtu");
+  
 }
 

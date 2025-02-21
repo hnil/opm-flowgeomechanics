@@ -15,17 +15,14 @@
 #include <dune/common/exceptions.hh>
 #include <dune/foamgrid/foamgrid.hh>
 
-// #include <dune/grid/yaspgrid.hh>
-// #include <dune/grid/yaspgrid/partitioning.hh>
-// #include <dune/istl/matrixmarket.hh>
-
 namespace Opm {
 
 typedef std::array<int, 3> CellRef; // (i, j, [0 | 1])
 typedef std::array<int, 3> EdgeRef; // (i, j, [0 | 1 | 2])
 typedef std::array<int, 2> NodeRef;  // (i, j)
 typedef std::array<double, 3> Coord3D;
-typedef Dune::FoamGrid<2, 3> Grid;
+using Grid = Dune::FoamGrid<2, 3>;
+  //typedef Dune::FoamGrid<2, 3> Grid;
 //typedef int Grid; // @@ dummy
 
 
@@ -65,7 +62,7 @@ public:
   std::vector<std::array<size_t, 3>> cellNodes() const;
 
   std::pair<NodeRef, NodeRef> edgeNodes(const EdgeRef& edge) const;
-  std::vector<std::pair<size_t, size_t>> edgeNodeIndices() const;
+  std::vector<std::pair<size_t, size_t>> edgeNodeIndices(bool only_boundary=false) const;
   std::pair<Coord3D, Coord3D> edgeNodeCoords(const EdgeRef& edge) const;
   std::vector<std::pair<Coord3D, Coord3D>> edgeNodeCoords() const;
   
@@ -83,5 +80,7 @@ private:
   const std::array<double, 2> edgelen_;
 };
 
+void writeMeshToVTK(const RegularTrimesh& mesh, const std::string& filename);
+void writeMeshBoundaryToVTK(const RegularTrimesh& mesh, const std::string& filename);
   
 } // namespace Opm

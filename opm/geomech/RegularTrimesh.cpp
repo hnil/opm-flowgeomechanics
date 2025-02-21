@@ -2,8 +2,10 @@
 #include <opm/geomech/RegularTrimesh.hpp>
 #include <set>
 #include <algorithm>
+#include <fstream>
 
-
+#include <dune/grid/io/file/vtk/vtkwriter.hh>
+#include <dune/grid/utility/structuredgridfactory.hh>
 
 namespace {
 
@@ -239,7 +241,7 @@ std::unique_ptr<Grid> RegularTrimesh::createDuneGrid() const
                                                      static_cast<unsigned int>(cell[1]),
                                                      static_cast<unsigned int>(cell[2]) });
   return factory.createGrid();
-  //return std::unique_ptr<Grid>(new(int)); // @@ dummy, for now
+
 }
 
 // ----------------------------------------------------------------------------
@@ -252,11 +254,11 @@ std::pair<NodeRef, NodeRef> RegularTrimesh::edgeNodes(const EdgeRef& e) const
 }
 
 // ----------------------------------------------------------------------------
-std::vector<std::pair<size_t, size_t>> RegularTrimesh::edgeNodeIndices() const
+std::vector<std::pair<size_t, size_t>> RegularTrimesh::edgeNodeIndices(bool only_boundary) const
 // ----------------------------------------------------------------------------  
 {
   const auto nodeindices = nodeIndices();
-  const auto edgeindices = edgeIndices();
+  const auto edgeindices = only_boundary ? boundaryEdges() : edgeIndices();
 
   // make mapping from node to index
   std::map<NodeRef, size_t> node2index;
@@ -348,6 +350,73 @@ void RegularTrimesh::writeMatlabTriangulation(std::ostream& out) const
   //set axis equal
   out << "axis equal;\n";
 }
+
+
+// ----------------------------------------------------------------------------
+void writeMeshToVTK(const RegularTrimesh& mesh, const std::string& filename)
+// ----------------------------------------------------------------------------
+{
+  const auto grid = mesh.createDuneGrid();
+
+  // write grid to file
+  auto vtkwriter =
+    std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(
+                                           grid->leafGridView(),
+                                           Dune::VTK::nonconforming);
+  vtkwriter->write(filename);
+}
+
+// ----------------------------------------------------------------------------  
+void writeMeshBoundaryToVTK(const RegularTrimesh& mesh, const std::string& filename)
+// ----------------------------------------------------------------------------  
+{
+  std::ofstream file(filename.c_str());
+  if (!file.is_open()) {
+    std::cerr << "Error opening file: " << filename << std::endl;
+    return;
+  }
   
+  const std::vector<Coord3D> points = mesh.nodeCoords();
+  const std::vector<std::pair<size_t, size_t>> edges = mesh.edgeNodeIndices(true);
+
+  // header
+  file << "<?xml version=\"1.0\"?>\n";
+  file << "<VTKFile type=\"UnstructuredGrid\" version=\"0.1\" byte_order=\"LittleEndian\">\n";
+  file << "  <UnstructuredGrid>\n";
+  file << "    <Piece NumberOfPoints=\"" << points.size() << "\" NumberOfCells=\"" << edges.size() << "\">\n";
+
+  // points
+  file << "      <Points>\n";
+  file << "        <DataArray type=\"Float32\" NumberOfComponents=\"3\" format=\"ascii\">\n";
+  for (const auto& point : points) 
+    file << "          " << point[0] << " " << point[1] << " " << point[2] << "\n";
+  file << "        </DataArray>\n";
+  file << "      </Points>\n";
+
+  // cells (edges)
+  file << "      <Cells>\n";
+  file << "        <DataArray type=\"Int32\" Name=\"connectivity\" format=\"ascii\">\n";
+  for (const auto& edge : edges) 
+    file << "          " << edge.first << " " << edge.second << "\n";
+  file << "        </DataArray>\n";
+  file << "        <DataArray type=\"Int32\" Name=\"offsets\" format=\"ascii\">\n";
+  for (size_t i = 1; i <= edges.size(); ++i) 
+    file << "          " << i * 2 << "\n";
+  file << "        </DataArray>\n";
+  file << "        <DataArray type=\"UInt8\" Name=\"types\" format=\"ascii\">\n";
+  for (size_t i = 0; i < edges.size(); ++i) 
+        file << "          3\n";
+  file << "        </DataArray>\n";
+  file << "      </Cells>\n";
+
+  // Footer
+  file << "    </Piece>\n";
+  file << "  </UnstructuredGrid>\n";
+  file << "</VTKFile>\n";
+
+  file.close();
+}
+
+
 } // namespace
  
