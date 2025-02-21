@@ -63,6 +63,11 @@ public:
   std::vector<Coord3D> nodeCoords() const;
 
   std::vector<std::array<size_t, 3>> cellNodes() const;
+
+  std::pair<NodeRef, NodeRef> edgeNodes(const EdgeRef& edge) const;
+  std::vector<std::pair<size_t, size_t>> edgeNodeIndices() const;
+  std::pair<Coord3D, Coord3D> edgeNodeCoords(const EdgeRef& edge) const;
+  std::vector<std::pair<Coord3D, Coord3D>> edgeNodeCoords() const;
   
   // functions for outputting grids
   std::unique_ptr<Grid> createDuneGrid() const;

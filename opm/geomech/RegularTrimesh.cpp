@@ -235,10 +235,61 @@ std::unique_ptr<Grid> RegularTrimesh::createDuneGrid() const
   // define triangles 
   for (const auto& cell : cellNodes())
     factory.insertElement(Dune::GeometryTypes::simplex(2),
-                          std::vector<unsigned int> {cell[0], cell[1], cell[2] });
-
+                          std::vector<unsigned int> {static_cast<unsigned int>(cell[0]),
+                                                     static_cast<unsigned int>(cell[1]),
+                                                     static_cast<unsigned int>(cell[2]) });
   return factory.createGrid();
   //return std::unique_ptr<Grid>(new(int)); // @@ dummy, for now
+}
+
+// ----------------------------------------------------------------------------
+std::pair<NodeRef, NodeRef> RegularTrimesh::edgeNodes(const EdgeRef& e) const
+// ----------------------------------------------------------------------------
+{
+  return e[2] == 0 ? std::make_pair(NodeRef{e[0], e[1]}, NodeRef{e[0] + 1, e[1]}) :
+         e[2] == 1 ? std::make_pair(NodeRef{e[0], e[1]}, NodeRef{e[0], e[1] + 1}) :
+                     std::make_pair(NodeRef{e[0], e[1] + 1}, NodeRef{e[0] + 1, e[1]});
+}
+
+// ----------------------------------------------------------------------------
+std::vector<std::pair<size_t, size_t>> RegularTrimesh::edgeNodeIndices() const
+// ----------------------------------------------------------------------------  
+{
+  const auto nodeindices = nodeIndices();
+  const auto edgeindices = edgeIndices();
+
+  // make mapping from node to index
+  std::map<NodeRef, size_t> node2index;
+  for (size_t i = 0; i != nodeindices.size(); ++i)
+    node2index[nodeindices[i]] = i;
+
+  // map back to indices, for all edges in the mesh
+  std::vector<std::pair<size_t, size_t>> result;  
+  for (const auto& edge : edgeindices) {
+    const auto nodes = edgeNodes(edge);
+    result.push_back({node2index[nodes.first], node2index[nodes.second]});
+  }
+
+  return result;
+}
+
+// ----------------------------------------------------------------------------
+std::pair<Coord3D, Coord3D> RegularTrimesh::edgeNodeCoords(const EdgeRef& edge) const
+// ----------------------------------------------------------------------------  
+{
+  return std::make_pair(nodeCoord(edgeNodes(edge).first),
+                        nodeCoord(edgeNodes(edge).second));
+}
+
+// ----------------------------------------------------------------------------
+std::vector<std::pair<Coord3D, Coord3D>> RegularTrimesh::edgeNodeCoords() const
+// ----------------------------------------------------------------------------
+{
+  const auto edgeindices = edgeIndices();
+  std::vector<std::pair<Coord3D, Coord3D>> result;
+  for (const auto& edge : edgeindices)
+    result.push_back(edgeNodeCoords(edge));
+  return result;
 }
 
 // ----------------------------------------------------------------------------
