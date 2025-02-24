@@ -71,8 +71,10 @@ public:
   void writeMatlabTriangulation(std::ostream& out) const;
   
 private:
+  // helper functions
   std::vector<EdgeRef> all_half_edges_() const ; // internal edges are duplicated
-  
+
+  // data members
   std::map<CellRef, CellAttributes> cellinfo_;
   const Coord3D origin_;
   const Coord3D axis1_;

@@ -383,8 +383,8 @@ void writeMeshBoundaryToVTK(const RegularTrimesh& mesh, const std::string& filen
   file << "<?xml version=\"1.0\"?>\n";
   file << "<VTKFile type=\"UnstructuredGrid\" version=\"0.1\" byte_order=\"LittleEndian\">\n";
   file << "  <UnstructuredGrid>\n";
-  file << "    <Piece NumberOfPoints=\"" << points.size() << "\" NumberOfCells=\"" << edges.size() << "\">\n";
-
+  file << "    <Piece NumberOfPoints=\"" << points.size() << "\" NumberOfCells=\""
+       << edges.size() << "\">\n";
   // points
   file << "      <Points>\n";
   file << "        <DataArray type=\"Float32\" NumberOfComponents=\"3\" format=\"ascii\">\n";

@@ -68,14 +68,14 @@ int main() {
   mesh.writeMatlabTriangulation(file);
   file.close();
   
-  //  const auto grid = mesh.createDuneGrid();
+   const auto grid = mesh.createDuneGrid();
 
-  // write grid to file
-  // auto vtkwriter =
-  //   std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(
-  //                                          grid->leafGridView(),
-  //                                          Dune::VTK::nonconforming);
-  // vtkwriter->write("mesh");
+  //write grid to file
+  auto vtkwriter =
+    std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(
+                                           grid->leafGridView(),
+                                           Dune::VTK::nonconforming);
+  vtkwriter->write("mesh");
 
   // write outer boundary edges to file
   vector<pair<Coord3D, Coord3D>> outer_boundary_edges;
