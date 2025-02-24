@@ -15,6 +15,9 @@
 
 namespace Opm {
     class RuntimePerforation;
+
+    template <typename Scalar>
+    class WellState;
 } // namespace Opm
 
 namespace Opm{
@@ -121,7 +124,13 @@ public:
              well.updateReservoirProperties<TypeTag,Simulator>(simulator);
         }
     }
-    std::vector<RuntimePerforation> getExtraWellIndices(const std::string& wellname) const;
+
+    std::vector<RuntimePerforation>
+    getExtraWellIndices(const std::string& wellname) const;
+
+    template <typename Scalar>
+    void assignGeomechWellState(WellState<Scalar>& wellState) const;
+
     bool addPertsToSchedule(){return prm_.get<bool>("addperfs_to_schedule");}
     // probably this should be collected in one loop since all do full loop over fracture ++ well
     Dune::FieldVector<double,6> stress(Dune::FieldVector<double,3> obs) const;
