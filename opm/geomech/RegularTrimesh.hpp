@@ -45,6 +45,7 @@ public:
       cellinfo_[*it] = CellAttributes();
   }
 
+  // --------------------- Functions for inspecting the grid ---------------------
   std::vector<CellRef> cellIndices() const;
   std::vector<EdgeRef> edgeIndices() const;
   std::vector<NodeRef> nodeIndices() const;
@@ -65,8 +66,12 @@ public:
   std::vector<std::pair<size_t, size_t>> edgeNodeIndices(bool only_boundary=false) const;
   std::pair<Coord3D, Coord3D> edgeNodeCoords(const EdgeRef& edge) const;
   std::vector<std::pair<Coord3D, Coord3D>> edgeNodeCoords() const;
+
+  // --------------------- Functions for modifying the grid ---------------------
+  int expandGrid(const CellRef& cell);
+  int expandGrid(const std::vector<CellRef>& cells);
   
-  // functions for outputting grids
+  // ---------------------- Functions for outputting grids ----------------------
   std::unique_ptr<Grid> createDuneGrid() const;
   void writeMatlabTriangulation(std::ostream& out) const;
   

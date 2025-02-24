@@ -417,6 +417,17 @@ void writeMeshBoundaryToVTK(const RegularTrimesh& mesh, const std::string& filen
   file.close();
 }
 
+int RegularTrimesh::expandGrid(const CellRef& cell)
+{
+  return 0;
+}
+
+int RegularTrimesh::expandGrid(const std::vector<CellRef>& cells)
+{
+  return 0;
+}
+
+
 
 } // namespace
  
