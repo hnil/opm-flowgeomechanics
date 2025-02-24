@@ -9,8 +9,23 @@ using namespace Opm;
 using namespace std;
 
 
-// write a test progam
-int main() {
+int expand_grid_test(int turns)
+{
+  RegularTrimesh mesh;
+
+  for (int i = 0; i != turns; ++i) {
+    const auto cells = mesh.cellIndices();
+    mesh.expandGrid(cells);
+    mesh.removeSawtooths();
+  }
+
+  writeMeshToVTK(mesh, "expandedgrid");
+  cout << "Number of cells: " << mesh.numActive() << endl;
+  return 0;
+}
+
+int irregular_grid_test()
+{
   vector<array<int, 3>> cellspec = {
     {0, 0, 0},
     {1, 0, 0},
@@ -85,6 +100,23 @@ int main() {
   //dumpEdges(outer_boundary_edges, "outer_boundary_edges.vtk");
 
   Opm::writeMeshBoundaryToVTK(mesh, "boundary.vtu");
-  
+  return 0;
 }
 
+
+// write a test progam
+int main(int varnum, char** vararg) {
+
+  if (varnum == 1)
+    cout <<
+      "Options are: \n" <<
+      "1 - create irregular 5-cell grid\n" <<
+      "2 - test grid expansion <n turns> \n" <<
+      endl;
+  else
+    if (atoi(vararg[1]) == 1) return irregular_grid_test();
+    else if (atoi(vararg[1]) == 2) return expand_grid_test(atoi(vararg[2]));
+    else
+      cout << "Invalid option given" << endl;
+  return 1;
+};

@@ -17,6 +17,9 @@
 
 #include <opm/grid/polyhedralgrid.hh>
 
+#include <opm/geomech/RegularTrimesh.hpp>
+
+
 namespace {
 
 /**
@@ -73,8 +76,16 @@ Fracture::init(std::string well,
     layers_ = 0;
     nlinear_ = 0;
 
-    setFractureGrid();
-
+    // @@ Hack to test/use RegularTrimesh
+    //setFractureGrid();
+    const int trimeshlayers = 4;
+    const double radius = 1;
+    setFractureGrid(RegularTrimesh(trimeshlayers,
+                                   {origo_[0], origo_[1], origo_[2]},
+                                   {axis_[0][0], axis_[0][1], axis_[0][2]},
+                                   {axis_[1][0], axis_[1][1], axis_[1][2]},
+                                   {radius, radius}).createDuneGrid());
+    
     setPerfPressure(0.0); // This can be changed by subsequently calling this
                           // function when the fracture is connected to the
                           // reservoir

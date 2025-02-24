@@ -45,6 +45,12 @@ public:
       cellinfo_[*it] = CellAttributes();
   }
 
+  RegularTrimesh(const int layers = 1,
+                 const std::array<double, 3>& origin = {0, 0, 0},
+                 const std::array<double, 3>& axis1 = {1, 0, 0},
+                 const std::array<double, 3>& axis2 = {0.5, std::sqrt(3)/2, 0},
+                 const std::array<double, 2>& edgelen = {1, 1});
+  
   // --------------------- Functions for inspecting the grid ---------------------
   std::vector<CellRef> cellIndices() const;
   std::vector<EdgeRef> edgeIndices() const;
@@ -67,9 +73,15 @@ public:
   std::pair<Coord3D, Coord3D> edgeNodeCoords(const EdgeRef& edge) const;
   std::vector<std::pair<Coord3D, Coord3D>> edgeNodeCoords() const;
 
+  bool isActive(const CellRef& cell) const;
+  size_t numActive() const;
+  
   // --------------------- Functions for modifying the grid ---------------------
+  bool setActive(const CellRef& cell);
   int expandGrid(const CellRef& cell);
   int expandGrid(const std::vector<CellRef>& cells);
+  int expandGrid(); // uniform expansion all directions
+  void removeSawtooths();
   
   // ---------------------- Functions for outputting grids ----------------------
   std::unique_ptr<Grid> createDuneGrid() const;

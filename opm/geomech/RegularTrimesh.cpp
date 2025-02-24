@@ -1,4 +1,5 @@
 #include "RegularTrimesh.hpp"
+#include "GeometryHelpers.hpp"
 #include <opm/geomech/RegularTrimesh.hpp>
 #include <set>
 #include <algorithm>
@@ -7,8 +8,38 @@
 #include <dune/grid/io/file/vtk/vtkwriter.hh>
 #include <dune/grid/utility/structuredgridfactory.hh>
 
+using namespace Opm;
+using namespace std;
+
 namespace {
 
+std::array<EdgeRef, 3> cell2edges(const CellRef& cell) {
+  return (cell[2] == 0) ? std::array<EdgeRef, 3> {EdgeRef{cell[0], cell[1], 0},
+                                                  EdgeRef{cell[0], cell[1], 1},
+                                                  EdgeRef{cell[0], cell[1], 2}} :
+                          std::array<EdgeRef, 3> {EdgeRef{cell[0], cell[1] + 1, 0},
+                                                  EdgeRef{cell[0] + 1 , cell[1], 1},
+                                                  EdgeRef{cell[0], cell[1], 2}};
+}
+
+std::array<CellRef, 2> edge2cells(const EdgeRef& edge) {
+  return (edge[2] == 0) ?
+        array<CellRef, 2> {CellRef{edge[0], edge[1], 0}, CellRef{edge[0], edge[1] - 1, 1}} :
+    (edge[2] == 1) ?
+        array<CellRef, 2> {CellRef{edge[0], edge[1], 0}, CellRef{edge[0]-1, edge[1], 1}} :
+        array<CellRef, 2> {CellRef{edge[0], edge[1], 1}, CellRef{edge[0], edge[1], 0}};
+}
+
+std::array<CellRef, 3> cellNeighbors(const CellRef& cell) {
+  return (cell[2] == 0) ?
+    array<CellRef, 3> {CellRef{cell[0], cell[1], 1},
+                       CellRef{cell[0] - 1, cell[1], 1},
+                       CellRef{cell[0], cell[1] - 1, 1}} :
+    array<CellRef, 3> {CellRef{cell[0], cell[1], 0},
+                       CellRef{cell[0] + 1, cell[1], 0},
+                       CellRef{cell[0], cell[1] + 1, 0}};
+};
+  
 // += operator for Opm::Coord3D
 Opm::Coord3D& operator+=(Opm::Coord3D& lhs, const Opm::Coord3D& rhs) {
   for (int i = 0; i != 3; ++i)
@@ -80,6 +111,20 @@ bool operator<(const Opm::EdgeRef& lhs, const Opm::EdgeRef& rhs) {
 
 namespace Opm
 {
+// ----------------------------------------------------------------------------
+RegularTrimesh::RegularTrimesh(const int layers,
+                               const std::array<double, 3>& origin,
+                               const std::array<double, 3>& axis1,
+                               const std::array<double, 3>& axis2, 
+                               const std::array<double, 2>& edgelen)
+// ----------------------------------------------------------------------------
+  : origin_(origin), axis1_(axis1), axis2_(axis2), edgelen_(edgelen)
+{
+    cellinfo_[{0, 0, 0}] = CellAttributes(); // set a single seed cell
+    for (int i = 0; i != layers; ++i)
+      expandGrid();
+}
+
 // ----------------------------------------------------------------------------
 std::vector<CellRef> RegularTrimesh::cellIndices() const
 // ----------------------------------------------------------------------------
@@ -417,17 +462,93 @@ void writeMeshBoundaryToVTK(const RegularTrimesh& mesh, const std::string& filen
   file.close();
 }
 
+// ----------------------------------------------------------------------------
+size_t RegularTrimesh::numActive() const
+// ----------------------------------------------------------------------------  
+{
+  return cellinfo_.size();
+}
+  
+// ----------------------------------------------------------------------------  
+bool RegularTrimesh::isActive(const CellRef& cell) const
+// ----------------------------------------------------------------------------    
+{
+  return cellinfo_.find(cell) != cellinfo_.end();
+}
+
+// ----------------------------------------------------------------------------  
+bool RegularTrimesh::setActive(const CellRef& cell)
+// ----------------------------------------------------------------------------    
+{
+  if (isActive(cell))
+    return false;
+  cellinfo_.insert({cell, CellAttributes()});
+  return true;
+}
+
+// ----------------------------------------------------------------------------  
 int RegularTrimesh::expandGrid(const CellRef& cell)
+// ----------------------------------------------------------------------------    
 {
-  return 0;
+  int result = 0;
+  const auto edges = cell2edges(cell);
+  for (const auto& e : edges) 
+    for (const auto& c : edge2cells(e))
+      result += setActive(c);
+
+  return result;
 }
 
+// ----------------------------------------------------------------------------  
 int RegularTrimesh::expandGrid(const std::vector<CellRef>& cells)
+// ----------------------------------------------------------------------------    
 {
-  return 0;
+  int result = 0;
+  for (const auto& c : cells)
+    result += expandGrid(c);
+  return result;
 }
 
+// ----------------------------------------------------------------------------
+int RegularTrimesh::expandGrid()
+// ----------------------------------------------------------------------------
+{
+  // regular expansion in all directions
+  vector<CellRef> boundary_cells;
+  const auto bedges = boundaryEdges();
+  for (const auto& e : bedges)
+    for (const auto& c : edge2cells(e))
+      if (isActive(c))
+        boundary_cells.push_back(c);
 
+  // remove duplicates from boundary_cells
+  const auto last = std::unique(boundary_cells.begin(), boundary_cells.end());
+  return expandGrid(vector<CellRef>(boundary_cells.begin(), last));
+}
 
+// ----------------------------------------------------------------------------
+void RegularTrimesh::removeSawtooths()
+// ----------------------------------------------------------------------------
+{
+  const auto bedges = boundaryEdges();
+  std::vector<CellRef> candidates;
+  for (const auto& edge : bedges) 
+    for (const auto& cell : edge2cells(edge))
+      if (!isActive(cell))
+        candidates.push_back(cell);
+
+  std::sort(candidates.begin(), candidates.end());
+
+  // inactive cells adjacent to more than one boundary edge should be activated
+  for (auto it = candidates.begin(); it != candidates.end(); ++it) {
+    const auto range = std::equal_range(it, candidates.end(), *it);
+    if (range.second - range.first > 1) {
+        setActive(*it);
+        it = range.second - 1;
+    }
+  }
+}        
+
+  
 } // namespace
- 
+
