@@ -145,7 +145,63 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
     std::cout << "Aperture: ";
     std::cout <<  *std::min_element(fracture_width_.begin(), fracture_width_.end()) << ", "
               << *std::max_element(fracture_width_.begin(), fracture_width_.end()) << std::endl;
+  } else if (method == "if_propagate_trimesh") {
+
+    // initialization
+    const int max_iter = 100;
+    const double tol = 1e-8;
+    const double K1max = prm_.get<double>("KMax"); // @@ for testing.  Should be added as a proper data member
+
+    fracture_width_ = 1e-2;   // Ensure not completely closed
+    fracture_pressure_ = 0.0;
+
+    // start by assuming pressure equal to confining stress (will also set
+    // fracture_pressure_ to its correct size
+    normalFractureTraction(fracture_pressure_);
+    if (numWellEquations() > 0) // @@ it is implicitly assumed for now that
+      // there is just one well equation.  We initialize with an existing value.
+      fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
+
+    const std::vector<CellRef> cell_indices = trimesh_->cellIndices();
     
+    // iterate until boundary has been established
+    while (true) {
+
+      // solve flow-mechanical system
+      int iter = 0;
+      while (!fullSystemIteration(tol) && iter++ < max_iter) {};
+      std::cout << "Iterations needed: " << iter << std::endl;
+      
+      // identify where max stress intensity is exceeded and propagation is needed
+      const std::vector<double> K1_not_nan = Fracture::stressIntensityK1();
+      std::vector<CellRef> breaking_cells; 
+      for (size_t i = 0; i != K1_not_nan.size(); ++i)
+        if (!std::isnan(K1_not_nan[i]) && K1_not_nan[i] > K1max)
+          breaking_cells.push_back(cell_indices[i]);
+
+      // if no more expansion of the fracture grid is needed, we are finished
+      if (breaking_cells.empty())
+        break;
+      
+      // create new, expanded grid
+      std::vector<CellRef> wsources;
+      for (const auto ix : well_source_)
+        wsources.push_back(trimesh_->cellIndex(ix)); // remember source cells
+
+      trimesh_->expandGrid(breaking_cells);
+      trimesh_->removeSawtooths();
+
+      // recompute discretizations and update reservoir properties
+      for (const auto& cell : wsources)
+        well_source_.push_back(trimesh_->linearCellIndex(cell)); // restore source cells
+      setFractureGrid(trimesh_->createDuneGrid());
+      updateReservoirCells(cell_search_tree);
+      updateReservoirProperties<TypeTag, Simulator>(simulator, true);
+      initFractureWidth();
+      initFracturePressureFromReservoir();
+      rhs_pressure_.resize(0);
+    };
+
   } else if (method == "if_propagate") {
     // iterate full nonlinear system until convergence, and expand fracture if necessary
     

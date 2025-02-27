@@ -52,6 +52,7 @@
 #include <dune/istl/matrixmarket.hh>
 
 #include <opm/geomech/GridStretcher.hpp>
+#include <opm/geomech/RegularTrimesh.hpp>
 
 namespace Opm
 {
@@ -215,7 +216,8 @@ private:
     void initFracture(); // create a new fracture grid from scratch
     Point3D surfaceMap(double x, double y);
 
-    std::unique_ptr<GridStretcher> grid_stretcher_;
+    std::unique_ptr<GridStretcher> grid_stretcher_; //@@ experimental, for stretching grids
+    std::unique_ptr<Opm::RegularTrimesh> trimesh_; // @@ experimental, for regular, implicitly defined grids
   
     std::unique_ptr<Grid> grid_;
     Point3D origo_;

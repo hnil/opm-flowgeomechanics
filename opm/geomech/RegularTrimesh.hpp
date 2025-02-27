@@ -7,11 +7,6 @@
 #include <cmath>
 #include <memory>
 
-// // #include <dune/grid/common/mcmgmapper.hh> // mapper class
-// // #include <dune/grid/io/file/vtk.hh>
-// // #include <dune/grid/io/file/vtk/vtkwriter.hh>
-// // #include <dune/grid/utility/persistentcontainer.hh>
-
 #include <dune/common/exceptions.hh>
 #include <dune/foamgrid/foamgrid.hh>
 
@@ -75,7 +70,8 @@ public:
 
   bool isActive(const CellRef& cell) const;
   size_t numActive() const;
-  
+  size_t linearCellIndex(const CellRef& cell) const;
+  CellRef cellIndex(const size_t idx) const;
   // --------------------- Functions for modifying the grid ---------------------
   bool setActive(const CellRef& cell);
   int expandGrid(const CellRef& cell);
@@ -99,7 +95,7 @@ private:
   const std::array<double, 2> edgelen_;
 };
 
-void writeMeshToVTK(const RegularTrimesh& mesh, const std::string& filename);
-void writeMeshBoundaryToVTK(const RegularTrimesh& mesh, const std::string& filename);
+void writeMeshToVTK(const RegularTrimesh& mesh, const char* const filename);
+void writeMeshBoundaryToVTK(const RegularTrimesh& mesh, const char* const filename);
   
 } // namespace Opm

@@ -80,11 +80,27 @@ Fracture::init(std::string well,
     //setFractureGrid();
     const int trimeshlayers = 4;
     const double radius = 1;
-    setFractureGrid(RegularTrimesh(trimeshlayers,
-                                   {origo_[0], origo_[1], origo_[2]},
-                                   {axis_[0][0], axis_[0][1], axis_[0][2]},
-                                   {axis_[1][0], axis_[1][1], axis_[1][2]},
-                                   {radius, radius}).createDuneGrid());
+    const double fac = std::sqrt(3) / 2;
+    const std::array<double, 3> ax1 {axis_[0][0], axis_[0][1], axis_[0][2]};
+    const std::array<double, 3> ax2 {0.5 * ax1[0] + fac * axis_[1][0],
+                                     0.5 * ax1[1] + fac * axis_[1][1],
+                                     0.5 * ax1[2] + fac * axis_[1][2]};
+    trimesh_ = std::unique_ptr<RegularTrimesh>(
+                                new RegularTrimesh(trimeshlayers,
+                                                   {origo_[0], origo_[1], origo_[2]},
+                                                   ax1,
+                                                   ax2,
+                                                   {radius, radius}));
+    trimesh_->removeSawtooths();
+
+    // identify well cells (since this is not done in setFractureGrid when providing
+    // a user-defined grid)
+    std::vector<CellRef> wellcells { {0, 0, 0}, {0, -1, 1}, {0, -1, 0}, {-1, -1, 1},
+                                     {-1, 0, 0}, {-1, 0, 1} };
+    for (const auto& cell : wellcells)
+      well_source_.push_back(trimesh_->linearCellIndex(cell));
+
+    setFractureGrid(trimesh_->createDuneGrid()); // create the physical grid from trimesh
     
     setPerfPressure(0.0); // This can be changed by subsequently calling this
                           // function when the fracture is connected to the
@@ -243,18 +259,19 @@ void Fracture::setFractureGrid(std::unique_ptr<Fracture::Grid> gptr)
     // use grid provided by user
     grid_ = std::move(gptr);
     // @@ NB: we have not initialized the out_indices_ vector, which would be
-    // necessary if we plan to grow the user-provided grid
-  }
-
+    // necessary if we plan to grow the user-provided grid.
+    // well_source_ is also not initialized.
+  } 
   // compute the cell normals
   updateCellNormals();
   
-  // set object to allow stretching of the grid
-  grid_stretcher_ = std::unique_ptr<GridStretcher>(new GridStretcher(*grid_));
-
+  // set object to allow stretching of the grid // @@ do not use with trimesh
+  if (trimesh_ == nullptr)
+    grid_stretcher_ = std::unique_ptr<GridStretcher>(new GridStretcher(*grid_));
+  
   // set sparsity of pressure matrix, but do not compute its entries
   initPressureMatrix(); 
-
+  
   // Since the grid has been created/updated/changed, any previous mapping to
   // reservoir cells has been invalidated, and the fracture matrix (for
   // mechanics) is obsolete.
@@ -263,9 +280,8 @@ void Fracture::setFractureGrid(std::unique_ptr<Fracture::Grid> gptr)
   
   this->resetWriters();
 }
-
-void
-Fracture::initFracture()
+  
+void Fracture::initFracture()
 {
     Dune::GridFactory<Grid> factory; // Dune::FoamGrid<2,3>> factory;
     size_t N = 6;
@@ -1166,6 +1182,7 @@ void Fracture::initPressureMatrix()
     // Flow from wells to fracture cells
     double fWI = prm_.get<double>("fractureWI");
     perfinj_.clear();
+    htrans_.clear(); 
     for(int cell : well_source_){
         perfinj_.push_back({cell,fWI});
     }

@@ -16,7 +16,7 @@
             "num_lin": 0
         },
         "solver":{
-            "method":"if_propagate",
+            "method":"if_propagate_trimesh",
             "max_iter":1,
             "min_width":1e-10,
             "max_width":5e+100,

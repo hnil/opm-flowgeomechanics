@@ -398,7 +398,7 @@ void RegularTrimesh::writeMatlabTriangulation(std::ostream& out) const
 
 
 // ----------------------------------------------------------------------------
-void writeMeshToVTK(const RegularTrimesh& mesh, const std::string& filename)
+void writeMeshToVTK(const RegularTrimesh& mesh, const char* const filename)
 // ----------------------------------------------------------------------------
 {
   const auto grid = mesh.createDuneGrid();
@@ -412,10 +412,10 @@ void writeMeshToVTK(const RegularTrimesh& mesh, const std::string& filename)
 }
 
 // ----------------------------------------------------------------------------  
-void writeMeshBoundaryToVTK(const RegularTrimesh& mesh, const std::string& filename)
+void writeMeshBoundaryToVTK(const RegularTrimesh& mesh, const char* const filename)
 // ----------------------------------------------------------------------------  
 {
-  std::ofstream file(filename.c_str());
+  std::ofstream file(filename);
   if (!file.is_open()) {
     std::cerr << "Error opening file: " << filename << std::endl;
     return;
@@ -547,8 +547,22 @@ void RegularTrimesh::removeSawtooths()
         it = range.second - 1;
     }
   }
-}        
+}
 
-  
+// ----------------------------------------------------------------------------
+size_t RegularTrimesh::linearCellIndex(const CellRef& cell) const
+{
+  // cellinfo is a map from CellRef to CellAttributes. 
+  return std::distance(cellinfo_.begin(), cellinfo_.find(cell));
+}
+
+// ----------------------------------------------------------------------------
+CellRef RegularTrimesh::cellIndex(const size_t index) const
+{
+  auto it = cellinfo_.begin();
+  std::advance(it, index);
+  return it->first;
+}
+
 } // namespace
 
