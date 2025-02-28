@@ -408,6 +408,11 @@ void writeMeshToVTK(const RegularTrimesh& mesh, const char* const filename)
     std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(
                                            grid->leafGridView(),
                                            Dune::VTK::nonconforming);
+
+  // write flag to file
+  const auto flags = mesh.getCellFlags();
+  vtkwriter->addCellData(flags, "flag");
+  
   vtkwriter->write(filename);
 }
 
@@ -483,6 +488,8 @@ bool RegularTrimesh::setActive(const CellRef& cell)
   if (isActive(cell))
     return false;
   cellinfo_.insert({cell, CellAttributes()});
+
+  assert(cellinfo_[cell].flag == 0);
   return true;
 }
 
@@ -542,6 +549,8 @@ void RegularTrimesh::removeSawtooths()
   // inactive cells adjacent to more than one boundary edge should be activated
   for (auto it = candidates.begin(); it != candidates.end(); ++it) {
     const auto range = std::equal_range(it, candidates.end(), *it);
+    const size_t dill = range.second - range.first;
+    const size_t dall = std::distance(range.first, range.second);
     if (range.second - range.first > 1) {
         setActive(*it);
         it = range.second - 1;
@@ -563,6 +572,40 @@ CellRef RegularTrimesh::cellIndex(const size_t index) const
   std::advance(it, index);
   return it->first;
 }
+
+// ----------------------------------------------------------------------------
+void RegularTrimesh::setCellFlag(const CellRef& cell, const int value)
+// ----------------------------------------------------------------------------
+{
+  cellinfo_[cell].flag = value;
+}
+
+// ----------------------------------------------------------------------------
+void RegularTrimesh::setAllFlags(const int value)
+// ----------------------------------------------------------------------------  
+{
+  for (auto& it : cellinfo_)
+    it.second.flag = value;
+}
+
+// ----------------------------------------------------------------------------
+int RegularTrimesh::getCellFlag(const CellRef& cell) const
+// ----------------------------------------------------------------------------
+{
+  const auto it = cellinfo_.find(cell);
+  return it->second.flag;
+}
+
+// ----------------------------------------------------------------------------
+std::vector<int> RegularTrimesh::getCellFlags() const
+// ----------------------------------------------------------------------------
+{
+  std::vector<int> result;
+  for (const auto& el : cellinfo_)
+    result.push_back(el.second.flag);
+  return result;
+}
+
 
 } // namespace
 

@@ -21,7 +21,10 @@ using Grid = Dune::FoamGrid<2, 3>;
 //typedef int Grid; // @@ dummy
 
 
-struct CellAttributes {}; // fill this with contents as needed
+struct CellAttributes {
+  CellAttributes() : flag(0) {};
+  int flag;
+}; // fill this with contents as needed
 
 
   
@@ -72,7 +75,12 @@ public:
   size_t numActive() const;
   size_t linearCellIndex(const CellRef& cell) const;
   CellRef cellIndex(const size_t idx) const;
-  // --------------------- Functions for modifying the grid ---------------------
+  int getCellFlag(const CellRef& cell) const;
+  std::vector<int> getCellFlags() const;
+
+    // --------------------- Functions for modifying the grid ---------------------
+  void setAllFlags(const int value);
+  void setCellFlag(const CellRef& cell, const int value);
   bool setActive(const CellRef& cell);
   int expandGrid(const CellRef& cell);
   int expandGrid(const std::vector<CellRef>& cells);

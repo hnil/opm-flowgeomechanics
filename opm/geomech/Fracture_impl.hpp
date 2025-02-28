@@ -162,8 +162,6 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       // there is just one well equation.  We initialize with an existing value.
       fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
 
-    const std::vector<CellRef> cell_indices = trimesh_->cellIndices();
-    
     // iterate until boundary has been established
     while (true) {
 
@@ -177,7 +175,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       std::vector<CellRef> breaking_cells; 
       for (size_t i = 0; i != K1_not_nan.size(); ++i)
         if (!std::isnan(K1_not_nan[i]) && K1_not_nan[i] > K1max)
-          breaking_cells.push_back(cell_indices[i]);
+          breaking_cells.push_back(trimesh_->cellIndex(i));
 
       // if no more expansion of the fracture grid is needed, we are finished
       if (breaking_cells.empty())
@@ -192,14 +190,19 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       trimesh_->removeSawtooths();
 
       // recompute discretizations and update reservoir properties
-      for (const auto& cell : wsources)
+      trimesh_->setAllFlags(0);
+      //well_source_.clear();       @@
+      for (const auto& cell : wsources) {
         well_source_.push_back(trimesh_->linearCellIndex(cell)); // restore source cells
+        trimesh_->setCellFlag(cell, 1);
+      }
       setFractureGrid(trimesh_->createDuneGrid());
       updateReservoirCells(cell_search_tree);
       updateReservoirProperties<TypeTag, Simulator>(simulator, true);
       initFractureWidth();
       initFracturePressureFromReservoir();
       rhs_pressure_.resize(0);
+      coupling_matrix_ = nullptr;
     };
 
   } else if (method == "if_propagate") {
