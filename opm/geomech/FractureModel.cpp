@@ -3,6 +3,22 @@
 #include <dune/common/fmatrixev.hh>
 #include <opm/geomech/DiscreteDisplacement.hpp>
 #include <opm/simulators/linalg/PropertyTree.hpp>
+#include <opm/simulators/wells/RuntimePerforation.hpp>
+
+#include <opm/simulators/wells/SingleWellState.hpp>
+#include <opm/simulators/wells/WellState.hpp>
+
+#include <algorithm>
+#include <cassert>
+#include <iostream>
+#include <iterator>
+#include <stdexcept>
+#include <string>
+#include <tuple>
+#include <utility>
+#include <vector>
+
+#include <stddef.h>
 
 namespace Opm{
     void FractureModel::addWell(std::string name,
@@ -33,7 +49,7 @@ namespace Opm{
                 // auto origo = geo.center();
                 Dune::FieldVector<double, 3> origo, normal;
                 int perf = eIdx;
-                
+
                 int well_cell = well.reservoirCell(eIdx);
 
                 if (type == "perp_well") {
@@ -47,14 +63,11 @@ namespace Opm{
 		    int cell = config.get< int> ("cell");
 		    if(well.reservoirCell(eIdx) == cell){
 		      origo = geo.corner(1);
-		      //auto config_bst = config.getBoostParamPtr();
-		      //double tmp = config_bst->get<double > ("normal",1);
-		      //for (auto i : as_vector<int>(pt, "a")) std::cout << i << ' ';
-		      //std::vector<double> tmp_normal = as_vector<double>(*config_bst,"normal");
-                      auto tmp_normal = config.get_child_items_as_vector<double>("normal");
-		      assert(tmp_normal->size() == 3); // wrong use of tmpmal.
+
+		      const auto tmp_normal = config.get_child_items_as_vector<double>("normal");
+		      assert(tmp_normal.has_value() && tmp_normal->size() == 3);
 		      for(int i=0; i < 3; ++i){
-			normal[i] = (*tmp_normal)[i];
+		        normal[i] = (*tmp_normal)[i];
 		      }
 		    }else{
 		      continue;
@@ -181,18 +194,20 @@ namespace Opm{
             }
         }
     }
-    std::vector<std::tuple<int,double,double>> 
-    FractureModel::getExtraWellIndices(std::string wellname) const{
+
+    std::vector<RuntimePerforation>
+    FractureModel::getExtraWellIndices(const std::string& wellname) const
+    {
         // for now just do a search
         bool addconnections = prm_.get<bool>("addconnections");
         if (addconnections) {
             for (size_t i = 0; i < wells_.size(); ++i) {
                 if (wells_[i].name() == wellname) {
                     // collect all from a well
-                    std::vector<std::tuple<int, double, double>> wellindices;
+                    std::vector<RuntimePerforation> wellindices;
                     for (const auto& frac : well_fractures_[i]) {
                         auto perfs = frac.wellIndices();
-                        wellindices.insert(wellindices.begin(),perfs.begin(), perfs.end());
+                        wellindices.insert(wellindices.end(),perfs.begin(), perfs.end());
                     }
                     return wellindices;
                 }
@@ -201,7 +216,41 @@ namespace Opm{
             message += wellname;
             OPM_THROW(std::runtime_error, message.c_str());
         }
-        std::vector<std::tuple<int, double, double>> empty; 
-        return empty;
+        return {};
+    }
+
+    template <typename Scalar>
+    void FractureModel::assignGeomechWellState(WellState<Scalar>& wellState) const
+    {
+        const auto nWells = this->wells_.size();
+        for (auto i = 0*nWells; i < nWells; ++i) {
+            const auto wsIx = wellState.index(this->wells_[i].name());
+            if (! wsIx.has_value()) { continue; }
+
+            auto& perfData = wellState[*wsIx].perf_data;
+
+            if (perfData.connFracStatistics.size() != perfData.cell_index.size()) {
+                perfData.connFracStatistics.resize(perfData.cell_index.size());
+            }
+
+            for (const auto& fracture : this->well_fractures_[i]) {
+                auto perfPos = std::find(perfData.cell_index.begin(),
+                                         perfData.cell_index.end(),
+                                         fracture.wellInfo().well_cell);
+                if (perfPos == perfData.cell_index.end()) { continue; }
+
+                // Possibly just "fracture.wellInfo().perf" instead.
+                const auto perfIx = std::distance(perfData.cell_index.begin(), perfPos);
+
+                fracture.assignGeomechWellState(perfData.connFracStatistics[perfIx]);
+            }
+        }
     }
 }
+
+// ===========================================================================
+// Explicit specialisations.  No other code below separator.
+// ===========================================================================
+
+template void Opm::FractureModel::assignGeomechWellState(WellState<float>&) const;
+template void Opm::FractureModel::assignGeomechWellState(WellState<double>&) const;

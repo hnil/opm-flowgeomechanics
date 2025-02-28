@@ -12,25 +12,14 @@
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <boost/property_tree/ptree.hpp>
-using ptree = boost::property_tree::ptree;
-template <typename T>
-std::vector<T> as_vector(ptree const& pt, ptree::key_type const& key)
-{
-    std::vector<T> r;
-    for (auto& item : pt.get_child(key))
-        r.push_back(item.second.get_value<T>());
-    return r;
-}
 
-// template <typename T>
-// std::vector<T> opm_as_vector(const Opm::PropertyTree& pt, const std::string& key)
-// {
-//     std::vector<T> r;
-//     for (auto& item : pt.get_child(key))
-//       r.push_back(item.second.get_value<T>());
-//     return r;
-// }
+namespace Opm {
+    class RuntimePerforation;
+
+    template <typename Scalar>
+    class WellState;
+} // namespace Opm
+
 namespace Opm{
 class FractureModel{
     //using CartesianIndexMapper = Dune::CartesianIndexMapper<Dune::CpGrid>;
@@ -135,7 +124,13 @@ public:
              well.updateReservoirProperties<TypeTag,Simulator>(simulator);
         }
     }
-    std::vector<std::tuple<int,double,double>> getExtraWellIndices(std::string wellname) const;
+
+    std::vector<RuntimePerforation>
+    getExtraWellIndices(const std::string& wellname) const;
+
+    template <typename Scalar>
+    void assignGeomechWellState(WellState<Scalar>& wellState) const;
+
     bool addPertsToSchedule(){return prm_.get<bool>("addperfs_to_schedule");}
     // probably this should be collected in one loop since all do full loop over fracture ++ well
     Dune::FieldVector<double,6> stress(Dune::FieldVector<double,3> obs) const;
