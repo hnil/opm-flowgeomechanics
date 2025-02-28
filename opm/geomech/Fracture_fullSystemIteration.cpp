@@ -204,11 +204,11 @@ void updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
 inline bool convergence_test(const VectorHP& res, const double tol_flow, double tol_mech)
 // ----------------------------------------------------------------------------
 {
-    std::cout << "Residual norm[0] is " << res[_0].infinity_norm()<<std::endl;
-    std::cout << "Residual norm[1] is " << res[_1].infinity_norm()<<std::endl;
+    // std::cout << "Residual norm[0] is " << res[_0].infinity_norm()<<std::endl;
+    // std::cout << "Residual norm[1] is " << res[_1].infinity_norm()<<std::endl;
 
-    std::cout << "tol mech is: " << tol_mech << std::endl;
-    std::cout << "tol flow is: " << tol_flow << std::endl;
+    // std::cout << "tol mech is: " << tol_mech << std::endl;
+    // std::cout << "tol flow is: " << tol_flow << std::endl;
   return res[_0].infinity_norm() < tol_mech && res[_1].infinity_norm() < tol_flow;
   //return res.infinity_norm() < tol;
 }
@@ -275,10 +275,10 @@ std::vector<int> identify_closed(const FMatrix& A,
   const ResVector& p = x[_1];
   A.mmv(h, tmp);
   I.mmv(p, tmp);
-
+  double min_width = prm_.get<double>("solver.min_width");
   std::vector<int> result;
   for (size_t i = 0; i != A.N(); ++i)
-    result.push_back(tmp[i] >= 0 && h[i] <= 0);
+    result.push_back(tmp[i] >= 0 && h[i] <= min_width);
 
   //std::fill(result.begin(), result.end(), 1); // @@@
   return result;
@@ -368,28 +368,48 @@ bool Fracture::fullSystemIteration(const double tol)
   const Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP> S_linop(S); 
   TailoredPrecondDiag precond(S); // cannot be 'const' due to BiCGstabsolver interface
   Dune::InverseOperatorResult iores; // cannot be 'const' due to BiCGstabsolver interface
+  const double linsolve_tol = prm_.get<double>("solver.linsolver.tol");
+  const int max_iter = prm_.get<double>("solver.linsolver.max_iter");
+  const int verbosity = prm_.get<double>("solver.linsolver.verbosity");
   auto psolver = Dune::BiCGSTABSolver<VectorHP>(S_linop,
                                                 precond,
-                                                1e-10, //1e-20, // desired rhs reduction factor
-                                                200, // max number of iterations
-                                                1); // verbose
+                                                linsolve_tol, //1e-20, // desired rhs reduction factor
+                                                max_iter, // max number of iterations
+                                                verbosity); // verbose
   psolver.apply(dx, rhs, iores); // NB: will modify 'rhs'
-
-  std::cout << "x:  " << x[_0].infinity_norm() << " " << x[_1].infinity_norm() << std::endl;
-  std::cout << "dx: " << dx[_0].infinity_norm() << " " << dx[_1].infinity_norm() << std::endl;
-  
+  const int nlin_verbosity = prm_.get<double>("solver.verbosity");
+  if(nlin_verbosity > 1){
+    std::cout << "x:  " << x[_0].infinity_norm() << " " << x[_1].infinity_norm() << std::endl;
+    std::cout << "dx: " << dx[_0].infinity_norm() << " " << dx[_1].infinity_norm() << std::endl;
+  }
   // the following is a heuristic way to limit stepsize to stay within convergence radius
-  const double step_fac = estimate_step_fac(x, dx);
-  std::cout << "fac: " << step_fac << std::endl;
+  const double damping = prm_.get<double>("solver.damping");
+  const double step_fac = estimate_step_fac(x, dx)*damping;
+  //std::cout << "fac: " << step_fac << std::endl;
+  auto& dx0 = dx[_0];
+  double max_dwidth = prm_.get<double>("solver.max_dwidth");
+  //for(auto& dx0v: dx0){
+  for (int i = 0; i != fracture_width_.size(); ++i){
+    dx0[i][0] = std::max(-max_dwidth, std::min(max_dwidth, dx0[i][0]));
+  }
+  auto& dx1 = dx[_1];
+  double max_dp = prm_.get<double>("solver.max_dp");
+  //for(auto& dx1v: dx1){
+  for (int i = 0; i != fracture_pressure_.size(); ++i){
+    dx1[i][0] = std::max(-max_dp, std::min(max_dp, dx1[i][0]));
+  }
 
   dx *= step_fac;
   x += dx;
 
   // copying modified variables back to member variables
   fracture_width_ = x[_0];
-  for (int i = 0; i != fracture_width_.size(); ++i)
-    fracture_width_[i] = std::max(0.0, fracture_width_[i][0]); // ensure non-negativity
-  
+  double min_width = prm_.get<double>("solver.min_width");
+  double max_width = prm_.get<double>("solver.max_width");
+  for (int i = 0; i != fracture_width_.size(); ++i){
+    fracture_width_[i][0] = std::max(min_width, fracture_width_[i][0]); // ensure non-negativity
+    //fracture_width_[i][0] = std::min(max_width, fracture_width_[i][0]); // ensure non-negativity
+  }
   fracture_pressure_ = x[_1];
   
   return false;

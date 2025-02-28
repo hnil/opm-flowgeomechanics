@@ -107,8 +107,10 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
   } else if (method == "if") {
     // iterate full nonlinear system until convergence
     std::cout << "Solve Fracture Pressure using Iterative Fracture" << std::endl;
-    fracture_width_ = 1e-2;   // Ensure not completely closed
-    
+    double min_width = prm_.get<double>("solver.min_width");
+    for(auto& width : fracture_width_){
+      width[0] = std::max(width[0], min_width);   // Ensure not completely closed
+    }
     // start by assuming pressure equal to confining stress (will also set
     // fracture_pressure_ to its correct size
     normalFractureTraction(fracture_pressure_);
@@ -117,12 +119,17 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       // it with an existing value.
       fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
     
-    const double tol = 1e-8; //1e-5; // @@
-    const int max_iter = 100;
+    const double tol = prm_.get<int>("solver.max_iter"); //1e-5; // @@
+    const int max_iter = prm_.get<int>("solver.max_iter");
     int iter = 0;
     
     // solve flow-mechanical system
-    while (!fullSystemIteration(tol) && iter++ < max_iter) {};
+    const int nlin_verbosity = prm_.get<double>("solver.verbosity");
+    while (!fullSystemIteration(tol) && iter++ < max_iter) {
+      if(nlin_verbosity > 1){
+        std::cout << "Iteration: " << iter << std::endl;
+      }
+    };
     
     // @@ debug
     const std::vector<double> K1_not_nan = Fracture::stressIntensityK1(); 
