@@ -37,12 +37,24 @@ public:
                  const std::array<double, 3>& axis1 = {1, 0, 0},
                  const std::array<double, 3>& axis2 = {0.5, std::sqrt(3)/2, 0},
                  const std::array<double, 2>& edgelen = {1, 1})
-    : origin_(origin), axis1_(axis1), axis2_(axis2), edgelen_(edgelen)
+    : origin_(origin),
+      axis1_(RegularTrimesh::normalize(axis1)),
+      axis2_(RegularTrimesh::normalize(axis2)),
+      edgelen_(edgelen)
   {
     for (auto it = cells_begin; it != cells_end; ++it) 
       cellinfo_[*it] = CellAttributes();
   }
 
+  RegularTrimesh(const std::map<CellRef, CellAttributes>& cells,
+                 const std::array<double, 3>& origin = {0, 0, 0},
+                 const std::array<double, 3>& axis1 = {1, 0, 0},
+                 const std::array<double, 3>& axis2 = {0.5, std::sqrt(3)/2, 0},
+                 const std::array<double, 2>& edgelen = {1, 1})
+    : cellinfo_(cells), origin_(origin), axis1_(RegularTrimesh::normalize(axis1)),
+      axis2_(RegularTrimesh::normalize(axis2)), edgelen_(edgelen)
+  {}
+  
   RegularTrimesh(const int layers = 1,
                  const std::array<double, 3>& origin = {0, 0, 0},
                  const std::array<double, 3>& axis1 = {1, 0, 0},
@@ -81,20 +93,34 @@ public:
     // --------------------- Functions for modifying the grid ---------------------
   void setAllFlags(const int value);
   void setCellFlag(const CellRef& cell, const int value);
+  void setCellFlags(const std::vector<CellRef>& cells, const int value);
   bool setActive(const CellRef& cell);
   int expandGrid(const CellRef& cell);
   int expandGrid(const std::vector<CellRef>& cells);
   int expandGrid(); // uniform expansion all directions
   void removeSawtooths();
   
-  // ---------------------- Functions for outputting grids ----------------------
+  // ---------------------- Functions for outputting other grid types -------------
   std::unique_ptr<Grid> createDuneGrid() const;
   void writeMatlabTriangulation(std::ostream& out) const;
+
+  // ------------- Functions for creating new RegularTrimesh objects -------------
+  RegularTrimesh refine() const;
+  RegularTrimesh coarsen() const;
   
 private:
   // helper functions
   std::vector<EdgeRef> all_half_edges_() const ; // internal edges are duplicated
 
+  static Coord3D normalize(const Coord3D& v) {
+    double norm = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+    return {v[0]/norm, v[1]/norm, v[2]/norm};
+  }
+
+  static std::array<CellRef, 4> coarse_to_fine_(const CellRef& cell);
+  static CellRef fine_to_coarse_(const CellRef& cell);
+
+  
   // data members
   std::map<CellRef, CellAttributes> cellinfo_;
   const Coord3D origin_;
@@ -105,5 +131,10 @@ private:
 
 void writeMeshToVTK(const RegularTrimesh& mesh, const char* const filename);
 void writeMeshBoundaryToVTK(const RegularTrimesh& mesh, const char* const filename);
-  
+
+
+RegularTrimesh
+expand_to_criterion(const RegularTrimesh& mesh,
+                    std::function<std::vector<double>(const RegularTrimesh&)> score_function,
+                    double threshold);
 } // namespace Opm

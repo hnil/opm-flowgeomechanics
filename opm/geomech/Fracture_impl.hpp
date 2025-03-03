@@ -186,16 +186,20 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       for (const auto ix : well_source_)
         wsources.push_back(trimesh_->cellIndex(ix)); // remember source cells
 
+      trimesh_->setAllFlags(0);  // @@
+      trimesh_->setCellFlags(wsources, 1); // @@
+      trimesh_->setCellFlags(breaking_cells, 2); //@@
+      
       trimesh_->expandGrid(breaking_cells);
       trimesh_->removeSawtooths();
 
       // recompute discretizations and update reservoir properties
       trimesh_->setAllFlags(0);
-      //well_source_.clear();       @@
-      for (const auto& cell : wsources) {
+      well_source_.clear();       //@@
+      trimesh_->setCellFlags(wsources, 1);
+      for (const auto& cell : wsources) 
         well_source_.push_back(trimesh_->linearCellIndex(cell)); // restore source cells
-        trimesh_->setCellFlag(cell, 1);
-      }
+
       setFractureGrid(trimesh_->createDuneGrid());
       updateReservoirCells(cell_search_tree);
       updateReservoirProperties<TypeTag, Simulator>(simulator, true);

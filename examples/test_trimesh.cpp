@@ -9,6 +9,31 @@ using namespace Opm;
 using namespace std;
 
 
+int test_grid_refinement()
+{
+  // make mesh
+  std::map<CellRef, CellAttributes> cells;
+  cells[{0, 0, 0}] = CellAttributes();
+  cells[{0, 0, 1}] = CellAttributes();
+  cells[{1, 0, 0}] = CellAttributes();
+  cells[{1, 1, 0}] = CellAttributes();
+  cells[{1, 1, 1}] = CellAttributes();
+  
+  const RegularTrimesh mesh(cells);
+  
+  // make refined mesh
+  const RegularTrimesh mesh2 = mesh.refine();
+
+  // make coarse grid
+  const RegularTrimesh mesh3 = mesh2.coarsen();
+  
+  // export both meshes to vtk
+  writeMeshToVTK(mesh, "initial_grid");
+  writeMeshToVTK(mesh2, "refined_grid");
+  writeMeshToVTK(mesh3, "coarse_grid");
+  return 0;
+}
+
 int expand_grid_test(int turns)
 {
   RegularTrimesh mesh;
@@ -112,10 +137,12 @@ int main(int varnum, char** vararg) {
       "Options are: \n" <<
       "1 - create irregular 5-cell grid\n" <<
       "2 - test grid expansion <n turns> \n" <<
+      "3 - test grid refinement \n" << 
       endl;
   else
     if (atoi(vararg[1]) == 1) return irregular_grid_test();
     else if (atoi(vararg[1]) == 2) return expand_grid_test(atoi(vararg[2]));
+    else if (atoi(vararg[1]) == 3) return test_grid_refinement();
     else
       cout << "Invalid option given" << endl;
   return 1;

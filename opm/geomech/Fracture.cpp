@@ -79,7 +79,7 @@ Fracture::init(std::string well,
     // @@ Hack to test/use RegularTrimesh
     //setFractureGrid();
     const int trimeshlayers = 4;
-    const double radius = 1;
+    const double radius = 0.5; //1;
     const double fac = std::sqrt(3) / 2;
     const std::array<double, 3> ax1 {axis_[0][0], axis_[0][1], axis_[0][2]};
     const std::array<double, 3> ax2 {0.5 * ax1[0] + fac * axis_[1][0],

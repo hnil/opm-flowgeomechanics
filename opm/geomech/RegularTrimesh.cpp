@@ -118,7 +118,10 @@ RegularTrimesh::RegularTrimesh(const int layers,
                                const std::array<double, 3>& axis2, 
                                const std::array<double, 2>& edgelen)
 // ----------------------------------------------------------------------------
-  : origin_(origin), axis1_(axis1), axis2_(axis2), edgelen_(edgelen)
+  : origin_(origin),
+    axis1_(RegularTrimesh::normalize(axis1)),
+    axis2_(RegularTrimesh::normalize(axis2)),
+    edgelen_(edgelen)
 {
     cellinfo_[{0, 0, 0}] = CellAttributes(); // set a single seed cell
     for (int i = 0; i != layers; ++i)
@@ -549,8 +552,6 @@ void RegularTrimesh::removeSawtooths()
   // inactive cells adjacent to more than one boundary edge should be activated
   for (auto it = candidates.begin(); it != candidates.end(); ++it) {
     const auto range = std::equal_range(it, candidates.end(), *it);
-    const size_t dill = range.second - range.first;
-    const size_t dall = std::distance(range.first, range.second);
     if (range.second - range.first > 1) {
         setActive(*it);
         it = range.second - 1;
@@ -581,6 +582,15 @@ void RegularTrimesh::setCellFlag(const CellRef& cell, const int value)
 }
 
 // ----------------------------------------------------------------------------
+void RegularTrimesh::setCellFlags(const std::vector<CellRef>& cells,
+                                  const int value)
+// ----------------------------------------------------------------------------
+{
+  for (const auto& cell : cells)
+    setCellFlag(cell, value);
+}
+
+// ----------------------------------------------------------------------------
 void RegularTrimesh::setAllFlags(const int value)
 // ----------------------------------------------------------------------------  
 {
@@ -605,6 +615,67 @@ std::vector<int> RegularTrimesh::getCellFlags() const
     result.push_back(el.second.flag);
   return result;
 }
+
+// ----------------------------------------------------------------------------
+RegularTrimesh RegularTrimesh::refine() const
+// ----------------------------------------------------------------------------  
+{
+  map<CellRef, CellAttributes> new_cells;
+  for (const auto& e : cellinfo_)
+    for (const auto & c : coarse_to_fine_(e))
+      new_cells[c] = e.second;
+
+  return RegularTrimesh {new_cells, origin_, axis1_, axis2_, {edgelen_[0]/2, edgelen_[1]/2}}; 
+}
+
+// ----------------------------------------------------------------------------
+RegularTrimesh RegularTrimesh::coarsen() const
+// ----------------------------------------------------------------------------
+{
+  map<CellRef, CellAttributes> new_cells;
+  for (const auto& e : cellinfo_) {
+        const CellRef& c = e.first;
+        const CellAttributes& attr = e.second;
+        if (c[2] == 1 && c[0] % 2 == 0 && c[1] % 2 == 0) 
+          new_cells[{c[0]/2, c[1]/2, 0}] = attr;
+        else if (c[2] == 0 && c[0] % 2 == 1 && c[1] % 2 == 1) 
+          new_cells[{c[0]/2, c[1]/2, 1}] = attr;
+  }
+  
+  return RegularTrimesh {new_cells, origin_, axis1_, axis2_, {edgelen_[0]*2, edgelen_[1]*2}}; 
+}
+
+// ----------------------------------------------------------------------------
+RegularTrimesh expand_to_criterion(const RegularTrimesh& mesh,
+     function<std::vector<double>(const RegularTrimesh&)> score_function,
+                                    double threshold)
+// ----------------------------------------------------------------------------
+{
+  return RegularTrimesh(); // @@ dummy for now
+}
+
+// ----------------------------------------------------------------------------
+std::array<CellRef, 4> RegularTrimesh::coarse_to_fine_(const CellRef& cell)
+// ----------------------------------------------------------------------------  
+{
+  return (c[2] == 0) ? { {2*c[0],   2*c[1],   0},
+                         {2*c[0]+1, 2*c[1],   0},
+                         {2*c[0],   2*c[1]+1, 0},
+                         {2*c[0],   2*c[1],   1} } :
+
+                         { {2*c[0]+1, 2*c[1]+1, 0},
+                           {2*c[0]+1, 2*c[1],   1}, 
+                           {2*c[0],   2*c[1]+1, 1},
+                           {2*c[0]+1, 2*c[1]+1, 1} } ;
+}
+
+// ----------------------------------------------------------------------------  
+CellRef RegularTrimesh::fine_to_coarse_(const CellRef& cell)
+// ----------------------------------------------------------------------------  
+{
+  
+}
+
 
 
 } // namespace
