@@ -24,13 +24,18 @@ int test_grid_refinement()
   // make refined mesh
   const RegularTrimesh mesh2 = mesh.refine();
 
+  // make more refined grid
+  const RegularTrimesh mesh3 = mesh2.refine().refine().refine();
+  
   // make coarse grid
-  const RegularTrimesh mesh3 = mesh2.coarsen();
+  const RegularTrimesh mesh4 = mesh2.coarsen();
+
   
   // export both meshes to vtk
   writeMeshToVTK(mesh, "initial_grid");
   writeMeshToVTK(mesh2, "refined_grid");
-  writeMeshToVTK(mesh3, "coarse_grid");
+  writeMeshToVTK(mesh3, "more_refined_grid", true); //  coarsen interior
+  writeMeshToVTK(mesh4, "coarse_grid");
   return 0;
 }
 

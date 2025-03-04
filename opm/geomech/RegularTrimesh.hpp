@@ -67,6 +67,7 @@ public:
   std::vector<NodeRef> nodeIndices() const;
 
   std::vector<EdgeRef> boundaryEdges() const;
+  std::vector<CellRef> boundaryCells() const;
   
   Coord3D cellCentroid(const CellRef& cell) const;
   Coord3D edgeCentroid(const EdgeRef& edge) const;
@@ -76,7 +77,8 @@ public:
   std::vector<Coord3D> edgeCentroids() const;
   std::vector<Coord3D> nodeCoords() const;
 
-  std::vector<std::array<size_t, 3>> cellNodes() const;
+  static std::array<NodeRef, 3> cellNodes(const CellRef& cell);
+  std::vector<std::array<size_t, 3>> cellNodesLinear() const;
 
   std::pair<NodeRef, NodeRef> edgeNodes(const EdgeRef& edge) const;
   std::vector<std::pair<size_t, size_t>> edgeNodeIndices(bool only_boundary=false) const;
@@ -98,28 +100,33 @@ public:
   int expandGrid(const CellRef& cell);
   int expandGrid(const std::vector<CellRef>& cells);
   int expandGrid(); // uniform expansion all directions
+  int contractGrid(); // uniform contraction in all directions
   void removeSawtooths();
   
   // ---------------------- Functions for outputting other grid types -------------
-  std::unique_ptr<Grid> createDuneGrid() const;
+  std::unique_ptr<Grid> createDuneGrid(bool coarsen_interior=false) const;
   void writeMatlabTriangulation(std::ostream& out) const;
 
   // ------------- Functions for creating new RegularTrimesh objects -------------
   RegularTrimesh refine() const;
   RegularTrimesh coarsen() const;
+
+  // -------------- Functions for getting the triangles of the mesh --------------
+  std::vector<std::array<unsigned int, 3>> getTriangles() const;
+  std::vector<std::array<unsigned int, 3>> getMultiresTriangles() const;
   
 private:
   // helper functions
   std::vector<EdgeRef> all_half_edges_() const ; // internal edges are duplicated
-
+  std::vector<CellRef> interior_coarsegrid_() const; // all coarse cells fully covered by fine ones
   static Coord3D normalize(const Coord3D& v) {
     double norm = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
     return {v[0]/norm, v[1]/norm, v[2]/norm};
   }
-
+  
   static std::array<CellRef, 4> coarse_to_fine_(const CellRef& cell);
   static CellRef fine_to_coarse_(const CellRef& cell);
-
+  static NodeRef coarse_to_fine_(const NodeRef& node);
   
   // data members
   std::map<CellRef, CellAttributes> cellinfo_;
@@ -129,7 +136,8 @@ private:
   const std::array<double, 2> edgelen_;
 };
 
-void writeMeshToVTK(const RegularTrimesh& mesh, const char* const filename);
+void writeMeshToVTK(const RegularTrimesh& mesh, const char* const filename,
+                    bool coarsen_interior=false);
 void writeMeshBoundaryToVTK(const RegularTrimesh& mesh, const char* const filename);
 
 
