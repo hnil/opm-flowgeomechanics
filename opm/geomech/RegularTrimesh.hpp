@@ -62,12 +62,13 @@ public:
                  const std::array<double, 2>& edgelen = {1, 1});
   
   // --------------------- Functions for inspecting the grid ---------------------
-  std::vector<CellRef> cellIndices() const;
-  std::vector<EdgeRef> edgeIndices() const;
-  std::vector<NodeRef> nodeIndices() const;
+  std::vector<CellRef> cellIndices() const; // result is sorted
+  std::vector<EdgeRef> edgeIndices() const; // result is sorted
+  std::vector<NodeRef> nodeIndices() const; // result is sorted
 
-  std::vector<EdgeRef> boundaryEdges() const;
-  std::vector<CellRef> boundaryCells() const;
+  std::vector<EdgeRef> boundaryEdges() const;  // result is sorted
+  std::vector<CellRef> boundaryCells() const;  // result is sorted
+  std::vector<CellRef> interiorCells() const;  // result is sorted
   
   Coord3D cellCentroid(const CellRef& cell) const;
   Coord3D edgeCentroid(const EdgeRef& edge) const;
@@ -127,6 +128,8 @@ private:
   static std::array<CellRef, 4> coarse_to_fine_(const CellRef& cell);
   static CellRef fine_to_coarse_(const CellRef& cell);
   static NodeRef coarse_to_fine_(const NodeRef& node);
+  std::vector<std::array<NodeRef, 3>> tesselate_coarsecell_(const CellRef& cell) const;
+                                                     
   
   // data members
   std::map<CellRef, CellAttributes> cellinfo_;
