@@ -98,6 +98,7 @@ public:
   void setCellFlag(const CellRef& cell, const int value);
   void setCellFlags(const std::vector<CellRef>& cells, const int value);
   bool setActive(const CellRef& cell);
+  bool setInactive(const CellRef& cell);
   int expandGrid(const CellRef& cell);
   int expandGrid(const std::vector<CellRef>& cells);
   int expandGrid(); // uniform expansion all directions
@@ -105,17 +106,25 @@ public:
   void removeSawtooths();
   
   // ---------------------- Functions for outputting other grid types -------------
-  std::unique_ptr<Grid> createDuneGrid(bool coarsen_interior=false) const;
+  std::pair<std::unique_ptr<Grid>, std::map<size_t, size_t>>
+  createDuneGrid(bool coarsen_interior=false,
+                 const std::vector<CellRef>& fixed_cells=std::vector<CellRef>()) const;
   void writeMatlabTriangulation(std::ostream& out) const;
 
   // ------------- Functions for creating new RegularTrimesh objects -------------
   RegularTrimesh refine() const;
-  RegularTrimesh coarsen() const;
+  RegularTrimesh coarsen(bool strict=false) const;
 
   // -------------- Functions for getting the triangles of the mesh --------------
-  std::vector<std::array<unsigned int, 3>> getTriangles() const;
-  std::vector<std::array<unsigned int, 3>> getMultiresTriangles() const;
-  
+  std::pair<std::vector<std::array<unsigned int, 3>>, std::map<size_t, size_t>>
+  getTriangles() const;
+  std::pair<std::vector<std::array<unsigned int, 3>>, std::map<size_t, size_t>>
+  getMultiresTriangles(const std::vector<CellRef>& fixed_cells = std::vector<CellRef>()) const;
+
+  // static functions
+  static std::array<CellRef, 4> coarse_to_fine(const CellRef& cell);
+  static NodeRef coarse_to_fine(const NodeRef& node);
+  static CellRef fine_to_coarse(const CellRef& cell);
 private:
   // helper functions
   std::vector<EdgeRef> all_half_edges_() const ; // internal edges are duplicated
@@ -124,12 +133,6 @@ private:
     double norm = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
     return {v[0]/norm, v[1]/norm, v[2]/norm};
   }
-  
-  static std::array<CellRef, 4> coarse_to_fine_(const CellRef& cell);
-  static CellRef fine_to_coarse_(const CellRef& cell);
-  static NodeRef coarse_to_fine_(const NodeRef& node);
-  std::vector<std::array<NodeRef, 3>> tesselate_coarsecell_(const CellRef& cell) const;
-                                                     
   
   // data members
   std::map<CellRef, CellAttributes> cellinfo_;

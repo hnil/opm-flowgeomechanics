@@ -113,7 +113,7 @@ int irregular_grid_test()
   mesh.writeMatlabTriangulation(file);
   file.close();
   
-   const auto grid = mesh.createDuneGrid();
+  const auto [grid, fsmap] = mesh.createDuneGrid();
 
   //write grid to file
   auto vtkwriter =

@@ -100,7 +100,9 @@ Fracture::init(std::string well,
     for (const auto& cell : wellcells)
       well_source_.push_back(trimesh_->linearCellIndex(cell));
 
-    setFractureGrid(trimesh_->createDuneGrid()); // create the physical grid from trimesh
+    auto [grid, fsmap] = trimesh_->createDuneGrid();
+    setFractureGrid(std::move(grid)); // create the physical grid from trimesh
+    fsmap_ = fsmap; // mapping between grid and mesh cells
     
     setPerfPressure(0.0); // This can be changed by subsequently calling this
                           // function when the fracture is connected to the

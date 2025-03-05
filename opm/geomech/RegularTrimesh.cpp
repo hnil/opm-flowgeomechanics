@@ -13,16 +13,16 @@ using namespace std;
 
 namespace {
 
-std::array<EdgeRef, 3> cell2edges(const CellRef& cell) {
-  return (cell[2] == 0) ? std::array<EdgeRef, 3> {EdgeRef{cell[0], cell[1], 0},
+array<EdgeRef, 3> cell2edges(const CellRef& cell) {
+  return (cell[2] == 0) ? array<EdgeRef, 3> {EdgeRef{cell[0], cell[1], 0},
                                                   EdgeRef{cell[0], cell[1], 1},
                                                   EdgeRef{cell[0], cell[1], 2}} :
-                          std::array<EdgeRef, 3> {EdgeRef{cell[0], cell[1] + 1, 0},
+                          array<EdgeRef, 3> {EdgeRef{cell[0], cell[1] + 1, 0},
                                                   EdgeRef{cell[0] + 1 , cell[1], 1},
                                                   EdgeRef{cell[0], cell[1], 2}};
 }
 
-std::array<CellRef, 2> edge2cells(const EdgeRef& edge) {
+array<CellRef, 2> edge2cells(const EdgeRef& edge) {
   return (edge[2] == 0) ?
         array<CellRef, 2> {CellRef{edge[0], edge[1], 0}, CellRef{edge[0], edge[1] - 1, 1}} :
     (edge[2] == 1) ?
@@ -30,7 +30,7 @@ std::array<CellRef, 2> edge2cells(const EdgeRef& edge) {
         array<CellRef, 2> {CellRef{edge[0], edge[1], 1}, CellRef{edge[0], edge[1], 0}};
 }
 
-std::array<CellRef, 3> cellNeighbors(const CellRef& cell) {
+array<CellRef, 3> cellNeighbors(const CellRef& cell) {
   return (cell[2] == 0) ?
     array<CellRef, 3> {CellRef{cell[0], cell[1], 1},
                        CellRef{cell[0] - 1, cell[1], 1},
@@ -107,17 +107,137 @@ bool operator<(const Opm::EdgeRef& lhs, const Opm::EdgeRef& rhs) {
   return lhs[0] < rhs[0] || (lhs[0] == rhs[0] && lhs[1] < rhs[1]) ||
          (lhs[0] == rhs[0] && lhs[1] == rhs[1] && lhs[2] < rhs[2]);
 }
+  
+// ----------------------------------------------------------------------------
+array<EdgeRef, 3> half_edges(const CellRef& cell) 
+// ----------------------------------------------------------------------------
+{
+  return (cell[2] == 0) ? 
+    array<EdgeRef, 3> {EdgeRef{cell[0], cell[1], 0},
+                       EdgeRef{cell[0], cell[1], 1},
+                       EdgeRef{cell[0], cell[1], 2}} :
+    array<EdgeRef, 3> {EdgeRef{cell[0],     cell[1] + 1, 0},
+                       EdgeRef{cell[0] + 1, cell[1],     1},
+                       EdgeRef{cell[0],     cell[1],     2}};
+}
 
+// ----------------------------------------------------------------------------
+array<CellRef, 3> neigh_cells(const CellRef& cell)
+// ----------------------------------------------------------------------------
+{
+  return (cell[2] == 0) ?
+    array<CellRef, 3> { CellRef {cell[0],     cell[1] - 1, 1},
+                        CellRef {cell[0] - 1, cell[1],     1},
+                        CellRef {cell[0],     cell[1],     1} } :
+
+    array<CellRef, 3> { CellRef {cell[0],     cell[1] + 1, 0},
+                        CellRef {cell[0] + 1, cell[1],     0},
+                        CellRef {cell[0],     cell[1],     0} };
+}
+  
+
+// ----------------------------------------------------------------------------  
+array<bool, 3> identify_boundary(const CellRef& cell, const RegularTrimesh& mesh)
+// ----------------------------------------------------------------------------  
+{
+  // return 'true' for the triangle edges that lie on the boundary
+  const auto ncells = neigh_cells(cell);
+  return {! mesh.isActive(ncells[0]),
+          ! mesh.isActive(ncells[1]),
+          ! mesh.isActive(ncells[2])};
+}
+
+// ----------------------------------------------------------------------------  
+RegularTrimesh remove_mesh_corners(const RegularTrimesh& mesh)
+// ----------------------------------------------------------------------------  
+{
+  RegularTrimesh result(mesh);
+
+  bool redo = true;
+
+  while (redo) {
+    redo = false;
+    for (const auto& cell : result.boundaryCells()) {
+      const auto bnd = identify_boundary(cell, result);
+      if (std::count(bnd.begin(), bnd.end(), true) > 1) {
+        result.setInactive(cell);
+        redo = true;
+      }
+    }
+  }
+  
+  return result;
+}
+
+// ----------------------------------------------------------------------------
+vector<array<NodeRef, 3>> single_split(const CellRef& cell, const array<bool, 3>& bnd)
+// ----------------------------------------------------------------------------  
+{
+  assert(bnd[0] + bnd[1] + bnd[2] == 1);
+
+  const int i = cell[0];
+  const int j = cell[1];
+  
+  const NodeRef A = (cell[2] == 0) ? NodeRef {2*i, 2*j}     : NodeRef {2*(i+1), 2*(j+1)};
+  const NodeRef B = (cell[2] == 0) ? NodeRef {2*(i+1), 2*j} : NodeRef {2*i, 2*(j+1)};
+  const NodeRef C = (cell[2] == 0) ? NodeRef {2*i, 2*(j+1)} : NodeRef {2*(i+1), 2*j};
+      
+  const array<NodeRef, 3> tri = bnd[0] ? array<NodeRef, 3> {A, B, C} :
+                                bnd[1] ? array<NodeRef, 3> {C, A, B} :
+                                         array<NodeRef, 3> {B, C, A};
+  const NodeRef X = {(tri[0][0] + tri[1][0])/2, (tri[0][1] + tri[1][1])/2};
+
+  return vector<array<NodeRef, 3>> {array<NodeRef, 3> {tri[0], X, tri[2]},
+                                    array<NodeRef, 3> {X, tri[1], tri[2]}};
+}
+
+
+  
+// ----------------------------------------------------------------------------  
+vector<array<NodeRef, 3>> tesselate_coarsecell(const CellRef& cell,
+                                               const RegularTrimesh& mesh) 
+// ----------------------------------------------------------------------------    
+{
+  // tessellate this cell as if its boundary intersects with a refined triangulation
+  const array<bool, 3> bnd = identify_boundary(cell, mesh);
+
+  const int sum_bnd = bnd[0] + bnd[1] + bnd[2];
+  assert(sum_bnd <= 1); // before calling this function , the grid should have been
+                        // 'rounded' so that there are no boundary cells with more than
+                        // one boundary edge.
+
+  if (sum_bnd == 1)
+    // triangle split in the middle
+    return single_split(cell, bnd);
+
+  // this should not happen for boundary cells, but if function is called on interior
+  // cell, just return the triangle associated with that cell
+  vector<array<NodeRef, 3>> result;
+  const auto nodes = mesh.cellNodes(cell);
+  result.push_back({RegularTrimesh::coarse_to_fine(nodes[0]),
+                    RegularTrimesh::coarse_to_fine(nodes[1]),
+                    RegularTrimesh::coarse_to_fine(nodes[2])});
+  return result;
+}
+
+// ----------------------------------------------------------------------------
+bool is_boundary_cell(const CellRef& cell, const RegularTrimesh& mesh)
+// ----------------------------------------------------------------------------
+{
+  const auto bnd = identify_boundary(cell, mesh);
+  return std::count(bnd.begin(), bnd.end(), true) > 0;
+}
+  
 }; // namespace
 
 namespace Opm
 {
 // ----------------------------------------------------------------------------
 RegularTrimesh::RegularTrimesh(const int layers,
-                               const std::array<double, 3>& origin,
-                               const std::array<double, 3>& axis1,
-                               const std::array<double, 3>& axis2, 
-                               const std::array<double, 2>& edgelen)
+                               const array<double, 3>& origin,
+                               const array<double, 3>& axis1,
+                               const array<double, 3>& axis2, 
+                               const array<double, 2>& edgelen)
 // ----------------------------------------------------------------------------
   : origin_(origin),
     axis1_(RegularTrimesh::normalize(axis1)),
@@ -233,27 +353,41 @@ std::vector<CellRef> RegularTrimesh::interiorCells() const
                       std::back_inserter(result));
   return result;
 }
-  
+
 // ----------------------------------------------------------------------------
 std::vector<EdgeRef> RegularTrimesh::all_half_edges_() const
 // ----------------------------------------------------------------------------  
 {
   // make a vector of all edges.  Count internal edges twice.  Sort the result
   std::vector<EdgeRef> all_edges;
-  for (const auto& entry : cellinfo_) {
-    const auto& cell = entry.first;
-    if (cell[2] == 0) // "right way" triangle
-      for (int i = 0; i != 3; ++i)
-        all_edges.push_back( {cell[0], cell[1], i} );
-    else
-      for (int i = 0; i != 3; ++i)
-        all_edges.push_back( i == 0 ? EdgeRef{cell[0],     cell[1] + 1, i} :
-                             i == 1 ? EdgeRef{cell[0] + 1, cell[1],     i} :
-                                      EdgeRef{cell[0],     cell[1],     i} );
-  }
+  for (const auto& entry : cellinfo_)
+    for (const auto& edge : half_edges(entry.first))
+      all_edges.push_back(edge);
+    
   std::sort(all_edges.begin(), all_edges.end());
   return all_edges;
 }
+
+// // ----------------------------------------------------------------------------
+// std::vector<EdgeRef> RegularTrimesh::all_half_edges_() const
+// // ----------------------------------------------------------------------------  
+// {
+//   // make a vector of all edges.  Count internal edges twice.  Sort the result
+//   std::vector<EdgeRef> all_edges;
+//   for (const auto& entry : cellinfo_) {
+//     const auto& cell = entry.first;
+//     if (cell[2] == 0) // "right way" triangle
+//       for (int i = 0; i != 3; ++i)
+//         all_edges.push_back( {cell[0], cell[1], i} );
+//     else
+//       for (int i = 0; i != 3; ++i)
+//         all_edges.push_back( i == 0 ? EdgeRef{cell[0],     cell[1] + 1, i} :
+//                              i == 1 ? EdgeRef{cell[0] + 1, cell[1],     i} :
+//                                       EdgeRef{cell[0],     cell[1],     i} );
+//   }
+//   std::sort(all_edges.begin(), all_edges.end());
+//   return all_edges;
+// }
 
 // ----------------------------------------------------------------------------      
 Coord3D RegularTrimesh::nodeCoord(const NodeRef& node) const
@@ -318,8 +452,8 @@ std::vector<Coord3D> RegularTrimesh::nodeCoords() const
   return result;
 }
 
-//------------------------------------------------------------------------------  
-vector<array<unsigned int, 3>> RegularTrimesh::getTriangles() const
+//------------------------------------------------------------------------------
+pair<vector<array<unsigned int, 3>>, map<size_t, size_t>> RegularTrimesh::getTriangles() const
 //------------------------------------------------------------------------------  
 {
   vector<array<unsigned int, 3>> result;
@@ -327,21 +461,29 @@ vector<array<unsigned int, 3>> RegularTrimesh::getTriangles() const
     result.push_back( {(unsigned int) cell[0],
                        (unsigned int) cell[1],
                        (unsigned int) cell[2]});
-  return result;
+
+  map<size_t, size_t> trivialmap;
+  for(size_t i = 0; i != result.size(); ++i)
+    trivialmap[i] = i;
+  return make_pair(result, trivialmap);
 }
 
 //------------------------------------------------------------------------------  
-vector<array<unsigned int, 3>> RegularTrimesh::getMultiresTriangles() const
+pair<vector<array<unsigned int, 3>>, map<size_t, size_t>>
+RegularTrimesh::getMultiresTriangles(const std::vector<CellRef>& fixed_cells) const
 //------------------------------------------------------------------------------  
 {
   vector<array<unsigned int, 3>> result;
 
-  // create mesh with boundary cells removed
+  // create mesh with boundary cells and 'fixed cells' removed
   RegularTrimesh mesh(*this);
-  for (int i = 0; i != 3; ++i)
+  for (const auto& cell : fixed_cells)
+    mesh.setInactive(cell);
+  for (int i = 0; i != 1; ++i) // @@ increase iterations to increase refined zone
     mesh.contractGrid();
 
-  const RegularTrimesh coarsened = mesh.coarsen();
+  // create coarsened mesh, and remove all cells with more than one boundary edge
+  const RegularTrimesh coarsened = remove_mesh_corners(mesh.coarsen(true));
 
   const auto nodeindices = nodeIndices();
   // function to identify the index in nodeindices of a NodeRef
@@ -355,14 +497,13 @@ vector<array<unsigned int, 3>> RegularTrimesh::getMultiresTriangles() const
   // coarsened interior triangles  
   for (const auto& cell : coarse_icells) {
     const auto coarsenodes = cellNodes(cell);
-    result.push_back( {(unsigned int) nodeix(coarse_to_fine_(coarsenodes[0])),
-                       (unsigned int) nodeix(coarse_to_fine_(coarsenodes[1])),
-                       (unsigned int) nodeix(coarse_to_fine_(coarsenodes[2]))});
+    result.push_back( {(unsigned int) nodeix(coarse_to_fine(coarsenodes[0])),
+                       (unsigned int) nodeix(coarse_to_fine(coarsenodes[1])),
+                       (unsigned int) nodeix(coarse_to_fine(coarsenodes[2]))});
   }
-
   // coarsened boundary triangles
   for (const auto& cell : coarse_bcells)
-    for (const auto& tri : coarsened.tesselate_coarsecell_(cell))
+    for (const auto& tri : tesselate_coarsecell(cell, coarsened))
       result.push_back( {(unsigned int) nodeix(tri[0]),
                          (unsigned int) nodeix(tri[1]) ,
                          (unsigned int) nodeix(tri[2])});
@@ -370,7 +511,7 @@ vector<array<unsigned int, 3>> RegularTrimesh::getMultiresTriangles() const
   // identify which fine-scale cells have been covered by the coarse grid
   vector<CellRef> covered_finecells; // will be gradually filled below
   for (const auto& cell : coarsened.cellIndices())
-    for (const auto& cref : coarse_to_fine_(cell))
+    for (const auto& cref : coarse_to_fine(cell))
         covered_finecells.push_back(cref);
 
   vector<CellRef> all_finecells = cellIndices(); // these are sorted
@@ -382,18 +523,22 @@ vector<array<unsigned int, 3>> RegularTrimesh::getMultiresTriangles() const
 
   // insert remaining fine triangles to result
   const auto cnodes = cellNodesLinear();
+  map<size_t, size_t> cellmap;
   for (const auto& cell : uncovered_finecells) {
     const auto nodes = cnodes[linearCellIndex(cell)];
     result.push_back({(unsigned int) nodes[0],
                       (unsigned int) nodes[1],
                       (unsigned int) nodes[2]});
+    cellmap[result.size() -1] = linearCellIndex(cell);
   }
   
-  return result; // @@ dummy, for now
+  return make_pair(result, cellmap); 
 }
 
 //------------------------------------------------------------------------------
-std::unique_ptr<Grid> RegularTrimesh::createDuneGrid(bool coarsen_interior) const 
+std::pair<std::unique_ptr<Grid>, std::map<size_t, size_t>>
+RegularTrimesh::createDuneGrid(bool coarsen_interior,
+                               const std::vector<CellRef>& fixed_cells) const 
 //------------------------------------------------------------------------------  
 {
   Dune::GridFactory<Grid> factory;
@@ -403,11 +548,13 @@ std::unique_ptr<Grid> RegularTrimesh::createDuneGrid(bool coarsen_interior) cons
     factory.insertVertex( Dune::FieldVector<double, 3> {node[0], node[1], node[2]});
 
   // define triangles
-  for (const auto& tri : (coarsen_interior? getMultiresTriangles() : getTriangles()))
+  const auto tmp = coarsen_interior ? getMultiresTriangles(fixed_cells) : getTriangles();
+  
+  for (const auto& tri : tmp.first)
         factory.insertElement(Dune::GeometryTypes::simplex(2),
                               vector<unsigned int> {tri[0], tri[1], tri[2]});
   
-  return factory.createGrid();
+  return make_pair(factory.createGrid(), tmp.second);
 
 }
 
@@ -462,23 +609,23 @@ std::vector<std::pair<Coord3D, Coord3D>> RegularTrimesh::edgeNodeCoords() const
 }
 
 // ----------------------------------------------------------------------------
-std::array<NodeRef, 3> RegularTrimesh::cellNodes(const CellRef& cell) 
+array<NodeRef, 3> RegularTrimesh::cellNodes(const CellRef& cell) 
 // ----------------------------------------------------------------------------
 {
         return cell[2] == 0 ?
-          std::array<NodeRef, 3> {NodeRef{cell[0], cell[1]},
+          array<NodeRef, 3> {NodeRef{cell[0], cell[1]},
                                   NodeRef{cell[0] + 1, cell[1]},
                                   NodeRef{cell[0], cell[1] + 1}} :
-          std::array<NodeRef, 3> {NodeRef{cell[0] + 1, cell[1]},
+          array<NodeRef, 3> {NodeRef{cell[0] + 1, cell[1]},
                                   NodeRef{cell[0], cell[1] + 1},
                                   NodeRef{cell[0] + 1, cell[1] + 1}};
 }
 
 // ----------------------------------------------------------------------------
-std::vector<std::array<size_t, 3>> RegularTrimesh::cellNodesLinear() const
+std::vector<array<size_t, 3>> RegularTrimesh::cellNodesLinear() const
 // ----------------------------------------------------------------------------  
 {
-  std::vector<std::array<size_t, 3>> result;
+  std::vector<array<size_t, 3>> result;
   const auto nodeindices = nodeIndices();
   const auto cellindices = cellIndices();
 
@@ -538,16 +685,16 @@ void writeMeshToVTK(const RegularTrimesh& mesh, const char* const filename,
 
   // write grid to file
   auto vtkwriter =
-    std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(
-                                           grid->leafGridView(),
-                                           Dune::VTK::nonconforming);
+    std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid.first->leafGridView(),
+                                                          Dune::VTK::nonconforming);
   // write flag to file
   if (!coarsen_interior) {
-    const auto flags = mesh.getCellFlags();
+    const vector<int> flags = mesh.getCellFlags();
     vtkwriter->addCellData(flags, "flag");
+    vtkwriter->write(filename);
+  } else {
+    vtkwriter->write(filename);
   }
-  
-  vtkwriter->write(filename);
 }
 
 // ----------------------------------------------------------------------------  
@@ -613,6 +760,17 @@ bool RegularTrimesh::isActive(const CellRef& cell) const
 // ----------------------------------------------------------------------------    
 {
   return cellinfo_.find(cell) != cellinfo_.end();
+}
+
+// ----------------------------------------------------------------------------  
+bool RegularTrimesh::setInactive(const CellRef& cell)
+// ----------------------------------------------------------------------------    
+{
+  if (!isActive(cell))
+    return false;
+  // remove this cell from cellinfo
+  cellinfo_.erase(cell);
+  return true;
 }
 
 // ----------------------------------------------------------------------------  
@@ -760,23 +918,37 @@ RegularTrimesh RegularTrimesh::refine() const
 {
   map<CellRef, CellAttributes> new_cells;
   for (const auto& e : cellinfo_)
-    for (const auto & c : coarse_to_fine_(e.first))
+    for (const auto & c : coarse_to_fine(e.first))
       new_cells[c] = e.second;
 
   return RegularTrimesh {new_cells, origin_, axis1_, axis2_, {edgelen_[0]/2, edgelen_[1]/2}}; 
 }
 
 // ----------------------------------------------------------------------------
-RegularTrimesh RegularTrimesh::coarsen() const
+RegularTrimesh RegularTrimesh::coarsen(bool strict) const
 // ----------------------------------------------------------------------------
 {
   map<CellRef, CellAttributes> new_cells;
   for (const auto& e : cellinfo_) {
     const CellRef& c = e.first;
-    const int k = (c[0]%2 + c[1]%2 + c[2]%2 > 1) ? 1 : 0;
-    if ((k + c[2])% 2 == 1)
-      new_cells[fine_to_coarse_(c)] = e.second;
+    if (! strict || !is_boundary_cell(c, *this)) 
+      if ( ((c[0])%2 == 1 && (c[1])%2 == 1) ||
+           ((c[0])%2 == 0 && (c[1])%2 == 0) )
+        new_cells[fine_to_coarse(c)] = e.second;
+      // if ( (abs(c[0])%2 == 1 && abs(c[1])%2 == 1) ||
+      //      (abs(c[0])%2 == 0 && abs(c[1])%2 == 0) )
+      //   new_cells[fine_to_coarse(c)] = e.second;
   }
+    
+  
+  // map<CellRef, CellAttributes> new_cells;
+  // for (const auto& e : cellinfo_) {
+  //   const CellRef& c = e.first;
+  //   const int k = (c[0]%2 + c[1]%2 + c[2]%2 > 1) ? 1 : 0;
+  //   if ( ((k + c[2])% 2 == 1) &&
+  //        (!strict || !is_boundary_cell(c, *this)))
+  //     new_cells[fine_to_coarse(c)] = e.second;
+  // }
   return RegularTrimesh {new_cells, origin_, axis1_, axis2_, {edgelen_[0]*2, edgelen_[1]*2}}; 
 }
 
@@ -799,7 +971,7 @@ RegularTrimesh expand_to_criterion(const RegularTrimesh& mesh,
 }
 
 // ----------------------------------------------------------------------------
-std::array<CellRef, 4> RegularTrimesh::coarse_to_fine_(const CellRef& c)
+array<CellRef, 4> RegularTrimesh::coarse_to_fine(const CellRef& c)
 // ----------------------------------------------------------------------------  
 {
   return (c[2] == 0) ?
@@ -814,15 +986,14 @@ std::array<CellRef, 4> RegularTrimesh::coarse_to_fine_(const CellRef& c)
 }
 
 // ----------------------------------------------------------------------------  
-CellRef RegularTrimesh::fine_to_coarse_(const CellRef& cell)
+CellRef RegularTrimesh::fine_to_coarse(const CellRef& cell)
 // ----------------------------------------------------------------------------  
 {
-  const int k = cell[0]%2 + cell[1]%2 + cell[2]%2;
-  return {cell[0]/2, cell[1]/2, k > 1 ? 1 : 0};
+  return {cell[0]/2, cell[1]/2, cell[2] == 0 ? 1 : 0};
 }
 
 // ----------------------------------------------------------------------------
-NodeRef RegularTrimesh::coarse_to_fine_(const NodeRef& node)
+NodeRef RegularTrimesh::coarse_to_fine(const NodeRef& node)
 // ----------------------------------------------------------------------------
 {
   return {2*node[0], 2*node[1]};
@@ -834,7 +1005,7 @@ vector<CellRef> RegularTrimesh::interior_coarsegrid_() const
 {
   map<CellRef, int> cell_count;
   for (const auto& e : cellinfo_) {
-    const CellRef coarse_cell = fine_to_coarse_(e.first);
+    const CellRef coarse_cell = fine_to_coarse(e.first);
     if (cell_count.find(coarse_cell) == cell_count.end())
       cell_count[coarse_cell] = 1;
     else
@@ -845,18 +1016,6 @@ vector<CellRef> RegularTrimesh::interior_coarsegrid_() const
     if (e.second == 4) // this cell is fully covered by all its fine cells
       result.push_back(e.first);
 
-  return result;
-}
-
-// ----------------------------------------------------------------------------  
-vector<array<NodeRef, 3>> RegularTrimesh::tesselate_coarsecell_(const CellRef& cell) const
-// ----------------------------------------------------------------------------    
-{
-  vector<array<NodeRef, 3>> result;
-  const auto nodes = cellNodes(cell);
-  result.push_back({coarse_to_fine_(nodes[0]),
-                    coarse_to_fine_(nodes[1]),
-                    coarse_to_fine_(nodes[2])});
   return result;
 }
 

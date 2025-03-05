@@ -1,6 +1,7 @@
 #pragma once
 
 #include <opm/grid/UnstructuredGrid.h>
+
 namespace Opm {
 
 inline double compute_target_expansion(const double K1_target,
@@ -175,7 +176,8 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       std::vector<CellRef> breaking_cells; 
       for (size_t i = 0; i != K1_not_nan.size(); ++i)
         if (!std::isnan(K1_not_nan[i]) && K1_not_nan[i] > K1max)
-          breaking_cells.push_back(trimesh_->cellIndex(i));
+          if (fsmap_.find(i) != fsmap_.end())
+            breaking_cells.push_back(trimesh_->cellIndex(fsmap_[i]));
 
       // if no more expansion of the fracture grid is needed, we are finished
       if (breaking_cells.empty())
@@ -184,23 +186,42 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       // create new, expanded grid
       std::vector<CellRef> wsources;
       for (const auto ix : well_source_)
-        wsources.push_back(trimesh_->cellIndex(ix)); // remember source cells
+        wsources.push_back(trimesh_->cellIndex(fsmap_[ix])); // remember source cells
 
       trimesh_->setAllFlags(0);  // @@
       trimesh_->setCellFlags(wsources, 1); // @@
       trimesh_->setCellFlags(breaking_cells, 2); //@@
+
+      writeMeshToVTK(*trimesh_, "before", false);
       
       trimesh_->expandGrid(breaking_cells);
       trimesh_->removeSawtooths();
 
+      writeMeshToVTK(*trimesh_, "after", false);      
+      
       // recompute discretizations and update reservoir properties
       trimesh_->setAllFlags(0);
-      well_source_.clear();       //@@
-      trimesh_->setCellFlags(wsources, 1);
-      for (const auto& cell : wsources) 
-        well_source_.push_back(trimesh_->linearCellIndex(cell)); // restore source cells
+      auto [grid, fsmap] = trimesh_->createDuneGrid(true, wsources);
+      setFractureGrid(std::move(grid)); // true -> coarsen interior
+      fsmap_ = fsmap;
 
-      setFractureGrid(trimesh_->createDuneGrid());
+      //@@@
+      auto vtkwriter =
+        std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(),
+                                                              Dune::VTK::nonconforming);
+      vtkwriter->write("coarsened"); // @@
+      
+      well_source_.clear();       
+      trimesh_->setCellFlags(wsources, 1);
+      std::map<size_t, size_t> fsmap_inv;
+      for (const auto e : fsmap_)
+        fsmap_inv[e.second] = e.first;
+      
+      for (const auto& cell : wsources) {
+        const size_t mesh_ix = trimesh_->linearCellIndex(cell);
+        well_source_.push_back(fsmap_inv[mesh_ix]);
+      }        
+      
       updateReservoirCells(cell_search_tree);
       updateReservoirProperties<TypeTag, Simulator>(simulator, true);
       initFractureWidth();
