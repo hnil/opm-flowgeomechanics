@@ -62,6 +62,7 @@ public:
                  const std::array<double, 2>& edgelen = {1, 1});
   
   // --------------------- Functions for inspecting the grid ---------------------
+  size_t numCells() const { return cellinfo_.size(); }
   std::vector<CellRef> cellIndices() const; // result is sorted
   std::vector<EdgeRef> edgeIndices() const; // result is sorted
   std::vector<NodeRef> nodeIndices() const; // result is sorted
@@ -106,7 +107,7 @@ public:
   void removeSawtooths();
   
   // ---------------------- Functions for outputting other grid types -------------
-  std::pair<std::unique_ptr<Grid>, std::map<size_t, size_t>>
+  std::pair<std::unique_ptr<Grid>, std::vector<int>>
   createDuneGrid(bool coarsen_interior=false,
                  const std::vector<CellRef>& fixed_cells=std::vector<CellRef>()) const;
   void writeMatlabTriangulation(std::ostream& out) const;
@@ -116,9 +117,9 @@ public:
   RegularTrimesh coarsen(bool strict=false) const;
 
   // -------------- Functions for getting the triangles of the mesh --------------
-  std::pair<std::vector<std::array<unsigned int, 3>>, std::map<size_t, size_t>>
+  std::pair<std::vector<std::array<unsigned int, 3>>, std::vector<int>>
   getTriangles() const;
-  std::pair<std::vector<std::array<unsigned int, 3>>, std::map<size_t, size_t>>
+  std::pair<std::vector<std::array<unsigned int, 3>>, std::vector<int>>
   getMultiresTriangles(const std::vector<CellRef>& fixed_cells = std::vector<CellRef>()) const;
 
   // static functions

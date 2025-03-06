@@ -164,8 +164,9 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
 
     // iterate until boundary has been established
+    int krull = 0;
     while (true) {
-
+      ++krull;
       // solve flow-mechanical system
       int iter = 0;
       while (!fullSystemIteration(tol) && iter++ < max_iter) {};
@@ -176,7 +177,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       std::vector<CellRef> breaking_cells; 
       for (size_t i = 0; i != K1_not_nan.size(); ++i)
         if (!std::isnan(K1_not_nan[i]) && K1_not_nan[i] > K1max)
-          if (fsmap_.find(i) != fsmap_.end())
+          if (fsmap_[i] != -1)
             breaking_cells.push_back(trimesh_->cellIndex(fsmap_[i]));
 
       // if no more expansion of the fracture grid is needed, we are finished
@@ -213,9 +214,10 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       
       well_source_.clear();       
       trimesh_->setCellFlags(wsources, 1);
-      std::map<size_t, size_t> fsmap_inv;
-      for (const auto e : fsmap_)
-        fsmap_inv[e.second] = e.first;
+      std::vector<size_t> fsmap_inv(trimesh_->numCells(), -1);
+      for (int i = 0; i != fsmap_.size(); ++i)
+        if (fsmap_[i] != -1)
+          fsmap_inv[fsmap_[i]] = i;
       
       for (const auto& cell : wsources) {
         const size_t mesh_ix = trimesh_->linearCellIndex(cell);

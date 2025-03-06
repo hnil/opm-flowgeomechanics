@@ -217,8 +217,8 @@ private:
     Point3D surfaceMap(double x, double y);
 
     std::unique_ptr<GridStretcher> grid_stretcher_; //@@ experimental, for stretching grids
-    std::unique_ptr<Opm::RegularTrimesh> trimesh_; // @@ experimental, for regular, implicitly defined grids
-    std::map<size_t, size_t> fsmap_; // map from fine-scale gridcells to trimesh_ cells
+    std::unique_ptr<Opm::RegularTrimesh> trimesh_; // @@ experimental, implicitly defined grids
+    std::vector<int> fsmap_; // map from fine-scale gridcells to trimesh_ cells
   
     std::unique_ptr<Grid> grid_;
     Point3D origo_;

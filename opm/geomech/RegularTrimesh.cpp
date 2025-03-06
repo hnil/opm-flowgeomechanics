@@ -453,7 +453,7 @@ std::vector<Coord3D> RegularTrimesh::nodeCoords() const
 }
 
 //------------------------------------------------------------------------------
-pair<vector<array<unsigned int, 3>>, map<size_t, size_t>> RegularTrimesh::getTriangles() const
+pair<vector<array<unsigned int, 3>>, vector<int>> RegularTrimesh::getTriangles() const
 //------------------------------------------------------------------------------  
 {
   vector<array<unsigned int, 3>> result;
@@ -462,14 +462,14 @@ pair<vector<array<unsigned int, 3>>, map<size_t, size_t>> RegularTrimesh::getTri
                        (unsigned int) cell[1],
                        (unsigned int) cell[2]});
 
-  map<size_t, size_t> trivialmap;
+  vector<int> trivialmap(result.size());
   for(size_t i = 0; i != result.size(); ++i)
     trivialmap[i] = i;
   return make_pair(result, trivialmap);
 }
 
 //------------------------------------------------------------------------------  
-pair<vector<array<unsigned int, 3>>, map<size_t, size_t>>
+pair<vector<array<unsigned int, 3>>, vector<int>>
 RegularTrimesh::getMultiresTriangles(const std::vector<CellRef>& fixed_cells) const
 //------------------------------------------------------------------------------  
 {
@@ -523,20 +523,20 @@ RegularTrimesh::getMultiresTriangles(const std::vector<CellRef>& fixed_cells) co
 
   // insert remaining fine triangles to result
   const auto cnodes = cellNodesLinear();
-  map<size_t, size_t> cellmap;
+  vector<int> cellmap(result.size(), -1);
   for (const auto& cell : uncovered_finecells) {
     const auto nodes = cnodes[linearCellIndex(cell)];
     result.push_back({(unsigned int) nodes[0],
                       (unsigned int) nodes[1],
                       (unsigned int) nodes[2]});
-    cellmap[result.size() -1] = linearCellIndex(cell);
+    cellmap.push_back(linearCellIndex(cell));
   }
   
   return make_pair(result, cellmap); 
 }
 
 //------------------------------------------------------------------------------
-std::pair<std::unique_ptr<Grid>, std::map<size_t, size_t>>
+std::pair<std::unique_ptr<Grid>, std::vector<int>>
 RegularTrimesh::createDuneGrid(bool coarsen_interior,
                                const std::vector<CellRef>& fixed_cells) const 
 //------------------------------------------------------------------------------  
@@ -932,8 +932,8 @@ RegularTrimesh RegularTrimesh::coarsen(bool strict) const
   for (const auto& e : cellinfo_) {
     const CellRef& c = e.first;
     if (! strict || !is_boundary_cell(c, *this)) 
-      if ( ((c[0])%2 == 1 && (c[1])%2 == 1) ||
-           ((c[0])%2 == 0 && (c[1])%2 == 0) )
+      if ( (abs(c[0])%2 == 1 && abs(c[1])%2 == 1 && c[2]==0) ||
+           (abs(c[0])%2 == 0 && abs(c[1])%2 == 0 && c[2]==1) )
         new_cells[fine_to_coarse(c)] = e.second;
       // if ( (abs(c[0])%2 == 1 && abs(c[1])%2 == 1) ||
       //      (abs(c[0])%2 == 0 && abs(c[1])%2 == 0) )
@@ -989,7 +989,9 @@ array<CellRef, 4> RegularTrimesh::coarse_to_fine(const CellRef& c)
 CellRef RegularTrimesh::fine_to_coarse(const CellRef& cell)
 // ----------------------------------------------------------------------------  
 {
-  return {cell[0]/2, cell[1]/2, cell[2] == 0 ? 1 : 0};
+  const int i = cell[0] >= 0 ? cell[0] : cell[0] - 1;
+  const int j = cell[1] >= 0 ? cell[1] : cell[1] - 1;
+  return {i/2, j/2, cell[2] == 0 ? 1 : 0};
 }
 
 // ----------------------------------------------------------------------------

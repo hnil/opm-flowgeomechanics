@@ -371,7 +371,7 @@ bool Fracture::fullSystemIteration(const double tol)
   auto psolver = Dune::BiCGSTABSolver<VectorHP>(S_linop,
                                                 precond,
                                                 1e-10, //1e-20, // desired rhs reduction factor
-                                                200, // max number of iterations
+                                                1500, // max number of iterations
                                                 1); // verbose
   psolver.apply(dx, rhs, iores); // NB: will modify 'rhs'
 
