@@ -105,7 +105,9 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       changed = (max_change < tol);
     }
     
+  // ----------------------------------------------------------------------------
   } else if (method == "if") {
+  // ----------------------------------------------------------------------------    
     // iterate full nonlinear system until convergence
     std::cout << "Solve Fracture Pressure using Iterative Fracture" << std::endl;
     fracture_width_ = 1e-2;   // Ensure not completely closed
@@ -146,12 +148,14 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
     std::cout << "Aperture: ";
     std::cout <<  *std::min_element(fracture_width_.begin(), fracture_width_.end()) << ", "
               << *std::max_element(fracture_width_.begin(), fracture_width_.end()) << std::endl;
-  } else if (method == "if_propagate_trimesh") {
 
+  // ----------------------------------------------------------------------------    
+  } else if (method == "if_propagate_trimesh") {
+  // ----------------------------------------------------------------------------
     // initialization
     const int max_iter = 100;
     const double tol = 1e-8;
-    const double K1max = prm_.get<double>("KMax"); // @@ for testing.  Should be added as a proper data member
+    const double K1max = prm_.get<double>("KMax"); 
 
     fracture_width_ = 1e-2;   // Ensure not completely closed
     fracture_pressure_ = 0.0;
@@ -159,14 +163,14 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
     // start by assuming pressure equal to confining stress (will also set
     // fracture_pressure_ to its correct size
     normalFractureTraction(fracture_pressure_);
-    if (numWellEquations() > 0) // @@ it is implicitly assumed for now that
-      // there is just one well equation.  We initialize with an existing value.
+
+    // @@ It is implicitly assumed for now that there is just one well equation.
+    // We initialize with an existing value.
+    if (numWellEquations() > 0) 
       fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
 
     // iterate until boundary has been established
-    int krull = 0;
     while (true) {
-      ++krull;
       // solve flow-mechanical system
       int iter = 0;
       while (!fullSystemIteration(tol) && iter++ < max_iter) {};
@@ -232,7 +236,9 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       coupling_matrix_ = nullptr;
     };
 
+  // ----------------------------------------------------------------------------
   } else if (method == "if_propagate") {
+  // ----------------------------------------------------------------------------
     // iterate full nonlinear system until convergence, and expand fracture if necessary
     
     fracture_width_ = 1e-2;   // Ensure not completely closed
