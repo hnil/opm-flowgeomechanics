@@ -962,15 +962,6 @@ RegularTrimesh RegularTrimesh::coarsen(bool strict) const
 // }
   
 // ----------------------------------------------------------------------------
-RegularTrimesh expand_to_criterion(const RegularTrimesh& mesh,
-     function<std::vector<double>(const RegularTrimesh&)> score_function,
-                                    double threshold)
-// ----------------------------------------------------------------------------
-{
-  return RegularTrimesh(); // @@ dummy for now
-}
-
-// ----------------------------------------------------------------------------
 array<CellRef, 4> RegularTrimesh::coarse_to_fine(const CellRef& c)
 // ----------------------------------------------------------------------------  
 {
@@ -1021,6 +1012,42 @@ vector<CellRef> RegularTrimesh::interior_coarsegrid_() const
   return result;
 }
 
+// ----------------------------------------------------------------------------  
+RegularTrimesh
+expand_to_criterion(const RegularTrimesh& mesh,
+                    function<vector<double>(const RegularTrimesh&)> score_function,
+                    double threshold)
+// ----------------------------------------------------------------------------  
+{
+  // @@ for the moment, an extremely simple expansion algorithm
+  RegularTrimesh working_mesh = mesh; // make a working copy of the mesh;
+
+  while (true) { // keep looping as long as grid still needs expansion
+    const vector<double> bnd_scores = score_function(working_mesh);
+    const vector<CellRef> bnd_cells = mesh.boundaryCells();
+    
+    assert(bnd_scores.size() == bnd_cells.size());
+    
+    vector<CellRef> expand_cells;
+    for (size_t i = 0; i != bnd_scores.size(); ++i)
+      if (bnd_scores[i] > threshold)
+        expand_cells.push_back(bnd_cells[i]);
+
+    if (expand_cells.size() == 0)
+      break;
+
+    // @@ debugging info
+    working_mesh.setAllFlags(0);
+    working_mesh.setCellFlags(expand_cells, 1);
+    writeMeshToVTK(working_mesh, "before", false);
+    
+    working_mesh.expandGrid(expand_cells);
+    working_mesh.removeSawtooths();
+
+    writeMeshToVTK(working_mesh, "after", false);
+  }
+  return working_mesh;
+}
 
 } // namespace
 

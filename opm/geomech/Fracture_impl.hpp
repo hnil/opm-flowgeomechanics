@@ -152,11 +152,8 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
   // ----------------------------------------------------------------------------    
   } else if (method == "if_propagate_trimesh") {
   // ----------------------------------------------------------------------------
-    // initialization
-    const int max_iter = 100;
-    const double tol = 1e-8;
-    const double K1max = prm_.get<double>("KMax"); 
 
+    // initialize fracture data
     fracture_width_ = 1e-2;   // Ensure not completely closed
     fracture_pressure_ = 0.0;
 
@@ -164,78 +161,73 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
     // fracture_pressure_ to its correct size
     normalFractureTraction(fracture_pressure_);
 
-    // @@ It is implicitly assumed for now that there is just one well equation.
-    // We initialize with an existing value.
+    // It is implicitly assumed for now that there is just one well equation.
+    // We initialize with an existing value. @@
     if (numWellEquations() > 0) 
       fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
 
-    // iterate until boundary has been established
-    while (true) {
-      // solve flow-mechanical system
-      int iter = 0;
-      while (!fullSystemIteration(tol) && iter++ < max_iter) {};
-      std::cout << "Iterations needed: " << iter << std::endl;
-      
-      // identify where max stress intensity is exceeded and propagation is needed
-      const std::vector<double> K1_not_nan = Fracture::stressIntensityK1();
-      std::vector<CellRef> breaking_cells; 
-      for (size_t i = 0; i != K1_not_nan.size(); ++i)
-        if (!std::isnan(K1_not_nan[i]) && K1_not_nan[i] > K1max)
-          if (fsmap_[i] != -1)
-            breaking_cells.push_back(trimesh_->cellIndex(fsmap_[i]));
+    // identify the well source cells in the mesh.  These should be invariant
+    std::vector<CellRef> wsources;
+    for (const auto ix : well_source_)
+      wsources.push_back(trimesh_->cellIndex(fsmap_[ix])); // remember source cells
+    
+    // local function taking a trimesh, updates the Fracture object with it and
+    // runs a simulation.  Its return value should be a vector of doubles:
+    auto score_function = [&] (const RegularTrimesh& trimesh) -> std::vector<double> {
+      const int max_iter = 100;
+      const double tol = 1e-8;
+      *trimesh_ = trimesh;
 
-      // if no more expansion of the fracture grid is needed, we are finished
-      if (breaking_cells.empty())
-        break;
-      
-      // create new, expanded grid
-      std::vector<CellRef> wsources;
-      for (const auto ix : well_source_)
-        wsources.push_back(trimesh_->cellIndex(fsmap_[ix])); // remember source cells
-
-      trimesh_->setAllFlags(0);  // @@
-      trimesh_->setCellFlags(wsources, 1); // @@
-      trimesh_->setCellFlags(breaking_cells, 2); //@@
-
-      writeMeshToVTK(*trimesh_, "before", false);
-      
-      trimesh_->expandGrid(breaking_cells);
-      trimesh_->removeSawtooths();
-
-      writeMeshToVTK(*trimesh_, "after", false);      
-      
-      // recompute discretizations and update reservoir properties
-      trimesh_->setAllFlags(0);
-      auto [grid, fsmap] = trimesh_->createDuneGrid(true, wsources);
+      // setup fracture with new grid
+      auto [grid, fsmap] = trimesh_->createDuneGrid(true, wsources); // well cells kept intact!
       setFractureGrid(std::move(grid)); // true -> coarsen interior
       fsmap_ = fsmap;
 
-      //@@@
-      auto vtkwriter =
-        std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(),
-                                                              Dune::VTK::nonconforming);
-      vtkwriter->write("coarsened"); // @@
-      
-      well_source_.clear();       
-      trimesh_->setCellFlags(wsources, 1);
+      // generate the inverse map of fsmap_ (needed below)
       std::vector<size_t> fsmap_inv(trimesh_->numCells(), -1);
       for (int i = 0; i != fsmap_.size(); ++i)
         if (fsmap_[i] != -1)
           fsmap_inv[fsmap_[i]] = i;
+
+      // @@ debug: write grid to VTK
+      auto vtkwriter =
+      std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(),
+                                                            Dune::VTK::nonconforming);
+      vtkwriter->write("coarsened");
       
+      // update indices for well sources to the correct cells in the new grid
+      well_source_.clear();
       for (const auto& cell : wsources) {
         const size_t mesh_ix = trimesh_->linearCellIndex(cell);
         well_source_.push_back(fsmap_inv[mesh_ix]);
-      }        
-      
+      }
+
+      // Update the rest of the fracture object to adapt to grid change
       updateReservoirCells(cell_search_tree);
       updateReservoirProperties<TypeTag, Simulator>(simulator, true);
       initFractureWidth();
       initFracturePressureFromReservoir();
       rhs_pressure_.resize(0);
       coupling_matrix_ = nullptr;
+
+      // solve flow-mechanical system
+      int iter = 0;
+      while (!fullSystemIteration(tol) && iter++ < max_iter) {};
+      std::cout << "Iterations needed: " << iter << std::endl;
+
+      // compute K1 stress intensity
+      const std::vector<double> K1_not_nan = Fracture::stressIntensityK1();
+      const std::vector<CellRef> boundary_cells = trimesh_->boundaryCells();
+      std::vector<double> result(boundary_cells.size());
+      for (size_t i = 0; i != result.size(); ++i)
+        result[i] =
+          K1_not_nan[fsmap_inv[trimesh_->linearCellIndex(boundary_cells[i])]];
+      return result;
     };
 
+    const double K1max = prm_.get<double>("KMax"); 
+    expand_to_criterion(*trimesh_, score_function, K1max);
+        
   // ----------------------------------------------------------------------------
   } else if (method == "if_propagate") {
   // ----------------------------------------------------------------------------

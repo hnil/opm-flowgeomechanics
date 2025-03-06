@@ -60,7 +60,7 @@ public:
                  const std::array<double, 3>& axis1 = {1, 0, 0},
                  const std::array<double, 3>& axis2 = {0.5, std::sqrt(3)/2, 0},
                  const std::array<double, 2>& edgelen = {1, 1});
-  
+
   // --------------------- Functions for inspecting the grid ---------------------
   size_t numCells() const { return cellinfo_.size(); }
   std::vector<CellRef> cellIndices() const; // result is sorted
@@ -137,10 +137,10 @@ private:
   
   // data members
   std::map<CellRef, CellAttributes> cellinfo_;
-  const Coord3D origin_;
-  const Coord3D axis1_;
-  const Coord3D axis2_;
-  const std::array<double, 2> edgelen_;
+  Coord3D origin_;
+  Coord3D axis1_;
+  Coord3D axis2_;
+  std::array<double, 2> edgelen_;
 };
 
 void writeMeshToVTK(const RegularTrimesh& mesh, const char* const filename,
