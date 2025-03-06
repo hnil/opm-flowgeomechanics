@@ -190,10 +190,10 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
           fsmap_inv[fsmap_[i]] = i;
 
       // @@ debug: write grid to VTK
-      auto vtkwriter =
-      std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(),
-                                                            Dune::VTK::nonconforming);
-      vtkwriter->write("coarsened");
+      // auto vtkwriter =
+      // std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(),
+      //                                                       Dune::VTK::nonconforming);
+      // vtkwriter->write("coarsened");
       
       // update indices for well sources to the correct cells in the new grid
       well_source_.clear();

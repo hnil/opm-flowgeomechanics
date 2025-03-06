@@ -76,34 +76,38 @@ Fracture::init(std::string well,
     layers_ = 0;
     nlinear_ = 0;
 
-    // @@ Hack to test/use RegularTrimesh
-    //setFractureGrid();
-    const int trimeshlayers = 4;
-    const double radius = 0.5; //1;
-    const double fac = std::sqrt(3) / 2;
-    const std::array<double, 3> ax1 {axis_[0][0], axis_[0][1], axis_[0][2]};
-    const std::array<double, 3> ax2 {0.5 * ax1[0] + fac * axis_[1][0],
-                                     0.5 * ax1[1] + fac * axis_[1][1],
-                                     0.5 * ax1[2] + fac * axis_[1][2]};
-    trimesh_ = std::unique_ptr<RegularTrimesh>(
-                                new RegularTrimesh(trimeshlayers,
-                                                   {origo_[0], origo_[1], origo_[2]},
-                                                   ax1,
-                                                   ax2,
-                                                   {radius, radius}));
-    trimesh_->removeSawtooths();
+    std::string method = prm_.get<std::string>("solver.method");
 
-    // identify well cells (since this is not done in setFractureGrid when providing
-    // a user-defined grid)
-    std::vector<CellRef> wellcells { {0, 0, 0}, {0, -1, 1}, {0, -1, 0}, {-1, -1, 1},
-                                     {-1, 0, 0}, {-1, 0, 1} };
-    for (const auto& cell : wellcells)
-      well_source_.push_back(trimesh_->linearCellIndex(cell));
-
-    auto [grid, fsmap] = trimesh_->createDuneGrid();
-    setFractureGrid(std::move(grid)); // create the physical grid from trimesh
-    fsmap_ = fsmap; // mapping between grid and mesh cells
-    
+    if (method == "if_propagate_trimesh") {
+      const int trimeshlayers = 4;
+      const double radius = 0.5; //1;
+      const double fac = std::sqrt(3) / 2;
+      const std::array<double, 3> ax1 {axis_[0][0], axis_[0][1], axis_[0][2]};
+      const std::array<double, 3> ax2 {0.5 * ax1[0] + fac * axis_[1][0],
+                                       0.5 * ax1[1] + fac * axis_[1][1],
+                                       0.5 * ax1[2] + fac * axis_[1][2]};
+      trimesh_ = std::unique_ptr<RegularTrimesh>(
+                     new RegularTrimesh(trimeshlayers,
+                                        {origo_[0], origo_[1], origo_[2]},
+                                        ax1,
+                                        ax2,
+                                        {radius, radius}));
+      trimesh_->removeSawtooths();
+      
+      // identify well cells (since this is not done in setFractureGrid when providing
+      // a user-defined grid)
+      std::vector<CellRef> wellcells { {0, 0, 0}, {0, -1, 1}, {0, -1, 0}, {-1, -1, 1},
+                                       {-1, 0, 0}, {-1, 0, 1} };
+      for (const auto& cell : wellcells)
+        well_source_.push_back(trimesh_->linearCellIndex(cell));
+      
+      auto [grid, fsmap] = trimesh_->createDuneGrid();
+      setFractureGrid(std::move(grid)); // create the physical grid from trimesh
+      fsmap_ = fsmap; // mapping between grid and mesh cells
+      
+    } else {
+      setFractureGrid();
+    }
     setPerfPressure(0.0); // This can be changed by subsequently calling this
                           // function when the fracture is connected to the
                           // reservoir

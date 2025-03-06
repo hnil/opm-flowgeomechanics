@@ -1037,14 +1037,14 @@ expand_to_criterion(const RegularTrimesh& mesh,
       break;
 
     // @@ debugging info
-    working_mesh.setAllFlags(0);
-    working_mesh.setCellFlags(expand_cells, 1);
-    writeMeshToVTK(working_mesh, "before", false);
+    // working_mesh.setAllFlags(0);
+    // working_mesh.setCellFlags(expand_cells, 1);
+    // writeMeshToVTK(working_mesh, "before", false);
     
     working_mesh.expandGrid(expand_cells);
     working_mesh.removeSawtooths();
 
-    writeMeshToVTK(working_mesh, "after", false);
+    // writeMeshToVTK(working_mesh, "after", false);
   }
   return working_mesh;
 }
