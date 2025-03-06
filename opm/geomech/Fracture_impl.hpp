@@ -159,8 +159,11 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
   // ----------------------------------------------------------------------------    
   } else if (method == "if_propagate_trimesh") {
   // ----------------------------------------------------------------------------
+    // initialization
+    const int max_iter = 100;
+    const double tol = 1e-8;
+    const double K1max = prm_.get<double>("KMax"); 
 
-    // initialize fracture data
     fracture_width_ = 1e-2;   // Ensure not completely closed
     fracture_pressure_ = 0.0;
 
