@@ -159,10 +159,6 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
   // ----------------------------------------------------------------------------    
   } else if (method == "if_propagate_trimesh") {
   // ----------------------------------------------------------------------------
-    // initialization
-    const int max_iter = 100;
-    const double tol = 1e-8;
-    const double K1max = prm_.get<double>("KMax"); 
 
     fracture_width_ = 1e-2;   // Ensure not completely closed
     fracture_pressure_ = 0.0;
@@ -196,6 +192,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       // generate the inverse map of fsmap_ (needed below)
       std::vector<size_t> fsmap_inv(trimesh_->numCells(), -1);
       for (int i = 0; i != fsmap_.size(); ++i)
+        
         if (fsmap_[i] != -1)
           fsmap_inv[fsmap_[i]] = i;
 
