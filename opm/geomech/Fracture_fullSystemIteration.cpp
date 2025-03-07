@@ -264,7 +264,8 @@ double estimate_step_fac(const VectorHP& x, const VectorHP& dx)
 std::vector<int> identify_closed(const FMatrix& A,
                                  const VectorHP& x,
                                  const ResVector& rhs,
-                                 const int nwells)
+                                 const int nwells,
+                                 const double min_width)
 // ----------------------------------------------------------------------------
 {
   ResVector tmp(rhs);
@@ -275,7 +276,7 @@ std::vector<int> identify_closed(const FMatrix& A,
   const ResVector& p = x[_1];
   A.mmv(h, tmp);
   I.mmv(p, tmp);
-  double min_width = prm_.get<double>("solver.min_width");
+  //double min_width = prm_.get<double>("solver.min_width");
   std::vector<int> result;
   for (size_t i = 0; i != A.N(); ++i)
     result.push_back(tmp[i] >= 0 && h[i] <= min_width);
@@ -308,6 +309,9 @@ namespace Opm
 bool Fracture::fullSystemIteration(const double tol)
 // ----------------------------------------------------------------------------
 {
+  const double min_width = prm_.get<double>("solver.min_width"); 
+  const double max_width = prm_.get<double>("solver.max_width");
+
   // update pressure matrix with the current values of `fracture_width_` and
   // `fracture_pressure_`
   assemblePressure(); // update pressure matrix
@@ -324,7 +328,7 @@ bool Fracture::fullSystemIteration(const double tol)
 
   // make a version of the fracture matrix that has trivial equations for closed cells
   const std::vector<int> closed_cells = identify_closed(fractureMatrix(), x, rhs[_0],
-                                                   numWellEquations());
+                                                        numWellEquations(), min_width);
   const auto A = modified_fracture_matrix(fractureMatrix(), closed_cells);
 
   // also modify right hand side for closed cells
@@ -404,8 +408,6 @@ bool Fracture::fullSystemIteration(const double tol)
 
   // copying modified variables back to member variables
   fracture_width_ = x[_0];
-  double min_width = prm_.get<double>("solver.min_width");
-  double max_width = prm_.get<double>("solver.max_width");
   for (int i = 0; i != fracture_width_.size(); ++i){
     fracture_width_[i][0] = std::max(min_width, fracture_width_[i][0]); // ensure non-negativity
     //fracture_width_[i][0] = std::min(max_width, fracture_width_[i][0]); // ensure non-negativity

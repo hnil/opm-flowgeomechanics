@@ -18,11 +18,20 @@
         "solver":{
             "method":"if_propagate_trimesh",
             "max_iter":1,
-            "min_width":1e-10,
+            "min_width":0, 
             "max_width":5e+100,
             "max_change":1e-3,
             "efac": 0.1,
-            "rfac": 0.1
+            "rfac": 0.1,
+            "damping": 1.0,
+            "verbosity": 1,
+            "max_dwidth": 1e-3,
+            "max_dp": 1e9,
+            "linsolver":{
+                "tol": 1e-10,
+                "max_iter": 1500,
+                "verbosity": 1
+            }
         },
         "reservoir":{
             "dist":10,
