@@ -137,15 +137,15 @@ namespace Opm{
 
         }
 
+
         std::vector<RuntimePerforation> getExtraWellIndices(const std::string& wellname){
             if(fracturemodel_){
                 return fracturemodel_->getExtraWellIndices(wellname);
             }else{
                 return std::vector<RuntimePerforation>();
             }
-            
         }
-
+      
         void updatePotentialForces(){
             std::cout << "Update Forces" << std::endl;
             size_t numDof = simulator_.model().numGridDof();

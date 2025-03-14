@@ -260,8 +260,6 @@ double estimate_step_fac(const VectorHP& x, const VectorHP& dx)
   return (fmax < threshold) ? 1.0 : std::max(threshold / fmax, fac_min);
 }
 
-
-
 // ----------------------------------------------------------------------------
 FMatrix modified_fracture_matrix(const FMatrix& A,
                                  const std::vector<int>& closed_cells)
