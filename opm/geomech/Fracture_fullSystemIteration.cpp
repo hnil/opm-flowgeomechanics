@@ -260,8 +260,28 @@ double estimate_step_fac(const VectorHP& x, const VectorHP& dx)
   return (fmax < threshold) ? 1.0 : std::max(threshold / fmax, fac_min);
 }
 
+
+
 // ----------------------------------------------------------------------------
-std::vector<int> identify_closed(const FMatrix& A,
+FMatrix modified_fracture_matrix(const FMatrix& A,
+                                 const std::vector<int>& closed_cells)
+// ----------------------------------------------------------------------------
+{
+  Dune::DynamicMatrix result(A);
+
+  for (size_t row = 0; row != A.N(); ++row)
+    if (closed_cells[row])
+      for (size_t col = 0; col != A.N(); ++col)
+        result[row][col] = (row == col);
+  return result;
+}
+  
+}; // end anonymous namespace
+
+namespace Opm
+{
+// ----------------------------------------------------------------------------
+  std::vector<int> Fracture::identify_closed(const FMatrix& A,
                                  const VectorHP& x,
                                  const ResVector& rhs,
                                  const int nwells,
@@ -285,26 +305,6 @@ std::vector<int> identify_closed(const FMatrix& A,
   return result;
     
 }
-
-// ----------------------------------------------------------------------------
-FMatrix modified_fracture_matrix(const FMatrix& A,
-                                 const std::vector<int>& closed_cells)
-// ----------------------------------------------------------------------------
-{
-  Dune::DynamicMatrix result(A);
-
-  for (size_t row = 0; row != A.N(); ++row)
-    if (closed_cells[row])
-      for (size_t col = 0; col != A.N(); ++col)
-        result[row][col] = (row == col);
-  return result;
-}
-  
-}; // end anonymous namespace
-
-namespace Opm
-{
-
 // ----------------------------------------------------------------------------
 bool Fracture::fullSystemIteration(const double tol)
 // ----------------------------------------------------------------------------

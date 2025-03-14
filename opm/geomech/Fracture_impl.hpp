@@ -275,19 +275,19 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       // open file "width" for appending data
       while (!fullSystemIteration(tol) && iter++ < max_iter) {
         // @@@@
-        auto fw = make_vector(fracture_width_);
-        auto fp = make_vector(fracture_pressure_, fracture_pressure_.size()-1);
-        grid_stretcher_->dumpToVTK("stretchedgrid", { fw, fp });
+        // auto fw = make_vector(fracture_width_);
+        // auto fp = make_vector(fracture_pressure_, fracture_pressure_.size()-1);
+        // grid_stretcher_->dumpToVTK("stretchedgrid", { fw, fp });
         
-        if (iter > 20) { 
-          std::ofstream width_debug("width", std::ios::app);
-          std::ofstream pressure_debug("pressure", std::ios::app);
+        // if (iter > 20) { 
+        //   std::ofstream width_debug("width", std::ios::app);
+        //   std::ofstream pressure_debug("pressure", std::ios::app);
           
-          std::copy(fw.begin(), fw.end(), std::ostream_iterator<double>(width_debug, " "));
-          std::copy(fp.begin(), fp.end(), std::ostream_iterator<double>(pressure_debug, " "));
+        //   std::copy(fw.begin(), fw.end(), std::ostream_iterator<double>(width_debug, " "));
+        //   std::copy(fp.begin(), fp.end(), std::ostream_iterator<double>(pressure_debug, " "));
           
-          int krull=0;
-        }
+        //   int krull=0;
+        //}
       };
       std::cout << "Iterations needed: " << iter << std::endl;
       
@@ -342,7 +342,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
       grid_stretcher_->rebalanceBoundary();
 
       // debug stuff
-      grid_stretcher_->dumpToVTK("stretchedgrid");
+      //grid_stretcher_->dumpToVTK("stretchedgrid");
       
       // grid has changed its geometry, so we have to recompute discretizations
       updateCellNormals();

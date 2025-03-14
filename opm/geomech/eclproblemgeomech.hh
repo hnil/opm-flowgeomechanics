@@ -243,6 +243,11 @@ namespace Opm{
             Parent::beginTimeStep();
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 geomechModel_.beginTimeStep();
+                if(this->hasFractures()){
+                    this->wellModel().beginTimeStep();// just to be sure well conteiner is reinitialized
+                    this->addConnectionsToWell(); // modify wells WI wiht fracture well 
+                }
+                
             }
         }
         void endTimeStep(){
@@ -250,7 +255,7 @@ namespace Opm{
                 std::cout << "----------------------Start endTimeStep-------------------\n"
                 << std::flush;
             }
-            Parent::FlowProblemType::endTimeStep();
+            //Parent::FlowBaseProblemType::endTimeStep();
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 geomechModel_.endTimeStep();
                 if(this->hasFractures()){
@@ -260,6 +265,7 @@ namespace Opm{
                         this->addConnectionsToSchedual();
                     }else{
                     // not not working ... more work...
+                    // will only work if structure is ok
                         assert(false);
                         this->addConnectionsToWell();
                     }
@@ -268,8 +274,9 @@ namespace Opm{
                         .assignGeomechWellState(this->wellModel_.wellState());
                 }
             }
-            
-            Parent::endStepApplyAction();
+
+            Parent::FlowProblemType::endTimeStep();
+            //Parent::endStepApplyAction();
  
         }
 
@@ -323,7 +330,9 @@ namespace Opm{
                                                ctfprop,
                                                /*sort_value*/ -1,
                                                /*defaut sattable*/ true);
-                    connection.setCF(WI);
+                    //only add zero value 
+                    // connection need to be modified lager
+                    connection.setCF(WI*0.0);
                     extra_perfs[wellName].push_back(connection);
                 }
             }
@@ -409,7 +418,9 @@ namespace Opm{
         // }
         bool hasFractures() const{ return hasFractures_;}
         Opm::PropertyTree getFractureParam() const{return fracture_param_.get_child("fractureparam");};
-        const GeomechModel& geomechModel() const{return geomechModel_;}
+        Opm::PropertyTree getGeomechParam() const{return fracture_param_;};
+        GeomechModel& geomechModel() {return geomechModel_;}
+        const GeomechModel& geomechModel()const {return geomechModel_;}
         // used for fracture model
         double yModule(size_t idx) const {return ymodule_[idx];}
         double pRatio(size_t idx) const {return pratio_[idx];}

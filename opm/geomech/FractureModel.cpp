@@ -85,7 +85,7 @@ namespace Opm{
 		  Dune::FieldVector<double, 3> eigenValues;
 		  Dune::FMatrixHelp::eigenValuesVectors(stressmat, eigenValues, eigenVectors);
 		  int min_dir = -1;
-		  int max_dir = -1;
+		  //int max_dir = -1;
 		  double min_eig = 1e99;
 		  double max_eig = -1e99;
 		  for (int i = 0; i < 3; ++i) {
@@ -94,7 +94,7 @@ namespace Opm{
 		      min_eig = eigenValues[i];
 		    }
 		    if (eigenValues[i] > max_eig) {
-		      max_dir = i;
+              //  max_dir = i;
 		      max_eig = eigenValues[i];
 		    }
 		  }

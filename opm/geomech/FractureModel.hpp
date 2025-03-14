@@ -136,6 +136,7 @@ public:
     Dune::FieldVector<double,6> stress(Dune::FieldVector<double,3> obs) const;
     Dune::FieldVector<double,6> strain(Dune::FieldVector<double,3> obs) const;
     Dune::FieldVector<double,3> disp(Dune::FieldVector<double,3> obs) const;
+    Opm::PropertyTree& getParam(){return prm_;}
 private:
     std::vector<FractureWell> wells_;
     std::vector<std::vector<Fracture>> well_fractures_;

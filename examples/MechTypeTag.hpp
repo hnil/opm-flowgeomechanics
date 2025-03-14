@@ -8,7 +8,8 @@
 #include <opm/simulators/wells/BlackoilWellModel.hpp>
 #include <opm/geomech/eclgeomechmodel.hh>
 #include <opm/geomech/eclproblemgeomech.hh>
-
+#include <opm/geomech/BlackoilGeomechWellModel.hpp>
+#include <opm/geomech/BlackoilModelGeomech.hpp>
 namespace Opm
 {
     namespace Properties
@@ -24,6 +25,11 @@ namespace Opm
         template <class TypeTag>
         struct Problem<TypeTag, TTag::EclFlowProblemMech> {
             using type = EclProblemGeoMech<TypeTag>;
+        };
+
+        template <class TypeTag>
+        struct NonlinearSystem<TypeTag, TTag::EclFlowProblemMech> {
+              using type = BlackoilModelGeomech<TypeTag>;
         };
 
 
@@ -93,6 +99,12 @@ namespace Opm
         template <class TypeTag>
         struct EnableDisgasInWater<TypeTag, TTag::EclFlowProblemMech> {
             static constexpr bool value = false;
+        };
+
+
+        template <class TypeTag>
+        struct WellModel<TypeTag, TTag::EclFlowProblemMech> {
+            using type = BlackoilGeomechWellModel<TypeTag>;
         };
 
         // static constexpr bool has_disgas_in_water = getPropValue<TypeTag, Properties::EnableDisgasInWater>();

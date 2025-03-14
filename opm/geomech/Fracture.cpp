@@ -83,7 +83,8 @@ Fracture::init(std::string well,
 
     if (method == "if_propagate_trimesh") {
       const int trimeshlayers = 4;
-      const double radius = 0.5; //1;
+      const double init_scale = prm_.get<double>("config.axis_scale");
+      const double radius = init_scale; //1;
       const double fac = std::sqrt(3) / 2;
       const std::array<double, 3> ax1 {axis_[0][0], axis_[0][1], axis_[0][2]};
       const std::array<double, 3> ax2 {0.5 * ax1[0] + fac * axis_[1][0],
@@ -133,13 +134,18 @@ void Fracture::resetWriters() {
     std::string outputdir = prm_.get<std::string>("outputdir");
     std::string simName = prm_.get<std::string>("casename") + this->name();
     std::string multiFileName =  "";
-    vtkmultiwriter_ =
-      std::make_unique< Opm::VtkMultiWriter<Grid::LeafGridView, VTKFormat > >(
+    if(!vtkmultiwriter_){
+      vtkmultiwriter_ =
+        std::make_unique< Opm::VtkMultiWriter<Grid::LeafGridView, VTKFormat > >(
           /*async*/ false,
           grid_->leafGridView(),
           outputdir,
           simName,
           multiFileName );
+    }else{
+      //vtkmultiwriter_->gridChanged();// need to be called if grid is changed
+      vtkmultiwriter_->gridViewChanged(grid_->leafGridView());// need to be called if grid is changed
+    }
 }
 
 void Fracture::setupPressureSolver(){
@@ -401,7 +407,7 @@ Fracture::write(int reportStep) const
 
 void Fracture::writemulti(double time) const
 {
-    //vtkmultiwriter_->gridChanged(); need to be called if grid is changed
+  //vtkmultiwriter_->gridChanged();// need to be called if grid is changed
     // need to have copies in case of async outout (and interface to functions)
     std::vector<double> K1 = this->stressIntensityK1();
     std::vector<double> fracture_pressure(numFractureCells(),0.0);

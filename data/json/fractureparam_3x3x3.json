@@ -1,13 +1,22 @@
 {
     "hasfractures":false,
     "add_perfs_to_schedule":true,
+    "solver":{
+        "method":"PostSolve",
+        "implicit_flow": false,
+        "max_mech_it": 10
+    },
     "fractureparam":{
-        "addconnections":false,
+        "addconnections":true,
+        "method":{
+            "iterate":true,
+            "max_it":1
+        },
         "config":{
-	                "type":"well_seed",
-	    "well": "P1",
-	    "cell_ijk": [30,30,21],
-	    "normal": [0,1,0],
+	        "type":"well_seed",
+	        "well": "P1",
+	        "cell_ijk": [30,30,21],
+	        "normal": [0,1,0],
             "initial_fracture_width":0.3048e-4,
             "axis_scale": 0.61
         },

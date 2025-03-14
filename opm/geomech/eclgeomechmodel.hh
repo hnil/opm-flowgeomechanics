@@ -69,11 +69,21 @@ namespace Opm{
             std::cout << "Geomech begin iteration" << std::endl;
         }
         void endTimeStep(){
+            // always do post solve
+            this->solveGeomechAndFracture();
+        }
+        void solveGeomechAndFracture(){
             //Parent::endIteration();
             const auto& problem = simulator_.problem();
             this->solveGeomechanics();
             if(problem.hasFractures()){
-                if(!fracturemodel_){
+                this->solveFractures();
+            }   
+        }
+
+       void solveFractures(){
+            if(!fracturemodel_){
+                    const auto& problem = simulator_.problem();
                     //NB could probably be moved to some initialization
                     // let fracture contain all wells
                     Opm::PropertyTree param = problem.getFractureParam();
@@ -110,9 +120,9 @@ namespace Opm{
                 fracturemodel_->updateReservoirProperties<TypeTag,Simulator>(simulator_);
                 fracturemodel_->solve<TypeTag, Simulator>(simulator_);
                 // copy from apply action
-            }
-        }
-
+       }
+       
+        
         void writeFractureSolution(){
             const auto& problem = simulator_.problem();
             if(problem.hasFractures()){
@@ -127,8 +137,13 @@ namespace Opm{
 
         }
 
-        auto getExtraWellIndices(const std::string& wellname){
-            return this->fracturemodel_->getExtraWellIndices(wellname);
+        std::vector<RuntimePerforation> getExtraWellIndices(const std::string& wellname){
+            if(fracturemodel_){
+                return fracturemodel_->getExtraWellIndices(wellname);
+            }else{
+                return std::vector<RuntimePerforation>();
+            }
+            
         }
 
         void updatePotentialForces(){
@@ -281,7 +296,7 @@ namespace Opm{
         }
 
 
-        void solveGeomechanics(){
+        void setupAndUpdateGemechanics(){
             OPM_TIMEBLOCK(endTimeStepMech);
             this->updatePotentialForces();
             // for now assemble and set up solver her
@@ -300,8 +315,10 @@ namespace Opm{
                 //elacticitysolver_.assemble(mechPotentialForce_, do_matrix, do_vector);
                 // need precomputed divgrad operator
                 elacticitysolver_.updateRhsWithGrad(mechPotentialForce_);
-            }
-
+            }    
+        }
+        void solveGeomechanics(){
+            setupAndUpdateGemechanics();
             {
                 OPM_TIMEBLOCK(SolveMechanicalSystem);
                 elacticitysolver_.solve();

@@ -188,9 +188,22 @@ public:
     void assignGeomechWellState(ConnFracStatistics<Scalar>& stats) const;
 
 private:
+    using ResVector = Opm::Fracture::Vector; 
+    using VectorHP = Dune::MultiTypeBlockVector<ResVector, ResVector>;
+
+  // using Krull = Dune::MultiTypeBlockVector<Dune::BlockVector<double>>;
+  // Dune::MultiTypeBlockVector<Dune::BlockVector<double, std::allocator<double>>> dill;
+  // Krull tull(2);  
+  
+    using SMatrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>; // sparse matrix
+    using FMatrix = Dune::DynamicMatrix<double>;                       // full matrix
 
     size_t numFractureCells() const { return grid_->leafGridView().size(0); }
-  
+    std::vector<int> identify_closed(const FMatrix& A,
+                                     const VectorHP& x,
+                                     const ResVector& rhs,
+                                     const int nwells,
+                                     const double min_width);
     template <class TypeTag, class Simulator>
     void initReservoirProperties(const Simulator& simulator)
     {
