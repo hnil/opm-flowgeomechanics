@@ -16,6 +16,7 @@
 #include "config.h"
 #include <opm/geomech/Fracture.hpp>
 #include <opm/common/ErrorMacros.hpp>
+#include <opm/common/TimingMacros.hpp>
 
 
 
@@ -127,6 +128,7 @@ std::unique_ptr<Opm::Fracture::Matrix>
 initCouplingMatrixSparsity(const std::vector<Htrans>& htrans, size_t num_cells, size_t num_wells)
 // ----------------------------------------------------------------------------
 {
+  OPM_TIMEFUNCTION();
   auto C = std::make_unique<Opm::Fracture::Matrix>(num_cells + num_wells,
                                                    num_cells,
                                                    4, 0.4,
@@ -152,6 +154,7 @@ void updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
                           const ResVector& aperture,
                           const std::vector<int>& closed_cells)
 {
+  OPM_TIMEFUNCTION();
   // create C if not done already
   if (!Cptr) Cptr = initCouplingMatrixSparsity(htrans, num_cells, num_wells);
   // if (!Cptr) Cptr = std::make_unique<Opm::Fracture::Matrix>(*M); // copy sparsity of M
@@ -265,6 +268,7 @@ FMatrix modified_fracture_matrix(const FMatrix& A,
                                  const std::vector<int>& closed_cells)
 // ----------------------------------------------------------------------------
 {
+  OPM_TIMEFUNCTION();
   Dune::DynamicMatrix result(A);
 
   for (size_t row = 0; row != A.N(); ++row)
@@ -286,6 +290,7 @@ namespace Opm
                                  const double min_width)
 // ----------------------------------------------------------------------------
 {
+  OPM_TIMEFUNCTION();
   ResVector tmp(rhs);
   const auto I = makeIdentity(A.N(), nwells);
 
@@ -307,6 +312,7 @@ namespace Opm
 bool Fracture::fullSystemIteration(const double tol)
 // ----------------------------------------------------------------------------
 {
+  OPM_TIMEFUNCTION();
   const double min_width = prm_.get<double>("solver.min_width"); 
   const double max_width = prm_.get<double>("solver.max_width");
 
@@ -378,7 +384,10 @@ bool Fracture::fullSystemIteration(const double tol)
                                                 linsolve_tol, //1e-20, // desired rhs reduction factor
                                                 max_iter, // max number of iterations
                                                 verbosity); // verbose
-  psolver.apply(dx, rhs, iores); // NB: will modify 'rhs'
+  {
+    OPM_TIMEBLOCK(SolveCoupledSystem);
+    psolver.apply(dx, rhs, iores); // NB: will modify 'rhs'
+  }
   const int nlin_verbosity = prm_.get<double>("solver.verbosity");
   if(nlin_verbosity > 1){
     std::cout << "x:  " << x[_0].infinity_norm() << " " << x[_1].infinity_norm() << std::endl;

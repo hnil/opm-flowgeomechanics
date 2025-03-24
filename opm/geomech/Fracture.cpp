@@ -21,7 +21,7 @@
 #include <opm/grid/polyhedralgrid.hh>
 
 #include <opm/geomech/RegularTrimesh.hpp>
-
+#include <opm/common/TimingMacros.hpp>
 
 namespace {
 
@@ -61,6 +61,7 @@ Fracture::init(std::string well,
                Fracture::Point3D normal,
                Opm::PropertyTree prm)
 {
+    OPM_TIMEFUNCTION();
     prm_ = prm;
     wellinfo_ = WellInfo({well, perf, well_cell});
 
@@ -1121,6 +1122,7 @@ Fracture::writeFractureSystem() const{
 
 void
 Fracture::solvePressure() {
+    OPM_TIMEFUNCTION();
     size_t nc = numFractureCells();
     assert(numWellEquations() == 0); // @@ not implemented/tested for "rate_well" control
     fracture_pressure_.resize(nc); 
@@ -1367,6 +1369,7 @@ double Fracture::normalFractureTraction(size_t eIdx) const
 void Fracture::normalFractureTraction(Dune::BlockVector<Dune::FieldVector<double, 1>>& traction,
                                       bool resize) const
 {
+  OPM_TIMEFUNCTION();
   const size_t nc = numFractureCells();
   if (resize)
     traction.resize(nc + numWellEquations());
@@ -1387,6 +1390,7 @@ void Fracture::updateFractureRHS() {
 }
 
 void Fracture::assembleFractureMatrix() const {
+    OPM_TIMEFUNCTION();
     size_t nc = numFractureCells();
     if(!fracture_matrix_){
         fracture_matrix_ = std::make_unique<DynamicMatrix>();

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <opm/grid/UnstructuredGrid.h>
-
+#include <opm/common/TimingMacros.hpp>
 namespace Opm {
 
 inline double compute_target_expansion(const double K1_target,
@@ -71,6 +71,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                      const Simulator& simulator)
 // ----------------------------------------------------------------------------  
 {
+  OPM_TIMEBLOCK(SolveFracture);
   std::cout << "Solve Fracture Pressure" << std::endl; 
   std::string method = prm_.get<std::string>("solver.method");
   if(method == "nothing"){

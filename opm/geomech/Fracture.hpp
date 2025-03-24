@@ -108,6 +108,8 @@ public:
       
         using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
         const auto& problem = simulator.problem();
+        const auto& grid = simulator.vanguard().grid();
+        GeometryHelper ghelper(grid);
         // NB burde truleg interpolere
         // NB reservoir dist not calculated
         size_t ncf = reservoir_cells_.size();
@@ -118,15 +120,18 @@ public:
         reservoir_perm_.resize(ncf);
         
         // should be calculated
-        double dist = prm_.get<double>("reservoir.dist");
-        reservoir_dist_.resize(ncf, dist);
+        bool calculate_dist = prm_.get<bool>("reservoir.calculate_dist");
+        if(!calculate_dist){
+          double dist = prm_.get<double>("reservoir.dist");
+          reservoir_dist_.resize(ncf, dist);
+        }
         
         double numax = 0, Emax = 0;
-        
+        //auto& enitity_seeds = problem.elementEntitySeeds();//used for radom axes better way?
         for (size_t i = 0; i < ncf; ++i) {
             size_t cell = reservoir_cells_[i];
             if (!(cell < 0)) {
-                //auto normal = this->cell_normals_[i];
+                auto normal = this->cell_normals_[i];
                 const auto& intQuants = simulator.model().intensiveQuantities(cell, /*timeIdx*/ 0);
                 const auto& fs = intQuants.fluidState();
                 {
@@ -145,6 +150,26 @@ public:
                 for (int dim = 0; dim < 3; ++dim) {
                   reservoir_stress_[i] = problem.stress(cell);
                 }
+                const auto& perm =  problem.intrinsicPermeability(cell);
+                auto pn = normal;
+                perm.mv(normal, pn);
+                double npn = pn.dot(normal); 
+                reservoir_perm_[i] = npn;
+                if(calculate_dist){
+                  assert(false);
+                  // auto elem = grid.entity(cell);
+                  // auto cell_center = ghelper.centroid(i);
+                  // double dist = 0;
+                  // int num_corners = elem.corners();
+                  // for(int li=0; li < elem.corners();++li){
+                  //   auto cdist = cell_center;
+                  //   cdist -= elem.corner(li);
+                  //   dist += std::abs(normal.dot(cdist));
+                  // }
+                  // dist /= num_corners;
+                  // reservoir_dist_[i] = dist;
+                }
+                
             } else {
                 // probably outside reservoir set all to zero
                 double stressval = 0;

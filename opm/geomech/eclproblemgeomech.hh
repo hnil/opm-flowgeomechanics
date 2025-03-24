@@ -52,6 +52,7 @@ namespace Opm{
         using Toolbox = MathToolbox<Evaluation>;
         using SymTensor = Dune::FieldVector<double,6>;
         using GeomechModel = EclGeoMechModel<TypeTag>;
+      //using CellSeedType = typename GridView::template Codim<0>::EntitySeed;
         EclProblemGeoMech(Simulator& simulator):
             FlowProblemBlackoil<TypeTag>(simulator),
             geomechModel_(simulator)
@@ -201,6 +202,11 @@ namespace Opm{
                 }else{
                     OPM_THROW(std::runtime_error, "Missing stress initialization keywords");
                 }
+                // entity_seed_.resize(gv.size(0));
+                // for(const auto& elem : elements(gv)){
+                //   const auto& cellIdx = gv.indexSet().index(elem);
+                //   entity_seed_[cellIdx] = elem.seed();
+                // }
             }
         }
         void initialSolutionApplied(){
@@ -255,7 +261,7 @@ namespace Opm{
                 std::cout << "----------------------Start endTimeStep-------------------\n"
                 << std::flush;
             }
-            //Parent::FlowBaseProblemType::endTimeStep();
+            //Parent::FlowProblemType::endTimeStep();
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 geomechModel_.endTimeStep();
                 if(this->hasFractures()){
@@ -275,7 +281,8 @@ namespace Opm{
                 }
             }
 
-            Parent::FlowProblemType::endTimeStep();
+            Parent::endTimeStep();
+            //Parent::FlowProblemType::endTimeStep();
             //Parent::endStepApplyAction();
  
         }
@@ -424,6 +431,9 @@ namespace Opm{
         // used for fracture model
         double yModule(size_t idx) const {return ymodule_[idx];}
         double pRatio(size_t idx) const {return pratio_[idx];}
+        
+      //const std::vector< GridView::Codim<0>::EntitySeed >& elementEntitySeed(){return entitity_seed_;}
+      //const std::vector< CellSeedType >& elementEntitySeed(){return entity_seed_;}
     private:
         GeomechModel geomechModel_;
 
@@ -445,7 +455,7 @@ namespace Opm{
         bool hasFractures_;
         bool addPerfsToSchedule_;
         Opm::PropertyTree fracture_param_;
-
+      //std::vector< CellSeedType > entity_seed_;
         //private:
         //std::unique_ptr<TimeStepper> adaptiveTimeStepping_;
     };
