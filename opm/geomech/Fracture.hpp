@@ -156,18 +156,21 @@ public:
                 double npn = pn.dot(normal); 
                 reservoir_perm_[i] = npn;
                 if(calculate_dist){
-                  assert(false);
-                  // auto elem = grid.entity(cell);
-                  // auto cell_center = ghelper.centroid(i);
-                  // double dist = 0;
-                  // int num_corners = elem.corners();
-                  // for(int li=0; li < elem.corners();++li){
-                  //   auto cdist = cell_center;
-                  //   cdist -= elem.corner(li);
-                  //   dist += std::abs(normal.dot(cdist));
-                  // }
-                  // dist /= num_corners;
-                  // reservoir_dist_[i] = dist;
+                  //assert(false);
+                  const auto& currentData = grid.currentData();
+                  const auto& elem = Dune::cpgrid::Entity<0>(*currentData.back(), cell, true);
+                  //auto cell_center = ghelper.centroid(i);
+                  const auto& geom = elem.geometry();
+                  auto cell_center = geom.center();
+                  double dist = 0;
+                  int num_corners = geom.corners();
+                  for(int li=0; li < geom.corners();++li){
+                    auto cdist = cell_center;
+                    cdist -= geom.corner(li);
+                    dist += std::abs(normal.dot(cdist));
+                  }
+                  dist /= num_corners;
+                  reservoir_dist_[i] = dist;
                 }
                 
             } else {

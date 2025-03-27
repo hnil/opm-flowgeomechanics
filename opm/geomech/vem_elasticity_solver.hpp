@@ -197,7 +197,7 @@ class VemElasticitySolver
             comm_->remoteIndices().rebuild<false>();// = *vertexRemoteParallelIndexSet_;   
             //OPM_THROW(std::runtime_error,"Parallel for mechanics not implemented");
             const std::function<Vector()> weightsCalculator;
-            std::size_t pressureIndex;
+            std::size_t pressureIndex = 0;
             //NB NB ! need other operator in parallel
             setCopyRowsToZero();    
             std::cout << "Make parallel solver" << std::endl;
@@ -211,7 +211,7 @@ class VemElasticitySolver
 	    pop_ = std::move(pop);
             tsolver_ = std::move(tsolver);
         }else{
-            std::size_t pressureIndex;//Dummy
+            std::size_t pressureIndex = 0;//Dummy
             const std::function<Vector()> weightsCalculator;//Dummy
             auto sop = std::make_unique<SeqOperatorType>(A.getOperator());
             using FlexibleSolverType = Dune::FlexibleSolver<SeqOperatorType>;

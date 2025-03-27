@@ -141,7 +141,7 @@ include(OpmBashCompletion)
 add_library(moduleVersionGeoMech OBJECT opm/simulators/utils/moduleVersion.cpp)
 set_property(TARGET moduleVersionGeoMech PROPERTY POSITION_INDEPENDENT_CODE ON)
 
-add_library(vem OBJECT opm/geomech/vem/vem.cpp)
+add_library(vem OBJECT opm/geomech/vem/vem.cpp opm/geomech/vem/vemutils.cpp)
 add_library(fracture OBJECT
 	opm/geomech/Fracture.cpp
 	opm/geomech/FractureModel.cpp

@@ -154,7 +154,7 @@ void Fracture::setupPressureSolver(){
     p.linsolver_ = prm_.get<std::string>("pressuresolver");
     prmpressure_ = Opm::setupPropertyTree(p, true, true);
     {
-        std::size_t pressureIndex; // Dummy
+        std::size_t pressureIndex = 0; // Dummy
         const std::function<Vector()> weightsCalculator; // Dummy
         auto pressure_operator = std::make_unique<PressureOperatorType>(*pressure_matrix_);
         // using FlexibleSolverType = Dune::FlexibleSolver<SeqOperatorType>;

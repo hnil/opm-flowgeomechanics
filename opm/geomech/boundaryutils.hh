@@ -25,6 +25,7 @@
 #include <cstring>
 #include <iostream>
 #include <opm/input/eclipse/EclipseState/Grid/FaceDir.hpp>
+#include <opm/input/eclipse/Schedule/BCProp.hpp>
 namespace Opm{
     namespace Elasticity{
         template<int dimension>
@@ -42,7 +43,7 @@ namespace Opm{
             return cartIndex;
         }
 
-        Opm::FaceDir::DirEnum faceToFaceDir(int insideFaceIdx){
+        inline Opm::FaceDir::DirEnum faceToFaceDir(int insideFaceIdx){
             Opm::FaceDir::DirEnum faceDirection;
             switch (insideFaceIdx) {
             case 0:
@@ -70,7 +71,7 @@ namespace Opm{
             return faceDirection;
         }
 
-        int faceDirToFace(Opm::FaceDir::DirEnum faceDirection){
+        inline int faceDirToFace(Opm::FaceDir::DirEnum faceDirection){
             int face;
             switch (faceDirection) {
                 case FaceDir::XMinus:
@@ -98,7 +99,7 @@ namespace Opm{
             return face;
         }
 
-        std::array<int,4> faceDirToNodes(Opm::FaceDir::DirEnum faceDirection){
+        inline std::array<int,4> faceDirToNodes(Opm::FaceDir::DirEnum faceDirection){
             std::array<int,4> face;
             switch (faceDirection) {
                 case FaceDir::XMinus:

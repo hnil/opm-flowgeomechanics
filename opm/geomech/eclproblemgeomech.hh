@@ -101,7 +101,7 @@ namespace Opm{
                 const auto& initconfig = eclState.getInitConfig();
                 geomechModel_.init(initconfig.restartRequested());
                 const auto& fp = eclState.fieldProps();
-                std::vector<std::string> needkeys = {"YMODULE","PRATIO","BIOTCOEF"};
+                std::vector<std::string> needkeys = {"YMODULE","PRATIO"};
                 for(size_t i=0; i < needkeys.size(); ++i){
                     bool ok = fp.has_double(needkeys[i]);
                 std::stringstream ss;
@@ -112,14 +112,42 @@ namespace Opm{
                 }
                 ymodule_ = fp.get_double("YMODULE");
                 pratio_ = fp.get_double("PRATIO");
-                biotcoef_ = fp.get_double("BIOTCOEF");
-                poelcoef_ = fp.get_double("POELCOEF");
-
+                if(fp.has_double("BIOTCOEF")){
+                    biotcoef_ = fp.get_double("BIOTCOEF");
+                    poelcoef_.resize(ymodule_.size());
+                    for(int i=0; i < ymodule_.size(); ++i){
+                        poelcoef_[i] = (1-2*pratio_[i])/(1-pratio_[i])*biotcoef_[i];
+                    }
+                }else{
+                    if(!fp.has_double("POELCOEF")){
+                        OPM_THROW(std::runtime_error,"Missing keyword BIOTCOEF or POELCOEF");
+                    }
+                    poelcoef_ = fp.get_double("POELCOEF");
+                    biotcoef_.resize(ymodule_.size());
+                    for(int i=0; i < ymodule_.size(); ++i){
+                        biotcoef_[i] = poelcoef_[i]*(1-pratio_[i])/(1-2*pratio_[i]); 
+                    }
+                }
+            
                 // thermal related
                 bool thermal_expansion = getPropValue<TypeTag, Properties::EnableEnergy>();
                 if(thermal_expansion){
-                    thelcoef_ = fp.get_double("THELCOEF");
-                    thermexr_ = fp.get_double("THERMEXR");
+                    if(fp.has_double("THELCOEF")){
+                        thelcoef_ = fp.get_double("THELCOEF");
+                        thermexr_.resize(ymodule_.size());
+                        for(int i=0; i < ymodule_.size(); ++i){
+                            thermexr_[i] = thelcoef_[i]*(1-pratio_[i])/ymodule_[i];
+                        }
+                    }else{
+                        if(!fp.has_double("THERMEXR")){
+                            OPM_THROW(std::runtime_error,"Missing keyword THELCOEF or THERMEXR");
+                        }
+                        thermexr_ = fp.get_double("THERMEXR");
+                        thelcoef_.resize(ymodule_.size());
+                        for(int i=0; i < ymodule_.size(); ++i){
+                            thelcoef_[i] = thermexr_[i]*ymodule_[i]/(1-pratio_[i]);
+                        }
+                    }
                 }
                 for(size_t i=0; i < ymodule_.size(); ++i){
                     using IsoMat = Opm::Elasticity::Isotropic;
