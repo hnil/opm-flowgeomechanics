@@ -118,6 +118,7 @@ public:
         reservoir_stress_.resize(ncf);
         reservoir_mobility_.resize(ncf);
         reservoir_perm_.resize(ncf);
+        reservoir_cstress_.resize(ncf);
         
         // should be calculated
         bool calculate_dist = prm_.get<bool>("reservoir.calculate_dist");
@@ -151,10 +152,12 @@ public:
                   reservoir_stress_[i] = problem.stress(cell);
                 }
                 const auto& perm =  problem.intrinsicPermeability(cell);
+                const auto& cstress =  problem.cStress(cell);
                 auto pn = normal;
                 perm.mv(normal, pn);
                 double npn = pn.dot(normal); 
                 reservoir_perm_[i] = npn;
+                reservoir_cstress_[i] = cstress;
                 if(calculate_dist){
                   //assert(false);
                   const auto& currentData = grid.currentData();
@@ -241,6 +244,7 @@ private:
         // NB reservoir dist not calculated
         size_t ncf = reservoir_cells_.size();
         reservoir_perm_.resize(ncf);
+        reservoir_cstress_.resize(ncf);
         // should be calcualted
         double dist = prm_.get<double>("reservoir.dist");
         reservoir_dist_.resize(ncf, dist);
@@ -252,10 +256,12 @@ private:
             auto normal = this->cell_normals_[i];
             {
                 auto permmat = problem.intrinsicPermeability(cell);
+                auto cstress = problem.cStress(cell);
                 auto np = normal;
                 permmat.mv(normal, np);
                 double value = np.dot(normal);
                 reservoir_perm_[i] = value;
+                reservoir_cstress_[i] = cstress;
             }
             Emax = std::max(Emax,problem.yModule(cell));
             numax = std::max(numax,problem.pRatio(cell));
@@ -317,6 +323,7 @@ private:
     std::vector<int> reservoir_cells_;
     // std::vector< Dune::FieldMatrix<double, 3, 3> > reservoir_perm_;
     std::vector<double> reservoir_perm_;
+    std::vector<double> reservoir_cstress_;
     std::vector<double> reservoir_mobility_;
     std::vector<double> reservoir_dist_;
     std::vector<double> reservoir_pressure_;

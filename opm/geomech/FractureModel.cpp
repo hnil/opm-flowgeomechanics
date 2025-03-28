@@ -21,6 +21,76 @@
 #include <stddef.h>
 
 namespace Opm{
+    Opm::PropertyTree makeDefaultFractureParam(){
+        using namespace std::string_literals;
+        Opm::PropertyTree fracture_param;
+        fracture_param.put("hasfractures",false);
+        fracture_param.put("add_perfs_to_schedule", true);
+        // solution method    
+        fracture_param.put("solver.method", "PostSolve"s);
+        fracture_param.put("solver.implicit_flow", false);
+        fracture_param.put("solver.max_mech_it", 2);
+
+        // solve method for fracture
+        fracture_param.put("fractureparam.method.iterate", true);
+        fracture_param.put("fractureparam.method.max_it", 3);
+
+        //
+        fracture_param.put("fractureparam.reduce_boundary", false);
+        fracture_param.put("fractureparam.addconnections", true);
+        // very experimental to calculate stress contributions from fracture to cell values
+        fracture_param.put("fractureparam.include_fracture_contributions", false);
+
+        // seed to be in input file   
+        // fracture_param.put("fractureparam.config.type", "well_seed");
+        // fracture_param.put("fractureparam.config.well", "P1");
+        // fracture_param.put("fractureparam.config.cell_ijk", std::vector<int>{8, 8, 10});
+        // fracture_param.put("fractureparam.config.normal", std::vector<double>{0, 1, 0});
+        // fracture_param.put("fractureparam.config.initial_fracture_width", 0.0);
+        // fracture_param.put("fractureparam.config.num_exp", 3);
+        // fracture_param.put("fractureparam.config.num_lin", 2);
+        // fracture_param.put("fractureparam.config.axis_scale", 4.50);
+
+        // propagation properties
+        fracture_param.put("fractureparam.solver.method", "if_propagate_trimesh"s);
+        fracture_param.put("fractureparam.solver.efac", 0.5);
+        fracture_param.put("fractureparam.solver.rfac", 0.1);
+        fracture_param.put("fractureparam.solver.max_iter", 100);
+        fracture_param.put("fractureparam.solver.damping", 1e0);
+        fracture_param.put("fractureparam.solver.min_width", 0.0);
+        fracture_param.put("fractureparam.solver.max_width", 1e10);
+        fracture_param.put("fractureparam.solver.max_dwidth", 1e-3);
+        fracture_param.put("fractureparam.solver.max_dp", 1e6);
+        fracture_param.put("fractureparam.solver.max_change", 1e-3);
+        fracture_param.put("fractureparam.solver.verbosity", 0);
+
+        // fracture linear solve
+        fracture_param.put("fractureparam.solver.linsolver.tol", 1e-10);
+        fracture_param.put("fractureparam.solver.linsolver.max_iter", 1000);
+        fracture_param.put("fractureparam.solver.linsolver.verbosity", 1);
+
+        // reservoir fracture coupling
+        fracture_param.put("fractureparam.reservoir.dist", 1e1);
+        fracture_param.put("fractureparam.reservoir.calculate_dist", true);
+        fracture_param.put("fractureparam.reservoir.mobility", 1.3e-3);
+        fracture_param.put("fractureparam.reservoir.perm", 1e-13);
+
+        // well fracture coupling
+        fracture_param.put("fractureparam.control.type", "perf_pressure"s);
+        fracture_param.put("fractureparam.control.rate", 2.9e-2);
+        fracture_param.put("fractureparam.control.WI", 1.0e-11);
+
+
+        //fracture_param.put("fractureparam.KMax", 1e6);// in input file
+        fracture_param.put("fractureparam.extended_fractures", true);
+        fracture_param.put("fractureparam.fractureWI", 0.1);
+        fracture_param.put("fractureparam.write_pressure_system", false);
+        fracture_param.put("fractureparam.write_fracture_system", false);
+        fracture_param.put("fractureparam.pressuresolver", "umfpack"s);
+        fracture_param.put("fractureparam.fracturesolver", "notused"s);
+        return fracture_param;
+    }
+
     void FractureModel::addWell(std::string name,
                            const std::vector<Point3D>& points,
                            const std::vector<Segment>& segments,

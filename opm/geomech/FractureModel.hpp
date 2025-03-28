@@ -21,6 +21,7 @@ namespace Opm {
 } // namespace Opm
 
 namespace Opm{
+  Opm::PropertyTree makeDefaultFractureParam();
 class FractureModel{
     //using CartesianIndexMapper = Dune::CartesianIndexMapper<Dune::CpGrid>;
 public:

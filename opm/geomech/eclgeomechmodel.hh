@@ -99,6 +99,9 @@ namespace Opm{
                     std::string caseName  = simulator_.vanguard().caseName();
                     param.put("outputdir", outputDir);
                     param.put("casename", caseName);
+                    //
+                    
+
 
                     fracturemodel_ = std::make_unique<FractureModel>(grid,
                                                                      wells,

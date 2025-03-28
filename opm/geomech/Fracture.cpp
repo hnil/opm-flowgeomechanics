@@ -372,6 +372,9 @@ Fracture::write(int reportStep) const
     if (reservoir_perm_.size() > 0) {
         vtkwriter_->addCellData(reservoir_perm_, "ReservoirPerm");
     }
+    if (reservoir_cstress_.size() > 0) {
+        vtkwriter_->addCellData(reservoir_cstress_, "ReservoirCStress");
+    }
     if (reservoir_dist_.size() > 0) {
         vtkwriter_->addCellData(reservoir_dist_, "ReservoirDist");
     }
@@ -415,6 +418,7 @@ void Fracture::writemulti(double time) const
     std::vector<double> reservoir_pressure = reservoir_pressure_;//.size(),0.0);
     std::vector<double> reservoir_dist = reservoir_dist_;//.size(),0.0);
     std::vector<double> reservoir_perm = reservoir_perm_;//.size(),0.0);
+    std::vector<double> reservoir_cstress = reservoir_cstress_;//.size(),0.0);
     std::vector<double> reservoir_mobility = reservoir_mobility_;//.size(),0.0);
     std::vector<double> reservoir_traction(reservoir_stress_.size(),0);
     std::vector<double> reservoir_cells(reservoir_cells_.size(),0.0);
@@ -458,6 +462,10 @@ void Fracture::writemulti(double time) const
     }
     if (reservoir_dist.size() > 0) {
         vtkmultiwriter_->attachScalarElementData(reservoir_dist, "ReservoirDist");
+    }
+
+    if (reservoir_cstress.size() > 0) {
+        vtkmultiwriter_->attachScalarElementData(reservoir_cstress, "ReservoirCStres");
     }
     if (fracture_pressure.size() > 0) {
         vtkmultiwriter_->attachScalarElementData(fracture_pressure, "FracturePressure");
@@ -661,6 +669,7 @@ void Fracture::updateReservoirProperties()
     // updater for standalone test
     double perm = prm_.get<double>("reservoir.perm");
     double dist = prm_.get<double>("reservoir.dist");
+    double cstress = prm_.get<double>("KMax");
     double mobility = prm_.get<double>("reservoir.mobility");
     size_t nc = numFractureCells();
     //assert(reservoir_cells_.size() == nc);
@@ -669,6 +678,8 @@ void Fracture::updateReservoirProperties()
     reservoir_mobility_.resize(nc, 1000);
     reservoir_pressure_.resize(nc, 100.0e5);
     reservoir_stress_.resize(nc);
+    reservoir_cstress_.resize(nc, cstress);
+
     for (size_t i = 0; i != nc; ++i)
       reservoir_stress_[i] = Dune::FieldVector<double, 6> {0, 0, 0, 0, 0, 0};
     

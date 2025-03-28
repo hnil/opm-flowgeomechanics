@@ -60,6 +60,7 @@ namespace Opm{
             std::string filename = Parameters::Get<Parameters::FractureParamFile>();
             try{
                 Opm::PropertyTree fracture_param(filename);
+                // set seed values
                 fracture_param_ = fracture_param;
             }
             catch(...){
@@ -67,7 +68,7 @@ namespace Opm{
                 ss << "No fracture parameter file: " << filename << " : no fractures added ";
                 //ss << e.what();
                 OpmLog::warning(ss.str());
-                Opm::PropertyTree fracture_param;
+                Opm::PropertyTree fracture_param = makeDefaultFractureParam();
                 fracture_param.put("hasfractures",false);
                 fracture_param.put("fractureparams.numfractures",1);
                 fracture_param_ = fracture_param;
@@ -158,6 +159,9 @@ namespace Opm{
                         OPM_THROW(std::runtime_error,"BIOTCOEF not valid");
                     }
                     elasticparams_.push_back(std::make_shared<IsoMat>(i,ymodule_[i],pratio_[i]));
+                }
+                if(fp.has_double("CSTRESS")){
+                    cstress_ = fp.get_double("CSTRESS");
                 }
                 // read mechanical boundary conditions
                 //const auto& simulator = this->simulator();
@@ -276,6 +280,11 @@ namespace Opm{
             }
             Parent::beginTimeStep();
             if(this->simulator().vanguard().eclState().runspec().mech()){
+                if(this->hasFractures()){
+                  if(!(cstress_.size() == this->gridView().size(0))){
+                        OPM_THROW(std::runtime_error,"CSTRESS not set but fractures exists");
+                    }
+                }
                 geomechModel_.beginTimeStep();
                 if(this->hasFractures()){
                     this->wellModel().beginTimeStep();// just to be sure well conteiner is reinitialized
@@ -459,6 +468,7 @@ namespace Opm{
         // used for fracture model
         double yModule(size_t idx) const {return ymodule_[idx];}
         double pRatio(size_t idx) const {return pratio_[idx];}
+        double cStress(size_t idx) const {return cstress_[idx];}
         
       //const std::vector< GridView::Codim<0>::EntitySeed >& elementEntitySeed(){return entitity_seed_;}
       //const std::vector< CellSeedType >& elementEntitySeed(){return entity_seed_;}
@@ -471,7 +481,8 @@ namespace Opm{
         std::vector<double> poelcoef_;
         std::vector<double> thermexr_;
         std::vector<double> thelcoef_;
-
+        std::vector<double> cstress_;
+        
         std::vector<double> initpressure_;
         std::vector<double> inittemperature_;
         std::vector<std::tuple<size_t,MechBCValue>> bc_nodes_;
