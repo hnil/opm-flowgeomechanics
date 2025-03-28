@@ -105,6 +105,7 @@ namespace Opm
         template <class TypeTag>
         struct WellModel<TypeTag, TTag::EclFlowProblemMech> {
             using type = BlackoilGeomechWellModel<TypeTag>;
+          //using type = BlackoilWellModel<TypeTag>;
         };
 
         // static constexpr bool has_disgas_in_water = getPropValue<TypeTag, Properties::EnableDisgasInWater>();
