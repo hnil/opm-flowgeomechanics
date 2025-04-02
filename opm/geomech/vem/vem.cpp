@@ -1270,13 +1270,15 @@ array<double, 3> identify_star_point(const array<double, 3>& point,
                           (result[1] - face_centroids[3*f_ix+1]) * face_normals[3*f_ix+1] +
                           (result[2] - face_centroids[3*f_ix+2]) * face_normals[3*f_ix+2];
       for (int ii = 0; ii != 3; ++ii)
-        result[ii] -= proj * face_normals[3*f_ix+ii];
+        result[ii] -= 1.1 * proj * face_normals[3*f_ix+ii]; // move slightly past plane
+      //result[ii] -= proj * face_normals[3*f_ix+ii];
     }
     if (++count == N)
       break;
   }
   if (count != N)
       throw runtime_error("Unable to find a star point for cell.");
+  std::cout << "A Ok."<< std::endl;
   return result;
 }
 
@@ -1382,37 +1384,68 @@ vector<int> consistent_face_ordering(const int* const faces,
   return result;
 }
 
+// // ----------------------------------------------------------------------------
+// bool inward_pointing_normals(const vector<double>& normals,
+//                              const vector<double>& face_centroids)
+// // ----------------------------------------------------------------------------
+// {
+//   const int N = (int)normals.size()/3;
+//   const double tol = 1e-9;
+
+//   for (int d = 0; d != 3; ++d) {
+//     // usually, it should be enough to check for d==0, but there may be pathological
+//     // cases where we would have to resort to other coordinate directions
+//     int max_ix = 0, min_ix = 0;
+//     double max_val = face_centroids[d], min_val = max_val;
+//     for (int i = 0; i != N; ++i) {
+//       if (face_centroids[3*i+d] < min_val) {
+//         min_val = face_centroids[3*i+d];
+//         min_ix = i;
+//       } else if (face_centroids[3*i+d] > max_val) {
+//         max_val = face_centroids[3*i+d];
+//         max_ix = i;
+//       }
+//     }
+//     if (fabs(normals[3 * max_ix + d]) > tol)
+//       return normals[3 * max_ix + d] < 0;
+//     else if (fabs(normals[3 * min_ix + d]) > tol)
+//       return normals[3 * min_ix + d] > 0;
+//   }
+
+//   // if we got here, there is something peculiar about the input data
+//   throw runtime_error("Unable to determine orientation of normals in element.");
+// }
+
 // ----------------------------------------------------------------------------
 bool inward_pointing_normals(const vector<double>& normals,
                              const vector<double>& face_centroids)
 // ----------------------------------------------------------------------------
 {
+  // This version of inward_pointing_normals is implemented to be a bit more
+  // robust than the previous one, by taking into account the possibility of
+  // non-planar faces.  It is still possible it may fail in some pathological
+  // cases.
+    
+  // compute the "centroid" of the polyhedron
   const int N = (int)normals.size()/3;
-  const double tol = 1e-9;
+  const array<double, 3> mean_point = point_average<3>(&face_centroids[0], N);
 
-  for (int d = 0; d != 3; ++d) {
-    // usually, it should be enough to check for d==0, but there may be pathological
-    // cases where we would have to resort to other coordinate directions
-    int max_ix = 0, min_ix = 0;
-    double max_val = face_centroids[d], min_val = max_val;
-    for (int i = 0; i != N; ++i) {
-      if (face_centroids[3*i+d] < min_val) {
-        min_val = face_centroids[3*i+d];
-        min_ix = i;
-      } else if (face_centroids[3*i+d] > max_val) {
-        max_val = face_centroids[3*i+d];
-        max_ix = i;
-      }
-    }
-    if (fabs(normals[3 * max_ix + d]) > tol)
-      return normals[3 * max_ix + d] < 0;
-    else if (fabs(normals[3 * min_ix + d]) > tol)
-      return normals[3 * min_ix + d] > 0;
-  }
+  // compute the distance vectors from the polyhedron centroid to the face centroids
+  vector<array<double, 3>> dists(N);
+  for (int i = 0; i != N; ++i)
+    for (int d = 0; d != 3; ++d)
+      dists[i][d] = face_centroids[3*i+d] - mean_point[d];
 
-  // if we got here, there is something peculiar about the input data
-  throw runtime_error("Unable to determine orientation of normals in element.");
+  // add up the scalar products between distance vectors and face normals
+  double sum = 0;
+  for (int i = 0; i != N; ++i)
+    for (int d = 0; d != 3; ++d)
+      sum += dists[i][d] * normals[3*i+d];
+
+  return sum < 0;
 }
+  
+
 
 // ----------------------------------------------------------------------------
 // Compute key parts of cell geometry, including a consistent set of outward
