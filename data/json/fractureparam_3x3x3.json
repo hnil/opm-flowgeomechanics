@@ -8,6 +8,7 @@
     },
     "fractureparam":{
         "addconnections":true,
+        "reduce_boundary":true,
         "method":{
             "iterate":true,
             "max_it":1
