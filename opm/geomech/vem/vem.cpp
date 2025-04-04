@@ -1270,13 +1270,15 @@ array<double, 3> identify_star_point(const array<double, 3>& point,
                           (result[1] - face_centroids[3*f_ix+1]) * face_normals[3*f_ix+1] +
                           (result[2] - face_centroids[3*f_ix+2]) * face_normals[3*f_ix+2];
       for (int ii = 0; ii != 3; ++ii)
-        result[ii] -= proj * face_normals[3*f_ix+ii];
+        result[ii] -= 1.1 * proj * face_normals[3*f_ix+ii]; // move slightly past plane
+      //result[ii] -= proj * face_normals[3*f_ix+ii];
     }
     if (++count == N)
       break;
   }
   if (count != N)
       throw runtime_error("Unable to find a star point for cell.");
+
   return result;
 }
 
@@ -1304,115 +1306,148 @@ void compute_face_geometry(const vector<double>& points, double* normal, double*
 }
 
 // ----------------------------------------------------------------------------
-vector<int> consistent_face_ordering(const int* const faces,
-                                     const int* const num_face_edges,
-                                     const int num_faces)
+vector<int> extract_local_faces(const int* const faces,
+                                const int* const num_face_edges,
+                                const int num_faces)
 // ----------------------------------------------------------------------------
 {
+  // Picks the locally relevant face corner indices
   vector<int> result(faces, faces + accumulate(num_face_edges, num_face_edges + num_faces, 0));
   return result;
-  vector<int> sorted_facenodes(result); // we need to sort the facenodes for quicker set operations
-  for (int f = 0, fpos=0; f != num_faces; fpos += num_face_edges[f++])
-    sort(&sorted_facenodes[fpos], &sorted_facenodes[fpos] + num_face_edges[f]);
-  vector<int*> face_ptrs(1, &result[0]);
-  vector<int*> sorted_fnode_ptrs(1, &sorted_facenodes[0]);
-  for (int i = 1; i != num_faces; ++i) {
-    face_ptrs.push_back(face_ptrs[i-1] + num_face_edges[i-1]);
-    sorted_fnode_ptrs.push_back(sorted_fnode_ptrs[i-1] + num_face_edges[i-1]);
-  }
-  vector<int> ordered(num_faces, false), completed(num_faces, false);
-  ordered[0] = true;
+} 
+//   vector<int> sorted_facenodes(result); // we need to sort the facenodes for quicker set operations
+//   for (int f = 0, fpos=0; f != num_faces; fpos += num_face_edges[f++])
+//     sort(&sorted_facenodes[fpos], &sorted_facenodes[fpos] + num_face_edges[f]);
+//   vector<int*> face_ptrs(1, &result[0]);
+//   vector<int*> sorted_fnode_ptrs(1, &sorted_facenodes[0]);
+//   for (int i = 1; i != num_faces; ++i) {
+//     face_ptrs.push_back(face_ptrs[i-1] + num_face_edges[i-1]);
+//     sorted_fnode_ptrs.push_back(sorted_fnode_ptrs[i-1] + num_face_edges[i-1]);
+//   }
+//   vector<int> ordered(num_faces, false), completed(num_faces, false);
+//   ordered[0] = true;
 
-  while (!all_of(ordered.begin(), ordered.end(), [](auto x){return x;})) {
-    // identfying the reference face to use this time
-    int ref_face = -1;
-    for (ref_face = 0; ref_face != num_faces; ++ref_face)
-      if (ordered[ref_face] && !completed[ref_face])
-        break;
+//   while (!all_of(ordered.begin(), ordered.end(), [](auto x){return x;})) {
+//     // identfying the reference face to use this time
+//     int ref_face = -1;
+//     for (ref_face = 0; ref_face != num_faces; ++ref_face)
+//       if (ordered[ref_face] && !completed[ref_face])
+//         break;
 
-    // check which faces that can be oriented based on the current reference face
-    vector<int> isect;
-    for (int i = 0; i != num_faces; ++i, isect.clear()) {
-      if (!ordered[i]) { 
-        //std::cout << "Fix ordering of face" << std::endl;
-        set_intersection(sorted_fnode_ptrs[ref_face], sorted_fnode_ptrs[ref_face] + num_face_edges[ref_face],
-                         sorted_fnode_ptrs[i], sorted_fnode_ptrs[i] + num_face_edges[i], back_inserter(isect));
-        if (isect.size() == 2 ) {
+//     // check which faces that can be oriented based on the current reference face
+//     vector<int> isect;
+//     for (int i = 0; i != num_faces; ++i, isect.clear()) {
+//       if (!ordered[i]) { 
+//         //std::cout << "Fix ordering of face" << std::endl;
+//         set_intersection(sorted_fnode_ptrs[ref_face], sorted_fnode_ptrs[ref_face] + num_face_edges[ref_face],
+//                          sorted_fnode_ptrs[i], sorted_fnode_ptrs[i] + num_face_edges[i], back_inserter(isect));
+//         if (isect.size() == 2 ) {
 
 
-          assert(isect.size() > 1); // should be at least two corners to a shared edge
-          const auto ref1 = find(face_ptrs[ref_face], face_ptrs[ref_face] + num_face_edges[ref_face], isect[0]);
-          const auto ref2 = find(face_ptrs[ref_face], face_ptrs[ref_face] + num_face_edges[ref_face], isect[1]);
-          const auto i1 = find(face_ptrs[i], face_ptrs[i] + num_face_edges[i], isect[0]);
-          const auto i2 = find(face_ptrs[i], face_ptrs[i] + num_face_edges[i], isect[1]);
-          if(!((i1-i2) == 1)){
-              bool is_ok = false;
-              if( i1 == (face_ptrs[i]) ){
-                  if( i2 == face_ptrs[i]+num_face_edges[i] ){
-                      is_ok = true;
-                  }
-              }
-              if( i2 == face_ptrs[i] ){
-                  if( i1 == face_ptrs[i]+num_face_edges[i] ){
-                      is_ok = true;
-                  }
-              }
-              if(!is_ok){
-                  std::cout << "strange intersection of faces" << std::endl;
-                  assert(false);
-              }
-          }
+//           assert(isect.size() > 1); // should be at least two corners to a shared edge
+//           const auto ref1 = find(face_ptrs[ref_face], face_ptrs[ref_face] + num_face_edges[ref_face], isect[0]);
+//           const auto ref2 = find(face_ptrs[ref_face], face_ptrs[ref_face] + num_face_edges[ref_face], isect[1]);
+//           const auto i1 = find(face_ptrs[i], face_ptrs[i] + num_face_edges[i], isect[0]);
+//           const auto i2 = find(face_ptrs[i], face_ptrs[i] + num_face_edges[i], isect[1]);
+//           if(!((i1-i2) == 1)){
+//               bool is_ok = false;
+//               if( i1 == (face_ptrs[i]) ){
+//                   if( i2 == face_ptrs[i]+num_face_edges[i] ){
+//                       is_ok = true;
+//                   }
+//               }
+//               if( i2 == face_ptrs[i] ){
+//                   if( i1 == face_ptrs[i]+num_face_edges[i] ){
+//                       is_ok = true;
+//                   }
+//               }
+//               if(!is_ok){
+//                   std::cout << "strange intersection of faces" << std::endl;
+//                   assert(false);
+//               }
+//           }
 
-          const bool orient1 = (ref2 == ref1+1 || ref2 == face_ptrs[ref_face]);  // order is ref1, ref2 if true
-          const bool orient2 = (i2 == i1 + 1 || i2 == face_ptrs[i]);            // order is i1, i2 if true
-          if (orient1 == orient2)
-            // faces have the same orientation.  Flip the orientation of the non-reference face
-            reverse(face_ptrs[i], face_ptrs[i] + num_face_edges[i]);
+//           const bool orient1 = (ref2 == ref1+1 || ref2 == face_ptrs[ref_face]);  // order is ref1, ref2 if true
+//           const bool orient2 = (i2 == i1 + 1 || i2 == face_ptrs[i]);            // order is i1, i2 if true
+//           if (orient1 == orient2)
+//             // faces have the same orientation.  Flip the orientation of the non-reference face
+//             reverse(face_ptrs[i], face_ptrs[i] + num_face_edges[i]);
 
-          // at this point, we should be assured that face 'i' is oriented consistently with face 'ref'
-          ordered[i] = true;
-        }
-        else if(!isect.empty()){
-            std::cout << "Face-face intersection with not 2 nodes" << std::endl;
-        }
-      }
-    }
-    completed[ref_face] = true;
-  }
-  return result;
-}
+//           // at this point, we should be assured that face 'i' is oriented consistently with face 'ref'
+//           ordered[i] = true;
+//         }
+//         else if(!isect.empty()){
+//             std::cout << "Face-face intersection with not 2 nodes" << std::endl;
+//         }
+//       }
+//     }
+//     completed[ref_face] = true;
+//   }
+//   return result;
+// }
+
+// // ----------------------------------------------------------------------------
+// bool inward_pointing_normals(const vector<double>& normals,
+//                              const vector<double>& face_centroids)
+// // ----------------------------------------------------------------------------
+// {
+//   const int N = (int)normals.size()/3;
+//   const double tol = 1e-9;
+
+//   for (int d = 0; d != 3; ++d) {
+//     // usually, it should be enough to check for d==0, but there may be pathological
+//     // cases where we would have to resort to other coordinate directions
+//     int max_ix = 0, min_ix = 0;
+//     double max_val = face_centroids[d], min_val = max_val;
+//     for (int i = 0; i != N; ++i) {
+//       if (face_centroids[3*i+d] < min_val) {
+//         min_val = face_centroids[3*i+d];
+//         min_ix = i;
+//       } else if (face_centroids[3*i+d] > max_val) {
+//         max_val = face_centroids[3*i+d];
+//         max_ix = i;
+//       }
+//     }
+//     if (fabs(normals[3 * max_ix + d]) > tol)
+//       return normals[3 * max_ix + d] < 0;
+//     else if (fabs(normals[3 * min_ix + d]) > tol)
+//       return normals[3 * min_ix + d] > 0;
+//   }
+
+//   // if we got here, there is something peculiar about the input data
+//   throw runtime_error("Unable to determine orientation of normals in element.");
+// }
 
 // ----------------------------------------------------------------------------
 bool inward_pointing_normals(const vector<double>& normals,
                              const vector<double>& face_centroids)
 // ----------------------------------------------------------------------------
 {
+  // This version of inward_pointing_normals is implemented to be a bit more
+  // robust than the previous one, by taking into account the possibility of
+  // non-planar faces.  It is still possible it may fail in some pathological
+  // cases.
+    
+  // compute the "centroid" of the polyhedron
   const int N = (int)normals.size()/3;
-  const double tol = 1e-9;
+  const array<double, 3> mean_point = point_average<3>(&face_centroids[0], N);
 
-  for (int d = 0; d != 3; ++d) {
-    // usually, it should be enough to check for d==0, but there may be pathological
-    // cases where we would have to resort to other coordinate directions
-    int max_ix = 0, min_ix = 0;
-    double max_val = face_centroids[d], min_val = max_val;
-    for (int i = 0; i != N; ++i) {
-      if (face_centroids[3*i+d] < min_val) {
-        min_val = face_centroids[3*i+d];
-        min_ix = i;
-      } else if (face_centroids[3*i+d] > max_val) {
-        max_val = face_centroids[3*i+d];
-        max_ix = i;
-      }
-    }
-    if (fabs(normals[3 * max_ix + d]) > tol)
-      return normals[3 * max_ix + d] < 0;
-    else if (fabs(normals[3 * min_ix + d]) > tol)
-      return normals[3 * min_ix + d] > 0;
-  }
+  // compute the distance vectors from the polyhedron centroid to the face centroids
+  vector<array<double, 3>> dists(N);
+  for (int i = 0; i != N; ++i)
+    for (int d = 0; d != 3; ++d)
+      dists[i][d] = face_centroids[3*i+d] - mean_point[d];
 
-  // if we got here, there is something peculiar about the input data
-  throw runtime_error("Unable to determine orientation of normals in element.");
+  // add up the scalar products between distance vectors and face normals
+  double sum = 0;
+  for (int i = 0; i != N; ++i)
+    for (int d = 0; d != 3; ++d)
+      sum += dists[i][d] * normals[3*i+d];
+
+  return sum < 0;
 }
+  
+
 
 // ----------------------------------------------------------------------------
 // Compute key parts of cell geometry, including a consistent set of outward
@@ -1432,7 +1467,7 @@ void compute_cell_geometry(const double* points,
 {
   // ensure faces are consistently oriented so that normals all point outwards
   // or inwards
-  vector<int> faces2 = consistent_face_ordering(faces, num_face_edges, num_faces);
+  vector<int> faces2 = extract_local_faces(faces, num_face_edges, num_faces);
 
   outward_normals.resize(num_faces * 3);
   face_centroids.resize(num_faces * 3);
@@ -1444,9 +1479,14 @@ void compute_cell_geometry(const double* points,
 
   // ensure normals are pointing out of, rather than into, polyhedron
   if (inward_pointing_normals(outward_normals, face_centroids))
-    for_each(outward_normals.begin(), outward_normals.end(), [](double& d) {d *= -1;});
-  assert(face_centroids.size() == static_cast<std::size_t>(num_faces*3));
-  //std::cout << "Size # "<< face_centroids.size() << std::endl;
+    assert(false);
+
+  // (deprecated, since we assume a consistent face corner ordering in 'faces')
+  //
+  // if (inward_pointing_normals(outward_normals, face_centroids))
+  //   for_each(outward_normals.begin(), outward_normals.end(), [](double& d) {d *= -1;});
+  // assert(face_centroids.size() == static_cast<std::size_t>(num_faces*3));
+         
   // identify a star point (usually, mean_point qualifies, but not necessarily)
   star_point = identify_star_point(point_average<3>(points, num_points),
                                    outward_normals, face_centroids);
