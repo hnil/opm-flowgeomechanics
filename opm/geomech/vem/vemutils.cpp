@@ -112,10 +112,11 @@ namespace vem{
     // std::vector<int> num_cell_faces_tmp;
     // std::vector<int> num_face_corners_tmp;
     // std::vector<int> face_corners_tmp;
-    // getGridVectors<Dune::CpGrid>(grid, coords_tmp,
-    //                              num_cell_faces_tmp,
-    //                              num_face_corners_tmp,
-    //                              face_corners_tmp);
+    // getGridVectors<Dune::CpGrid>(grid, coords,
+    //                               num_cell_faces,
+    //                               num_face_corners,
+    //                               face_corners);
+    // return;
     // coords = coords_tmp;
     // num_cell_faces = num_cell_faces_tmp;
     // num_face_corners =  num_face_corners_tmp;

@@ -22,7 +22,7 @@ cmake_minimum_required(VERSION 3.15)
 option(SIBLING_SEARCH "Search for other modules in sibling directories?" ON)
 set( USE_OPENMP_DEFAULT OFF ) # Use of OpenMP is considered experimental
 option(USE_TRACY_PROFILER "Enable tracy profiling" OFF)
-
+option(USE_HYPRE "Use the Hypre library for linear solvers?" OFF)
 # The following was copied from CMakeLists.txt in opm-common.
 # TODO: factor out the common parts in opm-common and opm-simulator as a cmake module
 
@@ -60,6 +60,22 @@ OpmSetPolicies()
 if(USE_MPI)
 	set(HDF5_PREFER_PARALLEL TRUE)
 endif()
+
+if(USE_HYPRE AND USE_MPI)
+  find_package(HYPRE)
+  if(HYPRE_FOUND)
+    set(HAVE_HYPRE 1)
+    ##list(APPEND opm-flowgeomech_LIBRARIES HYPRE::HYPRE)
+  else()
+    message(WARNING "Hypre requested but not found. Continuing without Hypre support.")
+    set(USE_HYPRE OFF)
+  endif()
+elseif(USE_HYPRE)
+  message(WARNING "Hypre requested but MPI not activated. Continuing without Hypre support.")
+  set(USE_HYPRE OFF)
+  set(HYPRE_FOUND OFF)
+endif()
+
 
 # not the same location as most of the other projects? this hook overrides
 macro (dir_hook)
@@ -155,6 +171,9 @@ add_library(fracture OBJECT
 	opm/geomech/RegularTrimesh.cpp
 	opm/geomech/Fracture_fullSystemIteration.cpp
 	examples/FlexibleSolverMech.cpp)
+if(HAVE_HYPRE)	
+	target_link_libraries(fracture HYPRE::HYPRE)
+endif()
 # target_link_libraries( vem PUBLIC Tracy::TracyClient)
 # Strictly we only depend on the update-version target,
 # but this is not exposed in a super-build.
