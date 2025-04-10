@@ -1,3 +1,5 @@
+#include <config.h>
+
 #include "RegularTrimesh.hpp"
 #include "GeometryHelpers.hpp"
 #include <algorithm>

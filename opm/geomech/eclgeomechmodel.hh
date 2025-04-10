@@ -9,6 +9,9 @@
 #include <opm/geomech/FlowGeomechLinearSolverParameters.hpp>
 #include <opm/geomech/FractureModel.hpp>
 #include <opm/simulators/linalg/WriteSystemMatrixHelper.hpp>
+
+#include <opm/input/eclipse/Schedule/Schedule.hpp>
+
 namespace Opm{
     template<typename TypeTag>
     class EclGeoMechModel : public BaseAuxiliaryModule<TypeTag>
@@ -111,7 +114,7 @@ namespace Opm{
                     // most important stress
                     fracturemodel_->updateReservoirWellProperties<TypeTag,Simulator>(simulator_);
                     // add fractures along the wells
-                    fracturemodel_->addFractures();
+                    fracturemodel_->addFractures(schedule[reportStepIdx]);
 
                     fracturemodel_->updateFractureReservoirCells();
                     fracturemodel_->initReservoirProperties<TypeTag,Simulator>(simulator_);
