@@ -2,19 +2,29 @@
 #include "Fracture.hpp"
 #include "FractureWell.hpp"
 #include "GeometryHelpers.hpp"
+
 #include <opm/grid/common/CartesianIndexMapper.hpp>
 #include <opm/grid/utility/compressedToCartesian.hpp>
 #include <opm/grid/utility/cartesianToCompressed.hpp>
+
 #include <opm/input/eclipse/Schedule/Well/Connection.hpp>
 #include <opm/input/eclipse/Schedule/Well/Well.hpp>
 #include <opm/input/eclipse/Schedule/Well/WellConnections.hpp>
+
 #include <opm/simulators/linalg/PropertyTree.hpp>
+
+#include <algorithm>
+#include <array>
+#include <cstddef>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 namespace Opm {
     class RuntimePerforation;
+
+    class ScheduleState;
 
     template <typename Scalar>
     class WellState;
@@ -32,7 +42,16 @@ public:
                   const std::vector<Opm::Well>& wells,
                    const Opm::PropertyTree&
         );
-    void addFractures();
+
+    /// Initialise fracture objects.
+    ///
+    /// Initialisation method selected by the property tree's "type" node,
+    /// which defaults to the "well_seed" method (WSEED keyword).
+    ///
+    /// \param[in] sched Dynamic objects in current run, especially
+    /// including well fracturing seed points and fracturing plane normal
+    /// vectors in addition to all current well objects.
+    void addFractures(const ScheduleState& sched);
 
     void updateFractureReservoirCells()
     {
@@ -42,14 +61,6 @@ public:
             }
         }
     }
-
-    template <class Grid>
-    void addFractures(const Grid& grid, const Opm::EclipseGrid& eclgrid);
-
-    template <class Grid>
-    void addDefaultsWells(const Grid& grid, const Opm::EclipseGrid& eclgrid);
-
-
   
   //void updateFractureReservoirCells(const Dune::CpGrid& cpgrid)
   template<class Grid>
@@ -143,6 +154,17 @@ private:
     std::vector<std::vector<Fracture>> well_fractures_;
     Opm::PropertyTree prm_;
     external::cvf::ref<external::cvf::BoundingBoxTree> cell_search_tree_;
+
+    /// Initialise fractures perpendicularly to each reservoir connection.
+    void addFracturesPerpWell();
+    void addFracturesTensile();
+
+    /// Initialise fractures in each seed identified in the WSEED keyword.
+    ///
+    /// \param[in] sched Dynamic objects in current run, especially
+    /// including well fracturing seed points and fracturing plane normal
+    /// vectors in addition to all current well objects.
+    void addFracturesWellSeed(const ScheduleState& sched);
 };
 }
 #include "FractureModel_impl.hpp"
