@@ -1,7 +1,9 @@
 #include "topology.hpp"
+#include "vem.hpp"
 #include <map>
 #include <algorithm>
 #include <cmath>
+#include <iostream> // @@ for debug/warning
 
 using namespace std;
 
@@ -33,6 +35,30 @@ namespace {
       return false;
     }
   };
+
+  // ----------------------------------------------------------------------------
+  bool same_face(tuple<double, double, int, int> f1,
+                 tuple<double, double, int, int> f2,
+                 const int* const num_face_corners,
+                 const int* const face_corners)
+  // ----------------------------------------------------------------------------    
+  {
+    const int f1_ix = get<2>(f1);
+    const int f2_ix = get<2>(f2);
+    const int fc1_start = get<3>(f1);
+    const int fc2_start = get<3>(f2);
+    
+    
+    if (num_face_corners[f1_ix] != num_face_corners[f2_ix])
+      return false;
+
+    for (int i = 0; i != num_face_corners[f1_ix]; ++i) 
+      if (face_corners[fc1_start + i] != face_corners[fc2_start + i])
+        return false;
+
+      return true;
+  }
+  
 };
 
 namespace vem {
@@ -46,25 +72,25 @@ namespace vem {
       
     for (size_t cell = 0; cell != num_cells; ++cell)
       for (size_t face = 0; face != num_cell_faces[cell]; ++face)
-        result.push_back({cell, face});
+        result.push_back({(int)cell, (int)face});
     return result;
   }
 
 
   // ----------------------------------------------------------------------------
-  tuple<vector<IndexPair>, vector<size_t>>
+  tuple<vector<IndexPair>, vector<int>>
   cellfaces_matching_faces(const int num_cells,
                            const int* const num_cell_faces,
                            const int* const num_face_corners,
                            const int* const face_corners)
   // ----------------------------------------------------------------------------    
   {
-    tuple<vector<IndexPair>, vector<size_t>> result;
-    map<FaceCorners, size_t> fc2cellface;
+    tuple<vector<IndexPair>, vector<int>> result;
+    map<FaceCorners, int> fc2cellface;
     
     const int* nfc_ptr = num_face_corners;
     const int* fc_ptr = face_corners;
-    size_t cellface_ix = 0;
+    int cellface_ix = 0;
 
     // identify pairs of cellfaces with identical corners
     for (size_t cell = 0; cell != num_cells; ++cell) {
@@ -90,7 +116,7 @@ namespace vem {
 
   // ----------------------------------------------------------------------------
   vector<array<double, 3>> cellface_centroids(const double* const coords, 
-                                              const vector<size_t>& cellface_ixs,
+                                              const vector<int>& cellface_ixs,
                                               const int* const num_face_corners,
                                               const int* const face_corners)
   // ----------------------------------------------------------------------------    
@@ -125,18 +151,87 @@ namespace vem {
   mutual_distances(const vector<array<double, 3>>& points)
   // ----------------------------------------------------------------------------
   {
-    vector<std::tuple<double, IndexPair>> result;
+    vector<tuple<double, IndexPair>> result;
     const size_t num_points = points.size();
     for (size_t i = 0; i != num_points; ++i) {
       for (size_t j = i + 1; j != num_points; ++j) {
         const double dist = sqrt(pow(points[i][0] - points[j][0], 2) +
                                  pow(points[i][1] - points[j][1], 2) +
                                  pow(points[i][2] - points[j][2], 2));
-        result.push_back({dist, {i, j}});
+        result.push_back({dist, {int(i), int(j)}});
       }
     }
     return result;
   }
 
+
+  // ----------------------------------------------------------------------------
+  vector<array<int, 2>> identify_top_bottom_faces(const double* const coords,
+                                                  const int num_cells,
+                                                  const int* const num_cell_faces,
+                                                  const int* const num_face_corners,
+                                                  const int* const face_corners)
+  // ----------------------------------------------------------------------------
+  {
+    // the top and bottom face for each cell are identified as the two faces with
+    // largest area.  
+    vector<array<int, 2>> result;
+    result.reserve(num_cells);
+    int cf_index = 0; // cell face index; will be counted steadily upward as we
+                      // address each cell and its faces.
+    int fcor_index = 0; // face corner index; will be counted steadily upward as we
+                        // address each face and its corners.
+
+    for (int cell = 0; cell != num_cells; ++cell) {
+
+      // area, lowest z-value and cellface index (last int is the 'fcor_index', may be
+      // removed if face duplicity check no longer needed)
+      vector<tuple<double, double, int, int>> areas; 
+      
+      for (int i = 0; i != num_cell_faces[cell]; ++i, ++cf_index) {
+
+        const vector<double> poly_corners = 
+          pick_points_3D(coords, &face_corners[fcor_index], num_face_corners[cf_index]);
+
+        // compute area
+        const double area = face_integral(&poly_corners[0], num_face_corners[cf_index], 3);
+        //const double area = element_volume_2D(&poly_corners[0], num_face_corners[cf_index]);
+
+        // summed z-value
+        double sum_zval = 0;
+        for (int j = 0; j != num_face_corners[cf_index]; ++j) 
+          sum_zval += poly_corners[3 * j + 2];
+
+        areas.push_back({area, sum_zval, cf_index, fcor_index});
+        fcor_index += num_face_corners[cf_index];        
+      }
+
+      // sort element in 'areas' according to their area (largest first)
+      sort(areas.begin(), areas.end(), [](const auto& a, const auto& b) {
+          return get<0>(a) > get<0>(b);
+      });
+      // get the two largest areas, the one with the lowest summed z-value
+      // should be mentioned first (it's the top face)
+      auto top_face = areas[0];
+      size_t ix = 1;
+      auto bot_face = areas[ix];
+
+      // @@ the following check should never trigger for properly defined grids 
+      while (same_face(top_face, bot_face, num_face_corners, face_corners)) {
+          // the two faces are topologically the same.  Should generally not happen!
+          cout << "Warning: duplicate face detected in cell " << cell << "!" << endl;
+          if (ix == areas.size()-1)
+            throw runtime_error("All faces in cell are identical!");
+          bot_face = areas[++ix];
+      }
+      
+      if (get<1>(top_face) > get<1>(bot_face))
+        std::swap(top_face, bot_face);
+
+      result.push_back({get<2>(top_face), get<2>(bot_face)});
+    }
     
-};
+    return result;
+  }
+  
+}; // end namespace
