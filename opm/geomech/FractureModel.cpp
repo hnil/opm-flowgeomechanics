@@ -2,19 +2,26 @@
 #include <opm/geomech/FractureModel.hpp>
 #include <dune/common/fmatrixev.hh>
 #include <opm/geomech/DiscreteDisplacement.hpp>
+
 #include <opm/simulators/linalg/PropertyTree.hpp>
 #include <opm/simulators/wells/RuntimePerforation.hpp>
-
 #include <opm/simulators/wells/SingleWellState.hpp>
 #include <opm/simulators/wells/WellState.hpp>
 
+#include <opm/input/eclipse/Schedule/ScheduleState.hpp>
+#include <opm/input/eclipse/Schedule/Well/Connection.hpp>
+#include <opm/input/eclipse/Schedule/Well/WellConnections.hpp>
+#include <opm/input/eclipse/Schedule/Well/WellFractureSeeds.hpp>
+
 #include <algorithm>
+#include <cstddef>
 #include <cassert>
 #include <iostream>
 #include <iterator>
 #include <stdexcept>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -102,86 +109,22 @@ namespace Opm{
         well_fractures_.push_back(std::vector<Fracture>());
     }
 
-    void
-    FractureModel::addFractures()
+    void FractureModel::addFractures(const ScheduleState& sched)
     {
-        auto config = prm_.get_child("config");
-        std::string type = config.get<std::string>("type");
-        for (size_t i = 0; i < wells_.size(); ++i) {
-            const FractureWell& well = wells_[i];
-            auto& grid = well.grid();
-            using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<FractureWell::Grid::LeafGridView>;
-            ElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
-            for (const auto& elem : elements(grid.leafGridView())) {
-                int eIdx = mapper.index(elem);
-                auto geo = elem.geometry();
-                assert(geo.corners() == 2);
-                // auto origo = geo.center();
-                Dune::FieldVector<double, 3> origo, normal;
-                int perf = eIdx;
+        const auto fracture_type = this->prm_
+            .get<std::string>("config.type", "well_seed");
 
-                int well_cell = well.reservoirCell(eIdx);
-
-                if (type == "perp_well") {
-		  origo = geo.corner(1); // assume this is cell center
-		  normal = geo.corner(1) - geo.corner(0);
-		  // perf = well_fractures_[i].size();
-		} else if (type == "well_seed") {
-		  if( config.get<std::string>("well") == well.name()){
-		    std::cout << "Fracure added for well " << well.name() << std::endl;
-		    //std::vector<int> cell_ijk = config.get< std::vector<int> > ("cell_ijk");
-		    int cell = config.get< int> ("cell");
-		    if(well.reservoirCell(eIdx) == cell){
-		      origo = geo.corner(1);
-		      const auto tmp_normal = config.get_child_items_as_vector<double>("normal");
-		      assert(tmp_normal.has_value() && tmp_normal->size() == 3);
-		      for(int i=0; i < 3; ++i){
-		        normal[i] = (*tmp_normal)[i];
-		      }
-		    }else{
-		      continue;
-		    }
-		  }else{
-		    continue;
-		  }
-                } else if (type == "tensile_fracture") {
-		  // https://link.springer.com/article/10.1007/s40948-023-00694-1
-		  double fractureThoughness = 1.0e6; // reservoir_fractureThoughness_[eIdx]; // ca 1.0 MPa m^1/2
-		  double tensilestrength = 5e6; // reservoir_tensilestrength_[eIdx]; //  5 MPa
-		  double criticallength = (fractureThoughness / tensilestrength); // ca (1/5)^2 5 mm.
-		  criticallength *= criticallength;
-		  auto stressmat = ddm::symTensor2Matrix(well.reservoirStress(eIdx));
-		  Dune::FieldMatrix<double, 3, 3> eigenVectors;
-		  Dune::FieldVector<double, 3> eigenValues;
-		  Dune::FMatrixHelp::eigenValuesVectors(stressmat, eigenValues, eigenVectors);
-		  int min_dir = -1;
-		  //int max_dir = -1;
-		  double min_eig = 1e99;
-		  double max_eig = -1e99;
-		  for (int i = 0; i < 3; ++i) {
-		    if (eigenValues[i] < min_eig) {
-		      min_dir = i;
-		      min_eig = eigenValues[i];
-		    }
-		    if (eigenValues[i] > max_eig) {
-              //  max_dir = i;
-		      max_eig = eigenValues[i];
-		    }
-		  }
-		  normal = eigenVectors[min_dir];
-		  // take midpoint
-		  origo = geo.corner(1); //-geo.corner(0);
-		  // origo /= 2.0;
-		  //  expression for size;
-                } else {
-		  OPM_THROW(std::runtime_error, "Invalid fracture type");
-                }
-
-
-                Fracture fracture;
-                fracture.init(well.name(), perf, well_cell, origo, normal, prm_);
-                well_fractures_[i].push_back(std::move(fracture));
-            }
+        if (fracture_type == "perp_well") {
+            this->addFracturesPerpWell();
+        }
+        else if (fracture_type == "tensile_fracture") {
+            this->addFracturesTensile();
+        }
+        else if (fracture_type == "well_seed") {
+            this->addFracturesWellSeed(sched);
+        }
+        else {
+            OPM_THROW(std::runtime_error, "Fracture type '" + fracture_type + "' is not supported");
         }
     }
 
@@ -313,6 +256,158 @@ namespace Opm{
 
                 fracture.assignGeomechWellState(perfData.connFracStatistics[perfIx]);
             }
+        }
+    }
+} // namespace Opm
+
+// ===========================================================================
+// Private member functions
+// ===========================================================================
+
+void Opm::FractureModel::addFracturesPerpWell()
+{
+    using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper
+        <FractureWell::Grid::LeafGridView>;
+
+    for (auto wellIx = 0*this->wells_.size(); wellIx < this->wells_.size(); ++wellIx) {
+        const auto& fracWell = this->wells_[wellIx];
+
+        const auto emap = ElementMapper {
+            fracWell.grid().leafGridView(), Dune::mcmgElementLayout()
+        };
+
+        for (const auto& elem : elements(fracWell.grid().leafGridView())) {
+            const auto& geom = elem.geometry();
+            const auto& origin = geom.corner(1);
+            const auto  normal = origin - geom.corner(0);
+            const auto  elemIdx = emap.index(elem);
+
+            this->well_fractures_[wellIx].emplace_back()
+                .init(fracWell.name(),
+                      /* connection index */ elemIdx,
+                      /* reservoir cell */ fracWell.reservoirCell(elemIdx),
+                      /* seed origin */ origin,
+                      /* fracturing plane's normal vector */ normal,
+                      this->prm_);
+        }
+    }
+}
+
+void Opm::FractureModel::addFracturesTensile()
+{
+    // https://link.springer.com/article/10.1007/s40948-023-00694-1
+
+    using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper
+        <FractureWell::Grid::LeafGridView>;
+
+    for (auto wellIx = 0*this->wells_.size(); wellIx < this->wells_.size(); ++wellIx) {
+        const auto& fracWell = this->wells_[wellIx];
+
+        const auto emap = ElementMapper {
+            fracWell.grid().leafGridView(), Dune::mcmgElementLayout()
+        };
+
+        for (const auto& elem : elements(fracWell.grid().leafGridView())) {
+            auto eigenVectors = Dune::FieldMatrix<double, 3, 3>{};
+            auto eigenValues  = Dune::FieldVector<double, 3>{};
+
+            const auto elemIdx = emap.index(elem);
+
+            const auto stressmat = ddm::symTensor2Matrix(fracWell.reservoirStress(elemIdx));
+            Dune::FMatrixHelp::eigenValuesVectors(stressmat, eigenValues, eigenVectors);
+
+            // Note: documentation for eigenValuesVectors() seems to imply
+            // that minPos == eigenValues.begin() here.
+            const auto  minPos = std::min_element(eigenValues.begin(), eigenValues.end());
+            const auto& normal = eigenVectors[std::distance(eigenValues.begin(), minPos)];
+
+            this->well_fractures_[wellIx].emplace_back()
+                .init(fracWell.name(),
+                      /* connection index */ elemIdx,
+                      /* reservoir cell */ fracWell.reservoirCell(elemIdx),
+                      /* seed origin */ elem.geometry().corner(1),
+                      /* fracturing plane's normal vector */ normal,
+                      this->prm_);
+        }
+    }
+}
+
+namespace {
+    std::unordered_map<int, std::size_t>
+    localSeedCells(const Opm::FractureWell&      fracWell,
+                   const Opm::WellConnections&   conns,
+                   const Opm::WellFractureSeeds& seeds)
+    {
+        auto localSeedIxMap = std::unordered_map<int, std::size_t>{};
+
+        auto connIx = [&fracWell, &conns](const std::size_t seedCellGlobal)
+        {
+            auto connPos = std::find_if(conns.begin(), conns.end(),
+                                        [seedCellGlobal](const auto& conn)
+                                        { return conn.global_index() == seedCellGlobal; });
+
+            if (connPos == conns.end()) {
+                return -1;
+            }
+
+            return fracWell.reservoirCell(std::distance(conns.begin(), connPos));
+        };
+
+        const auto& cells = seeds.seedCells();
+
+        for (auto seedIx = 0*cells.size(); seedIx < cells.size(); ++seedIx) {
+            if (const auto ix = connIx(cells[seedIx]); ix >= 0) {
+                localSeedIxMap.insert_or_assign(ix, seedIx);
+            }
+        }
+    }
+}
+
+void Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched)
+{
+    if (sched.wseed().empty()) {
+        return;
+    }
+
+    using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper
+        <FractureWell::Grid::LeafGridView>;
+
+    for (auto wellIx = 0*this->wells_.size(); wellIx < this->wells_.size(); ++wellIx) {
+        const auto& fracWell = this->wells_[wellIx];
+
+        if (! sched.wseed.has(fracWell.name())) {
+            continue;
+        }
+
+        const auto& wseed = sched.wseed(fracWell.name());
+        const auto localSeeds = localSeedCells
+            (fracWell, sched.wells(fracWell.name()).getConnections(), wseed);
+
+        const auto emap = ElementMapper {
+            fracWell.grid().leafGridView(), Dune::mcmgElementLayout()
+        };
+
+        for (const auto& elem : elements(fracWell.grid().leafGridView())) {
+            const auto elemIdx = emap.index(elem);
+            const auto seedPos = localSeeds.find(elemIdx);
+            if (seedPos == localSeeds.end()) {
+                continue;
+            }
+
+            const auto& seedNormal = wseed.getNormal
+                (WellFractureSeeds::SeedIndex { seedPos->second });
+
+            const auto normal = Dune::FieldVector<double, 3> {
+                seedNormal[0], seedNormal[1], seedNormal[2],
+            };
+
+            this->well_fractures_[wellIx].emplace_back()
+                .init(fracWell.name(),
+                      /* connection index */ elemIdx,
+                      /* reservoir cell */ seedPos->first,
+                      /* seed origin */ elem.geometry().corner(1),
+                      /* fracturing plane's normal vector */ normal,
+                      this->prm_);
         }
     }
 }
