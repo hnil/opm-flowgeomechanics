@@ -1264,7 +1264,7 @@ array<double, 3> identify_star_point(const array<double, 3>& point,
     const int f_ix = i % N;
     if (!is_behind_face(result, &face_normals[3 * f_ix], &face_centroids[3 * f_ix])) {
       count = 0;
-      std::cout << "Averga point not insize cell " << std::endl;
+      //std::cout << "Averga point not insize cell " << std::endl;
       // projecting the point onto the plane defined by the normal and the centroid
       const double proj = (result[0] - face_centroids[3*f_ix])   * face_normals[3*f_ix] +
                           (result[1] - face_centroids[3*f_ix+1]) * face_normals[3*f_ix+1] +
