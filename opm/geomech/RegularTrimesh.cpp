@@ -249,6 +249,50 @@ RegularTrimesh::RegularTrimesh(const int layers,
       expandGrid();
 }
 
+// ----------------------------------------------------------------------------    
+RegularTrimesh::RegularTrimesh(const double radius,
+                               const std::array<double, 3>& origin,
+                               const std::array<double, 3>& axis1,
+                               const std::array<double, 3>& axis2,
+                               const std::array<double, 2>& edgelen)
+// ----------------------------------------------------------------------------
+  : origin_(origin),
+    axis1_(RegularTrimesh::normalize(axis1)),
+    axis2_(RegularTrimesh::normalize(axis2)),
+    edgelen_(edgelen)
+{
+    const double R2 = radius * radius;
+    const double denom2 = (5.0/4.0) - (axis1_[0] * axis2_[0] +
+                                       axis1_[1] * axis2_[1] +
+                                       axis1_[2] * axis2_[2]);
+
+    // const double denom2 = 2 * (1 - axis1_[0] * axis2_[0] -
+    //                                axis1_[1] * axis2_[1] -
+    //                                axis1_[2] * axis2_[2]);
+
+    const int c = ceil(std::max(sqrt(R2 / denom2), radius));
+    
+    for (int i = (-c-1); i <= c; ++i)
+        for (int j = (-c-1); j <= c; ++j) 
+            for (int k = 0; k != 2; ++k)
+                if (norm(cellCentroid( {i, j, k} )) < radius)
+                    setActive(CellRef{i, j, k});
+
+    auto tmp = remove_mesh_corners(*this);
+    swap(tmp);
+}
+    
+// ----------------------------------------------------------------------------    
+void RegularTrimesh::swap(RegularTrimesh& other)
+// ----------------------------------------------------------------------------    
+{
+        std::swap(cellinfo_, other.cellinfo_);
+        std::swap(origin_, other.origin_);
+        std::swap(axis1_, other.axis1_);
+        std::swap(axis2_, other.axis2_);
+        std::swap(edgelen_, other.edgelen_);
+}
+    
 // ----------------------------------------------------------------------------
 std::vector<CellRef> RegularTrimesh::cellIndices() const
 // ----------------------------------------------------------------------------

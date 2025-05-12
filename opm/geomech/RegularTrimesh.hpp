@@ -68,6 +68,12 @@ public:
                    const std::array<double, 3>& axis2 = {0.5, std::sqrt(3) / 2, 0},
                    const std::array<double, 2>& edgelen = {1, 1});
 
+    RegularTrimesh(const double radius,
+                   const std::array<double, 3>& origin = {0, 0, 0},
+                   const std::array<double, 3>& axis1 = {1, 0, 0},
+                   const std::array<double, 3>& axis2 = {0.5, std::sqrt(3) / 2, 0},
+                   const std::array<double, 2>& edgelen = {1, 1});
+    
     // --------------------- Functions for inspecting the grid ---------------------
     size_t numCells() const
     {
@@ -115,7 +121,7 @@ public:
     int expandGrid(); // uniform expansion all directions
     int contractGrid(); // uniform contraction in all directions
     void removeSawtooths();
-
+    void swap(RegularTrimesh& other);
     // ---------------------- Functions for outputting other grid types -------------
     std::pair<std::unique_ptr<Grid>, std::vector<int>> createDuneGrid(bool coarsen_interior = false,
                                                                       const std::vector<CellRef>& fixed_cells
@@ -140,10 +146,14 @@ private:
     // helper functions
     std::vector<EdgeRef> all_half_edges_() const; // internal edges are duplicated
     std::vector<CellRef> interior_coarsegrid_() const; // all coarse cells fully covered by fine ones
+    static double norm(const Coord3D& v)
+    {
+        return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+    }
     static Coord3D normalize(const Coord3D& v)
     {
-        double norm = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-        return {v[0] / norm, v[1] / norm, v[2] / norm};
+        const double n = norm(v); //std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+        return {v[0] / n, v[1] / n, v[2] / n};
     }
 
     // data members
