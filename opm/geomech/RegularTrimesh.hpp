@@ -123,9 +123,9 @@ public:
     void removeSawtooths();
     void swap(RegularTrimesh& other);
     // ---------------------- Functions for outputting other grid types -------------
-    std::pair<std::unique_ptr<Grid>, std::vector<int>> createDuneGrid(bool coarsen_interior = false,
-                                                                      const std::vector<CellRef>& fixed_cells
-                                                                      = std::vector<CellRef>()) const;
+    std::pair<std::unique_ptr<Grid>, std::vector<int>>
+    createDuneGrid(const int coarsen_levels = 0,
+                   const std::vector<CellRef>& fixed_cells = std::vector<CellRef>()) const;
     void writeMatlabTriangulation(std::ostream& out) const;
 
     // ------------- Functions for creating new RegularTrimesh objects -------------
@@ -135,17 +135,23 @@ public:
     // -------------- Functions for getting the triangles of the mesh --------------
     std::pair<std::vector<std::array<unsigned int, 3>>, std::vector<int>> getTriangles() const;
     std::pair<std::vector<std::array<unsigned int, 3>>, std::vector<int>>
-    getMultiresTriangles(const std::vector<CellRef>& fixed_cells = std::vector<CellRef>()) const;
+    getMultiresTriangles(const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(),
+                         const int max_levels = 5) const;
 
     // static functions
     static std::array<CellRef, 4> coarse_to_fine(const CellRef& cell);
-    static NodeRef coarse_to_fine(const NodeRef& node);
+    static NodeRef coarse_to_fine(const NodeRef& node, const int level=1);
     static CellRef fine_to_coarse(const CellRef& cell);
+    static std::pair<RegularTrimesh, std::vector<CellRef>>
+    coarsen_mesh(const RegularTrimesh& mesh, const std::vector<CellRef>& fixed_cells);
+                                                                             
 
 private:
     // helper functions
     std::vector<EdgeRef> all_half_edges_() const; // internal edges are duplicated
     std::vector<CellRef> interior_coarsegrid_() const; // all coarse cells fully covered by fine ones
+    std::vector<unsigned int> noderefs_to_indices(const std::vector<NodeRef>& noderefs) const;
+    std::vector<unsigned int> cellrefs_to_indices(const std::vector<CellRef>& cellrefs) const;
     static double norm(const Coord3D& v)
     {
         return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
@@ -164,7 +170,7 @@ private:
     std::array<double, 2> edgelen_;
 };
 
-void writeMeshToVTK(const RegularTrimesh& mesh, const char* const filename, bool coarsen_interior = false);
+void writeMeshToVTK(const RegularTrimesh& mesh, const char* const filename, const int coarsen_levels = 0);
 void writeMeshBoundaryToVTK(const RegularTrimesh& mesh, const char* const filename);
 
 

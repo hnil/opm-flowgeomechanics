@@ -34,15 +34,15 @@ int test_grid_refinement()
   // export both meshes to vtk
   writeMeshToVTK(mesh, "initial_grid");
   writeMeshToVTK(mesh2, "refined_grid");
-  writeMeshToVTK(mesh3, "more_refined_grid", true); //  coarsen interior
+  writeMeshToVTK(mesh3, "more_refined_grid", 1); //  coarsen interior
   writeMeshToVTK(mesh4, "coarse_grid");
   return 0;
 }
 
-int test_circular(double radius)
+int test_circular(double radius, int levels)
 {
-    RegularTrimesh mesh(radius);
-    writeMeshToVTK(mesh, "circular_grid");
+    const RegularTrimesh mesh(radius);
+    writeMeshToVTK(mesh, "circular_grid", levels);
     cout << "Number of cells: " << mesh.numActive() << endl;
     return 0;
 }
@@ -158,7 +158,8 @@ int main(int varnum, char** vararg) {
     if (atoi(vararg[1]) == 1) return irregular_grid_test();
     else if (atoi(vararg[1]) == 2) return expand_grid_test(atoi(vararg[2]));
     else if (atoi(vararg[1]) == 3) return test_grid_refinement();
-    else if (atoi(vararg[1]) == 4) return test_circular(atof(vararg[2]));
+    else if (atoi(vararg[1]) == 4) return test_circular(atof(vararg[2]),
+                                                        atoi(vararg[3]));
     else
       cout << "Invalid option given" << endl;
   return 1;
