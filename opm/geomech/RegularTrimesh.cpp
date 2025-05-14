@@ -283,7 +283,7 @@ RegularTrimesh::RegularTrimesh(const double radius,
     for (int i = (-c-1); i <= c; ++i)
         for (int j = (-c-1); j <= c; ++j) 
             for (int k = 0; k != 2; ++k)
-                if (norm(cellCentroid( {i, j, k} )) < radius)
+                if (dist(origin_, cellCentroid( {i, j, k} )) < radius)
                     setActive(CellRef{i, j, k});
 
     auto tmp = remove_mesh_corners(*this);
@@ -852,13 +852,29 @@ void RegularTrimesh::writeMatlabTriangulation(std::ostream& out) const
   out << "axis equal;\n";
 }
 
+// ----------------------------------------------------------------------------
+vector<CellRef> RegularTrimesh::inner_ring_cells() // static function
+// ----------------------------------------------------------------------------
+{
+    // utility function to quickly construct a vector with reference to all
+    // cells having the origin as a corner
+    return vector<CellRef> {
+        {0, 0, 0},
+        {-1, 0, 1},
+        {-1, 0, 0},
+        {-1, -1, 1},
+        {0, -1, 0},
+        {0, -1, 1}
+    };
+}
 
 // ----------------------------------------------------------------------------
 void writeMeshToVTK(const RegularTrimesh& mesh, const char* const filename,
-                    const int coarsen_levels)
+                    const int coarsen_levels,
+                    const vector<CellRef>& fixed_cells)
 // ----------------------------------------------------------------------------
 {
-  const auto grid = mesh.createDuneGrid(coarsen_levels);
+    const auto grid = mesh.createDuneGrid(coarsen_levels, fixed_cells);
 
   // write grid to file
   auto vtkwriter =
@@ -872,6 +888,14 @@ void writeMeshToVTK(const RegularTrimesh& mesh, const char* const filename,
   } else {
     vtkwriter->write(filename);
   }
+}
+
+// ----------------------------------------------------------------------------
+void writeMeshToVTKDebug(const RegularTrimesh& mesh, const char* const filename,
+                         const int coarsen_levels)
+// ----------------------------------------------------------------------------    
+{
+    writeMeshToVTK(mesh, filename, coarsen_levels);
 }
 
 // ----------------------------------------------------------------------------  

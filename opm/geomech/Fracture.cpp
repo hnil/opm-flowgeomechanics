@@ -83,30 +83,32 @@ Fracture::init(std::string well,
     std::string method = prm_.get<std::string>("solver.method");
 
     if (method == "if_propagate_trimesh") {
-      const int trimeshlayers = 4;
+      //const int trimeshlayers = 4;
       const double init_scale = prm_.get<double>("config.axis_scale");
-      const double radius = init_scale; //1;
+      const double edgelen = init_scale; //1;
+      const double radius = 7 * edgelen;
       const double fac = std::sqrt(3) / 2;
       const std::array<double, 3> ax1 {axis_[0][0], axis_[0][1], axis_[0][2]};
       const std::array<double, 3> ax2 {0.5 * ax1[0] + fac * axis_[1][0],
                                        0.5 * ax1[1] + fac * axis_[1][1],
                                        0.5 * ax1[2] + fac * axis_[1][2]};
       trimesh_ = std::unique_ptr<RegularTrimesh>(
-                     new RegularTrimesh(trimeshlayers,
+                     new RegularTrimesh(radius, //trimeshlayers,
                                         {origo_[0], origo_[1], origo_[2]},
                                         ax1,
                                         ax2,
-                                        {radius, radius}));
+                                        {edgelen, edgelen}));
       trimesh_->removeSawtooths();
       
       // identify well cells (since this is not done in setFractureGrid when providing
       // a user-defined grid)
-      std::vector<CellRef> wellcells { {0, 0, 0}, {0, -1, 1}, {0, -1, 0}, {-1, -1, 1},
-                                       {-1, 0, 0}, {-1, 0, 1} };
+      // std::vector<CellRef> wellcells { {0, 0, 0}, {0, -1, 1}, {0, -1, 0}, {-1, -1, 1},
+      //                                  {-1, 0, 0}, {-1, 0, 1} };
+      std::vector<CellRef> wellcells = RegularTrimesh::inner_ring_cells();
       for (const auto& cell : wellcells)
         well_source_.push_back(trimesh_->linearCellIndex(cell));
       
-      auto [grid, fsmap] = trimesh_->createDuneGrid();
+      auto [grid, fsmap] = trimesh_->createDuneGrid(1, wellcells);
       setFractureGrid(std::move(grid)); // create the physical grid from trimesh
       fsmap_ = fsmap; // mapping between grid and mesh cells
       

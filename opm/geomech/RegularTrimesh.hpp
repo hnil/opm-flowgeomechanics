@@ -142,6 +142,7 @@ public:
     static std::array<CellRef, 4> coarse_to_fine(const CellRef& cell);
     static NodeRef coarse_to_fine(const NodeRef& node, const int level=1);
     static CellRef fine_to_coarse(const CellRef& cell);
+    static std::vector<CellRef> inner_ring_cells();
     static std::pair<RegularTrimesh, std::vector<CellRef>>
     coarsen_mesh(const RegularTrimesh& mesh, const std::vector<CellRef>& fixed_cells);
                                                                              
@@ -156,6 +157,13 @@ private:
     {
         return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
     }
+
+    static double dist(const Coord3D& v1, const Coord3D& v2) {
+        return std::sqrt((v1[0] - v2[0]) * (v1[0] - v2[0]) +
+                         (v1[1] - v2[1]) * (v1[1] - v2[1]) +
+                         (v1[2] - v2[2]) * (v1[2] - v2[2]));
+    }
+        
     static Coord3D normalize(const Coord3D& v)
     {
         const double n = norm(v); //std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
@@ -170,7 +178,11 @@ private:
     std::array<double, 2> edgelen_;
 };
 
-void writeMeshToVTK(const RegularTrimesh& mesh, const char* const filename, const int coarsen_levels = 0);
+void writeMeshToVTK(const RegularTrimesh& mesh, const char* const filename, const int coarsen_levels = 0,
+                    const std::vector<CellRef>& fixed_cells = std::vector<CellRef>());
+// @@ just because debugger doesnt handle the default arg.    
+void writeMeshToVTKDebug(const RegularTrimesh& mesh, const char* const filename, const int coarsen_levels = 0);
+
 void writeMeshBoundaryToVTK(const RegularTrimesh& mesh, const char* const filename);
 
 
