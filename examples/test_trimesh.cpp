@@ -39,11 +39,12 @@ int test_grid_refinement()
   return 0;
 }
 
-int test_circular(double radius, int levels, bool center_well)
+int test_circular(double radius, int levels, bool center_well, bool smoothing)
 {
     const RegularTrimesh mesh(radius);
     writeMeshToVTK(mesh, "circular_grid", levels,
-                   center_well ? RegularTrimesh::inner_ring_cells() : vector<CellRef>());;
+                   center_well ? RegularTrimesh::inner_ring_cells() : vector<CellRef>(),
+                   smoothing);
     cout << "Number of cells: " << mesh.numActive() << endl;
     return 0;
 }
@@ -153,7 +154,7 @@ int main(int varnum, char** vararg) {
         "1 - create irregular 5-cell grid\n" <<
         "2 - test grid expansion <n turns> \n" <<
         "3 - test grid refinement \n" <<
-        "4 - test circular grid construction <radius> <# of layers> <1/0 (presence of center well)\n" <<
+        "4 - test circular grid construction <radius> <# of levels> <1/0 (presence of center well) <1/0> (smoothing)\n" <<
         endl;
   else
     if (atoi(vararg[1]) == 1) return irregular_grid_test();
@@ -161,7 +162,8 @@ int main(int varnum, char** vararg) {
     else if (atoi(vararg[1]) == 3) return test_grid_refinement();
     else if (atoi(vararg[1]) == 4) return test_circular(atof(vararg[2]),
                                                         atoi(vararg[3]),
-                                                        atoi(vararg[4]));
+                                                        atoi(vararg[4]),
+                                                        atoi(vararg[5]));
     else
       cout << "Invalid option given" << endl;
   return 1;

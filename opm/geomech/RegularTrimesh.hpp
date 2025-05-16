@@ -1,3 +1,4 @@
+
 #pragma once
 
 #include <array>
@@ -125,7 +126,8 @@ public:
     // ---------------------- Functions for outputting other grid types -------------
     std::pair<std::unique_ptr<Grid>, std::vector<int>>
     createDuneGrid(const int coarsen_levels = 0,
-                   const std::vector<CellRef>& fixed_cells = std::vector<CellRef>()) const;
+                   const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(),
+                   const bool add_smoothing_triangles = true) const;
     void writeMatlabTriangulation(std::ostream& out) const;
 
     // ------------- Functions for creating new RegularTrimesh objects -------------
@@ -151,9 +153,11 @@ private:
     // helper functions
     std::vector<EdgeRef> all_half_edges_() const; // internal edges are duplicated
     std::vector<CellRef> interior_coarsegrid_() const; // all coarse cells fully covered by fine ones
-    std::vector<unsigned int> noderefs_to_indices(const std::vector<NodeRef>& noderefs) const;
-    std::vector<unsigned int> cellrefs_to_indices(const std::vector<CellRef>& cellrefs) const;
-    std::vector<EdgeRef> boundary_smoothing_triangles() const;
+    std::vector<unsigned int> noderefs_to_indices_(const std::vector<NodeRef>& noderefs) const;
+    std::vector<unsigned int> cellrefs_to_indices_(const std::vector<CellRef>& cellrefs) const;
+    std::vector<std::pair<std::array<unsigned int, 3>,
+                          std::array<CellRef, 2>>> boundary_smoothing_triangles_() const;
+
     static double norm(const Coord3D& v)
     {
         return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
@@ -180,7 +184,7 @@ private:
 };
 
 void writeMeshToVTK(const RegularTrimesh& mesh, const char* const filename, const int coarsen_levels = 0,
-                    const std::vector<CellRef>& fixed_cells = std::vector<CellRef>());
+                    const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(), const bool add_smoothing_triangles = true);
 // @@ just because debugger doesnt handle the default arg.    
 void writeMeshToVTKDebug(const RegularTrimesh& mesh, const char* const filename, const int coarsen_levels = 0);
 
