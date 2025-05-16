@@ -153,6 +153,7 @@ private:
     std::vector<CellRef> interior_coarsegrid_() const; // all coarse cells fully covered by fine ones
     std::vector<unsigned int> noderefs_to_indices(const std::vector<NodeRef>& noderefs) const;
     std::vector<unsigned int> cellrefs_to_indices(const std::vector<CellRef>& cellrefs) const;
+    std::vector<EdgeRef> boundary_smoothing_triangles() const;
     static double norm(const Coord3D& v)
     {
         return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);

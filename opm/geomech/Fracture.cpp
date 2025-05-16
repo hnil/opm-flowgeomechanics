@@ -105,12 +105,19 @@ Fracture::init(std::string well,
       // std::vector<CellRef> wellcells { {0, 0, 0}, {0, -1, 1}, {0, -1, 0}, {-1, -1, 1},
       //                                  {-1, 0, 0}, {-1, 0, 1} };
       std::vector<CellRef> wellcells = RegularTrimesh::inner_ring_cells();
-      for (const auto& cell : wellcells)
-        well_source_.push_back(trimesh_->linearCellIndex(cell));
-      
       auto [grid, fsmap] = trimesh_->createDuneGrid(1, wellcells);
+      fsmap_ = fsmap; // mapping between Dune grid to mesh cells (only for fine scale cells)
+
+      // determine wellcell indices in Dune grid
+      std::vector<size_t> fsmap_inv(trimesh_->numCells(), -1);
+      for (int i = 0; i != fsmap_.size(); ++i)
+        if (fsmap_[i] != -1)
+          fsmap_inv[fsmap_[i]] = i; // mapping from Trimesh to Dune grid cells
+      
+      for (const auto& cell : wellcells)
+        well_source_.push_back(fsmap_inv[trimesh_->linearCellIndex(cell)]);
+      
       setFractureGrid(std::move(grid)); // create the physical grid from trimesh
-      fsmap_ = fsmap; // mapping between grid and mesh cells
       
     } else {
       setFractureGrid();
