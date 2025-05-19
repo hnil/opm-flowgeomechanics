@@ -919,10 +919,8 @@ writeMeshToVTK(const RegularTrimesh& mesh,
     if (coarsen_levels == 0) {
         vector<int> flags = mesh.getCellFlags();
         if (add_smoothing_triangles)
-            flags.insert(flags.end(), vector<int>(grid->
+            flags.resize(std::get<0>(grid)->size(0), -1);
         vtkwriter->addCellData(flags, "flag");
-
-            
         vtkwriter->write(filename);
     } else {
         vtkwriter->write(filename);
