@@ -7,6 +7,7 @@
 #include <map>
 #include <memory>
 #include <vector>
+#include <tuple>
 
 #include <dune/common/exceptions.hh>
 #include <dune/foamgrid/foamgrid.hh>
@@ -124,7 +125,12 @@ public:
     void removeSawtooths();
     void swap(RegularTrimesh& other);
     // ---------------------- Functions for outputting other grid types -------------
-    std::pair<std::unique_ptr<Grid>, std::vector<int>>
+
+    // first return value is the Dune grid, second is a map from Dune cells to
+    // Trimesh cells (only for those who have a direct counterpart), third is a
+    // map from TriMesh boundary cells to the relevant boundary cell in the Dune
+    // grid (not always trivial, due to smoothing cells)
+    std::tuple<std::unique_ptr<Grid>, std::vector<int>, std::map<int, int>>
     createDuneGrid(const int coarsen_levels = 0,
                    const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(),
                    const bool add_smoothing_triangles = true) const;

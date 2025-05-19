@@ -105,7 +105,7 @@ Fracture::init(std::string well,
       // std::vector<CellRef> wellcells { {0, 0, 0}, {0, -1, 1}, {0, -1, 0}, {-1, -1, 1},
       //                                  {-1, 0, 0}, {-1, 0, 1} };
       std::vector<CellRef> wellcells = RegularTrimesh::inner_ring_cells();
-      auto [grid, fsmap] = trimesh_->createDuneGrid(1, wellcells);
+      auto [grid, fsmap, bmap] = trimesh_->createDuneGrid(1, wellcells);
       fsmap_ = fsmap; // mapping between Dune grid to mesh cells (only for fine scale cells)
 
       // determine wellcell indices in Dune grid

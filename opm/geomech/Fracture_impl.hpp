@@ -191,8 +191,8 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
 
             // setup fracture with new grid
             const int MAX_NUM_COARSENING = 10;
-            auto [grid, fsmap] = trimesh_->createDuneGrid(MAX_NUM_COARSENING,
-                                                          wsources); // well cells kept intact!
+            auto [grid, fsmap, bmap] =
+                trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources); // well cells kept intact!
             setFractureGrid(std::move(grid)); // true -> coarsen interior
             fsmap_ = fsmap;
 
@@ -235,7 +235,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             const std::vector<CellRef> boundary_cells = trimesh_->boundaryCells();
             std::vector<double> result(boundary_cells.size());
             for (size_t i = 0; i != result.size(); ++i)
-                result[i] = K1_not_nan[fsmap_inv[trimesh_->linearCellIndex(boundary_cells[i])]];
+                result[i] = K1_not_nan[bmap[trimesh_->linearCellIndex(boundary_cells[i])]];
             return result;
         };
 

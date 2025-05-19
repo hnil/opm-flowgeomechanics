@@ -4,6 +4,7 @@
 #include <fstream>
 #include <opm/geomech/RegularTrimesh.hpp>
 #include <set>
+#include <tuple>
 
 #include <dune/grid/io/file/vtk/vtkwriter.hh>
 #include <dune/grid/utility/structuredgridfactory.hh>
@@ -498,8 +499,8 @@ RegularTrimesh::boundary_smoothing_triangles_() const
     vector<pair<array<unsigned int, 3>, array<CellRef, 2>>> result;
     for (int i = 0; i != N; ++i) 
         result.push_back({{node_ixs[3 * i],        // triangle corner 1
-                    node_ixs[3 * i + 1],    // triangle corner 2
-                    node_ixs[3 * i + 2]},   // triangle corner 3
+                           node_ixs[3 * i + 1],    // triangle corner 2
+                           node_ixs[3 * i + 2]},   // triangle corner 3
                           {neigh_cells[2 * i],     // cell neighbor 1
                            neigh_cells[2 * i + 1]}}); // cell neighbor 2
     return result;
@@ -724,7 +725,7 @@ RegularTrimesh::cellrefs_to_indices_(const vector<CellRef>& cellrefs) const
 }
 
 //------------------------------------------------------------------------------
-pair<unique_ptr<Grid>, vector<int>>
+std::tuple<std::unique_ptr<Grid>, std::vector<int>, std::map<int, int>>    
 RegularTrimesh::createDuneGrid(const int coarsen_levels,
                                const vector<CellRef>& fixed_cells,
                                const bool add_smoothing_triangles) const
@@ -738,19 +739,38 @@ RegularTrimesh::createDuneGrid(const int coarsen_levels,
 
     // define triangles
     const auto tmp = coarsen_levels > 0 ? getMultiresTriangles(fixed_cells, coarsen_levels) : getTriangles();
-
+    const auto& fsmap = tmp.second;
+    
     for (const auto& tri : tmp.first)
         factory.insertElement(Dune::GeometryTypes::simplex(2),
                               vector<unsigned int> {tri[0], tri[1], tri[2]});
 
+    // create map from trimesh boundary cells to Dune grid cells
+    std::map<int, int> boundary_map;
+    std::vector<size_t> fsmap_inv(numCells(), -1);
+    for (int i = 0; i != fsmap.size(); ++i)
+        if (fsmap[i] != -1)
+            fsmap_inv[fsmap[i]] = i; // mapping from Trimesh to Dune grid cells
+    const auto bcells = cellrefs_to_indices_(boundaryCells());
+    for (const auto& cell : bcells)
+        boundary_map[cell] = fsmap_inv[cell]; // mapping from Dune grid cells to Trimesh cells
+        
+    
     if (add_smoothing_triangles) {
         const auto smoothing_triangles = boundary_smoothing_triangles_();
-        for (const auto& tri : smoothing_triangles)
+        int smoothing_cell_index = fsmap.size();
+        for (const auto& tri : smoothing_triangles) {
             factory.insertElement(Dune::GeometryTypes::simplex(2),
                                   vector<unsigned int> {tri.first[0], tri.first[1], tri.first[2]});
+            // make the associated boundary cells in the TriMesh map to the
+            // smoothing triangle in the Dune grid
+            boundary_map[linearCellIndex(tri.second[0])] = smoothing_cell_index;
+            boundary_map[linearCellIndex(tri.second[1])] = smoothing_cell_index;
+            ++smoothing_cell_index;
+        }
     }
     
-    return make_pair(factory.createGrid(), tmp.second);
+    return make_tuple(factory.createGrid(), fsmap, boundary_map);
 }
 
 // ----------------------------------------------------------------------------
@@ -894,7 +914,7 @@ writeMeshToVTK(const RegularTrimesh& mesh,
 
     // write grid to file
     auto vtkwriter
-        = make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid.first->leafGridView(), Dune::VTK::nonconforming);
+        = make_unique<Dune::VTKWriter<Grid::LeafGridView>>(get<0>(grid)->leafGridView(), Dune::VTK::nonconforming);
     // write flag to file
     if (coarsen_levels == 0) {
         const vector<int> flags = mesh.getCellFlags();
