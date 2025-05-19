@@ -917,8 +917,12 @@ writeMeshToVTK(const RegularTrimesh& mesh,
         = make_unique<Dune::VTKWriter<Grid::LeafGridView>>(get<0>(grid)->leafGridView(), Dune::VTK::nonconforming);
     // write flag to file
     if (coarsen_levels == 0) {
-        const vector<int> flags = mesh.getCellFlags();
+        vector<int> flags = mesh.getCellFlags();
+        if (add_smoothing_triangles)
+            flags.insert(flags.end(), vector<int>(grid->
         vtkwriter->addCellData(flags, "flag");
+
+            
         vtkwriter->write(filename);
     } else {
         vtkwriter->write(filename);
