@@ -18,7 +18,7 @@
 */
 #include "config.h"
 #if USE_TRACY
-#define DETAILED_PROFILING 1
+//#define DETAILED_PROFILING 1
 #endif
 
 #include <exception>
