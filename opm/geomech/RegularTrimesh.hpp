@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include <array>
@@ -111,6 +110,7 @@ public:
     CellRef cellIndex(const size_t idx) const;
     int getCellFlag(const CellRef& cell) const;
     std::vector<int> getCellFlags() const;
+    std::vector<CellRef> activeNeighborCells(const std::vector<CellRef>& cells) const;
 
     // --------------------- Functions for modifying the grid ---------------------
     void setAllFlags(const int value);
@@ -181,6 +181,17 @@ private:
         return {v[0] / n, v[1] / n, v[2] / n};
     }
 
+    static NodeRef rotate60(const NodeRef& node) // rotate node 60 degrees clockwise
+    {
+        return {node[0] + node[1], -node[0]};
+    }
+
+    static CellRef rotate60(const CellRef& cell) // rotate cell 60 degrees clockwise
+    {
+        return {cell[0] + cell[1] + cell[2], -cell[0]  - 1, (cell[2] + 1) % 2};
+    }
+    
+    
     // data members
     std::map<CellRef, CellAttributes> cellinfo_;
     Coord3D origin_;
@@ -192,7 +203,7 @@ private:
 void writeMeshToVTK(const RegularTrimesh& mesh, const char* const filename, const int coarsen_levels = 0,
                     const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(), const bool add_smoothing_triangles = true);
 // @@ just because debugger doesnt handle the default arg.    
-void writeMeshToVTKDebug(const RegularTrimesh& mesh, const char* const filename, const int coarsen_levels = 0);
+void writeMeshToVTKDebug(const RegularTrimesh& mesh, const char* const filename, const int coarsen_levels = 0, const bool add_smoothing_triangles = true);
 
 void writeMeshBoundaryToVTK(const RegularTrimesh& mesh, const char* const filename);
 

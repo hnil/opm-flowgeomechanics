@@ -442,33 +442,61 @@ RegularTrimesh::boundary_smoothing_triangles_() const
     // identify all 'internal' edges within boundary cells
     const auto bcells = boundaryCells();
     const auto bedges = boundaryEdges(); 
-    set<EdgeRef> identified_edges(bedges.begin(), bedges.end()); // better for search?
-    array<vector<EdgeRef>, 3> internal_edges;
-    for (const auto& cell : bcells) {
-        const auto cell_edges = cell2edges(cell);
-        for (const auto& e : cell_edges)
-            if (identified_edges.find(e) == identified_edges.end()) 
-                internal_edges[e[2]].push_back(e);
-    }
+    set<EdgeRef> bedges_set(bedges.begin(), bedges.end()); // better for search?
+    array<set<EdgeRef>, 3> internal_edges;
+    for (const auto& cell : bcells) 
+        for (const auto& e : cell2edges(cell))
+            if (bedges_set.find(e) == bedges_set.end()) 
+                internal_edges[e[2]].insert(e);
     
     // identify internal edges that 'line up' along one of the three cardinal grid directions
     const array<int, 3> ioffsets {-1, 2, 1}, joffsets {2, -1, 1};
     array<vector<EdgeRef>, 3> candidate_sites; // candidates for where to place a smoothing triangle
 
     for (int i = 0; i != 3; ++i)
-        for (int k = 0; k != internal_edges[i].size(); ++k)
-            if (find(internal_edges[i].begin(), internal_edges[i].end(),
-                     EdgeRef { internal_edges[i][k][0] + ioffsets[i],
-                               internal_edges[i][k][1] + joffsets[i], i}) != internal_edges[i].end()) 
-                candidate_sites[i].push_back(internal_edges[i][k]);
+        for (const auto& iedge : internal_edges[i])
+            if (internal_edges[i].find(EdgeRef { iedge[0] + ioffsets[i],
+                                                 iedge[1] + joffsets[i], i}) != internal_edges[i].end()) 
+                candidate_sites[i].push_back(iedge);
     
     // determine smoothing triangles
     vector<NodeRef> corners;
     vector<CellRef> neigh_cells;
-    const array<int, 3> norient {1, 1, 0}; // orientation of "opposing" boundary triangle
-    const array<array<int, 2>, 3> ocell {{ {-1, 1}, {1 , -1}, {1, 1 } }}; // location of 'opposing' cell    
-    const array<array<int, 3>, 3> n1 {{ {-1, 0}, {0, -1}, {0, 1} }};
-    const array<array<int, 3>, 3> n2 {{ {0, 0}, {0, 0}, {1, 0} }};
+
+    // neighbors that should be inactive in order to create a smoothing triangle
+    // (template will be rotated depending on the direction considered)
+    const array<CellRef> check_template { {0, 1, 0}, {0, 0, 1}, {0, 0, 0}, {0, -1, 1}, {1, -1, 0}, {1, -2, 1} };
+
+    // template of smoothing triangle to add (will be rotated depending on the direction considered)
+    const array<NodeRef> smooth_template { {0, 0}, {1, -1}, {0, 1} };
+
+    //const array<int, 3> norient {1, 1, 0}; // orientation of "opposing" boundary triangle
+    const array<array<int, 2>, 3> ocell {{ {-1, 1}, {1 , -1}, {1, 1 } }}; // location of 'opposing' cell
+
+    for (int dir = 0; dir != 3; ++dir) // three cardinal directions
+        for (const auto& edge : candidate_sites[dir]) 
+            for (int side = 0; side != 2; ++side) // right and left
+                if (none_active(dir + 3 * side)) {
+                    corners.insert(corners.end(),
+                                   { {edge[0] + ncorner[side][dir][0][0], edge[1] + ncorner[side][dir][0][1]},
+                                     {edge[0] + ncorner[side][dir][1][0], edge[1] + ncorner[side][dir][1][1]},
+                                     {edge[0] + ncorner[side][dir][2][0], edge[1] + ncorner[side][dir][2][1]} });
+                    neigh_cells.insert(neigh_cells.end(),
+                                       { {edge[0], edge[1], (norient[dir]+1)%2},
+                                         {edge[0] + ocell[dir][0], edge[1] + ocell[dir][1], norient[dir]}});
+                }
+            
+                
+        
+    
+          
+
+
+
+    //const array<array<int, 3>, 3> n1_1 {{ {-1, 0}, {0, -1}, {0, 1} }};
+    //const array<array<int, 3>, 3> n1_2 {{ {-1, 1}, {1, -1}, {0 ,1} }};
+    //const array<array<int, 3>, 3> n2_1 {{ {0, 0}, {0, 0}, {1, 0} }};
+    //const array<array<int, 3>, 3> n2_2 {{ {0, 1}, {1, 0}, {1, 0} }};    
     const array<array<array<int, 2>, 3>, 3>n1corner {{ {{ {0, 0}, {0, 1}, {-1, 2} }},
                                                        {{ {0, 0}, {2,-1}, {1, 0}  }},
                                                        {{ {0, 1}, {1, 1}, {1, 2}  }} }};
@@ -477,14 +505,16 @@ RegularTrimesh::boundary_smoothing_triangles_() const
                                                        {{ {1, 0}, {2, 1}, {1, 1} }} }};
     for (int dir = 0; dir != 3; ++dir) 
         for (const auto& edge : candidate_sites[dir]) {
-            if (! isActive( {edge[0] + n1[dir][0], edge[1] + n1[dir][1], norient[dir]} )) {
+            if (! isActive( {edge[0] + n1_1[dir][0], edge[1] + n1_1[dir][1], norient[dir]} ) &&
+                ! isActive( {edge[0] + n1_2[dir][0], edge[1] + n1_2[dir][1], (norient[dir] + 1) % 2} )) {
                 corners.insert(corners.end(), { {edge[0] + n1corner[dir][0][0], edge[1] + n1corner[dir][0][1]},
                                                 {edge[0] + n1corner[dir][1][0], edge[1] + n1corner[dir][1][1]},
                                                 {edge[0] + n1corner[dir][2][0], edge[1] + n1corner[dir][2][1]} });
                 neigh_cells.insert(neigh_cells.end(), { {edge[0], edge[1], (norient[dir]+1)%2},
                                                         {edge[0] + ocell[dir][0], edge[1] + ocell[dir][1], norient[dir]}});
             }
-            if (! isActive( {edge[0] + n2[dir][0], edge[1] + n2[dir][1], norient[dir]} )) {
+            if (! isActive( {edge[0] + n2_1[dir][0], edge[1] + n2_1[dir][1], norient[dir]} ) &&
+                ! isActive( {edge[0] + n2_2[dir][0], edge[1] + n2_2[dir][1], norient[dir]} )) {
                 corners.insert(corners.end(), { {edge[0] + n2corner[dir][0][0], edge[1] + n2corner[dir][0][1]},
                                                 {edge[0] + n2corner[dir][1][0], edge[1] + n2corner[dir][1][1]},
                                                 {edge[0] + n2corner[dir][2][0], edge[1] + n2corner[dir][2][1]} });
@@ -622,6 +652,7 @@ RegularTrimesh::getMultiresTriangles(const vector<CellRef>& fixed_cells, const i
         auto& uncoarsened_cells = coarsened.second;
 
         // add uncoarsened cells into result
+        const int num_tri_before = triangles.size() / 3;
         for (const auto& cell : uncoarsened_cells)
             for (const auto& tri : tesselate_coarsecell(cell, mesh, level == 0))
                 for (int i = 0; i != 3; ++i)
@@ -632,7 +663,7 @@ RegularTrimesh::getMultiresTriangles(const vector<CellRef>& fixed_cells, const i
             for (const auto& cell : uncoarsened_cells)
                 cellmap.push_back(linearCellIndex(cell));
         else
-            cellmap.insert(cellmap.end(), uncoarsened_cells.size(), -1);
+            cellmap.insert(cellmap.end(), triangles.size()/3 - num_tri_before, -1);
 
         // increment level and swap meshes
         level++;
@@ -929,10 +960,11 @@ writeMeshToVTK(const RegularTrimesh& mesh,
 
 // ----------------------------------------------------------------------------
 void
-writeMeshToVTKDebug(const RegularTrimesh& mesh, const char* const filename, const int coarsen_levels)
+writeMeshToVTKDebug(const RegularTrimesh& mesh, const char* const filename, const int coarsen_levels,
+                    const bool add_smoothing_triangles)
 // ----------------------------------------------------------------------------
 {
-    writeMeshToVTK(mesh, filename, coarsen_levels);
+    writeMeshToVTK(mesh, filename, coarsen_levels, vector<CellRef>(), add_smoothing_triangles);
 }
 
 // ----------------------------------------------------------------------------
@@ -1255,6 +1287,23 @@ RegularTrimesh::interior_coarsegrid_() const
 }
 
 // ----------------------------------------------------------------------------
+vector<CellRef> RegularTrimesh::activeNeighborCells(const vector<CellRef>& cells) const
+// ----------------------------------------------------------------------------
+{
+    set<CellRef> result;
+    for (const auto& cell : cells)
+        for (const auto& edge : cell2edges(cell)) 
+            for (const auto& c : edge2cells(edge))
+                if (isActive(c))
+                    result.insert(c);
+
+    for (const auto& c : cells)
+        result.erase(c); // remove the original cells
+    
+    return vector<CellRef>(result.begin(), result.end());
+}
+
+// ----------------------------------------------------------------------------
 RegularTrimesh
 expand_to_criterion(const RegularTrimesh& mesh,
                     function<vector<double>(const RegularTrimesh&)> score_function,
@@ -1285,6 +1334,10 @@ expand_to_criterion(const RegularTrimesh& mesh,
 
         working_mesh.expandGrid(expand_cells);
         working_mesh.removeSawtooths();
+
+        // auto neighs = working_mesh.activeNeighborCells(expand_cells);
+        // working_mesh.expandGrid(neighs);
+        // working_mesh.removeSawtooths();
 
         // writeMeshToVTK(working_mesh, "after", false);
     }
