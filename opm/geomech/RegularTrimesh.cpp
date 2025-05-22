@@ -447,12 +447,12 @@ RegularTrimesh::boundary_smoothing_triangles_() const
     // identify all 'internal' edges within boundary cells
     const auto bcells = boundaryCells();
     const auto bedges = boundaryEdges(); 
-    set<EdgeRef> bedges_set(bedges.begin(), bedges.end()); // better for search?
+    //set<EdgeRef> bedges_set(bedges.begin(), bedges.end()); // better for search?
     array<set<EdgeRef>, 3> internal_edges;
     for (const auto& cell : bcells) 
         for (const auto& e : cell2edges(cell))
-            if (bedges_set.find(e) == bedges_set.end()) 
-                internal_edges[e[2]].insert(e);
+            //if (bedges_set.find(e) == bedges_set.end()) 
+            internal_edges[e[2]].insert(e);
     
     // identify internal edges that 'line up' along one of the three cardinal grid directions
     const array<int, 3> ioffsets {-1, 2, 1}, joffsets {2, -1, 1};

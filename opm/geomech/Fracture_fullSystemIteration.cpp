@@ -318,11 +318,11 @@ bool Fracture::fullSystemIteration(const double tol)
 
   // update pressure matrix with the current values of `fracture_width_` and
   // `fracture_pressure_`
-  std::cout << "---- Assemble pressure" << std::endl;
+  //std::cout << "---- Assemble pressure" << std::endl;
   assemblePressure(); // update pressure matrix
   setSource();         // update right-hand side of pressure system;
 
-  std::cout << "---- Various " << std::endl;
+  //std::cout << "---- Various " << std::endl;
   // initialize vector of unknown, and vector represnting direction in tangent space
   VectorHP x {fracture_width_, fracture_pressure_};
   VectorHP dx = x; dx = 0; // gradient of 'x' (which we aim to compute below)
