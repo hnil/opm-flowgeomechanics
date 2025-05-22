@@ -135,6 +135,11 @@ operator<(const Opm::EdgeRef& lhs, const Opm::EdgeRef& rhs)
         || (lhs[0] == rhs[0] && lhs[1] == rhs[1] && lhs[2] < rhs[2]);
 }
 
+NodeRef operator+(const NodeRef& lhs, const NodeRef& rhs)
+{
+    return NodeRef {lhs[0] + rhs[0], lhs[1] + rhs[1]};
+}
+    
 // ----------------------------------------------------------------------------
 array<EdgeRef, 3>
 half_edges(const CellRef& cell)
@@ -473,17 +478,35 @@ RegularTrimesh::boundary_smoothing_triangles_() const
     //const array<int, 3> norient {1, 1, 0}; // orientation of "opposing" boundary triangle
     const array<array<int, 2>, 3> ocell {{ {-1, 1}, {1 , -1}, {1, 1 } }}; // location of 'opposing' cell
 
+    const auto cell_position(const auto& EdgeRef& edge, const CellRef& template_cell, const int rotation) -> CellRef {
+        CellRef result { template_cell[0] - edge[0], template_cell[1] - edge[1], template_cell[2] };
+        rotate60(result, rotation);
+        for (int i = 0; i != 2; ++i) result[i] += edge[i];
+        return result;
+    };
+
+    // function to check that the cells from check_template are inactive
+    const auto none_active = [&](const EdgeRef& edge, const int rotation) -> bool {
+        for (const auto& template_cell : check_template) 
+            if isActive(cell_position(edge, template_cell, rotation % 6))
+                return false;
+        return true;
+    };
+
+    // get rid of ocell
+    // get rid of ncorners
+        
     for (int dir = 0; dir != 3; ++dir) // three cardinal directions
         for (const auto& edge : candidate_sites[dir]) 
             for (int side = 0; side != 2; ++side) // right and left
-                if (none_active(dir + 3 * side)) {
-                    corners.insert(corners.end(),
-                                   { {edge[0] + ncorner[side][dir][0][0], edge[1] + ncorner[side][dir][0][1]},
-                                     {edge[0] + ncorner[side][dir][1][0], edge[1] + ncorner[side][dir][1][1]},
-                                     {edge[0] + ncorner[side][dir][2][0], edge[1] + ncorner[side][dir][2][1]} });
-                    neigh_cells.insert(neigh_cells.end(),
-                                       { {edge[0], edge[1], (norient[dir]+1)%2},
-                                         {edge[0] + ocell[dir][0], edge[1] + ocell[dir][1], norient[dir]}});
+                if (none_active(edge, dir + 3 * side)) {
+                    // make smoothing triangle
+                    for (int i = 0; i != 3; ++i)
+                        corners.push_back( { edge2node(edge) + ncorner[dir][side][i] });
+
+                    // keep track of cell neighbors to the new smoothing cell
+                    neigh_cells.insert( { node2cell(edge2node(edge), dir != 2) } );
+                    neigh_cells.insert( { node2cell(edge2node(edge) + ocell[dir], dir == 2) } );
                 }
             
                 

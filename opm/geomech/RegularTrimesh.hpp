@@ -181,16 +181,25 @@ private:
         return {v[0] / n, v[1] / n, v[2] / n};
     }
 
-    static NodeRef rotate60(const NodeRef& node) // rotate node 60 degrees clockwise
+    static void rotate60(NodeRef& node) // rotate node 60 degrees clockwise
     {
-        return {node[0] + node[1], -node[0]};
+        std::swap(node, NodeRef{node[0] + node[1], -node[0]} );
     }
 
-    static CellRef rotate60(const CellRef& cell) // rotate cell 60 degrees clockwise
+    static void rotate60(CellRef& cell) // rotate cell 60 degrees clockwise
     {
-        return {cell[0] + cell[1] + cell[2], -cell[0]  - 1, (cell[2] + 1) % 2};
+        std::swap(cell, CellRef {cell[0] + cell[1] + cell[2], -cell[0]  - 1, (cell[2] + 1) % 2} );
     }
-    
+
+    static NodeRef edge2node(const EdgeRef& edge) // convert edge to corner node
+    {
+        return { edge[0], edge[1] }; 
+    }
+
+    static CellRef node2cell(const NodeRef& node, bool second) // make cell from corner node and orientation
+    {
+        return { node[0], node[1], int(second) };
+    }
     
     // data members
     std::map<CellRef, CellAttributes> cellinfo_;
