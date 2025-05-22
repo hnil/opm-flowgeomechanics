@@ -190,16 +190,17 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             *trimesh_ = trimesh;
 
             // setup fracture with new grid
-            const int MAX_NUM_COARSENING = 10;
+            const int MAX_NUM_COARSENING = 20; // should be enough for all practical purposes
+            std::cout << "*** Creating Dune grid from trimesh" << std::endl;
             auto [grid, fsmap, bmap] =
                 trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources); // well cells kept intact!
             setFractureGrid(std::move(grid)); // true -> coarsen interior
             fsmap_ = fsmap;
 
             // generate the inverse map of fsmap_ (needed below)
+            std::cout << "*** Generating inverse mapping" << std::endl;
             std::vector<size_t> fsmap_inv(trimesh_->numCells(), -1);
             for (int i = 0; i != fsmap_.size(); ++i)
-
                 if (fsmap_[i] != -1)
                     fsmap_inv[fsmap_[i]] = i;
 
@@ -217,6 +218,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             }
 
             // Update the rest of the fracture object to adapt to grid change
+            std::cout << "*** Updating relation with fracture and reservoir grid" << std::endl;
             updateReservoirCells(cell_search_tree);
             updateReservoirProperties<TypeTag, Simulator>(simulator, true);
             initFractureWidth();
@@ -226,16 +228,19 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
 
             // solve flow-mechanical system
             int iter = 0;
+            std::cout << "*** Solving system" << std::endl;
             while (!fullSystemIteration(tol) && iter++ < max_iter) {
             };
             std::cout << "Iterations needed: " << iter << std::endl;
 
             // compute K1 stress intensity
+            std::cout << "*** Computing stress intensity" << std::endl;
             const std::vector<double> K1_not_nan = Fracture::stressIntensityK1();
             const std::vector<CellRef> boundary_cells = trimesh_->boundaryCells();
             std::vector<double> result(boundary_cells.size());
             for (size_t i = 0; i != result.size(); ++i)
                 result[i] = K1_not_nan[bmap[trimesh_->linearCellIndex(boundary_cells[i])]];
+            std::cout << "*** Returning result" << std::endl;
             return result;
         };
 

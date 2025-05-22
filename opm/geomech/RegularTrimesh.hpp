@@ -183,12 +183,14 @@ private:
 
     static void rotate60(NodeRef& node) // rotate node 60 degrees clockwise
     {
-        std::swap(node, NodeRef{node[0] + node[1], -node[0]} );
+        NodeRef tmp {node[0] + node[1], -node[0]};
+        std::swap(node, tmp);
     }
 
     static void rotate60(CellRef& cell) // rotate cell 60 degrees clockwise
     {
-        std::swap(cell, CellRef {cell[0] + cell[1] + cell[2], -cell[0]  - 1, (cell[2] + 1) % 2} );
+        CellRef tmp {cell[0] + cell[1] + cell[2], -cell[0]  - 1, (cell[2] + 1) % 2} ;
+        std::swap(cell, tmp);
     }
 
     static NodeRef edge2node(const EdgeRef& edge) // convert edge to corner node

@@ -470,81 +470,48 @@ RegularTrimesh::boundary_smoothing_triangles_() const
 
     // neighbors that should be inactive in order to create a smoothing triangle
     // (template will be rotated depending on the direction considered)
-    const array<CellRef> check_template { {0, 1, 0}, {0, 0, 1}, {0, 0, 0}, {0, -1, 1}, {1, -1, 0}, {1, -2, 1} };
+    const array<CellRef, 6> check_template { {{0, 1, 0}, {0, 0, 1}, {0, 0, 0}, {0, -1, 1}, {1, -1, 0}, {1, -2, 1} }};
 
     // template of smoothing triangle to add (will be rotated depending on the direction considered)
-    const array<NodeRef> smooth_template { {0, 0}, {1, -1}, {0, 1} };
-
-    //const array<int, 3> norient {1, 1, 0}; // orientation of "opposing" boundary triangle
+    const array<NodeRef, 3> smooth_template {{ {0, 0}, {1, -1}, {0, 1} }};
     const array<array<int, 2>, 3> ocell {{ {-1, 1}, {1 , -1}, {1, 1 } }}; // location of 'opposing' cell
-
-    const auto cell_position(const auto& EdgeRef& edge, const CellRef& template_cell, const int rotation) -> CellRef {
-        CellRef result { template_cell[0] - edge[0], template_cell[1] - edge[1], template_cell[2] };
-        rotate60(result, rotation);
+    const array<int, 3> dir_rot {0, 2, 1}; // how many times to rotate 60 degrees to align with corresp. triangle edge
+    
+    const auto cell_position = [](const EdgeRef& edge, const CellRef& template_cell, const int rotation) -> CellRef {
+        CellRef result(template_cell);
+        for (int i = 0; i != rotation; ++i) rotate60(result);
         for (int i = 0; i != 2; ++i) result[i] += edge[i];
+        if (edge[2] != 0) result[0] += 1;
+        if (edge[2] != 1) result[1] += 1;
         return result;
     };
 
+    const auto node_rotate_n = [](NodeRef n, const int times) -> NodeRef {
+        for (int i = 0; i != times; ++i) rotate60(n);
+        return n;
+    };
     // function to check that the cells from check_template are inactive
     const auto none_active = [&](const EdgeRef& edge, const int rotation) -> bool {
         for (const auto& template_cell : check_template) 
-            if isActive(cell_position(edge, template_cell, rotation % 6))
+            if (isActive(cell_position(edge, template_cell, rotation % 6)))
                 return false;
         return true;
     };
-
-    // get rid of ocell
-    // get rid of ncorners
-        
     for (int dir = 0; dir != 3; ++dir) // three cardinal directions
         for (const auto& edge : candidate_sites[dir]) 
             for (int side = 0; side != 2; ++side) // right and left
-                if (none_active(edge, dir + 3 * side)) {
+                if (none_active(edge, dir_rot[dir] + 3 * side)) {
                     // make smoothing triangle
                     for (int i = 0; i != 3; ++i)
-                        corners.push_back( { edge2node(edge) + ncorner[dir][side][i] });
-
+                        corners.push_back(
+                             { edge2node(edge) + NodeRef {dir != 0, dir != 1} + 
+                               node_rotate_n(smooth_template[i], dir_rot[dir] + 3 * side) });
+                                
                     // keep track of cell neighbors to the new smoothing cell
-                    neigh_cells.insert( { node2cell(edge2node(edge), dir != 2) } );
-                    neigh_cells.insert( { node2cell(edge2node(edge) + ocell[dir], dir == 2) } );
+                    neigh_cells.push_back( { node2cell(edge2node(edge), dir == 2) } );
+                    neigh_cells.push_back( { node2cell(edge2node(edge) + ocell[dir], dir != 2) } );
                 }
-            
-                
-        
     
-          
-
-
-
-    //const array<array<int, 3>, 3> n1_1 {{ {-1, 0}, {0, -1}, {0, 1} }};
-    //const array<array<int, 3>, 3> n1_2 {{ {-1, 1}, {1, -1}, {0 ,1} }};
-    //const array<array<int, 3>, 3> n2_1 {{ {0, 0}, {0, 0}, {1, 0} }};
-    //const array<array<int, 3>, 3> n2_2 {{ {0, 1}, {1, 0}, {1, 0} }};    
-    const array<array<array<int, 2>, 3>, 3>n1corner {{ {{ {0, 0}, {0, 1}, {-1, 2} }},
-                                                       {{ {0, 0}, {2,-1}, {1, 0}  }},
-                                                       {{ {0, 1}, {1, 1}, {1, 2}  }} }};
-    const array<array<array<int, 2>, 3>, 3>n2corner {{ {{ {1, 0}, {0, 2}, {0, 1} }},
-                                                       {{ {0, 1}, {1, 0}, {2, 0} }},
-                                                       {{ {1, 0}, {2, 1}, {1, 1} }} }};
-    for (int dir = 0; dir != 3; ++dir) 
-        for (const auto& edge : candidate_sites[dir]) {
-            if (! isActive( {edge[0] + n1_1[dir][0], edge[1] + n1_1[dir][1], norient[dir]} ) &&
-                ! isActive( {edge[0] + n1_2[dir][0], edge[1] + n1_2[dir][1], (norient[dir] + 1) % 2} )) {
-                corners.insert(corners.end(), { {edge[0] + n1corner[dir][0][0], edge[1] + n1corner[dir][0][1]},
-                                                {edge[0] + n1corner[dir][1][0], edge[1] + n1corner[dir][1][1]},
-                                                {edge[0] + n1corner[dir][2][0], edge[1] + n1corner[dir][2][1]} });
-                neigh_cells.insert(neigh_cells.end(), { {edge[0], edge[1], (norient[dir]+1)%2},
-                                                        {edge[0] + ocell[dir][0], edge[1] + ocell[dir][1], norient[dir]}});
-            }
-            if (! isActive( {edge[0] + n2_1[dir][0], edge[1] + n2_1[dir][1], norient[dir]} ) &&
-                ! isActive( {edge[0] + n2_2[dir][0], edge[1] + n2_2[dir][1], norient[dir]} )) {
-                corners.insert(corners.end(), { {edge[0] + n2corner[dir][0][0], edge[1] + n2corner[dir][0][1]},
-                                                {edge[0] + n2corner[dir][1][0], edge[1] + n2corner[dir][1][1]},
-                                                {edge[0] + n2corner[dir][2][0], edge[1] + n2corner[dir][2][1]} });
-                neigh_cells.insert(neigh_cells.end(), { {edge[0], edge[1], (norient[dir]+1)%2},
-                                                        {edge[0] + ocell[dir][0], edge[1] + ocell[dir][1], norient[dir]}});
-            }
-        }
     // prepare result by changing NodeRefs to indices
     const vector<unsigned int> node_ixs = noderefs_to_indices_(corners);
     assert(node_ixs.size() == 3 * (neigh_cells.size() / 2)); // each traingle has 3 nodes and 2 cell neighbors
