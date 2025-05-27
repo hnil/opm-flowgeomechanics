@@ -148,8 +148,8 @@ public:
 
     // static functions
     static std::array<CellRef, 4> coarse_to_fine(const CellRef& cell);
-    static NodeRef coarse_to_fine(const NodeRef& node, const int level=1);
-    static CellRef fine_to_coarse(const CellRef& cell);
+    static NodeRef coarse_to_fine(const NodeRef& node, const int levels=1);
+    static CellRef fine_to_coarse(const CellRef& cell, const int levels=1);
     static std::vector<CellRef> inner_ring_cells();
     static std::pair<RegularTrimesh, std::vector<CellRef>>
     coarsen_mesh(const RegularTrimesh& mesh, const std::vector<CellRef>& fixed_cells);
@@ -219,7 +219,8 @@ void writeMeshToVTKDebug(const RegularTrimesh& mesh, const char* const filename,
 void writeMeshBoundaryToVTK(const RegularTrimesh& mesh, const char* const filename);
 
 
-RegularTrimesh expand_to_criterion(const RegularTrimesh& mesh,
-                                   std::function<std::vector<double>(const RegularTrimesh&)> score_function,
-                                   double threshold);
+std::tuple<RegularTrimesh, int>
+expand_to_criterion(const RegularTrimesh& mesh,
+                    std::function<std::vector<double>(const RegularTrimesh&, const int level)> score_function,
+                    double threshold);
 } // namespace Opm

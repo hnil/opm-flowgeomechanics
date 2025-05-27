@@ -282,7 +282,6 @@ private:
 
     std::unique_ptr<GridStretcher> grid_stretcher_; //@@ experimental, for stretching grids
     std::unique_ptr<Opm::RegularTrimesh> trimesh_; // @@ experimental, implicitly defined grids
-    std::vector<int> fsmap_; // map from fine-scale gridcells to trimesh_ cells
   
     std::unique_ptr<Grid> grid_;
     Point3D origo_;
@@ -318,7 +317,8 @@ private:
     }
   
     //double well_pressure_;// for now using prm object for definition
-    std::vector<int> well_source_;
+    std::vector<CellRef> well_source_cellref_; // references to well cells in the fully resolved TriMesh
+    std::vector<int> well_source_; // indices to well cells
     // for reservoir
     std::vector<int> reservoir_cells_;
     // std::vector< Dune::FieldMatrix<double, 3, 3> > reservoir_perm_;

@@ -14,7 +14,10 @@ using namespace std;
 
 namespace
 {
-
+    const bool DEBUG_DUMP_GRIDS = true;
+    static int DEBUG_CURRENT_GRID_ITERATION_COUNT = 0; // @@
+    static int DEBUG_GRID_COUNT = 0;
+    
 array<EdgeRef, 3>
 cell2edges(const CellRef& cell)
 {
@@ -391,10 +394,15 @@ RegularTrimesh::boundaryEdges() const
     // boundary edges are those that are not duplicated
     vector<EdgeRef> result;
     for (auto it = all_edges.begin(); it != all_edges.end(); ++it)
-        if (*it != *(it + 1))
+        if (it == all_edges.end() - 1 || *it != *(it + 1))
             result.push_back(*it);
         else
             ++it; // skip the next one, which we already know is duplicated
+    
+        // if (*it != *(it + 1))
+        //     result.push_back(*it);
+        // else
+        //     ++it; // skip the next one, which we already know is duplicated
 
     // sort entries
     sort(result.begin(), result.end());
@@ -491,7 +499,7 @@ RegularTrimesh::boundary_smoothing_triangles_() const
         return n;
     };
     // function to check that the cells from check_template are inactive
-    const auto none_active = [&](const EdgeRef& edge, const int rotation) -> bool {
+    const auto check_active = [&](const EdgeRef& edge, const int rotation) -> bool {
         for (const auto& template_cell : check_template) 
             if (isActive(cell_position(edge, template_cell, rotation % 6)))
                 return false;
@@ -500,7 +508,12 @@ RegularTrimesh::boundary_smoothing_triangles_() const
     for (int dir = 0; dir != 3; ++dir) // three cardinal directions
         for (const auto& edge : candidate_sites[dir]) 
             for (int side = 0; side != 2; ++side) // right and left
-                if (none_active(edge, dir_rot[dir] + 3 * side)) {
+                if (check_active(edge, dir_rot[dir] + 3 * side)) {
+                    const CellRef n1 { node2cell(edge2node(edge), dir == 2) }; // cell associated with first edge
+                    const CellRef n2 { node2cell(edge2node(edge) + ocell[dir], dir != 2) }; //opposing cell
+                    if (!isActive(n1) || !isActive(n2))
+                        continue;
+                    
                     // make smoothing triangle
                     for (int i = 0; i != 3; ++i)
                         corners.push_back(
@@ -508,8 +521,8 @@ RegularTrimesh::boundary_smoothing_triangles_() const
                                node_rotate_n(smooth_template[i], dir_rot[dir] + 3 * side) });
                                 
                     // keep track of cell neighbors to the new smoothing cell
-                    neigh_cells.push_back( { node2cell(edge2node(edge), dir == 2) } );
-                    neigh_cells.push_back( { node2cell(edge2node(edge) + ocell[dir], dir != 2) } );
+                    neigh_cells.push_back( n1 );
+                    neigh_cells.push_back( n2 );
                 }
     
     // prepare result by changing NodeRefs to indices
@@ -707,7 +720,6 @@ RegularTrimesh::coarsen_mesh(const RegularTrimesh& mesh, const vector<CellRef>& 
                         covered_finecells.begin(),
                         covered_finecells.end(),
                         back_inserter(uncovered_finecells));
-
     return make_pair(coarsened, uncovered_finecells);
 }
 
@@ -753,7 +765,6 @@ RegularTrimesh::createDuneGrid(const int coarsen_levels,
 //------------------------------------------------------------------------------
 {
     Dune::GridFactory<Grid> factory;
-
     // define points
     for (const auto& node : nodeCoords())
         factory.insertVertex(Dune::FieldVector<double, 3> {node[0], node[1], node[2]});
@@ -761,7 +772,7 @@ RegularTrimesh::createDuneGrid(const int coarsen_levels,
     // define triangles
     const auto tmp = coarsen_levels > 0 ? getMultiresTriangles(fixed_cells, coarsen_levels) : getTriangles();
     const auto& fsmap = tmp.second;
-    
+
     for (const auto& tri : tmp.first)
         factory.insertElement(Dune::GeometryTypes::simplex(2),
                               vector<unsigned int> {tri[0], tri[1], tri[2]});
@@ -775,8 +786,7 @@ RegularTrimesh::createDuneGrid(const int coarsen_levels,
     const auto bcells = cellrefs_to_indices_(boundaryCells());
     for (const auto& cell : bcells)
         boundary_map[cell] = fsmap_inv[cell]; // mapping from Dune grid cells to Trimesh cells
-        
-    
+
     if (add_smoothing_triangles) {
         const auto smoothing_triangles = boundary_smoothing_triangles_();
         int smoothing_cell_index = fsmap.size();
@@ -790,7 +800,6 @@ RegularTrimesh::createDuneGrid(const int coarsen_levels,
             ++smoothing_cell_index;
         }
     }
-    
     return make_tuple(factory.createGrid(), fsmap, boundary_map);
 }
 
@@ -1235,23 +1244,38 @@ RegularTrimesh::coarse_to_fine(const CellRef& c)
 
 // ----------------------------------------------------------------------------
 CellRef
-RegularTrimesh::fine_to_coarse(const CellRef& cell)
+RegularTrimesh::fine_to_coarse(const CellRef& cell, const int levels)
 // ----------------------------------------------------------------------------
 {
-    const int i = cell[0] >= 0 ? cell[0] : cell[0] - 1;
-    const int j = cell[1] >= 0 ? cell[1] : cell[1] - 1;
-    return {i / 2, j / 2, cell[2] == 0 ? 1 : 0};
+    int i = cell[0], j = cell[1], k = cell[2];
+
+    for (int l = 0; l < levels; ++l) {
+        const int impairs = abs(i%2) + abs(j%2) + k;
+
+        (i < 0) && --i;
+        (j < 0) && --j;
+    
+        i /= 2;
+        j /= 2;
+
+        k = (impairs > 1) ? 1 : 0;
+    }
+    return {i, j, k};
+    
+    // const int i = cell[0] >= 0 ? cell[0] : cell[0] - 1;
+    // const int j = cell[1] >= 0 ? cell[1] : cell[1] - 1;
+    // return {i / 2, j / 2, cell[2] == 0 ? 1 : 0};
 }
 
 // ----------------------------------------------------------------------------
 NodeRef
-RegularTrimesh::coarse_to_fine(const NodeRef& node, const int level)
+RegularTrimesh::coarse_to_fine(const NodeRef& node, const int levels)
 // ----------------------------------------------------------------------------
 {
-    if (level < 0)
-        return {node[0] / (1 << abs(level)), node[1] / (1 << abs(level))};
+    if (levels < 0)
+        return {node[0] / (1 << abs(levels)), node[1] / (1 << abs(levels))};
     else
-        return {node[0] * (1 << level), node[1] * (1 << level)};
+        return {node[0] * (1 << levels), node[1] * (1 << levels)};
     // return {2*node[0], 2*node[1]};
 }
 
@@ -1295,7 +1319,7 @@ vector<CellRef> RegularTrimesh::activeNeighborCells(const vector<CellRef>& cells
 
 // ----------------------------------------------------------------------------
 RegularTrimesh
-expand_to_criterion(const RegularTrimesh& mesh,
+expand_to_criterion_old(const RegularTrimesh& mesh,
                     function<vector<double>(const RegularTrimesh&)> score_function,
                     double threshold)
 // ----------------------------------------------------------------------------
@@ -1333,5 +1357,88 @@ expand_to_criterion(const RegularTrimesh& mesh,
     }
     return working_mesh;
 }
+
+// ----------------------------------------------------------------------------
+std::tuple<RegularTrimesh, int>
+expand_to_criterion(const RegularTrimesh& mesh,
+                    function<vector<double>(const RegularTrimesh&, const int level)> score_function,
+                    double threshold)
+{
+    RegularTrimesh working_mesh = mesh; // make a working copy of the mesh;
+    vector<RegularTrimesh> last_meshes; // keep track of meshes at each level before coarsening
+    int cur_level = 0; // start expanding mesh at finest level
+    int iter_count = 0; // keep track of iterations on current level
+    const int max_iter = 5; // 5; // maximum number of iterations on current level
+    int roof = numeric_limits<int>::max();
+    
+    ++DEBUG_GRID_COUNT; // @@ only for keeping track of grids to output for debugging/monitoring purposes
+    DEBUG_CURRENT_GRID_ITERATION_COUNT=0; //@@ same
+
+    // determine starting level
+    const int target_cellcount = 800; // target number of cells in the final mesh
+    const int cellcount_threshold = 400; // target number of cells in the initial mesh
+    while (working_mesh.numCells() > cellcount_threshold) {
+        last_meshes.push_back(working_mesh);
+        working_mesh = working_mesh.coarsen(true);
+        working_mesh.removeSawtooths();
+        cur_level++;
+    }
+    cout << "------------- Starting propagation at level: " << cur_level << " -----------" <<endl;
+    while (true) { // keep looping as long as grid need expansion
+
+        if (DEBUG_DUMP_GRIDS) {
+            string filename = "current_grid_" + to_string(DEBUG_GRID_COUNT) + "_" + to_string(DEBUG_CURRENT_GRID_ITERATION_COUNT++);
+            writeMeshToVTKDebug(working_mesh, filename.c_str(), 0, 1);
+        }
+        const vector<double> bnd_scores = score_function(working_mesh, cur_level);
+        const vector<CellRef> bnd_cells = mesh.boundaryCells();
+        assert(bnd_scores.size() == bnd_cells.size());
+
+        vector<CellRef> expand_cells;
+        for (size_t i = 0; i != bnd_scores.size(); ++i)
+            if (bnd_scores[i] > threshold)
+                expand_cells.push_back(bnd_cells[i]);
+
+        if (expand_cells.size() == 0) {
+            if (cur_level == 0 || working_mesh.numCells() >= target_cellcount) 
+                break;
+            working_mesh.contractGrid();
+            working_mesh = working_mesh.refine();
+
+            // ensure we did not lose cells that were already inherited from
+            // finer level when the coarse mesh was created
+            const auto prev_cells = last_meshes.back().cellIndices();
+            for (const auto& cell : prev_cells)
+                working_mesh.setActive(cell);
+            last_meshes.pop_back();
+            working_mesh.removeSawtooths();
+            
+            roof = cur_level--;
+            cout << "** -------- Refining to level -------- " << cur_level << endl;
+            iter_count = 0;
+        } else if (iter_count >= max_iter && cur_level < roof-1) {
+            // expansion is going too slowly, move to coarser level
+            last_meshes.push_back(working_mesh);
+
+            working_mesh = working_mesh.coarsen(true);
+            working_mesh.removeSawtooths();
+            cur_level++;
+            cout << "** -------- Coarsening to level ------- " << cur_level << endl;
+            iter_count = 0;
+        } else {
+            // expanding grid at current level
+            working_mesh.expandGrid(expand_cells);
+            working_mesh.removeSawtooths();
+            iter_count++;
+        }
+    }
+    cout << " ** ---------- CONVERGED BOUNDARY MESH ---------- **" << endl;
+
+    return {working_mesh, cur_level};
+}
+
+
+
+
 
 } // namespace Opm
