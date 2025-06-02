@@ -14,7 +14,7 @@ using namespace std;
 
 namespace
 {
-    const bool DEBUG_DUMP_GRIDS = true;
+    const bool DEBUG_DUMP_GRIDS = false;
     static int DEBUG_CURRENT_GRID_ITERATION_COUNT = 0; // @@
     static int DEBUG_GRID_COUNT = 0;
     
@@ -1317,46 +1317,46 @@ vector<CellRef> RegularTrimesh::activeNeighborCells(const vector<CellRef>& cells
     return vector<CellRef>(result.begin(), result.end());
 }
 
-// ----------------------------------------------------------------------------
-RegularTrimesh
-expand_to_criterion_old(const RegularTrimesh& mesh,
-                    function<vector<double>(const RegularTrimesh&)> score_function,
-                    double threshold)
-// ----------------------------------------------------------------------------
-{
-    // @@ for the moment, an extremely simple expansion algorithm
-    RegularTrimesh working_mesh = mesh; // make a working copy of the mesh;
+// // ----------------------------------------------------------------------------
+// RegularTrimesh
+// expand_to_criterion_old(const RegularTrimesh& mesh,
+//                     function<vector<double>(const RegularTrimesh&)> score_function,
+//                     double threshold)
+// // ----------------------------------------------------------------------------
+// {
+//     // @@ for the moment, an extremely simple expansion algorithm
+//     RegularTrimesh working_mesh = mesh; // make a working copy of the mesh;
 
-    while (true) { // keep looping as long as grid still needs expansion
-        const vector<double> bnd_scores = score_function(working_mesh);
-        const vector<CellRef> bnd_cells = mesh.boundaryCells();
+//     while (true) { // keep looping as long as grid still needs expansion
+//         const vector<double> bnd_scores = score_function(working_mesh);
+//         const vector<CellRef> bnd_cells = mesh.boundaryCells();
 
-        assert(bnd_scores.size() == bnd_cells.size());
+//         assert(bnd_scores.size() == bnd_cells.size());
 
-        vector<CellRef> expand_cells;
-        for (size_t i = 0; i != bnd_scores.size(); ++i)
-            if (bnd_scores[i] > threshold)
-                expand_cells.push_back(bnd_cells[i]);
+//         vector<CellRef> expand_cells;
+//         for (size_t i = 0; i != bnd_scores.size(); ++i)
+//             if (bnd_scores[i] > threshold)
+//                 expand_cells.push_back(bnd_cells[i]);
 
-        if (expand_cells.size() == 0)
-            break;
+//         if (expand_cells.size() == 0)
+//             break;
 
-        // @@ debugging info
-        // working_mesh.setAllFlags(0);
-        // working_mesh.setCellFlags(expand_cells, 1);
-        // writeMeshToVTK(working_mesh, "before", false);
+//         // @@ debugging info
+//         // working_mesh.setAllFlags(0);
+//         // working_mesh.setCellFlags(expand_cells, 1);
+//         // writeMeshToVTK(working_mesh, "before", false);
 
-        working_mesh.expandGrid(expand_cells);
-        working_mesh.removeSawtooths();
+//         working_mesh.expandGrid(expand_cells);
+//         working_mesh.removeSawtooths();
 
-        // auto neighs = working_mesh.activeNeighborCells(expand_cells);
-        // working_mesh.expandGrid(neighs);
-        // working_mesh.removeSawtooths();
+//         // auto neighs = working_mesh.activeNeighborCells(expand_cells);
+//         // working_mesh.expandGrid(neighs);
+//         // working_mesh.removeSawtooths();
 
-        // writeMeshToVTK(working_mesh, "after", false);
-    }
-    return working_mesh;
-}
+//         // writeMeshToVTK(working_mesh, "after", false);
+//     }
+//     return working_mesh;
+// }
 
 // ----------------------------------------------------------------------------
 std::tuple<RegularTrimesh, int>
