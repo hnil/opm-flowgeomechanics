@@ -497,7 +497,7 @@ void Fracture::writemulti(double time) const
 
         vtkmultiwriter_->attachScalarElementData(K1, "stressIntensityK1");
     }
-    vtkmultiwriter_->endWrite();
+    vtkmultiwriter_->endWrite(false);
 };
 
 void

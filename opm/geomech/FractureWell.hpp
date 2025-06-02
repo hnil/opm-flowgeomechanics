@@ -64,7 +64,7 @@ private:
     std::vector<double> perf_pressure_;
   //
   // welldata : state, WI, ?
-    static constexpr int VTKFormat = Dune::VTK::ascii;
+    static constexpr auto VTKFormat = Dune::VTK::ascii;
     std::unique_ptr<Opm::VtkMultiWriter<Grid::LeafGridView, VTKFormat>> vtkmultiwriter_;
 };
 }

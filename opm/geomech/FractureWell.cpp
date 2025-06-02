@@ -51,7 +51,7 @@ namespace Opm{
         if (reservoir_temperature.size() > 0) {
             vtkmultiwriter_->attachScalarElementData(reservoir_temperature, "ReservoirTemperature");
         }
-        vtkmultiwriter_->endWrite();
+        vtkmultiwriter_->endWrite(false);
     }
 
     FractureWell::FractureWell(std::string outputprefix,

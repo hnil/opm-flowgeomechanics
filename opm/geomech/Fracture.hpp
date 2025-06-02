@@ -288,7 +288,7 @@ private:
     std::array<Point3D, 3> axis_;
     WellInfo wellinfo_;
     std::unique_ptr<Dune::VTKWriter<Grid::LeafGridView>> vtkwriter_;
-    static constexpr int VTKFormat = Dune::VTK::ascii;
+    static constexpr auto VTKFormat = Dune::VTK::ascii;
     std::unique_ptr<Opm::VtkMultiWriter<Grid::LeafGridView, VTKFormat>> vtkmultiwriter_;
     std::vector<unsigned int> out_indices_;
 
