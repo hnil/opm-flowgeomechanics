@@ -1375,8 +1375,9 @@ expand_to_criterion(const RegularTrimesh& mesh,
     DEBUG_CURRENT_GRID_ITERATION_COUNT=0; //@@ same
 
     // determine starting level
-    const int target_cellcount = 800; // target number of cells in the final mesh
-    const int cellcount_threshold = 400; // target number of cells in the initial mesh
+    const int target_cellcount = 200; // target number of cells in the final mesh
+    const int cellcount_threshold = 50; // target number of cells in the initial mesh
+    const int max_cellcount = 400; // maximum number of cells in the final mesh
     while (working_mesh.numCells() > cellcount_threshold) {
         last_meshes.push_back(working_mesh);
         working_mesh = working_mesh.coarsen(true);

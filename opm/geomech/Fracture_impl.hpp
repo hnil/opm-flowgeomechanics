@@ -226,13 +226,17 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             const std::vector<double> K1_not_nan = Fracture::stressIntensityK1();
             const std::vector<CellRef> boundary_cells = trimesh_->boundaryCells();
             std::vector<double> result(boundary_cells.size());
-            for (size_t i = 0; i != result.size(); ++i)
-                result[i] = K1_not_nan[bmap[trimesh_->linearCellIndex(boundary_cells[i])]];
+            for (size_t i = 0; i != result.size(); ++i){
+                double KImax = reservoir_cstress_[bmap[trimesh_->linearCellIndex(boundary_cells[i])]];
+                double KI = K1_not_nan[bmap[trimesh_->linearCellIndex(boundary_cells[i])]];
+                result[i] = KI/KImax;
+            }
             return result;
         };
 
-        const double K1max = prm_.get<double>("KMax");
-        const auto [mesh, cur_level] = expand_to_criterion(*trimesh_, score_function, K1max);
+        //const double K1max = prm_.get<double>("KMax");
+        const double threshold = 1.0;
+        const auto [mesh, cur_level] = expand_to_criterion(*trimesh_, score_function, threshold);
         // make current level become the reference (finest) level
         // note that the well_source_cellref_ is already set from the last call to the score function
         for (auto& cell : well_source_cellref_) 
@@ -260,17 +264,17 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
 
         const double efac = prm_.get<double>("solver.efac"); // 2; // @@ heuristic
         const double rfac = prm_.get<double>("solver.rfac"); // 2; // @@ heuristic
-        const double K1max = prm_.get<double>("KMax"); // @@ for testing.  Should be added as a proper data member
+        double K1max = prm_.get<double>("KMax"); // @@ for testing.  Should be added as a proper data member
         const std::vector<size_t> boundary_cells = grid_stretcher_->boundaryCellIndices();
         const size_t N = boundary_cells.size(); // number of boundary nodes and boundary cells
 
         std::vector<double> total_bnode_disp(N, 0), bnode_disp(N, 0), cell_disp(N, 0);
         // const std::vector<GridStretcher::CoordType>
         //   bnode_normals_orig = grid_stretcher_->bnodenormals();
-
+        int max_expand_iter = prm_.get<int>("solver.max_expand_iter");
         std::vector<GridStretcher::CoordType> displacements(N, {0, 0, 0});
         int count = 0; // @@
-        while (true) {
+        while (true && (count < max_expand_iter)) {
 
             std::cout << "Iteration: " << ++count << std::endl;
             // solve flow-mechanical system
@@ -301,17 +305,23 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
 
             const std::vector<double> K1_not_nan = Fracture::stressIntensityK1();
             std::vector<double> K1;
-            for (size_t i = 0; i != K1_not_nan.size(); ++i)
-                if (!std::isnan(K1_not_nan[i]))
-                    K1.push_back(K1_not_nan[i]);
-
-            // if no more expansion of the fracture grid is needed, we are finished
-            if (*max_element(K1.begin(), K1.end()) <= K1max)
+            bool should_fracture = false;
+            for (size_t i = 0; i != K1_not_nan.size(); ++i){
+                if (!std::isnan(K1_not_nan[i])){
+                    K1max = reservoir_cstress_[i];
+                    if(K1_not_nan[i] > K1max){
+                        should_fracture = true;
+                    }
+                }
+            }
+            if(!should_fracture){
                 break;
+            }
 
             // loop over cells, determine how much they should be expanded or contracted
             const double maxgrow = rfac * grid_stretcher_->maxBoxLength();
             for (size_t i = 0; i != N; ++i) {
+                K1max = reservoir_cstress_[boundary_cells[i]];
                 cell_disp[i]
                     = efac * (compute_target_expansion(K1max, fracture_width_[boundary_cells[i]], E_, nu_) - dist[i]);
                 cell_disp[i] = std::max(std::min(cell_disp[i], maxgrow), -maxgrow);
@@ -355,6 +365,9 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             // for(auto i : bix)
             //   os << pts[i][0] << " " << pts[i][1] << " " << pts[i][2] << "\n";
             // os.close();
+        }
+        if(count >= max_expand_iter){
+           std::cout << "Fracture expansion did not converge within the maximum number of iterations" << std::endl;
         }
     } else {
         OPM_THROW(std::runtime_error, "Unknowns solution method");
