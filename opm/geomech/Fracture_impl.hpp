@@ -234,9 +234,11 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             return result;
         };
 
+        
         //const double K1max = prm_.get<double>("KMax");
         const double threshold = 1.0;
-        const auto [mesh, cur_level] = expand_to_criterion(*trimesh_, score_function, threshold);
+        const std::vector<CellRef> fixed_cells = well_source_cellref_; 
+        const auto [mesh, cur_level] = expand_to_criterion(*trimesh_, score_function, threshold, fixed_cells);
         // make current level become the reference (finest) level
         // note that the well_source_cellref_ is already set from the last call to the score function
         for (auto& cell : well_source_cellref_) 

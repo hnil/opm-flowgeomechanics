@@ -1364,7 +1364,7 @@ vector<CellRef> RegularTrimesh::activeNeighborCells(const vector<CellRef>& cells
 std::tuple<RegularTrimesh, int>
 expand_to_criterion(const RegularTrimesh& mesh,
                     function<vector<double>(const RegularTrimesh&, const int level)> score_function,
-                    double threshold)
+                    double threshold, const std::vector<CellRef>& fixed_cells)
 {
     RegularTrimesh working_mesh = mesh; // make a working copy of the mesh;
     vector<RegularTrimesh> last_meshes; // keep track of meshes at each level before coarsening
@@ -1377,12 +1377,32 @@ expand_to_criterion(const RegularTrimesh& mesh,
     DEBUG_CURRENT_GRID_ITERATION_COUNT=0; //@@ same
 
     // determine starting level
-    const int target_cellcount = 200; // target number of cells in the final mesh
-    const int cellcount_threshold = 50; // target number of cells in the initial mesh
-    const int max_cellcount = 400; // maximum number of cells in the final mesh
+    const int target_cellcount = 50; // target number of cells in the final mesh
+    const int cellcount_threshold = 4*target_cellcount; // target number of cells in the initial mesh
+    const int max_cellcount = 200; // maximum number of cells in the final mesh
+
+    auto fixed_on_level = [&fixed_cells](const int level)->vector<CellRef> {
+        if (level == 0){
+            for(const auto& cell : fixed_cells)
+               std::cout << "{" << cell[0] << ", " << cell[1] << ", " << cell[2] << "} ";
+            std::cout << std::endl;
+            return fixed_cells;
+        }else {
+            vector<CellRef> result;
+            for (const auto& cell : fixed_cells)
+                result.push_back(RegularTrimesh::fine_to_coarse(cell, level));
+            //dump vector result to cout
+            for(const auto& cell : result)
+               std::cout << "{" << cell[0] << ", " << cell[1] << ", " << cell[2] << "} ";
+            std::cout << std::endl;
+            return result;
+        }
+    };
+
     while (working_mesh.numCells() > cellcount_threshold) {
         last_meshes.push_back(working_mesh);
         working_mesh = working_mesh.coarsen(true);
+        working_mesh.setCellFlags(fixed_on_level(cur_level), 1); // set fixed cells at this level
         working_mesh.removeSawtooths();
         cur_level++;
     }
@@ -1398,6 +1418,12 @@ expand_to_criterion(const RegularTrimesh& mesh,
         assert(bnd_scores.size() == bnd_cells.size());
 
         vector<CellRef> expand_cells;
+        
+        if(working_mesh.numCells() > max_cellcount) {
+            cout << " ** ---------- MAXIMUM CELL COUNT REACHED, STOPPING EXPANSION ---------- **" << endl;
+            break;
+        }   
+
         for (size_t i = 0; i != bnd_scores.size(); ++i)
             if (bnd_scores[i] > threshold)
                 expand_cells.push_back(bnd_cells[i]);
@@ -1419,11 +1445,12 @@ expand_to_criterion(const RegularTrimesh& mesh,
             roof = cur_level--;
             cout << "** -------- Refining to level -------- " << cur_level << endl;
             iter_count = 0;
-        } else if (iter_count >= max_iter && cur_level < roof-1) {
+        } else if (iter_count >= max_iter && cur_level < roof-1 ) {
             // expansion is going too slowly, move to coarser level
             last_meshes.push_back(working_mesh);
 
             working_mesh = working_mesh.coarsen(true);
+            working_mesh.setCellFlags(fixed_on_level(cur_level), 1); // set fixed cells at this level
             working_mesh.removeSawtooths();
             cur_level++;
             cout << "** -------- Coarsening to level ------- " << cur_level << endl;

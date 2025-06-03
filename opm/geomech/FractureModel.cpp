@@ -59,7 +59,8 @@ namespace Opm{
         // fracture_param.put("fractureparam.config.axis_scale", 4.50);
 
         // propagation properties
-        fracture_param.put("fractureparam.solver.method", "if_propagate_trimesh"s);
+        //fracture_param.put("fractureparam.solver.method", "if_propagate_trimesh"s);
+        fracture_param.put("fractureparam.solver.method", "if_propagate"s);
         fracture_param.put("fractureparam.solver.efac", 0.5);
         fracture_param.put("fractureparam.solver.rfac", 0.1);
         fracture_param.put("fractureparam.solver.max_iter", 100);
@@ -79,12 +80,12 @@ namespace Opm{
         // reservoir fracture coupling
         fracture_param.put("fractureparam.reservoir.dist", 1e1);
         fracture_param.put("fractureparam.reservoir.calculate_dist", true);
-        fracture_param.put("fractureparam.reservoir.mobility", 1.3e-3);
-        fracture_param.put("fractureparam.reservoir.perm", 1e-13);
+        //fracture_param.put("fractureparam.reservoir.mobility", 1.3e-3);
+        //fracture_param.put("fractureparam.reservoir.perm", 1e-13);
 
         // well fracture coupling
         fracture_param.put("fractureparam.control.type", "perf_pressure"s);
-        fracture_param.put("fractureparam.control.rate", 2.9e-2);
+        //fracture_param.put("fractureparam.control.rate", 2.9e-2);
         fracture_param.put("fractureparam.control.WI", 1.0e-11);
 
 
@@ -96,7 +97,7 @@ namespace Opm{
         fracture_param.put("fractureparam.pressuresolver", "umfpack"s);
         fracture_param.put("fractureparam.fracturesolver", "notused"s);
         return fracture_param;
-    }
+   }
 
     void FractureModel::addWell(std::string name,
                            const std::vector<Point3D>& points,
@@ -119,8 +120,13 @@ namespace Opm{
         }
         else if (fracture_type == "tensile_fracture") {
             this->addFracturesTensile();
-        }
-        else if (fracture_type == "well_seed") {
+        //}
+        // else if (fracture_type == "well_seed_json") {
+        //     // old method
+        //     Fracture fracture;
+        //     fracture.init(well.name(), perf, well_cell, origo, normal, prm_);
+        //     well_fractures_[i].push_back(std::move(fracture));
+        }else if (fracture_type == "well_seed") {
             this->addFracturesWellSeed(sched);
         }
         else {
@@ -360,6 +366,7 @@ namespace {
                 localSeedIxMap.insert_or_assign(ix, seedIx);
             }
         }
+        return localSeedIxMap;
     }
 }
 
@@ -389,7 +396,8 @@ void Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched)
 
         for (const auto& elem : elements(fracWell.grid().leafGridView())) {
             const auto elemIdx = emap.index(elem);
-            const auto seedPos = localSeeds.find(elemIdx);
+            size_t res_cell = fracWell.reservoirCell(elemIdx);
+            const auto seedPos = localSeeds.find(res_cell);
             if (seedPos == localSeeds.end()) {
                 continue;
             }
