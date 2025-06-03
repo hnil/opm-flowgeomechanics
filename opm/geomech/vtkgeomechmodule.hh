@@ -105,11 +105,11 @@ namespace Opm {
         {
             if (geoMechOutput_()){
                 //pressDiff_.resize(geoMechModel.numCells);
-                this->resizeScalarBuffer_(pressDiff_);
-                this->resizeVectorBuffer_(disp_,ParentType::BufferType::VertexBuffer);
-                this->resizeTensorBuffer_(stress_);
-                this->resizeTensorBuffer_(delstress_);
-                this->resizeTensorBuffer_(strain_);
+                this->resizeScalarBuffer_(pressDiff_, ParentType::BufferType::Element);
+                this->resizeVectorBuffer_(disp_, ParentType::BufferType::Vertex);
+                this->resizeTensorBuffer_(stress_, ParentType::BufferType::Element);
+                this->resizeTensorBuffer_(delstress_, ParentType::BufferType::Element);
+                this->resizeTensorBuffer_(strain_, ParentType::BufferType::Element);
                 //this->resizeVectorBuffer_(symstress_,ParentType::BufferType::ElementBuffer, 6);
             }
 
@@ -188,30 +188,31 @@ namespace Opm {
                 {
                     const std::string tmp = "pressureDiff";
                     this->commitScalarBuffer_(baseWriter,tmp.c_str(),
-                                              pressDiff_);
+                                              pressDiff_,
+                                              ParentType::BufferType::Element);
                 }
                 {
                     const std::string tmp = "disp";
                     this->commitVectorBuffer_(baseWriter,tmp.c_str(),
-                                              disp_, ParentType::BufferType::VertexBuffer);
+                                              disp_, ParentType::BufferType::Vertex);
                 }
                 {
                     const std::string tmp = "stress";
                     this->commitTensorBuffer_(baseWriter,tmp.c_str(),
                                               stress_,
-                                              ParentType::BufferType::ElementBuffer);
+                                              ParentType::BufferType::Element);
                 }
                 {
                     const std::string tmp = "delstress";
                     this->commitTensorBuffer_(baseWriter,tmp.c_str(),
                                               delstress_,
-                                              ParentType::BufferType::ElementBuffer);
+                                              ParentType::BufferType::Element);
                 }
                 {
                     const std::string tmp = "strain";
                     this->commitTensorBuffer_(baseWriter,tmp.c_str(),
                                               strain_,
-                                              ParentType::BufferType::ElementBuffer);
+                                              ParentType::BufferType::Element);
                 }
 
             }

@@ -74,10 +74,10 @@ namespace Opm{
                 fracture_param_ = fracture_param;
             }
 
-            hasFractures_ = fracture_param_.get<bool>("hasfractures");
+            hasFractures_ = this->simulator().vanguard().eclState().runspec().frac();//fracture_param_.get<bool>("hasfractures");
             addPerfsToSchedule_ = fracture_param_.get<bool>("add_perfs_to_schedule");
             if(this->simulator().vanguard().eclState().runspec().mech()){
-                this->model().addOutputModule(new VtkGeoMechModule<TypeTag>(simulator));
+              this->model().addOutputModule(std::make_unique<VtkGeoMechModule<TypeTag>>(simulator));
             }
         }
 
