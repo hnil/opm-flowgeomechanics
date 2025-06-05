@@ -76,6 +76,10 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                      const Simulator& simulator)
 // ----------------------------------------------------------------------------
 {
+    if(!active_){
+        std::cout << "Fracture " << this->name() << " is not active, skipping solve." << std::endl;
+        return;
+    }
     OPM_TIMEBLOCK(SolveFracture);
     std::cout << "Solve Fracture Pressure" << std::endl;
     std::string method = prm_.get<std::string>("solver.method");
@@ -237,8 +241,10 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         
         //const double K1max = prm_.get<double>("KMax");
         const double threshold = 1.0;
-        const std::vector<CellRef> fixed_cells = well_source_cellref_; 
-        const auto [mesh, cur_level] = expand_to_criterion(*trimesh_, score_function, threshold, fixed_cells);
+        const std::vector<CellRef> fixed_cells = well_source_cellref_;
+        int target_cellcount = prm_.get<int>("solver.target_cellcount"); 
+        int cellcount_threshold = prm_.get<int>("solver.cellcount_threshold");
+        const auto [mesh, cur_level] = expand_to_criterion(*trimesh_, score_function, threshold, fixed_cells, target_cellcount, cellcount_threshold);
         // make current level become the reference (finest) level
         // note that the well_source_cellref_ is already set from the last call to the score function
         for (auto& cell : well_source_cellref_) 

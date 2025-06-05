@@ -152,7 +152,8 @@ void updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
                           const std::vector<Htrans>& htrans,
                           const ResVector& pressure,
                           const ResVector& aperture,
-                          const std::vector<int>& closed_cells)
+                          const std::vector<int>& closed_cells,
+                          double min_width)
 {
   OPM_TIMEFUNCTION();
   // create C if not done already
@@ -169,8 +170,8 @@ void updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
     
     const double t1 = std::get<2>(e);
     const double t2 = std::get<3>(e);
-    const double h1 = aperture[i];
-    const double h2 = aperture[j];
+    const double h1 = aperture[i] + min_width;
+    const double h2 = aperture[j] + min_width;
     const double p1 = pressure[i];
     const double p2 = pressure[j];
     
@@ -286,8 +287,7 @@ namespace Opm
   std::vector<int> Fracture::identify_closed(const FMatrix& A,
                                  const VectorHP& x,
                                  const ResVector& rhs,
-                                 const int nwells,
-                                 const double min_width)
+                                 const int nwells)
 // ----------------------------------------------------------------------------
 {
   OPM_TIMEFUNCTION();
@@ -299,10 +299,9 @@ namespace Opm
   const ResVector& p = x[_1];
   A.mmv(h, tmp);
   I.mmv(p, tmp);
-  //double min_width = prm_.get<double>("solver.min_width");
   std::vector<int> result;
   for (size_t i = 0; i != A.N(); ++i)
-    result.push_back(tmp[i] >= 0 && h[i] <= min_width);
+    result.push_back(tmp[i] >= 0 && h[i] <= 0.0);
 
   //std::fill(result.begin(), result.end(), 1); // @@@
   return result;
@@ -313,7 +312,7 @@ bool Fracture::fullSystemIteration(const double tol)
 // ----------------------------------------------------------------------------
 {
   OPM_TIMEFUNCTION();
-  const double min_width = prm_.get<double>("solver.min_width"); 
+  min_width_ = prm_.get<double>("solver.min_width"); // min with only used for flow calculations
   const double max_width = prm_.get<double>("solver.max_width");
 
   // update pressure matrix with the current values of `fracture_width_` and
@@ -334,7 +333,7 @@ bool Fracture::fullSystemIteration(const double tol)
 
   // make a version of the fracture matrix that has trivial equations for closed cells
   const std::vector<int> closed_cells = identify_closed(fractureMatrix(), x, rhs[_0],
-                                                        numWellEquations(), min_width);
+                                                        numWellEquations());
   const auto A = modified_fracture_matrix(fractureMatrix(), closed_cells);
 
   // also modify right hand side for closed cells
@@ -345,8 +344,10 @@ bool Fracture::fullSystemIteration(const double tol)
   updateCouplingMatrix(coupling_matrix_,
                        pressure_matrix_->N() - numWellEquations(), // num cells
                        numWellEquations(),                         // num wells
-                       htrans_, fracture_pressure_, fracture_width_,
-                       closed_cells);
+                       htrans_, fracture_pressure_, 
+                       fracture_width_,
+                       closed_cells,
+                       min_width_);
   // setup the full system
   const auto& M = *pressure_matrix_;
   const auto& C = *coupling_matrix_;
@@ -418,7 +419,7 @@ bool Fracture::fullSystemIteration(const double tol)
   // copying modified variables back to member variables
   fracture_width_ = x[_0];
   for (int i = 0; i != fracture_width_.size(); ++i){
-    fracture_width_[i][0] = std::max(min_width, fracture_width_[i][0]); // ensure non-negativity
+    fracture_width_[i][0] = std::max(0.0, fracture_width_[i][0]); // ensure non-negativity
     //fracture_width_[i][0] = std::min(max_width, fracture_width_[i][0]); // ensure non-negativity
   }
   fracture_pressure_ = x[_1];

@@ -70,9 +70,11 @@ namespace Opm{
                 OpmLog::warning(ss.str());
                 Opm::PropertyTree fracture_param = makeDefaultFractureParam();
                 fracture_param.put("hasfractures",false);
-                fracture_param.put("fractureparams.numfractures",1);
+                //fracture_param.put("fractureparams.numfractures",1);
                 fracture_param_ = fracture_param;
+                
             }
+            fracture_param_.write_json(std::cout, true);
 
             hasFractures_ = this->simulator().vanguard().eclState().runspec().frac();//fracture_param_.get<bool>("hasfractures");
             addPerfsToSchedule_ = fracture_param_.get<bool>("add_perfs_to_schedule");
@@ -301,7 +303,7 @@ namespace Opm{
             //Parent::FlowProblemType::endTimeStep();
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 geomechModel_.endTimeStep();
-                if(this->hasFractures()){
+                if(this->hasFractures() && this->geomechModel().fractureModelActive()){
                     // method for handling extra connections from fractures
                     // it is options for not including them in fractures i.e. addconnections
                     if(addPerfsToSchedule_){
@@ -312,9 +314,9 @@ namespace Opm{
                         assert(false);
                         this->addConnectionsToWell();
                     }
-
-                    this->geomechModel_.fractureModel()
-                        .assignGeomechWellState(this->wellModel_.wellState());
+                
+                    this->geomechModel_.fractureModel().
+                        assignGeomechWellState(this->wellModel_.wellState());
                 }
             }
 
@@ -325,6 +327,7 @@ namespace Opm{
         }
 
         void addConnectionsToWell(){
+            //return;
         // add extra connections from fractures direclty to the well structure
             auto& wellcontainer = this->wellModel().localNonshutWells();
             for (auto& wellPtr : wellcontainer) {
@@ -336,6 +339,7 @@ namespace Opm{
 
         void addConnectionsToSchedual()
         {
+            //return;
         // add extra connections to schedule and use the action framework to handle it
             //const auto& problem = simulator_.problem();
             auto& simulator = this->simulator();
@@ -346,10 +350,12 @@ namespace Opm{
             // const auto ts = formatActionDate(now, reportStep);
             std::map<std::string, std::vector<Opm::Connection>> extra_perfs;
             //auto mapper = simulator.vanguard().cartesianMapper();
-            auto& wellcontainer = this->wellModel().localNonshutWells();
-            for (auto& wellPtr : wellcontainer) {
-                auto wellName = wellPtr->name();
+            //auto& wellcontainer = this->wellModel().localNonshutWells();
+            //for (auto& wellPtr : wellcontainer) {
+            for (const auto& wellName : schedule.wellNames(reportStep) ){   
+                //auto wellName = wellPtr->name();
                 const auto& wellcons = geomechModel_.getExtraWellIndices(wellName);
+                std::cout << "Adding extra connections for well: " << wellName << " number " << wellcons.size() << std::endl;
                 for (const auto& cons : wellcons) {
                     // simple calculated with upscaling
                     const auto [cell, WI, depth] = cons;

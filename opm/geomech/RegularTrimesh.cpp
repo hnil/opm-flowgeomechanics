@@ -1364,7 +1364,10 @@ vector<CellRef> RegularTrimesh::activeNeighborCells(const vector<CellRef>& cells
 std::tuple<RegularTrimesh, int>
 expand_to_criterion(const RegularTrimesh& mesh,
                     function<vector<double>(const RegularTrimesh&, const int level)> score_function,
-                    double threshold, const std::vector<CellRef>& fixed_cells)
+                    double threshold, const std::vector<CellRef>& fixed_cells,
+                    const int target_cellcount,
+                    const int cellcount_threshold
+                    )
 {
     RegularTrimesh working_mesh = mesh; // make a working copy of the mesh;
     vector<RegularTrimesh> last_meshes; // keep track of meshes at each level before coarsening
@@ -1377,8 +1380,8 @@ expand_to_criterion(const RegularTrimesh& mesh,
     DEBUG_CURRENT_GRID_ITERATION_COUNT=0; //@@ same
 
     // determine starting level
-    const int target_cellcount = 50; // target number of cells in the final mesh
-    const int cellcount_threshold = 4*target_cellcount; // target number of cells in the initial mesh
+    //const int target_cellcount = 50; // target number of cells in the final mesh
+    //const int cellcount_threshold = 4*target_cellcount; // target number of cells in the initial mesh
     const int max_cellcount = 200; // maximum number of cells in the final mesh
 
     auto fixed_on_level = [&fixed_cells](const int level)->vector<CellRef> {

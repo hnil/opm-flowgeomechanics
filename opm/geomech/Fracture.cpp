@@ -1320,8 +1320,8 @@ Fracture::assemblePressure()
         size_t j = std::get<1>(matel);
         double t1 = std::get<2>(matel);
         double t2 = std::get<3>(matel);
-        double h1 = fracture_width_[i];
-        double h2 = fracture_width_[j];
+        double h1 = fracture_width_[i]+min_width_;
+        double h2 = fracture_width_[j]+min_width_;
         // harmonic mean of surface flow
         double value = 12. / (h1 * h1 * h1 * t1) + 12. / (h2 * h2 * h2 * t2);
 

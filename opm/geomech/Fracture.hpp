@@ -217,7 +217,8 @@ public:
 
     template <typename Scalar>
     void assignGeomechWellState(ConnFracStatistics<Scalar>& stats) const;
-
+    void setActive(bool active) { active_ = active; }
+    bool isActive() const { return active_; }
 private:
     using ResVector = Opm::Fracture::Vector; 
     using VectorHP = Dune::MultiTypeBlockVector<ResVector, ResVector>;
@@ -233,8 +234,7 @@ private:
     std::vector<int> identify_closed(const FMatrix& A,
                                      const VectorHP& x,
                                      const ResVector& rhs,
-                                     const int nwells,
-                                     const double min_width);
+                                     const int nwells);
     template <class TypeTag, class Simulator>
     void initReservoirProperties(const Simulator& simulator)
     {
@@ -287,6 +287,7 @@ private:
     Point3D origo_;
     std::array<Point3D, 3> axis_;
     WellInfo wellinfo_;
+    bool active_{false}; // is fracture active?
     std::unique_ptr<Dune::VTKWriter<Grid::LeafGridView>> vtkwriter_;
     static constexpr auto VTKFormat = Dune::VTK::ascii;
     std::unique_ptr<Opm::VtkMultiWriter<Grid::LeafGridView, VTKFormat>> vtkmultiwriter_;
@@ -368,6 +369,7 @@ private:
   
     double E_;
     double nu_;
+    double min_width_; // minimum width of fracture, used for convergence criterion
     Opm::PropertyTree prm_;
 };
 } // namespace Opm

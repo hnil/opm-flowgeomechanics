@@ -30,11 +30,10 @@ public:
         // NB everything is not explicit and ministeps are not considered
         if (reportStepIdx > 0) {
             const auto& problem = this->simulator_.problem();
-            if (problem.hasFractures()) {
+            const auto& geomechmodel = problem.geomechModel();
+            if (problem.hasFractures() && geomechmodel.fractureModelActive()) {
                 for (auto& wellPtr : this->well_container_) {
                     auto wellName = wellPtr->name();
-
-                    const auto& geomechmodel = problem.geomechModel();
                     const auto& fracturemodel = geomechmodel.fractureModel();
                     auto wellIndices = fracturemodel.getExtraWellIndices(wellName);
                     wellPtr->addPerforations(wellIndices);

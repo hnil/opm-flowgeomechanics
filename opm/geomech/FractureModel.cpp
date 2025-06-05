@@ -49,20 +49,23 @@ namespace Opm{
         fracture_param.put("fractureparam.include_fracture_contributions", false);
 
         // seed to be in input file   
-        // fracture_param.put("fractureparam.config.type", "well_seed");
+        fracture_param.put("fractureparam.config.type", "well_seed"s);
         // fracture_param.put("fractureparam.config.well", "P1");
         // fracture_param.put("fractureparam.config.cell_ijk", std::vector<int>{8, 8, 10});
         // fracture_param.put("fractureparam.config.normal", std::vector<double>{0, 1, 0});
-        // fracture_param.put("fractureparam.config.initial_fracture_width", 0.0);
-        // fracture_param.put("fractureparam.config.num_exp", 3);
-        // fracture_param.put("fractureparam.config.num_lin", 2);
-        // fracture_param.put("fractureparam.config.axis_scale", 4.50);
+        fracture_param.put("fractureparam.config.initial_fracture_width", 0.0);
+        fracture_param.put("fractureparam.config.num_exp", 3);
+        fracture_param.put("fractureparam.config.num_lin", 2);
+        fracture_param.put("fractureparam.config.axis_scale", 1.50);
 
         // propagation properties
         //fracture_param.put("fractureparam.solver.method", "if_propagate_trimesh"s);
-        fracture_param.put("fractureparam.solver.method", "if_propagate"s);
+        fracture_param.put("fractureparam.solver.method", "if_propagate_trimesh"s);
+        fracture_param.put("fractureparam.solver.target_cellcount", 50);
+        fracture_param.put("fractureparam.solver.cellcount_threshold", 200);
         fracture_param.put("fractureparam.solver.efac", 0.5);
         fracture_param.put("fractureparam.solver.rfac", 0.1);
+        fracture_param.put("fractureparam.solver.max_expand_iter", 20);
         fracture_param.put("fractureparam.solver.max_iter", 100);
         fracture_param.put("fractureparam.solver.damping", 1e0);
         fracture_param.put("fractureparam.solver.min_width", 0.0);
@@ -75,21 +78,21 @@ namespace Opm{
         // fracture linear solve
         fracture_param.put("fractureparam.solver.linsolver.tol", 1e-10);
         fracture_param.put("fractureparam.solver.linsolver.max_iter", 1000);
-        fracture_param.put("fractureparam.solver.linsolver.verbosity", 1);
+        fracture_param.put("fractureparam.solver.linsolver.verbosity", 0);
 
         // reservoir fracture coupling
         fracture_param.put("fractureparam.reservoir.dist", 1e1);
         fracture_param.put("fractureparam.reservoir.calculate_dist", true);
-        //fracture_param.put("fractureparam.reservoir.mobility", 1.3e-3);
-        //fracture_param.put("fractureparam.reservoir.perm", 1e-13);
+        fracture_param.put("fractureparam.reservoir.mobility", 1.3e-3);
+        fracture_param.put("fractureparam.reservoir.perm", 1e-13);
 
         // well fracture coupling
         fracture_param.put("fractureparam.control.type", "perf_pressure"s);
-        //fracture_param.put("fractureparam.control.rate", 2.9e-2);
+        fracture_param.put("fractureparam.control.rate", 2.9e-2);
         fracture_param.put("fractureparam.control.WI", 1.0e-11);
 
 
-        //fracture_param.put("fractureparam.KMax", 1e6);// in input file
+        fracture_param.put("fractureparam.KMax", 1e6);// in input file
         fracture_param.put("fractureparam.extended_fractures", true);
         fracture_param.put("fractureparam.fractureWI", 0.1);
         fracture_param.put("fractureparam.write_pressure_system", false);
@@ -132,6 +135,14 @@ namespace Opm{
         else {
             OPM_THROW(std::runtime_error, "Fracture type '" + fracture_type + "' is not supported");
         }
+        std::cout << "Added fractures to " << wells_.size() << " wells" << std::endl;
+        std::cout << "Total number of fractures_wells: " << well_fractures_.size() << std::endl;
+        int count_frac = 0;
+        for(size_t i=0; i < well_fractures_.size(); ++i){
+            count_frac += well_fractures_[i].size();
+            std::cout << "Well " << wells_[i].name() << " has " << well_fractures_[i].size() << " fractures" << std::endl;
+        }
+        std::cout << "Total number of fractures: " << count_frac << std::endl;
     }
 
     void FractureModel::initFractureStates(){
@@ -219,20 +230,42 @@ namespace Opm{
         // for now just do a search
         bool addconnections = prm_.get<bool>("addconnections");
         if (addconnections) {
+            int well_idx = -1;
             for (size_t i = 0; i < wells_.size(); ++i) {
+                if(!wells_[i].isActive()){
+                    if (wells_[i].name() == wellname) {
+                        well_idx = i;
+                    }
+                    continue;
+                }
                 if (wells_[i].name() == wellname) {
+                    well_idx = i;
                     // collect all from a well
                     std::vector<RuntimePerforation> wellindices;
                     for (const auto& frac : well_fractures_[i]) {
+                        //assert(frac.isActive());
+                        if(!frac.isActive()){
+                            continue;
+                        }
                         auto perfs = frac.wellIndices();
                         wellindices.insert(wellindices.end(),perfs.begin(), perfs.end());
                     }
                     return wellindices;
                 }
             }
-            std::string message = "Now fractures on this well found";
-            message += wellname;
-            OPM_THROW(std::runtime_error, message.c_str());
+            std::cout << "Well " << wellname << " not connections added" << std::endl;
+            if(well_idx <-1){    
+                std::cout << "Well not found " << wellname << std::endl;
+            }else{
+                std::cout << "Well " << wellname << " active " << wells_[well_idx].isActive() << " fractures " << well_fractures_[well_idx].size() << std::endl;
+                if(well_fractures_[well_idx].size() >0){
+                    for(const auto& frac: well_fractures_[well_idx]){
+                        std::cout << "Fracture " << frac.name() << " active " << frac.isActive() << std::endl;
+                    }
+                } 
+            }
+            //message += wellname;
+            //OPM_THROW(std::runtime_error, message.c_str());
         }
         return {};
     }
@@ -242,6 +275,9 @@ namespace Opm{
     {
         const auto nWells = this->wells_.size();
         for (auto i = 0*nWells; i < nWells; ++i) {
+            if(!wells_[i].isActive()){
+                continue;
+            }
             const auto wsIx = wellState.index(this->wells_[i].name());
             if (! wsIx.has_value()) { continue; }
 
@@ -252,6 +288,7 @@ namespace Opm{
             }
 
             for (const auto& fracture : this->well_fractures_[i]) {
+                if (! fracture.isActive()) { continue; }
                 auto perfPos = std::find(perfData.cell_index.begin(),
                                          perfData.cell_index.end(),
                                          fracture.wellInfo().well_cell);
@@ -259,7 +296,6 @@ namespace Opm{
 
                 // Possibly just "fracture.wellInfo().perf" instead.
                 const auto perfIx = std::distance(perfData.cell_index.begin(), perfPos);
-
                 fracture.assignGeomechWellState(perfData.connFracStatistics[perfIx]);
             }
         }

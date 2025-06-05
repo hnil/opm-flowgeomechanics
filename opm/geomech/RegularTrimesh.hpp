@@ -222,5 +222,8 @@ void writeMeshBoundaryToVTK(const RegularTrimesh& mesh, const char* const filena
 std::tuple<RegularTrimesh, int>
 expand_to_criterion(const RegularTrimesh& mesh,
                     std::function<std::vector<double>(const RegularTrimesh&, const int level)> score_function,
-                    double threshold, const std::vector<CellRef>& fixed_cells);
+                    double threshold, const std::vector<CellRef>& fixed_cells,
+                    const int target_cellcount,
+                    const int cellcount_threshold
+                    );
 } // namespace Opm

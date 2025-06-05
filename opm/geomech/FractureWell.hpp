@@ -24,6 +24,7 @@ public:
         assert(grid_->leafGridView().size(0) == reservoir_cells_.size());
         const auto& problem = simulator.problem();
         perf_pressure_.resize(reservoir_cells_.size());
+        perf_active_.resize(reservoir_cells_.size(),false);
         reservoir_stress_.resize(reservoir_cells_.size());
         reservoir_pressure_.resize(reservoir_cells_.size());
         reservoir_temperature_.resize(reservoir_cells_.size());
@@ -48,6 +49,14 @@ public:
     void resetWriters();
     int reservoirCell(int wellcell) const {return reservoir_cells_[wellcell];};
     Dune::FieldVector<double,6> reservoirStress(int wellcell) const{return reservoir_stress_[wellcell];};
+    bool isActive() const {return active_;};
+    void setActive(bool active) {active_ = active;};
+    void setPerfActive(int perf_index, bool active)
+    {
+        assert(perf_index>= 0);
+        assert(perf_index < static_cast<int>(perf_active_.size()));
+        perf_active_[perf_index] = active;
+    }
 private:
     std::string outputprefix_;
     std::string casename_;
@@ -62,6 +71,8 @@ private:
     std::vector<double> reservoir_temperature_;
     // well data
     std::vector<double> perf_pressure_;
+    std::vector<double> perf_active_;
+    bool active_ = false; // if the well is active
   //
   // welldata : state, WI, ?
     static constexpr auto VTKFormat = Dune::VTK::ascii;

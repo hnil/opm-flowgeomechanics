@@ -51,4 +51,58 @@ namespace Opm{
 
         external::buildBoundingBoxTree(cell_search_tree_, grid);
     }
+    template <class TypeTag, class Simulator>
+    void FractureModel::updateWellProperties(const Simulator& simulator)
+    {
+        for (size_t i=0; i < wells_.size(); ++i) {  
+            for (auto& fracture : well_fractures_[i]){
+                // do update wells
+                // set well properties
+                WellInfo wellinfo = fracture.wellInfo();
+                // need to be double checked how to assosiate correct perforation/segment
+                int perf_index_frac = wellinfo.perf;
+                int cell_index_frac = wellinfo.well_cell;
+                // see if well exist
+                fracture.setActive(false);
+                auto well_index = simulator.problem().wellModel().wellState().index(wellinfo.name);
+                if(!well_index.has_value()){
+                    wells_[i].setActive(false);
+                    fracture.setActive(false);
+                    continue;
+                }
+                const auto& wellstate = simulator.problem().wellModel().wellState().well(*well_index);
+                // check if well is open
+                if(wellstate.status != Opm::WellStatus::OPEN) {
+                    wells_[i].setActive(false);
+                    std::cerr << "Warning: Well " << wellinfo.name << " is not open, skipping update." << std::endl;
+                    fracture.setActive(false);
+                    continue; // skip if not open
+                }
+
+                // get well perforation
+                const auto& perf_data = wellstate.perf_data;
+                auto it = std::find(perf_data.cell_index.begin(),
+                                    perf_data.cell_index.end(),
+                                    cell_index_frac);
+                // check if perforation exists
+                if(it == perf_data.cell_index.end()) {
+                    std::cerr << "Warning: Could not find perforation for well " << wellinfo.name
+                              << " in cell index " << cell_index_frac << std::endl;
+                    fracture.setActive(false);
+                    wells_[i].setPerfActive(perf_index_frac,false);          
+                    continue; // skip if not found
+                }
+                int perf_index = it- perf_data.cell_index.begin();
+                double perf_pressure = perf_data.pressure[perf_index];
+                std::cout << "Perf index flow " << perf_index << " fracture " << perf_index_frac << " pressure " << perf_pressure << std::endl;
+                fracture.setPerfPressure(perf_pressure);
+                wells_[i].setPerfPressure(perf_index_frac, perf_pressure);
+                fracture.setActive(true);
+                wells_[i].setPerfActive(perf_index_frac,true);
+                //NB do we need some rates? need to be summed over "peforations of the fractures"
+            }
+        }
+    }
+    
+
 }

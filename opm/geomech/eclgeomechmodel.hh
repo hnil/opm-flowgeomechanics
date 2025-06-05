@@ -73,6 +73,7 @@ namespace Opm{
         }
         void endTimeStep(){
             // always do post solve
+            std::cout << "Geomech model endstimeStep" << std::endl;
             this->solveGeomechAndFracture();
         }
         void solveGeomechAndFracture(){
@@ -85,16 +86,30 @@ namespace Opm{
         }
 
        void solveFractures(){
-            if(!fracturemodel_){
+            OPM_TIMEBLOCK(solveFractures);
+            int reportStepIdx = simulator_.episodeIndex();
+            const auto& schedule =  this->simulator_.vanguard().schedule();
+            bool has_seeds = !schedule[reportStepIdx].wseed().empty();
+            if(!has_seeds){
+                std::cout << "No fracture seeds found, on this step " << reportStepIdx << std::endl;
+            }
+            if(fracturemodel_){
+                std::cout << "Fracture model already initialized, solving fractures using previous fractures" << std::endl;
+            }
+
+            if(has_seeds && !fracturemodel_){
+                    std::cout << "Fracture model not initialized, initializing now. report step" <<  reportStepIdx << std::endl;
                     const auto& problem = simulator_.problem();
                     //NB could probably be moved to some initialization
                     // let fracture contain all wells
                     Opm::PropertyTree param = problem.getFractureParam();
                     include_fracture_contributions_ = param.get<bool>("include_fracture_contributions");
                     //param.read("fractureparam.json");
-                    const auto& schedule =  this->simulator_.vanguard().schedule();
-                    int reportStepIdx = simulator_.episodeIndex();
-                    const std::vector<Opm::Well>& wells = problem.wellModel().getLocalWells(reportStepIdx);
+                    //const auto& schedule =  this->simulator_.vanguard().schedule();
+                    //int reportStepIdx = simulator_.episodeIndex();
+                    // take all wells and perforations
+                    int end_step = schedule.size() - 1;
+                    const std::vector<Opm::Well>& wells = problem.wellModel().getLocalWells(end_step);
                     //const std::vector<Opm::Well>& wells = schedule.getWells(reportStepIdx);
                     //const Opm::EclipseGrid& eclgrid = simulator_.vanguard().eclState().getInputGrid();
                     const auto& grid = simulator_.vanguard().grid();
@@ -118,20 +133,25 @@ namespace Opm{
 
                     fracturemodel_->updateFractureReservoirCells();
                     fracturemodel_->initReservoirProperties<TypeTag,Simulator>(simulator_);
-                    fracturemodel_->updateReservoirProperties<TypeTag,Simulator>(simulator_);
+                    fracturemodel_->updateReservoirAndWellProperties<TypeTag,Simulator>(simulator_);
                     fracturemodel_->initFractureStates();
                 }
                 // get reservoir properties on fractures
                 // simulator need
-                fracturemodel_->updateReservoirProperties<TypeTag,Simulator>(simulator_);
-                fracturemodel_->solve<TypeTag, Simulator>(simulator_);
+                if(fracturemodel_){
+                    std::cout << "Frac modelfound, updating reservoir properties and solving fractures" << std::endl;
+                    fracturemodel_->updateReservoirAndWellProperties<TypeTag,Simulator>(simulator_);
+                    fracturemodel_->solve<TypeTag, Simulator>(simulator_);
+                }else{
+                    std::cout << "Fracture model not initialized, not solving fractures" << std::endl;
+                }
                 // copy from apply action
        }
        
         
         void writeFractureSolution(){
             const auto& problem = simulator_.problem();
-            if(problem.hasFractures()){
+            if(problem.hasFractures() && fracturemodel_){
                 // write first solution in standard format
                 int reportStepIdx = simulator_.episodeIndex();
                 if(reportStepIdx==1){
@@ -391,7 +411,9 @@ namespace Opm{
                     auto center = geom.center();
                     Dune::FieldVector<double,3> obs = {center[0],center[1],center[2]};
                     // check if this is correct stress
-                    disp += fracturemodel_->disp(obs);
+                    if(fracturemodel_){
+                        disp += fracturemodel_->disp(obs);
+                    }
                 }
             }
             return disp;
@@ -425,7 +447,9 @@ namespace Opm{
                     auto center = geom.center();
                     Dune::FieldVector<double,3> obs = {center[0],center[1],center[2]};
                     // check if this is correct stress
-                    strain += fracturemodel_->strain(obs);
+                    if(fracturemodel_){
+                        strain += fracturemodel_->strain(obs);
+                    }
                 }
             }
             return strain_[globalIdx];
@@ -446,7 +470,9 @@ namespace Opm{
                     auto center = geom.center();
                     Dune::FieldVector<double,3> obs = {center[0],center[1],center[2]};
                     // check if this is correct stress
-                    effStress += fracturemodel_->stress(obs);
+                    if(fracturemodel_){
+                        effStress += fracturemodel_->stress(obs);
+                    }
                 }
             }
 
@@ -531,7 +557,21 @@ namespace Opm{
                 celldisplacement_[cellindex] /= vertices.size();
             }
         }
-        const FractureModel& fractureModel() const{return *fracturemodel_;}
+
+        bool fractureModelActive() const{
+            if(!fracturemodel_){                
+                return false;
+            }else{
+                return true;
+            }           
+        }
+        const FractureModel& fractureModel() const{
+            if(!fracturemodel_){
+                std::cout << "Fracture model not initialized, returning nullptr" << std::endl;
+                throw std::runtime_error("Fracture model not initialized");
+            }
+            return *fracturemodel_;
+        }
     private:
         bool first_solve_{true};
         bool write_system_{false};

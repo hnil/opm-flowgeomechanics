@@ -56,12 +56,13 @@ namespace Opm{
 
     FractureWell::FractureWell(std::string outputprefix,
                                std::string casename, 
-                           std::string name,
-                           const std::vector<Point3D>& points,
-                           const std::vector<Segment>& segments,
-                           const std::vector<int>& res_cells){
-                            outputprefix_ = outputprefix;
-                            casename_ = casename;
+                               std::string name,
+                               const std::vector<Point3D>& points,
+                               const std::vector<Segment>& segments,
+                               const std::vector<int>& res_cells){
+        active_ = false;                        
+        outputprefix_ = outputprefix;
+        casename_ = casename;
         name_ = name;
         this->init(points, segments);
         vtkwriter_ =
