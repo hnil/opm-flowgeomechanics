@@ -319,7 +319,7 @@ bool Fracture::fullSystemIteration(const double tol)
   // `fracture_pressure_`
   //std::cout << "---- Assemble pressure" << std::endl;
   assemblePressure(); // update pressure matrix
-  setSource();         // update right-hand side of pressure system;
+  addSource();         // update right-hand side of pressure system;
 
   //std::cout << "---- Various " << std::endl;
   // initialize vector of unknown, and vector represnting direction in tangent space
@@ -341,10 +341,16 @@ bool Fracture::fullSystemIteration(const double tol)
     if (closed_cells[i]) rhs[_0][i] = 0;
   
   // update the coupling matrix (possibly create it if not already initialized)
+  auto fracture_head(fracture_pressure_);
+  assert(fracture_dgh_.size() == fracture_pressure_.size());
+  for(int i=0;  i < fracture_dgh_.size(); ++i){
+    fracture_head[i] = fracture_pressure_[i] - fracture_dgh_[i];
+  }
+
   updateCouplingMatrix(coupling_matrix_,
                        pressure_matrix_->N() - numWellEquations(), // num cells
                        numWellEquations(),                         // num wells
-                       htrans_, fracture_pressure_, 
+                       htrans_, fracture_head, 
                        fracture_width_,
                        closed_cells,
                        min_width_);

@@ -119,7 +119,7 @@ public:
         reservoir_mobility_.resize(ncf);
         reservoir_perm_.resize(ncf);
         reservoir_cstress_.resize(ncf);
-        
+        reservoir_cell_z_.resize(ncf, 0.0);
         // should be calculated
         bool calculate_dist = prm_.get<bool>("reservoir.calculate_dist");
         if(!calculate_dist){
@@ -141,6 +141,7 @@ public:
                 }
                 enum { numPhases = getPropValue<TypeTag, Properties::NumPhases>() };
                 reservoir_mobility_[i] = 0.0;
+                reservoir_density_[i] = intQuants.fluidState().density(FluidSystem::waterPhaseIdx).value();
                 for (unsigned phaseIdx = 0; phaseIdx < numPhases; ++phaseIdx) {
                   if (FluidSystem::phaseIsActive(phaseIdx)) {
                     // assume sum should only be water;
@@ -165,6 +166,7 @@ public:
                   //auto cell_center = ghelper.centroid(i);
                   const auto& geom = elem.geometry();
                   auto cell_center = geom.center();
+                  reservoir_cell_z_[i] = cell_center[2];
                   double dist = 0;
                   int num_corners = geom.corners();
                   for(int li=0; li < geom.corners();++li){
@@ -184,6 +186,7 @@ public:
                 reservoir_stress_[i][2] = stressval; //???
                 reservoir_pressure_[i] = 0.0;
                 reservoir_mobility_[i] = 0.0;
+                reservoir_density_[i] = 1000.0;
                 reservoir_perm_[i] = 0.0;
             }
             // assume reservoir distance is calculated
@@ -245,6 +248,7 @@ private:
         size_t ncf = reservoir_cells_.size();
         reservoir_perm_.resize(ncf);
         reservoir_cstress_.resize(ncf);
+        reservoir_density_.resize(ncf);
         // should be calcualted
         double dist = prm_.get<double>("reservoir.dist");
         reservoir_dist_.resize(ncf, dist);
@@ -299,7 +303,7 @@ private:
 
     // help function for solving
     void assemblePressure();
-    void setSource();
+    void addSource();
     void initPressureMatrix();
     void setupPressureSolver();
     void updateFractureRHS();
@@ -326,6 +330,8 @@ private:
     std::vector<double> reservoir_perm_;
     std::vector<double> reservoir_cstress_;
     std::vector<double> reservoir_mobility_;
+    std::vector<double> reservoir_density_;
+    std::vector<double> reservoir_cell_z_;
     std::vector<double> reservoir_dist_;
     std::vector<double> reservoir_pressure_;
     std::vector<Dune::FieldVector<double, 6>> reservoir_stress_;
@@ -370,6 +376,8 @@ private:
     double E_;
     double nu_;
     double min_width_; // minimum width of fracture, used for convergence criterion
+    double gravity_{0.0};//{9.81}; // gravity acceleration, used for leakoff calculations
+    std::vector<double> fracture_dgh_; // gravity contribution to fracture pressure, used for leakoff calculations  
     Opm::PropertyTree prm_;
 };
 } // namespace Opm

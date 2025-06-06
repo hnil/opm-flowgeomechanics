@@ -244,6 +244,17 @@ if(USE_TRACY_PROFILER AND Tracy_FOUND)
 	target_link_libraries(test_elasticity Tracy::TracyClient)
 endif()
 
+opm_add_test(padmodel
+	ONLY_COMPILE
+	ALWAYS_ENABLE
+	DEPENDS opmsimulators
+	LIBRARIES opmsimulators
+	SOURCES
+	examples/padmodel.cpp
+	$<TARGET_OBJECTS:moduleVersionGeoMech>
+)
+
+
 opm_add_test(test_grid
 	ONLY_COMPILE
 	ALWAYS_ENABLE

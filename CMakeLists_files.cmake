@@ -38,6 +38,7 @@ list (APPEND MAIN_SOURCE_FILES
 # originally generated with the command:
 # find tutorials examples -name '*.c*' -printf '\t%p\n' | sort
 list (APPEND EXAMPLE_SOURCE_FILES
+    #examples/padmodel.cpp
 #	examples/flow_experimental.cpp
 #	examples/flow_geomech.cpp
 #     examples/flow_test.cpp
@@ -45,6 +46,7 @@ list (APPEND EXAMPLE_SOURCE_FILES
 #     examples/flow_test_2ph.cpp
 	)
 list (APPEND  PROGRAM_SOURCE_FILES
+#      examples/padmodel.cpp
  #    examples/flow_test.cpp
  #    examples/flow_test2.cpp
  #    examples/flow_test_2ph.cpp

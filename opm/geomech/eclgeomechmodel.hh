@@ -156,6 +156,8 @@ namespace Opm{
                 int reportStepIdx = simulator_.episodeIndex();
                 if(reportStepIdx==1){
                     fracturemodel_->write(reportStepIdx);
+                    // hack to get correct number of fracture output
+                    fracturemodel_->writemulti(0.0);
                 }
                 double time = simulator_.time();
                 fracturemodel_->writemulti(time);

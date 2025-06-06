@@ -54,7 +54,11 @@ namespace Opm{
     template <class TypeTag, class Simulator>
     void FractureModel::updateWellProperties(const Simulator& simulator)
     {
-        for (size_t i=0; i < wells_.size(); ++i) {  
+        for (size_t i=0; i < wells_.size(); ++i) {
+            // TO DO set wells to active even without fractures
+            {
+                
+            }  
             for (auto& fracture : well_fractures_[i]){
                 // do update wells
                 // set well properties
@@ -78,7 +82,8 @@ namespace Opm{
                     fracture.setActive(false);
                     continue; // skip if not open
                 }
-
+                // well is active
+                wells_[i].setActive(true);
                 // get well perforation
                 const auto& perf_data = wellstate.perf_data;
                 auto it = std::find(perf_data.cell_index.begin(),

@@ -253,16 +253,19 @@ namespace Opm{
                     return wellindices;
                 }
             }
-            std::cout << "Well " << wellname << " not connections added" << std::endl;
-            if(well_idx <-1){    
-                std::cout << "Well not found " << wellname << std::endl;
-            }else{
-                std::cout << "Well " << wellname << " active " << wells_[well_idx].isActive() << " fractures " << well_fractures_[well_idx].size() << std::endl;
-                if(well_fractures_[well_idx].size() >0){
-                    for(const auto& frac: well_fractures_[well_idx]){
-                        std::cout << "Fracture " << frac.name() << " active " << frac.isActive() << std::endl;
+            if (false) {
+                std::cout << "Well " << wellname << " not connections added" << std::endl;
+                if (well_idx < -1) {
+                    std::cout << "Well not found " << wellname << std::endl;
+                } else {
+                    std::cout << "Well " << wellname << " active " << wells_[well_idx].isActive() << " fractures "
+                              << well_fractures_[well_idx].size() << std::endl;
+                    if (well_fractures_[well_idx].size() > 0) {
+                        for (const auto& frac : well_fractures_[well_idx]) {
+                            std::cout << "Fracture " << frac.name() << " active " << frac.isActive() << std::endl;
+                        }
                     }
-                } 
+                }
             }
             //message += wellname;
             //OPM_THROW(std::runtime_error, message.c_str());

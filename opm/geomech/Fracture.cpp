@@ -424,6 +424,7 @@ void Fracture::writemulti(double time) const
     std::vector<double> reservoir_cstress = reservoir_cstress_;//.size(),0.0);
     std::vector<double> reservoir_mobility = reservoir_mobility_;//.size(),0.0);
     std::vector<double> reservoir_traction(reservoir_stress_.size(),0);
+    std::vector<double> fracture_force(reservoir_stress_.size(),0);
     std::vector<double> reservoir_cells(reservoir_cells_.size(),0.0);
     std::vector<double> fracture_width(fracture_width_.size(),0.0);
     std::vector<double> rhs_width(rhs_width_.size(),0.0);
@@ -447,6 +448,7 @@ void Fracture::writemulti(double time) const
         fracture_pressure[i] = fracture_pressure_[i][0];
         reservoir_cells[i] = reservoir_cells_[i];// only converts to double
         reservoir_traction[i] = ddm::tractionSymTensor(reservoir_stress_[i],cell_normals_[i]);
+        fracture_force[i] = reservoir_traction[i]-fracture_pressure[i];
     }
 
     for(size_t i=0; i < numFractureCells(); ++i){
@@ -479,6 +481,10 @@ void Fracture::writemulti(double time) const
     if (reservoir_traction.size() > 0) {
         vtkmultiwriter_->attachScalarElementData(reservoir_traction, "ReservoirTraction");
     }
+    if (fracture_force.size() > 0) {
+        vtkmultiwriter_->attachScalarElementData(fracture_force, "FractureForce");
+    }
+
     if (reservoir_mobility.size() > 0) {
         vtkmultiwriter_->attachScalarElementData(reservoir_mobility, "ReservoirMobility");
     }
@@ -960,17 +966,55 @@ void Fracture::updateReservoirProperties()
 
 
 void
-Fracture::setSource()
+Fracture::addSource()
 {
     if (rhs_pressure_.size() == 0) {
       size_t nc = numFractureCells();
       rhs_pressure_.resize(nc + numWellEquations());
     }
+    assert(rhs_pressure_.size() == numFractureCells() + numWellEquations());
     rhs_pressure_ = 0;
+    // add contributions for fracture fracture gravity contributions
+    int nc = grid_->leafGridView().size(0);
+    fracture_dgh_.resize(nc,0.0);
+    for(auto element : Dune::elements(grid_->leafGridView())) {
+        //int i = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView, Dune::mcmgElementLayout>::index(element);
+        int i = grid_->leafGridView().indexSet().index(element);
+        double z = element.geometry().center()[2];
+        fracture_dgh_[i] = gravity_*reservoir_density_[i]*z;
+    }
+    // could be put into the assemble loop
+    for (auto matel : htrans_) {
+        size_t i = std::get<0>(matel);
+        size_t j = std::get<1>(matel);
+        double t1 = std::get<2>(matel);
+        double t2 = std::get<3>(matel);
+        double h1 = fracture_width_[i]+min_width_;
+        double h2 = fracture_width_[j]+min_width_;
+        // harmonic mean of surface flow
+        double value = 12. / (h1 * h1 * h1 * t1) + 12. / (h2 * h2 * h2 * t2);
+
+        const double mobility = 0.5 * (reservoir_mobility_[i] + reservoir_mobility_[j]);
+        value = 1 / value;
+        value *= mobility;
+        double dh =  (fracture_dgh_[i]-fracture_dgh_[j]);
+        rhs_pressure_[i] -= value * dh;
+        rhs_pressure_[j] += value * dh;
+    }    
 
     for(size_t i=0; i< reservoir_pressure_.size(); ++i){
         rhs_pressure_[i] += leakof_[i]*reservoir_pressure_[i];
     }
+    // gravity contribution from fracture to reservoir
+    for(auto element : Dune::elements(grid_->leafGridView())) {
+        //int i = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView, Dune::mcmgElementLayout>::index(element);
+        int i = grid_->leafGridView().indexSet().index(element);
+        double z = element.geometry().center()[2];
+        //double gravity = 9.81;
+        rhs_pressure_[i] += leakof_[i]*(z-reservoir_cell_z_[i])*gravity_*reservoir_density_[i];
+    }
+    // gravity contributions between fracture cells
+
     auto control=prm_.get_child("control");
     std::string control_type = control.get<std::string>("type");
     if (control_type == "rate") {
@@ -1084,7 +1128,12 @@ std::vector<RuntimePerforation> Fracture::wellIndices() const{
         auto& perf = wellIndices[i];
 
         perf.cell  = res_cells[i];
-        perf.ctf   = q_cells[i] / (inj_press - p_cells[i]);
+        double WI = q_cells[i] / (inj_press - p_cells[i]);
+        if(WI<0.0){
+            std::cout << "Negative WI: " << WI << " for cell: " << res_cells[i] << std::endl;
+            WI = 0.0;
+        }
+        perf.ctf   = WI;
         perf.depth = this->origo_[2];
     }
     return wellIndices;
@@ -1146,7 +1195,7 @@ Fracture::solvePressure() {
     //     this->initPressureMatrix();
     // }
     this->assemblePressure();
-    this->setSource(); // probably include reservoir pressure
+    this->addSource(); // probably include reservoir pressure
     this->writePressureSystem();
     try {
         if(!pressure_solver_){
@@ -1314,7 +1363,7 @@ Fracture::assemblePressure()
     auto& matrix = *pressure_matrix_;
     matrix = 0.0;
     //double mobility=1e4; //1e4; // @@ 1.0
-
+    // get head in all fracture cells
     for (auto matel : htrans_) {
         size_t i = std::get<0>(matel);
         size_t j = std::get<1>(matel);
@@ -1339,6 +1388,7 @@ Fracture::assemblePressure()
         //
         matrix[i][i] += value;
         matrix[j][j] += value;
+        // gravity contributions
     }
     auto control = prm_.get_child("control");
     std::string control_type = control.get<std::string>("type");
