@@ -1028,13 +1028,19 @@ Fracture::addSource()
         for (const auto& perfinj : perfinj_) {
             int cell = std::get<0>(perfinj);
             double value = std::get<1>(perfinj);
-            rhs_pressure_[cell] += value * pressure;
+            double dh_perf = origo_[2] * gravity_ * reservoir_density_[cell];
+            double dh_cell = fracture_dgh_[cell];;
+            double dh = dh_perf-dh_cell;
+            rhs_pressure_[cell] += value * (pressure-dh);
         }
     } else if (control_type == "perf_pressure") {
         for (const auto& perfinj : perfinj_) {
             int cell = std::get<0>(perfinj);
             double value = std::get<1>(perfinj);
-            rhs_pressure_[cell] += value * perf_pressure_;
+            double dh_perf = origo_[2] * gravity_ * reservoir_density_[cell];
+            double dh_cell = fracture_dgh_[cell];;
+            double dh = dh_perf-dh_cell;
+            rhs_pressure_[cell] += value * (perf_pressure_-dh);
         }
     } else if (control_type == "rate_well") {
       assert(numWellEquations() == 1); // @@ for now, we assume there is just one well equation
@@ -1128,7 +1134,10 @@ std::vector<RuntimePerforation> Fracture::wellIndices() const{
         auto& perf = wellIndices[i];
 
         perf.cell  = res_cells[i];
-        double WI = q_cells[i] / (inj_press - p_cells[i]);
+        double dh_res= reservoir_cell_z_[i]*gravity_* reservoir_density_[i];
+        double perf_density = reservoir_density_[i];
+        double dh_perf = gravity_*perf_density*origo_[2];
+        double WI = q_cells[i] / ((inj_press-dh_perf) - (p_cells[i]-dh_res));
         if(WI<0.0){
             std::cout << "Negative WI: " << WI << " for cell: " << res_cells[i] << std::endl;
             WI = 0.0;
