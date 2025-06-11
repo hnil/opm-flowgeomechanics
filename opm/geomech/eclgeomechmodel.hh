@@ -89,15 +89,19 @@ namespace Opm{
             OPM_TIMEBLOCK(solveFractures);
             int reportStepIdx = simulator_.episodeIndex();
             const auto& schedule =  this->simulator_.vanguard().schedule();
-            bool has_seeds = !schedule[reportStepIdx].wseed().empty();
-            if(!has_seeds){
-                std::cout << "No fracture seeds found, on this step " << reportStepIdx << std::endl;
+            int end_step = schedule.size() - 1;
+            bool no_seeds = schedule[end_step].wseed().empty();
+            if(!no_seeds){
+                //std::cout << "No fracture seeds found, on this step " << reportStepIdx << std::endl;
+                std::cout << "Fracture seeds found, on this step " << std::endl;
+            }else{
+                std::cout << "No fracture seeds found, on this step "  << std::endl;
             }
             if(fracturemodel_){
                 std::cout << "Fracture model already initialized, solving fractures using previous fractures" << std::endl;
             }
 
-            if(has_seeds && !fracturemodel_){
+            if(!no_seeds && !fracturemodel_){
                     std::cout << "Fracture model not initialized, initializing now. report step" <<  reportStepIdx << std::endl;
                     const auto& problem = simulator_.problem();
                     //NB could probably be moved to some initialization
@@ -108,7 +112,7 @@ namespace Opm{
                     //const auto& schedule =  this->simulator_.vanguard().schedule();
                     //int reportStepIdx = simulator_.episodeIndex();
                     // take all wells and perforations
-                    int end_step = schedule.size() - 1;
+                    //int end_step = schedule.size() - 1;
                     const std::vector<Opm::Well>& wells = problem.wellModel().getLocalWells(end_step);
                     //const std::vector<Opm::Well>& wells = schedule.getWells(reportStepIdx);
                     //const Opm::EclipseGrid& eclgrid = simulator_.vanguard().eclState().getInputGrid();
@@ -129,7 +133,8 @@ namespace Opm{
                     // most important stress
                     fracturemodel_->updateReservoirWellProperties<TypeTag,Simulator>(simulator_);
                     // add fractures along the wells
-                    fracturemodel_->addFractures(schedule[reportStepIdx]);
+                    //fracturemodel_->addFractures(schedule[reportStepIdx]);
+                    fracturemodel_->addFractures(schedule[end_step]);
 
                     fracturemodel_->updateFractureReservoirCells();
                     fracturemodel_->initReservoirProperties<TypeTag,Simulator>(simulator_);

@@ -19,7 +19,7 @@
 #include "config.h"
 
 #if USE_TRACY
-#define DETAILED_PROFILING 1
+#define DETAILED_PROFILING 0
 #endif
 
 #include <exception>
@@ -57,7 +57,7 @@ struct EclFlowProblemMechNoTemp {
 }
         template <class TypeTag>
         struct EnableEnergy<TypeTag, TTag::EclFlowProblemMechNoTemp> {
-            static constexpr bool value = true;
+            static constexpr bool value = false;
         };
 
 
@@ -67,11 +67,11 @@ struct EclFlowProblemMechNoTemp {
 
 int main(int argc, char** argv)
 {
-    Opm::Parameters::SetDefault<Opm::Parameters::EnableOpmRstFile>(true);
-    Opm::Parameters::SetDefault<Opm::Parameters::EnableVtkOutput>(true);
-    Opm::Parameters::SetDefault<Opm::Parameters::ThreadsPerProcess>(1);
-    Opm::Parameters::SetDefault<Opm::Parameters::EnableAsyncVtkOutput>(false);
-    Opm::Parameters::SetDefault<Opm::Parameters::EnableAsyncEclOutput>(false);
+    // Opm::Parameters::SetDefault<Opm::Parameters::EnableOpmRstFile>(true);
+    // Opm::Parameters::SetDefault<Opm::Parameters::EnableVtkOutput>(true);
+    // Opm::Parameters::SetDefault<Opm::Parameters::ThreadsPerProcess>(1);
+    // Opm::Parameters::SetDefault<Opm::Parameters::EnableAsyncVtkOutput>(false);
+    // Opm::Parameters::SetDefault<Opm::Parameters::EnableAsyncEclOutput>(false);
     OPM_TIMEBLOCK(fullSimulation);
     using TypeTag = Opm::Properties::TTag::EclFlowProblemMechNoTemp;
     auto mainObject = Opm::Main(argc, argv);

@@ -376,7 +376,7 @@ private:
     double E_;
     double nu_;
     double min_width_; // minimum width of fracture, used for convergence criterion
-    double gravity_{9.81}; // gravity acceleration, used for leakoff calculations
+    double gravity_{0.0};//{9.81}; // gravity acceleration, used for leakoff calculations
     std::vector<double> fracture_dgh_; // gravity contribution to fracture pressure, used for leakoff calculations  
     Opm::PropertyTree prm_;
 };

@@ -39,6 +39,7 @@
 #include <opm/input/eclipse/Parser/ParserKeywords/D.hpp>
 #include <opm/input/eclipse/Parser/ParserKeywords/E.hpp>
 #include <opm/input/eclipse/Parser/ParserKeywords/S.hpp>
+#include <opm/input/eclipse/Parser/ParserKeywords/N.hpp>
 
 #include <opm/simulators/linalg/PropertyTree.hpp>
 
@@ -372,18 +373,25 @@ void extendDimens(const GridSize& grid_size, ExtendParam& extend_param, Opm::Dec
         for (const auto& records : schedule) {
             // DeckView
 
-            if (records.name() != std::string("COMPDAT")) {
+            if (!(records.name() == std::string("COMPDAT") || records.name() == std::string("WSEED")) ) {
                 std::cout << "Schedule record name not handled: " << records.name() << std::endl;
                 continue;
-            }
+            }else{
+                std::cout << "Extending schedule record: " << records.name() << std::endl;
+            }            
             std::cout << "Schedule record name: " << records.name() << std::endl;
             for (const auto& record : records) {
                 DeckRecord a;
                 // std::cout << "Record: " << record << std::endl;
-                int& K1 = const_cast<int&>(record.getItem("K1").getData<int>()[0]);
-                int& K2 = const_cast<int&>(record.getItem("K2").getData<int>()[0]);
-                K1 += nz_upper;
-                K2 += nz_upper;
+                if(records.name() == std::string("WSEED")){
+                    int& K = const_cast<int&>(record.getItem("K").getData<int>()[0]);
+                    K += nz_upper;
+                }else{
+                    int& K1 = const_cast<int&>(record.getItem("K1").getData<int>()[0]);
+                    int& K2 = const_cast<int&>(record.getItem("K2").getData<int>()[0]);
+                    K1 += nz_upper;
+                    K2 += nz_upper;
+                }
                 //   for(const auto& item: record){
                 //         std::cout << "Item name: " << item.name() << std::endl;
                 //         auto type_tag = item.getType();
@@ -516,7 +524,17 @@ Opm::Deck manipulate_deck(const char* deck_file, std::ostream& os)
     // Pad vertically
     auto deck = Opm::Parser{}.parseFile(deck_file, parseContext, errors);
     ExtendParam extend_param = getExtendParam("fracture_param.json");
-    
+    // write out json file
+    std::cout << "Extend parameters: " << std::endl;
+    std::cout << "nz_upper: " << extend_param.nz_upper << std::endl;
+    std::cout << "top_upper: " << extend_param.top_upper << std::endl;
+    std::cout << "nz_lower: " << extend_param.nz_lower << std::endl;
+    std::cout << "bottom_lower: " << extend_param.bottom_lower << std::endl;
+    std::cout << "upper_poro: " << extend_param.upper_poro << std::endl;
+    std::cout << "min_dist: " << extend_param.min_dist << std::endl;
+    std::cout << "no_gap: " << extend_param.no_gap << std::endl;
+    std::cout << "monotonic_zcorn: " << extend_param.monotonic_zcorn << std::endl;
+    std::cout << "vert_coord: " << extend_param.vert_coord << std::endl;
     //GridSection gridsec(decDeckSection gridsec(deck,"GRID");
     DeckSection gridsec(deck,"GRID");// fixing CARTDIMS? + ZCORN + double valued arrays.
     DeckSection runspec(deck,"RUNSPEC"); // fixing dimens
@@ -544,14 +562,31 @@ Opm::Deck manipulate_deck(const char* deck_file, std::ostream& os)
     extendGridSection<double>(gridsec, grid_size, extend_param, type_tag::fdouble);
     extendGridSection<int>(gridsec, grid_size, extend_param, type_tag::integer);
     std::vector<int>& actnum = const_cast<std::vector<int>&>(gridsec.get<ParserKeywords::ACTNUM>().back().getIntData());
+    std::vector<double>& ntg = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::NTG>().back().getRawDoubleData());
+    std::vector<double>& poro = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::PORO>().back().getRawDoubleData());
+    std::vector<double>& permx = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::PERMX>().back().getRawDoubleData());
+    //std::vector<double>& permy = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::PERMY>().back().getRawDoubleData());
+    //std::vector<double>& permz = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::PERMZ>().back().getRawDoubleData());
     std::vector<value::status>& actnum_status = const_cast<std::vector<value::status>&>(gridsec.get<ParserKeywords::ACTNUM>().back().getValueStatus());
-    int nc_new = grid_size.nx*grid_size.ny*extend_param.nz_new;    
-    actnum.resize(nc_new);
+    //int nc_new = grid_size.nx*grid_size.ny*extend_param.nz_new;    
+    //actnum.resize(nc_new);
+    int nc_new = actnum.size();
     actnum_status = std::vector<value::status>(nc_new, value::status::deck_value);
     
-    for(auto& act:actnum){
-        act = 1;
+    for(int i = 0; i < actnum.size(); ++i){
+        if(actnum[i] == 0){
+            actnum[i] = 1;
+            // maybe one sould have used values from deck if resonable and check if deck_value
+            poro[i] = extend_param.upper_poro;
+            permx[i] = 0.0;
+            //permy[i] = 0.0;
+            //
+            //permz[i] = 0.0;
+            ntg[i] = 1.0;
+        }
+        //actnum[i] = 1;
     }
+
     extendGRDECL(gridsec, grid_size, extend_param);
 
     //NB NB need to always add EQUILNUM
@@ -566,6 +601,7 @@ Opm::Deck manipulate_deck(const char* deck_file, std::ostream& os)
         // DeckView
         if ((records.name() != std::string("EQUALS")) 
            && (records.name() != std::string("MULTIPLY"))
+           && (records.name() != std::string("ADD"))
            && (records.name() != std::string("COPY"))) 
         {
             //std::cout << "Deck record name not handled: " << records.name() << std::endl;
