@@ -345,28 +345,43 @@ namespace Opm{
             auto& simulator = this->simulator();
             auto& schedule = simulator.vanguard().schedule();
             const int reportStep = this->episodeIndex();
+
             // const auto sim_time = simulator_.time() + simulator_.timeStepSize();
             //  const auto now = TimeStampUTC {schedule_.getStartTime()} + std::chrono::duration<double>(sim_time);
             // const auto ts = formatActionDate(now, reportStep);
+
             std::map<std::string, std::vector<Opm::Connection>> extra_perfs;
+
             //auto mapper = simulator.vanguard().cartesianMapper();
             //auto& wellcontainer = this->wellModel().localNonshutWells();
             //for (auto& wellPtr : wellcontainer) {
-            for (const auto& wellName : schedule.wellNames(reportStep) ){   
+            for (const auto& wellName : schedule.wellNames(reportStep)) {
                 //auto wellName = wellPtr->name();
-                const auto& wellcons = geomechModel_.getExtraWellIndices(wellName);
-                std::cout << "Adding extra connections for well: " << wellName << " number " << wellcons.size() << std::endl;
-                for (const auto& cons : wellcons) {
-                    // simple calculated with upscaling
-                    const auto [cell, WI, depth] = cons;
-                    // map to cartesian
-                    const auto cartesianIdx = simulator.vanguard().cartesianIndex(cell);
-                    // get ijk
-                    std::array<int, 3> ijk;
-                    simulator.vanguard().cartesianCoordinate(cell, ijk);
-                    // makeing preliminary connection to be added in schedual with correct numbering
+                const auto wellcons = geomechModel_.getExtraWellIndices(wellName);
 
-                    Opm::Connection::CTFProperties ctfprop;
+                if (wellcons.empty()) {
+                    continue;
+                }
+
+                std::cout << "Adding extra connections for well: "
+                          << wellName << " number " << wellcons.size()
+                          << std::endl;
+
+                auto& extra = extra_perfs[wellName];
+
+                for (const auto& wellconn : wellcons) {
+                    // simple calculated with upscaling
+
+                    // map to cartesian
+                    const auto cartesianIdx = simulator.vanguard().cartesianIndex(wellconn.cell);
+
+                    // get ijk
+                    std::array<int, 3> ijk{};
+                    simulator.vanguard().cartesianCoordinate(wellconn.cell, ijk);
+
+                    // making preliminary connection to be added in schedule
+                    // with correct numbering
+                    Opm::Connection::CTFProperties ctfprop{};
                     Opm::Connection connection(ijk[0],
                                                ijk[1],
                                                ijk[2],
@@ -374,33 +389,33 @@ namespace Opm{
                                                /*complnum*/ -1,
                                                Opm::Connection::State::OPEN,
                                                Opm::Connection::Direction::Z,
-                                               Opm::Connection::CTFKind::Defaulted,
+                                               Opm::Connection::CTFKind::DynamicFracturing,
                                                /*sort_value*/ -1,
-                                               depth,
+                                               wellconn.depth,
                                                ctfprop,
                                                /*sort_value*/ -1,
                                                /*defaut sattable*/ true);
+
                     //only add zero value 
-                    // connection need to be modified lager
-                    connection.setCF(WI*0.0);
-                    extra_perfs[wellName].push_back(connection);
+                    // connection need to be modified later.
+                    connection.setCF(wellconn.ctf * 0.0);
+                    extra.push_back(connection);
                 }
             }
+
+            if (extra_perfs.empty()) {
+                return;
+            }
+
             bool commit_wellstate = false;
             auto sim_update = schedule.modifyCompletions(reportStep, extra_perfs);
-            // shouldnot be used
-            auto updateTrans = [this](const bool global)
-            {
-                using TransUpdateQuantities = typename Vanguard::TransmissibilityType::TransUpdateQuantities;
-                this->transmissibilities_
-                    .update(global, TransUpdateQuantities::All, [&vg = this->simulator().vanguard()]
-                            (const unsigned int i)
-                    {
-                        return vg.gridIdxToEquilGridIdx(i);
-                    });
-            };
+
+            // should not be used
+            auto updateTrans = [](const bool){};
+
             // alwas rebuild wells
             sim_update.well_structure_changed = true;
+
             this->actionHandler_.applySimulatorUpdate(reportStep,
                                                       sim_update,
                                                       updateTrans,
