@@ -356,6 +356,7 @@ namespace Opm{
                 //auto wellName = wellPtr->name();
                 const auto& wellcons = geomechModel_.getExtraWellIndices(wellName);
                 std::cout << "Adding extra connections for well: " << wellName << " number " << wellcons.size() << std::endl;
+                // check if well connections already exist
                 for (const auto& cons : wellcons) {
                     // simple calculated with upscaling
                     const auto [cell, WI, depth] = cons;
