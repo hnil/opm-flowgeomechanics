@@ -28,6 +28,10 @@ namespace Opm{
                 vertices.push_back(vertex);
                 cells.push_back(cell_index);
             }
+            if(cells.size() == 0){
+                std::cerr << "Warning: No connections found for well " << well.name() << std::endl;
+                continue; // skip if no connections
+            }
             Point3D refpoint(vertices[0]);
             if(well.hasRefDepth()){
                 if(std::abs(well.getRefDepth()-refpoint[2])< 10){
