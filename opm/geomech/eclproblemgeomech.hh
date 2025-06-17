@@ -205,6 +205,13 @@ namespace Opm{
                         const auto STRESSYYGRAD = record.stressYY_grad();
                         const auto STRESSZZ= record.stressZZ();
                         const auto STRESSZZGRAD = record.stressZZ_grad();
+                        const auto STRESSXY= record.stressXY();
+                        const auto STRESSXZ= record.stressXZ();
+                        const auto STRESSYZ= record.stressYZ();
+
+                        const auto stressXYGRAD = record.stressXY_grad();
+                        const auto stressXZGRAD = record.stressXZ_grad();
+                        const auto stressYZGRAD = record.stressYZ_grad();
                         for(const auto& cell : elements(gv)){
                             const auto& center = cell.geometry().center();
                             const auto& cellIdx = gv.indexSet().index(cell);
@@ -216,9 +223,9 @@ namespace Opm{
                                 initstress[0] = STRESSXX +  STRESSXXGRAD*(center[2] - datum_depth);
                                 initstress[1] = STRESSYY +  STRESSYYGRAD*(center[2] - datum_depth);
                                 initstress[2] = STRESSZZ +  STRESSZZGRAD*(center[2] - datum_depth);
-                                initstress[3] = 0.0;
-                                initstress[4] = 0.0;
-                                initstress[5] = 0.0;
+                                initstress[3] = STRESSYZ +  stressYZGRAD*(center[2] - datum_depth);
+                                initstress[4] = STRESSXZ +  stressXZGRAD*(center[2] - datum_depth);
+                                initstress[5] = STRESSXY +  stressXYGRAD*(center[2] - datum_depth);
                                 // NB share stress not set to zero
                                 // we operate with stress = C \grad d + \grad d^T in the matematics
                                 initstress_[cellIdx] = initstress;
@@ -352,17 +359,31 @@ namespace Opm{
             //auto mapper = simulator.vanguard().cartesianMapper();
             //auto& wellcontainer = this->wellModel().localNonshutWells();
             //for (auto& wellPtr : wellcontainer) {
-            for (const auto& wellName : schedule.wellNames(reportStep) ){   
+            bool hasExtraPerfs = false;
+            //const auto& wells = schedule.getWells(reportStep);
+            //for (const auto& wellName : schedule.wellNames(reportStep) ){   
+            for (const auto& well : schedule.getWells(reportStep) ){   
                 //auto wellName = wellPtr->name();
+                auto wellName = well.name();
                 const auto& wellcons = geomechModel_.getExtraWellIndices(wellName);
                 std::cout << "Adding extra connections for well: " << wellName << " number " << wellcons.size() << std::endl;
                 // check if well connections already exist
+                if (wellcons.empty()) {
+                    continue; // no extra connections for this well
+                }
+                //hasExtraPerfs = false;
                 for (const auto& cons : wellcons) {
                     // simple calculated with upscaling
                     const auto [cell, WI, depth] = cons;
                     // map to cartesian
                     const auto cartesianIdx = simulator.vanguard().cartesianIndex(cell);
                     // get ijk
+                    if (well.getConnections().hasGlobalIndex(cell)) {
+                        // already have connection for this cell
+                        std::cout << "Connection already exists for cell: " << cell << std::endl;
+                        continue;
+                    }
+                    hasExtraPerfs = true;
                     std::array<int, 3> ijk;
                     simulator.vanguard().cartesianCoordinate(cell, ijk);
                     // makeing preliminary connection to be added in schedual with correct numbering
@@ -385,6 +406,19 @@ namespace Opm{
                     // connection need to be modified lager
                     connection.setCF(WI*0.0);
                     extra_perfs[wellName].push_back(connection);
+                }
+            }
+            if(!hasExtraPerfs){
+                // add to schedule
+                return;
+            }else{
+            // add to schedule
+                // structure will be changed erase matrix, maybe only rebuilding of linear solver is neede
+                std::cout << "Rebuilding linear solver for extra connections" << std::endl;
+                this->simulator().model().linearizer().eraseMatrix();
+                //this->simulator().model().newtonMethod().linearSolver().clear();
+                if (this->gridView().comm().rank() == 0) {
+                    std::cout << "Adding extra connections to schedule for report step: " << reportStep << std::endl;
                 }
             }
             bool commit_wellstate = false;
@@ -454,6 +488,7 @@ namespace Opm{
         double pRatio(unsigned globalIdx) const{
             return pratio_[globalIdx];
         }
+
         const std::vector<std::tuple<size_t,MechBCValue>>& bcNodes() const{
             return bc_nodes_;
         }

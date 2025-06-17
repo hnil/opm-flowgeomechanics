@@ -14,6 +14,7 @@ namespace Opm{
         //auto cartdims = cartmapper.cartesianDimensions();
         GeometryHelper geomhelp(grid);
 	// NB: need to be carefull in parallel
+        vtkwritewells_= prm_.get<bool>("vtkwritewells", false);
         for(int wellIdx=0; wellIdx < wells.size(); ++wellIdx){
             std::vector<Point3D> vertices;
             std::vector<Segment> wellsegment;

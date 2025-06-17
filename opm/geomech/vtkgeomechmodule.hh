@@ -110,6 +110,15 @@ namespace Opm {
                 this->resizeTensorBuffer_(stress_, ParentType::BufferType::Element);
                 this->resizeTensorBuffer_(delstress_, ParentType::BufferType::Element);
                 this->resizeTensorBuffer_(strain_, ParentType::BufferType::Element);
+
+                
+                this->resizeScalarBuffer_(pressure_, ParentType::BufferType::Element);
+                this->resizeScalarBuffer_(biot_, ParentType::BufferType::Element);
+                this->resizeScalarBuffer_(ymodule_, ParentType::BufferType::Element);
+                this->resizeScalarBuffer_(pratio_, ParentType::BufferType::Element);
+                this->resizeScalarBuffer_(poro_, ParentType::BufferType::Element);
+                
+                
                 //this->resizeVectorBuffer_(symstress_,ParentType::BufferType::ElementBuffer, 6);
             }
 
@@ -142,10 +151,18 @@ namespace Opm {
             if (!Parameters::Get<Parameters::EnableVtkOutput>())
                 return;
 
-            const auto& geoMechModel = elemCtx.problem().geoMechModel();
+            const auto& problem = elemCtx.problem();    
+            const auto& geoMechModel = problem.geoMechModel();
             for (unsigned dofIdx = 0; dofIdx < elemCtx.numPrimaryDof(/*timeIdx=*/0); ++dofIdx) {
+                // get the global index of the dof         
                 unsigned globalDofIdx = elemCtx.globalSpaceIndex(dofIdx, /*timeIdx=*/0);
                 pressDiff_[globalDofIdx] = geoMechModel.pressureDiff(globalDofIdx);
+                poro_[globalDofIdx] = problem.porosity(globalDofIdx, /*timeIdx=*/0);
+                biot_[globalDofIdx] = problem.biotCoef(globalDofIdx);
+                pratio_[globalDofIdx] = problem.pRatio(globalDofIdx);
+                ymodule_[globalDofIdx] = problem.yModule(globalDofIdx);
+                // give the pressure for the geomech model
+                pressure_[globalDofIdx] = geoMechModel.pressure(globalDofIdx);
                 //
                 {
                     const SymTensor& symtensor = geoMechModel.stress(globalDofIdx);
@@ -233,6 +250,12 @@ namespace Opm {
         TensorBuffer stress_;
         TensorBuffer delstress_;
         TensorBuffer strain_;
+
+        ScalarBuffer pressure_;
+        ScalarBuffer biot_;
+        ScalarBuffer ymodule_;
+        ScalarBuffer pratio_;
+        ScalarBuffer poro_;
     };
 } // namespace Opm
 

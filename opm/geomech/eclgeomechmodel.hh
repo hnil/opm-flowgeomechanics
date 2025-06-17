@@ -158,12 +158,13 @@ namespace Opm{
             const auto& problem = simulator_.problem();
             if(problem.hasFractures() && fracturemodel_){
                 // write first solution in standard format
-                int reportStepIdx = simulator_.episodeIndex();
+                // this may ad some extra output of static variables
+                /* int reportStepIdx = simulator_.episodeIndex();
                 if(reportStepIdx==1){
                     fracturemodel_->write(reportStepIdx);
                     // hack to get correct number of fracture output
                     fracturemodel_->writemulti(0.0);
-                }
+                } */
                 double time = simulator_.time();
                 fracturemodel_->writemulti(time);
             }
@@ -192,11 +193,13 @@ namespace Opm{
                 //thermal part
                 //Properties::EnableTemperature
                 const auto& poelCoef = problem.poelCoef(dofIdx);
-                double diffpress = (Toolbox::value(press) - problem.initPressure(dofIdx));
-		const auto& pratio = problem.pRatio(dofIdx);
+                double pressure = Toolbox::value(press);
+                double diffpress = (pressure - problem.initPressure(dofIdx));
+		        const auto& pratio = problem.pRatio(dofIdx);
                 double fac = (1-pratio)/(1-2*pratio);
                 double pcoeff = poelCoef*fac;
 		//assert pcoeff == biot
+                pressure_[dofIdx] = pressure;
                 mechPotentialForce_[dofIdx] = diffpress*pcoeff;
                 mechPotentialPressForce_[dofIdx] = diffpress*pcoeff;
                 assert(pcoeff<=1.0);
@@ -372,6 +375,7 @@ namespace Opm{
         void init(bool /*restart*/){
             std::cout << "Geomech init" << std::endl;
             size_t numDof = simulator_.model().numGridDof();
+            pressure_.resize(numDof);
             mechPotentialForce_.resize(numDof);
             mechPotentialTempForce_.resize(numDof);
             mechPotentialPressForce_.resize(numDof);
@@ -400,6 +404,10 @@ namespace Opm{
         const double& mechPotentialForce(unsigned globalDofIdx) const
         {
             return mechPotentialForce_[globalDofIdx];
+        }
+        const double& pressure(unsigned globalDofIdx) const
+        {
+            return pressure_[globalDofIdx];
         }
         const double& mechPotentialTempForce(unsigned globalDofIdx) const
         {
@@ -585,6 +593,8 @@ namespace Opm{
         bool reduce_boundary_{false};
         bool include_fracture_contributions_{false};
         Simulator& simulator_;
+
+        Dune::BlockVector<Dune::FieldVector<double,1>> pressure_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialForce_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialPressForce_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialPressForceFracture_;
