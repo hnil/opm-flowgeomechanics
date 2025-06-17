@@ -373,19 +373,28 @@ void extendDimens(const GridSize& grid_size, ExtendParam& extend_param, Opm::Dec
         for (const auto& records : schedule) {
             // DeckView
 
-            if (!(records.name() == std::string("COMPDAT") || records.name() == std::string("WSEED")) ) {
+            if (!(records.name() == std::string("COMPDAT") 
+            || records.name() == std::string("WSEED") 
+            || records.name() == std::string("COMPSEGS"))
+            ) {
                 std::cout << "Schedule record name not handled: " << records.name() << std::endl;
                 continue;
             }else{
                 std::cout << "Extending schedule record: " << records.name() << std::endl;
             }            
             std::cout << "Schedule record name: " << records.name() << std::endl;
+            int count = 0;
             for (const auto& record : records) {
                 DeckRecord a;
                 // std::cout << "Record: " << record << std::endl;
                 if(records.name() == std::string("WSEED")){
                     int& K = const_cast<int&>(record.getItem("K").getData<int>()[0]);
                     K += nz_upper;
+                }else if(records.name() == std::string("COMPSEGS")){
+                    if(count>0){
+                        int& K = const_cast<int&>(record.getItem("K").getData<int>()[0]);
+                        K += nz_upper;
+                    }  
                 }else{
                     int& K1 = const_cast<int&>(record.getItem("K1").getData<int>()[0]);
                     int& K2 = const_cast<int&>(record.getItem("K2").getData<int>()[0]);
@@ -400,6 +409,7 @@ void extendDimens(const GridSize& grid_size, ExtendParam& extend_param, Opm::Dec
                 //         std::cout << "Item data size: " << item.data_size() << std::endl;
                 //         //std::cout << "Item value status: " << item.getValueStatus() << std::endl;
                 //     }
+                count += 1;
             }
         }
     }
@@ -562,6 +572,7 @@ Opm::Deck manipulate_deck(const char* deck_file, std::ostream& os)
     extendGridSection<double>(gridsec, grid_size, extend_param, type_tag::fdouble);
     extendGridSection<int>(gridsec, grid_size, extend_param, type_tag::integer);
     std::vector<int>& actnum = const_cast<std::vector<int>&>(gridsec.get<ParserKeywords::ACTNUM>().back().getIntData());
+    // TODO need to handle cases where this is not given ..
     std::vector<double>& ntg = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::NTG>().back().getRawDoubleData());
     std::vector<double>& poro = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::PORO>().back().getRawDoubleData());
     std::vector<double>& permx = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::PERMX>().back().getRawDoubleData());

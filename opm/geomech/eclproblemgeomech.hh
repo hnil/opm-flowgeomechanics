@@ -450,9 +450,9 @@ namespace Opm{
         double poelCoef(unsigned globalIdx) const{
             return poelcoef_[globalIdx];
         }
-        double pRatio(unsigned globalIdx) const{
-            return pratio_[globalIdx];
-        }
+        // double pRatio(unsigned globalIdx) const{
+        //     return pratio_[globalIdx];
+        // }
         const std::vector<std::tuple<size_t,MechBCValue>>& bcNodes() const{
             return bc_nodes_;
         }

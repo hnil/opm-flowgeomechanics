@@ -20,8 +20,8 @@
   You should have received a copy of the GNU General Public License
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 */
-#ifndef OPM_FRACTURE_MODEL_HH
-#define OPM_FRACTURE_MODEL_HH
+#ifndef OPM_FRACTURE_HH
+#define OPM_FRACTURE_HH
 #include <cmath>
 #include <functional>
 #include <iostream>
@@ -130,7 +130,7 @@ public:
         double numax = 0, Emax = 0;
         //auto& enitity_seeds = problem.elementEntitySeeds();//used for radom axes better way?
         for (size_t i = 0; i < ncf; ++i) {
-            size_t cell = reservoir_cells_[i];
+            int cell = reservoir_cells_[i];
             if (!(cell < 0)) {
                 auto normal = this->cell_normals_[i];
                 const auto& intQuants = simulator.model().intensiveQuantities(cell, /*timeIdx*/ 0);
@@ -256,7 +256,15 @@ private:
         double Emax = -1e99;
         assert(ncf>0);
         for (size_t i = 0; i < ncf; ++i) {
-            size_t cell = reservoir_cells_[i];
+            int cell = reservoir_cells_[i];
+            if(cell < 0){
+                // probably outside reservoir set all to zero
+                reservoir_perm_[i] = 0.0;
+                reservoir_cstress_[i] = 1e20;
+                reservoir_density_[i] = 1000.0; // water density
+                reservoir_dist_[i] = dist;
+                continue;
+            }
             auto normal = this->cell_normals_[i];
             {
                 auto permmat = problem.intrinsicPermeability(cell);
