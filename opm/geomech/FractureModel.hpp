@@ -133,6 +133,7 @@ public:
     Dune::FieldVector<double,3> disp(Dune::FieldVector<double,3> obs) const;
     Opm::PropertyTree& getParam(){return prm_;}
 private:
+    bool vtkwritewells_ = false; // write wells to VTK files
     template <class TypeTag, class Simulator>   
     void updateReservoirProperties(const Simulator& simulator){
         for (size_t i=0; i < wells_.size(); ++i) {
