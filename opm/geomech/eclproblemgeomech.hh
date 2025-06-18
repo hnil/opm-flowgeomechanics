@@ -352,90 +352,102 @@ namespace Opm{
             auto& simulator = this->simulator();
             auto& schedule = simulator.vanguard().schedule();
             const int reportStep = this->episodeIndex();
+
             // const auto sim_time = simulator_.time() + simulator_.timeStepSize();
             //  const auto now = TimeStampUTC {schedule_.getStartTime()} + std::chrono::duration<double>(sim_time);
             // const auto ts = formatActionDate(now, reportStep);
+
             std::map<std::string, std::vector<Opm::Connection>> extra_perfs;
+
             //auto mapper = simulator.vanguard().cartesianMapper();
             //auto& wellcontainer = this->wellModel().localNonshutWells();
             //for (auto& wellPtr : wellcontainer) {
-            bool hasExtraPerfs = false;
-            //const auto& wells = schedule.getWells(reportStep);
-            //for (const auto& wellName : schedule.wellNames(reportStep) ){   
-            for (const auto& well : schedule.getWells(reportStep) ){   
-                //auto wellName = wellPtr->name();
-                auto wellName = well.name();
-                const auto& wellcons = geomechModel_.getExtraWellIndices(wellName);
-                std::cout << "Adding extra connections for well: " << wellName << " number " << wellcons.size() << std::endl;
-                // check if well connections already exist
+            for (const auto& wellName : schedule.wellNames(reportStep)) {
+                const auto wellcons = geomechModel_.getExtraWellIndices(wellName);
+
                 if (wellcons.empty()) {
-                    continue; // no extra connections for this well
+                    // No extra connections for this well.
+                    continue;
                 }
-                //hasExtraPerfs = false;
-                for (const auto& cons : wellcons) {
+
+                const auto& origConns = this->schedule_[reportStep]
+                    .wells(wellName).getConnections();
+
+                auto extra = std::vector<Connection>{};
+
+                for (const auto& wellconn : wellcons) {
                     // simple calculated with upscaling
-                    const auto [cell, WI, depth] = cons;
+
                     // map to cartesian
-                    const auto cartesianIdx = simulator.vanguard().cartesianIndex(cell);
-                    // get ijk
-                    if (well.getConnections().hasGlobalIndex(cell)) {
-                        // already have connection for this cell
-                        std::cout << "Connection already exists for cell: " << cell << std::endl;
+                    const auto cartesianIdx = simulator.vanguard()
+                        .cartesianIndex(wellconn.cell);
+
+                    if (origConns.hasGlobalIndex(cartesianIdx)) {
+                        std::cout << "Connection already exists for cell: "
+                                  << wellconn.cell << std::endl;
                         continue;
                     }
-                    hasExtraPerfs = true;
-                    std::array<int, 3> ijk;
-                    simulator.vanguard().cartesianCoordinate(cell, ijk);
-                    // makeing preliminary connection to be added in schedual with correct numbering
 
-                    Opm::Connection::CTFProperties ctfprop;
-                    Opm::Connection connection(ijk[0],
-                                               ijk[1],
-                                               ijk[2],
-                                               cartesianIdx,
-                                               /*complnum*/ -1,
-                                               Opm::Connection::State::OPEN,
-                                               Opm::Connection::Direction::Z,
-                                               Opm::Connection::CTFKind::Defaulted,
-                                               /*sort_value*/ -1,
-                                               depth,
-                                               ctfprop,
-                                               /*sort_value*/ -1,
-                                               /*defaut sattable*/ true);
+                    // get ijk
+                    std::array<int, 3> ijk{};
+                    simulator.vanguard().cartesianCoordinate(wellconn.cell, ijk);
+
+                    // Making preliminary connection to be added in schedule
+                    // with correct numbering
+                    auto& connection = extra
+                        .emplace_back(ijk[0], ijk[1], ijk[2], cartesianIdx,
+                                      /*complnum*/ -1,
+                                      Connection::State::OPEN,
+                                      Connection::Direction::Z,
+                                      Connection::CTFKind::DynamicFracturing,
+                                      /* sort_value */ -1,
+                                      wellconn.depth,
+                                      Connection::CTFProperties{},
+                                      /* sort_value */ -1,
+                                      /* defaut sattable */ true);
+
                     //only add zero value 
-                    // connection need to be modified lager
-                    connection.setCF(WI*0.0);
-                    extra_perfs[wellName].push_back(connection);
+                    // connection need to be modified later.
+                    connection.setCF(wellconn.ctf * 0.0);
+                }
+
+                if (! extra.empty()) {
+                    const auto* pl = (extra.size() != 1) ? "s" : "";
+
+                    std::cout << "Adding " << extra.size()
+                              << "extra connection" << pl << " for well: "
+                              << wellName << std::endl;
+
+                    extra_perfs.insert_or_assign(wellName, std::move(extra));
                 }
             }
-            if(!hasExtraPerfs){
-                // add to schedule
+
+            if (extra_perfs.empty()) {
                 return;
+
             }else{
-            // add to schedule
+                // add to schedule
                 // structure will be changed erase matrix, maybe only rebuilding of linear solver is neede
                 //std::cout << "Rebuilding linear solver for extra connections" << std::endl;
-                //this->simulator().model().linearizer().eraseMatrix();
+                this->simulator().model().linearizer().eraseMatrix();
                 //this->simulator().model().newtonMethod().linearSolver().setForceRecreate();
                 if (this->gridView().comm().rank() == 0) {
-                    std::cout << "Adding extra connections to schedule for report step: " << reportStep << std::endl;
+                    std::cout << "Adding extra connections to "
+                                 "schedule for report step: "
+                              << reportStep << std::endl;
                 }
             }
+
+
             bool commit_wellstate = false;
             auto sim_update = schedule.modifyCompletions(reportStep, extra_perfs);
-            // shouldnot be used
-            auto updateTrans = [this](const bool global)
-            {
-                using TransUpdateQuantities = typename Vanguard::TransmissibilityType::TransUpdateQuantities;
-                this->transmissibilities_
-                    .update(global, TransUpdateQuantities::All, [&vg = this->simulator().vanguard()]
-                            (const unsigned int i)
-                    {
-                        return vg.gridIdxToEquilGridIdx(i);
-                    });
-            };
+
+            // should not be used
+            auto updateTrans = [](const bool){};
+
             // alwas rebuild wells
             sim_update.well_structure_changed = true;
+
             this->actionHandler_.applySimulatorUpdate(reportStep,
                                                       sim_update,
                                                       updateTrans,
