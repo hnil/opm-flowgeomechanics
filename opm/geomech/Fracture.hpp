@@ -180,11 +180,11 @@ public:
                 
             } else {
                 // probably outside reservoir set all to zero
-                double stressval = 0;
+                double stressval = 300e5;
                 reservoir_stress_[i][0] = stressval;
                 reservoir_stress_[i][1] = stressval;
                 reservoir_stress_[i][2] = stressval; //???
-                reservoir_pressure_[i] = 0.0;
+                reservoir_pressure_[i] = injectionPressure();
                 reservoir_mobility_[i] = 0.0;
                 reservoir_density_[i] = 1000.0;
                 reservoir_perm_[i] = 0.0;
