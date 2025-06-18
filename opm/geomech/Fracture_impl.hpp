@@ -244,7 +244,9 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         const std::vector<CellRef> fixed_cells = well_source_cellref_;
         int target_cellcount = prm_.get<int>("solver.target_cellcount"); 
         int cellcount_threshold = prm_.get<int>("solver.cellcount_threshold");
-        const auto [mesh, cur_level] = expand_to_criterion(*trimesh_, score_function, threshold, fixed_cells, target_cellcount, cellcount_threshold);
+        const auto [mesh, cur_level] =
+            expand_to_criterion(*trimesh_, score_function, threshold,
+                                fixed_cells, target_cellcount, cellcount_threshold);
         // make current level become the reference (finest) level
         // note that the well_source_cellref_ is already set from the last call to the score function
         for (auto& cell : well_source_cellref_) 

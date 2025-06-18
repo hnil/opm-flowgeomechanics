@@ -1368,7 +1368,8 @@ vector<CellRef> RegularTrimesh::activeNeighborCells(const vector<CellRef>& cells
 // ----------------------------------------------------------------------------
 std::tuple<RegularTrimesh, int>
 expand_to_criterion(const RegularTrimesh& mesh,
-                    function<vector<double>(const RegularTrimesh&, const int level)> score_function,
+                    function<vector<double>(const RegularTrimesh&,
+                                            const int level)> score_function,
                     double threshold, const std::vector<CellRef>& fixed_cells,
                     const int target_cellcount,
                     const int cellcount_threshold
@@ -1381,8 +1382,9 @@ expand_to_criterion(const RegularTrimesh& mesh,
     const int max_iter = 5; // 5; // maximum number of iterations on current level
     int roof = numeric_limits<int>::max();
     
-    ++DEBUG_GRID_COUNT; // @@ only for keeping track of grids to output for debugging/monitoring purposes
+    ++DEBUG_GRID_COUNT; // @@ keeping track of grids to output for debugging/monitoring purposes
     DEBUG_CURRENT_GRID_ITERATION_COUNT=0; //@@ same
+
 
     // determine starting level
     //const int target_cellcount = 50; // target number of cells in the final mesh
@@ -1414,11 +1416,12 @@ expand_to_criterion(const RegularTrimesh& mesh,
         working_mesh.removeSawtooths();
         cur_level++;
     }
-    cout << "------------- Starting propagation at level: " << cur_level << " -----------" <<endl;
+    cout << "---------- Starting propagation at level: " << cur_level << " --------" <<endl;
     while (true) { // keep looping as long as grid need expansion
 
         if (DEBUG_DUMP_GRIDS) {
-            string filename = "current_grid_" + to_string(DEBUG_GRID_COUNT) + "_" + to_string(DEBUG_CURRENT_GRID_ITERATION_COUNT++);
+            string filename = "current_grid_" + to_string(DEBUG_GRID_COUNT) + "_" +
+                to_string(DEBUG_CURRENT_GRID_ITERATION_COUNT++);
             writeMeshToVTKDebug(working_mesh, filename.c_str(), 0, 1);
         }
         const vector<double> bnd_scores = score_function(working_mesh, cur_level);
@@ -1428,7 +1431,7 @@ expand_to_criterion(const RegularTrimesh& mesh,
         vector<CellRef> expand_cells;
         
         if(working_mesh.numCells() > max_cellcount) {
-            cout << " ** ---------- MAXIMUM CELL COUNT REACHED, STOPPING EXPANSION ---------- **" << endl;
+            cout << " ** ----- MAXIMUM CELL COUNT REACHED, STOPPING EXPANSION ----- **" << endl;
             break;
         }   
 
