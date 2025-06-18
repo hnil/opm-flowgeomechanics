@@ -76,7 +76,10 @@ Fracture::init(std::string well,
         axis_[i] /= axis_[i].two_norm();
         axis_[i] *= init_scale;
     }
-
+    std::cout << "axis" << axis_[0][0] << "," << axis_[0][1] << "," << axis_[0][2]
+              << " " << axis_[1][0] << "," << axis_[1][1] << "," << axis_[1][2]
+              << " " << axis_[2][0] << "," << axis_[2][1] << "," << axis_[2][2]
+              << std::endl;
     layers_ = 0;
     nlinear_ = 0;
 
@@ -84,7 +87,7 @@ Fracture::init(std::string well,
 
     if (method == "if_propagate_trimesh") {
       //const int trimeshlayers = 4;
-      const double init_scale = prm_.get<double>("config.axis_scale");
+      //const double init_scale = prm_.get<double>("config.axis_scale");
       const double edgelen = init_scale; //1;
       const double radius = 5 * edgelen;
       const double fac = std::sqrt(3) / 2;
@@ -92,6 +95,11 @@ Fracture::init(std::string well,
       const std::array<double, 3> ax2 {0.5 * ax1[0] + fac * axis_[1][0],
                                        0.5 * ax1[1] + fac * axis_[1][1],
                                        0.5 * ax1[2] + fac * axis_[1][2]};
+      std::cout << "Creating trimesh with radius: " << radius
+                << ", edgelen: " << edgelen
+                << ", ax1: " << ax1[0] << "," << ax1[1] << "," << ax1[2]
+                << ", ax2: " << ax2[0] << "," << ax2[1] << "," << ax2[2]
+                << std::endl;                                 
       trimesh_ = std::unique_ptr<RegularTrimesh>(
                      new RegularTrimesh(radius, //trimeshlayers,
                                         {origo_[0], origo_[1], origo_[2]},

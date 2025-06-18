@@ -254,6 +254,7 @@ namespace Opm{
                 write_system_ = prm.get<int>("verbosity") > 10;
         }
         void writeMechSystem(){
+            OPM_TIMEBLOCK(WriteMechSystem);
                     const auto& problem = simulator_.problem();
                     Opm::Helper::writeMechSystem(simulator_,
                     elacticitysolver_.A.getOperator(),

@@ -377,7 +377,7 @@ void extendDimens(const GridSize& grid_size, ExtendParam& extend_param, Opm::Dec
             || records.name() == std::string("WSEED") 
             || records.name() == std::string("COMPSEGS"))
             ) {
-                std::cout << "Schedule record name not handled: " << records.name() << std::endl;
+                //std::cout << "Schedule record name not handled: " << records.name() << std::endl;
                 continue;
             }else{
                 std::cout << "Extending schedule record: " << records.name() << std::endl;
@@ -576,8 +576,8 @@ Opm::Deck manipulate_deck(const char* deck_file, std::ostream& os)
     std::vector<double>& ntg = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::NTG>().back().getRawDoubleData());
     std::vector<double>& poro = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::PORO>().back().getRawDoubleData());
     std::vector<double>& permx = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::PERMX>().back().getRawDoubleData());
-    //std::vector<double>& permy = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::PERMY>().back().getRawDoubleData());
-    //std::vector<double>& permz = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::PERMZ>().back().getRawDoubleData());
+    std::vector<double>& permy = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::PERMY>().back().getRawDoubleData());
+    std::vector<double>& permz = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::PERMZ>().back().getRawDoubleData());
     std::vector<value::status>& actnum_status = const_cast<std::vector<value::status>&>(gridsec.get<ParserKeywords::ACTNUM>().back().getValueStatus());
     //int nc_new = grid_size.nx*grid_size.ny*extend_param.nz_new;    
     //actnum.resize(nc_new);
