@@ -1,5 +1,7 @@
 #include "config.h"
+
 #include <opm/geomech/FractureModel.hpp>
+
 #include <dune/common/fmatrixev.hh>
 #include <opm/geomech/DiscreteDisplacement.hpp>
 
@@ -28,9 +30,9 @@
 #include <stddef.h>
 
 namespace Opm{
-    Opm::PropertyTree makeDefaultFractureParam(){
+    PropertyTree makeDefaultFractureParam(){
         using namespace std::string_literals;
-        Opm::PropertyTree fracture_param;
+        PropertyTree fracture_param;
         fracture_param.put("hasfractures",false);
         fracture_param.put("add_perfs_to_schedule", true);
         // solution method    
@@ -102,15 +104,17 @@ namespace Opm{
         return fracture_param;
    }
 
-    void FractureModel::addWell(std::string name,
-                           const std::vector<Point3D>& points,
-                           const std::vector<Segment>& segments,
-                           const std::vector<int>& res_cells){
-        std::string outputdir = prm_.get<std::string>("outputdir");
-        std::string casename = prm_.get<std::string>("casename"); 
-        wells_.push_back(FractureWell(outputdir,casename, name,points,segments, res_cells));
-        // add witth no fractures
-        well_fractures_.push_back(std::vector<Fracture>());
+    void FractureModel::addWell(const std::string&                           name,
+                                const std::vector<FractureWell::Connection>& conns,
+                                const std::vector<Point3D>&                  points,
+                                const std::vector<Segment>&                  segments)
+    {
+        const std::string outputdir = prm_.get<std::string>("outputdir");
+        const std::string casename = prm_.get<std::string>("casename");
+
+        // add with no fractures
+        wells_.emplace_back(outputdir, casename, name, conns, points, segments);
+        well_fractures_.emplace_back();
     }
 
     void FractureModel::addFractures(const ScheduleState& sched)
@@ -123,25 +127,35 @@ namespace Opm{
         }
         else if (fracture_type == "tensile_fracture") {
             this->addFracturesTensile();
-        //}
+        }
         // else if (fracture_type == "well_seed_json") {
         //     // old method
         //     Fracture fracture;
         //     fracture.init(well.name(), perf, well_cell, origo, normal, prm_);
         //     well_fractures_[i].push_back(std::move(fracture));
-        }else if (fracture_type == "well_seed") {
+        //}
+        else if (fracture_type == "well_seed") {
             this->addFracturesWellSeed(sched);
         }
         else {
             OPM_THROW(std::runtime_error, "Fracture type '" + fracture_type + "' is not supported");
         }
-        std::cout << "Added fractures to " << wells_.size() << " wells" << std::endl;
-        std::cout << "Total number of fractures_wells: " << well_fractures_.size() << std::endl;
+
+        std::cout << "Added fractures to " << wells_.size() << " wells\n"
+                  << "Total number of fractures_wells: " << well_fractures_.size()
+                  << std::endl;
+
         int count_frac = 0;
-        for(size_t i=0; i < well_fractures_.size(); ++i){
-            count_frac += well_fractures_[i].size();
-            std::cout << "Well " << wells_[i].name() << " has " << well_fractures_[i].size() << " fractures" << std::endl;
+        for (auto i = 0*well_fractures_.size(); i < well_fractures_.size(); ++i) {
+            const auto nfrac = well_fractures_[i].size();
+            const auto* pl = (nfrac != 1) ? "s" : "";
+
+            count_frac += static_cast<int>(nfrac);
+
+            std::cout << "Well " << wells_[i].name() << " has "
+                      << nfrac << " fracture" << pl << '\n';
         }
+
         std::cout << "Total number of fractures: " << count_frac << std::endl;
     }
 
@@ -333,6 +347,8 @@ void Opm::FractureModel::addFracturesPerpWell()
                 .init(fracWell.name(),
                       /* connection index */ elemIdx,
                       /* reservoir cell */ fracWell.reservoirCell(elemIdx),
+                      /* well segment */ fracWell.segment(elemIdx),
+                      /* distance range */ fracWell.perfRange(elemIdx),
                       /* seed origin */ origin,
                       /* fracturing plane's normal vector */ normal,
                       this->prm_);
@@ -372,6 +388,8 @@ void Opm::FractureModel::addFracturesTensile()
                 .init(fracWell.name(),
                       /* connection index */ elemIdx,
                       /* reservoir cell */ fracWell.reservoirCell(elemIdx),
+                      /* well segment */ fracWell.segment(elemIdx),
+                      /* distance range */ fracWell.perfRange(elemIdx),
                       /* seed origin */ elem.geometry().corner(1),
                       /* fracturing plane's normal vector */ normal,
                       this->prm_);
@@ -437,8 +455,7 @@ void Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched)
 
         for (const auto& elem : elements(fracWell.grid().leafGridView())) {
             const auto elemIdx = emap.index(elem);
-            size_t res_cell = fracWell.reservoirCell(elemIdx);
-            const auto seedPos = localSeeds.find(res_cell);
+            const auto seedPos = localSeeds.find(fracWell.reservoirCell(elemIdx));
             if (seedPos == localSeeds.end()) {
                 continue;
             }
@@ -454,6 +471,8 @@ void Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched)
                 .init(fracWell.name(),
                       /* connection index */ elemIdx,
                       /* reservoir cell */ seedPos->first,
+                      /* well segment */ fracWell.segment(elemIdx),
+                      /* distance range */ fracWell.perfRange(elemIdx),
                       /* seed origin */ elem.geometry().corner(1),
                       /* fracturing plane's normal vector */ normal,
                       this->prm_);

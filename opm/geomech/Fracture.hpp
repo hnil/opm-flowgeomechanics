@@ -20,14 +20,9 @@
   You should have received a copy of the GNU General Public License
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 */
+
 #ifndef OPM_FRACTURE_HH
 #define OPM_FRACTURE_HH
-#include <cmath>
-#include <functional>
-#include <iostream>
-#include <memory>
-#include <sstream>
-#include <string>
 
 #include <dune/common/exceptions.hh>
 #include <dune/foamgrid/foamgrid.hh>
@@ -36,7 +31,7 @@
 #include <dune/grid/io/file/vtk/vtkwriter.hh>
 #include <dune/grid/utility/persistentcontainer.hh>
 #include <opm/grid/CpGrid.hpp>
-// from pdelab
+
 #include "GeometryHelpers.hpp"
 #include <dune/grid/yaspgrid.hh>
 #include <dune/grid/yaspgrid/partitioning.hh>
@@ -50,6 +45,16 @@
 
 #include <opm/geomech/GridStretcher.hpp>
 #include <opm/geomech/RegularTrimesh.hpp>
+
+#include <cmath>
+#include <functional>
+#include <iostream>
+#include <memory>
+#include <optional>
+#include <sstream>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace Opm {
     template <typename Scalar>
@@ -66,10 +71,13 @@ namespace Opm::Properties {
 
 namespace Opm
 {
-struct WellInfo {
+struct WellInfo
+{
     std::string name;
     int perf;
     int well_cell;
+    int segment{};
+    std::optional<std::pair<double, double>> perf_range{};
 };
 
 struct RuntimePerforation;
@@ -84,8 +92,15 @@ public:
     using Matrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>;
     using DynamicMatrix = Dune::DynamicMatrix<double>;
   
-    void init(std::string well, int perf, int well_cell, Point3D origo,
-              Point3D normal, Opm::PropertyTree prm);
+    void init(const std::string& well,
+              const int perf,
+              const int well_cell,
+              const int segment,
+              const std::optional<std::pair<double, double>>& perf_range,
+              const Point3D& origo,
+              const Point3D& normal,
+              const PropertyTree& prm);
+
     void grow(int layers, int method);
     std::string name() const;
     void write(int reportStep = -1) const;
@@ -222,8 +237,9 @@ public:
     void assignGeomechWellState(ConnFracStatistics<Scalar>& stats) const;
     void setActive(bool active) { active_ = active; }
     bool isActive() const { return active_; }
+
 private:
-    using ResVector = Opm::Fracture::Vector; 
+    using ResVector = ::Opm::Fracture::Vector;
     using VectorHP = Dune::MultiTypeBlockVector<ResVector, ResVector>;
 
   // using Krull = Dune::MultiTypeBlockVector<Dune::BlockVector<double>>;
@@ -293,7 +309,7 @@ private:
     Point3D surfaceMap(double x, double y);
 
     std::unique_ptr<GridStretcher> grid_stretcher_; //@@ experimental, for stretching grids
-    std::unique_ptr<Opm::RegularTrimesh> trimesh_; // @@ experimental, implicitly defined grids
+    std::unique_ptr<RegularTrimesh> trimesh_; // @@ experimental, implicitly defined grids
   
     std::unique_ptr<Grid> grid_;
     Point3D origo_;
@@ -302,7 +318,7 @@ private:
     bool active_{false}; // is fracture active?
     std::unique_ptr<Dune::VTKWriter<Grid::LeafGridView>> vtkwriter_;
     static constexpr auto VTKFormat = Dune::VTK::ascii;
-    std::unique_ptr<Opm::VtkMultiWriter<Grid::LeafGridView, VTKFormat>> vtkmultiwriter_;
+    std::unique_ptr<::Opm::VtkMultiWriter<Grid::LeafGridView, VTKFormat>> vtkmultiwriter_;
     std::vector<unsigned int> out_indices_;
 
     // should probably not be needed
@@ -360,7 +376,7 @@ private:
     double perf_pressure_;
     std::vector<double> leakof_;
     //
-    Opm::PropertyTree prmpressure_;
+    PropertyTree prmpressure_;
     using PressureOperatorType = Dune::MatrixAdapter<Matrix, Vector, Vector>;
     using FlexibleSolverType = Dune::FlexibleSolver<PressureOperatorType>;
     mutable std::unique_ptr<Matrix> pressure_matrix_;
@@ -386,7 +402,7 @@ private:
     double min_width_; // minimum width of fracture, used for convergence criterion
     double gravity_{0.0};//{9.81}; // gravity acceleration, used for leakoff calculations
     std::vector<double> fracture_dgh_; // gravity contribution to fracture pressure, used for leakoff calculations  
-    Opm::PropertyTree prm_;
+    PropertyTree prm_;
 };
 } // namespace Opm
 

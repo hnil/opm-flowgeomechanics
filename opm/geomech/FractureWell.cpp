@@ -1,9 +1,50 @@
 #include "config.h"
+
 #include <opm/geomech/FractureWell.hpp>
-#include <dune/geometry/referenceelements.hh>
-namespace Opm{
+
+#include <dune/common/fvector.hh>
+
+#include <dune/grid/io/file/vtk/vtkwriter.hh>
+
+#include <dune/foamgrid/foamgrid.hh>
+
+#include <opm/models/io/vtkmultiwriter.hh>
+
+#include <algorithm>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include <stddef.h>
+
+namespace Opm
+{
+    FractureWell::FractureWell(const std::string& outputprefix,
+                               const std::string& casename,
+                               const std::string& name,
+                               const std::vector<Connection>& conns,
+                               const std::vector<Point3D>& points,
+                               const std::vector<Segment>& segments)
+        : outputprefix_ { outputprefix }
+        , casename_     { casename }
+        , name_         { name }
+        , conns_        { conns }
+    {
+        this->init(points, segments);
+
+        this->vtkwriter_ =
+            std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>
+            (grid_->leafGridView(), Dune::VTK::nonconforming);
+
+        reservoir_stress_.resize(this->conns_.size());
+        std::fill(reservoir_stress_.begin(),
+                  reservoir_stress_.end(),
+                  100e5);// random initialization
+    }
+
     void FractureWell::init(const std::vector<Point3D>& points,
-                   const std::vector<Segment>& segments){
+                            const std::vector<Segment>& segments)
+    {
         Dune::GridFactory<Grid> factory;
         for(size_t i=0; i < points.size(); ++i){
             factory.insertVertex(points[i]);
@@ -52,24 +93,5 @@ namespace Opm{
             vtkmultiwriter_->attachScalarElementData(reservoir_temperature, "ReservoirTemperature");
         }
         vtkmultiwriter_->endWrite(false);
-    }
-
-    FractureWell::FractureWell(std::string outputprefix,
-                               std::string casename, 
-                               std::string name,
-                               const std::vector<Point3D>& points,
-                               const std::vector<Segment>& segments,
-                               const std::vector<int>& res_cells){
-        active_ = false;                        
-        outputprefix_ = outputprefix;
-        casename_ = casename;
-        name_ = name;
-        this->init(points, segments);
-        vtkwriter_ =
-            std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>
-            (grid_->leafGridView(), Dune::VTK::nonconforming);
-        reservoir_cells_ = res_cells;
-        reservoir_stress_.resize(res_cells.size());
-        std::fill(reservoir_stress_.begin(),reservoir_stress_.end(),100e5);// random initialization    
     }
 }

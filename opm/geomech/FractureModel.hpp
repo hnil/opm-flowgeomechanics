@@ -1,4 +1,5 @@
 #pragma once
+
 #include "Fracture.hpp"
 #include "FractureWell.hpp"
 #include "GeometryHelpers.hpp"
@@ -31,7 +32,7 @@ namespace Opm {
 } // namespace Opm
 
 namespace Opm{
-  Opm::PropertyTree makeDefaultFractureParam();
+    PropertyTree makeDefaultFractureParam();
 class FractureModel{
     //using CartesianIndexMapper = Dune::CartesianIndexMapper<Dune::CpGrid>;
 public:
@@ -39,9 +40,8 @@ public:
     using Segment = std::array<unsigned int,2>;
     template<class Grid>
     FractureModel(const Grid& grid,
-                  const std::vector<Opm::Well>& wells,
-                   const Opm::PropertyTree&
-        );
+                  const std::vector<Well>& wells,
+                  const PropertyTree&);
 
     /// Initialise fracture objects.
     ///
@@ -75,10 +75,10 @@ public:
         }
     }
 
-  void addWell(std::string name,
-	       const std::vector<Point3D>& points,
-	       const std::vector<std::array<unsigned,2>>& segments,
-	       const std::vector<int>& reservoir_cells );
+    void addWell(const std::string& name,
+                 const std::vector<FractureWell::Connection>& conns,
+                 const std::vector<Point3D>& points,
+                 const std::vector<std::array<unsigned,2>>& segments);
 
     void write(int ReportStep = -1) const;
     void writemulti(double time) const;
