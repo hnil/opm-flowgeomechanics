@@ -218,6 +218,16 @@ void extendDimens(const GridSize& grid_size, ExtendParam& extend_param, Opm::Dec
         if(records.name() == std::string("NTG")){
             default_value = 1.0;
         }
+
+        if(records.name() == std::string("PERMX")){
+            default_value = 0.0;
+        }
+        if(records.name() == std::string("PERMY")){
+            default_value = 0.0;
+        }
+        if(records.name() == std::string("PERMZ")){
+            default_value = 0.0;
+        }
         std::cout << "Extend data_size: " << records.name() << std::endl;
         //std::cout << "Extend item name: " << item.name() << std::endl;
         std::vector<value::status>& val_status = const_cast<std::vector<value::status>&>(item.getValueStatus());
@@ -456,6 +466,7 @@ void extendDimens(const GridSize& grid_size, ExtendParam& extend_param, Opm::Dec
         if(records.name() == std::string("EQLNUM")){
             exteded_val = upper_equilnum;
         }
+        std::cout << "Extend regions: " << records.name() << std::endl;
         //std::cout << "Extend data_size: " << .data_size() << std::endl;
         std::vector<value::status>& val_status = const_cast<std::vector<value::status>&>(item.getValueStatus());
 
@@ -472,7 +483,6 @@ void extendDimens(const GridSize& grid_size, ExtendParam& extend_param, Opm::Dec
                          val_new[ind_new] = val[ind_old];
                          val_status_new[ind_new] = val_status[ind_old];
                      }else{
-                        std::cout << "Extend regions: " << records.name() << std::endl;
                          val_status_new[ind_new] = value::status::deck_value;
                          val_new[ind_new] = exteded_val;           
                      }   
@@ -569,6 +579,29 @@ Opm::Deck manipulate_deck(const char* deck_file, std::ostream& os)
     std::vector<int> actnum_old = const_cast<std::vector<int>&>(gridsec.get<ParserKeywords::ACTNUM>().back().getIntData());
     GridSize grid_size = getDimens(deck);//(nx, ny, nz);
     extendDimens(grid_size, extend_param, deck);
+    // extend BCCON only downwards
+    for(const auto& records: gridsec){
+        if(records.name() == std::string("BCCON")){
+            std::cout << "Extending BCCON" << std::endl;
+            //std::cout << records << std::endl;
+            for(const auto& record: records){
+                int& K1 = const_cast<int&>(record.getItem("K1").getData<int>()[0]);
+                int& K2 = const_cast<int&>(record.getItem("K2").getData<int>()[0]);
+                std::string direction = record.getItem("DIRECTION").getTrimmedString(0);
+                std::cout << direction << std::endl;
+                if(direction == std::string("Z+")){
+                    int shift = extend_param.nz_upper + extend_param.nz_lower;
+                    K1 += shift;
+                    K2 += shift;
+                }
+                if(direction == std::string("Z-")){
+                    assert(K1 == 1);
+                    assert(K2== 1);
+                }
+            }
+        }
+    }
+
     extendGridSection<double>(gridsec, grid_size, extend_param, type_tag::fdouble);
     extendGridSection<int>(gridsec, grid_size, extend_param, type_tag::integer);
     std::vector<int>& actnum = const_cast<std::vector<int>&>(gridsec.get<ParserKeywords::ACTNUM>().back().getIntData());
@@ -590,9 +623,9 @@ Opm::Deck manipulate_deck(const char* deck_file, std::ostream& os)
             // maybe one sould have used values from deck if resonable and check if deck_value
             poro[i] = extend_param.upper_poro;
             permx[i] = 0.0;
-            //permy[i] = 0.0;
-            //
-            //permz[i] = 0.0;
+            permy[i] = 0.0;
+            permz[i] = 0.0;
+            
             ntg[i] = 1.0;
         }
         //actnum[i] = 1;

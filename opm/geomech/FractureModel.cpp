@@ -333,6 +333,7 @@ void Opm::FractureModel::addFracturesPerpWell()
                 .init(fracWell.name(),
                       /* connection index */ elemIdx,
                       /* reservoir cell */ fracWell.reservoirCell(elemIdx),
+                      /*global_index */ -1,// dummy for now
                       /* seed origin */ origin,
                       /* fracturing plane's normal vector */ normal,
                       this->prm_);
@@ -372,6 +373,7 @@ void Opm::FractureModel::addFracturesTensile()
                 .init(fracWell.name(),
                       /* connection index */ elemIdx,
                       /* reservoir cell */ fracWell.reservoirCell(elemIdx),
+                      /*global_index */ -1,// dummy for now
                       /* seed origin */ elem.geometry().corner(1),
                       /* fracturing plane's normal vector */ normal,
                       this->prm_);
@@ -446,14 +448,28 @@ void Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched)
             const auto& seedNormal = wseed.getNormal
                 (WellFractureSeeds::SeedIndex { seedPos->second });
 
+            const auto& seedSize = wseed.getSize
+                (WellFractureSeeds::SeedIndex { seedPos->second });
+
             const auto normal = Dune::FieldVector<double, 3> {
                 seedNormal[0], seedNormal[1], seedNormal[2],
             };
+            const auto frac_size = Dune::FieldVector<double, 3> {
+                seedSize[0], seedSize[1], seedSize[2]
+            };
+            // hack
+            prm_.put("config.axis_scale", frac_size[0]);// vertical scale
+            //prm_.put("fractureparam.config.axis_scale", frac_size[1]);// horizontal scale
+            prm_.put("config.min_width", frac_size[2]);
 
+            assert(normal.two_norm() > 0.0);
+            const auto& conn =  sched.wells(fracWell.name()).getConnections();
+            int globalIndex =  conn[elemIdx].global_index();
             this->well_fractures_[wellIx].emplace_back()
                 .init(fracWell.name(),
                       /* connection index */ elemIdx,
                       /* reservoir cell */ seedPos->first,
+                      /*global_index */ globalIndex,
                       /* seed origin */ elem.geometry().corner(1),
                       /* fracturing plane's normal vector */ normal,
                       this->prm_);
