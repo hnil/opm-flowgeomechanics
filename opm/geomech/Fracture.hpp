@@ -41,10 +41,12 @@
 #include <opm/models/utils/propertysystem.hh>
 #include <opm/simulators/linalg/FlexibleSolver.hpp>
 #include <opm/simulators/linalg/PropertyTree.hpp>
+#include <opm/simulators/wells/WellState.hpp>
 #include <dune/istl/matrixmarket.hh>
 
 #include <opm/geomech/GridStretcher.hpp>
 #include <opm/geomech/RegularTrimesh.hpp>
+
 
 #include <cmath>
 #include <functional>
@@ -55,6 +57,9 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+
+#include <opm/input/eclipse/Schedule/Well/WellConnections.hpp>
 
 namespace Opm {
     template <typename Scalar>
@@ -76,6 +81,7 @@ struct WellInfo
     std::string name;
     int perf;
     int well_cell;
+    int global_index;
     int segment{};
     std::optional<std::pair<double, double>> perf_range{};
 };
@@ -92,9 +98,11 @@ public:
     using Matrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>;
     using DynamicMatrix = Dune::DynamicMatrix<double>;
   
+
     void init(const std::string& well,
               const int perf,
               const int well_cell,
+              const int global_index,
               const int segment,
               const std::optional<std::pair<double, double>>& perf_range,
               const Point3D& origo,
@@ -135,6 +143,7 @@ public:
         reservoir_perm_.resize(ncf);
         reservoir_cstress_.resize(ncf);
         reservoir_cell_z_.resize(ncf, 0.0);
+        filtercake_thikness_.resize(ncf, 0.0);
         // should be calculated
         bool calculate_dist = prm_.get<bool>("reservoir.calculate_dist");
         if(!calculate_dist){
@@ -144,6 +153,7 @@ public:
         
         double numax = 0, Emax = 0;
         //auto& enitity_seeds = problem.elementEntitySeeds();//used for radom axes better way?
+        // get properties from rservoir
         for (size_t i = 0; i < ncf; ++i) {
             int cell = reservoir_cells_[i];
             if (!(cell < 0)) {
@@ -206,8 +216,35 @@ public:
             }
             // assume reservoir distance is calculated
         }
-    }
-  
+        int reportStepIdx = simulator.episodeIndex();
+        const auto& schedule =  simulator.vanguard().schedule();
+        //const Opm::Well& well = wells[wellinfo_.name];
+        //const std::vector<Opm::Well>& wells = problem.wellModel().getLocalWells(reportStepIdx);
+        // get properties from well connections in case of filter cake
+        if(schedule[reportStepIdx].wells.has(wellinfo_.name) == false){
+            std::cerr << "Warning: Well " << wellinfo_.name << " not found in schedule step " << reportStepIdx << std::endl;
+            return;
+        }
+        const auto& well = schedule[reportStepIdx].wells(wellinfo_.name);
+        //const auto& well = problem.wellModel().getWellEcl(wellinfo_.name);
+        const auto& connections = well.getConnections();
+        //const auto& connection = connections[wellinfo_.perf];// probably wrong
+        if(connections.hasGlobalIndex(wellinfo_.global_index) == false){
+            std::cerr << "Warning: Well connection with global index " << wellinfo_.global_index << " not found in schedule step " << reportStepIdx << std::endl;
+            return;
+        }
+        const auto& wellstates = simulator.problem().wellModel().wellState();
+        const auto& well_index = wellstates.index(wellinfo_.name);
+        if (!well_index.has_value()) {
+            std::cerr << "Warning: Well " << wellinfo_.name << " not found in well state at step " << reportStepIdx << std::endl;
+            has_filtercake_ = false;// prevois state did not have this well
+            return;
+        }
+        const auto& wellstate = wellstates[*well_index];
+        updateFilterCakeProps(connections, wellstate);
+    };
+    void updateFilterCakeProps(const Opm::WellConnections& connections,
+                              const Opm::SingleWellState<double>& wellstate);    
     void initFracturePressureFromReservoir();
     void initFractureStates();
     void initFractureWidth();
@@ -321,6 +358,11 @@ private:
     static constexpr auto VTKFormat = Dune::VTK::ascii;
     std::unique_ptr<::Opm::VtkMultiWriter<Grid::LeafGridView, VTKFormat>> vtkmultiwriter_;
     std::vector<unsigned int> out_indices_;
+
+    std::vector<double> filtercake_thikness_; // properties of filter cake, if any
+    double filtercake_perm_{0.0}; // permeability of filter cake, if any
+    double filtercake_poro_{0.0}; // permeability of filter cake, if any
+    bool has_filtercake_{false}; // if true, filter cake is used in the model
 
     // should probably not be needed
     int layers_;
