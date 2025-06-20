@@ -3,6 +3,7 @@
 #include <functional>
 #include <iostream>
 #include <fstream>
+#include <string>
 
 #include <dune/common/indices.hh> // needed for _0, _1, etc.
           // 
@@ -19,8 +20,16 @@
 #include <opm/common/TimingMacros.hpp>
 
 
-
+using namespace std;
 namespace {
+    static int DEBUG_COUNT = 0;
+    string debug_filename(const string& prefix, const string& suffix = ".txt")
+    {
+        std::ostringstream oss;
+        oss << prefix << DEBUG_COUNT++ << suffix;
+        return oss.str();
+    }
+    
 // ========================== Convenience definitions ==========================
 using Dune::Indices::_0;
 using Dune::Indices::_1;
@@ -74,6 +83,16 @@ void dump_matrix(const SMatrix& m, const char* const name)
 }
 
 // ----------------------------------------------------------------------------
+void dump_vector(const vector<int>& v, const char* const name)
+// ----------------------------------------------------------------------------
+{
+  std::ofstream os(name);
+  for (size_t i = 0; i != v.size(); ++i)
+    os << v[i] << "\n";
+  os.close();
+}
+    
+// ----------------------------------------------------------------------------
 void dump_vector(const ResVector& v, const char* const name)
 // ----------------------------------------------------------------------------
 {
@@ -96,7 +115,7 @@ void dump_vector(const VectorHP& v, const char* const name1, const char* const n
   dump_vector(v[_0], name1);
   dump_vector(v[_1], name2);
 }
-  
+    
 // ============================= Helper functions =============================
 
 // ----------------------------------------------------------------------------  
@@ -311,6 +330,7 @@ namespace Opm
 bool Fracture::fullSystemIteration(const double tol)
 // ----------------------------------------------------------------------------
 {
+  ++DEBUG_COUNT;
   OPM_TIMEFUNCTION();
   min_width_ = prm_.get<double>("solver.min_width"); // min with only used for flow calculations
   const double max_width = prm_.get<double>("solver.max_width");
@@ -324,6 +344,8 @@ bool Fracture::fullSystemIteration(const double tol)
   //std::cout << "---- Various " << std::endl;
   // initialize vector of unknown, and vector represnting direction in tangent space
   VectorHP x {fracture_width_, fracture_pressure_};
+  dump_vector(x, debug_filename("w_").c_str(), debug_filename("p_").c_str());
+  
   VectorHP dx = x; dx = 0; // gradient of 'x' (which we aim to compute below)
 
   // set right hand side
@@ -334,6 +356,7 @@ bool Fracture::fullSystemIteration(const double tol)
   // make a version of the fracture matrix that has trivial equations for closed cells
   const std::vector<int> closed_cells = identify_closed(fractureMatrix(), x, rhs[_0],
                                                         numWellEquations());
+  dump_vector(closed_cells, debug_filename("closed_cells_").c_str());
   const auto A = modified_fracture_matrix(fractureMatrix(), closed_cells);
 
   // also modify right hand side for closed cells
@@ -365,7 +388,7 @@ bool Fracture::fullSystemIteration(const double tol)
 
   // system equations
   SystemMatrix S0 = S; S0[_1][_0] = 0; // the equations themselves have no cross term
-
+  dump_vector(rhs, debug_filename("rhs_w_").c_str(), debug_filename("rhs_p_").c_str());
   S0.mmv(x, rhs); // rhs = rhs - S0 * x;   (we are working in the tanget plane)
 
   // Verify that equations have been chosen correctly
@@ -420,6 +443,7 @@ bool Fracture::fullSystemIteration(const double tol)
   }
 
   dx *= step_fac;
+  dump_vector(dx, debug_filename("dx_w_").c_str(), debug_filename("dx_p_").c_str());
   x += dx;
 
   // copying modified variables back to member variables
