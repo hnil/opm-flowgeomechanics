@@ -65,6 +65,7 @@ void
 Fracture::init(const std::string& well,
                const int perf,
                const int well_cell,
+               int global_index,
                const int segment,
                const std::optional<std::pair<double, double>>& perf_range,
                const Point3D& origo,
@@ -73,7 +74,7 @@ Fracture::init(const std::string& well,
 {
     OPM_TIMEFUNCTION();
     prm_ = prm;
-    wellinfo_ = WellInfo({well, perf, well_cell, segment, perf_range});
+    wellinfo_ = WellInfo({well, perf, well_cell, global_index, segment, perf_range});
 
     origo_ = origo;
     axis_[2] = normal;
@@ -98,8 +99,8 @@ Fracture::init(const std::string& well,
     if (method == "if_propagate_trimesh") {
       //const int trimeshlayers = 4;
       //const double init_scale = prm_.get<double>("config.axis_scale");
-      const double edgelen = init_scale; //1;
-      const double radius = 5 * edgelen;
+      const double edgelen = init_scale/5; //1;
+      const double radius = init_scale;
       const double fac = std::sqrt(3) / 2;
       const std::array<double, 3> ax1 {axis_[0][0], axis_[0][1], axis_[0][2]};
       const std::array<double, 3> ax2 {0.5 * ax1[0] + fac * axis_[1][0],
@@ -232,6 +233,84 @@ void Fracture::removeCells(){
     }
     this->resetWriters();
 }
+
+    void Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
+                              const Opm::SingleWellState<double>& wellstate){
+        OPM_TIMEFUNCTION();
+        // potentially remap filtercake thikness if grid has changed
+        assert(filtercake_thikness_.size() == reservoir_cells_.size());                                 
+        const auto& perfdata = wellstate.perf_data;
+        std::map<int,double> WI_fluxes;
+        int water_index = 0;
+        int np = 3;
+        for(int i = 0; i < perfdata.cell_index.size(); ++i){
+            int cell_index = perfdata.cell_index[i];
+            // similar as in WellFilterCake.cpp:148
+            const auto& connection_rates = perfdata.phase_rates;
+            const double water_rate = std::max(0.0, connection_rates[i * np + water_index]);
+            WI_fluxes[cell_index] = water_rate;
+        }
+
+        const auto& connection = connections.getFromGlobalIndex(wellinfo_.global_index);// probably wrong
+        auto& filter_cake = connection.getFilterCake();
+        has_filtercake_ = connection.filterCakeActive();
+        if (has_filtercake_) {
+            const double poro = filter_cake.poro;
+            const double perm = filter_cake.perm;
+            filtercake_poro_ = poro;
+            filtercake_perm_ = perm;
+
+            std::map<int, double> reservoir_areas;
+            std::map<int, double> reservoir_flux;
+            if((leakof_.size() > 0)) {//should be first step with seed fracture is clean could have used rates from solve
+                assert(leakof_.size() == fracture_pressure_.size());
+                ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+                for (auto& element : Dune::elements(grid_->leafGridView())) {
+                    int eIdx = mapper.index(element);
+                    auto geom = element.geometry();
+                    double area = geom.volume(); // is the area of this face
+                    int res_cell = reservoir_cells_[eIdx];
+                    reservoir_areas[res_cell] += area;    
+                    double dp = (fracture_pressure_[eIdx] - reservoir_pressure_[eIdx]);
+                    double trans = leakof_[eIdx];
+                    double flux = trans*dp;
+                    reservoir_flux[res_cell] += flux;
+                    double dh =  flux/(area*(1-filtercake_poro_));
+                    filtercake_thikness_[eIdx] += dh;
+                }
+
+            }
+
+            /// for setting or controling the fluxes between multiphase and single phase
+            ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+            for (const auto& [res_cell, flux] : reservoir_flux) {
+            //for (auto& element : Dune::elements(grid_->leafGridView())) {
+                //int eIdx = mapper.index(element);   
+                //int res_cell = reservoir_cells_[eIdx];
+                if(reservoir_areas.find(res_cell) == reservoir_areas.end()){
+                    std::cout << "Reservoir area not found for element index " << res_cell << std::endl;
+                    continue;
+                }
+                double frac_flux = reservoir_flux[res_cell];
+                if(res_cell != wellinfo_.well_cell){
+                    if(std::abs(flux - WI_fluxes[res_cell]) > 0){
+                        std::cout << "Fracture flux differs from flow flux " << res_cell << std::endl;
+                        std::cout << "Flux: frac " << frac_flux << " vs res " << WI_fluxes[res_cell] << std::endl;
+                    }
+                } else {
+                    std::cout << "Total WI flux " << WI_fluxes[res_cell] << " for cell " << res_cell
+                              << " matches fracture flux " << frac_flux << std::endl;//" for element index " << eIdx << std::endl;
+                } 
+                //double res_area = reservoir_areas[res_area];
+                // To do use multiphase flux
+                //double flux = reservoir_flux[res_area];
+                //double dh =  flux/(res_area*(1-filtercake_poro_));
+                //filtercake_thikness_[eIdx] += dh;
+            }
+        }
+    }
+  
+
 
 Dune::BlockVector<Dune::FieldVector<double, 3>> Fracture::all_slips() const{
     Dune::BlockVector<Dune::FieldVector<double, 3>> slips(grid_->leafGridView().size(0));
@@ -440,6 +519,7 @@ void Fracture::writemulti(double time) const
     // need to have copies in case of async outout (and interface to functions)
     std::vector<double> K1 = this->stressIntensityK1();
     std::vector<double> fracture_pressure(numFractureCells(),0.0);
+    std::vector<double> filtercake_thikness = filtercake_thikness_;//.size(),0.0);
     std::vector<double> reservoir_pressure = reservoir_pressure_;//.size(),0.0);
     std::vector<double> reservoir_dist = reservoir_dist_;//.size(),0.0);
     std::vector<double> reservoir_perm = reservoir_perm_;//.size(),0.0);
@@ -499,6 +579,9 @@ void Fracture::writemulti(double time) const
     }
     if (reservoir_pressure.size() > 0) {
         vtkmultiwriter_->attachScalarElementData(reservoir_pressure, "ReservoirPressure");
+    }
+    if (filtercake_thikness.size() > 0) {
+        vtkmultiwriter_->attachScalarElementData(filtercake_thikness, "FilterCakeThickness");
     }
     if (reservoir_traction.size() > 0) {
         vtkmultiwriter_->attachScalarElementData(reservoir_traction, "ReservoirTraction");
@@ -1303,8 +1386,21 @@ void Fracture::updateLeakoff()
     for (auto& element : Dune::elements(grid_->leafGridView())) {
         const int eIdx = mapper.index(element);
         const auto geom = element.geometry();
-        leakof_[eIdx] = reservoir_mobility_[eIdx] * reservoir_perm_[eIdx] * geom.volume() /
+        double area = geom.volume();
+        double res_mob =reservoir_mobility_[eIdx]; 
+        leakof_[eIdx] = res_mob * reservoir_perm_[eIdx] * area /
                         reservoir_dist_[eIdx];
+        if(has_filtercake_){
+            double invtrans =  1/leakof_[eIdx];
+            if(filtercake_thikness_[eIdx] > 0.0){
+                double fitercaketrans = res_mob * filtercake_perm_ * area /
+                        filtercake_thikness_[eIdx];
+                invtrans += 1/fitercaketrans;
+            //assert(filtercake_perm_ > 0.0);
+            //assert(filtercake_thikness_[eIdx] > 0.0);
+            }
+            leakof_[eIdx] = 1/invtrans;
+        }
     }
 }
 

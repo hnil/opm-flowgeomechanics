@@ -305,7 +305,10 @@ RegularTrimesh::RegularTrimesh(const double radius,
     , axis2_(RegularTrimesh::normalize(axis2))
     , edgelen_(edgelen)
 {
-    const double R2 = radius * radius;
+    double R2 = radius * radius;
+    // NB to be checked
+    double scale=std::min(edgelen_[0], edgelen_[1]);
+    R2 /= (scale*scale);
     const double denom2 = (5.0 / 4.0) - (axis1_[0] * axis2_[0] + axis1_[1] * axis2_[1] + axis1_[2] * axis2_[2]);
 
     // const double denom2 = 2 * (1 - axis1_[0] * axis2_[0] -

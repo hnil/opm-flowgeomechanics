@@ -159,12 +159,12 @@ namespace Opm{
             if(problem.hasFractures() && fracturemodel_){
                 // write first solution in standard format
                 // this may ad some extra output of static variables
-                /* int reportStepIdx = simulator_.episodeIndex();
+                int reportStepIdx = simulator_.episodeIndex();
                 if(reportStepIdx==1){
-                    fracturemodel_->write(reportStepIdx);
+                    //fracturemodel_->write(reportStepIdx);
                     // hack to get correct number of fracture output
                     fracturemodel_->writemulti(0.0);
-                } */
+                } 
                 double time = simulator_.time();
                 fracturemodel_->writemulti(time);
             }
