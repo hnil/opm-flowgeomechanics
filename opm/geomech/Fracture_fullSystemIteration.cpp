@@ -4,6 +4,8 @@
 #include <string>
 #include <tuple>
 #include <vector>
+#include <fstream>
+
 
 #include <dune/common/indices.hh> // needed for _0, _1, etc.
 //
@@ -21,6 +23,7 @@
 
 
 using namespace std;
+
 namespace
 {
 static int DEBUG_COUNT = 0;
@@ -345,6 +348,7 @@ bool
 Fracture::fullSystemIteration(const double tol)
 // ----------------------------------------------------------------------------
 {
+
     ++DEBUG_COUNT;
     OPM_TIMEFUNCTION();
     min_width_ = prm_.get<double>("solver.min_width"); // min with only used for flow calculations
@@ -364,6 +368,7 @@ Fracture::fullSystemIteration(const double tol)
 
     VectorHP dx = x;
     dx = 0; // gradient of 'x' (which we aim to compute below)
+
 
     // set right hand side
     VectorHP rhs {x}; // same size as system, content set below
@@ -400,7 +405,7 @@ Fracture::fullSystemIteration(const double tol)
     const auto& M = *pressure_matrix_;
     const auto& C = *coupling_matrix_;
     const auto I = makeIdentity(A.N(), numWellEquations(), 1, closed_cells);
-
+        
     // system Jacobian (with cross term)  @@ should S be included as a member variable of Fracture?
     SystemMatrix S {{A, I}, // mechanics system (since A is negative, we leave I positive here)
                     {C, M}}; // flow system
