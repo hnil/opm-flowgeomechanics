@@ -196,13 +196,14 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             const int MAX_NUM_COARSENING = prm_.get<int>("solver.max_num_coarsening"); // should be enough for all practical purposes
             const int numcell_threshold = prm_.get<int>("solver.numcell_threshold");
             auto [grid, fsmap, bmap] =
-            trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources, numcell_threshold); // well cells kept intact!
+            trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources); // well cells kept intact!
+            grid_mesh_map_ = fsmap;
             setFractureGrid(std::move(grid)); // true -> coarsen interior
             // generate the inverse map of fsmap_ (needed below)
             std::vector<size_t> fsmap_inv(trimesh_->numCells(), -1);
             for (int i = 0; i != fsmap.size(); ++i)
-                if (fsmap[i] != -1)
-                    fsmap_inv[fsmap[i]] = i;
+                if (size(fsmap[i]) == 1) // a fine-scale cell
+                    fsmap_inv[fsmap[i].front()] = i;
 
             // update indices for well sources to the correct cells in the new grid
             well_source_.clear();

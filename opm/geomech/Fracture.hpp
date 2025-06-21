@@ -360,7 +360,9 @@ private:
     Point3D surfaceMap(double x, double y);
 
     std::unique_ptr<GridStretcher> grid_stretcher_; //@@ experimental, for stretching grids
-    std::unique_ptr<RegularTrimesh> trimesh_; // @@ experimental, implicitly defined grids
+    std::unique_ptr<Opm::RegularTrimesh> trimesh_; // @@ experimental, implicitly defined grids
+    std::vector<std::vector<int>> grid_mesh_map_; // @@ index mapping from cells in grid_ to trimesh_.  NB: many-to-many!
+
   
     std::unique_ptr<Grid> grid_;
     Point3D origo_;

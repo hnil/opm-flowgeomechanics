@@ -134,6 +134,7 @@ Fracture::init(const std::string& well,
           well_source_.push_back(trimesh_->linearCellIndex(cell));
 
       auto [grid, fsmap, bmap] = trimesh_->createDuneGrid(1, well_source_cellref_);
+      grid_mesh_map_ = fsmap;
       
       setFractureGrid(std::move(grid)); // create the physical grid from trimesh
       

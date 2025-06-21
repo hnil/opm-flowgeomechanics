@@ -127,10 +127,10 @@ public:
     // ---------------------- Functions for outputting other grid types -------------
 
     // first return value is the Dune grid, second is a map from Dune cells to
-    // Trimesh cells (only for those who have a direct counterpart), third is a
-    // map from TriMesh boundary cells to the relevant boundary cell in the Dune
-    // grid (not always trivial, due to smoothing cells)
-    std::tuple<std::unique_ptr<Grid>, std::vector<int>, std::map<int, int>>
+    // Trimesh cells, third is a map from TriMesh boundary cells to the relevant
+    // boundary cell in the Dune grid (not always trivial, due to smoothing
+    // cells)
+    std::tuple<std::unique_ptr<Grid>, std::vector<std::vector<int>>, std::map<int, int>>
     createDuneGrid(const int coarsen_levels = 0,
                    const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(),
                    const bool add_smoothing_triangles = true,
@@ -142,15 +142,15 @@ public:
     RegularTrimesh coarsen(bool strict = false) const;
 
     // -------------- Functions for getting the triangles of the mesh --------------
-    std::pair<std::vector<std::array<unsigned int, 3>>, std::vector<int>> getTriangles() const;
-    std::pair<std::vector<std::array<unsigned int, 3>>, std::vector<int>>
+    std::pair<std::vector<std::array<unsigned int, 3>>, std::vector<std::vector<int>>> getTriangles() const;
+    std::pair<std::vector<std::array<unsigned int, 3>>, std::vector<std::vector<int>>>
     getMultiresTriangles(const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(),
                         const int max_levels = 5, const int cellnum_threshold = 10) const;
 //                        const int max_levels, const int cellnum_threshold ) const;
 //                         
 
     // static functions
-    static std::array<CellRef, 4> coarse_to_fine(const CellRef& cell);
+    static std::vector<CellRef> coarse_to_fine(const CellRef& cell, const int levels=1);
     static NodeRef coarse_to_fine(const NodeRef& node, const int levels=1);
     static CellRef fine_to_coarse(const CellRef& cell, const int levels=1);
     static std::vector<CellRef> inner_ring_cells();
