@@ -312,7 +312,7 @@ bool Fracture::fullSystemIteration(const double tol)
 // ----------------------------------------------------------------------------
 {
   OPM_TIMEFUNCTION();
-  min_width_ = prm_.get<double>("solver.min_width"); // min with only used for flow calculations
+  //min_width_ = prm_.get<double>("solver.min_width"); // min with only used for flow calculations
   const double max_width = prm_.get<double>("solver.max_width");
 
   // update pressure matrix with the current values of `fracture_width_` and

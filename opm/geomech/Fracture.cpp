@@ -74,6 +74,7 @@ Fracture::init(const std::string& well,
 {
     OPM_TIMEFUNCTION();
     prm_ = prm;
+    min_width_ = prm_.get<double>("config.min_width",1e-3);
     wellinfo_ = WellInfo({well, perf, well_cell, global_index, segment, perf_range});
 
     origo_ = origo;
@@ -546,7 +547,7 @@ void Fracture::writemulti(double time) const
     }
 
     for(size_t i=0; i < fracture_width_.size(); ++i){
-        fracture_width[i] = fracture_width_[i][0];
+        fracture_width[i] = fracture_width_[i][0]+min_width_;
         fracture_pressure[i] = fracture_pressure_[i][0];
         reservoir_cells[i] = reservoir_cells_[i];// only converts to double
         reservoir_traction[i] = ddm::tractionSymTensor(reservoir_stress_[i],cell_normals_[i]);
