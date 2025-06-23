@@ -395,7 +395,7 @@ Fracture::fullSystemIteration(const double tol)
                          fracture_head,
                          fracture_width_,
                          closed_cells,
-                         min_width_);
+                         Zmin_width_);
     // setup the full system
     const auto& M = *pressure_matrix_;
     const auto& C = *coupling_matrix_;
