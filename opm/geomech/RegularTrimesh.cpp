@@ -305,15 +305,13 @@ RegularTrimesh::RegularTrimesh(const double radius,
     , axis2_(RegularTrimesh::normalize(axis2))
     , edgelen_(edgelen)
 {
-    double R2 = radius * radius;
     // NB to be checked
-    double scale=std::min(edgelen_[0], edgelen_[1]);
-    R2 /= (scale*scale);
-    const double denom2 = (5.0 / 4.0) - (axis1_[0] * axis2_[0] + axis1_[1] * axis2_[1] + axis1_[2] * axis2_[2]);
-
-    // const double denom2 = 2 * (1 - axis1_[0] * axis2_[0] -
-    //                                axis1_[1] * axis2_[1] -
-    //                                axis1_[2] * axis2_[2]);
+    const double scale=std::min(edgelen_[0], edgelen_[1]);
+    const double R2 = (radius * radius) / (scale * scale);
+    
+    const double denom2 = (5.0 / 4.0) - (axis1_[0] * axis2_[0] +
+                                         axis1_[1] * axis2_[1] +
+                                         axis1_[2] * axis2_[2]);
 
     const int c = ceil(max(sqrt(R2 / denom2), radius));
 
@@ -627,34 +625,33 @@ RegularTrimesh::nodeCoords() const
 }
 
 //------------------------------------------------------------------------------
-pair<vector<array<unsigned int, 3>>, vector<vector<int>>>
+pair<vector<array<NodeRef, 3>>, vector<vector<CellRef>>>
 RegularTrimesh::getTriangles() const
 //------------------------------------------------------------------------------
 {
-    vector<array<unsigned int, 3>> result;
-    for (const auto& cell : cellNodesLinear())
-        result.push_back({(unsigned int)cell[0], (unsigned int)cell[1], (unsigned int)cell[2]});
+    vector<array<NodeRef, 3>> result;
+    vector<vector<CellRef>> trivialmap;
 
-    vector<vector<int>> trivialmap(result.size());
-    for (size_t i = 0; i != result.size(); ++i)
-        trivialmap[i].push_back(i);
-    
+    const auto cells = cellIndices();
+    for (const auto& cref : cells) {
+        result.push_back(cellNodes(cref));
+        trivialmap.push_back(vector<CellRef> { cref });
+    }
+        
     return make_pair(result, trivialmap);
 }
 
 //------------------------------------------------------------------------------
+
 pair<vector<array<unsigned int, 3>>, vector<vector<int>>>
 RegularTrimesh::getMultiresTriangles(const vector<CellRef>& fixed_cells, const int max_levels, const int cellnum_threshold) const        
 //------------------------------------------------------------------------------
 {
-    struct Entry {
-        array<NodeRef, 3> triangle;
-        vector<CellRef> cells; // finest-level cells that this triangle covers
-    };
-    vector<Entry> entries;
     RegularTrimesh mesh(*this);
     const int CELLNUM_THRESHOLD = cellnum_threshold;
     int level = 0;
+    vector<array<NodeRef, 3>> result_triangles;
+    vector<vector<CellRef>> result_cells;
 
     while (mesh.numCells() > CELLNUM_THRESHOLD && level < max_levels) {
 
@@ -664,49 +661,28 @@ RegularTrimesh::getMultiresTriangles(const vector<CellRef>& fixed_cells, const i
         auto& uncoarsened_cells = coarsened.second;
 
         // add uncoarsened cells into result
-        for (const auto& cell : uncoarsened_cells) 
-            for (const auto& tri : tesselate_coarsecell(cell, mesh, level == 0))
-                entries.push_back({ { coarse_to_fine(tri[0], level - 1),
-                                      coarse_to_fine(tri[1], level - 1),
-                                      coarse_to_fine(tri[2], level - 1) },
-                                    coarse_to_fine(cell, level) });
+        for (const auto& cell : uncoarsened_cells) {
+            for (const auto& tri : tesselate_coarsecell(cell, mesh, level == 0)) {
+                result_triangles.push_back({coarse_to_fine(tri[0], level - 1),
+                                            coarse_to_fine(tri[1], level - 1),
+                                            coarse_to_fine(tri[2], level - 1)});
+                result_cells.push_back(coarse_to_fine(cell, level));
+            }
+        }
         // increment level and swap meshes
         level++;
         mesh.swap(new_mesh);
     }
     // add remaining cells into result
-    for (const auto& cell : mesh.cellIndices()) 
-        for (const auto& tri : tesselate_coarsecell(cell, mesh, level == 0))
-            entries.push_back({ { coarse_to_fine(tri[0], level - 1),
-                                  coarse_to_fine(tri[1], level - 1),
-                                  coarse_to_fine(tri[2], level - 1) },
-                                coarse_to_fine(cell, level) });
-
-    // return result after having translated NodeRefs and CellRefs to indices.
-    // Since the calls to `noderefs_to_indices_` and `cellrefs_to_indices_` are expensive,
-    // we will do it only once for all entries.
-    vector<NodeRef> tmp_nodes;
-    vector<CellRef> tmp_cells;
-    for (const auto& entry : entries) {
-        tmp_cells.insert(tmp_cells.end(), entry.cells.begin(), entry.cells.end());
-        tmp_nodes.insert(tmp_nodes.end(), {entry.triangle[0], entry.triangle[1], entry.triangle[2]});
+    for (const auto& cell : mesh.cellIndices())  {
+        for (const auto& tri : tesselate_coarsecell(cell, mesh, level == 0)) {
+            result_triangles.push_back({coarse_to_fine(tri[0], level - 1),
+                                        coarse_to_fine(tri[1], level - 1),
+                                        coarse_to_fine(tri[2], level - 1)});
+            result_cells.push_back(coarse_to_fine(cell, level));
+        }
     }
-    // identify and arrange node indices
-    const auto triangles_ixs = noderefs_to_indices_(tmp_nodes);
-    vector<array<unsigned int, 3>> result_triangles;
-    for (size_t i = 0; i != triangles_ixs.size(); i += 3)
-        result_triangles.push_back(
-            {(unsigned int)triangles_ixs[i], (unsigned int)triangles_ixs[i + 1], (unsigned int)triangles_ixs[i + 2]});
-
-    // identify and arrange cell indices
-    const auto cells_ixs = cellrefs_to_indices_(tmp_cells);
-    auto cells_ixs_iter = cells_ixs.begin();
-    vector<vector<int>> result_cells;
-    for (size_t i = 0; i != entries.size(); ++i) {
-        const int N = entries[i].cells.size();
-        result_cells.push_back(vector<int>(cells_ixs_iter, cells_ixs_iter + N));
-        cells_ixs_iter += N;
-    }
+    
     return make_pair(result_triangles, result_cells);
 }
 
@@ -775,7 +751,29 @@ RegularTrimesh::cellrefs_to_indices_(const vector<CellRef>& cellrefs) const
 }
 
 //------------------------------------------------------------------------------
-std::tuple<std::unique_ptr<Grid>, std::vector<std::vector<int>>, std::map<int, int>>    
+vector<array<unsigned int, 3>>
+RegularTrimesh::ref2index_(const vector<array<NodeRef, 3>>& vec) const
+//------------------------------------------------------------------------------    
+{
+    //  collect all NodeRefs in one vector
+    vector<NodeRef> all_nodes;
+    for (const auto& tri : vec)
+        all_nodes.insert(all_nodes.end(), tri.begin(), tri.end());
+
+    // compute linear indices
+    const vector<unsigned int> node_indices = noderefs_to_indices_(all_nodes);
+
+    // return vector with indices rather than NodeRef
+    vector<array<unsigned int, 3>> result;
+    for (size_t i = 0; i != vec.size(); ++i) 
+        result.push_back({(node_indices[3 * i]),
+                          (node_indices[3 * i + 1]),
+                          (node_indices[3 * i + 2])});
+    return result;
+}
+
+//------------------------------------------------------------------------------
+std::tuple<std::unique_ptr<Grid>, std::vector<std::vector<CellRef>>, std::map<CellRef, int>>    
 RegularTrimesh::createDuneGrid(const int coarsen_levels,
                                const vector<CellRef>& fixed_cells,
                                const bool add_smoothing_triangles,
@@ -789,34 +787,33 @@ RegularTrimesh::createDuneGrid(const int coarsen_levels,
         factory.insertVertex(Dune::FieldVector<double, 3> {node[0], node[1], node[2]});
 
     // define triangles
+
     const auto tmp = coarsen_levels > 0 ? getMultiresTriangles(fixed_cells, coarsen_levels, cellnum_threshold) : getTriangles();
+    const auto& triangles = ref2index_(tmp.first); // vector<array<uint, 3>>
     const auto& fsmap = tmp.second;
 
-    for (const auto& tri : tmp.first)
+    for (const auto& tri : triangles)
         factory.insertElement(Dune::GeometryTypes::simplex(2),
                               vector<unsigned int> {tri[0], tri[1], tri[2]});
 
     // create map from trimesh boundary cells to Dune grid cells
-    std::map<int, int> boundary_map;
-    std::vector<size_t> fsmap_inv(numCells(), -1);
+    std::map<CellRef, int> boundary_map, fsmap_inv;
     for (int i = 0; i != fsmap.size(); ++i)
-        if (size(fsmap[i]) == 1) // there's a one-to-one mapping, i.e. this is already a fine-scale cell
+        if (size(fsmap[i]) == 1) // there's a one-to-one mapping -> already a fine-scale cell
             fsmap_inv[fsmap[i].front()] = i; // mapping from Trimesh to Dune grid cells
-    const auto bcells = cellrefs_to_indices_(boundaryCells());
-    for (const auto& cell : bcells)
-        boundary_map[cell] = fsmap_inv[cell]; // mapping from Dune grid cells to Trimesh cells
+    for (const auto& cell : boundaryCells())
+        boundary_map[cell] = fsmap_inv[cell]; // mapping from Trimesh cells to Dune grid cells
 
     if (add_smoothing_triangles) {
         const auto smoothing_triangles = boundary_smoothing_triangles_();
-        int smoothing_cell_index = fsmap.size();
         for (const auto& tri : smoothing_triangles) {
             factory.insertElement(Dune::GeometryTypes::simplex(2),
                                   vector<unsigned int> {tri.first[0], tri.first[1], tri.first[2]});
             // make the associated boundary cells in the TriMesh map to the
             // smoothing triangle in the Dune grid
-            boundary_map[linearCellIndex(tri.second[0])] = smoothing_cell_index;
-            boundary_map[linearCellIndex(tri.second[1])] = smoothing_cell_index;
-            ++smoothing_cell_index;
+            boundary_map[tri.second[0]] = fsmap.size();
+            boundary_map[tri.second[1]] = fsmap.size();
+            fsmap.push_back(vector<CellRef> {tri.second[0], tri.second[1]});
         }
     }
     return make_tuple(factory.createGrid(), fsmap, boundary_map);
@@ -828,7 +825,7 @@ RegularTrimesh::edgeNodes(const EdgeRef& e) const
 // ----------------------------------------------------------------------------
 {
     return e[2] == 0 ? make_pair(NodeRef {e[0], e[1]}, NodeRef {e[0] + 1, e[1]})
-        : e[2] == 1  ? make_pair(NodeRef {e[0], e[1]}, NodeRef {e[0], e[1] + 1})
+         : e[2] == 1 ? make_pair(NodeRef {e[0], e[1]}, NodeRef {e[0], e[1] + 1})
                      : make_pair(NodeRef {e[0], e[1] + 1}, NodeRef {e[0] + 1, e[1]});
 }
 
@@ -1417,6 +1414,7 @@ expand_to_criterion(const RegularTrimesh& mesh,
     DEBUG_CURRENT_GRID_ITERATION_COUNT=0; //@@ same
 
 
+
     // determine starting level
     //const int target_cellcount = 50; // target number of cells in the final mesh
     //const int cellcount_threshold = 4*target_cellcount; // target number of cells in the initial mesh
@@ -1461,10 +1459,10 @@ expand_to_criterion(const RegularTrimesh& mesh,
 
         vector<CellRef> expand_cells;
         
-        if(working_mesh.numCells() > max_cellcount) {
-            cout << " ** ----- MAXIMUM CELL COUNT REACHED, STOPPING EXPANSION ----- **" << endl;
-            break;
-        }   
+        // if(working_mesh.numCells() > max_cellcount) {
+        //     cout << " ** ----- MAXIMUM CELL COUNT REACHED, STOPPING EXPANSION ----- **" << endl;
+        //     break;
+        // }   
 
         for (size_t i = 0; i != bnd_scores.size(); ++i)
             if (bnd_scores[i] > threshold)

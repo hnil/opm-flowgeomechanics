@@ -130,7 +130,7 @@ public:
     // Trimesh cells, third is a map from TriMesh boundary cells to the relevant
     // boundary cell in the Dune grid (not always trivial, due to smoothing
     // cells)
-    std::tuple<std::unique_ptr<Grid>, std::vector<std::vector<int>>, std::map<int, int>>
+    std::tuple<std::unique_ptr<Grid>, std::vector<std::vector<CellRef>>, std::map<CellRef, int>>
     createDuneGrid(const int coarsen_levels = 0,
                    const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(),
                    const bool add_smoothing_triangles = true,
@@ -142,8 +142,21 @@ public:
     RegularTrimesh coarsen(bool strict = false) const;
 
     // -------------- Functions for getting the triangles of the mesh --------------
-    std::pair<std::vector<std::array<unsigned int, 3>>, std::vector<std::vector<int>>> getTriangles() const;
-    std::pair<std::vector<std::array<unsigned int, 3>>, std::vector<std::vector<int>>>
+
+    // Returns a pair of vectors, first is the triangles, second is the set of
+    // triangles in the Trimesh covered by each triangle (for
+    // `getTriangles`, this is a trivial one-to-one mapping, but not for its
+    // sister function `getMultiresTriangles`).
+    std::pair<std::vector<std::array<NodeRef, 3>>,std::vector<std::vector<CellRef>>>
+    getTriangles() const;
+
+    // Returns a pair of vectors, first is the triangles, second is the set of
+    // triangles in the Trimesh covered by each triangle (note that this is a
+    // many-to-many relationship, since when a coarse triangle is split in two
+    // (for conformity reasons), each of the two resulting triangles will be
+    // considered "covering" all the Trimesh triangles covered by the coarse
+    // triangle before splitting.
+    std::pair<std::vector<std::array<NodeRef, 3>>, std::vector<std::vector<CellRef>>>
     getMultiresTriangles(const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(),
                         const int max_levels = 5, const int cellnum_threshold = 10) const;
 //                        const int max_levels, const int cellnum_threshold ) const;
@@ -164,6 +177,8 @@ private:
     std::vector<CellRef> interior_coarsegrid_() const; // all coarse cells fully covered by fine ones
     std::vector<unsigned int> noderefs_to_indices_(const std::vector<NodeRef>& noderefs) const;
     std::vector<unsigned int> cellrefs_to_indices_(const std::vector<CellRef>& cellrefs) const;
+    std::vector<std::array<unsigned int, 3>> ref2index_(const std::vector<std::array<NodeRef, 3>>& vec) const;
+    
     std::vector<std::pair<std::array<unsigned int, 3>,
                           std::array<CellRef, 2>>> boundary_smoothing_triangles_() const;
 
