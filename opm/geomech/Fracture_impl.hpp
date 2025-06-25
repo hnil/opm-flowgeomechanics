@@ -171,7 +171,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         // ----------------------------------------------------------------------------
 
         fracture_width_ = 1e-2; // Ensure not completely closed
-        fracture_pressure_ = 0.0;
+        fracture_pressure_ = 0.0; // @@ no effect, due to call to `normalFracturetraction`
 
         // start by assuming pressure equal to confining stress (will also set
         // fracture_pressure_ to its correct size
@@ -184,11 +184,14 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
 
         // local function taking a trimesh, updates the Fracture object with it and
         // runs a simulation.  Its return value should be a vector of doubles:
-        auto score_function = [&](const RegularTrimesh& trimesh, const int level) -> std::vector<double> {
+        auto score_function =
+            [&](const RegularTrimesh& trimesh, const int level) -> std::vector<double> {
+
             const int max_iter = 100;
             const double tol = 1e-8;
             *trimesh_ = trimesh;
-            std::vector<CellRef> wsources = well_source_cellref_; // save well sources before grid change
+            // save well sources before grid change
+            std::vector<CellRef> wsources = well_source_cellref_; 
             for (auto& cell : wsources) 
                 cell = RegularTrimesh::fine_to_coarse(cell, level);
             
@@ -200,17 +203,15 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             grid_mesh_map_ = fsmap;
             setFractureGrid(std::move(grid)); // true -> coarsen interior
             // generate the inverse map of fsmap_ (needed below)
-            std::vector<size_t> fsmap_inv(trimesh_->numCells(), -1);
+            std::map<CellRef, size_t> fsmap_inv;
             for (int i = 0; i != fsmap.size(); ++i)
                 if (size(fsmap[i]) == 1) // a fine-scale cell
                     fsmap_inv[fsmap[i].front()] = i;
 
             // update indices for well sources to the correct cells in the new grid
             well_source_.clear();
-            for (const auto& cell : wsources) {
-                const size_t mesh_ix = trimesh_->linearCellIndex(cell);
-                well_source_.push_back(fsmap_inv[mesh_ix]);
-            }
+            for (const auto& cell : wsources) 
+                well_source_.push_back(fsmap_inv[cell]);
 
             // Update the rest of the fracture object to adapt to grid change
             updateReservoirCells(cell_search_tree);
@@ -232,14 +233,13 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             const std::vector<CellRef> boundary_cells = trimesh_->boundaryCells();
             std::vector<double> result(boundary_cells.size());
             for (size_t i = 0; i != result.size(); ++i){
-                double KImax = reservoir_cstress_[bmap[trimesh_->linearCellIndex(boundary_cells[i])]];
-                double KI = K1_not_nan[bmap[trimesh_->linearCellIndex(boundary_cells[i])]];
+                const double KImax = reservoir_cstress_[bmap[boundary_cells[i]]];
+                const double KI = K1_not_nan[bmap[boundary_cells[i]]];
                 result[i] = KI/KImax;
             }
             return result;
         };
 
-        
         //const double K1max = prm_.get<double>("KMax");
         const double threshold = 1.0;
         const std::vector<CellRef> fixed_cells = well_source_cellref_;
