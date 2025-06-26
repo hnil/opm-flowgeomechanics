@@ -43,6 +43,7 @@ namespace Opm{
         // solve method for fracture
         fracture_param.put("fractureparam.method.iterate", true);
         fracture_param.put("fractureparam.method.max_it", 3);
+        fracture_param.put("fractureparam.method.tolerance", 1e-4);
 
         //
         fracture_param.put("fractureparam.reduce_boundary", false);
@@ -56,10 +57,10 @@ namespace Opm{
         // fracture_param.put("fractureparam.config.cell_ijk", std::vector<int>{8, 8, 10});
         // fracture_param.put("fractureparam.config.normal", std::vector<double>{0, 1, 0});
         fracture_param.put("fractureparam.config.initial_fracture_width", 0.0);
-        fracture_param.put("fractureparam.config.num_exp", 3);
-        fracture_param.put("fractureparam.config.num_lin", 2);
-        fracture_param.put("fractureparam.config.axis_scale", 1.50);
-
+        fracture_param.put("fractureparam.config.min_width", 0.0);
+        //fracture_param.put("fractureparam.config.num_exp", 3);
+        //fracture_param.put("fractureparam.config.num_lin", 2);
+        //fracture_param.put("fractureparam.config.axis_scale", 1.50);
         // propagation properties
         //fracture_param.put("fractureparam.solver.method", "if_propagate_trimesh"s);
         fracture_param.put("fractureparam.solver.method", "if_propagate_trimesh"s);
@@ -69,6 +70,7 @@ namespace Opm{
         fracture_param.put("fractureparam.solver.rfac", 0.1);
         fracture_param.put("fractureparam.solver.max_expand_iter", 20);
         fracture_param.put("fractureparam.solver.max_iter", 100);
+        fracture_param.put("fractureparam.solver.tolerance", 1e-8);
         fracture_param.put("fractureparam.solver.damping", 1e0);
         fracture_param.put("fractureparam.solver.min_width", 0.0);
         fracture_param.put("fractureparam.solver.max_width", 1e10);

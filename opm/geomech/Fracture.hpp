@@ -120,7 +120,7 @@ public:
     void removeCells();
 
     template <class TypeTag, class Simulator>
-    void updateReservoirProperties(const Simulator& simulator, bool init_constant_vals=false)
+    void updateReservoirProperties(const Simulator& simulator, bool init_constant_vals=false,bool update_filtercake=true)
     {
         // if `init_contant_vals` is true, the fields that should normally not
         // change, i.e.  E_, nu_ and reservoir_perm_ will be updated. This should
@@ -228,6 +228,14 @@ public:
         const auto& well = schedule[reportStepIdx].wells(wellinfo_.name);
         //const auto& well = problem.wellModel().getWellEcl(wellinfo_.name);
         const auto& connections = well.getConnections();
+        total_WI_well_ = 0.0;
+        for(const auto& conn : connections){
+          if(conn.state() == Connection::State::OPEN){
+              continue;
+          }
+          assert(conn.CF() >= 0);
+          total_WI_well_ += conn.CF();
+        }
         //const auto& connection = connections[wellinfo_.perf];// probably wrong
         if(connections.hasGlobalIndex(wellinfo_.global_index) == false){
             std::cerr << "Warning: Well connection with global index " << wellinfo_.global_index << " not found in schedule step " << reportStepIdx << std::endl;
@@ -241,7 +249,13 @@ public:
             return;
         }
         const auto& wellstate = wellstates[*well_index];
-        updateFilterCakeProps(connections, wellstate);
+        if(update_filtercake){
+            updateFilterCakeProps(connections, wellstate);
+        } else {
+          // remap
+          int ncf = reservoir_cells_.size();
+          filtercake_thikness_.resize(ncf, 0.0);
+        }
     };
     void updateFilterCakeProps(const Opm::WellConnections& connections,
                               const Opm::SingleWellState<double>& wellstate);    
@@ -445,6 +459,7 @@ private:
     double gravity_{0.0};//{9.81}; // gravity acceleration, used for leakoff calculations
     std::vector<double> fracture_dgh_; // gravity contribution to fracture pressure, used for leakoff calculations  
     PropertyTree prm_;
+    double total_WI_well_{0.0}; // total well index for the well, used for leakoff calculations
 };
 } // namespace Opm
 

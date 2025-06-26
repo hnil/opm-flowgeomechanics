@@ -404,8 +404,11 @@ bool Fracture::fullSystemIteration(const double tol)
   }
   // the following is a heuristic way to limit stepsize to stay within convergence radius
   const double damping = prm_.get<double>("solver.damping");
-  const double step_fac = estimate_step_fac(x, dx)*damping;
-  //std::cout << "fac: " << step_fac << std::endl;
+  const double step_fac = damping;//estimate_step_fac(x, dx)*damping;
+  if(nlin_verbosity > 1){
+    std::cout << "fac: " << step_fac << std::endl;
+  }
+  dx *= step_fac;
   auto& dx0 = dx[_0];
   double max_dwidth = prm_.get<double>("solver.max_dwidth");
   //for(auto& dx0v: dx0){
@@ -419,9 +422,12 @@ bool Fracture::fullSystemIteration(const double tol)
     dx1[i][0] = std::max(-max_dp, std::min(max_dp, dx1[i][0]));
   }
 
-  dx *= step_fac;
+  
   x += dx;
-
+  if(nlin_verbosity > 1){
+    //std::cout << "after: x:  " << x[_0].infinity_norm() << " " << x[_1].infinity_norm() << std::endl;
+    std::cout << "after: dx: " << dx[_0].infinity_norm() << " " << dx[_1].infinity_norm() << std::endl;
+  }
   // copying modified variables back to member variables
   fracture_width_ = x[_0];
   for (int i = 0; i != fracture_width_.size(); ++i){

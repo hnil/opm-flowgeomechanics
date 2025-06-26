@@ -132,7 +132,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             // it with an existing value.
             fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
 
-        const double tol = prm_.get<int>("solver.max_iter"); // 1e-5; // @@
+        const double tol = prm_.get<int>("solver.tolerance"); // 1e-5; // @@
         const int max_iter = prm_.get<int>("solver.max_iter");
         int iter = 0;
 
@@ -169,10 +169,10 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         // ----------------------------------------------------------------------------
     } else if (method == "if_propagate_trimesh") {
         // ----------------------------------------------------------------------------
-
-        fracture_width_ = 1e-2; // Ensure not completely closed
-        fracture_pressure_ = 0.0;
-
+        if(true){
+            fracture_width_ = 1e-3; // Ensure not completely closed
+            fracture_pressure_ = perf_pressure_;
+        }
         // start by assuming pressure equal to confining stress (will also set
         // fracture_pressure_ to its correct size
         normalFractureTraction(fracture_pressure_);
@@ -185,18 +185,18 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         // local function taking a trimesh, updates the Fracture object with it and
         // runs a simulation.  Its return value should be a vector of doubles:
         auto score_function = [&](const RegularTrimesh& trimesh, const int level) -> std::vector<double> {
-            const int max_iter = 100;
-            const double tol = 1e-8;
+            const int max_iter = prm_.get<int>("solver.max_iter");
+            const double tol = prm_.get<double>("solver.tolerance");//,1e-8);
             *trimesh_ = trimesh;
             std::vector<CellRef> wsources = well_source_cellref_; // save well sources before grid change
             for (auto& cell : wsources) 
                 cell = RegularTrimesh::fine_to_coarse(cell, level);
             
             // setup fracture with new grid
-            const int MAX_NUM_COARSENING = 20; // should be enough for all practical purposes
-
+            const int MAX_NUM_COARSENING = prm_.get<int>("solver.max_num_coarsening"); // should be enough for all practical purposes
+            const int numcell_threshold = prm_.get<int>("solver.numcell_threshold");
             auto [grid, fsmap, bmap] =
-            trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources); // well cells kept intact!
+            trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources, numcell_threshold); // well cells kept intact!
             setFractureGrid(std::move(grid)); // true -> coarsen interior
             // generate the inverse map of fsmap_ (needed below)
             std::vector<size_t> fsmap_inv(trimesh_->numCells(), -1);
@@ -213,7 +213,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
 
             // Update the rest of the fracture object to adapt to grid change
             updateReservoirCells(cell_search_tree);
-            updateReservoirProperties<TypeTag, Simulator>(simulator, true);
+            updateReservoirProperties<TypeTag, Simulator>(simulator, true, false);
             initPressureMatrix();
             initFractureWidth();
             initFracturePressureFromReservoir();
@@ -254,20 +254,21 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
     } else if (method == "if_propagate") {
         // ----------------------------------------------------------------------------
         // iterate full nonlinear system until convergence, and expand fracture if necessary
-
-        fracture_width_ = 1e-2; // Ensure not completely closed
-        fracture_pressure_ = 0.0;
+        if(false){
+            fracture_width_ = 1e-2; // Ensure not completely closed
+            fracture_pressure_ = 0.0;
+        }
 
         // start by assuming pressure equal to confining stress (will also set
         // fracture_pressure_ to its correct size
         normalFractureTraction(fracture_pressure_);
-        if (numWellEquations() > 0) // @@ it is implicitly assumed for now that
+        if (numWellEquations() > 0){ // @@ it is implicitly assumed for now that
             // there is just one well equation.  We initializze
             // it with an existing value.
             fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
-
-        const double tol = 1e-8; // 1e-5; // @@
-        const int max_iter = 100;
+        }
+        const int max_iter = prm_.get<int>("solver.max_iter");
+        const double tol = prm_.get<double>("solver.tolerance");//,1e-8);
 
 
         const double efac = prm_.get<double>("solver.efac"); // 2; // @@ heuristic
@@ -364,7 +365,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             // grid has changed its geometry, so we have to recompute discretizations
             updateCellNormals();
             updateReservoirCells(cell_search_tree);
-            updateReservoirProperties<TypeTag, Simulator>(simulator, true);
+            updateReservoirProperties<TypeTag, Simulator>(simulator, true, false);
             initPressureMatrix();
             fracture_matrix_ = nullptr;
 

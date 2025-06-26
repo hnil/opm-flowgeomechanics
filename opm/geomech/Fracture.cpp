@@ -100,7 +100,8 @@ Fracture::init(const std::string& well,
     if (method == "if_propagate_trimesh") {
       //const int trimeshlayers = 4;
       //const double init_scale = prm_.get<double>("config.axis_scale");
-      const double edgelen = init_scale/5; //1;
+      double trires = prm_.get<double>("config.trires");
+      const double edgelen = init_scale/trires; //1;
       const double radius = init_scale;
       const double fac = std::sqrt(3) / 2;
       const std::array<double, 3> ax1 {axis_[0][0], axis_[0][1], axis_[0][2]};
@@ -516,6 +517,7 @@ Fracture::write(int reportStep) const
 
 void Fracture::writemulti(double time) const
 {
+    std::cout<< "Writing fracture data to VTK files at time: " << time << "grid_size" << numFractureCells() << std::endl;
   //vtkmultiwriter_->gridChanged();// need to be called if grid is changed
     // need to have copies in case of async outout (and interface to functions)
     std::vector<double> K1 = this->stressIntensityK1();
@@ -530,6 +532,7 @@ void Fracture::writemulti(double time) const
     std::vector<double> fracture_force(reservoir_stress_.size(),0);
     std::vector<double> reservoir_cells(reservoir_cells_.size(),0.0);
     std::vector<double> fracture_width(fracture_width_.size(),0.0);
+    std::vector<double> flow_width(fracture_width_.size(),0.0);
     std::vector<double> rhs_width(rhs_width_.size(),0.0);
     std::vector<double> well_index(numFractureCells(),0.0);
     std::map<int,double> wellIndMap;
@@ -547,7 +550,8 @@ void Fracture::writemulti(double time) const
     }
 
     for(size_t i=0; i < fracture_width_.size(); ++i){
-        fracture_width[i] = fracture_width_[i][0]+min_width_;
+        fracture_width[i] = fracture_width_[i][0];
+        flow_width[i] = fracture_width_[i][0] + min_width_;
         fracture_pressure[i] = fracture_pressure_[i][0];
         reservoir_cells[i] = reservoir_cells_[i];// only converts to double
         reservoir_traction[i] = ddm::tractionSymTensor(reservoir_stress_[i],cell_normals_[i]);
@@ -606,7 +610,7 @@ void Fracture::writemulti(double time) const
     }
     if (fracture_width.size() > 0) {
         vtkmultiwriter_->attachScalarElementData(fracture_width, "FractureWidth");
-
+        vtkmultiwriter_->attachScalarElementData(flow_width, "FlowWidth");
         vtkmultiwriter_->attachScalarElementData(K1, "stressIntensityK1");
     }
     vtkmultiwriter_->endWrite(false);
@@ -802,273 +806,6 @@ void Fracture::updateReservoirProperties()
     E_ = 1e9;
     this->initFractureWidth();
 }
-
-// void
-// Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& cell_search_tree)
-// {
-//     std::cout << "Solve Fracture Pressure" << std::endl; 
-//     std::string method = prm_.get<std::string>("solver.method");
-//     if(method == "nothing"){
-//     }else if(method == "simple"){
-//         this->solveFractureWidth();
-//         this->solvePressure();
-//     }else if(method == "only_pressure"){
-//         this->solvePressure();
-//     }else if(method == "only_width"){
-//         this->solveFractureWidth();
-//     }else if(method == "iterative"){
-//         int max_it = prm_.get<int>("max_iter");
-//         int it=0;
-//          bool changed = true;
-//         while(changed && (it < max_it)){
-//             initFractureStates(); // ensure initial fracture_width and fracture_pressure
-//                                   // set to something reasonable
-//             auto fracture_width = fracture_width_;
-//             auto fracture_pressure = fracture_pressure_;
-//             this->solveFractureWidth();
-//             // grow fracture
-//             this->solvePressure();
-//             it +=1;
-//             double tol = prm_.get<double>("solver.max_change");
-//             double max_change=0;
-//             for(int i=0;fracture_width_.size(); ++i){
-//                 double diff_width = fracture_width_[i] - fracture_width[i];
-//                 double diff_press = fracture_pressure_[i] - fracture_pressure[i];
-//                 max_change = std::max(max_change,diff_width/1e-2);
-//                 max_change = std::max(max_change,diff_press/1e5);
-//             }
-//             changed = (max_change < tol);
-//         }
-
-//     } else if (method == "if") {
-//       // iterate full nonlinear system until convergence
-//       std::cout << "Solve Fracture Pressure using Iterative Fracture" << std::endl;
-//       fracture_width_ = 1e-2;   // Ensure not completely closed
-
-//       // start by assuming pressure equal to confining stress (will also set
-//       // fracture_pressure_ to its correct size
-//       normalFractureTraction(fracture_pressure_);
-//       if (numWellEquations() > 0) // @@ it is implicitly assumed for now that
-//                                   // there is just one well equation.  We initializze
-//                                   // it with an existing value.
-//         fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
-      
-//       const double tol = 1e-8; //1e-5; // @@
-//       const int max_iter = 100;
-//       int iter = 0;
-      
-//       // solve flow-mechanical system
-//       while (!fullSystemIteration(tol) && iter++ < max_iter) {};
-
-//       // @@ debug
-//       const std::vector<double> K1_not_nan = Fracture::stressIntensityK1(); 
-//       std::vector<double> K1;
-//       for (size_t i = 0; i != K1_not_nan.size(); ++i)
-//         if (!std::isnan(K1_not_nan[i]))
-//           K1.push_back(K1_not_nan[i]);
-
-//       std::cout << "K1: ";
-//       std::cout <<  *std::min_element(K1.begin(), K1.end()) << ", "
-//                 << *std::max_element(K1.begin(), K1.end()) << std::endl;
-//       std::cout << "Pressure: ";
-//       std::cout <<  *std::min_element(fracture_pressure_.begin(), fracture_pressure_.end()) << ", "
-//           << *std::max_element(fracture_pressure_.begin(), fracture_pressure_.end()) << std::endl;
-//       std::cout << "Normal traction: ";
-//       Dune::BlockVector<Dune::FieldVector<double, 1>> krull(fracture_width_);
-//       normalFractureTraction(krull, false);
-//       std::cout <<  *std::min_element(krull.begin(), krull.end()) << ", "
-//                 << *std::max_element(krull.begin(), krull.end()) << std::endl;
-//       std::cout << "Aperture: ";
-//         std::cout <<  *std::min_element(fracture_width_.begin(), fracture_width_.end()) << ", "
-//                << *std::max_element(fracture_width_.begin(), fracture_width_.end()) << std::endl;
-      
-//     } else if (method == "if_propagate") {
-//       // iterate full nonlinear system until convergence, and expand fracture if necessary
-
-//       fracture_width_ = 1e-2;   // Ensure not completely closed
-//       fracture_pressure_ = 0.0;
-
-//       // start by assuming pressure equal to confining stress (will also set
-//       // fracture_pressure_ to its correct size
-//       normalFractureTraction(fracture_pressure_);
-//       if (numWellEquations() > 0) // @@ it is implicitly assumed for now that
-//                                   // there is just one well equation.  We initializze
-//                                   // it with an existing value.
-//         fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
-      
-//       const double tol = 1e-8; //1e-5; // @@      
-//       const int max_iter = 100;
-//       int iter = 0;
-      
-//       const double K1max = 1e6; // @@ for testing.  Should be added as a proper data member
-//       const double efac = 1; // 2; // @@ heuristic
-//       const std::vector<size_t> boundary_cells = grid_stretcher_->boundaryCellIndices();
-//       const size_t N = boundary_cells.size(); // number of boundary nodes and boundary cells
-
-//       std::vector<double> total_bnode_disp(N, 0), bnode_disp(N, 0), cell_disp(N, 0);
-//       const std::vector<GridStretcher::CoordType>
-//         bnode_normals_orig = grid_stretcher_->bnodenormals();
-
-//       std::vector<GridStretcher::CoordType> displacements(N, {0, 0, 0});
-//       while (true) {
-//         // solve flow-mechanical system
-//         while (!fullSystemIteration(tol) && iter++ < max_iter) {};
-
-//         // identify where max stress intensity is exceeded and propagation is needed
-//         const auto dist = grid_stretcher_->centroidEdgeDist();
-//         fill(bnode_disp.begin(), bnode_disp.end(), 0.0);
-
-//         const std::vector<double> K1_not_nan = Fracture::stressIntensityK1(); 
-//         std::vector<double> K1;
-//         for (size_t i = 0; i != K1_not_nan.size(); ++i)
-//           if (!std::isnan(K1_not_nan[i]))
-//             K1.push_back(K1_not_nan[i]);
-
-//         // if no more expansion of the fracture grid is needed, we are finished
-//         if (*max_element(K1.begin(), K1.end()) <= K1max)
-//           break;
-        
-//         // loop over cells, determine how much they should be expanded or contracted
-//         for (size_t i = 0; i != N; ++i)
-//           cell_disp[i] = 
-//             efac * (compute_target_expansion(K1max,
-//                                              fracture_width_[boundary_cells[i]],
-//                                              E_, nu_) - dist[i]);
-//         bnode_disp =
-//           grid_stretcher_->computeBoundaryNodeDisplacements(cell_disp, bnode_normals_orig);
-
-//         for (size_t i = 0; i != N; ++i)
-//           displacements[i] = bnode_normals_orig[i] * bnode_disp[i];
-
-//         grid_stretcher_->applyBoundaryNodeDisplacements(displacements);
-
-//         // grid has changed its geometry, so we have to recompute discretizations
-//         updateCellNormals();
-//         updateReservoirCells(cell_search_tree);
-//         //updateReservoirProperties(simulator, true); @@@@@
-//         initPressureMatrix();
-//         fracture_matrix_ = nullptr;
-        
-//       }
-//     }else{
-//         OPM_THROW(std::runtime_error,"Unknowns solution method");
-//     }
-// }
-
-    // }
-
-    //   const bool propagate = method == "if_propagate"; // whether or not to do fracture propagation
-
-    //   // iterate full nonlinear system until convergence
-    //   fracture_width_ = 1e-2;   // Ensure not completely closed
-    //   fracture_pressure_ = 0.0;
-
-    //   // the following values are only relevant if propagation is requested
-    //   const int max_iter = 100; 
-    //   const double diameter = 2; // @@ compute this from boundary nodes
-    //   const double tol = 1e-3 * diameter; //1e-5; //1e-5; // @@
-    //   const double efac = 2; // @@ heuristic
-    //   const double K1max = 3.7e8; // @@ for testing.  Should be added as a proper data member
-    //   const std::vector<size_t> boundary_cells = grid_stretcher_->boundaryCellIndices();
-    //   const size_t N = boundary_cells.size(); // number of boundary nodes and boundary cells
-
-    //   std::vector<double> total_bnode_disp(N, 0), bnode_disp(N, 0), cell_disp(N, 0);
-    //   const std::vector<GridStretcher::CoordType>
-    //     bnode_normals_orig = grid_stretcher_->bnodenormals();
-
-    //   std::vector<GridStretcher::CoordType> displacements(N, {0, 0, 0});
-    //   std::ofstream k1log("k1log"); // @@
-    //   std::ofstream texplog("texplog"); //@@ 
-    //   std::ofstream distlog("distlog"); //@@
-    //   int count = 0;
-    //   while (true) {
-    //     count++;
-    //     int iter = 0;
-
-    //     // solve flow-mechanical system
-    //     while (!fullSystemIteration(tol) && iter++ < max_iter) {};
-
-    //     // report on convergence
-    //     if (iter >= max_iter)
-    //       std::cout << "WARNING: Did not converge in " << max_iter
-    //                 << " iterations." << std::endl;
-    //     else
-    //       std::cout << "System converged in " << iter
-    //                 << " iterations." << std::endl;
-    //     if (!propagate)
-    //       break; // no need to do propagation; we are finished
-
-    //     // identify where max stress intensity is exceeded and propagation is needed
-    //     const auto dist = grid_stretcher_->centroidEdgeDist();
-
-    //     fill(bnode_disp.begin(), bnode_disp.end(), 0.0);
-
-    //     // @@ to facilitate debug; collect all K1 values that are not 'nan'
-    //     std::vector<double> K1_not_nan = Fracture::stressIntensityK1(); // @@
-    //     std::vector<double> K1;
-    //     for (size_t i = 0; i != K1_not_nan.size(); ++i)
-    //       if (!std::isnan(K1_not_nan[i]))
-    //         K1.push_back(K1_not_nan[i]);
-
-    //     // loop over cells, determine how much they should be expanded or contracted
-    //     for (size_t i = 0; i != N; ++i) 
-    //       cell_disp[i] = 
-    //         efac * (compute_target_expansion(K1max,
-    //                                          fracture_width_[boundary_cells[i]],
-    //                                          E_, nu_) - dist[i]);
-    //     bnode_disp =
-    //       grid_stretcher_->computeBoundaryNodeDisplacements(cell_disp, bnode_normals_orig);
-
-    //     for (size_t i = 0; i != N; ++i)
-    //       if (bnode_disp[i] + total_bnode_disp[i] < 0)
-    //         bnode_disp[i] = -total_bnode_disp[i];
-
-    //     for (size_t i = 0; i != N; ++i)
-    //       total_bnode_disp[i] += bnode_disp[i];
-        
-    //     for (size_t i = 0; i != N; ++i)
-    //       displacements[i] = bnode_normals_orig[i] * bnode_disp[i];
-        
-    //     for (int i = 0; i != K1.size(); ++i){
-    //       //std::cout << "K1 size: " << K1.size() << std::endl;
-    //       k1log << K1[i] << " ";
-    //       texplog << total_bnode_disp[i] << " ";
-    //       distlog << dist[i] << " " ;
-    //     }
-    //     std::cout << "Count: " << count << std::endl;
-    //     if (count > 100) // @@@
-    //       break;
-
-    //     // // @@ to facilitate debugging: identiy largest (absolute) displacement
-    //     // double largest_disp = bnode_disp[0];
-    //     // //double maxK = 0;
-    //     // for (int i = 0; i != bnode_disp.size(); ++i) 
-    //     //   largest_disp = abs(largest_disp) < abs(bnode_disp[i]) ? bnode_disp[i] : largest_disp;
-
-    //     // std::cout << "max change: " << largest_disp << std::endl;
-
-    //     // std::cout << "Max K: " << *max_element(K1.begin(), K1.end()) << std::endl;
-    //     // std::cout << "Min d: " << *min_element(bnode_disp.begin(), bnode_disp.end()) << std::endl;
-        
-    //     bool finished =
-    //       (*max_element(K1.begin(), K1.end()) <= K1max) &&
-    //       (*min_element(bnode_disp.begin(), bnode_disp.end()) >= -tol);
-        
-    //     if (finished)
-    //       break;
-
-    //     // it is necessary to propagate crack
-    //     //grid_stretcher_->expandBoundaryCells(bnode_disp); // keep original normals
-    //     grid_stretcher_->applyBoundaryNodeDisplacements(displacements);
-
-    //     // grid has changed its geometry, so we have to recompute discretizations
-    //     updateGridDiscretizations(); 
-    //   }
-    //   std::cout << "Finished! " << count << std::endl;
-      
-    //     // report on result
-
-
 
 
 void

@@ -643,13 +643,13 @@ RegularTrimesh::getTriangles() const
 
 //------------------------------------------------------------------------------
 pair<vector<array<unsigned int, 3>>, vector<int>>
-RegularTrimesh::getMultiresTriangles(const vector<CellRef>& fixed_cells, const int max_levels) const
+RegularTrimesh::getMultiresTriangles(const vector<CellRef>& fixed_cells, const int max_levels, const int cellnum_threshold) const
 //------------------------------------------------------------------------------
 {
     vector<NodeRef> triangles; // 3 consecutive entries make up a triangle
     vector<int> cellmap;
     RegularTrimesh mesh(*this);
-    const int CELLNUM_THRESHOLD = 4;
+    const int CELLNUM_THRESHOLD = cellnum_threshold;
     int level = 0;
 
     while (mesh.numCells() > CELLNUM_THRESHOLD && level < max_levels) {
@@ -766,7 +766,9 @@ RegularTrimesh::cellrefs_to_indices_(const vector<CellRef>& cellrefs) const
 std::tuple<std::unique_ptr<Grid>, std::vector<int>, std::map<int, int>>    
 RegularTrimesh::createDuneGrid(const int coarsen_levels,
                                const vector<CellRef>& fixed_cells,
-                               const bool add_smoothing_triangles) const
+                               const bool add_smoothing_triangles,
+                               const int cellnum_threshold
+                               ) const
 //------------------------------------------------------------------------------
 {
     Dune::GridFactory<Grid> factory;
@@ -775,7 +777,7 @@ RegularTrimesh::createDuneGrid(const int coarsen_levels,
         factory.insertVertex(Dune::FieldVector<double, 3> {node[0], node[1], node[2]});
 
     // define triangles
-    const auto tmp = coarsen_levels > 0 ? getMultiresTriangles(fixed_cells, coarsen_levels) : getTriangles();
+    const auto tmp = coarsen_levels > 0 ? getMultiresTriangles(fixed_cells, coarsen_levels, cellnum_threshold) : getTriangles();
     const auto& fsmap = tmp.second;
 
     for (const auto& tri : tmp.first)
@@ -1385,7 +1387,7 @@ expand_to_criterion(const RegularTrimesh& mesh,
     // determine starting level
     //const int target_cellcount = 50; // target number of cells in the final mesh
     //const int cellcount_threshold = 4*target_cellcount; // target number of cells in the initial mesh
-    const int max_cellcount = 200; // maximum number of cells in the final mesh
+    const int max_cellcount = 2000; // maximum number of cells in the final mesh
 
     auto fixed_on_level = [&fixed_cells](const int level)->vector<CellRef> {
         if (level == 0){

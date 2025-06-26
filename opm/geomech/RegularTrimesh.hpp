@@ -133,7 +133,8 @@ public:
     std::tuple<std::unique_ptr<Grid>, std::vector<int>, std::map<int, int>>
     createDuneGrid(const int coarsen_levels = 0,
                    const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(),
-                   const bool add_smoothing_triangles = true) const;
+                   const bool add_smoothing_triangles = true,
+                   const int cellnum_threshold = 10) const;
     void writeMatlabTriangulation(std::ostream& out) const;
 
     // ------------- Functions for creating new RegularTrimesh objects -------------
@@ -144,7 +145,9 @@ public:
     std::pair<std::vector<std::array<unsigned int, 3>>, std::vector<int>> getTriangles() const;
     std::pair<std::vector<std::array<unsigned int, 3>>, std::vector<int>>
     getMultiresTriangles(const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(),
-                         const int max_levels = 5) const;
+                        const int max_levels = 5, const int cellnum_threshold = 10) const;
+//                        const int max_levels, const int cellnum_threshold ) const;
+//                         
 
     // static functions
     static std::array<CellRef, 4> coarse_to_fine(const CellRef& cell);
