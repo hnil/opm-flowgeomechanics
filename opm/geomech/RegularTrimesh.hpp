@@ -169,8 +169,11 @@ public:
     static std::vector<CellRef> inner_ring_cells();
     static std::pair<RegularTrimesh, std::vector<CellRef>>
     coarsen_mesh(const RegularTrimesh& mesh, const std::vector<CellRef>& fixed_cells);
-                                                                             
-
+    static std::vector<std::tuple<unsigned int, unsigned int, double>>
+    createGridToGridMap(const std::vector<std::vector<CellRef>>& map1,
+                        const std::vector<std::vector<CellRef>>& map2,
+                        const int level);
+    
 private:
     // helper functions
     std::vector<EdgeRef> all_half_edges_() const; // internal edges are duplicated

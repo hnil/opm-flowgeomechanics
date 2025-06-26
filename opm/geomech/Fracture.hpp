@@ -249,6 +249,7 @@ public:
             return;
         }
         const auto& wellstate = wellstates[*well_index];
+
         if(update_filtercake){
             updateFilterCakeProps(connections, wellstate);
         } else {
