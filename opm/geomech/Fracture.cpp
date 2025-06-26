@@ -1,7 +1,9 @@
 #include "config.h"
+
+#include <opm/geomech/Fracture.hpp>
+
 #include "opm/geomech/GridStretcher.hpp"
 #include <opm/grid/polyhedralgrid.hh>
-#include <opm/geomech/Fracture.hpp>
 #include <opm/geomech/Math.hpp>
 #include <opm/simulators/linalg/setupPropertyTree.hpp>
 #include <opm/simulators/linalg/FlowLinearSolverParameters.hpp>
@@ -11,10 +13,6 @@
 #include <opm/geomech/DiscreteDisplacement.hpp>
 #include <dune/common/filledarray.hh> // needed for printSparseMatrix??
 #include <dune/istl/io.hh> // needed for printSparseMatrix??
-#include <cmath>
-#include <iostream>
-#include <sstream>
-#include <string>
 #include <dune/common/fmatrixev.hh>
 #include <dune/grid/utility/persistentcontainer.hh>
 
@@ -22,6 +20,16 @@
 
 #include <opm/geomech/RegularTrimesh.hpp>
 #include <opm/common/TimingMacros.hpp>
+
+#include <array>
+#include <cmath>
+#include <iostream>
+#include <memory>
+#include <optional>
+#include <sstream>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -54,16 +62,18 @@ namespace {
 namespace Opm
 {
 void
-Fracture::init(std::string well,
-               int perf,
-               int well_cell,
-               Fracture::Point3D origo,
-               Fracture::Point3D normal,
-               Opm::PropertyTree prm)
+Fracture::init(const std::string& well,
+               const int perf,
+               const int well_cell,
+               const int segment,
+               const std::optional<std::pair<double, double>>& perf_range,
+               const Point3D& origo,
+               const Point3D& normal,
+               const Opm::PropertyTree& prm)
 {
     OPM_TIMEFUNCTION();
     prm_ = prm;
-    wellinfo_ = WellInfo({well, perf, well_cell});
+    wellinfo_ = WellInfo({well, perf, well_cell, segment, perf_range});
 
     origo_ = origo;
     axis_[2] = normal;
@@ -95,17 +105,20 @@ Fracture::init(std::string well,
       const std::array<double, 3> ax2 {0.5 * ax1[0] + fac * axis_[1][0],
                                        0.5 * ax1[1] + fac * axis_[1][1],
                                        0.5 * ax1[2] + fac * axis_[1][2]};
+
       std::cout << "Creating trimesh with radius: " << radius
                 << ", edgelen: " << edgelen
                 << ", ax1: " << ax1[0] << "," << ax1[1] << "," << ax1[2]
                 << ", ax2: " << ax2[0] << "," << ax2[1] << "," << ax2[2]
-                << std::endl;                                 
-      trimesh_ = std::unique_ptr<RegularTrimesh>(
-                     new RegularTrimesh(radius, //trimeshlayers,
-                                        {origo_[0], origo_[1], origo_[2]},
-                                        ax1,
-                                        ax2,
-                                        {edgelen, edgelen}));
+                << std::endl;
+
+      trimesh_ = std::make_unique<RegularTrimesh>
+          (radius, //trimeshlayers,
+           std::array {origo_[0], origo_[1], origo_[2]},
+           ax1,
+           ax2,
+           std::array {edgelen, edgelen});
+
       trimesh_->removeSawtooths();
       
       // identify well cells (since this is not done in setFractureGrid when providing
@@ -125,6 +138,7 @@ Fracture::init(std::string well,
     } else {
       setFractureGrid();
     }
+
     setPerfPressure(0.0); // This can be changed by subsequently calling this
                           // function when the fracture is connected to the
                           // reservoir
@@ -1153,6 +1167,8 @@ std::vector<RuntimePerforation> Fracture::wellIndices() const{
         }
         perf.ctf   = WI;
         perf.depth = this->origo_[2];
+        perf.segment = this->wellinfo_.segment;
+        perf.perf_range = this->wellinfo_.perf_range;
     }
     return wellIndices;
 }

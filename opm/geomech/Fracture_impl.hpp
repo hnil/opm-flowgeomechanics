@@ -383,6 +383,6 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
     } else {
         OPM_THROW(std::runtime_error, "Unknowns solution method");
     }
-};
+}
 
-}; // namespace Opm
+} // namespace Opm

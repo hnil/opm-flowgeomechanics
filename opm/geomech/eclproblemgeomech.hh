@@ -18,20 +18,23 @@
 #include <opm/simulators/flow/FlowProblem.hpp>
 #include <opm/simulators/linalg/PropertyTree.hpp>
 #include <opm/simulators/flow/Transmissibility.hpp>
+
 #include <array>
+#include <cstddef>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <tuple>
 #include <vector>
+
 namespace Opm::Parameters {
     struct FractureParamFile {
         inline static std::string value{"notafile"};
     };
 }
-
 
 namespace Opm{
     template<typename TypeTag>
@@ -357,7 +360,7 @@ namespace Opm{
             //  const auto now = TimeStampUTC {schedule_.getStartTime()} + std::chrono::duration<double>(sim_time);
             // const auto ts = formatActionDate(now, reportStep);
 
-            std::map<std::string, std::vector<Opm::Connection>> extra_perfs;
+            std::map<std::string, std::vector<Connection>> extra_perfs;
 
             //auto mapper = simulator.vanguard().cartesianMapper();
             //auto& wellcontainer = this->wellModel().localNonshutWells();
@@ -400,7 +403,7 @@ namespace Opm{
                                       Connection::State::OPEN,
                                       Connection::Direction::Z,
                                       Connection::CTFKind::DynamicFracturing,
-                                      /* sort_value */ -1,
+                                      /* satTableId */ -1,
                                       wellconn.depth,
                                       Connection::CTFProperties{},
                                       /* sort_value */ -1,
@@ -409,6 +412,16 @@ namespace Opm{
                     //only add zero value 
                     // connection need to be modified later.
                     connection.setCF(wellconn.ctf * 0.0);
+
+                    if (wellconn.perf_range.has_value()) {
+                        const auto compseg_insert_index =
+                            std::numeric_limits<std::size_t>::max();
+
+                        connection.updateSegment(wellconn.segment,
+                                                 wellconn.depth,
+                                                 compseg_insert_index,
+                                                 wellconn.perf_range);
+                    }
                 }
 
                 if (! extra.empty()) {
@@ -437,7 +450,6 @@ namespace Opm{
                               << reportStep << std::endl;
                 }
             }
-
 
             bool commit_wellstate = false;
             auto sim_update = schedule.modifyCompletions(reportStep, extra_perfs);
