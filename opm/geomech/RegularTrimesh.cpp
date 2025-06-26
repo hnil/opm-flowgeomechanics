@@ -716,6 +716,36 @@ RegularTrimesh::coarsen_mesh(const RegularTrimesh& mesh, const vector<CellRef>& 
 }
 
 //------------------------------------------------------------------------------
+vector<tuple<unsigned int, unsigned int, double>>
+RegularTrimesh::createGridToGridMap(const vector<vector<CellRef>>& map1,
+                                    const vector<vector<CellRef>>& map2,
+                                    const int level)
+//------------------------------------------------------------------------------    
+{
+    vector<tuple<unsigned int, unsigned int, double>> result;
+
+    // create the inverse (multi)map of map2
+    map<CellRef, vector<unsigned int>> map2_inv;
+    for (size_t i = 0; i != map2.size(); ++i) 
+        for (const auto& cell : map2[i]) 
+                map2_inv[cell].push_back(i);
+
+    for (unsigned int i = 0; i != map1.size(); ++i) {
+        const auto& mv1 = map1[i];
+        const double w1 = 1.0 / mv1.size(); // weight
+        for (const auto& cell : mv1) {
+            // create a CellRef for the coarse cell
+            const CellRef cref = fine_to_coarse(cell, level);
+            const auto& target_cells = map2_inv[cref];
+            const double w2 = 1.0 / target_cells.size();
+            for (const auto j : target_cells)
+                result.push_back( make_tuple(i, j, w1 * w2) );
+        }
+    }
+    return result;
+}
+
+//------------------------------------------------------------------------------
 vector<unsigned int>
 RegularTrimesh::noderefs_to_indices_(const vector<NodeRef>& noderefs) const
 //------------------------------------------------------------------------------

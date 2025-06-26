@@ -241,7 +241,7 @@ public:
             return;
         }
         const auto& wellstate = wellstates[*well_index];
-        updateFilterCakeProps(connections, wellstate);
+        updateFilterCakeProps(connections, wellstate); // @@@
     };
     void updateFilterCakeProps(const Opm::WellConnections& connections,
                               const Opm::SingleWellState<double>& wellstate);    

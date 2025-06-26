@@ -17,7 +17,25 @@ compute_target_expansion(const double K1_target,
     return pow(fac * aperture / K1_target, 2);
 }
 
-// template<class CoordType> inline void ensure_convexity(const CoordType& ipoint,
+// ----------------------------------------------------------------------------
+inline
+std::vector<double> redistribute_values(const std::vector<double>& values,
+                                        const std::vector<std::vector<CellRef>>& map1,
+                                        const std::vector<std::vector<CellRef>>& map2,
+                                        const int level)
+// ----------------------------------------------------------------------------    
+{
+    const auto g2gmap = RegularTrimesh::createGridToGridMap(map1, map2, level);
+
+    std::vector<double> redistributed_values(map2.size(), 0.0);
+
+    for (const auto& e :g2gmap) 
+        redistributed_values[std::get<1>(e)] += values[std::get<0>(e)] * std::get<2>(e);
+
+    return redistributed_values;
+}
+
+ // template<class CoordType> inline void ensure_convexity(const CoordType& ipoint,
 //                                                        std::vector<CoordType>& pts) {
 //   while(true) {
 //     bool modified = false;
@@ -182,6 +200,10 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         if (numWellEquations() > 0)
             fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
 
+        // save original grid and filtercake, to allow us to map it onto evolved grids
+        const auto filtercake_thickness_0 = filtercake_thikness_; // copy
+        const auto grid_mesh_map_0 = grid_mesh_map_; 
+        
         // local function taking a trimesh, updates the Fracture object with it and
         // runs a simulation.  Its return value should be a vector of doubles:
         auto score_function =
@@ -222,6 +244,9 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             rhs_pressure_.resize(0);
             coupling_matrix_ = nullptr;
 
+            filtercake_thikness_ = redistribute_values(filtercake_thickness_0,
+                                                       grid_mesh_map_0,
+                                                       fsmap, level);
             // solve flow-mechanical system
             int iter = 0;
             while (!fullSystemIteration(tol) && iter++ < max_iter) {
@@ -243,8 +268,8 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         //const double K1max = prm_.get<double>("KMax");
         const double threshold = 1.0;
         const std::vector<CellRef> fixed_cells = well_source_cellref_;
-        int target_cellcount = prm_.get<int>("solver.target_cellcount"); 
-        int cellcount_threshold = prm_.get<int>("solver.cellcount_threshold");
+        const int target_cellcount = prm_.get<int>("solver.target_cellcount"); 
+        const int cellcount_threshold = prm_.get<int>("solver.cellcount_threshold");
         const auto [mesh, cur_level] =
             expand_to_criterion(*trimesh_, score_function, threshold,
                                 fixed_cells, target_cellcount, cellcount_threshold);
