@@ -58,6 +58,8 @@ namespace Opm{
         // fracture_param.put("fractureparam.config.normal", std::vector<double>{0, 1, 0});
         fracture_param.put("fractureparam.config.initial_fracture_width", 0.0);
         fracture_param.put("fractureparam.config.min_width", 0.0);
+        fracture_param.put("fractureparam.config.trires", 5);
+
         //fracture_param.put("fractureparam.config.num_exp", 3);
         //fracture_param.put("fractureparam.config.num_lin", 2);
         //fracture_param.put("fractureparam.config.axis_scale", 1.50);
@@ -66,16 +68,18 @@ namespace Opm{
         fracture_param.put("fractureparam.solver.method", "if_propagate_trimesh"s);
         fracture_param.put("fractureparam.solver.target_cellcount", 50);
         fracture_param.put("fractureparam.solver.cellcount_threshold", 200);
+        fracture_param.put("fractureparam.solver.numcell_threshold", 50);
+        fracture_param.put("fractureparam.solver.max_num_coarsening", 200);
         fracture_param.put("fractureparam.solver.efac", 0.5);
         fracture_param.put("fractureparam.solver.rfac", 0.1);
         fracture_param.put("fractureparam.solver.max_expand_iter", 20);
         fracture_param.put("fractureparam.solver.max_iter", 100);
-        fracture_param.put("fractureparam.solver.tolerance", 1e-8);
+        fracture_param.put("fractureparam.solver.tolerance", 1e-6);
         fracture_param.put("fractureparam.solver.damping", 1e0);
         fracture_param.put("fractureparam.solver.min_width", 0.0);
-        fracture_param.put("fractureparam.solver.max_width", 1e10);
-        fracture_param.put("fractureparam.solver.max_dwidth", 1e-3);
-        fracture_param.put("fractureparam.solver.max_dp", 1e6);
+        fracture_param.put("fractureparam.solver.max_width", 0.5);
+        fracture_param.put("fractureparam.solver.max_dwidth", 5e-3);
+        fracture_param.put("fractureparam.solver.max_dp", 1e8);
         fracture_param.put("fractureparam.solver.max_change", 1e-3);
         fracture_param.put("fractureparam.solver.verbosity", 0);
 

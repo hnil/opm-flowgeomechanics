@@ -278,7 +278,13 @@ void Fracture::removeCells(){
                     double trans = leakof_[eIdx];
                     double flux = trans*dp;
                     reservoir_flux[res_cell] += flux;
+                    if(flux < 0){
+                        std::cout << "Negative flux " << flux << " for element index " << eIdx
+                                  << " with reservoir cell " << res_cell << std::endl;
+                        flux = 0.0;          
+                    }
                     double dh =  flux/(area*(1-filtercake_poro_));
+                    assert(dh>=0);
                     filtercake_thikness_[eIdx] += dh;
                 }
 
@@ -557,6 +563,7 @@ void Fracture::writemulti(double time) const
         reservoir_cells[i] = reservoir_cells_[i];// only converts to double
         reservoir_traction[i] = ddm::tractionSymTensor(reservoir_stress_[i],cell_normals_[i]);
         fracture_force[i] = reservoir_traction[i]-fracture_pressure[i];
+        assert(filtercake_thikness[i] >= 0.0);
     }
 
     for(size_t i=0; i < numFractureCells(); ++i){
@@ -1131,6 +1138,7 @@ void Fracture::updateLeakoff()
                         reservoir_dist_[eIdx];
         if(has_filtercake_){
             double invtrans =  1/leakof_[eIdx];
+            assert(filtercake_thikness_[eIdx] >= 0.0);
             if(filtercake_thikness_[eIdx] > 0.0){
                 double fitercaketrans = res_mob * filtercake_perm_ * area /
                         filtercake_thikness_[eIdx];
@@ -1141,6 +1149,54 @@ void Fracture::updateLeakoff()
             leakof_[eIdx] = 1/invtrans;
         }
     }
+}
+
+void Fracture::redistribute_values(Dune::BlockVector<Dune::FieldVector<double, 1>>& values,
+                                        const std::vector<std::vector<CellRef>>& map1,
+                                        const std::vector<std::vector<CellRef>>& map2,
+                                        const int level,
+                                        bool point_wise){
+     std::vector<double> tmp_values(values.size());
+     for(size_t i = 0; i < values.size(); ++i) {
+        tmp_values[i] = values[i][0]; // assuming values is a BlockVector with one component
+     }
+    tmp_values = redistribute_values(tmp_values, map1, map2, level, point_wise);
+    values.resize(tmp_values.size());
+     for(size_t i = 0; i < values.size(); ++i) {
+        values[i][0] = tmp_values[i]; // assuming values is a BlockVector with one component
+     }                                     
+                                        
+}
+
+
+std::vector<double> Fracture::redistribute_values(const std::vector<double>& values,
+                                        const std::vector<std::vector<CellRef>>& map1,
+                                        const std::vector<std::vector<CellRef>>& map2,
+                                        const int level,
+                                        bool point_wise)
+// ----------------------------------------------------------------------------    
+{
+    const auto g2gmap = RegularTrimesh::createGridToGridMap(map1, map2, level);
+
+    std::vector<double> redistributed_values(map2.size(), 0.0);
+    std::vector<double> weight(map2.size(), 0.0);
+
+    for (const auto& e :g2gmap){ 
+        redistributed_values[std::get<1>(e)] += values[std::get<0>(e)] * std::get<2>(e);
+        weight[std::get<1>(e)] += std::get<2>(e);
+    }
+    if(point_wise){
+        for(size_t i = 0; i < redistributed_values.size(); ++i) {
+            assert(weight[i] >= 0.0);
+            if (weight[i] > 0.0) {
+                redistributed_values[i] /= weight[i];
+            } else {
+                redistributed_values[i] = 0.0; // or some other default value
+            }
+        }
+    }
+
+    return redistributed_values;
 }
 
 void Fracture::initPressureMatrix()

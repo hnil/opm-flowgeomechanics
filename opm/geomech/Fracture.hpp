@@ -120,144 +120,8 @@ public:
     void removeCells();
 
     template <class TypeTag, class Simulator>
-    void updateReservoirProperties(const Simulator& simulator, bool init_constant_vals=false,bool update_filtercake=true)
-    {
-        // if `init_contant_vals` is true, the fields that should normally not
-        // change, i.e.  E_, nu_ and reservoir_perm_ will be updated. This should
-        // normally only be needed the first time.
-        if (init_constant_vals) {
-            initReservoirProperties<TypeTag, Simulator>(simulator);
-        }
-      
-        using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
-        const auto& problem = simulator.problem();
-        const auto& grid = simulator.vanguard().grid();
-        GeometryHelper ghelper(grid);
-        // NB burde truleg interpolere
-        // NB reservoir dist not calculated
-        size_t ncf = reservoir_cells_.size();
-        assert(ncf > 0); 
-        reservoir_pressure_.resize(ncf);
-        reservoir_stress_.resize(ncf);
-        reservoir_mobility_.resize(ncf);
-        reservoir_perm_.resize(ncf);
-        reservoir_cstress_.resize(ncf);
-        reservoir_cell_z_.resize(ncf, 0.0);
-        filtercake_thikness_.resize(ncf, 0.0);
-        // should be calculated
-        bool calculate_dist = prm_.get<bool>("reservoir.calculate_dist");
-        if(!calculate_dist){
-          double dist = prm_.get<double>("reservoir.dist");
-          reservoir_dist_.resize(ncf, dist);
-        }
-        
-        double numax = 0, Emax = 0;
-        //auto& enitity_seeds = problem.elementEntitySeeds();//used for radom axes better way?
-        // get properties from rservoir
-        for (size_t i = 0; i < ncf; ++i) {
-            int cell = reservoir_cells_[i];
-            if (!(cell < 0)) {
-                auto normal = this->cell_normals_[i];
-                const auto& intQuants = simulator.model().intensiveQuantities(cell, /*timeIdx*/ 0);
-                const auto& fs = intQuants.fluidState();
-                {
-                  auto val = fs.pressure(FluidSystem::waterPhaseIdx);
-                  reservoir_pressure_[i] = val.value();
-                }
-                enum { numPhases = getPropValue<TypeTag, Properties::NumPhases>() };
-                reservoir_mobility_[i] = 0.0;
-                reservoir_density_[i] = intQuants.fluidState().density(FluidSystem::waterPhaseIdx).value();
-                for (unsigned phaseIdx = 0; phaseIdx < numPhases; ++phaseIdx) {
-                  if (FluidSystem::phaseIsActive(phaseIdx)) {
-                    // assume sum should only be water;
-                    auto val = intQuants.mobility(phaseIdx);
-                    reservoir_mobility_[i] += val.value();
-                  }
-                }
-                for (int dim = 0; dim < 3; ++dim) {
-                  reservoir_stress_[i] = problem.stress(cell);
-                }
-                const auto& perm =  problem.intrinsicPermeability(cell);
-                const auto& cstress =  problem.cStress(cell);
-                auto pn = normal;
-                perm.mv(normal, pn);
-                double npn = pn.dot(normal); 
-                reservoir_perm_[i] = npn;
-                reservoir_cstress_[i] = cstress;
-                if(calculate_dist){
-                  //assert(false);
-                  const auto& currentData = grid.currentData();
-                  const auto& elem = Dune::cpgrid::Entity<0>(*currentData.back(), cell, true);
-                  //auto cell_center = ghelper.centroid(i);
-                  const auto& geom = elem.geometry();
-                  auto cell_center = geom.center();
-                  reservoir_cell_z_[i] = cell_center[2];
-                  double dist = 0;
-                  int num_corners = geom.corners();
-                  for(int li=0; li < geom.corners();++li){
-                    auto cdist = cell_center;
-                    cdist -= geom.corner(li);
-                    dist += std::abs(normal.dot(cdist));
-                  }
-                  dist /= num_corners;
-                  reservoir_dist_[i] = dist;
-                }
-                
-            } else {
-                // probably outside reservoir set all to zero
-                double stressval = 300e5;
-                reservoir_stress_[i][0] = stressval;
-                reservoir_stress_[i][1] = stressval;
-                reservoir_stress_[i][2] = stressval; //???
-                reservoir_pressure_[i] = injectionPressure();
-                reservoir_mobility_[i] = 0.0;
-                reservoir_density_[i] = 1000.0;
-                reservoir_perm_[i] = 0.0;
-            }
-            // assume reservoir distance is calculated
-        }
-        int reportStepIdx = simulator.episodeIndex();
-        const auto& schedule =  simulator.vanguard().schedule();
-        //const Opm::Well& well = wells[wellinfo_.name];
-        //const std::vector<Opm::Well>& wells = problem.wellModel().getLocalWells(reportStepIdx);
-        // get properties from well connections in case of filter cake
-        if(schedule[reportStepIdx].wells.has(wellinfo_.name) == false){
-            std::cerr << "Warning: Well " << wellinfo_.name << " not found in schedule step " << reportStepIdx << std::endl;
-            return;
-        }
-        const auto& well = schedule[reportStepIdx].wells(wellinfo_.name);
-        //const auto& well = problem.wellModel().getWellEcl(wellinfo_.name);
-        const auto& connections = well.getConnections();
-        total_WI_well_ = 0.0;
-        for(const auto& conn : connections){
-          if(conn.state() == Connection::State::OPEN){
-              continue;
-          }
-          assert(conn.CF() >= 0);
-          total_WI_well_ += conn.CF();
-        }
-        //const auto& connection = connections[wellinfo_.perf];// probably wrong
-        if(connections.hasGlobalIndex(wellinfo_.global_index) == false){
-            std::cerr << "Warning: Well connection with global index " << wellinfo_.global_index << " not found in schedule step " << reportStepIdx << std::endl;
-            return;
-        }
-        const auto& wellstates = simulator.problem().wellModel().wellState();
-        const auto& well_index = wellstates.index(wellinfo_.name);
-        if (!well_index.has_value()) {
-            std::cerr << "Warning: Well " << wellinfo_.name << " not found in well state at step " << reportStepIdx << std::endl;
-            has_filtercake_ = false;// prevois state did not have this well
-            return;
-        }
-        const auto& wellstate = wellstates[*well_index];
-
-        if(update_filtercake){
-            updateFilterCakeProps(connections, wellstate);
-        } else {
-          // remap
-          int ncf = reservoir_cells_.size();
-          filtercake_thikness_.resize(ncf, 0.0);
-        }
-    };
+    void updateReservoirProperties(const Simulator& simulator, bool init_constant_vals=false,bool update_filtercake=true);
+    
     void updateFilterCakeProps(const Opm::WellConnections& connections,
                               const Opm::SingleWellState<double>& wellstate);    
     void initFracturePressureFromReservoir();
@@ -291,6 +155,18 @@ public:
     bool isActive() const { return active_; }
 
 private:
+   std::vector<double> redistribute_values(const std::vector<double>& values,
+                                        const std::vector<std::vector<CellRef>>& map1,
+                                        const std::vector<std::vector<CellRef>>& map2,
+                                        const int level,
+                                                     bool point_wise);
+
+   void redistribute_values(Dune::BlockVector<Dune::FieldVector<double, 1>>& values,
+                                        const std::vector<std::vector<CellRef>>& map1,
+                                        const std::vector<std::vector<CellRef>>& map2,
+                                        const int level,
+                             bool point_wise);
+  
     using ResVector = ::Opm::Fracture::Vector;
     using VectorHP = Dune::MultiTypeBlockVector<ResVector, ResVector>;
 

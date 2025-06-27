@@ -642,8 +642,7 @@ RegularTrimesh::getTriangles() const
 }
 
 //------------------------------------------------------------------------------
-
-pair<vector<array<unsigned int, 3>>, vector<vector<int>>>
+std::pair<std::vector<std::array<NodeRef, 3>>, std::vector<std::vector<CellRef>>>
 RegularTrimesh::getMultiresTriangles(const vector<CellRef>& fixed_cells, const int max_levels, const int cellnum_threshold) const        
 //------------------------------------------------------------------------------
 {
@@ -818,9 +817,9 @@ RegularTrimesh::createDuneGrid(const int coarsen_levels,
 
     // define triangles
 
-    const auto tmp = coarsen_levels > 0 ? getMultiresTriangles(fixed_cells, coarsen_levels, cellnum_threshold) : getTriangles();
+    auto tmp = coarsen_levels > 0 ? getMultiresTriangles(fixed_cells, coarsen_levels, cellnum_threshold) : getTriangles();
     const auto& triangles = ref2index_(tmp.first); // vector<array<uint, 3>>
-    const auto& fsmap = tmp.second;
+    auto& fsmap = tmp.second;
 
     for (const auto& tri : triangles)
         factory.insertElement(Dune::GeometryTypes::simplex(2),
