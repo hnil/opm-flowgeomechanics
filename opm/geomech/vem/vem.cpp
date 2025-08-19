@@ -1478,8 +1478,10 @@ void compute_cell_geometry(const double* points,
 
 
   // ensure normals are pointing out of, rather than into, polyhedron
-  if (inward_pointing_normals(outward_normals, face_centroids))
+  if (inward_pointing_normals(outward_normals, face_centroids)){
+    std::cout << "Warning!: inward pointing normals try to fix them" << std::endl;
     assert(false);
+  }
 
   // (deprecated, since we assume a consistent face corner ordering in 'faces')
   //

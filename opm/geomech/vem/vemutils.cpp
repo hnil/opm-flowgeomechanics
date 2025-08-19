@@ -127,7 +127,7 @@ namespace vem{
     using namespace std;
     using namespace Dune;
     const auto& gv = grid.leafGridView();
-
+    int nc = grid.numCells();
     for (const auto& v : vertices(gv)) {
       const auto c = v.geometry().corner(0);
       coords.insert(coords.end(), c.begin(), c.end());
@@ -144,8 +144,12 @@ namespace vem{
         auto faceSize = grid.numFaceVertices(face);
         num_face_corners.push_back(faceSize);
         //assert(faceSize == 4);
+        //auto numface_cells = grid.numCellFaces();
+        //assert(numface_cells == 2);
         auto out_cell = grid.faceCell(face,1);
         auto in_cell = grid.faceCell(face,0);
+        assert((out_cell < nc) && (in_cell < nc ));
+        assert(out_cell != in_cell);
         if(out_cell!=cellIdx){
           assert(in_cell==cellIdx);
           for(int v = 0; v < faceSize; ++v){

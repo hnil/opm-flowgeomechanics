@@ -160,7 +160,13 @@ void createGrids(std::unique_ptr<PolyGrid>& grid ,const Opm::EclipseState& eclSt
 
 void createGrids(std::unique_ptr<Dune::CpGrid>& grid ,const Opm::EclipseState& eclState,std::vector<unsigned int>& /*ordering*/){
     grid = std::make_unique<Dune::CpGrid>();
-    std::vector<std::size_t>  nums = grid->processEclipseFormat(&eclState.getInputGrid(), nullptr, false);
+    std::vector<std::size_t>  nums = grid->processEclipseFormat(&eclState.getInputGrid(), 
+                            /*eclipsestate */nullptr, 
+                            /*periodic*/ false,
+                        /*clip_z*/ false,
+                    /*pinchActive*/ false,
+                /*edge_conformal*/ true);
+    
 }
 
 //! \brief Main solution loop. Allows templating over the AMG type
@@ -211,18 +217,20 @@ int run(Params& p, const std::string& name, Dune::MPIHelper& mpihelper)
     }
     
     int overlapLayers=1;
-    int partitionMethod = Dune::PartitionMethod::zoltan;
-    //int partitionMethod = Dune::PartitionMethod::simple;
+    //int partitionMethod = Dune::PartitionMethod::zoltan;
+    int partitionMethod = Dune::PartitionMethod::simple;
     double imbalanceTol = 1.1;
-    bool addCornerCells = false;
+    bool addCornerCells = true;
     bool output_vertex = false;
     usleep(100);
     if(mpihelper.rank() == 0){
         std::cout << "Start Loadbalance" << " cells." << std::endl;
     }
     world_comm.barrier();
-    grid.loadBalance(overlapLayers,partitionMethod,imbalanceTol, addCornerCells);
-    grid.switchToDistributedView();
+    if(world_comm.size()>1){
+        grid.loadBalance(overlapLayers,partitionMethod,imbalanceTol, /*level ?*/ -1);
+        grid.switchToDistributedView();
+    }
     for(int rank=0; rank<mpihelper.size(); ++rank){
         if(rank == mpihelper.rank()){
             std::cout << "Grid size: " << grid.size(0) << " on rank " << mpihelper.rank() <<std::endl;
@@ -247,7 +255,7 @@ int run(Params& p, const std::string& name, Dune::MPIHelper& mpihelper)
     for(size_t j=0; j<allranks.size(); ++j){
          const auto& all = allranks[j];  
         for(size_t i=0; i<all.size(); ++i){
-            maxrank[i] = std::max(maxrank[i], all[i]);
+            maxrank[j] = std::max(maxrank[j], all[i]);
         }
     }
 
@@ -259,6 +267,7 @@ int run(Params& p, const std::string& name, Dune::MPIHelper& mpihelper)
                   auto lindex = elem.index();
                   // auto gindex = gindexset.index(elem);
                   auto gid = gidSet.id(elem);
+                  std::cout << "My rank " << mpihelper.rank() << " ";
                   std::cout << "Entity<" << codim << "> global: id " << gid << " local " << lindex << " type ";
                   std::cout << elem.partitionType() ; //<< " owner rank " << myrank[lindex];
                   //std::cout << " num pros " << numpros[lindex];
@@ -285,9 +294,9 @@ int run(Params& p, const std::string& name, Dune::MPIHelper& mpihelper)
     Opm::entityEntityCommunication<3>(grid, mpihelper);
     }
 
-    auto cell_parallindex = Opm::makeEntityEntityCommunication<0>(grid,false);
+    //auto cell_parallindex = Opm::makeEntityEntityCommunication<0>(grid,false);
     auto vertex_parallindex = Opm::makeEntityEntityCommunication<3>(grid,false);
-    auto dof_parallel_index = Opm::entityToDofIndexSet(vertex_parallindex, 3);
+    //auto dof_parallel_index = Opm::entityToDofIndexSet(vertex_parallindex, 3);
     //Opm::makeEntityEntityCommunication<3>(grid, mpihelper);
     if (!p.output.empty()){
         writeOutput(p, watch, grid.size(0));

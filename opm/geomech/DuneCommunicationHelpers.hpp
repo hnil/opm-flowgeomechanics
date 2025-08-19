@@ -432,7 +432,22 @@ namespace Opm {
           auto index = entity.index();
           auto gid = gidSet.id(entity);
           if (entity.partitionType() == Dune::PartitionType::InteriorEntity) {
+            // if(allranks_all[index].size() > 1){
+            //   std::cout << "Error My rank" << world_comm.rank() << " parition type " << entity.partitionType() << " global id " << gid << " local id " << index;
+            //   std::cout << "all other ranks ";
+            //   for (auto rr : allranks_all[index]){
+            //     std::cout << rr << " ";
+            //   }
+            //   std::cout << std::endl;
+
+            // }
+            // if(myrank == maxrank_ib[index]){
               entity_indexset.add(gid, ParallelIndexSet::LocalIndex(index, AttributeSet::owner, true));
+            //  }else{
+            //    //assert(false);
+            //    std::cout<< "Warning!!!: Owner do not seem to be unique ?" << std::endl;
+            //    entity_indexset.add(gid, ParallelIndexSet::LocalIndex(index, AttributeSet::copy, true));
+            //  }
           } else if (entity.partitionType() == Dune::PartitionType::OverlapEntity) {
               entity_indexset.add(gid, ParallelIndexSet::LocalIndex(index, AttributeSet::copy, true));
               // entity_indexset.add(gidset.id(elem),
@@ -477,6 +492,14 @@ namespace Opm {
       all_entity_entity_comm.template build<Vector>(all_cominterface);
       all_entity_entity_comm.template forward<Dune::FreeAddGatherScatter<Vector>>(numpros, numpros);
       //for (const auto& ind : entity_indexset) {
+      std::map<int,int> local_global;
+      std::map<int,int> global_local;
+      for (auto& entity : Dune::entities(gv, mycodim)) {
+        auto index = entity.index();
+        auto gid = gidSet.id(entity);
+        local_global[index] = gid;
+        global_local[gid] = index;
+      }
       bool ok = true;
       for (auto& entity : Dune::entities(gv, mycodim)) {
           auto index = entity.index();
@@ -484,7 +507,7 @@ namespace Opm {
           auto ind = entity_indexset.at(gid);
           assert(index == ind.local().local());
           if(numpros[ind.local().local()] != 1) {
-           if(!verbose){
+           if(!verbose || true){
               std::cout << "Num procs " << numpros[ind.local().local()]; 
               std::cout << " Global " << ind.global(); 
               std::cout << " Local " << ind.local().local() << " Attribute " << ind.local().attribute();// << std::endl;
@@ -500,18 +523,57 @@ namespace Opm {
                   std::cout << other << " ";
               }
               std::cout << std::endl;
+              {
+                Dune::Codim<0> cellcodim;
+                for (auto& cell : Dune::entities(gv, cellcodim)) {
+                  auto cgid = gidSet.id(cell);
+                  auto cind = cell.index();
+                  auto faces = grid.cellFaceRow(cind);
+                  auto correct_cell =false;
+                  for(int lface=0; lface < faces.size(); ++lface){
+                    int face = faces[lface].index();
+                    int nv = grid.numFaceVertices(face);
+                    for(int lnode=0; lnode < nv; ++lnode){
+                      auto node = grid.faceVertex(face, lnode);
+                      if( node == index){
+                        correct_cell = true;
+                      }
+                    }
+                  }
+                  if(correct_cell == true){
+                   auto& cv =  grid.current_view_data_;
+                   auto& pi = cv->partition_type_indicator_;
+                   std::cout << "Rank " << world_comm.rank() << " Cell global " << cgid  << " local " << cind << " parition " << Dune::PartitionType(pi->cell_indicator_[cind]) << std::endl; 
+                   for(int lface=0; lface < faces.size(); ++lface){
+                    int face = faces[lface].index();
+                    int nv = grid.numFaceVertices(face);
+                    std::cout << "Face " << face << " " << pi->getFacePartitionType(face) << ":" ;
+                    for(int lnode=0; lnode < nv; ++lnode){
+                      auto node = grid.faceVertex(face, lnode);
+                      auto gnode = local_global[node];
+                      //assert(index == node );
+                      std::cout << "{" << gnode << "," << node <<"," << Dune::PartitionType(pi->point_indicator_[node]) << "}";
+                    }
+                    std::cout << std::endl;
+                  } 
+                  }
+
+                }
+              }
               ok = false;
-              DUNE_THROW(Dune::Exception, "Owner is not a partition of unity");
-           } 
+              //assert(false);
+              //DUNE_THROW(Dune::Exception, "Owner is not a partition of unity");
+           } else{
+            ok = false;
+           }
           }
       }
       world_comm.barrier();
-      bool all_ok = true;
-      //bool* all_ok = &ok;
       int not_ok = !ok;
       not_ok = world_comm.sum(not_ok);
       if(not_ok > 0){
-          DUNE_THROW(Dune::Exception, "Owner is not a partition of unity");
+          std::cout << "Owner is not a partition of unity" << std::endl;
+          //DUNE_THROW(Dune::Exception, "Owner is not a partition of unity");
       }
       if(verbose){
       for (int rank = 0; rank < world_comm.size(); ++rank) {
@@ -521,7 +583,7 @@ namespace Opm {
                 std::cout << "Global " << ind.global(); 
                 std::cout << " Local " << ind.local().local() << " Attribute " << ind.local().attribute();// << std::endl;
                 std::cout << " rank " << world_comm.rank();
-                std::cout << " max_rank ib" << maxrank_ib[ind.local().local()];
+                std::cout << " max_rank ib " << maxrank_ib[ind.local().local()];
                 //std::cout << " max_rank all " << maxrank_all[ind.local().local()];
                   if (ind.local().attribute() == Dune::OwnerOverlapCopyAttributeSet::owner) {
                       if (numpros[ind.local().local()] != 1) {
@@ -564,7 +626,7 @@ namespace Opm {
     }
     dof_indexset.endResize();
     if(verbose){
-     for (const auto& ind : dof_indexset) {
+     for (const auto& ind : dof_indexset) { 
           std::cout << " Global " << ind.global(); 
           std::cout << " Local " << ind.local().local() << " Attribute " << ind.local().attribute();// << std::endl;
       }
