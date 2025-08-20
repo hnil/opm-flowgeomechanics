@@ -384,9 +384,21 @@ IMPL_FUNC(void, solve())
   try {
     Dune::InverseOperatorResult r;
     Vector& rhs = A.getLoadVector();
-    u.resize(rhs.size());
-    u = 0;
-    tsolver_->apply(u, rhs, r);
+    if(u.size() != rhs.size()){
+        u.resize(rhs.size());
+        u = 0;
+        tsolver_->apply(u, rhs, r);
+    }else{
+        const auto& mat=A.getOperator();
+        auto rhs_tmp = rhs;
+        mat.mmv(u,rhs_tmp);
+        auto dx = u;
+        dx=0;
+        tsolver_->apply(dx, rhs_tmp, r);
+        u += dx;
+    }
+        // MAYBe do other initialization or shift solution.
+    
   } catch (Dune::ISTLError& e) {
     std::cerr << "exception thrown " << e << std::endl;
   }
