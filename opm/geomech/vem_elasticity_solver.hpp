@@ -291,6 +291,15 @@ class VemElasticitySolver
             mat[i][j] += val;
         }
         }
+        // Matrix should be symmetric
+        for (auto row = mat.begin(), rowEnd = mat.end(); row != rowEnd; ++row) {
+            auto i = row.index();
+            for (auto col = row->begin(), colEnd = row->end(); col != colEnd; ++ col) {
+                auto j = col.index();
+                const auto& val = *col; // currently this is a scalar
+                assert(std::abs(mat[i][j] - val) < 1e-14);
+            }
+        }
     }
     void updateRhsWithGrad(const Vector& mechpot){
         OPM_TIMEBLOCK(updateRhsWithGrad);

@@ -255,9 +255,10 @@ void Fracture::removeCells(){
         }
 
         const auto& connection = connections.getFromGlobalIndex(wellinfo_.global_index);// probably wrong
-        auto& filter_cake = connection.getFilterCake();
+        
         has_filtercake_ = connection.filterCakeActive();
         if (has_filtercake_) {
+            auto& filter_cake = connection.getFilterCake();
             const double poro = filter_cake.poro;
             const double perm = filter_cake.perm;
             filtercake_poro_ = poro;
