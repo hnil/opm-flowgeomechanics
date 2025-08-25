@@ -291,6 +291,7 @@ namespace Opm{
                 << std::flush;
             }
             Parent::beginTimeStep();
+            OPM_BEGIN_PARALLEL_TRY_CATCH();
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 if(this->hasFractures()){
                   if(!(cstress_.size() == this->gridView().size(0))){
@@ -304,6 +305,7 @@ namespace Opm{
                 }
                 
             }
+            OPM_END_PARALLEL_TRY_CATCH("Begin time step geomech failed: ", this->simulator().vanguard().grid().comm());
         }
         void endTimeStep(){
             if (this->gridView().comm().rank() == 0){
@@ -311,6 +313,7 @@ namespace Opm{
                 << std::flush;
             }
             //Parent::FlowProblemType::endTimeStep();
+            OPM_BEGIN_PARALLEL_TRY_CATCH();
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 geomechModel_.endTimeStep();
                 if(this->hasFractures() && this->geomechModel().fractureModelActive()){
@@ -329,8 +332,15 @@ namespace Opm{
                         assignGeomechWellState(this->wellModel_.wellState());
                 }
             }
-
+            OPM_END_PARALLEL_TRY_CATCH("End time step geomech failed: ", this->simulator().vanguard().grid().comm());
             Parent::endTimeStep();
+            //
+            if(Parameters::Get<Parameters::EnableWriteAllSolutions>()){
+              //OPM_BEGIN_PARALLEL_TRY_CATCH();
+                geomechModel_.writeFractureSolution();
+                //  OPM_END_PARALLEL_TRY_CATCH("Writing fracture solution failed: ", this->simulator().vanguard().grid().comm());
+            }
+            //
             //Parent::FlowProblemType::endTimeStep();
             //Parent::endStepApplyAction();
  
@@ -389,6 +399,9 @@ namespace Opm{
                         std::cout << "Connection already exists for cell: "
                                   << wellconn.cell << std::endl;
                         continue;
+                    }else{
+                        std::cout << "New connection for cell: "
+                                  << wellconn.cell << std::endl;
                     }
 
                     // get ijk
@@ -434,10 +447,10 @@ namespace Opm{
                     extra_perfs.insert_or_assign(wellName, std::move(extra));
                 }
             }
-
-            if (extra_perfs.empty()) {
+            int loc_new_connections = extra_perfs.size();
+            int num_new_connections = this->gridView().comm().sum(loc_new_connections);
+            if (!(num_new_connections > 0)) {
                 return;
-
             }else{
                 // add to schedule
                 // structure will be changed erase matrix, maybe only rebuilding of linear solver is neede
@@ -472,7 +485,9 @@ namespace Opm{
 
         void endEpisode(){
             Parent::endEpisode();
-            geomechModel_.writeFractureSolution();
+            if(!Parameters::Get<Parameters::EnableWriteAllSolutions>()){
+                geomechModel_.writeFractureSolution();
+            }
         }
 
         const EclGeoMechModel<TypeTag>& geoMechModel() const
