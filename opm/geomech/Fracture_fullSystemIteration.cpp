@@ -364,7 +364,7 @@ Fracture::fullSystemIteration(const double tol)
     // std::cout << "---- Various " << std::endl;
     //  initialize vector of unknown, and vector represnting direction in tangent space
     VectorHP x {fracture_width_, fracture_pressure_};
-    dump_vector(x, "w", "p", true); // dump current state of fracture
+    //dump_vector(x, "w", "p", true); // dump current state of fracture
     //dump_vector(x, debug_filename("w_").c_str(), debug_filename("p_").c_str());
 
     VectorHP dx = x;
@@ -379,7 +379,7 @@ Fracture::fullSystemIteration(const double tol)
     // make a version of the fracture matrix that has trivial equations for closed cells
     const std::vector<int> closed_cells = identify_closed(fractureMatrix(), x, rhs[_0], numWellEquations());
     //dump_vector(closed_cells, debug_filename("closed_cells_").c_str());
-    dump_vector(closed_cells, "closed_cells", true);
+    //dump_vector(closed_cells, "closed_cells", true);
     const auto A = modified_fracture_matrix(fractureMatrix(), closed_cells);
 
     // also modify right hand side for closed cells
@@ -415,7 +415,7 @@ Fracture::fullSystemIteration(const double tol)
     SystemMatrix S0 = S;
     S0[_1][_0] = 0; // the equations themselves have no cross term
     //dump_vector(rhs, debug_filename("rhs_w_").c_str(), debug_filename("rhs_p_").c_str());
-    dump_vector(rhs, "rhs_w", "rhs_p", true);
+    //dump_vector(rhs, "rhs_w", "rhs_p", true);
     S0.mmv(x, rhs); // rhs = rhs - S0 * x;   (we are working in the tanget plane)
 
     // Verify that equations have been chosen correctly
@@ -475,7 +475,7 @@ Fracture::fullSystemIteration(const double tol)
 
     
     //dump_vector(dx, debug_filename("dx_w_").c_str(), debug_filename("dx_p_").c_str());
-    dump_vector(dx, "dx_w", "dx_p", true);
+    //dump_vector(dx, "dx_w", "dx_p", true);
     x += dx;
     if(nlin_verbosity > 1){
       //std::cout << "after: x:  " << x[_0].infinity_norm() << " " << x[_1].infinity_norm() << std::endl;

@@ -740,7 +740,7 @@ reduce_system(vector<tuple<int, int, double>>& A,
                                "provided in ascending order.");
 
     // sort entries of A into columns
-    cout << "Reducing system: moving elements to right hand side" << endl;
+    //cout << "Reducing system: moving elements to right hand side" << endl;
 
     sort(A.begin(), A.end(), [](const auto& aa, const auto& bb) { return get<1>(aa) < get<1>(bb); });
 
@@ -758,7 +758,7 @@ reduce_system(vector<tuple<int, int, double>>& A,
     }
 
     // determine renumbering
-    cout << "Reducing system: determining renumbering" << endl;
+    //cout << "Reducing system: determining renumbering" << endl;
     vector<int> keep(b.size());
     iota(keep.begin(), keep.end(), 0);
     vector<int> renum;
@@ -772,7 +772,7 @@ reduce_system(vector<tuple<int, int, double>>& A,
         renum_inv[renum[i]] = i;
 
     // eliminate rows associated with fixed dofs and renumber
-    cout << "Reducing system: eliminating entries" << endl;
+    //cout << "Reducing system: eliminating entries" << endl;
     A.erase(remove_if(A.begin(),
                       A.end(),
                       [&discard_flag, &renum_inv](const tuple<int, int, double>& el) {
@@ -787,7 +787,7 @@ reduce_system(vector<tuple<int, int, double>>& A,
         b[i] = b[renum[i]];
 
     b.resize(renum.size());
-    cout << "Reducing system: FINISHED" << endl;
+    //cout << "Reducing system: FINISHED" << endl;
 }
 
 void
@@ -804,7 +804,7 @@ set_boundary_conditions(vector<tuple<int, int, double>>& A,
                                "provided in ascending order.");
 
     // sort entries of A into columns
-    cout << "Setboundary conditions: by trivial equations" << endl;
+    //cout << "Setboundary conditions: by trivial equations" << endl;
 
     sort(A.begin(), A.end(), [](const auto& aa, const auto& bb) { return get<1>(aa) < get<1>(bb); });
 
@@ -826,7 +826,7 @@ set_boundary_conditions(vector<tuple<int, int, double>>& A,
     
 
     // determine renumbering
-    cout << "Sett boundary condititions in matrix and rhs" << endl;
+    //cout << "Sett boundary condititions in matrix and rhs" << endl;
     vector<int> keep(b.size());
     iota(keep.begin(), keep.end(), 0);
     vector<int> renum;
@@ -856,7 +856,7 @@ set_boundary_conditions(vector<tuple<int, int, double>>& A,
         b[dof] = fixed_dof_values[i];
     }
 
-    cout << "Setting boudnary conditions in matrix and rhs: FINISHED" << endl;
+    //cout << "Setting boudnary conditions in matrix and rhs: FINISHED" << endl;
 }
 
 // ----------------------------------------------------------------------------
@@ -1680,10 +1680,10 @@ assemble_mech_system_2D(const double* const points,
 
     // reduce system by eliminating Dirichlet degrees of freedom, and returning
     if(reduce_boundary){
-        cout << "Reducing system" << endl;
+        //cout << "Reducing system" << endl;
         reduce_system(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
     }else{
-        cout << "Set boundary conditions without reducing system" << endl;
+        //cout << "Set boundary conditions without reducing system" << endl;
         set_boundary_conditions(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
     }
     return b.size();
@@ -1729,7 +1729,7 @@ assemble_mech_system_3D(const double* const points,
     int cf_ix = 0; // index to first cell face for the current cell
     int fcorners_start = 0; // index to first cell corner for current cell
 
-    cout << "Starting assembly" << endl;
+    //cout << "Starting assembly" << endl;
     for (int c = 0; c != num_cells; ++c) {
         // computing local stiffness matrix, writing its entries into the global matrix
         assemble_stiffness_matrix_3D(points,
@@ -1769,7 +1769,7 @@ assemble_mech_system_3D(const double* const points,
         fcorners_start += accumulate(&num_face_corners[cf_ix], &num_face_corners[cf_ix + num_cell_faces[c]], 0);
         cf_ix += num_cell_faces[c];
     }
-    cout << "Applying forces" << endl;
+    //cout << "Applying forces" << endl;
 
     // add contribution to right hand side from applied forces.  Values are written
     // directly into the global right-hand-side vector
@@ -1777,14 +1777,14 @@ assemble_mech_system_3D(const double* const points,
         points, num_face_corners, face_corners, num_neumann_faces, neumann_faces, neumann_forces, &b[0]);
 
     if(reduce_boundary){
-        cout << "Reducing system" << endl;
+        //cout << "Set boundary conditions: Reducing system" << endl;
         reduce_system(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
     }else{
-        cout << "Set boundary conditions reducing system" << endl;
+        //cout << "Set boundary conditions: Set it directly in system" << endl;
         set_boundary_conditions(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
     }
 
-    cout << "Finished assembly.  Returning." << endl;
+    //cout << "Finished assembly.  Returning." << endl;
 
     return b.size();
 }
@@ -1825,7 +1825,7 @@ compute_stress_3D(const double* const points,
     int cf_ix = 0; // index to first cell face for the current cell
     int fcorners_start = 0; // index to first cell corner for current cell
 
-    cout << "Starting assembly" << endl;
+    //cout << "Starting assembly" << endl;
     for (int c = 0; c != num_cells; ++c) {
         // computing local stiffness matrix, writing its entries into the global matrix
         calculate_stress_3D_local(points,

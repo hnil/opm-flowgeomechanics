@@ -417,9 +417,9 @@ namespace Opm {
     const auto& allranks_all = datahandle_all.all_data();
 
 
-    std::cout << "Getting max rank of node " << std::endl;
+    //std::cout << "Getting max rank of node " << std::endl;
     world_comm.barrier();
-    std::cout << "Finnish max rank of node " << std::endl;
+    //std::cout << "Finnish max rank of node " << std::endl;
       
       // Dune::PartitionType::AllPartition
       using AttributeSet = Dune::OwnerOverlapCopyAttributeSet;
