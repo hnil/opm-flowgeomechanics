@@ -348,10 +348,9 @@ bool
 Fracture::fullSystemIteration(const double tol)
 // ----------------------------------------------------------------------------
 {
-
+  OPM_TIMEFUNCTION();
 
   ++DEBUG_COUNT;
-  OPM_TIMEFUNCTION();
   //min_width_ = prm_.get<double>("solver.min_width"); // min with only used for flow calculations
   const double max_width = prm_.get<double>("solver.max_width");
 
@@ -431,6 +430,7 @@ Fracture::fullSystemIteration(const double tol)
             rhs, tol * M.infinity_norm(), std::max(tol, A.infinity_norm() * std::numeric_limits<double>::epsilon())))
         return true;
 
+    
     // solve system equations
     const Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP> S_linop(S);
     TailoredPrecondDiag precond(S); // cannot be 'const' due to BiCGstabsolver interface
@@ -438,6 +438,11 @@ Fracture::fullSystemIteration(const double tol)
     const double linsolve_tol = prm_.get<double>("solver.linsolver.tol");
     const int max_iter = prm_.get<double>("solver.linsolver.max_iter");
     const int verbosity = prm_.get<double>("solver.linsolver.verbosity");
+    const int nlin_verbosity = prm_.get<double>("solver.verbosity");
+    if (nlin_verbosity > 1) {
+        std::cout << "rhs:  " << rhs[_0].infinity_norm() << " " << rhs[_1].infinity_norm() << std::endl;
+        std::cout << "dx: " << dx[_0].infinity_norm() << " " << dx[_1].infinity_norm() << std::endl;
+    }
     auto psolver = Dune::BiCGSTABSolver<VectorHP>(S_linop,
                                                   precond,
                                                   linsolve_tol, // 1e-20, // desired rhs reduction factor
@@ -447,10 +452,14 @@ Fracture::fullSystemIteration(const double tol)
         OPM_TIMEBLOCK(SolveCoupledSystem);
         psolver.apply(dx, rhs, iores); // NB: will modify 'rhs'
     }
-    const int nlin_verbosity = prm_.get<double>("solver.verbosity");
+    
     if (nlin_verbosity > 1) {
         std::cout << "x:  " << x[_0].infinity_norm() << " " << x[_1].infinity_norm() << std::endl;
         std::cout << "dx: " << dx[_0].infinity_norm() << " " << dx[_1].infinity_norm() << std::endl;
+        auto rhstmp = rhs;
+        S0.mmv(x, rhstmp);
+        std::cout << "rhs org:  " << rhs[_0].infinity_norm() << " " << rhs[_1].infinity_norm() << std::endl;
+        std::cout << "rhs:  " << rhstmp[_0].infinity_norm() << " " << rhstmp[_1].infinity_norm() << std::endl;
     }
     // the following is a heuristic way to limit stepsize to stay within convergence radius
     const double damping = prm_.get<double>("solver.damping");

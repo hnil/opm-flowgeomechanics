@@ -1,5 +1,9 @@
 #include "config.h"
 
+#include <string>       // std::string
+#include <iostream>     // std::cout
+#include <sstream>
+
 #include <opm/geomech/Fracture.hpp>
 
 #include "opm/geomech/GridStretcher.hpp"
@@ -179,6 +183,7 @@ void Fracture::resetWriters() {
 }
 
 void Fracture::setupPressureSolver(){
+  OPM_TIMEFUNCTION();
     Opm::FlowLinearSolverParameters p;
     p.linsolver_ = prm_.get<std::string>("pressuresolver");
     prmpressure_ = Opm::setupPropertyTree(p, true, true);
@@ -477,6 +482,7 @@ std::vector<double> Fracture::stressIntensityK1() const{
 void
 Fracture::write(int reportStep) const
 {
+  OPM_TIMEFUNCTION();
     std::vector<double> K1;//need to be in scope until written
     auto tmp(fracture_pressure_); //@@
     tmp.resize(numFractureCells());
@@ -525,7 +531,10 @@ Fracture::write(int reportStep) const
 
 void Fracture::writemulti(double time) const
 {
-    std::cout<< "Writing fracture data to VTK files at time: " << time << "grid_size" << numFractureCells() << std::endl;
+  OPM_TIMEFUNCTION();
+  std::stringstream message;
+  message << "Writing fracture data to VTK files at time: " << time << "grid_size" << numFractureCells() << std::endl;
+  OpmLog::info(message.str());
   //vtkmultiwriter_->gridChanged();// need to be called if grid is changed
     // need to have copies in case of async outout (and interface to functions)
     std::vector<double> K1 = this->stressIntensityK1();
@@ -1199,6 +1208,38 @@ std::vector<double> Fracture::redistribute_values(const std::vector<double>& val
 
     return redistributed_values;
 }
+    
+void updateMaxMinVector(std::array<double,2>& dvalvec, double val){
+    if(val<0){
+      dvalvec[0] = std::min(val,dvalvec[0]);
+    }else{
+      dvalvec[1] = std::max(val,dvalvec[1]);
+    }
+}
+
+
+FractureProperties Fracture::calculateFractureProperties() const
+{ 
+    std::array<double, 2> dhvec({0.0, 0.0});
+    std::array<double, 2> dwvec({0.0, 0.0});
+    double total_flux(0);
+    std::vector<double> leak_of_rate = leakOfRate();
+    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+    for (auto& element : Dune::elements(grid_->leafGridView())) {
+        int eIdx = mapper.index(element);
+        auto geom = element.geometry();
+        auto dist = geom.center() - origo_;
+        double dh = dist.dot(axis_[0]);
+        double dw = dist.dot(axis_[1]);
+        updateMaxMinVector(dhvec, dh);
+        updateMaxMinVector(dwvec, dw);
+        total_flux += leak_of_rate[eIdx]*geom.volume();
+    }
+    double height = dhvec[1]-dhvec[0];
+    double width = dwvec[1]-dwvec[0];
+    FractureProperties fracprop(height,width,total_flux);
+    return fracprop;
+}
 
 void Fracture::initPressureMatrix()
 {
@@ -1349,6 +1390,44 @@ Fracture::assemblePressure()
         OPM_THROW(std::runtime_error,"Unknown control of injection into Fracture");
     }
 }
+
+bool Fracture::removeNewZeroWithCells(RegularTrimesh& mesh,int cur_level,const RegularTrimesh& initial_mesh) const{
+        bool any_removed = false;
+        using GridView = typename Grid::LeafGridView;
+        using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
+        ElementMapper elemMapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+        for (auto& cell : elements(grid_->leafGridView())){
+          const auto index = elemMapper.index(cell);
+            if (fracture_width_[index] == 0) {
+                auto cellrefs = grid_mesh_map_[index];
+                for (const auto& cellref : cellrefs) {
+                    if (cur_level == 0) {
+                        if (!initial_mesh.isActive(cellref)) {
+                            mesh.setInactive(cellref);
+                            any_removed = true;
+                        }
+                    } else {
+                        // go through all fine cells of the initial mesh to see if they any is active
+                        assert(cur_level > 0);
+                        const auto& fine_cells = RegularTrimesh::coarse_to_fine(cellref, cur_level);
+                        bool any_active = false;
+                        for (const auto& fine_cell : fine_cells) {
+                            if (initial_mesh.isActive(fine_cell)) {
+                                any_active = true;
+                            }
+                        }
+                        if (!any_active) {
+                            mesh.setInactive(cellref);
+                            any_removed = true;
+                        }
+                    }
+                }
+            }
+        }
+   return any_removed;
+}
+
+
 
 double Fracture::normalFractureTraction(size_t eIdx) const
 {

@@ -48,6 +48,8 @@
 #include <opm/geomech/RegularTrimesh.hpp>
 
 
+
+
 #include <cmath>
 #include <functional>
 #include <iostream>
@@ -76,6 +78,20 @@ namespace Opm::Properties {
 
 namespace Opm
 {
+struct FractureProperties
+{
+  double height;
+  double width;
+  double flux;
+  FractureProperties(double height_, double width_, double flux_):
+    height(height_),
+    width(width_),
+    flux(flux_)
+  {
+  };
+};
+
+  
 struct WellInfo
 {
     std::string name;
@@ -133,7 +149,7 @@ public:
     template <class TypeTag, class Simulator>
     void solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& cell_search_tree,
                const Simulator& simulator);
-
+    FractureProperties calculateFractureProperties() const;
     void printPressureMatrix() const; // debug purposes
     void printMechMatrix() const; // debug purposes
     void writeFractureSystem()  const;
@@ -153,8 +169,9 @@ public:
     void assignGeomechWellState(ConnFracStatistics<Scalar>& stats) const;
     void setActive(bool active) { active_ = active; }
     bool isActive() const { return active_; }
-
+    std::array<double,2> hightAndWidth() const; 
 private:
+   bool removeNewZeroWithCells(RegularTrimesh& mesh,int cur_level,const RegularTrimesh& original_mesh) const;
    std::vector<double> redistribute_values(const std::vector<double>& values,
                                         const std::vector<std::vector<CellRef>>& map1,
                                         const std::vector<std::vector<CellRef>>& map2,

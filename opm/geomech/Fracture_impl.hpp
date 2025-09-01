@@ -351,7 +351,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             const int MAX_NUM_COARSENING = prm_.get<int>("solver.max_num_coarsening"); // should be enough for all practical purposes
             const int numcell_threshold = prm_.get<int>("solver.numcell_threshold");
             auto [grid, fsmap, bmap] =
-            trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources); // well cells kept intact!
+            trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources,/* smoothed triangels */ false, numcell_threshold); // well cells kept intact!
             grid_mesh_map_ = fsmap;
             setFractureGrid(std::move(grid)); // true -> coarsen interior
             // generate the inverse map of fsmap_ (needed below)
@@ -391,6 +391,10 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 for (size_t i = 0; i < fracture_pressure_.size(); ++i) {
                     assert(std::abs(fracture_pressure_[i][0]) < 1e10);
                     assert(std::abs(fracture_width_[i][0]) < 0.6);
+                    if(fracture_pressure_[i] == 0.0){
+                      // not initialized values
+                      fracture_pressure_[i] = reservoir_pressure_[i];
+                    }
                 }
             } else {
                 initFractureWidth();
@@ -424,145 +428,165 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         const std::vector<CellRef> fixed_cells = well_source_cellref_;
         const int target_cellcount = prm_.get<int>("solver.target_cellcount"); 
         const int cellcount_threshold = prm_.get<int>("solver.cellcount_threshold");
-        const auto [mesh, cur_level] =
+        const int max_iter_on_same_level = prm_.get<int>("solver.max_iter_on_same_level");
+        const auto initial_mesh= *trimesh_;
+        auto [mesh, cur_level] =
             expand_to_criterion(*trimesh_, score_function, threshold,
-                                fixed_cells, target_cellcount, cellcount_threshold);
-        // make current level become the reference (finest) level
-        // note that the well_source_cellref_ is already set from the last call to the score function
-        for (auto& cell : well_source_cellref_) 
-            cell = RegularTrimesh::fine_to_coarse(cell, cur_level);
+                                fixed_cells,
+                                target_cellcount,
+                                cellcount_threshold,
+                                max_iter_on_same_level);
+
+
         
-        // ----------------------------------------------------------------------------
-    } else if (method == "if_propagate") {
-        // ----------------------------------------------------------------------------
-        // iterate full nonlinear system until convergence, and expand fracture if necessary
-        if(false){
-            fracture_width_ = 1e-2; // Ensure not completely closed
-            fracture_pressure_ = 0.0;
+        bool any_removed = removeNewZeroWithCells(mesh,cur_level, initial_mesh);
+        // this will set trimesh_,change dune grid  and solve
+        if(any_removed){
+          mesh.removeSawtooths();
+          score_function(mesh, cur_level);
         }
 
-        // start by assuming pressure equal to confining stress (will also set
-        // fracture_pressure_ to its correct size
-        normalFractureTraction(fracture_pressure_);
-        if (numWellEquations() > 0){ // @@ it is implicitly assumed for now that
-            // there is just one well equation.  We initializze
-            // it with an existing value.
-            fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
+
+            // make current level become the reference (finest) level
+            // note that the well_source_cellref_ is already set from the last call to the score function
+            for (auto& cell : well_source_cellref_)
+                cell = RegularTrimesh::fine_to_coarse(cell, cur_level);
+
+            // ----------------------------------------------------------------------------
         }
-        const int max_iter = prm_.get<int>("solver.max_iter");
-        const double tol = prm_.get<double>("solver.tolerance");//,1e-8);
+        else if (method == "if_propagate")
+        {
+            // ----------------------------------------------------------------------------
+            // iterate full nonlinear system until convergence, and expand fracture if necessary
+            if (false) {
+                fracture_width_ = 1e-2; // Ensure not completely closed
+                fracture_pressure_ = 0.0;
+            }
+
+            // start by assuming pressure equal to confining stress (will also set
+            // fracture_pressure_ to its correct size
+            normalFractureTraction(fracture_pressure_);
+            if (numWellEquations() > 0) { // @@ it is implicitly assumed for now that
+                // there is just one well equation.  We initializze
+                // it with an existing value.
+                fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
+            }
+            const int max_iter = prm_.get<int>("solver.max_iter");
+            const double tol = prm_.get<double>("solver.tolerance"); //,1e-8);
 
 
-        const double efac = prm_.get<double>("solver.efac"); // 2; // @@ heuristic
-        const double rfac = prm_.get<double>("solver.rfac"); // 2; // @@ heuristic
-        double K1max = prm_.get<double>("KMax"); // @@ for testing.  Should be added as a proper data member
-        const std::vector<size_t> boundary_cells = grid_stretcher_->boundaryCellIndices();
-        const size_t N = boundary_cells.size(); // number of boundary nodes and boundary cells
+            const double efac = prm_.get<double>("solver.efac"); // 2; // @@ heuristic
+            const double rfac = prm_.get<double>("solver.rfac"); // 2; // @@ heuristic
+            double K1max = prm_.get<double>("KMax"); // @@ for testing.  Should be added as a proper data member
+            const std::vector<size_t> boundary_cells = grid_stretcher_->boundaryCellIndices();
+            const size_t N = boundary_cells.size(); // number of boundary nodes and boundary cells
 
-        std::vector<double> total_bnode_disp(N, 0), bnode_disp(N, 0), cell_disp(N, 0);
-        // const std::vector<GridStretcher::CoordType>
-        //   bnode_normals_orig = grid_stretcher_->bnodenormals();
-        int max_expand_iter = prm_.get<int>("solver.max_expand_iter");
-        std::vector<GridStretcher::CoordType> displacements(N, {0, 0, 0});
-        int count = 0; // @@
-        while (true && (count < max_expand_iter)) {
+            std::vector<double> total_bnode_disp(N, 0), bnode_disp(N, 0), cell_disp(N, 0);
+            // const std::vector<GridStretcher::CoordType>
+            //   bnode_normals_orig = grid_stretcher_->bnodenormals();
+            int max_expand_iter = prm_.get<int>("solver.max_expand_iter");
+            std::vector<GridStretcher::CoordType> displacements(N, {0, 0, 0});
+            int count = 0; // @@
+            while (true && (count < max_expand_iter)) {
 
-            std::cout << "Iteration: " << ++count << std::endl;
-            // solve flow-mechanical system
-            int iter = 0;
-            // open file "width" for appending data
-            while (!fullSystemIteration(tol) && iter++ < max_iter) {
-                // @@@@
-                // auto fw = make_vector(fracture_width_);
-                // auto fp = make_vector(fracture_pressure_, fracture_pressure_.size()-1);
-                // grid_stretcher_->dumpToVTK("stretchedgrid", { fw, fp });
+                std::cout << "Iteration: " << ++count << std::endl;
+                // solve flow-mechanical system
+                int iter = 0;
+                // open file "width" for appending data
+                while (!fullSystemIteration(tol) && iter++ < max_iter) {
+                    // @@@@
+                    // auto fw = make_vector(fracture_width_);
+                    // auto fp = make_vector(fracture_pressure_, fracture_pressure_.size()-1);
+                    // grid_stretcher_->dumpToVTK("stretchedgrid", { fw, fp });
 
-                // if (iter > 20) {
-                //   std::ofstream width_debug("width", std::ios::app);
-                //   std::ofstream pressure_debug("pressure", std::ios::app);
+                    // if (iter > 20) {
+                    //   std::ofstream width_debug("width", std::ios::app);
+                    //   std::ofstream pressure_debug("pressure", std::ios::app);
 
-                //   std::copy(fw.begin(), fw.end(), std::ostream_iterator<double>(width_debug, " "));
-                //   std::copy(fp.begin(), fp.end(), std::ostream_iterator<double>(pressure_debug, " "));
+                    //   std::copy(fw.begin(), fw.end(), std::ostream_iterator<double>(width_debug, " "));
+                    //   std::copy(fp.begin(), fp.end(), std::ostream_iterator<double>(pressure_debug, " "));
 
-                //   int krull=0;
-                //}
-            };
-            std::cout << "Iterations needed: " << iter << std::endl;
+                    //   int krull=0;
+                    //}
+                };
+                std::cout << "Iterations needed: " << iter << std::endl;
 
 
-            // identify where max stress intensity is exceeded and propagation is needed
-            const auto dist = grid_stretcher_->centroidEdgeDist();
-            fill(bnode_disp.begin(), bnode_disp.end(), 0.0);
+                // identify where max stress intensity is exceeded and propagation is needed
+                const auto dist = grid_stretcher_->centroidEdgeDist();
+                fill(bnode_disp.begin(), bnode_disp.end(), 0.0);
 
-            const std::vector<double> K1_not_nan = Fracture::stressIntensityK1();
-            std::vector<double> K1;
-            bool should_fracture = false;
-            for (size_t i = 0; i != K1_not_nan.size(); ++i){
-                if (!std::isnan(K1_not_nan[i])){
-                    K1max = reservoir_cstress_[i];
-                    if(K1_not_nan[i] > K1max){
-                        should_fracture = true;
+                const std::vector<double> K1_not_nan = Fracture::stressIntensityK1();
+                std::vector<double> K1;
+                bool should_fracture = false;
+                for (size_t i = 0; i != K1_not_nan.size(); ++i) {
+                    if (!std::isnan(K1_not_nan[i])) {
+                        K1max = reservoir_cstress_[i];
+                        if (K1_not_nan[i] > K1max) {
+                            should_fracture = true;
+                        }
                     }
                 }
+                if (!should_fracture) {
+                    break;
+                }
+
+                // loop over cells, determine how much they should be expanded or contracted
+                const double maxgrow = rfac * grid_stretcher_->maxBoxLength();
+                for (size_t i = 0; i != N; ++i) {
+                    K1max = reservoir_cstress_[boundary_cells[i]];
+                    cell_disp[i] = efac
+                        * (compute_target_expansion(K1max, fracture_width_[boundary_cells[i]], E_, nu_) - dist[i]);
+                    cell_disp[i] = std::max(std::min(cell_disp[i], maxgrow), -maxgrow);
+                }
+
+                bnode_disp = grid_stretcher_->computeBoundaryNodeDisplacements(cell_disp); //@@
+                // bnode_disp =
+                //   grid_stretcher_->computeBoundaryNodeDisplacements(cell_disp, bnode_normals_orig);
+                for (size_t i = 0; i != N; ++i)
+                    bnode_disp[i] = std::max(std::min(bnode_disp[i], maxgrow), -maxgrow);
+
+                // // ensure no boundary node moved inwards further than starting point
+                // for (size_t i = 0; i != N; ++i) {
+                //   bnode_disp[i] = std::max(bnode_disp[i], -total_bnode_disp[i]);
+                //   total_bnode_disp[i] += bnode_disp[i];
+                // } // @@@ no longer works after rebalanceBoundary introduced()
+
+                // ensure convexity
+                grid_stretcher_->adjustToConvex(bnode_disp, total_bnode_disp, grid_stretcher_->bnodenormals());
+                // bnode_normals_orig);
+
+                for (size_t i = 0; i != N; ++i)
+                    displacements[i] = grid_stretcher_->bnodenormals()[i] * bnode_disp[i];
+                // displacements[i] = bnode_normals_orig[i] * bnode_disp[i];
+
+                grid_stretcher_->applyBoundaryNodeDisplacements(displacements);
+                grid_stretcher_->rebalanceBoundary();
+
+                // debug stuff
+                // grid_stretcher_->dumpToVTK("stretchedgrid");
+
+                // grid has changed its geometry, so we have to recompute discretizations
+                updateCellNormals();
+                updateReservoirCells(cell_search_tree);
+                updateReservoirProperties<TypeTag, Simulator>(simulator, true, false);
+                initPressureMatrix();
+                fracture_matrix_ = nullptr;
+
+                const auto& pts = grid_stretcher_->nodecoords();
+                const auto bix = grid_stretcher_->boundaryNodeIndices();
+                // for(auto i : bix)
+                //   os << pts[i][0] << " " << pts[i][1] << " " << pts[i][2] << "\n";
+                // os.close();
             }
-            if(!should_fracture){
-                break;
+            if (count >= max_expand_iter) {
+                std::cout << "Fracture expansion did not converge within the maximum number of iterations" << std::endl;
             }
-
-            // loop over cells, determine how much they should be expanded or contracted
-            const double maxgrow = rfac * grid_stretcher_->maxBoxLength();
-            for (size_t i = 0; i != N; ++i) {
-                K1max = reservoir_cstress_[boundary_cells[i]];
-                cell_disp[i]
-                    = efac * (compute_target_expansion(K1max, fracture_width_[boundary_cells[i]], E_, nu_) - dist[i]);
-                cell_disp[i] = std::max(std::min(cell_disp[i], maxgrow), -maxgrow);
-            }
-
-            bnode_disp = grid_stretcher_->computeBoundaryNodeDisplacements(cell_disp); //@@
-            // bnode_disp =
-            //   grid_stretcher_->computeBoundaryNodeDisplacements(cell_disp, bnode_normals_orig);
-            for (size_t i = 0; i != N; ++i)
-                bnode_disp[i] = std::max(std::min(bnode_disp[i], maxgrow), -maxgrow);
-
-            // // ensure no boundary node moved inwards further than starting point
-            // for (size_t i = 0; i != N; ++i) {
-            //   bnode_disp[i] = std::max(bnode_disp[i], -total_bnode_disp[i]);
-            //   total_bnode_disp[i] += bnode_disp[i];
-            // } // @@@ no longer works after rebalanceBoundary introduced()
-
-            // ensure convexity
-            grid_stretcher_->adjustToConvex(bnode_disp, total_bnode_disp, grid_stretcher_->bnodenormals());
-            // bnode_normals_orig);
-
-            for (size_t i = 0; i != N; ++i)
-                displacements[i] = grid_stretcher_->bnodenormals()[i] * bnode_disp[i];
-            // displacements[i] = bnode_normals_orig[i] * bnode_disp[i];
-
-            grid_stretcher_->applyBoundaryNodeDisplacements(displacements);
-            grid_stretcher_->rebalanceBoundary();
-
-            // debug stuff
-            // grid_stretcher_->dumpToVTK("stretchedgrid");
-
-            // grid has changed its geometry, so we have to recompute discretizations
-            updateCellNormals();
-            updateReservoirCells(cell_search_tree);
-            updateReservoirProperties<TypeTag, Simulator>(simulator, true, false);
-            initPressureMatrix();
-            fracture_matrix_ = nullptr;
-
-            const auto& pts = grid_stretcher_->nodecoords();
-            const auto bix = grid_stretcher_->boundaryNodeIndices();
-            // for(auto i : bix)
-            //   os << pts[i][0] << " " << pts[i][1] << " " << pts[i][2] << "\n";
-            // os.close();
         }
-        if(count >= max_expand_iter){
-           std::cout << "Fracture expansion did not converge within the maximum number of iterations" << std::endl;
+        else
+        {
+            OPM_THROW(std::runtime_error, "Unknowns solution method");
         }
-    } else {
-        OPM_THROW(std::runtime_error, "Unknowns solution method");
-    }
 }
 
 } // namespace Opm

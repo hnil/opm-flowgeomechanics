@@ -68,8 +68,9 @@ namespace Opm{
         fracture_param.put("fractureparam.solver.method", "if_propagate_trimesh"s);
         fracture_param.put("fractureparam.solver.target_cellcount", 100);
         fracture_param.put("fractureparam.solver.cellcount_threshold", 400);
-        fracture_param.put("fractureparam.solver.numcell_threshold", 50);
+        fracture_param.put("fractureparam.solver.numcell_threshold", 10);
         fracture_param.put("fractureparam.solver.max_num_coarsening", 200);
+        fracture_param.put("fractureparam.solver.max_iter_on_same_level", 5);
         fracture_param.put("fractureparam.solver.efac", 0.5);
         fracture_param.put("fractureparam.solver.rfac", 0.1);
         fracture_param.put("fractureparam.solver.max_expand_iter", 20);

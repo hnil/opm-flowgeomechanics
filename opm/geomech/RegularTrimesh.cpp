@@ -10,7 +10,7 @@
 
 #include <dune/grid/io/file/vtk/vtkwriter.hh>
 #include <dune/grid/utility/structuredgridfactory.hh>
-
+#include <opm/common/TimingMacros.hpp>
 using namespace Opm;
 using namespace std;
 
@@ -1424,19 +1424,21 @@ vector<CellRef> RegularTrimesh::activeNeighborCells(const vector<CellRef>& cells
 
 // ----------------------------------------------------------------------------
 std::tuple<RegularTrimesh, int>
-expand_to_criterion(const RegularTrimesh& mesh,
+expand_to_criterion(const RegularTrimesh& mesh,// remember that this is changed by score_function
                     function<vector<double>(const RegularTrimesh&,
                                             const int level)> score_function,
                     double threshold, const std::vector<CellRef>& fixed_cells,
                     const int target_cellcount,
-                    const int cellcount_threshold
+                    const int cellcount_threshold,
+                    const int max_iter
                     )
 {
+    OPM_TIMEFUNCTION();
     RegularTrimesh working_mesh = mesh; // make a working copy of the mesh;
     vector<RegularTrimesh> last_meshes; // keep track of meshes at each level before coarsening
     int cur_level = 0; // start expanding mesh at finest level
     int iter_count = 0; // keep track of iterations on current level
-    const int max_iter = 5; // 5; // maximum number of iterations on current level
+    //const int max_iter = 5; // 5; // maximum number of iterations on current level
     int roof = numeric_limits<int>::max();
     
     ++DEBUG_GRID_COUNT; // @@ keeping track of grids to output for debugging/monitoring purposes

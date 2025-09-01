@@ -246,6 +246,6 @@ expand_to_criterion(const RegularTrimesh& mesh,
                                           const int level)> score_function,
         double threshold, const std::vector<CellRef>& fixed_cells,
         const int target_cellcount, // target number of cells in final mesh
-        const int cellcount_threshold // target number of cells in initial mesh to expand (start level will be determined by this)
-        );
+                    const int cellcount_threshold, // target number of cells in initial mesh to expand (start level will be determined by this)
+        const int max_iteration_on_coarse_level);
 } // namespace Opm

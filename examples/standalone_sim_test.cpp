@@ -12,7 +12,7 @@
 #include <dune/istl/matrixmarket.hh>
 #include <dune/istl/preconditioners.hh>
 //#include <dune/istl/paamg/amg.hh>
-
+#include <opm/geomech/FractureMechanicsPreconditioner.hpp>
 //#include "opm/geomech/Fracture.hpp"
 #include <dune/foamgrid/foamgrid.hh>
 #include <dune/grid/common/mcmgmapper.hh> // mapper class
