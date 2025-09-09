@@ -20,7 +20,7 @@
 #include <opm/common/ErrorMacros.hpp>
 #include <opm/common/TimingMacros.hpp>
 #include <opm/geomech/Fracture.hpp>
-
+#include <opm/geomech/FractureMechanicsPreconditioner.hpp>
 
 using namespace std;
 
@@ -273,8 +273,8 @@ public:
         for (size_t i = 0; i != M_diag_.size(); ++i)
             v[_1][i] = d[_1][i] / M_diag_[i];
     };
-    virtual void post(VectorHP& v) {};
-    virtual void pre(VectorHP& x, VectorHP& b) {};
+    virtual void post(VectorHP& /*v*/) {};
+    virtual void pre(VectorHP& /*x*/, VectorHP& /*b*/) {};
     virtual Dune::SolverCategory::Category category() const
     {
         return Dune::SolverCategory::sequential;
@@ -389,7 +389,7 @@ Fracture::fullSystemIteration(const double tol)
     // update the coupling matrix (possibly create it if not already initialized)
     auto fracture_head(fracture_pressure_);
     assert(fracture_dgh_.size() == fracture_pressure_.size());
-    for (int i = 0; i < fracture_dgh_.size(); ++i) {
+    for (size_t i = 0; i < fracture_dgh_.size(); ++i) {
         fracture_head[i] = fracture_pressure_[i] - fracture_dgh_[i];
     }
 
@@ -433,7 +433,9 @@ Fracture::fullSystemIteration(const double tol)
     
     // solve system equations
     const Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP> S_linop(S);
-    TailoredPrecondDiag precond(S); // cannot be 'const' due to BiCGstabsolver interface
+    TailoredPrecondDiag precond_old(S); // cannot be 'const' due to BiCGstabsolver interface
+    Opm::PropertyTree lprm = prm_.get_child("solver.linsolver.preconditioner");
+    Opm::FractureMechanicsPreconditioner precond(S, lprm);
     Dune::InverseOperatorResult iores; // cannot be 'const' due to BiCGstabsolver interface
     const double linsolve_tol = prm_.get<double>("solver.linsolver.tol");
     const int max_iter = prm_.get<double>("solver.linsolver.max_iter");
