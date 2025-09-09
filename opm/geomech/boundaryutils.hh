@@ -214,10 +214,40 @@ namespace Opm{
             {
                 return std::get<0>(t1) == std::get<0>(t2);
             };
+            //TODO: make unique with masks removing boundary set on same dofs mayr romve masks
+            const std::vector<std::tuple<size_t,MechBCValue>> org_bc_nodes = bc_nodes;
             std::sort(bc_nodes.begin(), bc_nodes.end(), compare); // {1 1 2 3 4 4 5}
             auto last = std::unique(bc_nodes.begin(), bc_nodes.end(), isequal);
             // v now holds {1 2 3 4 5 x x}, where 'x' is indeterminate
             bc_nodes.erase(last, bc_nodes.end());
+            
+            // make index
+            auto max_elem = std::max_element(bc_nodes.begin(), bc_nodes.end(),
+                                          [](const auto& a, const auto& b){
+                                              return std::get<0>(a) < std::get<0>(b);
+                                          });
+            int maxnode = std::get<0>(*max_elem);
+            std::vector<int> mymap(maxnode+1,-1);
+            for(int i=0; i< int(bc_nodes.size()); ++i){
+                mymap[std::get<0>(bc_nodes[i])] = i;
+            }
+
+            for(int i=0; i< int(org_bc_nodes.size()); ++i){
+                int node = std::get<0>(org_bc_nodes[i]);
+                assert(node<mymap.size());
+                int index = mymap[node];
+                assert(index>-1);
+                auto mask = std::get<1>(org_bc_nodes[i]).fixeddir;
+                for(int mdim=0; mdim<3; mdim++){
+                    if(mask[mdim]){
+                        assert(index < int(bc_nodes.size()));
+                        auto& bc_node = bc_nodes[index];
+                        assert(node == std::get<0>(bc_node));
+                        std::get<1>(bc_node).fixeddir[mdim] = true;
+                        assert(std::get<1>(bc_nodes[index]).fixeddir[mdim] == true);
+                    }
+                }                
+            }
         }
     }
 }
