@@ -204,11 +204,11 @@ namespace Elasticity {
 {
     OPM_TIMEBLOCK(assemble);
     using namespace std;
-    Vector& b = A.getLoadVector();
+    Vector& b = this->getLoadVector();
     b = 0;
-    A.getLoadVector() = 0;
+    this->getLoadVector() = 0;
     if (do_matrix)
-        A.getOperator() = 0;
+        this->getOperator() = 0;
 
     if(do_matrix){
         vem::getGridVectors(grid_,coords_,
@@ -224,6 +224,8 @@ namespace Elasticity {
         const int num_neumann_faces = 0;
         num_cells_ = grid_.leafGridView().size(0); // entities of codim 0
         // assemble the mechanical system
+        {// scope for timing and removing A_entries util assembled directly in dune matrices            
+        OPM_TIMEBLOCK(assembleVEMSystem);
         vector<tuple<int, int, double>> A_entries;
         vem::StabilityChoice stability_choice = vem::D_RECIPE;
         {
@@ -237,7 +239,11 @@ namespace Elasticity {
 
 
         this->makeDuneSystemMatrix(A_entries);
-
+        }
+        // hack 
+        if(divmat_.N() > 0){// not rebuilding divmat_, stressmat_,strainmat_ for now
+            return; 
+        }
         {
         OPM_TIMEBLOCK(setUpExtraStructuresForVEM);
         // make indexing for div operator i.e. all nodes to dofs
@@ -283,20 +289,20 @@ namespace Elasticity {
         // finaly make dune matrix
         divmat_.setBuildMode(Matrix::implicit);
         // map from dof=3*nodes at a cell (ca 3*3*3) to cell
-        divmat_.setImplicitBuildModeParameters (3*3*3, 0.4);
+        divmat_.setImplicitBuildModeParameters (3*8, 0.4);
         if(reduce_boundary){
             divmat_.setSize(idx_free_.size(), num_cells_);
         }else{
             divmat_.setSize(grid_.leafGridView().size(3)*3, num_cells_);
         }
-
         makeDuneMatrixCompressed(divmatdof,divmat_);
-        // also make stress matrix
-        std::vector<std::tuple<int, int, double>> stressmat;
+        }
         std::vector<double> dispall(grid_.leafGridView().size(3)*3);
         std::vector<std::array<double,6>> stresstmp(grid_.leafGridView().size(0));
         {
-        OPM_TIMEBLOCK(setUpStressStressMatrix);
+        OPM_TIMEBLOCK(setUpStressStressMatrix);    
+        // also make stress matrix
+        std::vector<std::tuple<int, int, double>> stressmat;
         vem::compute_stress_3D(&coords_[0],
                                num_cells_,
                                &num_cell_faces_[0],
@@ -309,14 +315,14 @@ namespace Elasticity {
                                true,
                                true
         );
-        }
         stressmat_.setBuildMode(Matrix::implicit);
         stressmat_.setImplicitBuildModeParameters (3*3*3, 0.4);
         stressmat_.setSize(num_cells_*6, dispall.size());
         makeDuneMatrixCompressed(stressmat, stressmat_);
-        std::vector<std::tuple<int, int, double>> strainmat;
+        }
         {
-        OPM_TIMEBLOCK(setUpStressStrainMatrix);
+        OPM_TIMEBLOCK(setUpStrainMatrix);    
+        std::vector<std::tuple<int, int, double>> strainmat;
         vem::compute_stress_3D(&coords_[0],
                                num_cells_,
                                &num_cell_faces_[0],
@@ -329,7 +335,6 @@ namespace Elasticity {
                                true,
                                false
         );
-        }
         strainmat_.setBuildMode(Matrix::implicit);
         strainmat_.setImplicitBuildModeParameters (3*3*3, 0.4);
         strainmat_.setSize(num_cells_*6, dispall.size());
@@ -383,19 +388,19 @@ IMPL_FUNC(void, solve())
 {
   try {
     Dune::InverseOperatorResult r;
-    Vector& rhs = A.getLoadVector();
-    if(u.size() != rhs.size()){
-        u.resize(rhs.size());
-        u = 0;
-        tsolver_->apply(u, rhs, r);
+    Vector& rhs = this->getLoadVector();
+    if(sol_.size() != rhs.size()){
+        sol_.resize(rhs.size());
+        sol_ = 0;
+        tsolver_->apply(sol_, rhs, r);
     }else{
-        const auto& mat=A.getOperator();
+        const auto& mat= this->getOperator();
         auto rhs_tmp = rhs;
-        mat.mmv(u,rhs_tmp);
-        auto dx = u;
+        mat.mmv(sol_,rhs_tmp);
+        auto dx = sol_;
         dx=0;
         tsolver_->apply(dx, rhs_tmp, r);
-        u += dx;
+        sol_ += dx;
     }
         // MAYBe do other initialization or shift solution.
     

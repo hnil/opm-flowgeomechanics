@@ -77,10 +77,10 @@ class VemElasticitySolver
 
     typedef Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1> > Matrix;
     //! \brief The linear operator
-    ASMHandler<GridType> A;//NB NB names have to change
+    //ASMHandler<GridType> A;//NB NB names have to change
     //Matrix stiffnessMatrix_;
     //! \brief The solution vectors
-    Vector u;//NB NB names have to change
+    //Vector u;//NB NB names have to change
     //! \brief The load vectors
     //Vector rhs;//NB NB names have to change
 #if HAVE_MPI
@@ -96,7 +96,8 @@ class VemElasticitySolver
     //! \param[in] rocklist If not blank, file is a rocklist
     //! \param[in] verbose If true, give verbose output
     VemElasticitySolver(const GridType& grid)
-        : A(grid),grid_(grid)
+      : grid_(grid)
+        //: A(grid),grid_(grid)
     {
     }
 
@@ -128,6 +129,8 @@ class VemElasticitySolver
                 //fixed_dof_ixs.insert(fixed_dof_ixs.end(), {3*node, 3*node+1, 3*node+2});
             }
         }
+        // ensure unique 
+
         const int num_fixed_dofs = (int)fixed_dof_ixs.size();
 
 
@@ -160,9 +163,25 @@ class VemElasticitySolver
     void solve();
 
     const CommunicationType* comm() const { return comm_.get(); }
-    
+
+    void resetOperator(){
+        if(systemmatrix_){
+            systemmatrix_.reset();
+        }
+    }
+
+    Matrix& getOperator(){
+        if(systemmatrix_){
+            return *systemmatrix_;
+        }else{
+            systemmatrix_.reset(new Matrix());
+            return *systemmatrix_;
+        }
+    }
+    Vector& getLoadVector(){return rhs_;}
+    const Vector& getSolutionVector(){return sol_;}
     void setCopyRowsToZero(){
-        auto& matrix =  A.getOperator();
+      auto& matrix =  this->getOperator();
         assert(matrix.N() == matrix.M());
         assert(matrix.N() == dofParallelIndexSet_->size());
             for(auto index: *dofParallelIndexSet_){
@@ -178,6 +197,7 @@ class VemElasticitySolver
     // //! \param[in] params The linear solver parameters
     void setupSolver(const Opm::PropertyTree& prm){
         OPM_TIMEBLOCK(setupLinearSolver);
+        tsolver_.reset();
 #if HAVE_MPI
 // grid_.comm() is something like collective communication
 // comm_ here is the entity communication
@@ -203,7 +223,7 @@ class VemElasticitySolver
             std::cout << "Make parallel solver" << std::endl;
             comm_->communicator().barrier();
             using ParOperatorType = Dune::OverlappingSchwarzOperator<Matrix, Vector, Vector, CommunicationType>;
-            auto pop = std::make_unique<ParOperatorType>(A.getOperator(), *comm_);
+            auto pop = std::make_unique<ParOperatorType>(this->getOperator(), *comm_);
             using FlexibleSolverType = Dune::FlexibleSolver<ParOperatorType>;
             auto tsolver = std::make_unique<FlexibleSolverType>(*pop, *comm_, prm,
                                                            weightsCalculator,
@@ -213,7 +233,7 @@ class VemElasticitySolver
         }else{
             std::size_t pressureIndex = 0;//Dummy
             const std::function<Vector()> weightsCalculator;//Dummy
-            auto sop = std::make_unique<SeqOperatorType>(A.getOperator());
+            auto sop = std::make_unique<SeqOperatorType>(this->getOperator());
             using FlexibleSolverType = Dune::FlexibleSolver<SeqOperatorType>;
             auto tsolver = std::make_unique<FlexibleSolverType>(*sop, prm,
                                                                 weightsCalculator,
@@ -228,46 +248,18 @@ class VemElasticitySolver
     template<int comp>
     void averageStress(Dune::BlockVector<Dune::FieldVector<ctype,comp>>& sigmacells,
                        const Vector& uarg);
-    void setBodyForce(double gravity){
+    void setBodyForce(double gravity,std::vector<double>& density){
         OPM_TIMEBLOCK(setBodyFrorce);
         const int num_cells = grid_.leafGridView().size(0); // entities of codim 0
         // assemble the mechanical system
         body_force_.resize(3*num_cells, 0.0);
         for(int i=0; i<num_cells; ++i){
-            body_force_[3*i+2] = 2000*gravity;
+            body_force_[3*i+2] = density[i]*gravity;
         }
     }
 
     static void makeDuneMatrixCompressed(const std::vector<std::tuple<int, int, double>>& A_entries, Matrix& mat){
         OPM_TIMEBLOCK(makeDuneMatrixCompressed);
-        // // hopefully consisten with matrix
-        // // should be moved to initialization
-        // std::vector< std::set<int> > rows;
-        // int nrows=0;
-        // int ncols=0;
-        // {
-        // OPM_TIMEBLOCK(findRowStructure);
-        // for(auto matel: A_entries){
-        //     int i = std::get<0>(matel);
-        //     int j = std::get<1>(matel);
-        //     nrows = std::max(nrows,i);
-        //     ncols = std::max(ncols,j);
-        // }
-        // nrows = nrows+1;
-        // ncols = ncols+1;
-        // //assert(nrows==ncols);
-        // rows.resize(nrows);
-        // for(auto matel: A_entries){
-        //     int i = std::get<0>(matel);
-        //     int j = std::get<1>(matel);
-        //     rows[i].insert(j);
-        // }
-        // }
-        // // set up matrix structure
-        // {
-        // OPM_TIMEBLOCK(makeMatrix);
-        // MatrixOps::fromAdjacency(mat, rows, nrows, ncols);
-        // }
         {
             OPM_TIMEBLOCK(buildMatrixImplicite);
             //build mode need to be implicite and corredect matrix settings has to be done
@@ -277,9 +269,15 @@ class VemElasticitySolver
                 int j = std::get<1>(matel);
                 mat.entry(i,j)=0;
             }
-            //Dune::CompressionStatistics<Matrix::size_type> stats = mat.compress();
-            mat.compress();
-            //std::cout << stats;
+            Dune::CompressionStatistics<Matrix::size_type> stats = mat.compress();
+            std::cout << "Matrix compression statistics: " << std::endl;
+            std::cout << "avg" << stats.avg 
+                      << " maximum " << stats.maximum 
+                      << " overflow_total " << stats.overflow_total 
+                      << " mem_ratio " << stats.mem_ratio << std::endl;
+            std::cout << "Matrix has " << mat.N() << " rows and " << mat.M() << " columns" << std::endl;
+            std::cout << "Matrix has " << mat.nonzeroes() << " nonzeros" << std::endl;
+            std::cout << "Entries caluclated" << A_entries.size() << std::endl;
         }
         {
         OPM_TIMEBLOCK(setMatrixValues);
@@ -303,7 +301,7 @@ class VemElasticitySolver
     }
     void updateRhsWithGrad(const Vector& mechpot){
         OPM_TIMEBLOCK(updateRhsWithGrad);
-         Vector& b = A.getLoadVector();
+         Vector& b = this->getLoadVector();
          b = 0;
          b.resize(rhs_force_.size());
          divmat_.mv(mechpot,b);
@@ -313,72 +311,25 @@ class VemElasticitySolver
         }
     }
 
-    void makeDuneSystemMatrix(const std::vector<std::tuple<int, int, double>>& A_entries){
+    void makeDuneSystemMatrix(const std::vector<std::tuple<int, int, double>>& A_entries)
+    {
         OPM_TIMEBLOCK(makeDuneSystemMatrix);
-        // hopefully consisten with matrix
-        // should be moved to initialization
-        // std::vector< std::set<int> > rows;
-        // int nrows=0;
-        // int ncols=0;
-
-        // {
-        // OPM_TIMEBLOCK(makeStructure);
-        // for (auto matel: A_entries) {
-        //     int i = std::get<0>(matel);
-        //     int j = std::get<1>(matel);
-        //     nrows = std::max(nrows,i);
-        //     ncols = std::max(ncols,j);
-        // }
-        // nrows = nrows+1;
-        // ncols = ncols+1;
-        // //assert(nrows==ncols);
-        // rows.resize(nrows);
-        // for(const auto& matel: A_entries){
-        //     int i = std::get<0>(matel);
-        //     int j = std::get<1>(matel);
-        //     rows[i].insert(j);
-        // }
-        // }
-        // {
-        // OPM_TIMEBLOCK(matrixFromAdjacency);
-        // MatrixOps::fromAdjacency(MAT, rows, nrows, ncols);
-        // }
-        {
-            OPM_TIMEBLOCK(buildMatrixImplicite);
-            int ncols = 0;
-            int nrows = 0;
-            for (auto matel: A_entries) {
-                int i = std::get<0>(matel);
-                int j = std::get<1>(matel);
-                nrows = std::max(nrows,i);
-                ncols = std::max(ncols,j);
-            }
-            nrows = nrows+1;
-            ncols = ncols+1;
-            Matrix& MAT =this->A.getOperator();
-            MAT = 0;
-            MAT.setBuildMode(Matrix::implicit);
-            MAT.setImplicitBuildModeParameters (81, 0.4);
-            MAT.setSize(nrows, ncols);
-            makeDuneMatrixCompressed(A_entries,MAT);
-            //    for (auto matel: A_entries) {
-            //         int i = std::get<0>(matel);            
-            //         int j = std::get<1>(matel);
-            //         MAT.entry(i,j)=0;
-            //     }
-            //     Dune::CompressionStatistics<Matrix::size_type> stats = MAT.compress();
-            //     //std::cout << stats;
-            // }
-            // {
-            // OPM_TIMEBLOCK(insertValues);
-            // MAT = 0;
-            // for(const auto& matel:A_entries){
-            //     int i = std::get<0>(matel);
-            //     int j = std::get<1>(matel);
-            //     double val = std::get<2>(matel);
-            //     A.addMatElement(i,j, val);// += val;
-            // }
+        int ncols = 0;
+        int nrows = 0;
+        for (auto matel : A_entries) {
+            int i = std::get<0>(matel);
+            int j = std::get<1>(matel);
+            nrows = std::max(nrows, i);
+            ncols = std::max(ncols, j);
         }
+        nrows = nrows + 1;
+        ncols = ncols + 1;
+        Matrix& MAT = this->getOperator();
+        MAT = 0;
+        MAT.setBuildMode(Matrix::implicit);
+        MAT.setImplicitBuildModeParameters(81, 0.4);
+        MAT.setSize(nrows, ncols);
+        makeDuneMatrixCompressed(A_entries, MAT);
     }
     void calculateStressPrecomputed(const Vector& dispalldune);
     void calculateStrainPrecomputed(const Vector& dispalldune);
@@ -432,6 +383,10 @@ private:
     Matrix stressmat_; // from all dofs (not eliminating bc) to cell
     Matrix strainmat_;
     Matrix divmat_;   // from cell pressure to active dofs
+    std::unique_ptr<Matrix> systemmatrix_;
+    Dune::BlockVector<Dune::FieldVector<ctype,1>> rhs_;
+    Dune::BlockVector<Dune::FieldVector<ctype,1>> sol_;
+
     //std::vector<std::array<double,6>> stress_;
     std::shared_ptr< CommunicationType > comm_;
     std::shared_ptr< CommunicationType::ParallelIndexSet > vertexParallelIndexSet_;

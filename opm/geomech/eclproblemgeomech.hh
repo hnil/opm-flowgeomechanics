@@ -244,7 +244,8 @@ namespace Opm{
                     // NB setting initial stress
                     //this->geomechModel_.setStress(initstress_);
                 }else{
-                    OPM_THROW(std::runtime_error, "Missing stress initialization keywords");
+//                    OPM_THROW(std::runtime_error, "Missing stress initialization keywords");
+                    std::cout << "No stress equilibration specified .. try to equilibrate" << std::endl;    
                 }
                 // entity_seed_.resize(gv.size(0));
                 // for(const auto& elem : elements(gv)){
@@ -270,12 +271,25 @@ namespace Opm{
             initstress_.resize(numDof);
 
             // for now make a copy
-            if(simulator.vanguard().eclState().runspec().mech()){
-                //this->geomechModel_.setMaterial(elasticparams_);
-                this->geomechModel_.setMaterial(ymodule_,pratio_);
-                this->geomechModel_.updatePotentialForces();
+            if (simulator.vanguard().eclState().runspec().mech()) {
+                // this->geomechModel_.setMaterial(elasticparams_);
+                this->geomechModel_.setMaterial(ymodule_, pratio_);
+                this->geomechModel_.updatePotentialForces();//Neede only of output
+                const auto& eclState = simulator.vanguard().eclState();
+                const auto& initconfig = eclState.getInitConfig();
+                if (!initconfig.hasStressEquil()) {
+                    this->model().invalidateAndUpdateIntensiveQuantities(0);
+                    std::cout << "No stress equilibration specified .. try to equilibrate" << std::endl;
+                    initstress_.resize(numDof);
+                    geomechModel_.solveGeomechanics(/*use_body_force*/ true, /*relative_solve*/ false);
+                    //auto pure_stress = 
+                    for (size_t i = 0; i < initstress_.size(); ++i) {
+                        initstress_[i] = geomechModel_.stress(i);
+                    }
+                    // stress in output on first step maybe wrong i.e. 2*stress;
+                    this->geomechModel_.setFirstSolveTrue();// to do full rebuild next time step
+                }
             }
-
         }
         void timeIntegration()
         {
