@@ -170,6 +170,7 @@ add_library(fracture OBJECT
 	opm/geomech/GridStretcher.cpp
 	opm/geomech/RegularTrimesh.cpp
 	opm/geomech/Fracture_fullSystemIteration.cpp
+	opm/geomech/FractureMechanicsPreconditioner.cpp
 	examples/FlexibleSolverMech.cpp)
 if(HAVE_HYPRE)	
 	target_link_libraries(fracture HYPRE::HYPRE)

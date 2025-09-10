@@ -289,7 +289,7 @@ private:
     double normalFractureTraction(size_t ix) const;
 
     // one nonlinear iteration of fully coupled system.  Returns 'true' if converged
-    bool fullSystemIteration(const double tol);
+  bool fullSystemIteration(const double tol,const int iteration = 0);
 
     void assembleFractureMatrix() const;
     std::vector<double> stressIntensityK1() const;
@@ -356,6 +356,21 @@ private:
     std::vector<double> fracture_dgh_; // gravity contribution to fracture pressure, used for leakoff calculations  
     PropertyTree prm_;
     double total_WI_well_{0.0}; // total well index for the well, used for leakoff calculations
+    // for coupled solve
+  // using SMatrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>; // sparse matrix
+  //using FMatrix = Dune::DynamicMatrix<double>; 
+    // using SystemMatrix = Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<FMatrix, SMatrix>,
+    //                                             Dune::MultiTypeBlockVector<SMatrix, SMatrix>>;
+    // std::unique_ptr<SystemMatrix> S_;
+    //std::unique_ptr<FMatrix> A_; // system matrix without coupling terms    
+    //std::unique_ptr<SMatrix> C_; // system matrix without coupling terms    
+    //std::unique_ptr<SMatrix> I_; // system matrix without coupling terms    
+  //std::unique_ptr<SMatrix> M_; // system matrix without coupling terms
+    // using SystemOperator = Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP>;
+    // std::unique_ptr<SystemOperator> S_linop_;
+    // using CoupledFractureSolver = Dune::InverseOperator<VectorHP, VectorHP>;
+    // std::unique_ptr<CoupledFractureSolver> coupled_solver_;
+    
 };
 } // namespace Opm
 

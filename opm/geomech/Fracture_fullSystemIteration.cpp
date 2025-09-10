@@ -345,7 +345,7 @@ Fracture::identify_closed(const FMatrix& A, const VectorHP& x, const ResVector& 
 }
 // ----------------------------------------------------------------------------
 bool
-Fracture::fullSystemIteration(const double tol)
+Fracture::fullSystemIteration(const double tol,const int nlin_iteration)
 // ----------------------------------------------------------------------------
 {
   OPM_TIMEFUNCTION();
@@ -380,6 +380,8 @@ Fracture::fullSystemIteration(const double tol)
     //dump_vector(closed_cells, debug_filename("closed_cells_").c_str());
     //dump_vector(closed_cells, "closed_cells", true);
     const auto A = modified_fracture_matrix(fractureMatrix(), closed_cells);
+    //A_.reset(new FMatrix(modified_fracture_matrix(fractureMatrix(), closed_cells)));
+    //auto& A = *A_;
 
     // also modify right hand side for closed cells
     for (size_t i = 0; i != closed_cells.size(); ++i)
@@ -405,7 +407,7 @@ Fracture::fullSystemIteration(const double tol)
     const auto& M = *pressure_matrix_;
     const auto& C = *coupling_matrix_;
     const auto I = makeIdentity(A.N(), numWellEquations(), 1, closed_cells);
-        
+    //I_.reset(new SMatrix(makeIdentity(A.N(), numWellEquations(), 1, closed_cells))); 
     // system Jacobian (with cross term)  @@ should S be included as a member variable of Fracture?
     SystemMatrix S {{A, I}, // mechanics system (since A is negative, we leave I positive here)
                     {C, M}}; // flow system
@@ -438,6 +440,9 @@ Fracture::fullSystemIteration(const double tol)
     Opm::FractureMechanicsPreconditioner precond(S, lprm);
     Dune::InverseOperatorResult iores; // cannot be 'const' due to BiCGstabsolver interface
     const double linsolve_tol = prm_.get<double>("solver.linsolver.tol");
+    const double linsolve_atol = prm_.get<double>("solver.linsolver.atol");
+    double res = rhs.two_norm2();
+    double lintol = std::max(linsolve_tol, linsolve_atol/res);
     const int max_iter = prm_.get<double>("solver.linsolver.max_iter");
     const int verbosity = prm_.get<double>("solver.linsolver.verbosity");
     const int nlin_verbosity = prm_.get<double>("solver.verbosity");
@@ -447,7 +452,7 @@ Fracture::fullSystemIteration(const double tol)
     }
     auto psolver = Dune::BiCGSTABSolver<VectorHP>(S_linop,
                                                   precond,
-                                                  linsolve_tol, // 1e-20, // desired rhs reduction factor
+                                                  lintol, // 1e-20, // desired rhs reduction factor
                                                   max_iter, // max number of iterations
                                                   verbosity); // verbose
     {
@@ -458,10 +463,10 @@ Fracture::fullSystemIteration(const double tol)
     if (nlin_verbosity > 1) {
         std::cout << "x:  " << x[_0].infinity_norm() << " " << x[_1].infinity_norm() << std::endl;
         std::cout << "dx: " << dx[_0].infinity_norm() << " " << dx[_1].infinity_norm() << std::endl;
-        auto rhstmp = rhs;
-        S0.mmv(x, rhstmp);
+        //auto rhstmp = rhs;
+        //S0.mmv(x, rhstmp);
         std::cout << "rhs org:  " << rhs[_0].infinity_norm() << " " << rhs[_1].infinity_norm() << std::endl;
-        std::cout << "rhs:  " << rhstmp[_0].infinity_norm() << " " << rhstmp[_1].infinity_norm() << std::endl;
+        //std::cout << "rhs:  " << rhstmp[_0].infinity_norm() << " " << rhstmp[_1].infinity_norm() << std::endl;
     }
     // the following is a heuristic way to limit stepsize to stay within convergence radius
     const double damping = prm_.get<double>("solver.damping");
