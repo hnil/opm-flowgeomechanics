@@ -46,17 +46,18 @@
 
 #include "MechTypeTag.hpp"
 
-// adding linearshe sould be chaning the update_ function in the same class with condition that the error is reduced.
-// the trick is to be able to recalculate the residual from here.
-// unsure where the timestepping is done from suggestedtime??
-// suggestTimeStep is taken from newton solver in problem.limitTimestep
+// adding linearshe sould be chaning the update_ function in the same class with condition that the error
+// is reduced. the trick is to be able to recalculate the residual from here. unsure where the
+// timestepping is done from suggestedtime?? suggestTimeStep is taken from newton solver in
+// problem.limitTimestep
 namespace Opm
 {
 namespace Properties
 {
     namespace TTag
     {
-        struct EclFlowProblemMechPoly {
+        struct EclFlowProblemMechPoly
+        {
             using InheritsFrom = std::tuple<EclFlowProblemMech>;
         };
     } // namespace TTag
@@ -64,17 +65,20 @@ namespace Properties
 
     // set grid to polygrid
     template <class TypeTag>
-    struct Grid<TypeTag, TTag::EclFlowProblemMechPoly> {
+    struct Grid<TypeTag, TTag::EclFlowProblemMechPoly>
+    {
         using type = Dune::PolyhedralGrid<3, 3>;
     };
     template <class TypeTag>
-    struct EquilGrid<TypeTag, TTag::EclFlowProblemMechPoly> {
+    struct EquilGrid<TypeTag, TTag::EclFlowProblemMechPoly>
+    {
         // using type = Dune::CpGrid;
         using type = GetPropType<TypeTag, Properties::Grid>;
     };
 
     template <class TypeTag>
-    struct Vanguard<TypeTag, TTag::EclFlowProblemMechPoly> {
+    struct Vanguard<TypeTag, TTag::EclFlowProblemMechPoly>
+    {
         using type = Opm::PolyhedralGridVanguard<TypeTag>;
     };
 

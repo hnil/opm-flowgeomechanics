@@ -39,11 +39,9 @@ main(int argc, char** argv)
 
     // // Assemble mechanic matrix
     // int nc = grid->leafGridView().size(0);
-    // std::unique_ptr<Dune::DynamicMatrix<double>> frac_matrix(std::make_unique<Dune::DynamicMatrix<double>>());
-    // frac_matrix->resize(nc, nc);
-    // const double E = 1e9;
-    // const double nu = 0.25;
-    // ddm::assembleMatrix(*frac_matrix,E, nu,*grid);
+    // std::unique_ptr<Dune::DynamicMatrix<double>>
+    // frac_matrix(std::make_unique<Dune::DynamicMatrix<double>>()); frac_matrix->resize(nc, nc); const
+    // double E = 1e9; const double nu = 0.25; ddm::assembleMatrix(*frac_matrix,E, nu,*grid);
 
     // std::ofstream os("dumped_matrix");
     // Dune::printmatrix(os, *frac_matrix, "", "");

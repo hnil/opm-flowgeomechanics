@@ -103,9 +103,12 @@ TDStrainFSTri(const Dune::FieldVector<double, 3>& obs,
     return strain;
 }
 void
-// assembleMatrix(Dune::DynamicMatrix<Dune::FieldMatrix<double,1,1>>& matrix, const double E, const double nu, const
-// Dune::FoamGrid<2, 3>& grid)
-assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid)
+// assembleMatrix(Dune::DynamicMatrix<Dune::FieldMatrix<double,1,1>>& matrix, const double E, const
+// double nu, const Dune::FoamGrid<2, 3>& grid)
+assembleMatrix(Dune::DynamicMatrix<double>& matrix,
+               const double E,
+               const double nu,
+               const Dune::FoamGrid<2, 3>& grid)
 
 {
     OPM_TIMEFUNCTION();

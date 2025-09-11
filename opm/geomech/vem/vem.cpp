@@ -30,7 +30,8 @@ void
 plc(const double* p1, const double* const p2, const double fac1, const double fac2, double* target)
 // ----------------------------------------------------------------------------
 {
-    transform(p1, p1 + Dim, p2, target, [fac1, fac2](double d1, double d2) { return d1 * fac1 + d2 * fac2; });
+    transform(
+        p1, p1 + Dim, p2, target, [fac1, fac2](double d1, double d2) { return d1 * fac1 + d2 * fac2; });
 }
 
 // ----------------------------------------------------------------------------
@@ -118,7 +119,8 @@ double
 norm(const double* const v)
 // ----------------------------------------------------------------------------
 {
-    const double sumsquared = accumulate(v, v + Dim, 0.0, [](double acc, double el) { return acc + el * el; });
+    const double sumsquared
+        = accumulate(v, v + Dim, 0.0, [](double acc, double el) { return acc + el * el; });
     return sqrt(sumsquared);
 }
 
@@ -263,7 +265,10 @@ trinormal(const double* const c1, const double* const c2, const double* const c3
 //         corner points of the triangle.
 template <int Dim>
 vector<vector<double>>
-tessellate_face(const double* const corners, const int num_corners, bool skip_if_tri = true, double* centroid = nullptr)
+tessellate_face(const double* const corners,
+                const int num_corners,
+                bool skip_if_tri = true,
+                double* centroid = nullptr)
 // ----------------------------------------------------------------------------
 {
     if (skip_if_tri && num_corners == 3)
@@ -385,8 +390,8 @@ matmul(const double* data1,
     for (int r = 0; r != dim1.first; ++r)
         for (int c = 0; c != dim2.second; ++c)
             for (int k = 0; k != dim1.second; ++k)
-                result[r * dim2.second + c]
-                    += data1[r * stride1.first + k * stride1.second] * data2[k * stride2.first + c * stride2.second];
+                result[r * dim2.second + c] += data1[r * stride1.first + k * stride1.second]
+                    * data2[k * stride2.first + c * stride2.second];
 
     // Multiply matrix by a scalar factor, if requested
     if (fac != 1.0)
@@ -403,7 +408,8 @@ matmul(const double* data1,
 // @param data2 pointer to the data of the second matrix
 // @param r2 number of rows of the second matrix
 // @param c2 number of columns of the second matrix
-// @param transposed2 flag indicating whether the second matrix should be transposed before multiplication
+// @param transposed2 flag indicating whether the second matrix should be transposed before
+// multiplication
 // @param fac scaling factor applied to the multiplication (default is 1)
 //
 // @return a vector containing the result of the multiplication
@@ -510,7 +516,8 @@ compute_S(const std::vector<double>& Nc,
     const auto NtN = matmul(&Nc[0], r, c, true, &Nc[0], r, c, false);
 
     // const double alpha = 1;  // @@ use this line for comparison with vemmech
-    const double alpha = stability_choice == SIMPLE ? volume * trace(D) / trace(NtN) : // from Gain et al. 2014
+    const double alpha = stability_choice == SIMPLE ? volume * trace(D) / trace(NtN)
+                                                    : // from Gain et al. 2014
         (1 / 9.0) * volume * trace(D) * invtrace(NtN); // Andersen et al. 2017
 
     return identity_matrix(alpha, dim * num_corners);
@@ -555,15 +562,18 @@ final_assembly(const vector<double>& Wc,
     const auto DWct = matmul(&D[0], lsdim, lsdim, false, &Wc[0], totdim, lsdim, true);
     const auto EWcDWct = matmul(&Wc[0], totdim, lsdim, false, &DWct[0], lsdim, totdim, false, volume);
 
-    const auto S = stability_choice == D_RECIPE ? compute_S_D_recipe(EWcDWct, totdim, volume)
-                                                : compute_S(Nc, D, num_nodes, volume, dim, stability_choice);
+    const auto S = stability_choice == D_RECIPE
+        ? compute_S_D_recipe(EWcDWct, totdim, volume)
+        : compute_S(Nc, D, num_nodes, volume, dim, stability_choice);
 
     const auto SImP = matmul(&S[0], totdim, totdim, false, &ImP[0], totdim, totdim, false);
     const auto ImpSImp = matmul(&ImP[0], totdim, totdim, true, &SImP[0], totdim, totdim, false);
     assert(EWcDWct.size() == ImpSImp.size());
 
     // add conformance and stability term, and write result to target
-    transform(EWcDWct.begin(), EWcDWct.end(), ImpSImp.begin(), target, [](double a, double b) { return a + b; });
+    transform(EWcDWct.begin(), EWcDWct.end(), ImpSImp.begin(), target, [](double a, double b) {
+        return a + b;
+    });
 }
 
 // ----------------------------------------------------------------------------
@@ -639,7 +649,8 @@ compute_bodyforce_2D(const double* const points,
 // such that the full impact of the force is equal to the sum of the forces
 // appliedat its two end nodes.
 array<double, 4>
-compute_applied_forces_2D(const double* const points, const int n1, const int n2, const double fx, const double fy)
+compute_applied_forces_2D(
+    const double* const points, const int n1, const int n2, const double fx, const double fy)
 // ----------------------------------------------------------------------------
 {
     const double hL = norm<2>(pointdiff<2>(&points[2 * n1], &points[2 * n2])) / 2; // 1/2 L
@@ -702,7 +713,8 @@ compute_bodyforce_3D(const double* const points,
     int fcorner_start = 0;
     for (int f = 0; f != num_faces; ++f) {
         const int nfc = num_face_corners[f];
-        const auto tris = tessellate_face<3>(pick_points<3>(points, face_corners + fcorner_start, nfc), false);
+        const auto tris
+            = tessellate_face<3>(pick_points<3>(points, face_corners + fcorner_start, nfc), false);
         assert(int(tris.size()) == nfc * 2);
         for (int c = 0; c != nfc; ++c) {
             // the following two triangles in the tesselation pertain to corner 'c'.
@@ -744,7 +756,8 @@ reduce_system(vector<tuple<int, int, double>>& A,
     for (int i = 0; i != num_fixed_dofs; ++i) {
         const int dof = fixed_dof_ixs[i];
         // find the range of the elements whose column index equal 'dof'
-        auto start = lower_bound(cur_end, A.end(), dof, [](const auto& a, int value) { return get<1>(a) < value; });
+        auto start = lower_bound(
+            cur_end, A.end(), dof, [](const auto& a, int value) { return get<1>(a) < value; });
         if (start != A.end() && get<1>(*start) == dof) {
             cur_end = find_if(start, A.end(), [dof](const auto& a) { return get<1>(a) != dof; });
             for (; start != cur_end; ++start)
@@ -759,7 +772,8 @@ reduce_system(vector<tuple<int, int, double>>& A,
     vector<int> renum;
     renum.reserve(b.size());
 
-    set_difference(keep.begin(), keep.end(), fixed_dof_ixs, fixed_dof_ixs + num_fixed_dofs, back_inserter(renum));
+    set_difference(
+        keep.begin(), keep.end(), fixed_dof_ixs, fixed_dof_ixs + num_fixed_dofs, back_inserter(renum));
 
     const int discard_flag = b.size() + 1;
     vector<int> renum_inv(b.size(), discard_flag);
@@ -771,7 +785,8 @@ reduce_system(vector<tuple<int, int, double>>& A,
     A.erase(remove_if(A.begin(),
                       A.end(),
                       [&discard_flag, &renum_inv](const tuple<int, int, double>& el) {
-                          return renum_inv[get<0>(el)] == discard_flag || renum_inv[get<1>(el)] == discard_flag;
+                          return renum_inv[get<0>(el)] == discard_flag
+                              || renum_inv[get<1>(el)] == discard_flag;
                       }),
             A.end());
     transform(A.begin(), A.end(), A.begin(), [&renum_inv](const tuple<int, int, double>& el) {
@@ -809,7 +824,8 @@ set_boundary_conditions(vector<tuple<int, int, double>>& A,
     for (int i = 0; i != num_fixed_dofs; ++i) {
         const int dof = fixed_dof_ixs[i];
         // find the range of the elements whose column index equal 'dof'
-        auto start = lower_bound(cur_end, A.end(), dof, [](const auto& a, int value) { return get<1>(a) < value; });
+        auto start = lower_bound(
+            cur_end, A.end(), dof, [](const auto& a, int value) { return get<1>(a) < value; });
         if (start != A.end() && get<1>(*start) == dof) {
             cur_end = find_if(start, A.end(), [dof](const auto& a) { return get<1>(a) != dof; });
             for (; start != cur_end; ++start) {
@@ -827,7 +843,8 @@ set_boundary_conditions(vector<tuple<int, int, double>>& A,
     vector<int> renum;
     renum.reserve(b.size());
 
-    set_difference(keep.begin(), keep.end(), fixed_dof_ixs, fixed_dof_ixs + num_fixed_dofs, back_inserter(renum));
+    set_difference(
+        keep.begin(), keep.end(), fixed_dof_ixs, fixed_dof_ixs + num_fixed_dofs, back_inserter(renum));
 
     const int discard_flag = b.size() + 1;
     vector<int> renum_inv(b.size(), discard_flag);
@@ -969,7 +986,8 @@ compute_Nr_2D(const double* const corners, const int num_corners)
     result.reserve(6 * num_corners);
 
     for (int i = 0; i != num_corners; ++i)
-        append(result, matentry_2D(1, corners[2 * i + 1] - midpoint[1], 1, -(corners[2 * i] - midpoint[0])));
+        append(result,
+               matentry_2D(1, corners[2 * i + 1] - midpoint[1], 1, -(corners[2 * i] - midpoint[0])));
     return result;
 }
 
@@ -1059,8 +1077,15 @@ compute_Wr_3D(const vector<double>& q)
 
     for (int i = 0; i != num_corners; ++i)
         append(result,
-               matentry_3D(
-                   ncinv, q[3 * i + 1], -q[3 * i + 2], ncinv, -q[3 * i], q[3 * i + 2], ncinv, -q[3 * i + 1], q[3 * i]));
+               matentry_3D(ncinv,
+                           q[3 * i + 1],
+                           -q[3 * i + 2],
+                           ncinv,
+                           -q[3 * i],
+                           q[3 * i + 2],
+                           ncinv,
+                           -q[3 * i + 1],
+                           q[3 * i]));
     return result;
 }
 
@@ -1143,7 +1168,8 @@ compute_D_2D(const double young, const double poisson)
     // Note that element (3,3) is four times higher than what may be sometimes
     // be seen in literature.   This is because of using half the value for shear
     // elements when using voigt notation.
-    vector<double> result {1 - poisson, poisson, 0, poisson, 1 - poisson, 0, 0, 0, 2 * (1 - 2 * poisson)};
+    vector<double> result {
+        1 - poisson, poisson, 0, poisson, 1 - poisson, 0, 0, 0, 2 * (1 - 2 * poisson)};
 
     // multiply by the constant factor
     for_each(result.begin(), result.end(), [fac](double& d) { d *= fac; });
@@ -1213,18 +1239,23 @@ compute_ImP(const vector<double>& Nr,
 
 // ----------------------------------------------------------------------------
 bool
-is_behind_face(const array<double, 3>& point, const double* const face_normal, const double* const face_centroid)
+is_behind_face(const array<double, 3>& point,
+               const double* const face_normal,
+               const double* const face_centroid)
 // ----------------------------------------------------------------------------
 {
     const double tol = 1e-13;
-    const array<double, 3> v {face_centroid[0] - point[0], face_centroid[1] - point[1], face_centroid[2] - point[2]};
+    const array<double, 3> v {
+        face_centroid[0] - point[0], face_centroid[1] - point[1], face_centroid[2] - point[2]};
     return (v[0] * face_normal[0] + v[1] * face_normal[1] + v[2] * face_normal[2]) + tol > 0;
 }
 
 
 // ----------------------------------------------------------------------------
 bool
-is_star_point(const array<double, 3>& point, const vector<double>& face_normals, const vector<double>& face_centroids)
+is_star_point(const array<double, 3>& point,
+              const vector<double>& face_normals,
+              const vector<double>& face_centroids)
 // ----------------------------------------------------------------------------
 {
     const int N = (int)face_normals.size() / 3;
@@ -1280,7 +1311,8 @@ compute_face_geometry(const vector<double>& points, double* normal, double* cent
 // ----------------------------------------------------------------------------
 {
     // compute tessellation and face centroid
-    const auto face_tessellation = tessellate_face<3>(&points[0], (int)points.size() / 3, false, centroid);
+    const auto face_tessellation
+        = tessellate_face<3>(&points[0], (int)points.size() / 3, false, centroid);
 
     // compute (normalized) face normal
     fill(normal, normal + 3, 0);
@@ -1330,17 +1362,19 @@ extract_local_faces(const int* const faces, const int* const num_face_edges, con
 //     for (int i = 0; i != num_faces; ++i, isect.clear()) {
 //       if (!ordered[i]) {
 //         //std::cout << "Fix ordering of face" << std::endl;
-//         set_intersection(sorted_fnode_ptrs[ref_face], sorted_fnode_ptrs[ref_face] + num_face_edges[ref_face],
-//                          sorted_fnode_ptrs[i], sorted_fnode_ptrs[i] + num_face_edges[i], back_inserter(isect));
+//         set_intersection(sorted_fnode_ptrs[ref_face], sorted_fnode_ptrs[ref_face] +
+//         num_face_edges[ref_face],
+//                          sorted_fnode_ptrs[i], sorted_fnode_ptrs[i] + num_face_edges[i],
+//                          back_inserter(isect));
 //         if (isect.size() == 2 ) {
 
 
 //           assert(isect.size() > 1); // should be at least two corners to a shared edge
-//           const auto ref1 = find(face_ptrs[ref_face], face_ptrs[ref_face] + num_face_edges[ref_face], isect[0]);
-//           const auto ref2 = find(face_ptrs[ref_face], face_ptrs[ref_face] + num_face_edges[ref_face], isect[1]);
-//           const auto i1 = find(face_ptrs[i], face_ptrs[i] + num_face_edges[i], isect[0]);
-//           const auto i2 = find(face_ptrs[i], face_ptrs[i] + num_face_edges[i], isect[1]);
-//           if(!((i1-i2) == 1)){
+//           const auto ref1 = find(face_ptrs[ref_face], face_ptrs[ref_face] + num_face_edges[ref_face],
+//           isect[0]); const auto ref2 = find(face_ptrs[ref_face], face_ptrs[ref_face] +
+//           num_face_edges[ref_face], isect[1]); const auto i1 = find(face_ptrs[i], face_ptrs[i] +
+//           num_face_edges[i], isect[0]); const auto i2 = find(face_ptrs[i], face_ptrs[i] +
+//           num_face_edges[i], isect[1]); if(!((i1-i2) == 1)){
 //               bool is_ok = false;
 //               if( i1 == (face_ptrs[i]) ){
 //                   if( i2 == face_ptrs[i]+num_face_edges[i] ){
@@ -1358,14 +1392,14 @@ extract_local_faces(const int* const faces, const int* const num_face_edges, con
 //               }
 //           }
 
-//           const bool orient1 = (ref2 == ref1+1 || ref2 == face_ptrs[ref_face]);  // order is ref1, ref2 if true
-//           const bool orient2 = (i2 == i1 + 1 || i2 == face_ptrs[i]);            // order is i1, i2 if true
-//           if (orient1 == orient2)
+//           const bool orient1 = (ref2 == ref1+1 || ref2 == face_ptrs[ref_face]);  // order is ref1,
+//           ref2 if true const bool orient2 = (i2 == i1 + 1 || i2 == face_ptrs[i]);            // order
+//           is i1, i2 if true if (orient1 == orient2)
 //             // faces have the same orientation.  Flip the orientation of the non-reference face
 //             reverse(face_ptrs[i], face_ptrs[i] + num_face_edges[i]);
 
-//           // at this point, we should be assured that face 'i' is oriented consistently with face 'ref'
-//           ordered[i] = true;
+//           // at this point, we should be assured that face 'i' is oriented consistently with face
+//           'ref' ordered[i] = true;
 //         }
 //         else if(!isect.empty()){
 //             std::cout << "Face-face intersection with not 2 nodes" << std::endl;
@@ -1483,7 +1517,8 @@ compute_cell_geometry(const double* points,
     // assert(face_centroids.size() == static_cast<std::size_t>(num_faces*3));
 
     // identify a star point (usually, mean_point qualifies, but not necessarily)
-    star_point = identify_star_point(point_average<3>(points, num_points), outward_normals, face_centroids);
+    star_point
+        = identify_star_point(point_average<3>(points, num_points), outward_normals, face_centroids);
 
     // compute cell centroid and volume
     volume = 0;
@@ -1553,13 +1588,17 @@ potential_gradient_force_3D(const double* const points,
     int cur_fcor_start = 0;
     int cur_cface_start = 0;
     for (int cell = 0; cell != num_cells; ++cell) {
-        const auto reindex = global_to_local_indexing(
-            &face_corners[cur_fcor_start], &num_face_corners[cur_cface_start], num_cell_faces[cell], indexing);
+        const auto reindex = global_to_local_indexing(&face_corners[cur_fcor_start],
+                                                      &num_face_corners[cur_cface_start],
+                                                      num_cell_faces[cell],
+                                                      indexing);
         const int num_corners = int(indexing.size());
         const auto corners_loc = pick_points<3>(points, &indexing[0], num_corners);
 
-        const int tot_num_cellface_corners = accumulate(
-            &num_face_corners[cur_cface_start], &num_face_corners[cur_cface_start] + num_cell_faces[cell], 0);
+        const int tot_num_cellface_corners
+            = accumulate(&num_face_corners[cur_cface_start],
+                         &num_face_corners[cur_cface_start] + num_cell_faces[cell],
+                         0);
 
         vector<int> faces_loc(tot_num_cellface_corners);
         transform(&face_corners[cur_fcor_start],
@@ -1671,8 +1710,11 @@ assemble_mech_system_2D(const double* const points,
 
     // add contribution to right hand side from applied forces
     for (int f = 0; f != num_neumann_faces; ++f) {
-        const auto fvals = compute_applied_forces_2D(
-            points, neumann_faces[2 * f], neumann_faces[2 * f + 1], neumann_forces[2 * f], neumann_forces[2 * f + 1]);
+        const auto fvals = compute_applied_forces_2D(points,
+                                                     neumann_faces[2 * f],
+                                                     neumann_faces[2 * f + 1],
+                                                     neumann_forces[2 * f],
+                                                     neumann_forces[2 * f + 1]);
         b[2 * neumann_faces[2 * f]] += fvals[0];
         b[2 * neumann_faces[2 * f] + 1] += fvals[1];
         b[2 * neumann_faces[2 * f + 1]] += fvals[2];
@@ -1714,7 +1756,8 @@ assemble_mech_system_3D(const double* const points,
 {
     // preliminary computations
     const int tot_num_cell_faces = accumulate(num_cell_faces, num_cell_faces + num_cells, 0);
-    const int tot_num_face_corners = accumulate(num_face_corners, num_face_corners + tot_num_cell_faces, 0);
+    const int tot_num_face_corners
+        = accumulate(num_face_corners, num_face_corners + tot_num_cell_faces, 0);
     const int num_points = *max_element(face_corners, face_corners + tot_num_face_corners) + 1;
 
     // assemble full system matrix
@@ -1766,7 +1809,8 @@ assemble_mech_system_3D(const double* const points,
                              &body_force[3 * c],
                              &b[0]);
         // increment local indexing
-        fcorners_start += accumulate(&num_face_corners[cf_ix], &num_face_corners[cf_ix + num_cell_faces[c]], 0);
+        fcorners_start
+            += accumulate(&num_face_corners[cf_ix], &num_face_corners[cf_ix + num_cell_faces[c]], 0);
         cf_ix += num_cell_faces[c];
     }
     // cout << "Applying forces" << endl;
@@ -1813,8 +1857,9 @@ compute_stress_3D(const double* const points,
 {
     // preliminary computations
     // const int tot_num_cell_faces = accumulate(num_cell_faces, num_cell_faces + num_cells, 0);
-    // const int tot_num_face_corners = accumulate(num_face_corners, num_face_corners + tot_num_cell_faces, 0);
-    // const int num_points = *max_element(face_corners, face_corners + tot_num_face_corners) + 1;
+    // const int tot_num_face_corners = accumulate(num_face_corners, num_face_corners +
+    // tot_num_cell_faces, 0); const int num_points = *max_element(face_corners, face_corners +
+    // tot_num_face_corners) + 1;
 
     // assemble full system matrix
     // loop over cells and assemble system matrix
@@ -1839,7 +1884,8 @@ compute_stress_3D(const double* const points,
                                   stressmat,
                                   do_matrix,
                                   do_stress);
-        fcorners_start += accumulate(&num_face_corners[cf_ix], &num_face_corners[cf_ix + num_cell_faces[c]], 0);
+        fcorners_start
+            += accumulate(&num_face_corners[cf_ix], &num_face_corners[cf_ix + num_cell_faces[c]], 0);
         cf_ix += num_cell_faces[c];
     }
 }
@@ -2057,7 +2103,9 @@ matprint(const double* data, const int r, const int c, bool transposed, const do
 
     for (int i = 0; i != dim.first; ++i)
         for (int j = 0; j != dim.second; ++j)
-            cout << setw(12) << ((abs(data[i * stride.first + j * stride.second]) <= zthreshold) ? fixed : scientific)
+            cout << setw(12)
+                 << ((abs(data[i * stride.first + j * stride.second]) <= zthreshold) ? fixed
+                                                                                     : scientific)
                  << ((abs(data[i * stride.first + j * stride.second]) <= zthreshold) ? setprecision(0)
                                                                                      : setprecision(2))
                  << (abs(data[i * stride.first + j * stride.second]) <= zthreshold
@@ -2085,7 +2133,10 @@ sparse2full(const vector<tuple<int, int, double>>& nz, const int r, const int c)
 // ----------------------------------------------------------------------------
 // Return unsigned tetrahedron volume
 double
-tetrahedron_volume(const double* const p1, const double* const p2, const double* const p3, const double* const p4)
+tetrahedron_volume(const double* const p1,
+                   const double* const p2,
+                   const double* const p3,
+                   const double* const p4)
 // ----------------------------------------------------------------------------
 {
     const auto v1 = pointdiff<3>(p1, p4);
@@ -2151,7 +2202,10 @@ centroid_2D_3D(const double* const points, const int num_points)
 // ----------------------------------------------------------------------------
 // requires that corner points are already ordered consecutively
 double
-face_integral(const double* const corners, const int num_corners, const int dim, const double* const corner_values)
+face_integral(const double* const corners,
+              const int num_corners,
+              const int dim,
+              const double* const corner_values)
 // ----------------------------------------------------------------------------
 {
     assert(dim == 2 || dim == 3);

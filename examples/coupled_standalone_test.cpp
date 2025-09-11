@@ -179,7 +179,9 @@ solvePressure(const Vector& aperture,
     // fill in pressure matrix with actual values, based on current aperture and
     // imposed pressure
     std::vector<size_t> imposed_ixs;
-    for_each(fixed_pvals.begin(), fixed_pvals.end(), [&](const auto& el) { imposed_ixs.push_back(std::get<0>(el)); });
+    for_each(fixed_pvals.begin(), fixed_pvals.end(), [&](const auto& el) {
+        imposed_ixs.push_back(std::get<0>(el));
+    });
 
     updateTrans(pmat, aperture, imposed_ixs);
 
@@ -196,7 +198,8 @@ solvePressure(const Vector& aperture,
     // setup solver
     const auto prm = Opm::setupPropertyTree(Opm::FlowLinearSolverParameters(), true, true);
     auto op = PressureOperatorType(*std::get<0>(pmat));
-    // auto psolver_dummy = std::make_unique<FlexibleSolverType>(op, prm, std::function<Vector()>(), size_t(0));
+    // auto psolver_dummy = std::make_unique<FlexibleSolverType>(op, prm, std::function<Vector()>(),
+    // size_t(0));
     auto psolver_dummy = FlexibleSolverType(op, prm, std::function<Vector()>(), size_t(0));
 
     // Dune::MatrixAdapter<Matrix, Vector, Vector> op(*std::get<0>(pmat));
@@ -233,7 +236,9 @@ n_closest(const Grid& grid)
         distances.push_back({distances.size(), center.two_norm()});
     }
 
-    std::sort(distances.begin(), distances.end(), [](Elem& a, Elem& b) { return std::get<1>(a) < std::get<1>(b); });
+    std::sort(distances.begin(), distances.end(), [](Elem& a, Elem& b) {
+        return std::get<1>(a) < std::get<1>(b);
+    });
 
     std::array<size_t, N> result;
     for (int i = 0; i != N; ++i)
@@ -252,7 +257,8 @@ main()
 
     // compute mech matrix
     const int nc = grid->leafGridView().size(0);
-    std::unique_ptr<Dune::DynamicMatrix<double>> frac_matrix(std::make_unique<Dune::DynamicMatrix<double>>());
+    std::unique_ptr<Dune::DynamicMatrix<double>> frac_matrix(
+        std::make_unique<Dune::DynamicMatrix<double>>());
     frac_matrix->resize(nc, nc);
     ddm::assembleMatrix(*frac_matrix, E, nu, *grid);
     *frac_matrix *= -1;
@@ -271,9 +277,10 @@ main()
 
     std::vector<IntFloatPair> fixed_pvals;
     const double pfixedval = 2.0;
-    std::transform(wellcells.begin(), wellcells.end(), std::back_inserter(fixed_pvals), [pfixedval](const size_t ix) {
-        return IntFloatPair(ix, pfixedval);
-    });
+    std::transform(wellcells.begin(),
+                   wellcells.end(),
+                   std::back_inserter(fixed_pvals),
+                   [pfixedval](const size_t ix) { return IntFloatPair(ix, pfixedval); });
 
     // prepare pressure matrix structure
     PressureMatrixInfo pmat = pressureMatrixStructure(grid);

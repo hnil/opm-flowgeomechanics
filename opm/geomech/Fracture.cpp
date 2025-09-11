@@ -93,9 +93,9 @@ Fracture::init(const std::string& well,
         axis_[i] /= axis_[i].two_norm();
         axis_[i] *= init_scale;
     }
-    std::cout << "axis" << axis_[0][0] << "," << axis_[0][1] << "," << axis_[0][2] << " " << axis_[1][0] << ","
-              << axis_[1][1] << "," << axis_[1][2] << " " << axis_[2][0] << "," << axis_[2][1] << "," << axis_[2][2]
-              << std::endl;
+    std::cout << "axis" << axis_[0][0] << "," << axis_[0][1] << "," << axis_[0][2] << " " << axis_[1][0]
+              << "," << axis_[1][1] << "," << axis_[1][2] << " " << axis_[2][0] << "," << axis_[2][1]
+              << "," << axis_[2][2] << std::endl;
     layers_ = 0;
     nlinear_ = 0;
 
@@ -109,12 +109,13 @@ Fracture::init(const std::string& well,
         const double radius = init_scale;
         const double fac = std::sqrt(3) / 2;
         const std::array<double, 3> ax1 {axis_[0][0], axis_[0][1], axis_[0][2]};
-        const std::array<double, 3> ax2 {
-            0.5 * ax1[0] + fac * axis_[1][0], 0.5 * ax1[1] + fac * axis_[1][1], 0.5 * ax1[2] + fac * axis_[1][2]};
+        const std::array<double, 3> ax2 {0.5 * ax1[0] + fac * axis_[1][0],
+                                         0.5 * ax1[1] + fac * axis_[1][1],
+                                         0.5 * ax1[2] + fac * axis_[1][2]};
 
-        std::cout << "Creating trimesh with radius: " << radius << ", edgelen: " << edgelen << ", ax1: " << ax1[0]
-                  << "," << ax1[1] << "," << ax1[2] << ", ax2: " << ax2[0] << "," << ax2[1] << "," << ax2[2]
-                  << std::endl;
+        std::cout << "Creating trimesh with radius: " << radius << ", edgelen: " << edgelen
+                  << ", ax1: " << ax1[0] << "," << ax1[1] << "," << ax1[2] << ", ax2: " << ax2[0] << ","
+                  << ax2[1] << "," << ax2[2] << std::endl;
 
         trimesh_ = std::make_unique<RegularTrimesh>(radius, // trimeshlayers,
                                                     std::array {origo_[0], origo_[1], origo_[2]},
@@ -159,7 +160,8 @@ void
 Fracture::resetWriters()
 {
     // nead to be reseat if grid is changed ??
-    vtkwriter_ = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(), Dune::VTK::nonconforming);
+    vtkwriter_ = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(),
+                                                                       Dune::VTK::nonconforming);
 
     std::string outputdir = prm_.get<std::string>("outputdir");
     std::string simName = prm_.get<std::string>("casename") + this->name();
@@ -186,8 +188,8 @@ Fracture::setupPressureSolver()
         auto pressure_operator = std::make_unique<PressureOperatorType>(*pressure_matrix_);
         // using FlexibleSolverType = Dune::FlexibleSolver<SeqOperatorType>;
         pressure_operator_ = std::move(pressure_operator);
-        auto psolver
-            = std::make_unique<FlexibleSolverType>(*pressure_operator_, prmpressure_, weightsCalculator, pressureIndex);
+        auto psolver = std::make_unique<FlexibleSolverType>(
+            *pressure_operator_, prmpressure_, weightsCalculator, pressureIndex);
 
         pressure_solver_ = std::move(psolver);
     }
@@ -197,8 +199,8 @@ Fracture::setupPressureSolver()
  *
  * This function performs the following steps:
  * 1. Copies the current fracture width data to a persistent container.
- * 2. Iterates over all elements in the grid's leaf view and removes elements where the reservoir cell index is
- * negative.
+ * 2. Iterates over all elements in the grid's leaf view and removes elements where the reservoir cell
+ * index is negative.
  * 3. Grows the grid and performs post-growth operations.
  * 4. Resizes the fracture width array to match the new grid size.
  * 5. Copies the fracture width data back from the persistent container to the resized array.
@@ -239,7 +241,8 @@ Fracture::removeCells()
 }
 
 void
-Fracture::updateFilterCakeProps(const Opm::WellConnections& connections, const Opm::SingleWellState<double>& wellstate)
+Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
+                                const Opm::SingleWellState<double>& wellstate)
 {
     OPM_TIMEFUNCTION();
     // potentially remap filtercake thikness if grid has changed
@@ -268,7 +271,8 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections, const O
 
         std::map<int, double> reservoir_areas;
         std::map<int, double> reservoir_flux;
-        if ((leakof_.size() > 0)) { // should be first step with seed fracture is clean could have used rates from solve
+        if ((leakof_.size()
+             > 0)) { // should be first step with seed fracture is clean could have used rates from solve
             assert(leakof_.size() == fracture_pressure_.size());
             ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
             for (auto& element : Dune::elements(grid_->leafGridView())) {
@@ -282,8 +286,8 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections, const O
                 double flux = trans * dp;
                 reservoir_flux[res_cell] += flux;
                 if (flux < 0) {
-                    std::cout << "Negative flux " << flux << " for element index " << eIdx << " with reservoir cell "
-                              << res_cell << std::endl;
+                    std::cout << "Negative flux " << flux << " for element index " << eIdx
+                              << " with reservoir cell " << res_cell << std::endl;
                     flux = 0.0;
                 }
                 double dh = flux / (area * (1 - filtercake_poro_));
@@ -306,7 +310,8 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections, const O
             if (res_cell != wellinfo_.well_cell) {
                 if (std::abs(flux - WI_fluxes[res_cell]) > 0) {
                     std::cout << "Fracture flux differs from flow flux " << res_cell << std::endl;
-                    std::cout << "Flux: frac " << frac_flux << " vs res " << WI_fluxes[res_cell] << std::endl;
+                    std::cout << "Flux: frac " << frac_flux << " vs res " << WI_fluxes[res_cell]
+                              << std::endl;
                 }
             } else {
                 std::cout << "Total WI flux " << WI_fluxes[res_cell] << " for cell " << res_cell
@@ -368,7 +373,8 @@ Fracture::stress(Dune::FieldVector<double, 3> obs) const
 std::string
 Fracture::name() const
 {
-    std::string name = "Fracure_on_" + wellinfo_.name + "_perf_" + std::to_string(wellinfo_.perf) + "_nr";
+    std::string name
+        = "Fracure_on_" + wellinfo_.name + "_perf_" + std::to_string(wellinfo_.perf) + "_nr";
     return name;
 }
 
@@ -544,7 +550,8 @@ Fracture::writemulti(double time) const
 {
     OPM_TIMEFUNCTION();
     std::stringstream message;
-    message << "Writing fracture data to VTK files at time: " << time << "grid_size" << numFractureCells() << std::endl;
+    message << "Writing fracture data to VTK files at time: " << time << "grid_size"
+            << numFractureCells() << std::endl;
     OpmLog::info(message.str());
     // vtkmultiwriter_->gridChanged();// need to be called if grid is changed
     //  need to have copies in case of async outout (and interface to functions)
@@ -710,8 +717,9 @@ Fracture::insertExp(const std::vector<unsigned int>& inner_indices)
 
     for (size_t i = 0; i < N; ++i) {
         {
-            std::vector<unsigned int> cornerID(
-                {inner_indices[i], out_indices_[(2 * i) % (N * 2)], out_indices_[(2 * i + 1) % (N * 2)]});
+            std::vector<unsigned int> cornerID({inner_indices[i],
+                                                out_indices_[(2 * i) % (N * 2)],
+                                                out_indices_[(2 * i + 1) % (N * 2)]});
             grid_->insertElement(Dune::GeometryTypes::simplex(2), cornerID);
         }
         {
@@ -720,8 +728,9 @@ Fracture::insertExp(const std::vector<unsigned int>& inner_indices)
             grid_->insertElement(Dune::GeometryTypes::simplex(2), cornerID);
         }
         {
-            std::vector<unsigned int> cornerID(
-                {inner_indices[(i + 1) % N], out_indices_[(2 * i + 1) % (N * 2)], out_indices_[(2 * i + 2) % (N * 2)]});
+            std::vector<unsigned int> cornerID({inner_indices[(i + 1) % N],
+                                                out_indices_[(2 * i + 1) % (N * 2)],
+                                                out_indices_[(2 * i + 2) % (N * 2)]});
             grid_->insertElement(Dune::GeometryTypes::simplex(2), cornerID);
         }
     }
@@ -785,9 +794,9 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
                 // for ( const auto& globalCellIndex : cells )
                 // {
                 //     cvf::Vec3d    hexCorners[8];  //resinsight numbering, see RigCellGeometryTools.cpp
-                //     RigEclipseWellLogExtractor::hexCornersOpmToResinsight( hexCorners, globalCellIndex);
-                //     RigHexIntersectionTools::lineHexCellIntersection( p1, p2, hexCorners, globalCellIndex,
-                //     &intersections );
+                //     RigEclipseWellLogExtractor::hexCornersOpmToResinsight( hexCorners,
+                //     globalCellIndex); RigHexIntersectionTools::lineHexCellIntersection( p1, p2,
+                //     hexCorners, globalCellIndex, &intersections );
                 // }
                 tri_divide += 1;
             }
@@ -798,9 +807,10 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
             // int cell = Opm::findCell(grid3D,geom.center());
         }
     }
-    std::cout << "For Fracture : " << this->name() << " : " << tri_divide << " triangles should be devided"
+    std::cout << "For Fracture : " << this->name() << " : " << tri_divide
+              << " triangles should be devided" << std::endl;
+    std::cout << "For Fracture : " << this->name() << " : " << tri_outside << " triangles outside"
               << std::endl;
-    std::cout << "For Fracture : " << this->name() << " : " << tri_outside << " triangles outside" << std::endl;
     std::cout << "Total triangles: " << numFractureCells() << std::endl;
     auto it = std::find(reservoir_cells_.begin(), reservoir_cells_.end(), -1);
     auto extended_fractures = prm_.get<bool>("extended_fractures");
@@ -1052,8 +1062,8 @@ Fracture::assignGeomechWellState(ConnFracStatistics<Scalar>& stats) const
 
         samplePoint[pressIx] = this->fracture_pressure_[cellIx][0];
 
-        samplePoint[rateIx]
-            = this->leakof_[cellIx] * (this->fracture_pressure_[cellIx][0] - this->reservoir_pressure_[cellIx]);
+        samplePoint[rateIx] = this->leakof_[cellIx]
+            * (this->fracture_pressure_[cellIx][0] - this->reservoir_pressure_[cellIx]);
 
         samplePoint[widthIx] = this->fracture_width_[cellIx][0];
 
@@ -1423,7 +1433,9 @@ Fracture::assemblePressure()
 }
 
 bool
-Fracture::removeNewZeroWithCells(RegularTrimesh& mesh, int cur_level, const RegularTrimesh& initial_mesh) const
+Fracture::removeNewZeroWithCells(RegularTrimesh& mesh,
+                                 int cur_level,
+                                 const RegularTrimesh& initial_mesh) const
 {
     bool any_removed = false;
     using GridView = typename Grid::LeafGridView;
@@ -1469,7 +1481,8 @@ Fracture::normalFractureTraction(size_t eIdx) const
 }
 
 void
-Fracture::normalFractureTraction(Dune::BlockVector<Dune::FieldVector<double, 1>>& traction, bool resize) const
+Fracture::normalFractureTraction(Dune::BlockVector<Dune::FieldVector<double, 1>>& traction,
+                                 bool resize) const
 {
     OPM_TIMEFUNCTION();
     const size_t nc = numFractureCells();

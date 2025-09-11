@@ -87,7 +87,8 @@ public:
     }
 
 private:
-    Dune::FieldVector<double, 3> evaluateShapeFunctions_(const Dune::FieldVector<ctype, dimgrid>& x) const
+    Dune::FieldVector<double, 3>
+    evaluateShapeFunctions_(const Dune::FieldVector<ctype, dimgrid>& x) const
     {
         Dune::FieldVector<double, 3> out;
         out[0] = 1.0;
@@ -133,7 +134,8 @@ public:
     }
 
 private:
-    Dune::FieldVector<double, 3> evaluateShapeFunctions_(const Dune::FieldVector<ctype, dimgrid>& x) const
+    Dune::FieldVector<double, 3>
+    evaluateShapeFunctions_(const Dune::FieldVector<ctype, dimgrid>& x) const
     {
         Dune::FieldVector<double, 3> out;
         out[0] = 1.0;
@@ -150,8 +152,11 @@ private:
  */
 template <class GridView, class Mapper>
 void
-evolve(
-    const GridView& gridView, const Mapper& mapper, std::vector<double>& temperature, const double lambda, double& dt)
+evolve(const GridView& gridView,
+       const Mapper& mapper,
+       std::vector<double>& temperature,
+       const double lambda,
+       double& dt)
 {
     // allocate a temporary vector for the update
     std::vector<double> update(temperature.size());
@@ -205,7 +210,8 @@ evolve(
         temperature[i] += dt * update[i];
 }
 
-struct RestrictedValue {
+struct RestrictedValue
+{
     double value;
     int count;
     RestrictedValue()
@@ -250,7 +256,8 @@ finitevolumeadapt(Grid& grid, Mapper& mapper, std::vector<double>& temperature, 
             int nIdx = mapper.index(outside);
 
             // handle face from one side only
-            if (element.level() > outside.level() || (element.level() == outside.level() && eIdx < nIdx)) {
+            if (element.level() > outside.level()
+                || (element.level() == outside.level() && eIdx < nIdx)) {
                 double localdelta = std::abs(temperature[nIdx] - temperature[eIdx]);
                 indicator[eIdx] = std::max(indicator[eIdx], localdelta);
                 indicator[nIdx] = std::max(indicator[nIdx], localdelta);
@@ -380,7 +387,8 @@ twoDimensionalTest()
     }
 
 
-    // std::vector<Dune::FieldVector<double, dimworld> > vertices({{1,tao,0},{-1,tao,0},{1,-tao,0},{-1,-tao,0},
+    // std::vector<Dune::FieldVector<double, dimworld> >
+    // vertices({{1,tao,0},{-1,tao,0},{1,-tao,0},{-1,-tao,0},
     //                                                             {0,1,tao},{0,-1,tao},{0,1,-tao},{0,-1,-tao},
     //                                                             {tao,0,1},{-tao,0,1},{tao,0,-1},{-tao,0,-1}});
 
@@ -437,13 +445,15 @@ twoDimensionalTest()
 
             for (unsigned i = 0; i < N; ++i) {
                 {
-                    std::vector<unsigned int> cornerID(
-                        {inner_indices[i], out_indices[(2 * i) % (N * 2)], out_indices[(2 * i + 1) % (N * 2)]});
+                    std::vector<unsigned int> cornerID({inner_indices[i],
+                                                        out_indices[(2 * i) % (N * 2)],
+                                                        out_indices[(2 * i + 1) % (N * 2)]});
                     grid->insertElement(Dune::GeometryTypes::simplex(2), cornerID);
                 }
                 {
-                    std::vector<unsigned int> cornerID(
-                        {inner_indices[i], out_indices[(2 * i + 1) % (N * 2)], inner_indices[(i + 1) % N]});
+                    std::vector<unsigned int> cornerID({inner_indices[i],
+                                                        out_indices[(2 * i + 1) % (N * 2)],
+                                                        inner_indices[(i + 1) % N]});
                     grid->insertElement(Dune::GeometryTypes::simplex(2), cornerID);
                 }
                 {
@@ -479,8 +489,9 @@ twoDimensionalTest()
                 }
 
                 {
-                    std::vector<unsigned int> cornerID(
-                        {inner_indices[(i + 1) % N], out_indices[(i) % (N)], out_indices[(i + 1) % (N)]});
+                    std::vector<unsigned int> cornerID({inner_indices[(i + 1) % N],
+                                                        out_indices[(i) % (N)],
+                                                        out_indices[(i + 1) % (N)]});
                     grid->insertElement(Dune::GeometryTypes::simplex(2), cornerID);
                 }
             }
@@ -546,7 +557,8 @@ twoDimensionalTest()
         double lambda = 1.0;
 
         // Write pvd header
-        Dune::VTKSequenceWriter<Grid::LeafGridView> vtkWriter(grid->leafGridView(), "temperature_2d", ".", "");
+        Dune::VTKSequenceWriter<Grid::LeafGridView> vtkWriter(
+            grid->leafGridView(), "temperature_2d", ".", "");
         vtkWriter.addCellData(temperature, "celldata");
         vtkWriter.write(t);
 
@@ -586,7 +598,8 @@ twoDimensionalTest()
             std::bitset<std::size_t {3}> periodic(0);
             // GRID3D grid3D(L2,L,dims, periodic, overlap, comm, lb);// comm, part );
             GRID3D grid3D(L, dims); //, periodic, overlap, comm, lb);// comm, part );
-            Dune::VTKSequenceWriter<GRID3D::LeafGridView> vtkWriter3D(grid3D.leafGridView(), "grid3D", ".", "");
+            Dune::VTKSequenceWriter<GRID3D::LeafGridView> vtkWriter3D(
+                grid3D.leafGridView(), "grid3D", ".", "");
             vtkWriter3D.write(0);
             grid3D.globalRefine(2);
             vtkWriter3D.write(1);

@@ -78,7 +78,8 @@ public:
     }
 
 private:
-    Dune::FieldVector<double, 3> evaluateShapeFunctions_(const Dune::FieldVector<ctype, dimgrid>& x) const
+    Dune::FieldVector<double, 3>
+    evaluateShapeFunctions_(const Dune::FieldVector<ctype, dimgrid>& x) const
     {
         Dune::FieldVector<double, 3> out;
         out[0] = 1.0;
@@ -122,7 +123,8 @@ public:
     }
 
 private:
-    Dune::FieldVector<double, 3> evaluateShapeFunctions_(const Dune::FieldVector<ctype, dimgrid>& x) const
+    Dune::FieldVector<double, 3>
+    evaluateShapeFunctions_(const Dune::FieldVector<ctype, dimgrid>& x) const
     {
         Dune::FieldVector<double, 3> out;
         out[0] = 1.0;
@@ -139,8 +141,11 @@ private:
  */
 template <class GridView, class Mapper>
 void
-evolve(
-    const GridView& gridView, const Mapper& mapper, std::vector<double>& temperature, const double lambda, double& dt)
+evolve(const GridView& gridView,
+       const Mapper& mapper,
+       std::vector<double>& temperature,
+       const double lambda,
+       double& dt)
 {
     // allocate a temporary vector for the update
     std::vector<double> update(temperature.size());
@@ -187,7 +192,8 @@ evolve(
         temperature[i] += dt * update[i];
 }
 
-struct RestrictedValue {
+struct RestrictedValue
+{
     double value;
     int count;
     RestrictedValue()
@@ -232,7 +238,8 @@ finitevolumeadapt(Grid& grid, Mapper& mapper, std::vector<double>& temperature, 
             int nIdx = mapper.index(outside);
 
             // handle face from one side only
-            if (element.level() > outside.level() || (element.level() == outside.level() && eIdx < nIdx)) {
+            if (element.level() > outside.level()
+                || (element.level() == outside.level() && eIdx < nIdx)) {
                 double localdelta = std::abs(temperature[nIdx] - temperature[eIdx]);
                 indicator[eIdx] = std::max(indicator[eIdx], localdelta);
                 indicator[nIdx] = std::max(indicator[nIdx], localdelta);
@@ -354,7 +361,8 @@ oneDimensionalTest()
 
     double angle = M_PI / 2;
     for (int i = 0; i < numElements; i++) {
-        const auto mapping = UnitCircleMapping<ctype, dimgrid, dimworld> {angle, angle + 2.0 / 3.0 * M_PI};
+        const auto mapping
+            = UnitCircleMapping<ctype, dimgrid, dimworld> {angle, angle + 2.0 / 3.0 * M_PI};
         factory.insertElement(Dune::GeometryTypes::line, cornerIDs[i], std::move(mapping));
         angle += 2.0 / 3.0 * M_PI;
     }
@@ -406,7 +414,8 @@ oneDimensionalTest()
     double lambda = 1.0;
 
     // Write pvd header
-    Dune::VTKSequenceWriter<Grid::LeafGridView> vtkWriter(grid->leafGridView(), "temperature_1d", ".", "");
+    Dune::VTKSequenceWriter<Grid::LeafGridView> vtkWriter(
+        grid->leafGridView(), "temperature_1d", ".", "");
     vtkWriter.addCellData(temperature, "celldata");
     vtkWriter.write(t);
 
@@ -471,10 +480,10 @@ twoDimensionalTest()
     }
 
     // Create the element geometries
-    std::vector<std::vector<unsigned int>> cornerIDs({{1, 9, 11}, {3, 9, 11}, {2, 3, 5}, {2, 3, 7},  {0, 1, 4},
-                                                      {0, 1, 6},  {4, 5, 8},  {4, 5, 9}, {0, 8, 10}, {2, 8, 10},
-                                                      {6, 7, 10}, {6, 7, 11}, {4, 0, 8}, {4, 1, 9},  {6, 10, 0},
-                                                      {6, 11, 1}, {5, 2, 8},  {5, 3, 9}, {7, 2, 10}, {7, 3, 11}});
+    std::vector<std::vector<unsigned int>> cornerIDs(
+        {{1, 9, 11}, {3, 9, 11}, {2, 3, 5},  {2, 3, 7},  {0, 1, 4},  {0, 1, 6}, {4, 5, 8},
+         {4, 5, 9},  {0, 8, 10}, {2, 8, 10}, {6, 7, 10}, {6, 7, 11}, {4, 0, 8}, {4, 1, 9},
+         {6, 10, 0}, {6, 11, 1}, {5, 2, 8},  {5, 3, 9},  {7, 2, 10}, {7, 3, 11}});
     for (size_t i = 0; i < cornerIDs.size(); i++) {
         const auto mapping = UnitSphereMapping<ctype, dimgrid, dimworld>(
             {vertices[cornerIDs[i][0]], vertices[cornerIDs[i][1]], vertices[cornerIDs[i][2]]});
@@ -520,7 +529,8 @@ twoDimensionalTest()
     double lambda = 1.0;
 
     // Write pvd header
-    Dune::VTKSequenceWriter<Grid::LeafGridView> vtkWriter(grid->leafGridView(), "temperature_2d", ".", "");
+    Dune::VTKSequenceWriter<Grid::LeafGridView> vtkWriter(
+        grid->leafGridView(), "temperature_2d", ".", "");
     vtkWriter.addCellData(temperature, "celldata");
     vtkWriter.write(t);
 

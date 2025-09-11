@@ -71,7 +71,8 @@ public:
     void timeIntegration()
     {
         if (this->gridView().comm().rank() == 0) {
-            std::cout << "----------------------Start TimeIntegration-------------------\n" << std::flush;
+            std::cout << "----------------------Start TimeIntegration-------------------\n"
+                      << std::flush;
         }
         Parent::timeIntegration();
     }
@@ -143,8 +144,9 @@ public:
         const auto& problem = this->simulator_.problem();
         const auto intquant = this->cachedIntensiveQuantities(globalIdx, timeIdx);
         if (!this->enableIntensiveQuantityCache_) {
-            OPM_THROW(std::logic_error,
-                      "Run without intentive quantites not enabled: Use --enable-intensive-quantity=true");
+            OPM_THROW(
+                std::logic_error,
+                "Run without intentive quantites not enabled: Use --enable-intensive-quantity=true");
         }
         if (!intquant) {
             OPM_THROW(std::logic_error, "Intensive quantites need to be updated in code");
@@ -178,34 +180,38 @@ public:
 } // namespace Opm
 
 // the current code use eclnewtonmethod adding other conditions to proceed_ should do the trick for KA
-// adding linearshe sould be chaning the update_ function in the same class with condition that the error is reduced.
-// the trick is to be able to recalculate the residual from here.
-// unsure where the timestepping is done from suggestedtime??
-// suggestTimeStep is taken from newton solver in problem.limitTimestep
+// adding linearshe sould be chaning the update_ function in the same class with condition that the error
+// is reduced. the trick is to be able to recalculate the residual from here. unsure where the
+// timestepping is done from suggestedtime?? suggestTimeStep is taken from newton solver in
+// problem.limitTimestep
 namespace Opm
 {
 namespace Properties
 {
     namespace TTag
     {
-        struct EclFlowProblemMech {
+        struct EclFlowProblemMech
+        {
             using InheritsFrom = std::tuple<EclFlowProblem>;
         };
     } // namespace TTag
 
     // Set the problem class
     template <class TypeTag>
-    struct Problem<TypeTag, TTag::EclFlowProblemMech> {
+    struct Problem<TypeTag, TTag::EclFlowProblemMech>
+    {
         using type = EclProblemFlow<TypeTag>;
     };
 
     template <class TypeTag>
-    struct Model<TypeTag, TTag::EclFlowProblemMech> {
+    struct Model<TypeTag, TTag::EclFlowProblemMech>
+    {
         using type = BlackOilModelFvLocal<TypeTag>;
     };
 
     template <class TypeTag>
-    struct EclWellModel<TypeTag, TTag::EclFlowProblemMech> {
+    struct EclWellModel<TypeTag, TTag::EclFlowProblemMech>
+    {
         using type = BlackoilWellModelFvExtra<TypeTag>;
     };
 
@@ -215,24 +221,28 @@ namespace Properties
     // };
 
     template <class TypeTag>
-    struct ThreadsPerProcess<TypeTag, TTag::EclFlowProblemMech> {
+    struct ThreadsPerProcess<TypeTag, TTag::EclFlowProblemMech>
+    {
         static constexpr int value = 1;
     };
 
     template <class TypeTag>
-    struct ContinueOnConvergenceError<TypeTag, TTag::EclFlowProblemMech> {
+    struct ContinueOnConvergenceError<TypeTag, TTag::EclFlowProblemMech>
+    {
         static constexpr bool value = false;
     };
 
     template <class TypeTag>
-    struct EclNewtonSumTolerance<TypeTag, TTag::EclFlowProblemMech> {
+    struct EclNewtonSumTolerance<TypeTag, TTag::EclFlowProblemMech>
+    {
         using type = GetPropType<TypeTag, Scalar>;
         static constexpr type value = 1e-5;
     };
 
     // the default for the allowed volumetric error for oil per second
     template <class TypeTag>
-    struct NewtonTolerance<TypeTag, TTag::EclFlowProblemMech> {
+    struct NewtonTolerance<TypeTag, TTag::EclFlowProblemMech>
+    {
         using type = GetPropType<TypeTag, Scalar>;
         static constexpr type value = 1e-2;
     };
@@ -240,13 +250,15 @@ namespace Properties
     // set fraction of the pore volume where the volumetric residual may be violated during
     // strict Newton iterations
     template <class TypeTag>
-    struct EclNewtonRelaxedVolumeFraction<TypeTag, TTag::EclFlowProblemMech> {
+    struct EclNewtonRelaxedVolumeFraction<TypeTag, TTag::EclFlowProblemMech>
+    {
         using type = GetPropType<TypeTag, Scalar>;
         static constexpr type value = 0.0;
     };
 
     template <class TypeTag>
-    struct EclNewtonRelaxedTolerance<TypeTag, TTag::EclFlowProblemMech> {
+    struct EclNewtonRelaxedTolerance<TypeTag, TTag::EclFlowProblemMech>
+    {
         using type = GetPropType<TypeTag, Scalar>;
         static constexpr type value = 10 * getPropValue<TypeTag, Properties::NewtonTolerance>();
     };
@@ -260,34 +272,41 @@ namespace Properties
     // };
 
     template <class TypeTag>
-    struct Linearizer<TypeTag, TTag::EclFlowProblemMech> {
+    struct Linearizer<TypeTag, TTag::EclFlowProblemMech>
+    {
         using type = TpfaLinearizer<TypeTag>;
     };
 
     template <class TypeTag>
-    struct LocalResidual<TypeTag, TTag::EclFlowProblemMech> {
+    struct LocalResidual<TypeTag, TTag::EclFlowProblemMech>
+    {
         using type = BlackOilLocalResidualTPFA<TypeTag>;
     };
 
     template <class TypeTag>
-    struct EnableDiffusion<TypeTag, TTag::EclFlowProblemMech> {
+    struct EnableDiffusion<TypeTag, TTag::EclFlowProblemMech>
+    {
         static constexpr bool value = false;
     };
 
     template <class TypeTag>
-    struct EnableDisgasInWater<TypeTag, TTag::EclFlowProblemMech> {
+    struct EnableDisgasInWater<TypeTag, TTag::EclFlowProblemMech>
+    {
         static constexpr bool value = false;
     };
 
-    // static constexpr bool has_disgas_in_water = getPropValue<TypeTag, Properties::EnableDisgasInWater>();
+    // static constexpr bool has_disgas_in_water = getPropValue<TypeTag,
+    // Properties::EnableDisgasInWater>();
 
     template <class TypeTag>
-    struct Simulator<TypeTag, TTag::EclFlowProblemMech> {
+    struct Simulator<TypeTag, TTag::EclFlowProblemMech>
+    {
         using type = Opm::Simulator<TypeTag>;
     };
 
     template <class TypeTag>
-    struct EclEnableAquifers<TypeTag, TTag::EclFlowProblemMech> {
+    struct EclEnableAquifers<TypeTag, TTag::EclFlowProblemMech>
+    {
         static constexpr bool value = false;
     };
 } // namespace Properties

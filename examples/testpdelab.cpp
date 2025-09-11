@@ -16,8 +16,9 @@ static const double szX = 10.0;
 
 // define some grid functions to interpolate from
 template <typename GV, typename RF>
-class G : public Dune::PDELab::AnalyticGridFunctionBase<Dune::PDELab::AnalyticGridFunctionTraits<GV, RF, GV::dimension>,
-                                                        G<GV, RF>>
+class G : public Dune::PDELab::AnalyticGridFunctionBase<
+              Dune::PDELab::AnalyticGridFunctionTraits<GV, RF, GV::dimension>,
+              G<GV, RF>>
 {
 public:
     typedef Dune::PDELab::AnalyticGridFunctionTraits<GV, RF, GV::dimension> Traits;
@@ -38,22 +39,25 @@ public:
 
 // define some boundary grid functions to define boundary conditions
 template <typename GV>
-class ModelProblem
-    : public Dune::PDELab::LinearElasticityParameterInterface<Dune::PDELab::LinearElasticityParameterTraits<GV, double>,
-                                                              ModelProblem<GV>>
+class ModelProblem : public Dune::PDELab::LinearElasticityParameterInterface<
+                         Dune::PDELab::LinearElasticityParameterTraits<GV, double>,
+                         ModelProblem<GV>>
 {
 public:
     typedef Dune::PDELab::LinearElasticityParameterTraits<GV, double> Traits;
 
-    ModelProblem(typename Traits::RangeType G, typename Traits::RangeFieldType l, typename Traits::RangeFieldType m)
+    ModelProblem(typename Traits::RangeType G,
+                 typename Traits::RangeFieldType l,
+                 typename Traits::RangeFieldType m)
         : G_(G)
         , lambda_(l)
         , mu_(m)
     {
     }
 
-    void
-    f(const typename Traits::ElementType& e, const typename Traits::DomainType& x, typename Traits::RangeType& y) const
+    void f(const typename Traits::ElementType& e,
+           const typename Traits::DomainType& x,
+           typename Traits::RangeType& y) const
     {
         y = G_;
     }
@@ -65,8 +69,9 @@ public:
         return (xg[0] == 0.0); // || xg[0] == szX);  // Dirichlet b.c. on left & right boundary
     }
 
-    void
-    u(const typename Traits::ElementType& e, const typename Traits::DomainType& x, typename Traits::RangeType& y) const
+    void u(const typename Traits::ElementType& e,
+           const typename Traits::DomainType& x,
+           typename Traits::RangeType& y) const
     {
         y = 0.0;
     }

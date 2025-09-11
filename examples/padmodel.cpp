@@ -58,12 +58,14 @@ namespace fs = std::filesystem;
 namespace Opm
 {
 
-struct GridSize {
+struct GridSize
+{
     int nx;
     int ny;
     int nz;
 };
-struct ExtendParam {
+struct ExtendParam
+{
     int nz_upper;
     double top_upper;
     int nz_lower;
@@ -137,9 +139,12 @@ getDimens(const Opm::Deck& deck)
     int nx, ny, nz;
     GridSize grid_size;
     if (deck.hasKeyword<Opm::ParserKeywords::DIMENS>()) {
-        nx = deck[Opm::ParserKeywords::DIMENS::keywordName].back().getRecord(0).getItem("NX").get<int>(0);
-        ny = deck[Opm::ParserKeywords::DIMENS::keywordName].back().getRecord(0).getItem("NY").get<int>(0);
-        nz = deck[Opm::ParserKeywords::DIMENS::keywordName].back().getRecord(0).getItem("NZ").get<int>(0);
+        nx = deck[Opm::ParserKeywords::DIMENS::keywordName].back().getRecord(0).getItem("NX").get<int>(
+            0);
+        ny = deck[Opm::ParserKeywords::DIMENS::keywordName].back().getRecord(0).getItem("NY").get<int>(
+            0);
+        nz = deck[Opm::ParserKeywords::DIMENS::keywordName].back().getRecord(0).getItem("NZ").get<int>(
+            0);
         grid_size.nx = nx;
         grid_size.ny = ny;
         grid_size.nz = nz;
@@ -159,8 +164,8 @@ extendDimens(const GridSize& grid_size, ExtendParam& extend_param, Opm::Deck& de
 
         extend_param.nz_new = nz + extend_param.nz_upper + extend_param.nz_lower;
         {
-            DeckItem& NZit
-                = const_cast<DeckItem&>(deck[ParserKeywords::DIMENS::keywordName].back().getRecord(0).getItem("NZ"));
+            DeckItem& NZit = const_cast<DeckItem&>(
+                deck[ParserKeywords::DIMENS::keywordName].back().getRecord(0).getItem("NZ"));
             std::vector<int>& data = NZit.getData<int>();
             data[0] = extend_param.nz_new;
         }
@@ -186,15 +191,18 @@ extendDimens(const GridSize& grid_size, ExtendParam& extend_param, Opm::Deck& de
         std::cerr << "No DIMENS keyword found in the deck" << std::endl;
     }
     if (deck.hasKeyword<ParserKeywords::SPECGRID>()) {
-        DeckItem& NZit
-            = const_cast<DeckItem&>(deck[ParserKeywords::SPECGRID::keywordName].back().getRecord(0).getItem("NZ"));
+        DeckItem& NZit = const_cast<DeckItem&>(
+            deck[ParserKeywords::SPECGRID::keywordName].back().getRecord(0).getItem("NZ"));
         std::vector<int>& data = NZit.getData<int>();
         data[0] = extend_param.nz_new;
     }
 }
 template <typename T>
 void
-extendGridSection(DeckSection& gridsec, const GridSize& grid_size, const ExtendParam& extend_param, type_tag type)
+extendGridSection(DeckSection& gridsec,
+                  const GridSize& grid_size,
+                  const ExtendParam& extend_param,
+                  type_tag type)
 {
     int nx = grid_size.nx;
     int ny = grid_size.ny;
@@ -203,7 +211,8 @@ extendGridSection(DeckSection& gridsec, const GridSize& grid_size, const ExtendP
     int nz_new = extend_param.nz_new;
     int nc_new = nx * ny * nz_new;
     int nc = nx * ny * nz;
-    // std::vector<DeckKeyword*> keywords = const_cast<std::vector<DeckKeyword*>>(gridsec.getKeywordList());
+    // std::vector<DeckKeyword*> keywords =
+    // const_cast<std::vector<DeckKeyword*>>(gridsec.getKeywordList());
     for (const auto& records : gridsec) {
         if (records.size() != 1) {
             continue;
@@ -240,7 +249,8 @@ extendGridSection(DeckSection& gridsec, const GridSize& grid_size, const ExtendP
         }
         std::cout << "Extend data_size: " << records.name() << std::endl;
         // std::cout << "Extend item name: " << item.name() << std::endl;
-        std::vector<value::status>& val_status = const_cast<std::vector<value::status>&>(item.getValueStatus());
+        std::vector<value::status>& val_status
+            = const_cast<std::vector<value::status>&>(item.getValueStatus());
 
         std::vector<T> val_new(nc_new);
         std::vector<value::status> val_status_new(nc_new, value::status::deck_value);
@@ -279,12 +289,12 @@ extendGRDECL(DeckSection& gridsec, const GridSize& grid_size, const ExtendParam&
     double no_gap = extend_param.no_gap;
     int nz_new = extend_param.nz_new;
     // int nc_new = nx*ny*nz_new;
-    std::vector<double>& coord
-        = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::COORD>().back().getRawDoubleData());
-    std::vector<double>& zcorn
-        = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::ZCORN>().back().getRawDoubleData());
-    std::vector<value::status>& zcorn_status
-        = const_cast<std::vector<value::status>&>(gridsec.get<ParserKeywords::ZCORN>().back().getValueStatus());
+    std::vector<double>& coord = const_cast<std::vector<double>&>(
+        gridsec.get<ParserKeywords::COORD>().back().getRawDoubleData());
+    std::vector<double>& zcorn = const_cast<std::vector<double>&>(
+        gridsec.get<ParserKeywords::ZCORN>().back().getRawDoubleData());
+    std::vector<value::status>& zcorn_status = const_cast<std::vector<value::status>&>(
+        gridsec.get<ParserKeywords::ZCORN>().back().getValueStatus());
     // getRecord(0).getDataItem().getData< double >();
     // ZcornMapper mapper( getNX(), getNY(), getNZ());
     // zcorn_fixed = mapper.fixupZCORN( zcorn );
@@ -308,7 +318,8 @@ extendGRDECL(DeckSection& gridsec, const GridSize& grid_size, const ExtendParam&
     }
     if (extend_param.monotonic_zcorn) {
 
-        std::vector<value::status> zcorn_status_new((2 * nx) * (2 * ny) * (2 * nz_new), value::status::deck_value);
+        std::vector<value::status> zcorn_status_new((2 * nx) * (2 * ny) * (2 * nz_new),
+                                                    value::status::deck_value);
         std::vector<double> zcorn_new((2 * nx) * (2 * ny) * (2 * nz_new), 0.0);
         // extend, make monotonic, fill gaps zcorn
         for (int i = 0; i < 2 * nx; ++i) {
@@ -481,7 +492,8 @@ extendRegions(DeckSection& regions,
         }
         std::cout << "Extend regions: " << records.name() << std::endl;
         // std::cout << "Extend data_size: " << .data_size() << std::endl;
-        std::vector<value::status>& val_status = const_cast<std::vector<value::status>&>(item.getValueStatus());
+        std::vector<value::status>& val_status
+            = const_cast<std::vector<value::status>&>(item.getValueStatus());
 
         std::vector<int> val_new(nc_new);
         std::vector<value::status> val_status_new(nc_new, value::status::deck_value);
@@ -525,8 +537,10 @@ extendSolution(DeckSection& solution, const ExtendParam& /*extend_param*/)
             //      std::cout << "Item data size: " << item.data_size() << std::endl;
             //      //std::cout << "Item value status: " << item.getValueStatus() << std::endl;
             //  }
-            double& datum_pressure = const_cast<double&>(record.getItem("DATUM_PRESSURE").getData<double>()[0]);
-            double& datum_depth = const_cast<double&>(record.getItem("DATUM_DEPTH").getData<double>()[0]);
+            double& datum_pressure
+                = const_cast<double&>(record.getItem("DATUM_PRESSURE").getData<double>()[0]);
+            double& datum_depth
+                = const_cast<double&>(record.getItem("DATUM_DEPTH").getData<double>()[0]);
             datum_pressure = 1.0;
             datum_depth = 0.0;
             double& woc = const_cast<double&>(record.getItem("OWC").getData<double>()[0]);
@@ -619,20 +633,21 @@ manipulate_deck(const char* deck_file, std::ostream& os)
 
     extendGridSection<double>(gridsec, grid_size, extend_param, type_tag::fdouble);
     extendGridSection<int>(gridsec, grid_size, extend_param, type_tag::integer);
-    std::vector<int>& actnum = const_cast<std::vector<int>&>(gridsec.get<ParserKeywords::ACTNUM>().back().getIntData());
+    std::vector<int>& actnum
+        = const_cast<std::vector<int>&>(gridsec.get<ParserKeywords::ACTNUM>().back().getIntData());
     // TODO need to handle cases where this is not given ..
     std::vector<double>& ntg
         = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::NTG>().back().getRawDoubleData());
-    std::vector<double>& poro
-        = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::PORO>().back().getRawDoubleData());
-    std::vector<double>& permx
-        = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::PERMX>().back().getRawDoubleData());
-    std::vector<double>& permy
-        = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::PERMY>().back().getRawDoubleData());
-    std::vector<double>& permz
-        = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::PERMZ>().back().getRawDoubleData());
-    std::vector<value::status>& actnum_status
-        = const_cast<std::vector<value::status>&>(gridsec.get<ParserKeywords::ACTNUM>().back().getValueStatus());
+    std::vector<double>& poro = const_cast<std::vector<double>&>(
+        gridsec.get<ParserKeywords::PORO>().back().getRawDoubleData());
+    std::vector<double>& permx = const_cast<std::vector<double>&>(
+        gridsec.get<ParserKeywords::PERMX>().back().getRawDoubleData());
+    std::vector<double>& permy = const_cast<std::vector<double>&>(
+        gridsec.get<ParserKeywords::PERMY>().back().getRawDoubleData());
+    std::vector<double>& permz = const_cast<std::vector<double>&>(
+        gridsec.get<ParserKeywords::PERMZ>().back().getRawDoubleData());
+    std::vector<value::status>& actnum_status = const_cast<std::vector<value::status>&>(
+        gridsec.get<ParserKeywords::ACTNUM>().back().getValueStatus());
     // int nc_new = grid_size.nx*grid_size.ny*extend_param.nz_new;
     // actnum.resize(nc_new);
     int nc_new = actnum.size();
@@ -824,14 +839,16 @@ main(int argc, char** argv)
 
             using IMPORT = Opm::ParserKeywords::IMPORT;
             for (const auto& import_keyword : deck.get<IMPORT>()) {
-                const auto& fname = import_keyword.getRecord(0).getItem<IMPORT::FILE>().get<std::string>(0);
+                const auto& fname
+                    = import_keyword.getRecord(0).getItem<IMPORT::FILE>().get<std::string>(0);
                 copy_file(input_arg.parent_path(), fname, output_dir);
             }
 
 
             using PYACTION = Opm::ParserKeywords::PYACTION;
             for (const auto& pyaction_keyword : deck.get<PYACTION>()) {
-                const auto& fname = pyaction_keyword.getRecord(1).getItem<PYACTION::FILENAME>().get<std::string>(0);
+                const auto& fname
+                    = pyaction_keyword.getRecord(1).getItem<PYACTION::FILENAME>().get<std::string>(0);
                 copy_file(input_arg.parent_path(), fname, output_dir);
             }
 
@@ -839,7 +856,8 @@ main(int argc, char** argv)
             using GDFILE = Opm::ParserKeywords::GDFILE;
             if (deck.hasKeyword<GDFILE>()) {
                 const auto& gdfile_keyword = deck.get<GDFILE>().back();
-                const auto& fname = gdfile_keyword.getRecord(0).getItem<GDFILE::filename>().get<std::string>(0);
+                const auto& fname
+                    = gdfile_keyword.getRecord(0).getItem<GDFILE::filename>().get<std::string>(0);
                 copy_file(input_arg.parent_path(), fname, output_dir);
             }
         }

@@ -68,7 +68,8 @@ void
 syntax(char** argv)
 {
     std::cerr << "Usage: " << argv[0] << " gridfilename=filename.grdecl [option=]" << std::endl
-              << "options ctol Emin vtufilename resultfilename output verbose inpect with_gravity with_pressure"
+              << "options ctol Emin vtufilename resultfilename output verbose inpect with_gravity "
+                 "with_pressure"
               << std::endl
               << "\t gridfilename             - the grid file. can be 'uniform'" << std::endl
               << "\t vtufilename              - save results to vtu file" << std::endl;
@@ -77,7 +78,8 @@ syntax(char** argv)
 
 
 //! \brief Structure holding parameters configurable from command line
-struct Params {
+struct Params
+{
     double ctol;
     double Emin;
     //! \brief The eclipse grid file
@@ -153,7 +155,9 @@ using PolyGrid = Dune::PolyhedralGrid<3, 3>;
 #if HAVE_ALUGRID
 using AluGrid3D = Dune::ALUGrid<3, 3, Dune::cube, Dune::nonconforming>;
 void
-createGrids(std::unique_ptr<AluGrid3D>& grid, Opm::EclipseState& eclState, std::vector<unsigned int>& ordering)
+createGrids(std::unique_ptr<AluGrid3D>& grid,
+            Opm::EclipseState& eclState,
+            std::vector<unsigned int>& ordering)
 {
     Dune::CpGrid cpgrid;
     const auto& input_grid = eclState.getInputGrid();
@@ -165,7 +169,8 @@ createGrids(std::unique_ptr<AluGrid3D>& grid, Opm::EclipseState& eclState, std::
                                 /*clipZ=*/false);
 
     // auto  cartesianCellId = cpgrid.globalCell();
-    // std::vector<std::size_t>  nums = cpgrid.processEclipseFormat(eclState.getInputGrid(), nullptr, false);
+    // std::vector<std::size_t>  nums = cpgrid.processEclipseFormat(eclState.getInputGrid(), nullptr,
+    // false);
     Dune::FromToGridFactory<AluGrid3D> factory;
     // std::vector<unsigned int> ordering;
     auto cartesianCellIndx = cpgrid.globalCell();
@@ -173,7 +178,9 @@ createGrids(std::unique_ptr<AluGrid3D>& grid, Opm::EclipseState& eclState, std::
 }
 #endif
 void
-createGrids(std::unique_ptr<PolyGrid>& grid, const Opm::EclipseState& eclState, std::vector<unsigned int>& /*ordering*/)
+createGrids(std::unique_ptr<PolyGrid>& grid,
+            const Opm::EclipseState& eclState,
+            std::vector<unsigned int>& /*ordering*/)
 {
     grid = std::make_unique<PolyGrid>(eclState.getInputGrid(), eclState.fieldProps().porv(true));
 }
@@ -220,7 +227,8 @@ run(Params& p, const std::string& name)
     std::vector<std::size_t> nums = cpGrid.processEclipseFormat(&eclgrid, nullptr, false);
     using CartesianIndexMapper = Dune::CartesianIndexMapper<Dune::CpGrid>;
 
-    Dune::VTKWriter<typename GridType::LeafGridView> vtkwriter(grid.leafGridView(), Dune::VTK::nonconforming);
+    Dune::VTKWriter<typename GridType::LeafGridView> vtkwriter(grid.leafGridView(),
+                                                               Dune::VTK::nonconforming);
     std::string outputfile = name + "_" + p.vtufile;
     std::cout << "Writing output to " << outputfile << std::endl;
     vtkwriter.write(outputfile);
@@ -247,7 +255,8 @@ int
 main(int argc, char** argv)
 try {
     try {
-        if (argc < 2 || strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-?") == 0) {
+        if (argc < 2 || strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0
+            || strcmp(argv[1], "-?") == 0) {
             syntax(argv);
             exit(1);
         }

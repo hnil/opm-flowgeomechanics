@@ -129,7 +129,9 @@ n_closest(const Grid& grid)
         distances.push_back({eIdx, center.two_norm()});
     }
 
-    std::sort(distances.begin(), distances.end(), [](Elem& a, Elem& b) { return std::get<1>(a) < std::get<1>(b); });
+    std::sort(distances.begin(), distances.end(), [](Elem& a, Elem& b) {
+        return std::get<1>(a) < std::get<1>(b);
+    });
 
     std::array<size_t, N> result;
     for (int i = 0; i != N; ++i)
@@ -304,7 +306,8 @@ private:
         std::vector<size_t> all_ixs(nc);
         std::iota(all_ixs.begin(), all_ixs.end(), 0);
         std::vector<size_t> nonelim;
-        std::set_difference(all_ixs.begin(), all_ixs.end(), elim.begin(), elim.end(), std::back_inserter(nonelim));
+        std::set_difference(
+            all_ixs.begin(), all_ixs.end(), elim.begin(), elim.end(), std::back_inserter(nonelim));
         return nonelim;
     }
 
@@ -370,7 +373,11 @@ updateTrans(SparseMatrix& mat,
 // The matrix 'M' will be reduced, and any columns extracted will be collected and
 // retuerned. (Rows will just be removed).
 SparseMatrix
-reduceMatrix(SparseMatrix& M, bool rows, bool cols, const std::vector<size_t> elim, const std::vector<size_t> keep)
+reduceMatrix(SparseMatrix& M,
+             bool rows,
+             bool cols,
+             const std::vector<size_t> elim,
+             const std::vector<size_t> keep)
 // ----------------------------------------------------------------------------
 {
     if (cols)
@@ -423,7 +430,9 @@ class FlowSystemMatrices
 // ----------------------------------------------------------------------------
 {
 public:
-    FlowSystemMatrices(const SparseMatrix& M, const std::vector<HTrans>& htransvec, const std::vector<double>& leakvec)
+    FlowSystemMatrices(const SparseMatrix& M,
+                       const std::vector<HTrans>& htransvec,
+                       const std::vector<double>& leakvec)
         : M_(M)
         , C_(M)
         , rhs_()
@@ -528,11 +537,13 @@ private:
         std::vector<size_t> all_ixs(nc);
         std::iota(all_ixs.begin(), all_ixs.end(), 0);
         std::vector<size_t> nonelim;
-        std::set_difference(all_ixs.begin(), all_ixs.end(), elim.begin(), elim.end(), std::back_inserter(nonelim));
+        std::set_difference(
+            all_ixs.begin(), all_ixs.end(), elim.begin(), elim.end(), std::back_inserter(nonelim));
         return nonelim;
     }
-    static std::vector<int>
-    compute_remapping_(const std::vector<size_t>& eliminated, const std::vector<size_t>& kept, const size_t nc)
+    static std::vector<int> compute_remapping_(const std::vector<size_t>& eliminated,
+                                               const std::vector<size_t>& kept,
+                                               const size_t nc)
     {
         std::vector<int> result(nc);
         for (size_t i = 0; i != eliminated.size(); ++i)
@@ -998,7 +1009,8 @@ solveCoupledSplit(Vector& p,
 
         // auto criterion =
         //   Dune::Amg::CoarsenCriterion<Dune::Amg::UnSymmetricCriterion<SparseMatrix,
-        //                                                               Dune::Amg::FirstDiagonal>>(15, 50);
+        //                                                               Dune::Amg::FirstDiagonal>>(15,
+        //                                                               50);
         // criterion.setDefaultValuesIsotropic(2);
         // criterion.setAlpha(.67);
         // criterion.setBeta(1.0e-4);

@@ -61,8 +61,8 @@ partition_of_unity(const std::vector<double>& bpoints, const std::vector<double>
 
                 const size_t p2ix = (i + i2) % N;
                 const size_t p3ix = (p2ix + 1) % N;
-                const auto alpha
-                    = barycentric(&bpoints[2 * i], &bpoints[2 * p2ix], &bpoints[2 * p3ix], &ipoints[2 * j]);
+                const auto alpha = barycentric(
+                    &bpoints[2 * i], &bpoints[2 * p2ix], &bpoints[2 * p3ix], &ipoints[2 * j]);
                 if (alpha[0] >= 0 && alpha[1] >= 0 && alpha[2] >= 0) {
                     result[j * N + i] = alpha[0];
                 }
@@ -147,13 +147,16 @@ determine_suitable_axis_2D(const std::vector<double>& p3d)
     using Entry = std::tuple<double, size_t>;
 
     // find boundingbox (as well as indices to the points that determined its bounds
-    std::array<Entry, 6> bbox {{{p3d[0], 0}, {p3d[1], 0}, {p3d[2], 0}, {p3d[0], 0}, {p3d[1], 0}, {p3d[2], 0}}};
+    std::array<Entry, 6> bbox {
+        {{p3d[0], 0}, {p3d[1], 0}, {p3d[2], 0}, {p3d[0], 0}, {p3d[1], 0}, {p3d[2], 0}}};
 
     for (size_t i = 1; i != N; ++i) {
         for (int dim = 0; dim != 3; ++dim) {
-            bbox[dim] = std::get<0>(bbox[dim]) < p3d[3 * i + dim] ? bbox[dim] : Entry {p3d[3 * i + dim], i}; // min
-            bbox[dim + 3]
-                = std::get<0>(bbox[dim + 3]) > p3d[3 * i + dim] ? bbox[dim + 3] : Entry {p3d[3 * i + dim], i}; // max
+            bbox[dim] = std::get<0>(bbox[dim]) < p3d[3 * i + dim] ? bbox[dim]
+                                                                  : Entry {p3d[3 * i + dim], i}; // min
+            bbox[dim + 3] = std::get<0>(bbox[dim + 3]) > p3d[3 * i + dim]
+                ? bbox[dim + 3]
+                : Entry {p3d[3 * i + dim], i}; // max
         }
     }
 
@@ -180,10 +183,10 @@ determine_suitable_axis_2D(const std::vector<double>& p3d)
     }
 
     // decide on first axis (which we store in the variable 'ax1')
-    const size_t pix = std::get<1>(
-        bbox[ix_longest + 3]); // point defining the upper bound of the bounding box in the chosen direction
-    std::array<double, 3> ax1(
-        normalize({p3d[3 * pix] - origin[0], p3d[3 * pix + 1] - origin[1], p3d[3 * pix + 2] - origin[2]}));
+    const size_t pix = std::get<1>(bbox[ix_longest + 3]); // point defining the upper bound of the
+                                                          // bounding box in the chosen direction
+    std::array<double, 3> ax1(normalize(
+        {p3d[3 * pix] - origin[0], p3d[3 * pix + 1] - origin[1], p3d[3 * pix + 2] - origin[2]}));
 
     // identify second axis by among the five remaining points defining the bounding box
     std::array<double, 3> ax2(ax1); // start out with overlapping axes, which
@@ -193,8 +196,9 @@ determine_suitable_axis_2D(const std::vector<double>& p3d)
     for (int i = 0; i != 6; ++i) {
         if (i != ix_longest + 3) { // skip the direction that was used to construct 'ax1'
             const size_t point_ix = std::get<1>(bbox[i]);
-            auto cand(normalize(
-                {p3d[3 * point_ix] - origin[0], p3d[3 * point_ix + 1] - origin[1], p3d[3 * point_ix + 2] - origin[2]}));
+            auto cand(normalize({p3d[3 * point_ix] - origin[0],
+                                 p3d[3 * point_ix + 1] - origin[1],
+                                 p3d[3 * point_ix + 2] - origin[2]}));
             const double cand_scal_prod = cand[0] * ax1[0] + cand[1] * ax1[1] + cand[2] * ax1[2];
             if (std::abs(cand_scal_prod) < std::abs(scal_prod)) {
                 scal_prod = cand_scal_prod;
@@ -269,8 +273,9 @@ redistribute_2D(const std::vector<double>& points, std::vector<double>& result)
     double total_length = 0;
     for (size_t i = 0; i < N; ++i) {
         const size_t j = (i + 1) % N;
-        total_length += sqrt((points[2 * i] - points[2 * j]) * (points[2 * i] - points[2 * j])
-                             + (points[2 * i + 1] - points[2 * j + 1]) * (points[2 * i + 1] - points[2 * j + 1]));
+        total_length
+            += sqrt((points[2 * i] - points[2 * j]) * (points[2 * i] - points[2 * j])
+                    + (points[2 * i + 1] - points[2 * j + 1]) * (points[2 * i + 1] - points[2 * j + 1]));
     }
 
     // calculate the length of each segment

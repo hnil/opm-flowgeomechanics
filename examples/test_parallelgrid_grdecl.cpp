@@ -79,7 +79,8 @@ syntax(char** argv)
 {
     std::cerr << "Usage: " << argv[0] << " gridfilename=filename.grdecl [method=]" << std::endl
               << "\t[xmax=] [ymax=] [zmax=] [xmin=] [ymin=] [zmin=] [linsolver_type=]" << std::endl
-              << " \t[Emin=] [ctol=] [ltol=] [rock_list=] [vtufilename=] [output=] [verbose=]" << std::endl
+              << " \t[Emin=] [ctol=] [ltol=] [rock_list=] [vtufilename=] [output=] [verbose=]"
+              << std::endl
               << std::endl
               << "\t gridfilename             - the grid file. can be 'uniform'" << std::endl
               << "\t vtufilename              - save results to vtu file" << std::endl;
@@ -88,7 +89,8 @@ syntax(char** argv)
 
 
 //! \brief Structure holding parameters configurable from command line
-struct Params {
+struct Params
+{
     std::string file;
     //! \brief Rocklist overriding material params in .grdecl
     std::string vtufile;
@@ -138,7 +140,9 @@ using PolyGrid = Dune::PolyhedralGrid<3, 3>;
 #if HAVE_ALUGRID
 using AluGrid3D = Dune::ALUGrid<3, 3, Dune::cube, Dune::nonconforming>;
 void
-createGrids(std::unique_ptr<AluGrid3D>& grid, Opm::EclipseState& eclState, std::vector<unsigned int>& ordering)
+createGrids(std::unique_ptr<AluGrid3D>& grid,
+            Opm::EclipseState& eclState,
+            std::vector<unsigned int>& ordering)
 {
     Dune::CpGrid cpgrid;
     const auto& input_grid = eclState.getInputGrid();
@@ -150,7 +154,8 @@ createGrids(std::unique_ptr<AluGrid3D>& grid, Opm::EclipseState& eclState, std::
                                 /*clipZ=*/false);
 
     // auto  cartesianCellId = cpgrid.globalCell();
-    // std::vector<std::size_t>  nums = cpgrid.processEclipseFormat(eclState.getInputGrid(), nullptr, false);
+    // std::vector<std::size_t>  nums = cpgrid.processEclipseFormat(eclState.getInputGrid(), nullptr,
+    // false);
     Dune::FromToGridFactory<AluGrid3D> factory;
     // std::vector<unsigned int> ordering;
     auto cartesianCellIndx = cpgrid.globalCell();
@@ -158,7 +163,9 @@ createGrids(std::unique_ptr<AluGrid3D>& grid, Opm::EclipseState& eclState, std::
 }
 #endif
 void
-createGrids(std::unique_ptr<PolyGrid>& grid, const Opm::EclipseState& eclState, std::vector<unsigned int>& /*ordering*/)
+createGrids(std::unique_ptr<PolyGrid>& grid,
+            const Opm::EclipseState& eclState,
+            std::vector<unsigned int>& /*ordering*/)
 {
     grid = std::make_unique<PolyGrid>(eclState.getInputGrid(), eclState.fieldProps().porv(true));
 }
@@ -210,7 +217,8 @@ run(Params& p, const std::string& name, Dune::MPIHelper& mpihelper)
         // const Opm::Schedule schedule(deck, eclState);
         //
         // Dune::CpGrid cpGrid;
-        // std::vector<std::size_t>  nums = cpGrid.processEclipseFormat(&eclState.getInputGrid(), nullptr, false);
+        // std::vector<std::size_t>  nums = cpGrid.processEclipseFormat(&eclState.getInputGrid(),
+        // nullptr, false);
         using CartesianIndexMapper = Dune::CartesianIndexMapper<Dune::CpGrid>; // maybe wrong
         if (mpihelper.rank() == 0) {
             std::cout << "Before Loadbalance" << std::endl;
@@ -219,7 +227,8 @@ run(Params& p, const std::string& name, Dune::MPIHelper& mpihelper)
 
         for (int rank = 0; rank < mpihelper.size(); ++rank) {
             if (rank == mpihelper.rank()) {
-                std::cout << "Grid size: " << grid.size(0) << " on rank " << mpihelper.rank() << std::endl;
+                std::cout << "Grid size: " << grid.size(0) << " on rank " << mpihelper.rank()
+                          << std::endl;
             }
             usleep(100);
             world_comm.barrier();
@@ -242,7 +251,8 @@ run(Params& p, const std::string& name, Dune::MPIHelper& mpihelper)
         }
         for (int rank = 0; rank < mpihelper.size(); ++rank) {
             if (rank == mpihelper.rank()) {
-                std::cout << "Grid size: " << grid.size(0) << " on rank " << mpihelper.rank() << std::endl;
+                std::cout << "Grid size: " << grid.size(0) << " on rank " << mpihelper.rank()
+                          << std::endl;
             }
             usleep(100);
             world_comm.barrier();
@@ -257,7 +267,8 @@ run(Params& p, const std::string& name, Dune::MPIHelper& mpihelper)
         Vector myrank(gv.size(codim), world_comm.rank());
         using GridView = typename GridType::LeafGridView;
         Dune::MaxEntityVectorVectorDataHandle<GridView, Vector> datahandle(myrank, gv, codim);
-        // gv.communicate(datahandle, Dune::InteriorBorder_InteriorBorder_Interface, Dune::ForwardCommunication);
+        // gv.communicate(datahandle, Dune::InteriorBorder_InteriorBorder_Interface,
+        // Dune::ForwardCommunication);
         gv.communicate(datahandle, Dune::All_All_Interface, Dune::ForwardCommunication);
         auto allranks = datahandle.all_data();
         std::vector<int> maxrank(gv.size(codim), world_comm.rank());
@@ -277,7 +288,8 @@ run(Params& p, const std::string& name, Dune::MPIHelper& mpihelper)
                     // auto gindex = gindexset.index(elem);
                     auto gid = gidSet.id(elem);
                     std::cout << "My rank " << mpihelper.rank() << " ";
-                    std::cout << "Entity<" << codim << "> global: id " << gid << " local " << lindex << " type ";
+                    std::cout << "Entity<" << codim << "> global: id " << gid << " local " << lindex
+                              << " type ";
                     std::cout << elem.partitionType(); //<< " owner rank " << myrank[lindex];
                     // std::cout << " num pros " << numpros[lindex];
                     std::cout << " all ranks ";
@@ -290,7 +302,8 @@ run(Params& p, const std::string& name, Dune::MPIHelper& mpihelper)
                     std::cout << std::endl;
                 }
             }
-            // for bliding communicator see ParallelIstlInformation. (or Dune::OwnerOverlapCopyCommunication)
+            // for bliding communicator see ParallelIstlInformation. (or
+            // Dune::OwnerOverlapCopyCommunication)
             usleep(100);
             world_comm.barrier();
         }
@@ -325,7 +338,8 @@ int
 main(int argc, char** argv)
 {
     try {
-        if (argc < 2 || strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-?") == 0) {
+        if (argc < 2 || strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0
+            || strcmp(argv[1], "-?") == 0) {
             syntax(argv);
             exit(1);
         }

@@ -34,17 +34,18 @@
 #include <opm/geomech/eclproblemgeomech.hh>
 #include <opm/models/discretization/common/baseauxiliarymodule.hh>
 #include <opm/simulators/wells/BlackoilWellModel.hpp>
-// adding linearshe sould be chaning the update_ function in the same class with condition that the error is reduced.
-// the trick is to be able to recalculate the residual from here.
-// unsure where the timestepping is done from suggestedtime??
-// suggestTimeStep is taken from newton solver in problem.limitTimestep
+// adding linearshe sould be chaning the update_ function in the same class with condition that the error
+// is reduced. the trick is to be able to recalculate the residual from here. unsure where the
+// timestepping is done from suggestedtime?? suggestTimeStep is taken from newton solver in
+// problem.limitTimestep
 namespace Opm
 {
 namespace Properties
 {
     namespace TTag
     {
-        struct EclFlowProblemMechTemp {
+        struct EclFlowProblemMechTemp
+        {
             using InheritsFrom = std::tuple<EclFlowProblemMech>;
         };
     } // namespace TTag

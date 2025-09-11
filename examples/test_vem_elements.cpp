@@ -114,7 +114,8 @@ main(int argc, char** argv)
                                           indexing,
                                           target);
 
-        cout << "Centroid: " << cell_centroid[0] << " " << cell_centroid[1] << " " << cell_centroid[2] << endl;
+        cout << "Centroid: " << cell_centroid[0] << " " << cell_centroid[1] << " " << cell_centroid[2]
+             << endl;
         cout << "Indexing: " << endl;
         copy(indexing.begin(), indexing.end(), ostream_iterator<int>(cout, " "));
         cout << endl;

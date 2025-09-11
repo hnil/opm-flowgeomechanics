@@ -32,8 +32,8 @@ FractureWell::FractureWell(const std::string& outputprefix,
 {
     this->init(points, segments);
 
-    this->vtkwriter_
-        = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(), Dune::VTK::nonconforming);
+    this->vtkwriter_ = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(),
+                                                                             Dune::VTK::nonconforming);
 
     reservoir_stress_.resize(this->conns_.size());
     std::fill(reservoir_stress_.begin(), reservoir_stress_.end(),
@@ -68,7 +68,8 @@ void
 FractureWell::resetWriters()
 {
     // nead to be reseat if grid is changed ??
-    vtkwriter_ = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(), Dune::VTK::nonconforming);
+    vtkwriter_ = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(),
+                                                                       Dune::VTK::nonconforming);
     std::string outputdir = outputprefix_;
     std::string simName = casename_ + "_" + this->name();
     std::string multiFileName = "";

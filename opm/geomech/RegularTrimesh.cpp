@@ -34,9 +34,11 @@ cell2edges(const CellRef& cell)
 array<CellRef, 2>
 edge2cells(const EdgeRef& edge)
 {
-    return (edge[2] == 0) ? array<CellRef, 2> {CellRef {edge[0], edge[1], 0}, CellRef {edge[0], edge[1] - 1, 1}}
-        : (edge[2] == 1)  ? array<CellRef, 2> {CellRef {edge[0], edge[1], 0}, CellRef {edge[0] - 1, edge[1], 1}}
-                          : array<CellRef, 2> {CellRef {edge[0], edge[1], 1}, CellRef {edge[0], edge[1], 0}};
+    return (edge[2] == 0)
+        ? array<CellRef, 2> {CellRef {edge[0], edge[1], 0}, CellRef {edge[0], edge[1] - 1, 1}}
+        : (edge[2] == 1)
+        ? array<CellRef, 2> {CellRef {edge[0], edge[1], 0}, CellRef {edge[0] - 1, edge[1], 1}}
+        : array<CellRef, 2> {CellRef {edge[0], edge[1], 1}, CellRef {edge[0], edge[1], 0}};
 }
 
 array<CellRef, 3>
@@ -227,7 +229,8 @@ single_split(const CellRef& cell, const array<bool, 3>& bnd)
                                          : array<NodeRef, 3> {B, C, A};
     const NodeRef X = {(tri[0][0] + tri[1][0]) / 2, (tri[0][1] + tri[1][1]) / 2};
 
-    return vector<array<NodeRef, 3>> {array<NodeRef, 3> {tri[0], X, tri[2]}, array<NodeRef, 3> {X, tri[1], tri[2]}};
+    return vector<array<NodeRef, 3>> {array<NodeRef, 3> {tri[0], X, tri[2]},
+                                      array<NodeRef, 3> {X, tri[1], tri[2]}};
 }
 
 
@@ -239,9 +242,10 @@ tesselate_coarsecell(const CellRef& cell, const RegularTrimesh& mesh, const bool
 {
     if (skip) {
         const auto& nodes = mesh.cellNodes(cell);
-        return vector<array<NodeRef, 3>> {array<NodeRef, 3> {RegularTrimesh::coarse_to_fine(nodes[0], 1),
-                                                             RegularTrimesh::coarse_to_fine(nodes[1], 1),
-                                                             RegularTrimesh::coarse_to_fine(nodes[2], 1)}};
+        return vector<array<NodeRef, 3>> {
+            array<NodeRef, 3> {RegularTrimesh::coarse_to_fine(nodes[0], 1),
+                               RegularTrimesh::coarse_to_fine(nodes[1], 1),
+                               RegularTrimesh::coarse_to_fine(nodes[2], 1)}};
     }
 
     // tessellate this cell as if its boundary intersects with a refined triangulation
@@ -310,7 +314,8 @@ RegularTrimesh::RegularTrimesh(const double radius,
     const double scale = std::min(edgelen_[0], edgelen_[1]);
     const double R2 = (radius * radius) / (scale * scale);
 
-    const double denom2 = (5.0 / 4.0) - (axis1_[0] * axis2_[0] + axis1_[1] * axis2_[1] + axis1_[2] * axis2_[2]);
+    const double denom2
+        = (5.0 / 4.0) - (axis1_[0] * axis2_[0] + axis1_[1] * axis2_[1] + axis1_[2] * axis2_[2]);
 
     const int c = ceil(max(sqrt(R2 / denom2), radius));
 
@@ -374,9 +379,10 @@ RegularTrimesh::nodeIndices() const
     for (const auto& entry : cellinfo_) {
         const auto& cell = entry.first;
         for (int i = 0; i != 3; ++i)
-            indices.push_back(i == 0 ? (cell[2] == 0 ? NodeRef {cell[0], cell[1]} : NodeRef {cell[0] + 1, cell[1] + 1})
-                                  : i == 1 ? NodeRef {cell[0] + 1, cell[1]}
-                                           : NodeRef {cell[0], cell[1] + 1});
+            indices.push_back(
+                i == 0 ? (cell[2] == 0 ? NodeRef {cell[0], cell[1]} : NodeRef {cell[0] + 1, cell[1] + 1})
+                    : i == 1 ? NodeRef {cell[0] + 1, cell[1]}
+                             : NodeRef {cell[0], cell[1] + 1});
     }
 
     sort(indices.begin(), indices.end());
@@ -445,7 +451,8 @@ RegularTrimesh::interiorCells() const
     const vector<CellRef> allcells = cellIndices();
 
     vector<CellRef> result;
-    set_difference(allcells.begin(), allcells.end(), bcells.begin(), bcells.end(), back_inserter(result));
+    set_difference(
+        allcells.begin(), allcells.end(), bcells.begin(), bcells.end(), back_inserter(result));
     return result;
 }
 
@@ -480,14 +487,17 @@ RegularTrimesh::boundary_smoothing_triangles_() const
 
     // neighbors that should be inactive in order to create a smoothing triangle
     // (template will be rotated depending on the direction considered)
-    const array<CellRef, 6> check_template {{{0, 1, 0}, {0, 0, 1}, {0, 0, 0}, {0, -1, 1}, {1, -1, 0}, {1, -2, 1}}};
+    const array<CellRef, 6> check_template {
+        {{0, 1, 0}, {0, 0, 1}, {0, 0, 0}, {0, -1, 1}, {1, -1, 0}, {1, -2, 1}}};
 
     // template of smoothing triangle to add (will be rotated depending on the direction considered)
     const array<NodeRef, 3> smooth_template {{{0, 0}, {1, -1}, {0, 1}}};
     const array<array<int, 2>, 3> ocell {{{-1, 1}, {1, -1}, {1, 1}}}; // location of 'opposing' cell
-    const array<int, 3> dir_rot {0, 2, 1}; // how many times to rotate 60 degrees to align with corresp. triangle edge
+    const array<int, 3> dir_rot {
+        0, 2, 1}; // how many times to rotate 60 degrees to align with corresp. triangle edge
 
-    const auto cell_position = [](const EdgeRef& edge, const CellRef& template_cell, const int rotation) -> CellRef {
+    const auto cell_position
+        = [](const EdgeRef& edge, const CellRef& template_cell, const int rotation) -> CellRef {
         CellRef result(template_cell);
         for (int i = 0; i != rotation; ++i)
             rotate60(result);
@@ -516,15 +526,18 @@ RegularTrimesh::boundary_smoothing_triangles_() const
         for (const auto& edge : candidate_sites[dir])
             for (int side = 0; side != 2; ++side) // right and left
                 if (check_active(edge, dir_rot[dir] + 3 * side)) {
-                    const CellRef n1 {node2cell(edge2node(edge), dir == 2)}; // cell associated with first edge
-                    const CellRef n2 {node2cell(edge2node(edge) + ocell[dir], dir != 2)}; // opposing cell
+                    const CellRef n1 {
+                        node2cell(edge2node(edge), dir == 2)}; // cell associated with first edge
+                    const CellRef n2 {
+                        node2cell(edge2node(edge) + ocell[dir], dir != 2)}; // opposing cell
                     if (!isActive(n1) || !isActive(n2))
                         continue;
 
                     // make smoothing triangle
                     for (int i = 0; i != 3; ++i)
-                        corners.push_back({edge2node(edge) + NodeRef {dir != 0, dir != 1}
-                                           + node_rotate_n(smooth_template[i], dir_rot[dir] + 3 * side)});
+                        corners.push_back(
+                            {edge2node(edge) + NodeRef {dir != 0, dir != 1}
+                             + node_rotate_n(smooth_template[i], dir_rot[dir] + 3 * side)});
 
                     // keep track of cell neighbors to the new smoothing cell
                     neigh_cells.push_back(n1);
@@ -533,7 +546,8 @@ RegularTrimesh::boundary_smoothing_triangles_() const
 
     // prepare result by changing NodeRefs to indices
     const vector<unsigned int> node_ixs = noderefs_to_indices_(corners);
-    assert(node_ixs.size() == 3 * (neigh_cells.size() / 2)); // each traingle has 3 nodes and 2 cell neighbors
+    assert(node_ixs.size()
+           == 3 * (neigh_cells.size() / 2)); // each traingle has 3 nodes and 2 cell neighbors
     const int N = node_ixs.size() / 3;
     vector<pair<array<unsigned int, 3>, array<CellRef, 2>>> result;
     for (int i = 0; i != N; ++i)
@@ -576,7 +590,8 @@ Coord3D
 RegularTrimesh::cellCentroid(const CellRef& cell) const
 // ----------------------------------------------------------------------------
 {
-    Coord3D result = cell[2] == 0 ? nodeCoord({cell[0], cell[1]}) : nodeCoord({cell[0] + 1, cell[1] + 1});
+    Coord3D result
+        = cell[2] == 0 ? nodeCoord({cell[0], cell[1]}) : nodeCoord({cell[0] + 1, cell[1] + 1});
     result += nodeCoord({cell[0] + 1, cell[1]});
     result += nodeCoord({cell[0], cell[1] + 1});
 
@@ -819,13 +834,14 @@ RegularTrimesh::createDuneGrid(const int coarsen_levels,
 
     // define triangles
 
-    auto tmp
-        = coarsen_levels > 0 ? getMultiresTriangles(fixed_cells, coarsen_levels, cellnum_threshold) : getTriangles();
+    auto tmp = coarsen_levels > 0 ? getMultiresTriangles(fixed_cells, coarsen_levels, cellnum_threshold)
+                                  : getTriangles();
     const auto& triangles = ref2index_(tmp.first); // vector<array<uint, 3>>
     auto& fsmap = tmp.second;
 
     for (const auto& tri : triangles)
-        factory.insertElement(Dune::GeometryTypes::simplex(2), vector<unsigned int> {tri[0], tri[1], tri[2]});
+        factory.insertElement(Dune::GeometryTypes::simplex(2),
+                              vector<unsigned int> {tri[0], tri[1], tri[2]});
 
     // create map from trimesh boundary cells to Dune grid cells
     std::map<CellRef, int> boundary_map, fsmap_inv;
@@ -908,10 +924,12 @@ array<NodeRef, 3>
 RegularTrimesh::cellNodes(const CellRef& cell)
 // ----------------------------------------------------------------------------
 {
-    return cell[2] == 0
-        ? array<NodeRef, 3> {NodeRef {cell[0], cell[1]}, NodeRef {cell[0] + 1, cell[1]}, NodeRef {cell[0], cell[1] + 1}}
-        : array<NodeRef, 3> {
-              NodeRef {cell[0] + 1, cell[1]}, NodeRef {cell[0], cell[1] + 1}, NodeRef {cell[0] + 1, cell[1] + 1}};
+    return cell[2] == 0 ? array<NodeRef, 3> {NodeRef {cell[0], cell[1]},
+                                             NodeRef {cell[0] + 1, cell[1]},
+                                             NodeRef {cell[0], cell[1] + 1}}
+                        : array<NodeRef, 3> {NodeRef {cell[0] + 1, cell[1]},
+                                             NodeRef {cell[0], cell[1] + 1},
+                                             NodeRef {cell[0] + 1, cell[1] + 1}};
 }
 
 // ----------------------------------------------------------------------------
@@ -994,8 +1012,8 @@ writeMeshToVTK(const RegularTrimesh& mesh,
     const auto boundary_map = get<2>(grid);
 
     // write grid to file
-    auto vtkwriter
-        = make_unique<Dune::VTKWriter<Grid::LeafGridView>>(get<0>(grid)->leafGridView(), Dune::VTK::nonconforming);
+    auto vtkwriter = make_unique<Dune::VTKWriter<Grid::LeafGridView>>(get<0>(grid)->leafGridView(),
+                                                                      Dune::VTK::nonconforming);
     // write flag to file
     if (coarsen_levels == 0) {
         vector<int> flags = mesh.getCellFlags();
@@ -1037,7 +1055,8 @@ writeMeshBoundaryToVTK(const RegularTrimesh& mesh, const char* const filename)
     file << "<?xml version=\"1.0\"?>\n";
     file << "<VTKFile type=\"UnstructuredGrid\" version=\"0.1\" byte_order=\"LittleEndian\">\n";
     file << "  <UnstructuredGrid>\n";
-    file << "    <Piece NumberOfPoints=\"" << points.size() << "\" NumberOfCells=\"" << edges.size() << "\">\n";
+    file << "    <Piece NumberOfPoints=\"" << points.size() << "\" NumberOfCells=\"" << edges.size()
+         << "\">\n";
     // points
     file << "      <Points>\n";
     file << "        <DataArray type=\"Float32\" NumberOfComponents=\"3\" format=\"ascii\">\n";
@@ -1290,14 +1309,15 @@ RegularTrimesh::coarse_to_fine(const CellRef& c, const int level)
     if (level == 0)
         return vector<CellRef> {c}; // no refinement, return the cell itself
 
-    const vector<CellRef> fine_cells = (c[2] == 0) ? vector<CellRef> {CellRef {2 * c[0], 2 * c[1], 0},
-                                                                      CellRef {2 * c[0] + 1, 2 * c[1], 0},
-                                                                      CellRef {2 * c[0], 2 * c[1] + 1, 0},
-                                                                      CellRef {2 * c[0], 2 * c[1], 1}}
-                                                   : vector<CellRef> {CellRef {2 * c[0] + 1, 2 * c[1] + 1, 0},
-                                                                      CellRef {2 * c[0] + 1, 2 * c[1], 1},
-                                                                      CellRef {2 * c[0], 2 * c[1] + 1, 1},
-                                                                      CellRef {2 * c[0] + 1, 2 * c[1] + 1, 1}};
+    const vector<CellRef> fine_cells = (c[2] == 0)
+        ? vector<CellRef> {CellRef {2 * c[0], 2 * c[1], 0},
+                           CellRef {2 * c[0] + 1, 2 * c[1], 0},
+                           CellRef {2 * c[0], 2 * c[1] + 1, 0},
+                           CellRef {2 * c[0], 2 * c[1], 1}}
+        : vector<CellRef> {CellRef {2 * c[0] + 1, 2 * c[1] + 1, 0},
+                           CellRef {2 * c[0] + 1, 2 * c[1], 1},
+                           CellRef {2 * c[0], 2 * c[1] + 1, 1},
+                           CellRef {2 * c[0] + 1, 2 * c[1] + 1, 1}};
     if (level == 1)
         return fine_cells;
 
@@ -1484,8 +1504,8 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
     while (true) { // keep looping as long as grid need expansion
 
         if (DEBUG_DUMP_GRIDS) {
-            string filename
-                = "current_grid_" + to_string(DEBUG_GRID_COUNT) + "_" + to_string(DEBUG_CURRENT_GRID_ITERATION_COUNT++);
+            string filename = "current_grid_" + to_string(DEBUG_GRID_COUNT) + "_"
+                + to_string(DEBUG_CURRENT_GRID_ITERATION_COUNT++);
             writeMeshToVTKDebug(working_mesh, filename.c_str(), 0, 1);
         }
         const vector<double> bnd_scores = score_function(working_mesh, cur_level);

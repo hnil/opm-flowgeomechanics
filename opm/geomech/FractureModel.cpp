@@ -294,11 +294,12 @@ FractureModel::getExtraWellIndices(const std::string& wellname) const
             if (well_idx < -1) {
                 std::cout << "Well not found " << wellname << std::endl;
             } else {
-                std::cout << "Well " << wellname << " active " << wells_[well_idx].isActive() << " fractures "
-                          << well_fractures_[well_idx].size() << std::endl;
+                std::cout << "Well " << wellname << " active " << wells_[well_idx].isActive()
+                          << " fractures " << well_fractures_[well_idx].size() << std::endl;
                 if (well_fractures_[well_idx].size() > 0) {
                     for (const auto& frac : well_fractures_[well_idx]) {
-                        std::cout << "Fracture " << frac.name() << " active " << frac.isActive() << std::endl;
+                        std::cout << "Fracture " << frac.name() << " active " << frac.isActive()
+                                  << std::endl;
                     }
                 }
             }
@@ -333,8 +334,8 @@ FractureModel::assignGeomechWellState(WellState<Scalar>& wellState) const
             if (!fracture.isActive()) {
                 continue;
             }
-            auto perfPos
-                = std::find(perfData.cell_index.begin(), perfData.cell_index.end(), fracture.wellInfo().well_cell);
+            auto perfPos = std::find(
+                perfData.cell_index.begin(), perfData.cell_index.end(), fracture.wellInfo().well_cell);
             if (perfPos == perfData.cell_index.end()) {
                 continue;
             }
@@ -367,15 +368,16 @@ Opm::FractureModel::addFracturesPerpWell()
             const auto normal = origin - geom.corner(0);
             const auto elemIdx = emap.index(elem);
 
-            this->well_fractures_[wellIx].emplace_back().init(fracWell.name(),
-                                                              /* connection index */ elemIdx,
-                                                              /* reservoir cell */ fracWell.reservoirCell(elemIdx),
-                                                              /*global_index */ -1, // dummy for now
-                                                              /* well segment */ fracWell.segment(elemIdx),
-                                                              /* distance range */ fracWell.perfRange(elemIdx),
-                                                              /* seed origin */ origin,
-                                                              /* fracturing plane's normal vector */ normal,
-                                                              this->prm_);
+            this->well_fractures_[wellIx].emplace_back().init(
+                fracWell.name(),
+                /* connection index */ elemIdx,
+                /* reservoir cell */ fracWell.reservoirCell(elemIdx),
+                /*global_index */ -1, // dummy for now
+                /* well segment */ fracWell.segment(elemIdx),
+                /* distance range */ fracWell.perfRange(elemIdx),
+                /* seed origin */ origin,
+                /* fracturing plane's normal vector */ normal,
+                this->prm_);
         }
     }
 }
@@ -406,15 +408,16 @@ Opm::FractureModel::addFracturesTensile()
             const auto minPos = std::min_element(eigenValues.begin(), eigenValues.end());
             const auto& normal = eigenVectors[std::distance(eigenValues.begin(), minPos)];
 
-            this->well_fractures_[wellIx].emplace_back().init(fracWell.name(),
-                                                              /* connection index */ elemIdx,
-                                                              /* reservoir cell */ fracWell.reservoirCell(elemIdx),
-                                                              /*global_index */ -1, // dummy for now
-                                                              /* well segment */ fracWell.segment(elemIdx),
-                                                              /* distance range */ fracWell.perfRange(elemIdx),
-                                                              /* seed origin */ elem.geometry().corner(1),
-                                                              /* fracturing plane's normal vector */ normal,
-                                                              this->prm_);
+            this->well_fractures_[wellIx].emplace_back().init(
+                fracWell.name(),
+                /* connection index */ elemIdx,
+                /* reservoir cell */ fracWell.reservoirCell(elemIdx),
+                /*global_index */ -1, // dummy for now
+                /* well segment */ fracWell.segment(elemIdx),
+                /* distance range */ fracWell.perfRange(elemIdx),
+                /* seed origin */ elem.geometry().corner(1),
+                /* fracturing plane's normal vector */ normal,
+                this->prm_);
         }
     }
 }
@@ -468,7 +471,8 @@ Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched)
         }
 
         const auto& wseed = sched.wseed(fracWell.name());
-        const auto localSeeds = localSeedCells(fracWell, sched.wells(fracWell.name()).getConnections(), wseed);
+        const auto localSeeds
+            = localSeedCells(fracWell, sched.wells(fracWell.name()).getConnections(), wseed);
 
         const auto emap = ElementMapper {fracWell.grid().leafGridView(), Dune::mcmgElementLayout()};
 
@@ -497,15 +501,16 @@ Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched)
             assert(normal.two_norm() > 0.0);
             const auto& conn = sched.wells(fracWell.name()).getConnections();
             int globalIndex = conn[elemIdx].global_index();
-            this->well_fractures_[wellIx].emplace_back().init(fracWell.name(),
-                                                              /* connection index */ elemIdx,
-                                                              /* reservoir cell */ seedPos->first,
-                                                              /*global_index */ globalIndex,
-                                                              /* well segment */ fracWell.segment(elemIdx),
-                                                              /* distance range */ fracWell.perfRange(elemIdx),
-                                                              /* seed origin */ elem.geometry().corner(1),
-                                                              /* fracturing plane's normal vector */ normal,
-                                                              this->prm_);
+            this->well_fractures_[wellIx].emplace_back().init(
+                fracWell.name(),
+                /* connection index */ elemIdx,
+                /* reservoir cell */ seedPos->first,
+                /*global_index */ globalIndex,
+                /* well segment */ fracWell.segment(elemIdx),
+                /* distance range */ fracWell.perfRange(elemIdx),
+                /* seed origin */ elem.geometry().corner(1),
+                /* fracturing plane's normal vector */ normal,
+                this->prm_);
         }
     }
 }

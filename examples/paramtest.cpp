@@ -216,8 +216,8 @@ meshtest(const string& fname)
 
 
     // write result to disk
-    auto vtkwriter
-        = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid->leafGridView(), Dune::VTK::nonconforming);
+    auto vtkwriter = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid->leafGridView(),
+                                                                           Dune::VTK::nonconforming);
     vtkwriter->write("undeformed");
 
 
@@ -251,7 +251,8 @@ meshtest(const string& fname)
 
     int vcount = 0;
     for (auto& vertex : vertices(view))
-        grid->setPosition(vertex, Dune::FieldVector<double, 3> {coords[2 * vcount], coords[2 * vcount++ + 1], 0});
+        grid->setPosition(
+            vertex, Dune::FieldVector<double, 3> {coords[2 * vcount], coords[2 * vcount++ + 1], 0});
     //    const VertexHandle& vh = vertex.impl().hostEntity();
     //    vertex.geometry().corner(0)[0] = 0;//coords[2*vcount];
     //    vertex.geometry().corner(0)[1] = 0;//coords[2*vcount + 1];
@@ -287,8 +288,8 @@ meshtest(const string& fname)
 
     gs.applyBoundaryNodeDisplacements(disp);
 
-    auto vtkwriter2
-        = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid2->leafGridView(), Dune::VTK::nonconforming);
+    auto vtkwriter2 = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid2->leafGridView(),
+                                                                            Dune::VTK::nonconforming);
     vtkwriter2->write("deformed2");
 
     return 0;

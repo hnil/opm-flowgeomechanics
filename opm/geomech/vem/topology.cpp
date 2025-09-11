@@ -159,8 +159,9 @@ mutual_distances(const vector<array<double, 3>>& points)
     const size_t num_points = points.size();
     for (size_t i = 0; i != num_points; ++i) {
         for (size_t j = i + 1; j != num_points; ++j) {
-            const double dist = sqrt(pow(points[i][0] - points[j][0], 2) + pow(points[i][1] - points[j][1], 2)
-                                     + pow(points[i][2] - points[j][2], 2));
+            const double dist
+                = sqrt(pow(points[i][0] - points[j][0], 2) + pow(points[i][1] - points[j][1], 2)
+                       + pow(points[i][2] - points[j][2], 2));
             result.push_back({dist, {int(i), int(j)}});
         }
     }
@@ -211,7 +212,9 @@ identify_top_bottom_faces(const double* const coords,
         }
 
         // sort element in 'areas' according to their area (largest first)
-        sort(areas.begin(), areas.end(), [](const auto& a, const auto& b) { return get<0>(a) > get<0>(b); });
+        sort(areas.begin(), areas.end(), [](const auto& a, const auto& b) {
+            return get<0>(a) > get<0>(b);
+        });
         // get the two largest areas, the one with the lowest summed z-value
         // should be mentioned first (it's the top face)
         auto top_face = areas[0];

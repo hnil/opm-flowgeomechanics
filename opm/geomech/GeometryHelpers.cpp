@@ -36,7 +36,8 @@ buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, const Dun
         assert(geom.corners() == 8);
         cvf::BoundingBox cellBB;
         cvf::Vec3d cornerPoint;
-        // NB order should not matter when adding to bounding box: dune ordring and resinsight ordering is different
+        // NB order should not matter when adding to bounding box: dune ordring and resinsight ordering
+        // is different
         //  dune 0 1 2 3 4 5 6 7 is resinsight 0 1 3 2 4 5 7 6 (i think)
         for (std::size_t l = 0; l < 8; l++) {
             auto cornerPointArray = geom.corner(l);
@@ -95,10 +96,12 @@ buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, const Opm
     threadBoundingBoxes.shrink_to_fit();
     // #pragma omp critical
     //          {
-    cellIndicesForBoundingBoxes.insert(
-        cellIndicesForBoundingBoxes.end(), threadIndicesForBoundingBoxes.begin(), threadIndicesForBoundingBoxes.end());
+    cellIndicesForBoundingBoxes.insert(cellIndicesForBoundingBoxes.end(),
+                                       threadIndicesForBoundingBoxes.begin(),
+                                       threadIndicesForBoundingBoxes.end());
 
-    cellBoundingBoxes.insert(cellBoundingBoxes.end(), threadBoundingBoxes.begin(), threadBoundingBoxes.end());
+    cellBoundingBoxes.insert(
+        cellBoundingBoxes.end(), threadBoundingBoxes.begin(), threadBoundingBoxes.end());
     //  }
     // } #pragma omp parallel
     m_cellSearchTree = new cvf::BoundingBoxTree;

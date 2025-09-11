@@ -115,7 +115,8 @@ find_coord_in(const CoordType& c, const vector<CoordType>& cvec)
 {
     const double TOL = 1e-3;
 
-    return find_if(cvec.begin(), cvec.end(), [&](const CoordType& el) { return dist3D(el, c) < TOL; }) - cvec.begin();
+    return find_if(cvec.begin(), cvec.end(), [&](const CoordType& el) { return dist3D(el, c) < TOL; })
+        - cvec.begin();
 }
 
 // ----------------------------------------------------------------------------
@@ -131,7 +132,8 @@ CoordType
 cross(const CoordType& v1, const CoordType& v2)
 // ----------------------------------------------------------------------------
 {
-    return CoordType {v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0]};
+    return CoordType {
+        v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0]};
 }
 
 
@@ -209,7 +211,8 @@ GridStretcher::boundary_node_indices(const Grid& grid)
                 auto faceSize = refEl.size(inside, /*face*/ 1, /*node*/ 2);
                 for (int i = 0; i < faceSize; ++i) {
                     // this is a 2 grid where faces=cells=codim 1 nodes is of codim 2
-                    auto corner = refEl.subEntity(/*facenr*/ inside, /*face*/ 1, /*nodenum*/ i, /*node*/ 2);
+                    auto corner
+                        = refEl.subEntity(/*facenr*/ inside, /*face*/ 1, /*nodenum*/ i, /*node*/ 2);
                     auto cornerIndex = gv.indexSet().subIndex(el, corner, 2);
                     bix.push_back(cornerIndex);
                 }
@@ -325,7 +328,8 @@ GridStretcher::boundary_normals(const Grid& grid,
         const auto entry = c2bix.find(bix)->second;
         const auto elem = grid.entity(get<0>(entry));
         const auto ccenter = elem.geometry().center();
-        const auto ecenter = (nodecoords[bnindices[get<1>(entry)]] + nodecoords[bnindices[get<2>(entry)]]) / 2;
+        const auto ecenter
+            = (nodecoords[bnindices[get<1>(entry)]] + nodecoords[bnindices[get<2>(entry)]]) / 2;
         const auto dvec = normalize(ecenter - ccenter); // cell centroid to edge centroid
         result.bcell_normals[pos] = dvec;
 
@@ -387,8 +391,9 @@ GridStretcher::bcentroid_param_mat(const Grid& grid,
         const size_t iix = find(iindices.begin(), iindices.end(), cnodes[0]) - iindices.begin();
 
         // write in one-third of the parameterization of the internal point
-        transform(
-            &iparam[iix * Nb], &iparam[(iix + 1) * Nb], back_inserter(result), [](const double p) { return p / 3; });
+        transform(&iparam[iix * Nb], &iparam[(iix + 1) * Nb], back_inserter(result), [](const double p) {
+            return p / 3;
+        });
 
         // add one-third of each of the two boundary points
         for (int i = 1; i != 3; ++i)
@@ -456,9 +461,11 @@ GridStretcher::objective(const std::vector<double>& bndisp,
         const double dfac = (distance[i].two_norm() - dtarget[i]) / distance[i].two_norm();
         for (size_t j = 0; j != Nb; ++j) { // loop over boundary nodes
             // efac is zero unless this boundary node is part of the current cell
-            const double efac = (j == get<1>(c2bix_iter->second) || j == get<2>(c2bix_iter->second)) ? 0.5 : 0.0;
+            const double efac
+                = (j == get<1>(c2bix_iter->second) || j == get<2>(c2bix_iter->second)) ? 0.5 : 0.0;
             // derivative of centroid position with respect to boundary node 'j'
-            const double cpar = fixed_cell_centroids ? 0 : bcentroid_param_[i * Nb + j]; // d(d_i)/d(b_j);
+            const double cpar
+                = fixed_cell_centroids ? 0 : bcentroid_param_[i * Nb + j]; // d(d_i)/d(b_j);
             const double m = (efac - cpar);
             for (size_t d = 0; d != 3; ++d) // loop over dimensions
                 grad[j] += dfac * distance[i][d] * m * normals[j][d];
@@ -523,7 +530,8 @@ GridStretcher::computeBoundaryNodeDisplacements(const vector<double>& amounts,
 {
     const size_t N = bcindices_.size();
 
-    const vector<CoordType>& bnnorm = bnodenormals.empty() ? boundary_normals_.bnode_normals : bnodenormals;
+    const vector<CoordType>& bnnorm
+        = bnodenormals.empty() ? boundary_normals_.bnode_normals : bnodenormals;
     assert(bnnorm.size() == N);
 
     vector<double> node_amounts(N, -1 * std::numeric_limits<double>::infinity());
@@ -653,7 +661,8 @@ GridStretcher::centroidEdgeDist() const
         const auto entry = c2bix_.find(bcindices_[bc])->second;
         const auto elem = grid_.entity(get<0>(entry));
         const auto ccenter = elem.geometry().center();
-        const auto ecenter = (nodecoords_[bnindices_[get<1>(entry)]] + nodecoords_[bnindices_[get<2>(entry)]]) / 2;
+        const auto ecenter
+            = (nodecoords_[bnindices_[get<1>(entry)]] + nodecoords_[bnindices_[get<2>(entry)]]) / 2;
         result[bc] = (ccenter - ecenter).two_norm();
     }
     return result;
@@ -718,8 +727,8 @@ GridStretcher::adjustToConvex(std::vector<double>& disp,
 
         // adjust boundary points in the interval between bp_start_ix and bp_end_ix
         for (size_t j = (cstart + 1) % N; j != cend; j = (j + 1) % N) {
-            const double alpha
-                = adjust_disp_to_convex(&bpts2D[2 * cstart], &bpts2D[2 * cend], &bpts2D_old[2 * j], &dirs2D[2 * j]);
+            const double alpha = adjust_disp_to_convex(
+                &bpts2D[2 * cstart], &bpts2D[2 * cend], &bpts2D_old[2 * j], &dirs2D[2 * j]);
             const double diff = alpha - disp[j];
             disp[j] = alpha;
             total_disp[j] += diff;
@@ -734,8 +743,8 @@ GridStretcher::dumpToVTK(const char* filename, const std::vector<std::vector<dou
 // ----------------------------------------------------------------------------
 {
     // std::cout << "Hello" << std::endl;
-    auto vtkwriter
-        = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_.leafGridView(), Dune::VTK::nonconforming);
+    auto vtkwriter = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_.leafGridView(),
+                                                                           Dune::VTK::nonconforming);
 
     for (int i = 0; i != data.size(); ++i)
         vtkwriter->addCellData(data[i], "data" + std::to_string(i));

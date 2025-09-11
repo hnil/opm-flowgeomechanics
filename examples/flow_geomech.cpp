@@ -43,10 +43,10 @@
 #include <opm/simulators/flow/equil/EquilibrationHelpers_impl.hpp>
 #include <opm/simulators/flow/equil/InitStateEquil_impl.hpp>
 // #include <ebos/eclpolyhedralgridvanguard.hh>
-//  adding linearshe sould be chaning the update_ function in the same class with condition that the error is reduced.
-//  the trick is to be able to recalculate the residual from here.
-//  unsure where the timestepping is done from suggestedtime??
-//  suggestTimeStep is taken from newton solver in problem.limitTimestep
+//  adding linearshe sould be chaning the update_ function in the same class with condition that the
+//  error is reduced. the trick is to be able to recalculate the residual from here. unsure where the
+//  timestepping is done from suggestedtime?? suggestTimeStep is taken from newton solver in
+//  problem.limitTimestep
 #include "MechTypeTag.hpp"
 namespace Opm
 {
@@ -54,12 +54,14 @@ namespace Properties
 {
     namespace TTag
     {
-        struct EclFlowProblemMechNoTemp {
+        struct EclFlowProblemMechNoTemp
+        {
             using InheritsFrom = std::tuple<EclFlowProblemMech>;
         };
     } // namespace TTag
     template <class TypeTag>
-    struct EnableEnergy<TypeTag, TTag::EclFlowProblemMechNoTemp> {
+    struct EnableEnergy<TypeTag, TTag::EclFlowProblemMechNoTemp>
+    {
         static constexpr bool value = false;
     };
 

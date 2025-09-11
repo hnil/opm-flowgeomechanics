@@ -4,7 +4,8 @@
 
 namespace Opm
 {
-FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::SystemMatrix& S, Opm::PropertyTree prm)
+FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::SystemMatrix& S,
+                                                                 Opm::PropertyTree prm)
     : A_(S)
     , A_diag_(diagvec(S[_0][_0]))
     , M_diag_(diagvec(S[_1][_1]))
@@ -22,10 +23,11 @@ FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::Syst
     }
     if (!diag_flow_) {
         std::cout << "FractureMechanicsPreconditioner: using full flow preconditioner" << std::endl;
-        flowop_ = std::make_unique<Dune::MatrixAdapter<Opm::SMatrix, Opm::Vector, Opm::Vector>>(S[_1][_1]);
+        flowop_
+            = std::make_unique<Dune::MatrixAdapter<Opm::SMatrix, Opm::Vector, Opm::Vector>>(S[_1][_1]);
         using FlowSolverType = Dune::FlexibleSolver<FlowOperatorType>;
-        flow_solver_
-            = std::make_unique<FlowSolverType>(*flowop_, prm_.get_child("flow_solver"), std::function<Vector()>(), 1);
+        flow_solver_ = std::make_unique<FlowSolverType>(
+            *flowop_, prm_.get_child("flow_solver"), std::function<Vector()>(), 1);
     }
 }
 
@@ -74,7 +76,8 @@ FractureMechanicsPreconditioner::apply(Opm::VectorHP& v, const Opm::VectorHP& d)
     } else {
         Dune::InverseOperatorResult res;
         flow_solver_->apply(v[_1], rhs_flow, res);
-        // throw std::runtime_error("FractureMechanicsPreconditioner: full flow preconditioner not implemented");
+        // throw std::runtime_error("FractureMechanicsPreconditioner: full flow preconditioner not
+        // implemented");
     }
 };
 

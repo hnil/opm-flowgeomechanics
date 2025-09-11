@@ -60,8 +60,9 @@ main(int varnum, char** vararg)
 
     vector<CoordType> coords;
     for (const auto& vertex : vertices(grid->leafGridView()))
-        coords.push_back(
-            {vertex.geometry().corner(0)[0], vertex.geometry().corner(0)[1], vertex.geometry().corner(0)[2]});
+        coords.push_back({vertex.geometry().corner(0)[0],
+                          vertex.geometry().corner(0)[1],
+                          vertex.geometry().corner(0)[2]});
 
     GridStretcher gs(*grid);
     const vector<size_t>& bindices = gs.boundaryNodeIndices();

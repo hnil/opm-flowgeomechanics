@@ -54,7 +54,8 @@ main(int argc, char** argv)
             if (is_boundary) {
                 gnodes.push_back(gv.indexSet().index(vertex));
                 coords.push_back(point);
-                std::cout << gv.indexSet().index(vertex) << " " << vertex.geometry().center() << std::endl;
+                std::cout << gv.indexSet().index(vertex) << " " << vertex.geometry().center()
+                          << std::endl;
             }
         }
 

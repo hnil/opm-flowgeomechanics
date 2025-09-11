@@ -28,7 +28,8 @@ getGridVectors(const PolyGrid& grid,
     int tot_num_face_corners = 0;
     // for(int i=0; i< num_cellfaces; ++i){
     for (int cell = 0; cell < ungrid.number_of_cells; ++cell) {
-        for (grid_size_t hface = ungrid.cell_facepos[cell]; hface < ungrid.cell_facepos[cell + 1]; hface++) {
+        for (grid_size_t hface = ungrid.cell_facepos[cell]; hface < ungrid.cell_facepos[cell + 1];
+             hface++) {
             int face = ungrid.cell_faces[hface]; // ungrid.cell_facepos[i]];
             int num_local_corners = ungrid.face_nodepos[face + 1] - ungrid.face_nodepos[face];
             num_face_corners[hface] = num_local_corners;
@@ -39,7 +40,8 @@ getGridVectors(const PolyGrid& grid,
                 }
             } else {
                 // flip orientation for hface
-                for (grid_size_t j = ungrid.face_nodepos[face + 1] - 1; j >= ungrid.face_nodepos[face]; --j) {
+                for (grid_size_t j = ungrid.face_nodepos[face + 1] - 1; j >= ungrid.face_nodepos[face];
+                     --j) {
                     face_corners.push_back(ungrid.face_nodes[j]);
                 }
             }

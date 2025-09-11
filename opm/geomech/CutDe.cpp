@@ -584,12 +584,15 @@ tensor_transform3(Real3 a, Real3 b, Real3 c, Real6 tensor)
         + 2 * A[4] * A[7] * tensor.c + A[4] * A[4] * tensor.y + A[7] * A[7] * tensor.z;
     out.z = A[2] * A[2] * tensor.x + 2 * A[2] * A[5] * tensor.a + 2 * A[2] * A[8] * tensor.b
         + 2 * A[5] * A[8] * tensor.c + A[5] * A[5] * tensor.y + A[8] * A[8] * tensor.z;
-    out.a = A[0] * A[1] * tensor.x + (A[0] * A[4] + A[1] * A[3]) * tensor.a + (A[0] * A[7] + A[1] * A[6]) * tensor.b
-        + (A[7] * A[3] + A[6] * A[4]) * tensor.c + A[4] * A[3] * tensor.y + A[6] * A[7] * tensor.z;
-    out.b = A[0] * A[2] * tensor.x + (A[0] * A[5] + A[2] * A[3]) * tensor.a + (A[0] * A[8] + A[2] * A[6]) * tensor.b
-        + (A[8] * A[3] + A[6] * A[5]) * tensor.c + A[5] * A[3] * tensor.y + A[6] * A[8] * tensor.z;
-    out.c = A[1] * A[2] * tensor.x + (A[2] * A[4] + A[1] * A[5]) * tensor.a + (A[2] * A[7] + A[1] * A[8]) * tensor.b
-        + (A[7] * A[5] + A[8] * A[4]) * tensor.c + A[4] * A[5] * tensor.y + A[7] * A[8] * tensor.z;
+    out.a = A[0] * A[1] * tensor.x + (A[0] * A[4] + A[1] * A[3]) * tensor.a
+        + (A[0] * A[7] + A[1] * A[6]) * tensor.b + (A[7] * A[3] + A[6] * A[4]) * tensor.c
+        + A[4] * A[3] * tensor.y + A[6] * A[7] * tensor.z;
+    out.b = A[0] * A[2] * tensor.x + (A[0] * A[5] + A[2] * A[3]) * tensor.a
+        + (A[0] * A[8] + A[2] * A[6]) * tensor.b + (A[8] * A[3] + A[6] * A[5]) * tensor.c
+        + A[5] * A[3] * tensor.y + A[6] * A[8] * tensor.z;
+    out.c = A[1] * A[2] * tensor.x + (A[2] * A[4] + A[1] * A[5]) * tensor.a
+        + (A[2] * A[7] + A[1] * A[8]) * tensor.b + (A[7] * A[5] + A[8] * A[4]) * tensor.c
+        + A[4] * A[5] * tensor.y + A[7] * A[8] * tensor.z;
     return out;
 }
 
@@ -643,12 +646,16 @@ AngDisDisp(Real x, Real y, Real z, Real alpha, Real bx, Real by, Real bz, Real n
         * (eta * sinA / (r - zeta) - y * eta / r / (r - zeta) + y * y / r / (r - z)
            + (1 - 2 * nu) * (cosA * log(r - zeta) - log(r - z)));
     Real wx = bx / 8 / M_PI / (1 - nu)
-        * (eta * cosA / (r - zeta) - y / r - eta * z / r / (r - zeta) - (1 - 2 * nu) * sinA * log(r - zeta));
+        * (eta * cosA / (r - zeta) - y / r - eta * z / r / (r - zeta)
+           - (1 - 2 * nu) * sinA * log(r - zeta));
 
     Real uy = by / 8 / M_PI / (1 - nu)
-        * (x * x * cosA / r / (r - zeta) - x * x / r / (r - z) - (1 - 2 * nu) * (cosA * log(r - zeta) - log(r - z)));
-    Real vy = by * x / 8 / M_PI / (1 - nu) * (y * cosA / r / (r - zeta) - sinA * cosA / (r - zeta) - y / r / (r - z));
-    Real wy = by * x / 8 / M_PI / (1 - nu) * (z * cosA / r / (r - zeta) - cosA * cosA / (r - zeta) + 1 / r);
+        * (x * x * cosA / r / (r - zeta) - x * x / r / (r - z)
+           - (1 - 2 * nu) * (cosA * log(r - zeta) - log(r - z)));
+    Real vy = by * x / 8 / M_PI / (1 - nu)
+        * (y * cosA / r / (r - zeta) - sinA * cosA / (r - zeta) - y / r / (r - z));
+    Real wy
+        = by * x / 8 / M_PI / (1 - nu) * (z * cosA / r / (r - zeta) - cosA * cosA / (r - zeta) + 1 / r);
 
     Real uz = bz * sinA / 8 / M_PI / (1 - nu) * ((1 - 2 * nu) * log(r - zeta) - x * x / r / (r - zeta));
     Real vz = bz * x * sinA / 8 / M_PI / (1 - nu) * (sinA / (r - zeta) - y / r / (r - zeta));
@@ -723,31 +730,38 @@ AngDisStrain(Real x, Real y, Real z, Real alpha, Real bx, Real by, Real bz, Real
         + bx / 8 / M_PI / (1 - nu)
             * (eta / Wr + eta * x2 / W2r2 - eta * x2 / Wr3 + y / rz - x2 * y / r2z2 - x2 * y / r3z)
         - by * x / 8 / M_PI / (1 - nu)
-            * (((2 * nu + 1) / Wr + x2 / W2r2 - x2 / Wr3) * cosA + (2 * nu + 1) / rz - x2 / r2z2 - x2 / r3z)
+            * (((2 * nu + 1) / Wr + x2 / W2r2 - x2 / Wr3) * cosA + (2 * nu + 1) / rz - x2 / r2z2
+               - x2 / r3z)
         + bz * x * sinA / 8 / M_PI / (1 - nu) * ((2 * nu + 1) / Wr + x2 / W2r2 - x2 / Wr3);
 
     out.y = by * (rFi_ry)
         + bx / 8 / M_PI / (1 - nu)
-            * ((1 / Wr + S * S - y2 / Wr3) * eta + (2 * nu + 1) * y / rz - y * y * y / r2z2 - y * y * y / r3z
-               - 2 * nu * cosA * S)
-        - by * x / 8 / M_PI / (1 - nu) * (1 / rz - y2 / r2z2 - y2 / r3z + (1 / Wr + S * S - y2 / Wr3) * cosA)
+            * ((1 / Wr + S * S - y2 / Wr3) * eta + (2 * nu + 1) * y / rz - y * y * y / r2z2
+               - y * y * y / r3z - 2 * nu * cosA * S)
+        - by * x / 8 / M_PI / (1 - nu)
+            * (1 / rz - y2 / r2z2 - y2 / r3z + (1 / Wr + S * S - y2 / Wr3) * cosA)
         + bz * x * sinA / 8 / M_PI / (1 - nu) * (1 / Wr + S * S - y2 / Wr3);
 
     out.z = bz * (rFi_rz)
-        + bx / 8 / M_PI / (1 - nu) * (eta / W / r + eta * C * C - eta * z2 / Wr3 + y * z / r3 + 2 * nu * sinA * C)
+        + bx / 8 / M_PI / (1 - nu)
+            * (eta / W / r + eta * C * C - eta * z2 / Wr3 + y * z / r3 + 2 * nu * sinA * C)
         - by * x / 8 / M_PI / (1 - nu) * ((1 / Wr + C * C - z2 / Wr3) * cosA + z / r3)
         + bz * x * sinA / 8 / M_PI / (1 - nu) * (1 / Wr + C * C - z2 / Wr3);
 
     out.a = bx * (rFi_ry) / 2 + by * (rFi_rx) / 2
         - bx / 8 / M_PI / (1 - nu)
-            * (x * y2 / r2z2 - nu * x / rz + x * y2 / r3z - nu * x * cosA / Wr + eta * x * S / Wr + eta * x * y / Wr3)
+            * (x * y2 / r2z2 - nu * x / rz + x * y2 / r3z - nu * x * cosA / Wr + eta * x * S / Wr
+               + eta * x * y / Wr3)
         + by / 8 / M_PI / (1 - nu)
-            * (x2 * y / r2z2 - nu * y / rz + x2 * y / r3z + nu * cosA * S + x2 * y * cosA / Wr3 + x2 * cosA * S / Wr)
+            * (x2 * y / r2z2 - nu * y / rz + x2 * y / r3z + nu * cosA * S + x2 * y * cosA / Wr3
+               + x2 * cosA * S / Wr)
         - bz * sinA / 8 / M_PI / (1 - nu) * (nu * S + x2 * S / Wr + x2 * y / Wr3);
 
     out.b = bx * (rFi_rz) / 2 + bz * (rFi_rx) / 2
-        - bx / 8 / M_PI / (1 - nu) * (-x * y / r3 + nu * x * sinA / Wr + eta * x * C / Wr + eta * x * z / Wr3)
-        + by / 8 / M_PI / (1 - nu) * (-x2 / r3 + nu / r + nu * cosA * C + x2 * z * cosA / Wr3 + x2 * cosA * C / Wr)
+        - bx / 8 / M_PI / (1 - nu)
+            * (-x * y / r3 + nu * x * sinA / Wr + eta * x * C / Wr + eta * x * z / Wr3)
+        + by / 8 / M_PI / (1 - nu)
+            * (-x2 / r3 + nu / r + nu * cosA * C + x2 * z * cosA / Wr3 + x2 * cosA * C / Wr)
         - bz * sinA / 8 / M_PI / (1 - nu) * (nu * C + x2 * C / Wr + x2 * z / Wr3);
 
     out.c = by * (rFi_rz) / 2 + bz * (rFi_ry) / 2
@@ -755,8 +769,8 @@ AngDisStrain(Real x, Real y, Real z, Real alpha, Real bx, Real by, Real bz, Real
             * (y2 / r3 - nu / r - nu * cosA * C + nu * sinA * S + eta * sinA * cosA / W2
                - eta * (y * cosA + z * sinA) / W2r + eta * y * z / W2r2 - eta * y * z / Wr3)
         - by * x / 8 / M_PI / (1 - nu)
-            * (y / r3 + sinA * cosA * cosA / W2 - cosA * (y * cosA + z * sinA) / W2r + y * z * cosA / W2r2
-               - y * z * cosA / Wr3)
+            * (y / r3 + sinA * cosA * cosA / W2 - cosA * (y * cosA + z * sinA) / W2r
+               + y * z * cosA / W2r2 - y * z * cosA / Wr3)
         - bz * x * sinA / 8 / M_PI / (1 - nu)
             * (y * z / Wr3 - sinA * cosA / W2 + (y * cosA + z * sinA) / W2r - y * z / W2r2);
     return out;
@@ -814,8 +828,10 @@ AngDisDispFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3, R
 
     Real v1cb1 = b1 / 4 / M_PI / (1 - nu)
         * (-2 * (1 - nu) * (1 - 2 * nu) * Fib * (cotB * cotB)
-           + (1 - 2 * nu) * y2 / (rb + y3b) * ((1 - 2 * nu - a / rb) * cotB - y1 / (rb + y3b) * (nu + a / rb))
-           + (1 - 2 * nu) * y2 * cosB * cotB / (rb + z3b) * (cosB + a / rb) + a * y2 * (y3b - a) * cotB / (rb * rb * rb)
+           + (1 - 2 * nu) * y2 / (rb + y3b)
+               * ((1 - 2 * nu - a / rb) * cotB - y1 / (rb + y3b) * (nu + a / rb))
+           + (1 - 2 * nu) * y2 * cosB * cotB / (rb + z3b) * (cosB + a / rb)
+           + a * y2 * (y3b - a) * cotB / (rb * rb * rb)
            + y2 * (y3b - a) / (rb * (rb + y3b))
                * (-(1 - 2 * nu) * cotB + y1 / (rb + y3b) * (2 * nu + a / rb) + a * y1 / (rb * rb))
            + y2 * (y3b - a) / (rb * (rb + z3b))
@@ -829,15 +845,18 @@ AngDisDispFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3, R
                * ((2 * (1 - nu) * (cotB * cotB) - nu) * log(rb + y3b)
                   - (2 * (1 - nu) * (cotB * cotB) + 1 - 2 * nu) * cosB * log(rb + z3b))
            - (1 - 2 * nu) / (rb + y3b)
-               * (y1 * cotB * (1 - 2 * nu - a / rb) + nu * y3b - a + (y2 * y2) / (rb + y3b) * (nu + a / rb))
-           - (1 - 2 * nu) * z1b * cotB / (rb + z3b) * (cosB + a / rb) - a * y1 * (y3b - a) * cotB / (rb * rb * rb)
+               * (y1 * cotB * (1 - 2 * nu - a / rb) + nu * y3b - a
+                  + (y2 * y2) / (rb + y3b) * (nu + a / rb))
+           - (1 - 2 * nu) * z1b * cotB / (rb + z3b) * (cosB + a / rb)
+           - a * y1 * (y3b - a) * cotB / (rb * rb * rb)
            + (y3b - a) / (rb + y3b)
-               * (-2 * nu + 1 / rb * ((1 - 2 * nu) * y1 * cotB - a) + (y2 * y2) / (rb * (rb + y3b)) * (2 * nu + a / rb)
-                  + a * (y2 * y2) / (rb * rb * rb))
+               * (-2 * nu + 1 / rb * ((1 - 2 * nu) * y1 * cotB - a)
+                  + (y2 * y2) / (rb * (rb + y3b)) * (2 * nu + a / rb) + a * (y2 * y2) / (rb * rb * rb))
            + (y3b - a) / (rb + z3b)
                * ((cosB * cosB) - 1 / rb * ((1 - 2 * nu) * z1b * cotB + a * cosB)
                   + a * y3b * z1b * cotB / (rb * rb * rb)
-                  - 1 / (rb * (rb + z3b)) * ((y2 * y2) * (cosB * cosB) - a * z1b * cotB / rb * (rb * cosB + y3b))));
+                  - 1 / (rb * (rb + z3b))
+                      * ((y2 * y2) * (cosB * cosB) - a * z1b * cotB / rb * (rb * cosB + y3b))));
 
     Real v3cb1 = b1 / 4 / M_PI / (1 - nu)
         * (2 * (1 - nu)
@@ -857,8 +876,8 @@ AngDisDispFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3, R
            - (1 - 2 * nu) * cotB / (rb + z3b) * (z1b * cosB - a * (rb * sinB - y1) / (rb * cosB))
            - a * y1 * (y3b - a) * cotB / (rb * rb * rb)
            + (y3b - a) / (rb + y3b)
-               * (2 * nu + 1 / rb * ((1 - 2 * nu) * y1 * cotB + a) - (y1 * y1) / (rb * (rb + y3b)) * (2 * nu + a / rb)
-                  - a * (y1 * y1) / (rb * rb * rb))
+               * (2 * nu + 1 / rb * ((1 - 2 * nu) * y1 * cotB + a)
+                  - (y1 * y1) / (rb * (rb + y3b)) * (2 * nu + a / rb) - a * (y1 * y1) / (rb * rb * rb))
            + (y3b - a) * cotB / (rb + z3b)
                * (-cosB * sinB + a * y1 * y3b / ((rb * rb * rb) * cosB)
                   + (rb * sinB - y1) / rb
@@ -866,21 +885,28 @@ AngDisDispFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3, R
 
     Real v2cb2 = b2 / 4 / M_PI / (1 - nu)
         * (2 * (1 - nu) * (1 - 2 * nu) * Fib * (cotB * cotB)
-           + (1 - 2 * nu) * y2 / (rb + y3b) * (-(1 - 2 * nu - a / rb) * cotB + y1 / (rb + y3b) * (nu + a / rb))
-           - (1 - 2 * nu) * y2 * cotB / (rb + z3b) * (1 + a / (rb * cosB)) - a * y2 * (y3b - a) * cotB / (rb * rb * rb)
+           + (1 - 2 * nu) * y2 / (rb + y3b)
+               * (-(1 - 2 * nu - a / rb) * cotB + y1 / (rb + y3b) * (nu + a / rb))
+           - (1 - 2 * nu) * y2 * cotB / (rb + z3b) * (1 + a / (rb * cosB))
+           - a * y2 * (y3b - a) * cotB / (rb * rb * rb)
            + y2 * (y3b - a) / (rb * (rb + y3b))
-               * ((1 - 2 * nu) * cotB - 2 * nu * y1 / (rb + y3b) - a * y1 / rb * (1 / rb + 1 / (rb + y3b)))
+               * ((1 - 2 * nu) * cotB - 2 * nu * y1 / (rb + y3b)
+                  - a * y1 / rb * (1 / rb + 1 / (rb + y3b)))
            + y2 * (y3b - a) * cotB / (rb * (rb + z3b))
                * (-2 * (1 - nu) * cosB + (rb * cosB + y3b) / (rb + z3b) * (1 + a / (rb * cosB))
                   + a * y3b / ((rb * rb) * cosB)));
 
     Real v3cb2 = b2 / 4 / M_PI / (1 - nu)
         * (-2 * (1 - nu) * (1 - 2 * nu) * cotB * (log(rb + y3b) - cosB * log(rb + z3b))
-           - 2 * (1 - nu) * y1 / (rb + y3b) * (2 * nu + a / rb) + 2 * (1 - nu) * z1b / (rb + z3b) * (cosB + a / rb)
+           - 2 * (1 - nu) * y1 / (rb + y3b) * (2 * nu + a / rb)
+           + 2 * (1 - nu) * z1b / (rb + z3b) * (cosB + a / rb)
            + (y3b - a) / rb * ((1 - 2 * nu) * cotB - 2 * nu * y1 / (rb + y3b) - a * y1 / (rb * rb))
            - (y3b - a) / (rb + z3b)
-               * (cosB * sinB + (rb * cosB + y3b) * cotB / rb * (2 * (1 - nu) * cosB - (rb * cosB + y3b) / (rb + z3b))
-                  + a / rb * (sinB - y3b * z1b / (rb * rb) - z1b * (rb * cosB + y3b) / (rb * (rb + z3b)))));
+               * (cosB * sinB
+                  + (rb * cosB + y3b) * cotB / rb
+                      * (2 * (1 - nu) * cosB - (rb * cosB + y3b) / (rb + z3b))
+                  + a / rb
+                      * (sinB - y3b * z1b / (rb * rb) - z1b * (rb * cosB + y3b) / (rb * (rb + z3b)))));
 
     Real v1cb3 = b3 / 4 / M_PI / (1 - nu)
         * ((1 - 2 * nu) * (y2 / (rb + y3b) * (1 + a / rb) - y2 * cosB / (rb + z3b) * (cosB + a / rb))
@@ -889,11 +915,14 @@ AngDisDispFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3, R
                * ((rb * cosB + y3b) / (rb + z3b) * (cosB + a / rb) + a * y3b / (rb * rb)));
 
     Real v2cb3 = b3 / 4 / M_PI / (1 - nu)
-        * ((1 - 2 * nu) * (-sinB * log(rb + z3b) - y1 / (rb + y3b) * (1 + a / rb) + z1b / (rb + z3b) * (cosB + a / rb))
+        * ((1 - 2 * nu)
+               * (-sinB * log(rb + z3b) - y1 / (rb + y3b) * (1 + a / rb)
+                  + z1b / (rb + z3b) * (cosB + a / rb))
            + y1 * (y3b - a) / rb * (a / (rb * rb) + 1 / (rb + y3b))
            - (y3b - a) / (rb + z3b)
                * (sinB * (cosB - a / rb) + z1b / rb * (1 + a * y3b / (rb * rb))
-                  - 1 / (rb * (rb + z3b)) * ((y2 * y2) * cosB * sinB - a * z1b / rb * (rb * cosB + y3b))));
+                  - 1 / (rb * (rb + z3b))
+                      * ((y2 * y2) * cosB * sinB - a * z1b / rb * (rb * cosB + y3b))));
 
     Real v3cb3 = b3 / 4 / M_PI / (1 - nu)
         * (2 * (1 - nu) * Fib + 2 * (1 - nu) * (y2 * sinB / (rb + z3b) * (cosB + a / rb))
@@ -949,21 +978,29 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                   - y2 * W8 / (rb * rb * rb) / W6 * (-N1 * cotB + y1 / W6 * W5 + a * y1 / rb2) * y1
                   - y2 * W8 / rb2 / (W6 * W6) * (-N1 * cotB + y1 / W6 * W5 + a * y1 / rb2) * y1
                   + y2 * W8 / rb / W6
-                      * (1 / W6 * W5 - (y1 * y1) / (W6 * W6) * W5 / rb - (y1 * y1) / W6 * a / (rb * rb * rb) + a / rb2
+                      * (1 / W6 * W5 - (y1 * y1) / (W6 * W6) * W5 / rb
+                         - (y1 * y1) / W6 * a / (rb * rb * rb) + a / rb2
                          - 2 * a * (y1 * y1) / (rb2 * rb2))
                   - y2 * W8 / (rb * rb * rb) / W7
-                      * (cosB / W7 * (W1 * (N1 * cosB - a / rb) * cotB + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
+                      * (cosB / W7
+                             * (W1 * (N1 * cosB - a / rb) * cotB
+                                + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
                          - a * y3b * cosB * cotB / rb2)
                       * y1
                   - y2 * W8 / rb / (W7 * W7)
-                      * (cosB / W7 * (W1 * (N1 * cosB - a / rb) * cotB + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
+                      * (cosB / W7
+                             * (W1 * (N1 * cosB - a / rb) * cotB
+                                + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
                          - a * y3b * cosB * cotB / rb2)
                       * (y1 / rb - sinB)
                   + y2 * W8 / rb / W7
-                      * (-cosB / (W7 * W7) * (W1 * (N1 * cosB - a / rb) * cotB + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
+                      * (-cosB / (W7 * W7)
+                             * (W1 * (N1 * cosB - a / rb) * cotB
+                                + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
                              * (y1 / rb - sinB)
                          + cosB / W7
-                             * (1 / rb * cosB * y1 * (N1 * cosB - a / rb) * cotB + W1 * a / (rb * rb2) * y1 * cotB
+                             * (1 / rb * cosB * y1 * (N1 * cosB - a / rb) * cotB
+                                + W1 * a / (rb * rb2) * y1 * cotB
                                 + (2 - 2 * nu) * (1 / rb * sinB * y1 - 1) * cosB)
                          + 2 * a * y3b * cosB * cotB / (rb2 * rb2) * y1))
                / M_PI / (1 - nu))
@@ -972,12 +1009,15 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                * (N1
                       * (((2 - 2 * nu) * (cotB * cotB) + nu) / rb * y1 / W6
                          - ((2 - 2 * nu) * (cotB * cotB) + 1) * cosB * (y1 / rb - sinB) / W7)
-                  - N1 / (W6 * W6) * (-N1 * y1 * cotB + nu * y3b - a + a * y1 * cotB / rb + (y1 * y1) / W6 * W4) / rb
+                  - N1 / (W6 * W6)
+                      * (-N1 * y1 * cotB + nu * y3b - a + a * y1 * cotB / rb + (y1 * y1) / W6 * W4) / rb
                       * y1
                   + N1 / W6
-                      * (-N1 * cotB + a * cotB / rb - a * (y1 * y1) * cotB / (rb * rb * rb) + 2 * y1 / W6 * W4
-                         - (y1 * y1 * y1) / (W6 * W6) * W4 / rb - (y1 * y1 * y1) / W6 * a / (rb * rb * rb))
-                  + N1 * cotB / (W7 * W7) * (z1b * cosB - a * (rb * sinB - y1) / rb / cosB) * (y1 / rb - sinB)
+                      * (-N1 * cotB + a * cotB / rb - a * (y1 * y1) * cotB / (rb * rb * rb)
+                         + 2 * y1 / W6 * W4 - (y1 * y1 * y1) / (W6 * W6) * W4 / rb
+                         - (y1 * y1 * y1) / W6 * a / (rb * rb * rb))
+                  + N1 * cotB / (W7 * W7) * (z1b * cosB - a * (rb * sinB - y1) / rb / cosB)
+                      * (y1 / rb - sinB)
                   - N1 * cotB / W7
                       * ((cosB * cosB) - a * (1 / rb * sinB * y1 - 1) / rb / cosB
                          + a * (rb * sinB - y1) / (rb * rb * rb) / cosB * y1)
@@ -987,16 +1027,17 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                          - a * (y1 * y1) / (rb * rb * rb))
                       / rb * y1
                   + W8 / W6
-                      * (-1 / (rb * rb * rb) * (N1 * y1 * cotB + a) * y1 + 1 / rb * N1 * cotB - 2 * y1 / rb / W6 * W5
-                         + (y1 * y1 * y1) / (rb * rb * rb) / W6 * W5 + (y1 * y1 * y1) / rb2 / (W6 * W6) * W5
-                         + (y1 * y1 * y1) / (rb2 * rb2) / W6 * a - 2 * a / (rb * rb * rb) * y1
-                         + 3 * a * (y1 * y1 * y1) / (rb * rb2 * rb2))
+                      * (-1 / (rb * rb * rb) * (N1 * y1 * cotB + a) * y1 + 1 / rb * N1 * cotB
+                         - 2 * y1 / rb / W6 * W5 + (y1 * y1 * y1) / (rb * rb * rb) / W6 * W5
+                         + (y1 * y1 * y1) / rb2 / (W6 * W6) * W5 + (y1 * y1 * y1) / (rb2 * rb2) / W6 * a
+                         - 2 * a / (rb * rb * rb) * y1 + 3 * a * (y1 * y1 * y1) / (rb * rb2 * rb2))
                   - W8 * cotB / (W7 * W7)
                       * (-cosB * sinB + a * y1 * y3b / (rb * rb * rb) / cosB
                          + (rb * sinB - y1) / rb * ((2 - 2 * nu) * cosB - W1 / W7 * W9))
                       * (y1 / rb - sinB)
                   + W8 * cotB / W7
-                      * (a * y3b / (rb * rb * rb) / cosB - 3 * a * (y1 * y1) * y3b / (rb * rb2 * rb2) / cosB
+                      * (a * y3b / (rb * rb * rb) / cosB
+                         - 3 * a * (y1 * y1) * y3b / (rb * rb2 * rb2) / cosB
                          + (1 / rb * sinB * y1 - 1) / rb * ((2 - 2 * nu) * cosB - W1 / W7 * W9)
                          - (rb * sinB - y1) / (rb * rb * rb) * ((2 - 2 * nu) * cosB - W1 / W7 * W9) * y1
                          + (rb * sinB - y1) / rb
@@ -1007,7 +1048,8 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
             * (1.0 / 4.0
                * (N1
                       * (-y2 / (W6 * W6) * (1 + a / rb) / rb * y1 - y2 / W6 * a / (rb * rb * rb) * y1
-                         + y2 * cosB / (W7 * W7) * W2 * (y1 / rb - sinB) + y2 * cosB / W7 * a / (rb * rb * rb) * y1)
+                         + y2 * cosB / (W7 * W7) * W2 * (y1 / rb - sinB)
+                         + y2 * cosB / W7 * a / (rb * rb * rb) * y1)
                   + y2 * W8 / (rb * rb * rb) * (a / rb2 + 1 / W6) * y1
                   - y2 * W8 / rb * (-2 * a / (rb2 * rb2) * y1 - 1 / (W6 * W6) / rb * y1)
                   - y2 * W8 * cosB / (rb * rb * rb) / W7 * (W1 / W7 * W2 + a * y3b / rb2) * y1
@@ -1022,11 +1064,14 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                * (N1
                       * (((2 - 2 * nu) * (cotB * cotB) - nu) / rb * y2 / W6
                          - ((2 - 2 * nu) * (cotB * cotB) + 1 - 2 * nu) * cosB / rb * y2 / W7)
-                  + N1 / (W6 * W6) * (y1 * cotB * (1 - W5) + nu * y3b - a + (y2 * y2) / W6 * W4) / rb * y2
+                  + N1 / (W6 * W6) * (y1 * cotB * (1 - W5) + nu * y3b - a + (y2 * y2) / W6 * W4) / rb
+                      * y2
                   - N1 / W6
-                      * (a * y1 * cotB / (rb * rb * rb) * y2 + 2 * y2 / W6 * W4 - (y2 * y2 * y2) / (W6 * W6) * W4 / rb
+                      * (a * y1 * cotB / (rb * rb * rb) * y2 + 2 * y2 / W6 * W4
+                         - (y2 * y2 * y2) / (W6 * W6) * W4 / rb
                          - (y2 * y2 * y2) / W6 * a / (rb * rb * rb))
-                  + N1 * z1b * cotB / (W7 * W7) * W2 / rb * y2 + N1 * z1b * cotB / W7 * a / (rb * rb * rb) * y2
+                  + N1 * z1b * cotB / (W7 * W7) * W2 / rb * y2
+                  + N1 * z1b * cotB / W7 * a / (rb * rb * rb) * y2
                   + 3 * a * y2 * W8 * cotB / (rb * rb2 * rb2) * y1
                   - W8 / (W6 * W6)
                       * (-2 * nu + 1 / rb * (N1 * y1 * cotB - a) + (y2 * y2) / rb / W6 * W5
@@ -1034,38 +1079,44 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                       / rb * y2
                   + W8 / W6
                       * (-1 / (rb * rb * rb) * (N1 * y1 * cotB - a) * y2 + 2 * y2 / rb / W6 * W5
-                         - (y2 * y2 * y2) / (rb * rb * rb) / W6 * W5 - (y2 * y2 * y2) / rb2 / (W6 * W6) * W5
-                         - (y2 * y2 * y2) / (rb2 * rb2) / W6 * a + 2 * a / (rb * rb * rb) * y2
-                         - 3 * a * (y2 * y2 * y2) / (rb * rb2 * rb2))
+                         - (y2 * y2 * y2) / (rb * rb * rb) / W6 * W5
+                         - (y2 * y2 * y2) / rb2 / (W6 * W6) * W5 - (y2 * y2 * y2) / (rb2 * rb2) / W6 * a
+                         + 2 * a / (rb * rb * rb) * y2 - 3 * a * (y2 * y2 * y2) / (rb * rb2 * rb2))
                   - W8 / (W7 * W7)
-                      * ((cosB * cosB) - 1 / rb * (N1 * z1b * cotB + a * cosB) + a * y3b * z1b * cotB / (rb * rb * rb)
+                      * ((cosB * cosB) - 1 / rb * (N1 * z1b * cotB + a * cosB)
+                         + a * y3b * z1b * cotB / (rb * rb * rb)
                          - 1 / rb / W7 * ((y2 * y2) * (cosB * cosB) - a * z1b * cotB / rb * W1))
                       / rb * y2
                   + W8 / W7
                       * (1 / (rb * rb * rb) * (N1 * z1b * cotB + a * cosB) * y2
                          - 3 * a * y3b * z1b * cotB / (rb * rb2 * rb2) * y2
-                         + 1 / (rb * rb * rb) / W7 * ((y2 * y2) * (cosB * cosB) - a * z1b * cotB / rb * W1) * y2
-                         + 1 / rb2 / (W7 * W7) * ((y2 * y2) * (cosB * cosB) - a * z1b * cotB / rb * W1) * y2
+                         + 1 / (rb * rb * rb) / W7
+                             * ((y2 * y2) * (cosB * cosB) - a * z1b * cotB / rb * W1) * y2
+                         + 1 / rb2 / (W7 * W7) * ((y2 * y2) * (cosB * cosB) - a * z1b * cotB / rb * W1)
+                             * y2
                          - 1 / rb / W7
                              * (2 * y2 * (cosB * cosB) + a * z1b * cotB / (rb * rb * rb) * W1 * y2
                                 - a * z1b * cotB / rb2 * cosB * y2)))
                / M_PI / (1 - nu))
         + b2
             * (1.0 / 4.0
-               * ((2 - 2 * nu) * N1 * rFib_ry2 * (cotB * cotB) + N1 / W6 * ((W5 - 1) * cotB + y1 / W6 * W4)
+               * ((2 - 2 * nu) * N1 * rFib_ry2 * (cotB * cotB)
+                  + N1 / W6 * ((W5 - 1) * cotB + y1 / W6 * W4)
                   - N1 * (y2 * y2) / (W6 * W6) * ((W5 - 1) * cotB + y1 / W6 * W4) / rb
                   + N1 * y2 / W6
                       * (-a / (rb * rb * rb) * y2 * cotB - y1 / (W6 * W6) * W4 / rb * y2
                          - y2 / W6 * a / (rb * rb * rb) * y1)
                   - N1 * cotB / W7 * W9 + N1 * (y2 * y2) * cotB / (W7 * W7) * W9 / rb
-                  + N1 * (y2 * y2) * cotB / W7 * a / (rb * rb * rb) / cosB - a * W8 * cotB / (rb * rb * rb)
-                  + 3 * a * (y2 * y2) * W8 * cotB / (rb * rb2 * rb2)
+                  + N1 * (y2 * y2) * cotB / W7 * a / (rb * rb * rb) / cosB
+                  - a * W8 * cotB / (rb * rb * rb) + 3 * a * (y2 * y2) * W8 * cotB / (rb * rb2 * rb2)
                   + W8 / rb / W6 * (N1 * cotB - 2 * nu * y1 / W6 - a * y1 / rb * (1 / rb + 1 / W6))
                   - (y2 * y2) * W8 / (rb * rb * rb) / W6
                       * (N1 * cotB - 2 * nu * y1 / W6 - a * y1 / rb * (1 / rb + 1 / W6))
-                  - (y2 * y2) * W8 / rb2 / (W6 * W6) * (N1 * cotB - 2 * nu * y1 / W6 - a * y1 / rb * (1 / rb + 1 / W6))
+                  - (y2 * y2) * W8 / rb2 / (W6 * W6)
+                      * (N1 * cotB - 2 * nu * y1 / W6 - a * y1 / rb * (1 / rb + 1 / W6))
                   + y2 * W8 / rb / W6
-                      * (2 * nu * y1 / (W6 * W6) / rb * y2 + a * y1 / (rb * rb * rb) * (1 / rb + 1 / W6) * y2
+                      * (2 * nu * y1 / (W6 * W6) / rb * y2
+                         + a * y1 / (rb * rb * rb) * (1 / rb + 1 / W6) * y2
                          - a * y1 / rb * (-1 / (rb * rb * rb) * y2 - 1 / (W6 * W6) / rb * y2))
                   + W8 * cotB / rb / W7 * ((-2 + 2 * nu) * cosB + W1 / W7 * W9 + a * y3b / rb2 / cosB)
                   - (y2 * y2) * W8 * cotB / (rb * rb * rb) / W7
@@ -1074,7 +1125,8 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                       * ((-2 + 2 * nu) * cosB + W1 / W7 * W9 + a * y3b / rb2 / cosB)
                   + y2 * W8 * cotB / rb / W7
                       * (1 / rb * cosB * y2 / W7 * W9 - W1 / (W7 * W7) * W9 / rb * y2
-                         - W1 / W7 * a / (rb * rb * rb) / cosB * y2 - 2 * a * y3b / (rb2 * rb2) / cosB * y2))
+                         - W1 / W7 * a / (rb * rb * rb) / cosB * y2
+                         - 2 * a * y3b / (rb2 * rb2) / cosB * y2))
                / M_PI / (1 - nu))
         + b3
             * (1.0 / 4.0
@@ -1094,21 +1146,23 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                          + 1 / (rb * rb * rb) / W7 * ((y2 * y2) * cosB * sinB - a * z1b / rb * W1) * y2
                          + 1 / rb2 / (W7 * W7) * ((y2 * y2) * cosB * sinB - a * z1b / rb * W1) * y2
                          - 1 / rb / W7
-                             * (2 * y2 * cosB * sinB + a * z1b / (rb * rb * rb) * W1 * y2 - a * z1b / rb2 * cosB * y2)))
+                             * (2 * y2 * cosB * sinB + a * z1b / (rb * rb * rb) * W1 * y2
+                                - a * z1b / rb2 * cosB * y2)))
                / M_PI / (1 - nu));
 
     out.z = b1
             * (1.0 / 4.0
                * ((2 - 2 * nu)
                       * (N1 * rFib_ry3 * cotB - y2 / (W6 * W6) * W5 * (y3b / rb + 1)
-                         - 1.0 / 2.0 * y2 / W6 * a / (rb * rb * rb) * 2 * y3b + y2 * cosB / (W7 * W7) * W2 * W3
+                         - 1.0 / 2.0 * y2 / W6 * a / (rb * rb * rb) * 2 * y3b
+                         + y2 * cosB / (W7 * W7) * W2 * W3
                          + 1.0 / 2.0 * y2 * cosB / W7 * a / (rb * rb * rb) * 2 * y3b)
                   + y2 / rb * (2 * nu / W6 + a / rb2)
                   - 1.0 / 2.0 * y2 * W8 / (rb * rb * rb) * (2 * nu / W6 + a / rb2) * 2 * y3b
                   + y2 * W8 / rb * (-2 * nu / (W6 * W6) * (y3b / rb + 1) - a / (rb2 * rb2) * 2 * y3b)
                   + y2 * cosB / rb / W7 * (1 - 2 * nu - W1 / W7 * W2 - a * y3b / rb2)
-                  - 1.0 / 2.0 * y2 * W8 * cosB / (rb * rb * rb) / W7 * (1 - 2 * nu - W1 / W7 * W2 - a * y3b / rb2) * 2
-                      * y3b
+                  - 1.0 / 2.0 * y2 * W8 * cosB / (rb * rb * rb) / W7
+                      * (1 - 2 * nu - W1 / W7 * W2 - a * y3b / rb2) * 2 * y3b
                   - y2 * W8 * cosB / rb / (W7 * W7) * (1 - 2 * nu - W1 / W7 * W2 - a * y3b / rb2) * W3
                   + y2 * W8 * cosB / rb / W7
                       * (-(cosB * y3b / rb + 1) / W7 * W2 + W1 / (W7 * W7) * W2 * W3
@@ -1119,11 +1173,12 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
             * (1.0 / 4.0
                * ((-2 + 2 * nu) * N1 * cotB * ((y3b / rb + 1) / W6 - cosB * W3 / W7)
                   + (2 - 2 * nu) * y1 / (W6 * W6) * W5 * (y3b / rb + 1)
-                  + 1.0 / 2.0 * (2 - 2 * nu) * y1 / W6 * a / (rb * rb * rb) * 2 * y3b + (2 - 2 * nu) * sinB / W7 * W2
-                  - (2 - 2 * nu) * z1b / (W7 * W7) * W2 * W3
+                  + 1.0 / 2.0 * (2 - 2 * nu) * y1 / W6 * a / (rb * rb * rb) * 2 * y3b
+                  + (2 - 2 * nu) * sinB / W7 * W2 - (2 - 2 * nu) * z1b / (W7 * W7) * W2 * W3
                   - 1.0 / 2.0 * (2 - 2 * nu) * z1b / W7 * a / (rb * rb * rb) * 2 * y3b
                   + 1 / rb * (N1 * cotB - 2 * nu * y1 / W6 - a * y1 / rb2)
-                  - 1.0 / 2.0 * W8 / (rb * rb * rb) * (N1 * cotB - 2 * nu * y1 / W6 - a * y1 / rb2) * 2 * y3b
+                  - 1.0 / 2.0 * W8 / (rb * rb * rb) * (N1 * cotB - 2 * nu * y1 / W6 - a * y1 / rb2) * 2
+                      * y3b
                   + W8 / rb * (2 * nu * y1 / (W6 * W6) * (y3b / rb + 1) + a * y1 / (rb2 * rb2) * 2 * y3b)
                   - 1 / W7
                       * (cosB * sinB + W1 * cotB / rb * ((2 - 2 * nu) * cosB - W1 / W7)
@@ -1134,12 +1189,14 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                       * W3
                   - W8 / W7
                       * ((cosB * y3b / rb + 1) * cotB / rb * ((2 - 2 * nu) * cosB - W1 / W7)
-                         - 1.0 / 2.0 * W1 * cotB / (rb * rb * rb) * ((2 - 2 * nu) * cosB - W1 / W7) * 2 * y3b
+                         - 1.0 / 2.0 * W1 * cotB / (rb * rb * rb) * ((2 - 2 * nu) * cosB - W1 / W7) * 2
+                             * y3b
                          + W1 * cotB / rb * (-(cosB * y3b / rb + 1) / W7 + W1 / (W7 * W7) * W3)
-                         - 1.0 / 2.0 * a / (rb * rb * rb) * (sinB - y3b * z1b / rb2 - z1b * W1 / rb / W7) * 2 * y3b
+                         - 1.0 / 2.0 * a / (rb * rb * rb) * (sinB - y3b * z1b / rb2 - z1b * W1 / rb / W7)
+                             * 2 * y3b
                          + a / rb
-                             * (-z1b / rb2 - y3b * sinB / rb2 + y3b * z1b / (rb2 * rb2) * 2 * y3b - sinB * W1 / rb / W7
-                                - z1b * (cosB * y3b / rb + 1) / rb / W7
+                             * (-z1b / rb2 - y3b * sinB / rb2 + y3b * z1b / (rb2 * rb2) * 2 * y3b
+                                - sinB * W1 / rb / W7 - z1b * (cosB * y3b / rb + 1) / rb / W7
                                 + 1.0 / 2.0 * z1b * W1 / (rb * rb * rb) / W7 * 2 * y3b
                                 + z1b * W1 / rb / (W7 * W7) * W3)))
                / M_PI / (1 - nu))
@@ -1148,7 +1205,8 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                * ((2 - 2 * nu) * rFib_ry3 - (2 - 2 * nu) * y2 * sinB / (W7 * W7) * W2 * W3
                   - 1.0 / 2.0 * (2 - 2 * nu) * y2 * sinB / W7 * a / (rb * rb * rb) * 2 * y3b
                   + y2 * sinB / rb / W7 * (1 + W1 / W7 * W2 + a * y3b / rb2)
-                  - 1.0 / 2.0 * y2 * W8 * sinB / (rb * rb * rb) / W7 * (1 + W1 / W7 * W2 + a * y3b / rb2) * 2 * y3b
+                  - 1.0 / 2.0 * y2 * W8 * sinB / (rb * rb * rb) / W7 * (1 + W1 / W7 * W2 + a * y3b / rb2)
+                      * 2 * y3b
                   - y2 * W8 * sinB / rb / (W7 * W7) * (1 + W1 / W7 * W2 + a * y3b / rb2) * W3
                   + y2 * W8 * sinB / rb / W7
                       * ((cosB * y3b / rb + 1) / W7 * W2 - W1 / (W7 * W7) * W2 * W3
@@ -1158,14 +1216,15 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
 
     out.a = b1 / 2
             * (1.0 / 4.0
-               * ((-2 + 2 * nu) * N1 * rFib_ry2 * (cotB * cotB) + N1 / W6 * ((1 - W5) * cotB - y1 / W6 * W4)
+               * ((-2 + 2 * nu) * N1 * rFib_ry2 * (cotB * cotB)
+                  + N1 / W6 * ((1 - W5) * cotB - y1 / W6 * W4)
                   - N1 * (y2 * y2) / (W6 * W6) * ((1 - W5) * cotB - y1 / W6 * W4) / rb
                   + N1 * y2 / W6
                       * (a / (rb * rb * rb) * y2 * cotB + y1 / (W6 * W6) * W4 / rb * y2
                          + y2 / W6 * a / (rb * rb * rb) * y1)
                   + N1 * cosB * cotB / W7 * W2 - N1 * (y2 * y2) * cosB * cotB / (W7 * W7) * W2 / rb
-                  - N1 * (y2 * y2) * cosB * cotB / W7 * a / (rb * rb * rb) + a * W8 * cotB / (rb * rb * rb)
-                  - 3 * a * (y2 * y2) * W8 * cotB / (rb * rb2 * rb2)
+                  - N1 * (y2 * y2) * cosB * cotB / W7 * a / (rb * rb * rb)
+                  + a * W8 * cotB / (rb * rb * rb) - 3 * a * (y2 * y2) * W8 * cotB / (rb * rb2 * rb2)
                   + W8 / rb / W6 * (-N1 * cotB + y1 / W6 * W5 + a * y1 / rb2)
                   - (y2 * y2) * W8 / (rb * rb * rb) / W6 * (-N1 * cotB + y1 / W6 * W5 + a * y1 / rb2)
                   - (y2 * y2) * W8 / rb2 / (W6 * W6) * (-N1 * cotB + y1 / W6 * W5 + a * y1 / rb2)
@@ -1173,19 +1232,28 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                       * (-y1 / (W6 * W6) * W5 / rb * y2 - y2 / W6 * a / (rb * rb * rb) * y1
                          - 2 * a * y1 / (rb2 * rb2) * y2)
                   + W8 / rb / W7
-                      * (cosB / W7 * (W1 * (N1 * cosB - a / rb) * cotB + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
+                      * (cosB / W7
+                             * (W1 * (N1 * cosB - a / rb) * cotB
+                                + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
                          - a * y3b * cosB * cotB / rb2)
                   - (y2 * y2) * W8 / (rb * rb * rb) / W7
-                      * (cosB / W7 * (W1 * (N1 * cosB - a / rb) * cotB + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
+                      * (cosB / W7
+                             * (W1 * (N1 * cosB - a / rb) * cotB
+                                + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
                          - a * y3b * cosB * cotB / rb2)
                   - (y2 * y2) * W8 / rb2 / (W7 * W7)
-                      * (cosB / W7 * (W1 * (N1 * cosB - a / rb) * cotB + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
+                      * (cosB / W7
+                             * (W1 * (N1 * cosB - a / rb) * cotB
+                                + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
                          - a * y3b * cosB * cotB / rb2)
                   + y2 * W8 / rb / W7
-                      * (-cosB / (W7 * W7) * (W1 * (N1 * cosB - a / rb) * cotB + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
+                      * (-cosB / (W7 * W7)
+                             * (W1 * (N1 * cosB - a / rb) * cotB
+                                + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
                              / rb * y2
                          + cosB / W7
-                             * (1 / rb * cosB * y2 * (N1 * cosB - a / rb) * cotB + W1 * a / (rb * rb * rb) * y2 * cotB
+                             * (1 / rb * cosB * y2 * (N1 * cosB - a / rb) * cotB
+                                + W1 * a / (rb * rb * rb) * y2 * cotB
                                 + (2 - 2 * nu) / rb * sinB * y2 * cosB)
                          + 2 * a * y3b * cosB * cotB / (rb2 * rb2) * y2))
                / M_PI / (1 - nu))
@@ -1194,21 +1262,24 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                * (N1
                       * (((2 - 2 * nu) * (cotB * cotB) + nu) / rb * y2 / W6
                          - ((2 - 2 * nu) * (cotB * cotB) + 1) * cosB / rb * y2 / W7)
-                  - N1 / (W6 * W6) * (-N1 * y1 * cotB + nu * y3b - a + a * y1 * cotB / rb + (y1 * y1) / W6 * W4) / rb
+                  - N1 / (W6 * W6)
+                      * (-N1 * y1 * cotB + nu * y3b - a + a * y1 * cotB / rb + (y1 * y1) / W6 * W4) / rb
                       * y2
                   + N1 / W6
                       * (-a * y1 * cotB / (rb * rb * rb) * y2 - (y1 * y1) / (W6 * W6) * W4 / rb * y2
                          - (y1 * y1) / W6 * a / (rb * rb * rb) * y2)
                   + N1 * cotB / (W7 * W7) * (z1b * cosB - a * (rb * sinB - y1) / rb / cosB) / rb * y2
-                  - N1 * cotB / W7 * (-a / rb2 * sinB * y2 / cosB + a * (rb * sinB - y1) / (rb * rb * rb) / cosB * y2)
+                  - N1 * cotB / W7
+                      * (-a / rb2 * sinB * y2 / cosB + a * (rb * sinB - y1) / (rb * rb * rb) / cosB * y2)
                   + 3 * a * y2 * W8 * cotB / (rb * rb2 * rb2) * y1
                   - W8 / (W6 * W6)
                       * (2 * nu + 1 / rb * (N1 * y1 * cotB + a) - (y1 * y1) / rb / W6 * W5
                          - a * (y1 * y1) / (rb * rb * rb))
                       / rb * y2
                   + W8 / W6
-                      * (-1 / (rb * rb * rb) * (N1 * y1 * cotB + a) * y2 + (y1 * y1) / (rb * rb2) / W6 * W5 * y2
-                         + (y1 * y1) / rb2 / (W6 * W6) * W5 * y2 + (y1 * y1) / (rb2 * rb2) / W6 * a * y2
+                      * (-1 / (rb * rb * rb) * (N1 * y1 * cotB + a) * y2
+                         + (y1 * y1) / (rb * rb2) / W6 * W5 * y2 + (y1 * y1) / rb2 / (W6 * W6) * W5 * y2
+                         + (y1 * y1) / (rb2 * rb2) / W6 * a * y2
                          + 3 * a * (y1 * y1) / (rb * rb2 * rb2) * y2)
                   - W8 * cotB / (W7 * W7)
                       * (-cosB * sinB + a * y1 * y3b / (rb * rb * rb) / cosB
@@ -1226,7 +1297,8 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
             * (1.0 / 4.0
                * (N1
                       * (1 / W6 * (1 + a / rb) - (y2 * y2) / (W6 * W6) * (1 + a / rb) / rb
-                         - (y2 * y2) / W6 * a / (rb * rb * rb) - cosB / W7 * W2 + (y2 * y2) * cosB / (W7 * W7) * W2 / rb
+                         - (y2 * y2) / W6 * a / (rb * rb * rb) - cosB / W7 * W2
+                         + (y2 * y2) * cosB / (W7 * W7) * W2 / rb
                          + (y2 * y2) * cosB / W7 * a / (rb * rb * rb))
                   - W8 / rb * (a / rb2 + 1 / W6) + (y2 * y2) * W8 / (rb * rb * rb) * (a / rb2 + 1 / W6)
                   - y2 * W8 / rb * (-2 * a / (rb2 * rb2) * y2 - 1 / (W6 * W6) / rb * y2)
@@ -1242,9 +1314,11 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                * (N1
                       * (((2 - 2 * nu) * (cotB * cotB) - nu) / rb * y1 / W6
                          - ((2 - 2 * nu) * (cotB * cotB) + 1 - 2 * nu) * cosB * (y1 / rb - sinB) / W7)
-                  + N1 / (W6 * W6) * (y1 * cotB * (1 - W5) + nu * y3b - a + (y2 * y2) / W6 * W4) / rb * y1
+                  + N1 / (W6 * W6) * (y1 * cotB * (1 - W5) + nu * y3b - a + (y2 * y2) / W6 * W4) / rb
+                      * y1
                   - N1 / W6
-                      * ((1 - W5) * cotB + a * (y1 * y1) * cotB / (rb * rb * rb) - (y2 * y2) / (W6 * W6) * W4 / rb * y1
+                      * ((1 - W5) * cotB + a * (y1 * y1) * cotB / (rb * rb * rb)
+                         - (y2 * y2) / (W6 * W6) * W4 / rb * y1
                          - (y2 * y2) / W6 * a / (rb * rb * rb) * y1)
                   - N1 * cosB * cotB / W7 * W2 + N1 * z1b * cotB / (W7 * W7) * W2 * (y1 / rb - sinB)
                   + N1 * z1b * cotB / W7 * a / (rb * rb2) * y1 - a * W8 * cotB / (rb * rb * rb)
@@ -1255,16 +1329,20 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                       / rb * y1
                   + W8 / W6
                       * (-1 / (rb * rb * rb) * (N1 * y1 * cotB - a) * y1 + 1 / rb * N1 * cotB
-                         - (y2 * y2) / (rb * rb * rb) / W6 * W5 * y1 - (y2 * y2) / rb2 / (W6 * W6) * W5 * y1
-                         - (y2 * y2) / (rb2 * rb2) / W6 * a * y1 - 3 * a * (y2 * y2) / (rb * rb2 * rb2) * y1)
+                         - (y2 * y2) / (rb * rb * rb) / W6 * W5 * y1
+                         - (y2 * y2) / rb2 / (W6 * W6) * W5 * y1 - (y2 * y2) / (rb2 * rb2) / W6 * a * y1
+                         - 3 * a * (y2 * y2) / (rb * rb2 * rb2) * y1)
                   - W8 / (W7 * W7)
-                      * ((cosB * cosB) - 1 / rb * (N1 * z1b * cotB + a * cosB) + a * y3b * z1b * cotB / (rb * rb * rb)
+                      * ((cosB * cosB) - 1 / rb * (N1 * z1b * cotB + a * cosB)
+                         + a * y3b * z1b * cotB / (rb * rb * rb)
                          - 1 / rb / W7 * ((y2 * y2) * (cosB * cosB) - a * z1b * cotB / rb * W1))
                       * (y1 / rb - sinB)
                   + W8 / W7
-                      * (1 / (rb * rb * rb) * (N1 * z1b * cotB + a * cosB) * y1 - 1 / rb * N1 * cosB * cotB
-                         + a * y3b * cosB * cotB / (rb * rb * rb) - 3 * a * y3b * z1b * cotB / (rb * rb2 * rb2) * y1
-                         + 1 / (rb * rb * rb) / W7 * ((y2 * y2) * (cosB * cosB) - a * z1b * cotB / rb * W1) * y1
+                      * (1 / (rb * rb * rb) * (N1 * z1b * cotB + a * cosB) * y1
+                         - 1 / rb * N1 * cosB * cotB + a * y3b * cosB * cotB / (rb * rb * rb)
+                         - 3 * a * y3b * z1b * cotB / (rb * rb2 * rb2) * y1
+                         + 1 / (rb * rb * rb) / W7
+                             * ((y2 * y2) * (cosB * cosB) - a * z1b * cotB / rb * W1) * y1
                          + 1 / rb / (W7 * W7) * ((y2 * y2) * (cosB * cosB) - a * z1b * cotB / rb * W1)
                              * (y1 / rb - sinB)
                          - 1 / rb / W7
@@ -1281,28 +1359,30 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                   + N1 * y2 * cotB / (W7 * W7) * W9 * (y1 / rb - sinB)
                   + N1 * y2 * cotB / W7 * a / (rb * rb * rb) / cosB * y1
                   + 3 * a * y2 * W8 * cotB / (rb * rb2 * rb2) * y1
-                  - y2 * W8 / (rb * rb * rb) / W6 * (N1 * cotB - 2 * nu * y1 / W6 - a * y1 / rb * (1 / rb + 1 / W6))
-                      * y1
-                  - y2 * W8 / rb2 / (W6 * W6) * (N1 * cotB - 2 * nu * y1 / W6 - a * y1 / rb * (1 / rb + 1 / W6)) * y1
+                  - y2 * W8 / (rb * rb * rb) / W6
+                      * (N1 * cotB - 2 * nu * y1 / W6 - a * y1 / rb * (1 / rb + 1 / W6)) * y1
+                  - y2 * W8 / rb2 / (W6 * W6)
+                      * (N1 * cotB - 2 * nu * y1 / W6 - a * y1 / rb * (1 / rb + 1 / W6)) * y1
                   + y2 * W8 / rb / W6
                       * (-2 * nu / W6 + 2 * nu * (y1 * y1) / (W6 * W6) / rb - a / rb * (1 / rb + 1 / W6)
                          + a * (y1 * y1) / (rb * rb * rb) * (1 / rb + 1 / W6)
                          - a * y1 / rb * (-1 / (rb * rb * rb) * y1 - 1 / (W6 * W6) / rb * y1))
-                  - y2 * W8 * cotB / (rb * rb * rb) / W7 * ((-2 + 2 * nu) * cosB + W1 / W7 * W9 + a * y3b / rb2 / cosB)
-                      * y1
-                  - y2 * W8 * cotB / rb / (W7 * W7) * ((-2 + 2 * nu) * cosB + W1 / W7 * W9 + a * y3b / rb2 / cosB)
-                      * (y1 / rb - sinB)
+                  - y2 * W8 * cotB / (rb * rb * rb) / W7
+                      * ((-2 + 2 * nu) * cosB + W1 / W7 * W9 + a * y3b / rb2 / cosB) * y1
+                  - y2 * W8 * cotB / rb / (W7 * W7)
+                      * ((-2 + 2 * nu) * cosB + W1 / W7 * W9 + a * y3b / rb2 / cosB) * (y1 / rb - sinB)
                   + y2 * W8 * cotB / rb / W7
                       * (1 / rb * cosB * y1 / W7 * W9 - W1 / (W7 * W7) * W9 * (y1 / rb - sinB)
-                         - W1 / W7 * a / (rb * rb * rb) / cosB * y1 - 2 * a * y3b / (rb2 * rb2) / cosB * y1))
+                         - W1 / W7 * a / (rb * rb * rb) / cosB * y1
+                         - 2 * a * y3b / (rb2 * rb2) / cosB * y1))
                / M_PI / (1 - nu))
         + b3 / 2
             * (1.0 / 4.0
                * (N1
                       * (-sinB * (y1 / rb - sinB) / W7 - 1 / W6 * (1 + a / rb)
-                         + (y1 * y1) / (W6 * W6) * (1 + a / rb) / rb + (y1 * y1) / W6 * a / (rb * rb * rb)
-                         + cosB / W7 * W2 - z1b / (W7 * W7) * W2 * (y1 / rb - sinB)
-                         - z1b / W7 * a / (rb * rb * rb) * y1)
+                         + (y1 * y1) / (W6 * W6) * (1 + a / rb) / rb
+                         + (y1 * y1) / W6 * a / (rb * rb * rb) + cosB / W7 * W2
+                         - z1b / (W7 * W7) * W2 * (y1 / rb - sinB) - z1b / W7 * a / (rb * rb * rb) * y1)
                   + W8 / rb * (a / rb2 + 1 / W6) - (y1 * y1) * W8 / (rb * rb * rb) * (a / rb2 + 1 / W6)
                   + y1 * W8 / rb * (-2 * a / (rb2 * rb2) * y1 - 1 / (W6 * W6) / rb * y1)
                   + W8 / (W7 * W7)
@@ -1311,11 +1391,14 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                       * (y1 / rb - sinB)
                   - W8 / W7
                       * (sinB * a / (rb * rb * rb) * y1 + cosB / rb * (1 + a * y3b / rb2)
-                         - z1b / (rb * rb * rb) * (1 + a * y3b / rb2) * y1 - 2 * z1b / (rb * rb2 * rb2) * a * y3b * y1
+                         - z1b / (rb * rb * rb) * (1 + a * y3b / rb2) * y1
+                         - 2 * z1b / (rb * rb2 * rb2) * a * y3b * y1
                          + 1 / (rb * rb * rb) / W7 * ((y2 * y2) * cosB * sinB - a * z1b / rb * W1) * y1
-                         + 1 / rb / (W7 * W7) * ((y2 * y2) * cosB * sinB - a * z1b / rb * W1) * (y1 / rb - sinB)
+                         + 1 / rb / (W7 * W7) * ((y2 * y2) * cosB * sinB - a * z1b / rb * W1)
+                             * (y1 / rb - sinB)
                          - 1 / rb / W7
-                             * (-a * cosB / rb * W1 + a * z1b / (rb * rb * rb) * W1 * y1 - a * z1b / rb2 * cosB * y1)))
+                             * (-a * cosB / rb * W1 + a * z1b / (rb * rb * rb) * W1 * y1
+                                - a * z1b / rb2 * cosB * y1)))
                / M_PI / (1 - nu));
 
     out.b = b1 / 2
@@ -1323,30 +1406,43 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                * ((-2 + 2 * nu) * N1 * rFib_ry3 * (cotB * cotB)
                   - N1 * y2 / (W6 * W6) * ((1 - W5) * cotB - y1 / W6 * W4) * (y3b / rb + 1)
                   + N1 * y2 / W6
-                      * (1.0 / 2.0 * a / (rb * rb * rb) * 2 * y3b * cotB + y1 / (W6 * W6) * W4 * (y3b / rb + 1)
+                      * (1.0 / 2.0 * a / (rb * rb * rb) * 2 * y3b * cotB
+                         + y1 / (W6 * W6) * W4 * (y3b / rb + 1)
                          + 1.0 / 2.0 * y1 / W6 * a / (rb * rb * rb) * 2 * y3b)
                   - N1 * y2 * cosB * cotB / (W7 * W7) * W2 * W3
                   - 1.0 / 2.0 * N1 * y2 * cosB * cotB / W7 * a / (rb * rb * rb) * 2 * y3b
-                  + a / (rb * rb * rb) * y2 * cotB - 3.0 / 2.0 * a * y2 * W8 * cotB / (rb * rb2 * rb2) * 2 * y3b
+                  + a / (rb * rb * rb) * y2 * cotB
+                  - 3.0 / 2.0 * a * y2 * W8 * cotB / (rb * rb2 * rb2) * 2 * y3b
                   + y2 / rb / W6 * (-N1 * cotB + y1 / W6 * W5 + a * y1 / rb2)
-                  - 1.0 / 2.0 * y2 * W8 / (rb * rb * rb) / W6 * (-N1 * cotB + y1 / W6 * W5 + a * y1 / rb2) * 2 * y3b
-                  - y2 * W8 / rb / (W6 * W6) * (-N1 * cotB + y1 / W6 * W5 + a * y1 / rb2) * (y3b / rb + 1)
+                  - 1.0 / 2.0 * y2 * W8 / (rb * rb * rb) / W6
+                      * (-N1 * cotB + y1 / W6 * W5 + a * y1 / rb2) * 2 * y3b
+                  - y2 * W8 / rb / (W6 * W6) * (-N1 * cotB + y1 / W6 * W5 + a * y1 / rb2)
+                      * (y3b / rb + 1)
                   + y2 * W8 / rb / W6
-                      * (-y1 / (W6 * W6) * W5 * (y3b / rb + 1) - 1.0 / 2.0 * y1 / W6 * a / (rb * rb * rb) * 2 * y3b
+                      * (-y1 / (W6 * W6) * W5 * (y3b / rb + 1)
+                         - 1.0 / 2.0 * y1 / W6 * a / (rb * rb * rb) * 2 * y3b
                          - a * y1 / (rb2 * rb2) * 2 * y3b)
                   + y2 / rb / W7
-                      * (cosB / W7 * (W1 * (N1 * cosB - a / rb) * cotB + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
+                      * (cosB / W7
+                             * (W1 * (N1 * cosB - a / rb) * cotB
+                                + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
                          - a * y3b * cosB * cotB / rb2)
                   - 1.0 / 2.0 * y2 * W8 / (rb * rb * rb) / W7
-                      * (cosB / W7 * (W1 * (N1 * cosB - a / rb) * cotB + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
+                      * (cosB / W7
+                             * (W1 * (N1 * cosB - a / rb) * cotB
+                                + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
                          - a * y3b * cosB * cotB / rb2)
                       * 2 * y3b
                   - y2 * W8 / rb / (W7 * W7)
-                      * (cosB / W7 * (W1 * (N1 * cosB - a / rb) * cotB + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
+                      * (cosB / W7
+                             * (W1 * (N1 * cosB - a / rb) * cotB
+                                + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
                          - a * y3b * cosB * cotB / rb2)
                       * W3
                   + y2 * W8 / rb / W7
-                      * (-cosB / (W7 * W7) * (W1 * (N1 * cosB - a / rb) * cotB + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
+                      * (-cosB / (W7 * W7)
+                             * (W1 * (N1 * cosB - a / rb) * cotB
+                                + (2 - 2 * nu) * (rb * sinB - y1) * cosB)
                              * W3
                          + cosB / W7
                              * ((cosB * y3b / rb + 1) * (N1 * cosB - a / rb) * cotB
@@ -1359,7 +1455,8 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                * (N1
                       * (((2 - 2 * nu) * (cotB * cotB) + nu) * (y3b / rb + 1) / W6
                          - ((2 - 2 * nu) * (cotB * cotB) + 1) * cosB * W3 / W7)
-                  - N1 / (W6 * W6) * (-N1 * y1 * cotB + nu * y3b - a + a * y1 * cotB / rb + (y1 * y1) / W6 * W4)
+                  - N1 / (W6 * W6)
+                      * (-N1 * y1 * cotB + nu * y3b - a + a * y1 * cotB / rb + (y1 * y1) / W6 * W4)
                       * (y3b / rb + 1)
                   + N1 / W6
                       * (nu - 1.0 / 2.0 * a * y1 * cotB / (rb * rb * rb) * 2 * y3b
@@ -1369,7 +1466,8 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                   - N1 * cotB / W7
                       * (cosB * sinB - 1.0 / 2.0 * a / rb2 * sinB * 2 * y3b / cosB
                          + 1.0 / 2.0 * a * (rb * sinB - y1) / (rb * rb * rb) / cosB * 2 * y3b)
-                  - a / (rb * rb * rb) * y1 * cotB + 3.0 / 2.0 * a * y1 * W8 * cotB / (rb * rb2 * rb2) * 2 * y3b
+                  - a / (rb * rb * rb) * y1 * cotB
+                  + 3.0 / 2.0 * a * y1 * W8 * cotB / (rb * rb2 * rb2) * 2 * y3b
                   + 1 / W6
                       * (2 * nu + 1 / rb * (N1 * y1 * cotB + a) - (y1 * y1) / rb / W6 * W5
                          - a * (y1 * y1) / (rb * rb * rb))
@@ -1391,9 +1489,11 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                          + (rb * sinB - y1) / rb * ((2 - 2 * nu) * cosB - W1 / W7 * W9))
                       * W3
                   + W8 * cotB / W7
-                      * (a / (rb * rb * rb) / cosB * y1 - 3.0 / 2.0 * a * y1 * y3b / (rb * rb2 * rb2) / cosB * 2 * y3b
+                      * (a / (rb * rb * rb) / cosB * y1
+                         - 3.0 / 2.0 * a * y1 * y3b / (rb * rb2 * rb2) / cosB * 2 * y3b
                          + 1.0 / 2.0 / rb2 * sinB * 2 * y3b * ((2 - 2 * nu) * cosB - W1 / W7 * W9)
-                         - 1.0 / 2.0 * (rb * sinB - y1) / (rb * rb2) * ((2 - 2 * nu) * cosB - W1 / W7 * W9) * 2 * y3b
+                         - 1.0 / 2.0 * (rb * sinB - y1) / (rb * rb2)
+                             * ((2 - 2 * nu) * cosB - W1 / W7 * W9) * 2 * y3b
                          + (rb * sinB - y1) / rb
                              * (-(cosB * y3b / rb + 1) / W7 * W9 + W1 / (W7 * W7) * W9 * W3
                                 + 1.0 / 2.0 * W1 / W7 * a / (rb * rb * rb) / cosB * 2 * y3b)))
@@ -1402,12 +1502,15 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
             * (1.0 / 4.0
                * (N1
                       * (-y2 / (W6 * W6) * (1 + a / rb) * (y3b / rb + 1)
-                         - 1.0 / 2.0 * y2 / W6 * a / (rb * rb * rb) * 2 * y3b + y2 * cosB / (W7 * W7) * W2 * W3
+                         - 1.0 / 2.0 * y2 / W6 * a / (rb * rb * rb) * 2 * y3b
+                         + y2 * cosB / (W7 * W7) * W2 * W3
                          + 1.0 / 2.0 * y2 * cosB / W7 * a / (rb * rb * rb) * 2 * y3b)
-                  - y2 / rb * (a / rb2 + 1 / W6) + 1.0 / 2.0 * y2 * W8 / (rb * rb * rb) * (a / rb2 + 1 / W6) * 2 * y3b
+                  - y2 / rb * (a / rb2 + 1 / W6)
+                  + 1.0 / 2.0 * y2 * W8 / (rb * rb * rb) * (a / rb2 + 1 / W6) * 2 * y3b
                   - y2 * W8 / rb * (-a / (rb2 * rb2) * 2 * y3b - 1 / (W6 * W6) * (y3b / rb + 1))
                   + y2 * cosB / rb / W7 * (W1 / W7 * W2 + a * y3b / rb2)
-                  - 1.0 / 2.0 * y2 * W8 * cosB / (rb * rb * rb) / W7 * (W1 / W7 * W2 + a * y3b / rb2) * 2 * y3b
+                  - 1.0 / 2.0 * y2 * W8 * cosB / (rb * rb * rb) / W7 * (W1 / W7 * W2 + a * y3b / rb2) * 2
+                      * y3b
                   - y2 * W8 * cosB / rb / (W7 * W7) * (W1 / W7 * W2 + a * y3b / rb2) * W3
                   + y2 * W8 * cosB / rb / W7
                       * ((cosB * y3b / rb + 1) / W7 * W2 - W1 / (W7 * W7) * W2 * W3
@@ -1417,25 +1520,31 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
         + b1 / 2.0
             * (1.0 / 4.0
                * ((2 - 2 * nu)
-                      * (N1 * rFib_ry1 * cotB - y1 / (W6 * W6) * W5 / rb * y2 - y2 / W6 * a / (rb * rb * rb) * y1
-                         + y2 * cosB / (W7 * W7) * W2 * (y1 / rb - sinB) + y2 * cosB / W7 * a / (rb * rb2) * y1)
+                      * (N1 * rFib_ry1 * cotB - y1 / (W6 * W6) * W5 / rb * y2
+                         - y2 / W6 * a / (rb * rb * rb) * y1
+                         + y2 * cosB / (W7 * W7) * W2 * (y1 / rb - sinB)
+                         + y2 * cosB / W7 * a / (rb * rb2) * y1)
                   - y2 * W8 / (rb * rb * rb) * (2 * nu / W6 + a / rb2) * y1
                   + y2 * W8 / rb * (-2 * nu / (W6 * W6) / rb * y1 - 2 * a / (rb2 * rb2) * y1)
-                  - y2 * W8 * cosB / (rb * rb * rb) / W7 * (1 - 2 * nu - W1 / W7 * W2 - a * y3b / rb2) * y1
-                  - y2 * W8 * cosB / rb / (W7 * W7) * (1 - 2 * nu - W1 / W7 * W2 - a * y3b / rb2) * (y1 / rb - sinB)
+                  - y2 * W8 * cosB / (rb * rb * rb) / W7 * (1 - 2 * nu - W1 / W7 * W2 - a * y3b / rb2)
+                      * y1
+                  - y2 * W8 * cosB / rb / (W7 * W7) * (1 - 2 * nu - W1 / W7 * W2 - a * y3b / rb2)
+                      * (y1 / rb - sinB)
                   + y2 * W8 * cosB / rb / W7
                       * (-1 / rb * cosB * y1 / W7 * W2 + W1 / (W7 * W7) * W2 * (y1 / rb - sinB)
                          + W1 / W7 * a / (rb * rb * rb) * y1 + 2 * a * y3b / (rb2 * rb2) * y1))
                / M_PI / (1 - nu))
         + b2 / 2
             * (1.0 / 4.0
-               * ((-2 + 2 * nu) * N1 * cotB * (1 / rb * y1 / W6 - cosB * (y1 / rb - sinB) / W7) - (2 - 2 * nu) / W6 * W5
-                  + (2 - 2 * nu) * (y1 * y1) / (W6 * W6) * W5 / rb + (2 - 2 * nu) * (y1 * y1) / W6 * a / (rb * rb * rb)
-                  + (2 - 2 * nu) * cosB / W7 * W2 - (2 - 2 * nu) * z1b / (W7 * W7) * W2 * (y1 / rb - sinB)
+               * ((-2 + 2 * nu) * N1 * cotB * (1 / rb * y1 / W6 - cosB * (y1 / rb - sinB) / W7)
+                  - (2 - 2 * nu) / W6 * W5 + (2 - 2 * nu) * (y1 * y1) / (W6 * W6) * W5 / rb
+                  + (2 - 2 * nu) * (y1 * y1) / W6 * a / (rb * rb * rb) + (2 - 2 * nu) * cosB / W7 * W2
+                  - (2 - 2 * nu) * z1b / (W7 * W7) * W2 * (y1 / rb - sinB)
                   - (2 - 2 * nu) * z1b / W7 * a / (rb * rb * rb) * y1
                   - W8 / (rb * rb * rb) * (N1 * cotB - 2 * nu * y1 / W6 - a * y1 / rb2) * y1
                   + W8 / rb
-                      * (-2 * nu / W6 + 2 * nu * (y1 * y1) / (W6 * W6) / rb - a / rb2 + 2 * a * (y1 * y1) / (rb2 * rb2))
+                      * (-2 * nu / W6 + 2 * nu * (y1 * y1) / (W6 * W6) / rb - a / rb2
+                         + 2 * a * (y1 * y1) / (rb2 * rb2))
                   + W8 / (W7 * W7)
                       * (cosB * sinB + W1 * cotB / rb * ((2 - 2 * nu) * cosB - W1 / W7)
                          + a / rb * (sinB - y3b * z1b / rb2 - z1b * W1 / rb / W7))
@@ -1443,11 +1552,13 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                   - W8 / W7
                       * (1 / rb2 * cosB * y1 * cotB * ((2 - 2 * nu) * cosB - W1 / W7)
                          - W1 * cotB / (rb * rb * rb) * ((2 - 2 * nu) * cosB - W1 / W7) * y1
-                         + W1 * cotB / rb * (-1 / rb * cosB * y1 / W7 + W1 / (W7 * W7) * (y1 / rb - sinB))
+                         + W1 * cotB / rb
+                             * (-1 / rb * cosB * y1 / W7 + W1 / (W7 * W7) * (y1 / rb - sinB))
                          - a / (rb * rb * rb) * (sinB - y3b * z1b / rb2 - z1b * W1 / rb / W7) * y1
                          + a / rb
-                             * (-y3b * cosB / rb2 + 2 * y3b * z1b / (rb2 * rb2) * y1 - cosB * W1 / rb / W7
-                                - z1b / rb2 * cosB * y1 / W7 + z1b * W1 / (rb * rb * rb) / W7 * y1
+                             * (-y3b * cosB / rb2 + 2 * y3b * z1b / (rb2 * rb2) * y1
+                                - cosB * W1 / rb / W7 - z1b / rb2 * cosB * y1 / W7
+                                + z1b * W1 / (rb * rb * rb) / W7 * y1
                                 + z1b * W1 / rb / (W7 * W7) * (y1 / rb - sinB))))
                / M_PI / (1 - nu))
         + b3 / 2
@@ -1455,7 +1566,8 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                * ((2 - 2 * nu) * rFib_ry1 - (2 - 2 * nu) * y2 * sinB / (W7 * W7) * W2 * (y1 / rb - sinB)
                   - (2 - 2 * nu) * y2 * sinB / W7 * a / (rb * rb * rb) * y1
                   - y2 * W8 * sinB / (rb * rb * rb) / W7 * (1 + W1 / W7 * W2 + a * y3b / rb2) * y1
-                  - y2 * W8 * sinB / rb / (W7 * W7) * (1 + W1 / W7 * W2 + a * y3b / rb2) * (y1 / rb - sinB)
+                  - y2 * W8 * sinB / rb / (W7 * W7) * (1 + W1 / W7 * W2 + a * y3b / rb2)
+                      * (y1 / rb - sinB)
                   + y2 * W8 * sinB / rb / W7
                       * (1 / rb * cosB * y1 / W7 * W2 - W1 / (W7 * W7) * W2 * (y1 / rb - sinB)
                          - W1 / W7 * a / (rb * rb * rb) * y1 - 2 * a * y3b / (rb2 * rb2) * y1))
@@ -1466,13 +1578,15 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                * (N1
                       * (((2 - 2 * nu) * (cotB * cotB) - nu) * (y3b / rb + 1) / W6
                          - ((2 - 2 * nu) * (cotB * cotB) + 1 - 2 * nu) * cosB * W3 / W7)
-                  + N1 / (W6 * W6) * (y1 * cotB * (1 - W5) + nu * y3b - a + (y2 * y2) / W6 * W4) * (y3b / rb + 1)
+                  + N1 / (W6 * W6) * (y1 * cotB * (1 - W5) + nu * y3b - a + (y2 * y2) / W6 * W4)
+                      * (y3b / rb + 1)
                   - N1 / W6
                       * (1.0 / 2.0 * a * y1 * cotB / (rb * rb * rb) * 2 * y3b + nu
                          - (y2 * y2) / (W6 * W6) * W4 * (y3b / rb + 1)
                          - 1.0 / 2.0 * (y2 * y2) / W6 * a / (rb * rb * rb) * 2 * y3b)
                   - N1 * sinB * cotB / W7 * W2 + N1 * z1b * cotB / (W7 * W7) * W2 * W3
-                  + 1.0 / 2.0 * N1 * z1b * cotB / W7 * a / (rb * rb * rb) * 2 * y3b - a / (rb * rb * rb) * y1 * cotB
+                  + 1.0 / 2.0 * N1 * z1b * cotB / W7 * a / (rb * rb * rb) * 2 * y3b
+                  - a / (rb * rb * rb) * y1 * cotB
                   + 3.0 / 2.0 * a * y1 * W8 * cotB / (rb * rb2 * rb2) * 2 * y3b
                   + 1 / W6
                       * (-2 * nu + 1 / rb * (N1 * y1 * cotB - a) + (y2 * y2) / rb / W6 * W5
@@ -1488,21 +1602,26 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                          - 1.0 / 2.0 * (y2 * y2) / (rb2 * rb2) / W6 * a * 2 * y3b
                          - 3.0 / 2.0 * a * (y2 * y2) / (rb * rb2 * rb2) * 2 * y3b)
                   + 1 / W7
-                      * ((cosB * cosB) - 1 / rb * (N1 * z1b * cotB + a * cosB) + a * y3b * z1b * cotB / (rb * rb2)
+                      * ((cosB * cosB) - 1 / rb * (N1 * z1b * cotB + a * cosB)
+                         + a * y3b * z1b * cotB / (rb * rb2)
                          - 1 / rb / W7 * ((y2 * y2) * (cosB * cosB) - a * z1b * cotB / rb * W1))
                   - W8 / (W7 * W7)
-                      * ((cosB * cosB) - 1 / rb * (N1 * z1b * cotB + a * cosB) + a * y3b * z1b * cotB / (rb * rb * rb)
+                      * ((cosB * cosB) - 1 / rb * (N1 * z1b * cotB + a * cosB)
+                         + a * y3b * z1b * cotB / (rb * rb * rb)
                          - 1 / rb / W7 * ((y2 * y2) * (cosB * cosB) - a * z1b * cotB / rb * W1))
                       * W3
                   + W8 / W7
-                      * (1.0 / 2.0 / (rb * rb * rb) * (N1 * z1b * cotB + a * cosB) * 2 * y3b - 1 / rb * N1 * sinB * cotB
-                         + a * z1b * cotB / (rb * rb * rb) + a * y3b * sinB * cotB / (rb * rb * rb)
+                      * (1.0 / 2.0 / (rb * rb * rb) * (N1 * z1b * cotB + a * cosB) * 2 * y3b
+                         - 1 / rb * N1 * sinB * cotB + a * z1b * cotB / (rb * rb * rb)
+                         + a * y3b * sinB * cotB / (rb * rb * rb)
                          - 3.0 / 2.0 * a * y3b * z1b * cotB / (rb * rb2 * rb2) * 2 * y3b
-                         + 1.0 / 2.0 / (rb * rb2) / W7 * ((y2 * y2) * (cosB * cosB) - a * z1b * cotB / rb * W1) * 2
-                             * y3b
-                         + 1 / rb / (W7 * W7) * ((y2 * y2) * (cosB * cosB) - a * z1b * cotB / rb * W1) * W3
+                         + 1.0 / 2.0 / (rb * rb2) / W7
+                             * ((y2 * y2) * (cosB * cosB) - a * z1b * cotB / rb * W1) * 2 * y3b
+                         + 1 / rb / (W7 * W7) * ((y2 * y2) * (cosB * cosB) - a * z1b * cotB / rb * W1)
+                             * W3
                          - 1 / rb / W7
-                             * (-a * sinB * cotB / rb * W1 + 1.0 / 2.0 * a * z1b * cotB / (rb * rb * rb) * W1 * 2 * y3b
+                             * (-a * sinB * cotB / rb * W1
+                                + 1.0 / 2.0 * a * z1b * cotB / (rb * rb * rb) * W1 * 2 * y3b
                                 - a * z1b * cotB / rb * (cosB * y3b / rb + 1))))
                / M_PI / (1 - nu))
         + b2 / 2
@@ -1510,24 +1629,28 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                * ((2 - 2 * nu) * N1 * rFib_ry3 * (cotB * cotB)
                   - N1 * y2 / (W6 * W6) * ((W5 - 1) * cotB + y1 / W6 * W4) * (y3b / rb + 1)
                   + N1 * y2 / W6
-                      * (-1.0 / 2.0 * a / (rb * rb * rb) * 2 * y3b * cotB - y1 / (W6 * W6) * W4 * (y3b / rb + 1)
+                      * (-1.0 / 2.0 * a / (rb * rb * rb) * 2 * y3b * cotB
+                         - y1 / (W6 * W6) * W4 * (y3b / rb + 1)
                          - 1.0 / 2.0 * y1 / W6 * a / (rb * rb * rb) * 2 * y3b)
                   + N1 * y2 * cotB / (W7 * W7) * W9 * W3
                   + 1.0 / 2.0 * N1 * y2 * cotB / W7 * a / (rb * rb * rb) / cosB * 2 * y3b
-                  - a / (rb * rb * rb) * y2 * cotB + 3.0 / 2.0 * a * y2 * W8 * cotB / (rb * rb2 * rb2) * 2 * y3b
+                  - a / (rb * rb * rb) * y2 * cotB
+                  + 3.0 / 2.0 * a * y2 * W8 * cotB / (rb * rb2 * rb2) * 2 * y3b
                   + y2 / rb / W6 * (N1 * cotB - 2 * nu * y1 / W6 - a * y1 / rb * (1 / rb + 1 / W6))
                   - 1.0 / 2.0 * y2 * W8 / (rb * rb * rb) / W6
                       * (N1 * cotB - 2 * nu * y1 / W6 - a * y1 / rb * (1 / rb + 1 / W6)) * 2 * y3b
-                  - y2 * W8 / rb / (W6 * W6) * (N1 * cotB - 2 * nu * y1 / W6 - a * y1 / rb * (1 / rb + 1 / W6))
-                      * (y3b / rb + 1)
+                  - y2 * W8 / rb / (W6 * W6)
+                      * (N1 * cotB - 2 * nu * y1 / W6 - a * y1 / rb * (1 / rb + 1 / W6)) * (y3b / rb + 1)
                   + y2 * W8 / rb / W6
                       * (2 * nu * y1 / (W6 * W6) * (y3b / rb + 1)
                          + 1.0 / 2.0 * a * y1 / (rb * rb * rb) * (1 / rb + 1 / W6) * 2 * y3b
-                         - a * y1 / rb * (-1.0 / 2.0 / (rb * rb * rb) * 2 * y3b - 1 / (W6 * W6) * (y3b / rb + 1)))
+                         - a * y1 / rb
+                             * (-1.0 / 2.0 / (rb * rb * rb) * 2 * y3b - 1 / (W6 * W6) * (y3b / rb + 1)))
                   + y2 * cotB / rb / W7 * ((-2 + 2 * nu) * cosB + W1 / W7 * W9 + a * y3b / rb2 / cosB)
                   - 1.0 / 2.0 * y2 * W8 * cotB / (rb * rb * rb) / W7
                       * ((-2 + 2 * nu) * cosB + W1 / W7 * W9 + a * y3b / rb2 / cosB) * 2 * y3b
-                  - y2 * W8 * cotB / rb / (W7 * W7) * ((-2 + 2 * nu) * cosB + W1 / W7 * W9 + a * y3b / rb2 / cosB) * W3
+                  - y2 * W8 * cotB / rb / (W7 * W7)
+                      * ((-2 + 2 * nu) * cosB + W1 / W7 * W9 + a * y3b / rb2 / cosB) * W3
                   + y2 * W8 * cotB / rb / W7
                       * ((cosB * y3b / rb + 1) / W7 * W9 - W1 / (W7 * W7) * W9 * W3
                          - 1.0 / 2.0 * W1 / W7 * a / (rb * rb * rb) / cosB * 2 * y3b + a / rb2 / cosB
@@ -1538,8 +1661,10 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                * (N1
                       * (-sinB * W3 / W7 + y1 / (W6 * W6) * (1 + a / rb) * (y3b / rb + 1)
                          + 1.0 / 2.0 * y1 / W6 * a / (rb * rb * rb) * 2 * y3b + sinB / W7 * W2
-                         - z1b / (W7 * W7) * W2 * W3 - 1.0 / 2.0 * z1b / W7 * a / (rb * rb * rb) * 2 * y3b)
-                  + y1 / rb * (a / rb2 + 1 / W6) - 1.0 / 2.0 * y1 * W8 / (rb * rb2) * (a / rb2 + 1 / W6) * 2 * y3b
+                         - z1b / (W7 * W7) * W2 * W3
+                         - 1.0 / 2.0 * z1b / W7 * a / (rb * rb * rb) * 2 * y3b)
+                  + y1 / rb * (a / rb2 + 1 / W6)
+                  - 1.0 / 2.0 * y1 * W8 / (rb * rb2) * (a / rb2 + 1 / W6) * 2 * y3b
                   + y1 * W8 / rb * (-a / (rb2 * rb2) * 2 * y3b - 1 / (W6 * W6) * (y3b / rb + 1))
                   - 1 / W7
                       * (sinB * (cosB - a / rb) + z1b / rb * (1 + a * y3b / rb2)
@@ -1549,10 +1674,12 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                          - 1 / rb / W7 * ((y2 * y2) * cosB * sinB - a * z1b / rb * W1))
                       * W3
                   - W8 / W7
-                      * (1.0 / 2.0 * sinB * a / (rb * rb * rb) * 2 * y3b + sinB / rb * (1 + a * y3b / rb2)
+                      * (1.0 / 2.0 * sinB * a / (rb * rb * rb) * 2 * y3b
+                         + sinB / rb * (1 + a * y3b / rb2)
                          - 1.0 / 2.0 * z1b / (rb * rb * rb) * (1 + a * y3b / rb2) * 2 * y3b
                          + z1b / rb * (a / rb2 - a * y3b / (rb2 * rb2) * 2 * y3b)
-                         + 1.0 / 2.0 / (rb * rb * rb) / W7 * ((y2 * y2) * cosB * sinB - a * z1b / rb * W1) * 2 * y3b
+                         + 1.0 / 2.0 / (rb * rb * rb) / W7
+                             * ((y2 * y2) * cosB * sinB - a * z1b / rb * W1) * 2 * y3b
                          + 1 / rb / (W7 * W7) * ((y2 * y2) * cosB * sinB - a * z1b / rb * W1) * W3
                          - 1 / rb / W7
                              * (-a * sinB / rb * W1 + 1.0 / 2.0 * a * z1b / (rb * rb * rb) * W1 * 2 * y3b
@@ -1562,12 +1689,15 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
             * (1.0 / 4.0
                * ((2 - 2 * nu)
                       * (N1 * rFib_ry2 * cotB + 1 / W6 * W5 - (y2 * y2) / (W6 * W6) * W5 / rb
-                         - (y2 * y2) / W6 * a / (rb * rb * rb) - cosB / W7 * W2 + (y2 * y2) * cosB / (W7 * W7) * W2 / rb
+                         - (y2 * y2) / W6 * a / (rb * rb * rb) - cosB / W7 * W2
+                         + (y2 * y2) * cosB / (W7 * W7) * W2 / rb
                          + (y2 * y2) * cosB / W7 * a / (rb * rb * rb))
-                  + W8 / rb * (2 * nu / W6 + a / rb2) - (y2 * y2) * W8 / (rb * rb * rb) * (2 * nu / W6 + a / rb2)
+                  + W8 / rb * (2 * nu / W6 + a / rb2)
+                  - (y2 * y2) * W8 / (rb * rb * rb) * (2 * nu / W6 + a / rb2)
                   + y2 * W8 / rb * (-2 * nu / (W6 * W6) / rb * y2 - 2 * a / (rb2 * rb2) * y2)
                   + W8 * cosB / rb / W7 * (1 - 2 * nu - W1 / W7 * W2 - a * y3b / rb2)
-                  - (y2 * y2) * W8 * cosB / (rb * rb * rb) / W7 * (1 - 2 * nu - W1 / W7 * W2 - a * y3b / rb2)
+                  - (y2 * y2) * W8 * cosB / (rb * rb * rb) / W7
+                      * (1 - 2 * nu - W1 / W7 * W2 - a * y3b / rb2)
                   - (y2 * y2) * W8 * cosB / rb2 / (W7 * W7) * (1 - 2 * nu - W1 / W7 * W2 - a * y3b / rb2)
                   + y2 * W8 * cosB / rb / W7
                       * (-1 / rb * cosB * y2 / W7 * W2 + W1 / (W7 * W7) * W2 / rb * y2
@@ -1576,8 +1706,10 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
         + b2 / 2
             * (1.0 / 4.0
                * ((-2 + 2 * nu) * N1 * cotB * (1 / rb * y2 / W6 - cosB / rb * y2 / W7)
-                  + (2 - 2 * nu) * y1 / (W6 * W6) * W5 / rb * y2 + (2 - 2 * nu) * y1 / W6 * a / (rb * rb * rb) * y2
-                  - (2 - 2 * nu) * z1b / (W7 * W7) * W2 / rb * y2 - (2 - 2 * nu) * z1b / W7 * a / (rb * rb * rb) * y2
+                  + (2 - 2 * nu) * y1 / (W6 * W6) * W5 / rb * y2
+                  + (2 - 2 * nu) * y1 / W6 * a / (rb * rb * rb) * y2
+                  - (2 - 2 * nu) * z1b / (W7 * W7) * W2 / rb * y2
+                  - (2 - 2 * nu) * z1b / W7 * a / (rb * rb * rb) * y2
                   - W8 / (rb * rb2) * (N1 * cotB - 2 * nu * y1 / W6 - a * y1 / rb2) * y2
                   + W8 / rb * (2 * nu * y1 / (W6 * W6) / rb * y2 + 2 * a * y1 / (rb2 * rb2) * y2)
                   + W8 / (W7 * W7)
@@ -1591,7 +1723,8 @@ AngDisStrainFSC(Real y1, Real y2, Real y3, Real beta, Real b1, Real b2, Real b3,
                          - a / (rb * rb * rb) * (sinB - y3b * z1b / rb2 - z1b * W1 / rb / W7) * y2
                          + a / rb
                              * (2 * y3b * z1b / (rb2 * rb2) * y2 - z1b / rb2 * cosB * y2 / W7
-                                + z1b * W1 / (rb * rb * rb) / W7 * y2 + z1b * W1 / rb2 / (W7 * W7) * y2)))
+                                + z1b * W1 / (rb * rb * rb) / W7 * y2
+                                + z1b * W1 / rb2 / (W7 * W7) * y2)))
                / M_PI / (1 - nu))
         + b3 / 2
             * (1.0 / 4.0
@@ -1717,16 +1850,19 @@ disp_fs(Real3 obs, std::array<Real3, 3> tri, Real3 slip, Real nu)
         out = make3(NAN, NAN, NAN);
     }
 
-    Real3 a
-        = make3(-transformed_obs.x, transformed_tri[0].y - transformed_obs.y, transformed_tri[0].z - transformed_obs.z);
+    Real3 a = make3(-transformed_obs.x,
+                    transformed_tri[0].y - transformed_obs.y,
+                    transformed_tri[0].z - transformed_obs.z);
     Real3 b = negate3(transformed_obs);
-    Real3 c
-        = make3(-transformed_obs.x, transformed_tri[2].y - transformed_obs.y, transformed_tri[2].z - transformed_obs.z);
+    Real3 c = make3(-transformed_obs.x,
+                    transformed_tri[2].y - transformed_obs.y,
+                    transformed_tri[2].z - transformed_obs.z);
     Real na = length3(a);
     Real nb = length3(b);
     Real nc = length3(c);
 
-    Real FiN = (a.x * (b.y * c.z - b.z * c.y) - a.y * (b.x * c.z - b.z * c.x) + a.z * (b.x * c.y - b.y * c.x));
+    Real FiN = (a.x * (b.y * c.z - b.z * c.y) - a.y * (b.x * c.z - b.z * c.x)
+                + a.z * (b.x * c.y - b.y * c.x));
     Real FiD = (na * nb * nc + dot3(a, b) * nc + dot3(a, c) * nb + dot3(b, c) * na);
     Real Fi = -2 * atan2(FiN, FiD) / 4 / M_PI;
 
@@ -1823,8 +1959,10 @@ AngSetupFSC(Real3 obs, Real3 slip, Real3 PA, Real3 PStrainB, Real nu)
         configuration = -M_PI + beta;
     }
 
-    Real3 vA = AngDisDispFSC(yA.x, yA.y, yA.z, configuration, slip_adcs.x, slip_adcs.y, slip_adcs.z, nu, -PA.z);
-    Real3 vB = AngDisDispFSC(yB.x, yB.y, yB.z, configuration, slip_adcs.x, slip_adcs.y, slip_adcs.z, nu, -PB.z);
+    Real3 vA = AngDisDispFSC(
+        yA.x, yA.y, yA.z, configuration, slip_adcs.x, slip_adcs.y, slip_adcs.z, nu, -PA.z);
+    Real3 vB = AngDisDispFSC(
+        yB.x, yB.y, yB.z, configuration, slip_adcs.x, slip_adcs.y, slip_adcs.z, nu, -PB.z);
 
     Real3 v = sub3(vB, vA);
     return inv_transform3(ey1, ey2, ey3, v);
@@ -1857,8 +1995,10 @@ AngSetupFSC_S(Real3 obs, Real3 slip, Real3 PA, Real3 PB, Real nu)
         configuration = -M_PI + beta;
     }
 
-    Real6 vA = AngDisStrainFSC(yA.x, yA.y, yA.z, configuration, slip_adcs.x, slip_adcs.y, slip_adcs.z, nu, -PA.z);
-    Real6 vB = AngDisStrainFSC(yB.x, yB.y, yB.z, configuration, slip_adcs.x, slip_adcs.y, slip_adcs.z, nu, -PB.z);
+    Real6 vA = AngDisStrainFSC(
+        yA.x, yA.y, yA.z, configuration, slip_adcs.x, slip_adcs.y, slip_adcs.z, nu, -PA.z);
+    Real6 vB = AngDisStrainFSC(
+        yB.x, yB.y, yB.z, configuration, slip_adcs.x, slip_adcs.y, slip_adcs.z, nu, -PB.z);
     Real6 v = sub6(vB, vA);
     return tensor_transform3(ey1, ey2, ey3, v);
 }

@@ -158,7 +158,10 @@ update_M_and_rhs(SMatrix& M,
 
 // ----------------------------------------------------------------------------
 void
-update_C(SMatrix& C, const std::vector<Htrans>& htrans, const VectorHP& hp, const std::vector<int> remapping)
+update_C(SMatrix& C,
+         const std::vector<Htrans>& htrans,
+         const VectorHP& hp,
+         const std::vector<int> remapping)
 // ----------------------------------------------------------------------------
 {
     C = 0;
@@ -205,7 +208,9 @@ update_C(SMatrix& C, const std::vector<Htrans>& htrans, const VectorHP& hp, cons
 
 // ----------------------------------------------------------------------------
 const std::vector<int>
-compute_remapping(const std::vector<size_t>& eliminated, const std::vector<size_t>& kept, const size_t num_cells)
+compute_remapping(const std::vector<size_t>& eliminated,
+                  const std::vector<size_t>& kept,
+                  const size_t num_cells)
 // ----------------------------------------------------------------------------
 {
     std::vector<int> result(num_cells);
@@ -333,7 +338,8 @@ nonlinear_iteration(SystemMatrix& S, // will be updated (depends on current aper
     auto& C = S[_1][_0]; // coupling matrix (reference; will be modified)
 
     // --- update matrix entries based on the latest iteration of the solution vector ---
-    update_flow_system(M, C, rhs[_1], htrans, hp, rate, ratecells, bhp, eliminated_cells, kept_cells, leakoff_fac);
+    update_flow_system(
+        M, C, rhs[_1], htrans, hp, rate, ratecells, bhp, eliminated_cells, kept_cells, leakoff_fac);
 
     // --- update right-hand side ---
     if (negI_rhs.M() > 0) {
@@ -502,13 +508,14 @@ solve_fully_coupled(ResVector& pvec, // output: fracture pressure
     const double h_tol = (bhpcells.size() > 0) ? conv_tol * bhp : conv_tol;
     const double p_tol = conv_tol;
 
-    std::function<bool(const VectorHP&)> conv_test
-        = [&](const VectorHP& res) { return res[_0].infinity_norm() < h_tol && res[_1].infinity_norm() < p_tol; };
+    std::function<bool(const VectorHP&)> conv_test = [&](const VectorHP& res) {
+        return res[_0].infinity_norm() < h_tol && res[_1].infinity_norm() < p_tol;
+    };
 
     int iter = 0;
-    while (
-        !nonlinear_iteration(S, negI_rhs, hp, dhp, htrans, rate, ratecells, bhp, eliminated, kept, leakfac, conv_test)
-        && iter++ < max_nonlin_iter)
+    while (!nonlinear_iteration(
+               S, negI_rhs, hp, dhp, htrans, rate, ratecells, bhp, eliminated, kept, leakfac, conv_test)
+           && iter++ < max_nonlin_iter)
         hp += dhp;
 
     if (iter == max_nonlin_iter)

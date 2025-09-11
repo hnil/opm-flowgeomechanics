@@ -44,8 +44,11 @@ int
 test_circular(double radius, int levels, bool center_well, bool smoothing)
 {
     const RegularTrimesh mesh(radius);
-    writeMeshToVTK(
-        mesh, "circular_grid", levels, center_well ? RegularTrimesh::inner_ring_cells() : vector<CellRef>(), smoothing);
+    writeMeshToVTK(mesh,
+                   "circular_grid",
+                   levels,
+                   center_well ? RegularTrimesh::inner_ring_cells() : vector<CellRef>(),
+                   smoothing);
     cout << "Number of cells: " << mesh.numActive() << endl;
     return 0;
 }
@@ -124,8 +127,8 @@ irregular_grid_test()
     const auto [grid, fsmap, bcells] = mesh.createDuneGrid();
 
     // write grid to file
-    auto vtkwriter
-        = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid->leafGridView(), Dune::VTK::nonconforming);
+    auto vtkwriter = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid->leafGridView(),
+                                                                           Dune::VTK::nonconforming);
     vtkwriter->write("mesh");
 
     // write outer boundary edges to file
@@ -150,7 +153,8 @@ main(int varnum, char** vararg)
              << "1 - create irregular 5-cell grid\n"
              << "2 - test grid expansion <n turns> \n"
              << "3 - test grid refinement \n"
-             << "4 - test circular grid construction <radius> <# of levels> <1/0 (presence of center well) <1/0> "
+             << "4 - test circular grid construction <radius> <# of levels> <1/0 (presence of center "
+                "well) <1/0> "
                 "(smoothing)\n"
              << endl;
     else if (atoi(vararg[1]) == 1)
