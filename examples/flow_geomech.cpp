@@ -27,11 +27,11 @@
 
 #include <opm/models/blackoil/blackoillocalresidualtpfa.hh>
 #include <opm/models/discretization/common/tpfalinearizer.hh>
-//#include <opm/flowexperimental/blackoilintensivequantitiessimple.hh>
-#include <opm/models/discretization/common/baseauxiliarymodule.hh>
-#include <opm/simulators/wells/BlackoilWellModel.hpp>
+// #include <opm/flowexperimental/blackoilintensivequantitiessimple.hh>
 #include <opm/geomech/eclgeomechmodel.hh>
 #include <opm/geomech/eclproblemgeomech.hh>
+#include <opm/models/discretization/common/baseauxiliarymodule.hh>
+#include <opm/simulators/wells/BlackoilWellModel.hpp>
 
 #include <opm/grid/polyhedralgrid.hh>
 #ifdef HAVE_ALUGRID
@@ -42,30 +42,34 @@
 #include <opm/simulators/flow/PolyhedralGridVanguard.hpp>
 #include <opm/simulators/flow/equil/EquilibrationHelpers_impl.hpp>
 #include <opm/simulators/flow/equil/InitStateEquil_impl.hpp>
-//#include <ebos/eclpolyhedralgridvanguard.hh>
-// adding linearshe sould be chaning the update_ function in the same class with condition that the error is reduced.
-// the trick is to be able to recalculate the residual from here.
-// unsure where the timestepping is done from suggestedtime??
-// suggestTimeStep is taken from newton solver in problem.limitTimestep
+// #include <ebos/eclpolyhedralgridvanguard.hh>
+//  adding linearshe sould be chaning the update_ function in the same class with condition that the error is reduced.
+//  the trick is to be able to recalculate the residual from here.
+//  unsure where the timestepping is done from suggestedtime??
+//  suggestTimeStep is taken from newton solver in problem.limitTimestep
 #include "MechTypeTag.hpp"
-namespace Opm {
-namespace Properties {
-namespace TTag {
-struct EclFlowProblemMechNoTemp {
-    using InheritsFrom = std::tuple<EclFlowProblemMech>;
-};
-}
-        template <class TypeTag>
-        struct EnableEnergy<TypeTag, TTag::EclFlowProblemMechNoTemp> {
-            static constexpr bool value = false;
+namespace Opm
+{
+namespace Properties
+{
+    namespace TTag
+    {
+        struct EclFlowProblemMechNoTemp {
+            using InheritsFrom = std::tuple<EclFlowProblemMech>;
         };
+    } // namespace TTag
+    template <class TypeTag>
+    struct EnableEnergy<TypeTag, TTag::EclFlowProblemMechNoTemp> {
+        static constexpr bool value = false;
+    };
 
 
-}
-}
+} // namespace Properties
+} // namespace Opm
 
 
-int main(int argc, char** argv)
+int
+main(int argc, char** argv)
 {
     // Opm::Parameters::SetDefault<Opm::Parameters::EnableOpmRstFile>(true);
     // Opm::Parameters::SetDefault<Opm::Parameters::EnableVtkOutput>(true);
@@ -76,5 +80,5 @@ int main(int argc, char** argv)
     using TypeTag = Opm::Properties::TTag::EclFlowProblemMechNoTemp;
     auto mainObject = Opm::Main(argc, argv);
     return mainObject.runStatic<TypeTag>();
-    //return Opm::start<TypeTag>(argc, argv);
+    // return Opm::start<TypeTag>(argc, argv);
 }

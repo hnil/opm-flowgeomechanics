@@ -18,7 +18,7 @@
 */
 #include "config.h"
 #if USE_TRACY
-//#define DETAILED_PROFILING 1
+// #define DETAILED_PROFILING 1
 #endif
 
 #include <exception>
@@ -27,41 +27,42 @@
 
 #include <opm/models/blackoil/blackoillocalresidualtpfa.hh>
 #include <opm/models/discretization/common/tpfalinearizer.hh>
-//#include <opm/flowexperimental/blackoilintensivequantitiessimple.hh>
-#include <opm/models/discretization/common/baseauxiliarymodule.hh>
-#include <opm/simulators/wells/BlackoilWellModel.hpp>
-#include <opm/geomech/eclgeomechmodel.hh>
-#include <opm/geomech/eclproblemgeomech.hh>
+// #include <opm/flowexperimental/blackoilintensivequantitiessimple.hh>
 #include "MechTypeTag.hpp"
 #include <opm/geomech/BlackoilGeomechWellModel.hpp>
+#include <opm/geomech/eclgeomechmodel.hh>
+#include <opm/geomech/eclproblemgeomech.hh>
+#include <opm/models/discretization/common/baseauxiliarymodule.hh>
+#include <opm/simulators/wells/BlackoilWellModel.hpp>
 // adding linearshe sould be chaning the update_ function in the same class with condition that the error is reduced.
 // the trick is to be able to recalculate the residual from here.
 // unsure where the timestepping is done from suggestedtime??
 // suggestTimeStep is taken from newton solver in problem.limitTimestep
 namespace Opm
 {
-    namespace Properties
+namespace Properties
+{
+    namespace TTag
     {
-        namespace TTag
-        {
-            struct EclFlowProblemMechTemp {
-                using InheritsFrom = std::tuple<EclFlowProblemMech>;
-            };
-        }
+        struct EclFlowProblemMechTemp {
+            using InheritsFrom = std::tuple<EclFlowProblemMech>;
+        };
+    } // namespace TTag
 
-        // template <class TypeTag>
-        // struct WellModel<TypeTag, TTag::EclFlowProblemMechTemp> {
-        //      using type = BlackoilGeomechWellModel<TypeTag>;
-        // };
-    }
-}
+    // template <class TypeTag>
+    // struct WellModel<TypeTag, TTag::EclFlowProblemMechTemp> {
+    //      using type = BlackoilGeomechWellModel<TypeTag>;
+    // };
+} // namespace Properties
+} // namespace Opm
 
-int main(int argc, char** argv)
+int
+main(int argc, char** argv)
 {
 
     OPM_TIMEBLOCK(fullSimulation);
     using TypeTag = Opm::Properties::TTag::EclFlowProblemMechTemp;
     auto mainObject = Opm::Main(argc, argv);
     return mainObject.runStatic<TypeTag>();
-    //return Opm::start<TypeTag>(argc, argv);
+    // return Opm::start<TypeTag>(argc, argv);
 }

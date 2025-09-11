@@ -24,7 +24,8 @@
 template <int N>
 using OBMMec = Dune::BCRSMatrix<Dune::FieldMatrix<double, N, N>>;
 template <int N>
-using BVMec = Dune::BlockVector<Dune::FieldVector<double, N>>;;
+using BVMec = Dune::BlockVector<Dune::FieldVector<double, N>>;
+;
 using CommMec = Dune::OwnerOverlapCopyCommunication<int, int>;
 // Sequential operators.
 template <int N>

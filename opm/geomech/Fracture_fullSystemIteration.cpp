@@ -6,7 +6,6 @@
 #include <string>
 #include <tuple>
 #include <vector>
-#include <fstream>
 
 
 #include <dune/common/indices.hh> // needed for _0, _1, etc.
@@ -45,7 +44,7 @@ using Dune::Indices::_1;
 using ResVector = Opm::Fracture::Vector;
 using VectorHP = Dune::MultiTypeBlockVector<ResVector, ResVector>;
 
-    using SMatrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>; // sparse matrix
+using SMatrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>; // sparse matrix
 using FMatrix = Dune::DynamicMatrix<double>; // full matrix
 
 using SystemMatrix = Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<FMatrix, SMatrix>,
@@ -347,14 +346,14 @@ Fracture::identify_closed(const FMatrix& A, const VectorHP& x, const ResVector& 
 }
 // ----------------------------------------------------------------------------
 bool
-Fracture::fullSystemIteration(const double tol,const int nlin_iteration)
+Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
 // ----------------------------------------------------------------------------
 {
-  OPM_TIMEFUNCTION();
+    OPM_TIMEFUNCTION();
 
-  ++DEBUG_COUNT;
-  //min_width_ = prm_.get<double>("solver.min_width"); // min with only used for flow calculations
-  const double max_width = prm_.get<double>("solver.max_width");
+    ++DEBUG_COUNT;
+    // min_width_ = prm_.get<double>("solver.min_width"); // min with only used for flow calculations
+    const double max_width = prm_.get<double>("solver.max_width");
 
     // update pressure matrix with the current values of `fracture_width_` and
     // `fracture_pressure_`
@@ -365,8 +364,8 @@ Fracture::fullSystemIteration(const double tol,const int nlin_iteration)
     // std::cout << "---- Various " << std::endl;
     //  initialize vector of unknown, and vector represnting direction in tangent space
     VectorHP x {fracture_width_, fracture_pressure_};
-    //dump_vector(x, "w", "p", true); // dump current state of fracture
-    //dump_vector(x, debug_filename("w_").c_str(), debug_filename("p_").c_str());
+    // dump_vector(x, "w", "p", true); // dump current state of fracture
+    // dump_vector(x, debug_filename("w_").c_str(), debug_filename("p_").c_str());
 
     VectorHP dx = x;
     dx = 0; // gradient of 'x' (which we aim to compute below)
@@ -379,13 +378,13 @@ Fracture::fullSystemIteration(const double tol,const int nlin_iteration)
 
     // make a version of the fracture matrix that has trivial equations for closed cells
     const std::vector<int> closed_cells = identify_closed(fractureMatrix(), x, rhs[_0], numWellEquations());
-    //dump_vector(closed_cells, debug_filename("closed_cells_").c_str());
-    //dump_vector(closed_cells, "closed_cells", true);
-    //const auto A = modified_fracture_matrix(fractureMatrix(), closed_cells);
+    // dump_vector(closed_cells, debug_filename("closed_cells_").c_str());
+    // dump_vector(closed_cells, "closed_cells", true);
+    // const auto A = modified_fracture_matrix(fractureMatrix(), closed_cells);
     bool closed_cells_changed = true; // NB need to find out when this is need
     bool update_mech_matrix = nlin_iteration > 0 || closed_cells_changed;
-    if(update_mech_matrix){
-      A_.reset(new FMatrix(modified_fracture_matrix(fractureMatrix(), closed_cells)));
+    if (update_mech_matrix) {
+        A_.reset(new FMatrix(modified_fracture_matrix(fractureMatrix(), closed_cells)));
     }
     auto& A = *A_;
 
@@ -412,27 +411,27 @@ Fracture::fullSystemIteration(const double tol,const int nlin_iteration)
     // setup the full system
     const auto& M = *pressure_matrix_;
     const auto& C = *coupling_matrix_;
-    //const auto I = makeIdentity(A.N(), numWellEquations(), 1, closed_cells);
-    if(update_mech_matrix){
-      I_.reset(new SMatrix(makeIdentity(A.N(), numWellEquations(), 1, closed_cells)));
+    // const auto I = makeIdentity(A.N(), numWellEquations(), 1, closed_cells);
+    if (update_mech_matrix) {
+        I_.reset(new SMatrix(makeIdentity(A.N(), numWellEquations(), 1, closed_cells)));
     }
     const auto& I = *I_;
 
     // NB need to se how to modify this matrix as litle as possible and change only the part
-    // of preconditioner need 
+    // of preconditioner need
     // system Jacobian (with cross term)  @@ should S be included as a member variable of Fracture?
-    S_.reset(new SystemMatrix({{A, I},// mechanics system (since A is negative, we leave I positive here)
+    S_.reset(new SystemMatrix({{A, I}, // mechanics system (since A is negative, we leave I positive here)
                                {C, M}})); // flow system
 
-    //SystemMatrix S = {{A, I},// mechanics system (since A is negative, we leave I positive here)
-    //                  {C, M}};
+    // SystemMatrix S = {{A, I},// mechanics system (since A is negative, we leave I positive here)
+    //                   {C, M}};
     auto& S = *S_;
-    
+
     // system equations
     SystemMatrix S0 = S;
     S0[_1][_0] = 0; // the equations themselves have no cross term
-    //dump_vector(rhs, debug_filename("rhs_w_").c_str(), debug_filename("rhs_p_").c_str());
-    //dump_vector(rhs, "rhs_w", "rhs_p", true);
+    // dump_vector(rhs, debug_filename("rhs_w_").c_str(), debug_filename("rhs_p_").c_str());
+    // dump_vector(rhs, "rhs_w", "rhs_p", true);
     S0.mmv(x, rhs); // rhs = rhs - S0 * x;   (we are working in the tanget plane)
 
     // Verify that equations have been chosen correctly
@@ -448,7 +447,7 @@ Fracture::fullSystemIteration(const double tol,const int nlin_iteration)
             rhs, tol * M.infinity_norm(), std::max(tol, A.infinity_norm() * std::numeric_limits<double>::epsilon())))
         return true;
 
-    
+
     // solve system equations
     const Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP> S_linop(S);
     TailoredPrecondDiag precond_old(S); // cannot be 'const' due to BiCGstabsolver interface
@@ -458,7 +457,7 @@ Fracture::fullSystemIteration(const double tol,const int nlin_iteration)
     const double linsolve_tol = prm_.get<double>("solver.linsolver.tol");
     const double linsolve_atol = prm_.get<double>("solver.linsolver.atol");
     double res = rhs.two_norm2();
-    double lintol = std::max(linsolve_tol, linsolve_atol/res);
+    double lintol = std::max(linsolve_tol, linsolve_atol / res);
     const int max_iter = prm_.get<double>("solver.linsolver.max_iter");
     const int verbosity = prm_.get<double>("solver.linsolver.verbosity");
     const int nlin_verbosity = prm_.get<double>("solver.verbosity");
@@ -475,21 +474,21 @@ Fracture::fullSystemIteration(const double tol,const int nlin_iteration)
         OPM_TIMEBLOCK(SolveCoupledSystem);
         psolver.apply(dx, rhs, iores); // NB: will modify 'rhs'
     }
-    
+
     if (nlin_verbosity > 1) {
         std::cout << "x:  " << x[_0].infinity_norm() << " " << x[_1].infinity_norm() << std::endl;
         std::cout << "dx: " << dx[_0].infinity_norm() << " " << dx[_1].infinity_norm() << std::endl;
-        //auto rhstmp = rhs;
-        //S0.mmv(x, rhstmp);
+        // auto rhstmp = rhs;
+        // S0.mmv(x, rhstmp);
         std::cout << "rhs org:  " << rhs[_0].infinity_norm() << " " << rhs[_1].infinity_norm() << std::endl;
-        //std::cout << "rhs:  " << rhstmp[_0].infinity_norm() << " " << rhstmp[_1].infinity_norm() << std::endl;
+        // std::cout << "rhs:  " << rhstmp[_0].infinity_norm() << " " << rhstmp[_1].infinity_norm() << std::endl;
     }
     // the following is a heuristic way to limit stepsize to stay within convergence radius
     const double damping = prm_.get<double>("solver.damping");
-    const double step_fac = damping;//estimate_step_fac(x, dx) * damping;
+    const double step_fac = damping; // estimate_step_fac(x, dx) * damping;
     // std::cout << "fac: " << step_fac << std::endl;
-    if(nlin_verbosity > 1){
-      std::cout << "fac: " << step_fac << std::endl;
+    if (nlin_verbosity > 1) {
+        std::cout << "fac: " << step_fac << std::endl;
     }
     dx *= step_fac;
     auto& dx0 = dx[_0];
@@ -505,13 +504,13 @@ Fracture::fullSystemIteration(const double tol,const int nlin_iteration)
         dx1[i][0] = std::max(-max_dp, std::min(max_dp, dx1[i][0]));
     }
 
-    
-    //dump_vector(dx, debug_filename("dx_w_").c_str(), debug_filename("dx_p_").c_str());
-    //dump_vector(dx, "dx_w", "dx_p", true);
+
+    // dump_vector(dx, debug_filename("dx_w_").c_str(), debug_filename("dx_p_").c_str());
+    // dump_vector(dx, "dx_w", "dx_p", true);
     x += dx;
-    if(nlin_verbosity > 1){
-      //std::cout << "after: x:  " << x[_0].infinity_norm() << " " << x[_1].infinity_norm() << std::endl;
-      std::cout << "after: dx: " << dx[_0].infinity_norm() << " " << dx[_1].infinity_norm() << std::endl;
+    if (nlin_verbosity > 1) {
+        // std::cout << "after: x:  " << x[_0].infinity_norm() << " " << x[_1].infinity_norm() << std::endl;
+        std::cout << "after: dx: " << dx[_0].infinity_norm() << " " << dx[_1].infinity_norm() << std::endl;
     }
     // copying modified variables back to member variables
     fracture_width_ = x[_0];

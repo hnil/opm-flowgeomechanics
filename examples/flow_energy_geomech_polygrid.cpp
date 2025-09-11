@@ -25,24 +25,24 @@
 
 #include <opm/models/blackoil/blackoillocalresidualtpfa.hh>
 #include <opm/models/discretization/common/tpfalinearizer.hh>
-//#include <opm/flowexperimental/blackoilintensivequantitiessimple.hh>
-#include <opm/models/discretization/common/baseauxiliarymodule.hh>
-#include <opm/simulators/wells/BlackoilWellModel.hpp>
+// #include <opm/flowexperimental/blackoilintensivequantitiessimple.hh>
 #include <opm/geomech/eclgeomechmodel.hh>
 #include <opm/geomech/eclproblemgeomech.hh>
 #include <opm/grid/polyhedralgrid.hh>
+#include <opm/models/discretization/common/baseauxiliarymodule.hh>
+#include <opm/simulators/wells/BlackoilWellModel.hpp>
 
 #include <opm/simulators/flow/FlowProblem.hpp>
 #include <opm/simulators/flow/PolyhedralGridVanguard.hpp>
 
 #include <opm/simulators/aquifers/SupportsFaceTag.hpp>
-#include <opm/simulators/flow/equil/InitStateEquil_impl.hpp>
 #include <opm/simulators/flow/CollectDataOnIORank_impl.hpp>
 #include <opm/simulators/flow/EclGenericWriter_impl.hpp>
 #include <opm/simulators/flow/FlowGenericProblem_impl.hpp>
 #include <opm/simulators/flow/GenericThresholdPressure_impl.hpp>
 #include <opm/simulators/flow/GenericTracerModel_impl.hpp>
 #include <opm/simulators/flow/Transmissibility_impl.hpp>
+#include <opm/simulators/flow/equil/InitStateEquil_impl.hpp>
 
 #include "MechTypeTag.hpp"
 
@@ -50,46 +50,50 @@
 // the trick is to be able to recalculate the residual from here.
 // unsure where the timestepping is done from suggestedtime??
 // suggestTimeStep is taken from newton solver in problem.limitTimestep
-namespace Opm {
-namespace Properties {
-namespace TTag {
-struct EclFlowProblemMechPoly {
-    using InheritsFrom = std::tuple<EclFlowProblemMech>;
-};
-}
+namespace Opm
+{
+namespace Properties
+{
+    namespace TTag
+    {
+        struct EclFlowProblemMechPoly {
+            using InheritsFrom = std::tuple<EclFlowProblemMech>;
+        };
+    } // namespace TTag
 
 
-// set grid to polygrid
-    template<class TypeTag>
+    // set grid to polygrid
+    template <class TypeTag>
     struct Grid<TypeTag, TTag::EclFlowProblemMechPoly> {
         using type = Dune::PolyhedralGrid<3, 3>;
     };
-    template<class TypeTag>
+    template <class TypeTag>
     struct EquilGrid<TypeTag, TTag::EclFlowProblemMechPoly> {
-        //using type = Dune::CpGrid;
+        // using type = Dune::CpGrid;
         using type = GetPropType<TypeTag, Properties::Grid>;
     };
 
-    template<class TypeTag>
+    template <class TypeTag>
     struct Vanguard<TypeTag, TTag::EclFlowProblemMechPoly> {
         using type = Opm::PolyhedralGridVanguard<TypeTag>;
     };
 
-}
+} // namespace Properties
 
-template<>
-class SupportsFaceTag<Dune::PolyhedralGrid<3, 3>>
-    : public std::bool_constant<true>
-{};
+template <>
+class SupportsFaceTag<Dune::PolyhedralGrid<3, 3>> : public std::bool_constant<true>
+{
+};
 
-}
+} // namespace Opm
 
-int main(int argc, char** argv)
+int
+main(int argc, char** argv)
 {
 
     OPM_TIMEBLOCK(fullSimulation);
     using TypeTag = Opm::Properties::TTag::EclFlowProblemMechPoly;
     auto mainObject = Opm::Main(argc, argv);
     return mainObject.runStatic<TypeTag>();
-    //return Opm::start<TypeTag>(argc, argv);
+    // return Opm::start<TypeTag>(argc, argv);
 }

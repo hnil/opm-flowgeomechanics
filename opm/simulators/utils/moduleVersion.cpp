@@ -22,45 +22,49 @@
 #endif // HAVE_CONFIG_H
 
 
-#include <opm/simulators/utils/moduleVersion.hpp>
 #include "project-timestamp.h"
 #include "project-version.h"
+#include <opm/simulators/utils/moduleVersion.hpp>
 
 namespace Opm
 {
 
-    /// Return the version name of the module, for example "2015.10"
-    /// (for a release branch) or "2016.04-pre" (for a master branch).
-    std::string moduleVersionName()
-    {
-        return PROJECT_VERSION_NAME;
-    }
+/// Return the version name of the module, for example "2015.10"
+/// (for a release branch) or "2016.04-pre" (for a master branch).
+std::string
+moduleVersionName()
+{
+    return PROJECT_VERSION_NAME;
+}
 
-    /// Return a (short) git hash for the current version of the
-    /// module if this is a Release build (as defined by CMake), or
-    /// "debug" for Debug builds.
-    std::string moduleVersionHash()
-    {
-        return PROJECT_VERSION_HASH;
-    }
+/// Return a (short) git hash for the current version of the
+/// module if this is a Release build (as defined by CMake), or
+/// "debug" for Debug builds.
+std::string
+moduleVersionHash()
+{
+    return PROJECT_VERSION_HASH;
+}
 
-    /// Return a string containing both the name and hash, if N is the
-    /// name and H is the hash it will be "N (H)". For example
-    /// "2016.04-pre (f15be17)" or "2016.04-pre (debug)".
-    std::string moduleVersion()
-    {
-        return PROJECT_VERSION;
-    }
+/// Return a string containing both the name and hash, if N is the
+/// name and H is the hash it will be "N (H)". For example
+/// "2016.04-pre (f15be17)" or "2016.04-pre (debug)".
+std::string
+moduleVersion()
+{
+    return PROJECT_VERSION;
+}
 
-    /// Return a string "dd-mm-yyyy at HH::MM::SS hrs" which is the time
-    /// the binary was compiled.
-    std::string compileTimestamp()
-    {
+/// Return a string "dd-mm-yyyy at HH::MM::SS hrs" which is the time
+/// the binary was compiled.
+std::string
+compileTimestamp()
+{
 #ifdef BUILD_TIMESTAMP
-        return BUILD_TIMESTAMP;
+    return BUILD_TIMESTAMP;
 #else
-        return "";
+    return "";
 #endif
-    }
+}
 
 } // namespace Opm

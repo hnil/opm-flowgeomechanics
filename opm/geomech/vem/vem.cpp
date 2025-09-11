@@ -240,9 +240,8 @@ trinormal(const double* const c1, const double* const c2, const double* const c3
     const array<double, 3> v2 {c3[0] - c1[0], c3[1] - c1[1], c3[2] - c1[2]};
 
     // return the cross product
-    return array<double, 3> {v1[1] * v2[2] - v1[2] * v2[1],
-                             v1[2] * v2[0] - v1[0] * v2[2],
-                             v1[0] * v2[1] - v1[1] * v2[0]};
+    return array<double, 3> {
+        v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0]};
 }
 
 // ----------------------------------------------------------------------------
@@ -264,8 +263,7 @@ trinormal(const double* const c1, const double* const c2, const double* const c3
 //         corner points of the triangle.
 template <int Dim>
 vector<vector<double>>
-tessellate_face(const double* const corners, const int num_corners,
-                bool skip_if_tri = true, double* centroid = nullptr)
+tessellate_face(const double* const corners, const int num_corners, bool skip_if_tri = true, double* centroid = nullptr)
 // ----------------------------------------------------------------------------
 {
     if (skip_if_tri && num_corners == 3)
@@ -276,7 +274,7 @@ tessellate_face(const double* const corners, const int num_corners,
     const array<double, Dim> center = face_centroid<Dim>(corners, num_corners);
 
     if (centroid != nullptr)
-      copy(center.begin(), center.end(), centroid);
+        copy(center.begin(), center.end(), centroid);
 
     vector<vector<double>> result;
     for (int c = 0; c != num_corners; ++c) {
@@ -317,7 +315,7 @@ vector<vector<double>>
 tessellate_face(const vector<double>& corners, bool skip_if_tri = true)
 // ----------------------------------------------------------------------------
 {
-  return tessellate_face<Dim>(&corners[0], corners.size() / Dim, skip_if_tri);
+    return tessellate_face<Dim>(&corners[0], corners.size() / Dim, skip_if_tri);
 }
 
 // ----------------------------------------------------------------------------
@@ -429,7 +427,8 @@ matmul(const double* data1,
 // ----------------------------------------------------------------------------
 // compute the trace of a (full) matrix A, whose elements are stored in a vector
 // (row-major or column-major order does not really matter here).
-double trace(const vector<double>& A)
+double
+trace(const vector<double>& A)
 // ----------------------------------------------------------------------------
 {
     const auto N = std::size_t(std::sqrt(A.size()));
@@ -444,14 +443,15 @@ double trace(const vector<double>& A)
 
 // ----------------------------------------------------------------------------
 // extract the diagonal elements of a matrix
-vector<double> diag_elems(const vector<double>& A)
+vector<double>
+diag_elems(const vector<double>& A)
 // ----------------------------------------------------------------------------
 {
-  const int N = int(sqrt(A.size()));
-  vector<double> result(N, 0);
-  for (int i = 0; i != N; ++i)
-    result[i] = A[i*N+i];
-  return result;
+    const int N = int(sqrt(A.size()));
+    vector<double> result(N, 0);
+    for (int i = 0; i != N; ++i)
+        result[i] = A[i * N + i];
+    return result;
 }
 
 
@@ -459,14 +459,15 @@ vector<double> diag_elems(const vector<double>& A)
 // ----------------------------------------------------------------------------
 // Compute the trace of the inverse matrix.  The function only works correctly
 // for positive symmetric matrices
-double invtrace(const vector<double>& A)
+double
+invtrace(const vector<double>& A)
 // ----------------------------------------------------------------------------
 {
-  const auto diag = diag_elems(A);
-  double result = 0;
-  for (int i = 0; i != (int)diag.size(); ++i)
-    result += 1.0/diag[i];
-  return result;
+    const auto diag = diag_elems(A);
+    double result = 0;
+    for (int i = 0; i != (int)diag.size(); ++i)
+        result += 1.0 / diag[i];
+    return result;
 }
 
 // ----------------------------------------------------------------------------
@@ -509,26 +510,24 @@ compute_S(const std::vector<double>& Nc,
     const auto NtN = matmul(&Nc[0], r, c, true, &Nc[0], r, c, false);
 
     // const double alpha = 1;  // @@ use this line for comparison with vemmech
-    const double alpha = stability_choice == SIMPLE ?
-      volume * trace(D) / trace(NtN) :             // from Gain et al. 2014
-      (1/9.0) * volume * trace(D) * invtrace(NtN); // Andersen et al. 2017
+    const double alpha = stability_choice == SIMPLE ? volume * trace(D) / trace(NtN) : // from Gain et al. 2014
+        (1 / 9.0) * volume * trace(D) * invtrace(NtN); // Andersen et al. 2017
 
     return identity_matrix(alpha, dim * num_corners);
 }
 
 // ----------------------------------------------------------------------------
-vector<double> compute_S_D_recipe(const std::vector<double>& EWcDWct,
-                                  const int dofs,
-                                  const double volume)
+vector<double>
+compute_S_D_recipe(const std::vector<double>& EWcDWct, const int dofs, const double volume)
 // ----------------------------------------------------------------------------
 {
-  vector<double> result(dofs * dofs, 0);
+    vector<double> result(dofs * dofs, 0);
 
-  const double h = cbrt(volume); // diameter of cell scales with cube root of volume
-  for (int i = 0; i != dofs; ++i)
-    result[i + dofs*i] = max(h, EWcDWct[i + dofs * i]); // extract diagonal from matrix
+    const double h = cbrt(volume); // diameter of cell scales with cube root of volume
+    for (int i = 0; i != dofs; ++i)
+        result[i + dofs * i] = max(h, EWcDWct[i + dofs * i]); // extract diagonal from matrix
 
-  return result;
+    return result;
 }
 
 
@@ -556,9 +555,8 @@ final_assembly(const vector<double>& Wc,
     const auto DWct = matmul(&D[0], lsdim, lsdim, false, &Wc[0], totdim, lsdim, true);
     const auto EWcDWct = matmul(&Wc[0], totdim, lsdim, false, &DWct[0], lsdim, totdim, false, volume);
 
-    const auto S = stability_choice == D_RECIPE ?
-      compute_S_D_recipe(EWcDWct, totdim, volume) :
-      compute_S(Nc, D, num_nodes, volume, dim, stability_choice);
+    const auto S = stability_choice == D_RECIPE ? compute_S_D_recipe(EWcDWct, totdim, volume)
+                                                : compute_S(Nc, D, num_nodes, volume, dim, stability_choice);
 
     const auto SImP = matmul(&S[0], totdim, totdim, false, &ImP[0], totdim, totdim, false);
     const auto ImpSImp = matmul(&ImP[0], totdim, totdim, true, &SImP[0], totdim, totdim, false);
@@ -587,8 +585,7 @@ matentry_2D(const double e1, const double e2, const double e3, const double e4)
     // return the matrix [e1,  0, e2;
     //                     0, e1, e4]
     // in row-major order
-    return vector<double> {e1, 0, e2,
-                           0, e3, e4};
+    return vector<double> {e1, 0, e2, 0, e3, e4};
 }
 
 // ----------------------------------------------------------------------------
@@ -607,9 +604,7 @@ matentry_3D(const double e1,
 // ----------------------------------------------------------------------------
 {
 
-    return vector<double> {e1, 0, 0, e2, 0, e3,
-                           0, e4, 0, e5, e6, 0,
-                           0, 0, e7, 0, e8, e9};
+    return vector<double> {e1, 0, 0, e2, 0, e3, 0, e4, 0, e5, e6, 0, 0, 0, e7, 0, e8, e9};
 }
 
 
@@ -740,7 +735,7 @@ reduce_system(vector<tuple<int, int, double>>& A,
                                "provided in ascending order.");
 
     // sort entries of A into columns
-    //cout << "Reducing system: moving elements to right hand side" << endl;
+    // cout << "Reducing system: moving elements to right hand side" << endl;
 
     sort(A.begin(), A.end(), [](const auto& aa, const auto& bb) { return get<1>(aa) < get<1>(bb); });
 
@@ -758,7 +753,7 @@ reduce_system(vector<tuple<int, int, double>>& A,
     }
 
     // determine renumbering
-    //cout << "Reducing system: determining renumbering" << endl;
+    // cout << "Reducing system: determining renumbering" << endl;
     vector<int> keep(b.size());
     iota(keep.begin(), keep.end(), 0);
     vector<int> renum;
@@ -772,7 +767,7 @@ reduce_system(vector<tuple<int, int, double>>& A,
         renum_inv[renum[i]] = i;
 
     // eliminate rows associated with fixed dofs and renumber
-    //cout << "Reducing system: eliminating entries" << endl;
+    // cout << "Reducing system: eliminating entries" << endl;
     A.erase(remove_if(A.begin(),
                       A.end(),
                       [&discard_flag, &renum_inv](const tuple<int, int, double>& el) {
@@ -787,15 +782,15 @@ reduce_system(vector<tuple<int, int, double>>& A,
         b[i] = b[renum[i]];
 
     b.resize(renum.size());
-    //cout << "Reducing system: FINISHED" << endl;
+    // cout << "Reducing system: FINISHED" << endl;
 }
 
 void
 set_boundary_conditions(vector<tuple<int, int, double>>& A,
-              vector<double>& b,
-              const int num_fixed_dofs,
-              const int* const fixed_dof_ixs,
-              const double* const fixed_dof_values)
+                        vector<double>& b,
+                        const int num_fixed_dofs,
+                        const int* const fixed_dof_ixs,
+                        const double* const fixed_dof_values)
 // ----------------------------------------------------------------------------
 {
     // check input
@@ -804,7 +799,7 @@ set_boundary_conditions(vector<tuple<int, int, double>>& A,
                                "provided in ascending order.");
 
     // sort entries of A into columns
-    //cout << "Setboundary conditions: by trivial equations" << endl;
+    // cout << "Setboundary conditions: by trivial equations" << endl;
 
     sort(A.begin(), A.end(), [](const auto& aa, const auto& bb) { return get<1>(aa) < get<1>(bb); });
 
@@ -817,16 +812,16 @@ set_boundary_conditions(vector<tuple<int, int, double>>& A,
         auto start = lower_bound(cur_end, A.end(), dof, [](const auto& a, int value) { return get<1>(a) < value; });
         if (start != A.end() && get<1>(*start) == dof) {
             cur_end = find_if(start, A.end(), [dof](const auto& a) { return get<1>(a) != dof; });
-            for (; start != cur_end; ++start){
+            for (; start != cur_end; ++start) {
                 b[get<0>(*start)] -= get<2>(*start) * fixed_dof_values[i];
-                get<2>(*start) = 0;// set matrix element to zero
+                get<2>(*start) = 0; // set matrix element to zero
             }
-        }    
+        }
     }
-    
+
 
     // determine renumbering
-    //cout << "Sett boundary condititions in matrix and rhs" << endl;
+    // cout << "Sett boundary condititions in matrix and rhs" << endl;
     vector<int> keep(b.size());
     iota(keep.begin(), keep.end(), 0);
     vector<int> renum;
@@ -840,15 +835,15 @@ set_boundary_conditions(vector<tuple<int, int, double>>& A,
         renum_inv[renum[i]] = i;
 
     // eliminate rows associated with fixed dofs and renumber
-    for(auto& el: A){
+    for (auto& el : A) {
         bool is_diag = get<0>(el) == get<1>(el);
         bool is_dof = (renum_inv[get<0>(el)] == discard_flag) || (renum_inv[get<1>(el)] == discard_flag);
-        if(is_dof){
-            if(is_diag){
+        if (is_dof) {
+            if (is_diag) {
                 get<2>(el) = 1;
-             } else {
+            } else {
                 get<2>(el) = 0;
-            } 
+            }
         }
     }
     for (int i = 0; i != num_fixed_dofs; ++i) {
@@ -856,7 +851,7 @@ set_boundary_conditions(vector<tuple<int, int, double>>& A,
         b[dof] = fixed_dof_values[i];
     }
 
-    //cout << "Setting boudnary conditions in matrix and rhs: FINISHED" << endl;
+    // cout << "Setting boudnary conditions in matrix and rhs: FINISHED" << endl;
 }
 
 // ----------------------------------------------------------------------------
@@ -945,7 +940,7 @@ compute_q_3D(const double* const corners,
     int cur_vertex_ix = 0;
     for (int f = 0; f != num_faces; ++f) {
         const auto facecorners = pick_points<3>(corners, &faces[cur_vertex_ix], num_face_edges[f]);
-        const double* const normal = &outward_normals[3*f];
+        const double* const normal = &outward_normals[3 * f];
         vector<double> cvals(num_face_edges[f], 0);
         for (int e = 0; e != num_face_edges[f]; ++e, ++cur_vertex_ix) {
             fill(cvals.begin(), cvals.end(), 0);
@@ -1064,9 +1059,8 @@ compute_Wr_3D(const vector<double>& q)
 
     for (int i = 0; i != num_corners; ++i)
         append(result,
-               matentry_3D(ncinv, q[3 * i + 1], -q[3 * i + 2],
-                           ncinv, -q[3 * i], q[3 * i + 2],
-                           ncinv, -q[3 * i + 1], q[3 * i]));
+               matentry_3D(
+                   ncinv, q[3 * i + 1], -q[3 * i + 2], ncinv, -q[3 * i], q[3 * i + 2], ncinv, -q[3 * i + 1], q[3 * i]));
     return result;
 }
 
@@ -1103,9 +1097,15 @@ compute_Wc_3D(const vector<double>& q)
 
     for (int i = 0; i != num_corners; ++i)
         append(result,
-               matentry_3D(2 * q[3 * i],     q[3 * i + 1], q[3 * i + 2],
-                           2 * q[3 * i + 1], q[3 * i],     q[3 * i + 2],
-                           2 * q[3 * i + 2], q[3 * i + 1], q[3 * i]));
+               matentry_3D(2 * q[3 * i],
+                           q[3 * i + 1],
+                           q[3 * i + 2],
+                           2 * q[3 * i + 1],
+                           q[3 * i],
+                           q[3 * i + 2],
+                           2 * q[3 * i + 2],
+                           q[3 * i + 1],
+                           q[3 * i]));
     return result;
 }
 
@@ -1143,9 +1143,7 @@ compute_D_2D(const double young, const double poisson)
     // Note that element (3,3) is four times higher than what may be sometimes
     // be seen in literature.   This is because of using half the value for shear
     // elements when using voigt notation.
-    vector<double> result {1 - poisson, poisson,     0,
-                           poisson,     1 - poisson, 0,
-                           0,           0,           2 * (1 - 2 * poisson)};
+    vector<double> result {1 - poisson, poisson, 0, poisson, 1 - poisson, 0, 0, 0, 2 * (1 - 2 * poisson)};
 
     // multiply by the constant factor
     for_each(result.begin(), result.end(), [fac](double& d) { d *= fac; });
@@ -1168,13 +1166,12 @@ compute_D_3D(const double young, const double poisson)
     // Note that element (3,3) is four times higher than what may be sometimes
     // be seen in literature.   This is because of using half the value for shear
     // elements when using voigt notation.
-    vector<double> result {
-      1 - poisson,     poisson,     poisson,                     0,                     0,                     0,
-      poisson,     1 - poisson,     poisson,                     0,                     0,                     0,
-      poisson,         poisson, 1 - poisson,                     0,                     0,                     0,
-      0,                     0,           0, 2 * (1 - 2 * poisson),                     0,                     0,
-      0,                     0,           0,                     0, 2 * (1 - 2 * poisson),                     0,
-      0,                     0,           0,                     0,                     0, 2 * (1 - 2 * poisson)};
+    vector<double> result {1 - poisson,           poisson, poisson, 0, 0, 0,       poisson,
+                           1 - poisson,           poisson, 0,       0, 0, poisson, poisson,
+                           1 - poisson,           0,       0,       0, 0, 0,       0,
+                           2 * (1 - 2 * poisson), 0,       0,       0, 0, 0,       0,
+                           2 * (1 - 2 * poisson), 0,       0,       0, 0, 0,       0,
+                           2 * (1 - 2 * poisson)};
 
     // multiply by the constant factor
     for_each(result.begin(), result.end(), [fac](double& d) { d *= fac; });
@@ -1215,32 +1212,26 @@ compute_ImP(const vector<double>& Nr,
 }
 
 // ----------------------------------------------------------------------------
-bool is_behind_face(const array<double, 3>& point,
-                    const double* const face_normal,
-                    const double* const face_centroid)
+bool
+is_behind_face(const array<double, 3>& point, const double* const face_normal, const double* const face_centroid)
 // ----------------------------------------------------------------------------
 {
-  const double tol = 1e-13;
-  const array<double, 3> v {face_centroid[0] - point[0],
-                            face_centroid[1] - point[1],
-                            face_centroid[2] - point[2]};
-  return (v[0] * face_normal[0] +
-          v[1] * face_normal[1] +
-          v[2] * face_normal[2]) + tol > 0;
+    const double tol = 1e-13;
+    const array<double, 3> v {face_centroid[0] - point[0], face_centroid[1] - point[1], face_centroid[2] - point[2]};
+    return (v[0] * face_normal[0] + v[1] * face_normal[1] + v[2] * face_normal[2]) + tol > 0;
 }
 
 
 // ----------------------------------------------------------------------------
-bool is_star_point(const array<double, 3>& point,
-                   const vector<double>& face_normals,
-                   const vector<double>& face_centroids)
+bool
+is_star_point(const array<double, 3>& point, const vector<double>& face_normals, const vector<double>& face_centroids)
 // ----------------------------------------------------------------------------
 {
-  const int N = (int)face_normals.size() / 3;
-  for (int i = 0; i != N; ++i)
-    if (!is_behind_face(point, &face_normals[3*i], &face_centroids[3*i]))
-      return false;
-  return true;
+    const int N = (int)face_normals.size() / 3;
+    for (int i = 0; i != N; ++i)
+        if (!is_behind_face(point, &face_normals[3 * i], &face_centroids[3 * i]))
+            return false;
+    return true;
 }
 
 // ----------------------------------------------------------------------------
@@ -1250,71 +1241,71 @@ bool is_star_point(const array<double, 3>& point,
 // @@ NB: The algorithm assumes planar faces, which is not always guaranteed in
 // reality.  If it proves that the obtained star point creates inconsistencies
 // in some settings, one might have to tessellate the faces into planar triangles first
-array<double, 3> identify_star_point(const array<double, 3>& point,
-                                     const vector<double>& face_normals,
-                                     const vector<double>& face_centroids)
+array<double, 3>
+identify_star_point(const array<double, 3>& point,
+                    const vector<double>& face_normals,
+                    const vector<double>& face_centroids)
 // ----------------------------------------------------------------------------
 {
-  const int N = (int)face_normals.size() / 3;
-  const int max_iter = 20 * N; // presumably enough for most realistic cases?
+    const int N = (int)face_normals.size() / 3;
+    const int max_iter = 20 * N; // presumably enough for most realistic cases?
 
-  array<double, 3> result(point);
-  int count = 0;
-  for (int i = 0; i != max_iter; ++i) {
-    const int f_ix = i % N;
-    if (!is_behind_face(result, &face_normals[3 * f_ix], &face_centroids[3 * f_ix])) {
-      count = 0;
-      //std::cout << "Averga point not insize cell " << std::endl;
-      // projecting the point onto the plane defined by the normal and the centroid
-      const double proj = (result[0] - face_centroids[3*f_ix])   * face_normals[3*f_ix] +
-                          (result[1] - face_centroids[3*f_ix+1]) * face_normals[3*f_ix+1] +
-                          (result[2] - face_centroids[3*f_ix+2]) * face_normals[3*f_ix+2];
-      for (int ii = 0; ii != 3; ++ii)
-        result[ii] -= 1.1 * proj * face_normals[3*f_ix+ii]; // move slightly past plane
-      //result[ii] -= proj * face_normals[3*f_ix+ii];
+    array<double, 3> result(point);
+    int count = 0;
+    for (int i = 0; i != max_iter; ++i) {
+        const int f_ix = i % N;
+        if (!is_behind_face(result, &face_normals[3 * f_ix], &face_centroids[3 * f_ix])) {
+            count = 0;
+            // std::cout << "Averga point not insize cell " << std::endl;
+            //  projecting the point onto the plane defined by the normal and the centroid
+            const double proj = (result[0] - face_centroids[3 * f_ix]) * face_normals[3 * f_ix]
+                + (result[1] - face_centroids[3 * f_ix + 1]) * face_normals[3 * f_ix + 1]
+                + (result[2] - face_centroids[3 * f_ix + 2]) * face_normals[3 * f_ix + 2];
+            for (int ii = 0; ii != 3; ++ii)
+                result[ii] -= 1.1 * proj * face_normals[3 * f_ix + ii]; // move slightly past plane
+            // result[ii] -= proj * face_normals[3*f_ix+ii];
+        }
+        if (++count == N)
+            break;
     }
-    if (++count == N)
-      break;
-  }
-  if (count != N)
-      throw runtime_error("Unable to find a star point for cell.");
+    if (count != N)
+        throw runtime_error("Unable to find a star point for cell.");
 
-  return result;
+    return result;
 }
 
 // ----------------------------------------------------------------------------
-void compute_face_geometry(const vector<double>& points, double* normal, double* centroid)
+void
+compute_face_geometry(const vector<double>& points, double* normal, double* centroid)
 // ----------------------------------------------------------------------------
 {
-  // compute tessellation and face centroid
-  const auto face_tessellation = tessellate_face<3>(&points[0],
-                                                    (int)points.size()/3, false, centroid);
+    // compute tessellation and face centroid
+    const auto face_tessellation = tessellate_face<3>(&points[0], (int)points.size() / 3, false, centroid);
 
-  // compute (normalized) face normal
-  fill(normal, normal+3, 0);
+    // compute (normalized) face normal
+    fill(normal, normal + 3, 0);
 
-  for (auto tri : face_tessellation) {
-    const auto tn = trinormal(&tri[0], &tri[3], &tri[6]);
+    for (auto tri : face_tessellation) {
+        const auto tn = trinormal(&tri[0], &tri[3], &tri[6]);
+        for (int d = 0; d != 3; ++d)
+            normal[d] += tn[d];
+    }
+
+    // normalize
+    const double n = norm<3>(&normal[0]);
     for (int d = 0; d != 3; ++d)
-      normal[d] += tn[d];
-  }
-
-  // normalize
-  const double n = norm<3>(&normal[0]);
-  for (int d = 0; d != 3; ++d)
-    normal[d] /= n;
+        normal[d] /= n;
 }
 
 // ----------------------------------------------------------------------------
-vector<int> extract_local_faces(const int* const faces,
-                                const int* const num_face_edges,
-                                const int num_faces)
+vector<int>
+extract_local_faces(const int* const faces, const int* const num_face_edges, const int num_faces)
 // ----------------------------------------------------------------------------
 {
-  // Picks the locally relevant face corner indices
-  vector<int> result(faces, faces + accumulate(num_face_edges, num_face_edges + num_faces, 0));
-  return result;
-} 
+    // Picks the locally relevant face corner indices
+    vector<int> result(faces, faces + accumulate(num_face_edges, num_face_edges + num_faces, 0));
+    return result;
+}
 //   vector<int> sorted_facenodes(result); // we need to sort the facenodes for quicker set operations
 //   for (int f = 0, fpos=0; f != num_faces; fpos += num_face_edges[f++])
 //     sort(&sorted_facenodes[fpos], &sorted_facenodes[fpos] + num_face_edges[f]);
@@ -1337,7 +1328,7 @@ vector<int> extract_local_faces(const int* const faces,
 //     // check which faces that can be oriented based on the current reference face
 //     vector<int> isect;
 //     for (int i = 0; i != num_faces; ++i, isect.clear()) {
-//       if (!ordered[i]) { 
+//       if (!ordered[i]) {
 //         //std::cout << "Fix ordering of face" << std::endl;
 //         set_intersection(sorted_fnode_ptrs[ref_face], sorted_fnode_ptrs[ref_face] + num_face_edges[ref_face],
 //                          sorted_fnode_ptrs[i], sorted_fnode_ptrs[i] + num_face_edges[i], back_inserter(isect));
@@ -1419,104 +1410,104 @@ vector<int> extract_local_faces(const int* const faces,
 // }
 
 // ----------------------------------------------------------------------------
-bool inward_pointing_normals(const vector<double>& normals,
-                             const vector<double>& face_centroids)
+bool
+inward_pointing_normals(const vector<double>& normals, const vector<double>& face_centroids)
 // ----------------------------------------------------------------------------
 {
-  // This version of inward_pointing_normals is implemented to be a bit more
-  // robust than the previous one, by taking into account the possibility of
-  // non-planar faces.  It is still possible it may fail in some pathological
-  // cases.
-    
-  // compute the "centroid" of the polyhedron
-  const int N = (int)normals.size()/3;
-  const array<double, 3> mean_point = point_average<3>(&face_centroids[0], N);
+    // This version of inward_pointing_normals is implemented to be a bit more
+    // robust than the previous one, by taking into account the possibility of
+    // non-planar faces.  It is still possible it may fail in some pathological
+    // cases.
 
-  // compute the distance vectors from the polyhedron centroid to the face centroids
-  vector<array<double, 3>> dists(N);
-  for (int i = 0; i != N; ++i)
-    for (int d = 0; d != 3; ++d)
-      dists[i][d] = face_centroids[3*i+d] - mean_point[d];
+    // compute the "centroid" of the polyhedron
+    const int N = (int)normals.size() / 3;
+    const array<double, 3> mean_point = point_average<3>(&face_centroids[0], N);
 
-  // add up the scalar products between distance vectors and face normals
-  double sum = 0;
-  for (int i = 0; i != N; ++i)
-    for (int d = 0; d != 3; ++d)
-      sum += dists[i][d] * normals[3*i+d];
+    // compute the distance vectors from the polyhedron centroid to the face centroids
+    vector<array<double, 3>> dists(N);
+    for (int i = 0; i != N; ++i)
+        for (int d = 0; d != 3; ++d)
+            dists[i][d] = face_centroids[3 * i + d] - mean_point[d];
 
-  return sum < 0;
+    // add up the scalar products between distance vectors and face normals
+    double sum = 0;
+    for (int i = 0; i != N; ++i)
+        for (int d = 0; d != 3; ++d)
+            sum += dists[i][d] * normals[3 * i + d];
+
+    return sum < 0;
 }
-  
+
 
 
 // ----------------------------------------------------------------------------
 // Compute key parts of cell geometry, including a consistent set of outward
 // normals, the cell volume, centroid and a point for which the cell is
 // star-shaped (which may or may not be the centroid)
-void compute_cell_geometry(const double* points,
-                           const int num_points,
-                           const int* const faces,
-                           const int* const num_face_edges,
-                           const int num_faces,
-                           vector<double>& outward_normals,
-                           vector<double>& face_centroids,
-                           array<double, 3>& cell_centroid,
-                           array<double, 3>& star_point,
-                           double& volume)
+void
+compute_cell_geometry(const double* points,
+                      const int num_points,
+                      const int* const faces,
+                      const int* const num_face_edges,
+                      const int num_faces,
+                      vector<double>& outward_normals,
+                      vector<double>& face_centroids,
+                      array<double, 3>& cell_centroid,
+                      array<double, 3>& star_point,
+                      double& volume)
 // ----------------------------------------------------------------------------
 {
-  // ensure faces are consistently oriented so that normals all point outwards
-  // or inwards
-  vector<int> faces2 = extract_local_faces(faces, num_face_edges, num_faces);
+    // ensure faces are consistently oriented so that normals all point outwards
+    // or inwards
+    vector<int> faces2 = extract_local_faces(faces, num_face_edges, num_faces);
 
-  outward_normals.resize(num_faces * 3);
-  face_centroids.resize(num_faces * 3);
-  for (int f = 0, faces_offset = 0; f != num_faces; faces_offset += num_face_edges[f++])
-    compute_face_geometry(pick_points<3>(points, &faces2[faces_offset], num_face_edges[f]),
-                          &outward_normals[f*3], &face_centroids[f*3]);
-  assert(face_centroids.size() == static_cast<std::size_t>(num_faces*3));
+    outward_normals.resize(num_faces * 3);
+    face_centroids.resize(num_faces * 3);
+    for (int f = 0, faces_offset = 0; f != num_faces; faces_offset += num_face_edges[f++])
+        compute_face_geometry(pick_points<3>(points, &faces2[faces_offset], num_face_edges[f]),
+                              &outward_normals[f * 3],
+                              &face_centroids[f * 3]);
+    assert(face_centroids.size() == static_cast<std::size_t>(num_faces * 3));
 
 
-  // ensure normals are pointing out of, rather than into, polyhedron
-  if (inward_pointing_normals(outward_normals, face_centroids)){
-    std::cout << "Warning!: inward pointing normals try to fix them" << std::endl;
-    assert(false);
-  }
-
-  // (deprecated, since we assume a consistent face corner ordering in 'faces')
-  //
-  // if (inward_pointing_normals(outward_normals, face_centroids))
-  //   for_each(outward_normals.begin(), outward_normals.end(), [](double& d) {d *= -1;});
-  // assert(face_centroids.size() == static_cast<std::size_t>(num_faces*3));
-         
-  // identify a star point (usually, mean_point qualifies, but not necessarily)
-  star_point = identify_star_point(point_average<3>(points, num_points),
-                                   outward_normals, face_centroids);
-
-  // compute cell centroid and volume
-  volume = 0;
-  cell_centroid = {0, 0, 0};
-
-  // loop over faces, split each face into triangles, and accumulate the volumes
-  // defined by these triangles and the inside point
-  for (int f = 0, fpos = 0; f != num_faces; fpos += num_face_edges[f++]) {
-    for (auto tri : tessellate_face<3>(pick_points<3>(points, &faces[fpos], num_face_edges[f]))) {
-      tri.insert(tri.end(), &star_point[0], &star_point[0] + 3);
-      const double tvol = tetrahedron_volume(&tri[0], &tri[3], &tri[6], &tri[9]);
-      const auto tet_centroid = point_average<3>(&tri[0], 4);
-      volume += tvol;
-      for (int d = 0; d != 3; ++d)
-        cell_centroid[d] += tvol * tet_centroid[d];
+    // ensure normals are pointing out of, rather than into, polyhedron
+    if (inward_pointing_normals(outward_normals, face_centroids)) {
+        std::cout << "Warning!: inward pointing normals try to fix them" << std::endl;
+        assert(false);
     }
-  }
 
-  for (int d = 0; d != 3; ++d)
-    cell_centroid[d] /= volume;
+    // (deprecated, since we assume a consistent face corner ordering in 'faces')
+    //
+    // if (inward_pointing_normals(outward_normals, face_centroids))
+    //   for_each(outward_normals.begin(), outward_normals.end(), [](double& d) {d *= -1;});
+    // assert(face_centroids.size() == static_cast<std::size_t>(num_faces*3));
 
-  // if cell_centroid is also a star_point, use that as star_point instead
-  if (is_star_point(cell_centroid, outward_normals, face_centroids))
-    star_point = cell_centroid;
+    // identify a star point (usually, mean_point qualifies, but not necessarily)
+    star_point = identify_star_point(point_average<3>(points, num_points), outward_normals, face_centroids);
 
+    // compute cell centroid and volume
+    volume = 0;
+    cell_centroid = {0, 0, 0};
+
+    // loop over faces, split each face into triangles, and accumulate the volumes
+    // defined by these triangles and the inside point
+    for (int f = 0, fpos = 0; f != num_faces; fpos += num_face_edges[f++]) {
+        for (auto tri : tessellate_face<3>(pick_points<3>(points, &faces[fpos], num_face_edges[f]))) {
+            tri.insert(tri.end(), &star_point[0], &star_point[0] + 3);
+            const double tvol = tetrahedron_volume(&tri[0], &tri[3], &tri[6], &tri[9]);
+            const auto tet_centroid = point_average<3>(&tri[0], 4);
+            volume += tvol;
+            for (int d = 0; d != 3; ++d)
+                cell_centroid[d] += tvol * tet_centroid[d];
+        }
+    }
+
+    for (int d = 0; d != 3; ++d)
+        cell_centroid[d] /= volume;
+
+    // if cell_centroid is also a star_point, use that as star_point instead
+    if (is_star_point(cell_centroid, outward_normals, face_centroids))
+        star_point = cell_centroid;
 }
 
 
@@ -1530,84 +1521,94 @@ namespace vem
 // ============================================================================
 
 // ----------------------------------------------------------------------------
-void potential_gradient_force_3D(const double* const points,
-                                 const int num_cells,
-                                 const int* const num_cell_faces, // cell faces per cell
-                                 const int* const num_face_corners, // corners per cellface
-                                 const int* const face_corners,
-                                 const double* const field,
-                                 vector<double>& fgrad,
-                                 vector<tuple<int, int, double>>& div,
-                                 bool get_matrix
-    )
+void
+potential_gradient_force_3D(const double* const points,
+                            const int num_cells,
+                            const int* const num_cell_faces, // cell faces per cell
+                            const int* const num_face_corners, // corners per cellface
+                            const int* const face_corners,
+                            const double* const field,
+                            vector<double>& fgrad,
+                            vector<tuple<int, int, double>>& div,
+                            bool get_matrix)
 // ----------------------------------------------------------------------------
 {
-  // initializing result vector
-  const int tot_num_faces = accumulate(num_cell_faces, num_cell_faces + num_cells, 0);
-  const int tot_num_fcorners = accumulate(num_face_corners, num_face_corners + tot_num_faces, 0);
-  const int tot_num_nodes = *max_element(face_corners, face_corners + tot_num_fcorners) + 1;
-  fgrad = vector<double>(3 * tot_num_nodes, 0.0);
+    // initializing result vector
+    const int tot_num_faces = accumulate(num_cell_faces, num_cell_faces + num_cells, 0);
+    const int tot_num_fcorners = accumulate(num_face_corners, num_face_corners + tot_num_faces, 0);
+    const int tot_num_nodes = *max_element(face_corners, face_corners + tot_num_fcorners) + 1;
+    fgrad = vector<double>(3 * tot_num_nodes, 0.0);
 
-  // The contribution from a given cell to the gradient of pressure evaluated at
-  // one of its corners can be obtained from vem by considering the first three componnets
-  // of `volume * P * Wc`, where `P = [p p p 0 0 0]`.  Therefore, only the three first columns
-  // of Wc matter, which is `diag([2*q1, 2*q2, 2*q3])`.  Moreover, `q_i = 1/(2*volume) z_i`,
-  // where z_i is the face integral of the phi_i basis function of the node in question.  As such,
-  // we can compute the contribution of this cell to the gradient of pressure in the given node
-  // directly as `p * z_i`, and bypass the volume computation entirely.
+    // The contribution from a given cell to the gradient of pressure evaluated at
+    // one of its corners can be obtained from vem by considering the first three componnets
+    // of `volume * P * Wc`, where `P = [p p p 0 0 0]`.  Therefore, only the three first columns
+    // of Wc matter, which is `diag([2*q1, 2*q2, 2*q3])`.  Moreover, `q_i = 1/(2*volume) z_i`,
+    // where z_i is the face integral of the phi_i basis function of the node in question.  As such,
+    // we can compute the contribution of this cell to the gradient of pressure in the given node
+    // directly as `p * z_i`, and bypass the volume computation entirely.
 
-  // Below, we compute the contribution from all corners of all faces to the global 'fgrad' vector.
+    // Below, we compute the contribution from all corners of all faces to the global 'fgrad' vector.
 
-  vector<int> indexing;
-  int cur_fcor_start = 0;
-  int cur_cface_start = 0;
-  for (int cell = 0; cell != num_cells; ++cell) {
-    const auto reindex = global_to_local_indexing(&face_corners[cur_fcor_start],
-                                                  &num_face_corners[cur_cface_start],
-                                                  num_cell_faces[cell], indexing);
-    const int num_corners = int(indexing.size());
-    const auto corners_loc = pick_points<3>(points, &indexing[0], num_corners);
+    vector<int> indexing;
+    int cur_fcor_start = 0;
+    int cur_cface_start = 0;
+    for (int cell = 0; cell != num_cells; ++cell) {
+        const auto reindex = global_to_local_indexing(
+            &face_corners[cur_fcor_start], &num_face_corners[cur_cface_start], num_cell_faces[cell], indexing);
+        const int num_corners = int(indexing.size());
+        const auto corners_loc = pick_points<3>(points, &indexing[0], num_corners);
 
-    const int tot_num_cellface_corners =
-      accumulate(&num_face_corners[cur_cface_start],
-                 &num_face_corners[cur_cface_start] + num_cell_faces[cell], 0);
+        const int tot_num_cellface_corners = accumulate(
+            &num_face_corners[cur_cface_start], &num_face_corners[cur_cface_start] + num_cell_faces[cell], 0);
 
-    vector<int> faces_loc(tot_num_cellface_corners);
-    transform(&face_corners[cur_fcor_start],
-              &face_corners[cur_fcor_start] + tot_num_cellface_corners,
-              faces_loc.begin(), [&reindex] (const int I) { return reindex.find(I)->second;});
+        vector<int> faces_loc(tot_num_cellface_corners);
+        transform(&face_corners[cur_fcor_start],
+                  &face_corners[cur_fcor_start] + tot_num_cellface_corners,
+                  faces_loc.begin(),
+                  [&reindex](const int I) { return reindex.find(I)->second; });
 
-    double volume;                                  // to be computed below
-    vector<double> outward_normals, face_centroids; // to be computed below
-    array<double, 3> star_point, cell_centroid;     // to be computed below
-    compute_cell_geometry(&corners_loc[0], num_corners, &faces_loc[0],
-                          &num_face_corners[cur_cface_start], num_cell_faces[cell],
-                          outward_normals, face_centroids, cell_centroid, star_point, volume);
+        double volume; // to be computed below
+        vector<double> outward_normals, face_centroids; // to be computed below
+        array<double, 3> star_point, cell_centroid; // to be computed below
+        compute_cell_geometry(&corners_loc[0],
+                              num_corners,
+                              &faces_loc[0],
+                              &num_face_corners[cur_cface_start],
+                              num_cell_faces[cell],
+                              outward_normals,
+                              face_centroids,
+                              cell_centroid,
+                              star_point,
+                              volume);
 
-    // Since computing q involves dividing by volume, we are really computing q * volume
-    // in the below call, by passing the value '1' for volume.  In other words, we are computing
-    // (1/2) z_i.
-    const auto qv = compute_q_3D(&corners_loc[0], num_corners, &faces_loc[0],
-                                 &num_face_corners[cur_cface_start], num_cell_faces[cell],
-                                 1, outward_normals);
+        // Since computing q involves dividing by volume, we are really computing q * volume
+        // in the below call, by passing the value '1' for volume.  In other words, we are computing
+        // (1/2) z_i.
+        const auto qv = compute_q_3D(&corners_loc[0],
+                                     num_corners,
+                                     &faces_loc[0],
+                                     &num_face_corners[cur_cface_start],
+                                     num_cell_faces[cell],
+                                     1,
+                                     outward_normals);
 
-    // fill in entries in global fgrad vector
-    for (int c = 0; c != num_corners; ++c){
-        for (int d = 0; d != 3; ++d){
-            fgrad[3 * indexing[c] + d] += 2 * field[cell] * qv[3 * c + d];
-            if(get_matrix){
-                int I = 3 * indexing[c] + d;
-                int J = cell;
-                double val = 2*qv[3 * c + d];
-                div.push_back(tuple<int, int, double> {I, J, val});
+        // fill in entries in global fgrad vector
+        for (int c = 0; c != num_corners; ++c) {
+            for (int d = 0; d != 3; ++d) {
+                fgrad[3 * indexing[c] + d] += 2 * field[cell] * qv[3 * c + d];
+                if (get_matrix) {
+                    int I = 3 * indexing[c] + d;
+                    int J = cell;
+                    double val = 2 * qv[3 * c + d];
+                    div.push_back(tuple<int, int, double> {I, J, val});
+                }
             }
         }
-    }
 
-    // keep track of our current position in the `face_corners` array
-    cur_fcor_start += tot_num_cellface_corners;
-    cur_cface_start += num_cell_faces[cell];
-  }
+        // keep track of our current position in the `face_corners` array
+        cur_fcor_start += tot_num_cellface_corners;
+        cur_cface_start += num_cell_faces[cell];
+    }
 }
 
 
@@ -1649,8 +1650,8 @@ assemble_mech_system_2D(const double* const points,
         // computing local stiffness matrix, and writing its entries into the global
         // system matrix
         const int ncf = num_cell_faces[c];
-        assemble_stiffness_matrix_2D(points, &cell_corners[corner_ixs], ncf, young[c],
-                                     poisson[c], stability_choice, loc);
+        assemble_stiffness_matrix_2D(
+            points, &cell_corners[corner_ixs], ncf, young[c], poisson[c], stability_choice, loc);
 
         for (int i = 0; i != 2 * ncf; ++i) {
             for (int j = 0; j != 2 * ncf; ++j) {
@@ -1679,11 +1680,11 @@ assemble_mech_system_2D(const double* const points,
     }
 
     // reduce system by eliminating Dirichlet degrees of freedom, and returning
-    if(reduce_boundary){
-        //cout << "Reducing system" << endl;
+    if (reduce_boundary) {
+        // cout << "Reducing system" << endl;
         reduce_system(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
-    }else{
-        //cout << "Set boundary conditions without reducing system" << endl;
+    } else {
+        // cout << "Set boundary conditions without reducing system" << endl;
         set_boundary_conditions(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
     }
     return b.size();
@@ -1708,8 +1709,7 @@ assemble_mech_system_3D(const double* const points,
                         std::vector<std::tuple<int, int, double>>& A_entries,
                         std::vector<double>& b,
                         const StabilityChoice stability_choice,
-                        bool reduce_boundary
-                        )
+                        bool reduce_boundary)
 // ----------------------------------------------------------------------------
 {
     // preliminary computations
@@ -1729,7 +1729,7 @@ assemble_mech_system_3D(const double* const points,
     int cf_ix = 0; // index to first cell face for the current cell
     int fcorners_start = 0; // index to first cell corner for current cell
 
-    //cout << "Starting assembly" << endl;
+    // cout << "Starting assembly" << endl;
     for (int c = 0; c != num_cells; ++c) {
         // computing local stiffness matrix, writing its entries into the global matrix
         assemble_stiffness_matrix_3D(points,
@@ -1769,22 +1769,22 @@ assemble_mech_system_3D(const double* const points,
         fcorners_start += accumulate(&num_face_corners[cf_ix], &num_face_corners[cf_ix + num_cell_faces[c]], 0);
         cf_ix += num_cell_faces[c];
     }
-    //cout << "Applying forces" << endl;
+    // cout << "Applying forces" << endl;
 
     // add contribution to right hand side from applied forces.  Values are written
     // directly into the global right-hand-side vector
     compute_applied_forces_3D(
         points, num_face_corners, face_corners, num_neumann_faces, neumann_faces, neumann_forces, &b[0]);
 
-    if(reduce_boundary){
-        //cout << "Set boundary conditions: Reducing system" << endl;
+    if (reduce_boundary) {
+        // cout << "Set boundary conditions: Reducing system" << endl;
         reduce_system(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
-    }else{
-        //cout << "Set boundary conditions: Set it directly in system" << endl;
+    } else {
+        // cout << "Set boundary conditions: Set it directly in system" << endl;
         set_boundary_conditions(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
     }
 
-    //cout << "Finished assembly.  Returning." << endl;
+    // cout << "Finished assembly.  Returning." << endl;
 
     return b.size();
 }
@@ -1797,25 +1797,24 @@ compute_stress_3D(const double* const points,
                   const int* const face_corners,
                   const double* const young,
                   const double* const poisson,
-                  //const double* const body_force, // 3 * number of cells
-                  //const int num_fixed_dofs, // dirichlet
-                  //const int* const fixed_dof_ixs, // indices must be sorted
-                  //const double* const fixed_dof_values,
-                  //const int num_neumann_faces,
-                  //const int* const neumann_faces,
-                  //const double* const neumann_forces, // 3 * number of neumann faces
+                  // const double* const body_force, // 3 * number of cells
+                  // const int num_fixed_dofs, // dirichlet
+                  // const int* const fixed_dof_ixs, // indices must be sorted
+                  // const double* const fixed_dof_values,
+                  // const int num_neumann_faces,
+                  // const int* const neumann_faces,
+                  // const double* const neumann_forces, // 3 * number of neumann faces
                   const std::vector<double>& disp,
-                  std::vector<std::array<double,6>>& stress,
+                  std::vector<std::array<double, 6>>& stress,
                   vector<tuple<int, int, double>>& stressmat,
                   bool do_matrix,
-                  bool do_stress
-    )
+                  bool do_stress)
 // ----------------------------------------------------------------------------
 {
     // preliminary computations
-    //const int tot_num_cell_faces = accumulate(num_cell_faces, num_cell_faces + num_cells, 0);
-    //const int tot_num_face_corners = accumulate(num_face_corners, num_face_corners + tot_num_cell_faces, 0);
-    //const int num_points = *max_element(face_corners, face_corners + tot_num_face_corners) + 1;
+    // const int tot_num_cell_faces = accumulate(num_cell_faces, num_cell_faces + num_cells, 0);
+    // const int tot_num_face_corners = accumulate(num_face_corners, num_face_corners + tot_num_cell_faces, 0);
+    // const int num_points = *max_element(face_corners, face_corners + tot_num_face_corners) + 1;
 
     // assemble full system matrix
     // loop over cells and assemble system matrix
@@ -1825,7 +1824,7 @@ compute_stress_3D(const double* const points,
     int cf_ix = 0; // index to first cell face for the current cell
     int fcorners_start = 0; // index to first cell corner for current cell
 
-    //cout << "Starting assembly" << endl;
+    // cout << "Starting assembly" << endl;
     for (int c = 0; c != num_cells; ++c) {
         // computing local stiffness matrix, writing its entries into the global matrix
         calculate_stress_3D_local(points,
@@ -1834,13 +1833,12 @@ compute_stress_3D(const double* const points,
                                   num_cell_faces[c],
                                   young[c],
                                   poisson[c],
-                                  disp,// global displacement
+                                  disp, // global displacement
                                   c,
                                   stress[c],
                                   stressmat,
                                   do_matrix,
-                                  do_stress
-            );
+                                  do_stress);
         fcorners_start += accumulate(&num_face_corners[cf_ix], &num_face_corners[cf_ix + num_cell_faces[c]], 0);
         cf_ix += num_cell_faces[c];
     }
@@ -1871,7 +1869,7 @@ assemble_stiffness_matrix_2D(const double* const points,
     const auto Wr = compute_Wr_2D(q);
     const auto Wc = compute_Wc_2D(q);
     const auto D = compute_D_2D(young, poisson);
-    //const auto S = compute_S(Nc, D, num_corners, area, 2);
+    // const auto S = compute_S(Nc, D, num_corners, area, 2);
     const auto ImP = compute_ImP(Nr, Nc, Wr, Wc, 2);
 
     // do the final assembly of matrices, and write result to target
@@ -1907,21 +1905,34 @@ assemble_stiffness_matrix_3D(const double* const points,
         return reindex.find(I)->second;
     });
 
-    double volume;                                    // computed in 'compute_cell_geometry' below
-    vector<double> outward_normals, face_centroids;   // computed in 'compute_cell_geometry' below
-    array<double, 3> star_point;                      // computed in 'compute_cell_geometry' below
-    compute_cell_geometry(&corners_loc[0], num_corners, &faces_loc[0], num_face_edges, num_faces,
-                          outward_normals, face_centroids, centroid, star_point, volume);
+    double volume; // computed in 'compute_cell_geometry' below
+    vector<double> outward_normals, face_centroids; // computed in 'compute_cell_geometry' below
+    array<double, 3> star_point; // computed in 'compute_cell_geometry' below
+    compute_cell_geometry(&corners_loc[0],
+                          num_corners,
+                          &faces_loc[0],
+                          num_face_edges,
+                          num_faces,
+                          outward_normals,
+                          face_centroids,
+                          centroid,
+                          star_point,
+                          volume);
 
     // // compute all intermediary matrices
-    const auto q = compute_q_3D(&corners_loc[0], int(corners_loc.size() / 3), &faces_loc[0],
-                                num_face_edges, num_faces, volume, outward_normals);
+    const auto q = compute_q_3D(&corners_loc[0],
+                                int(corners_loc.size() / 3),
+                                &faces_loc[0],
+                                num_face_edges,
+                                num_faces,
+                                volume,
+                                outward_normals);
     const auto Nr = compute_Nr_3D(&corners_loc[0], num_corners);
     const auto Nc = compute_Nc_3D(&corners_loc[0], num_corners);
     const auto Wr = compute_Wr_3D(q);
     const auto Wc = compute_Wc_3D(q);
     const auto D = compute_D_3D(young, poisson);
-    //const auto S = compute_S(Nc, D, num_corners, volume, 3);
+    // const auto S = compute_S(Nc, D, num_corners, volume, 3);
     const auto ImP = compute_ImP(Nr, Nc, Wr, Wc, 3);
 
     // // do the final assembly of matrices, and write result to target
@@ -1936,13 +1947,12 @@ calculate_stress_3D_local(const double* const points,
                           const int num_faces,
                           const double young,
                           const double poisson,
-                          const std::vector<double>& disp,/// global displacement
+                          const std::vector<double>& disp, /// global displacement
                           const int cell,
-                          std::array<double,6>& stress,
+                          std::array<double, 6>& stress,
                           vector<tuple<int, int, double>>& stressmat,
                           bool do_matrix,
-                          bool do_stress
-    )
+                          bool do_stress)
 // ----------------------------------------------------------------------------
 {
     array<double, 3> centroid;
@@ -1962,65 +1972,78 @@ calculate_stress_3D_local(const double* const points,
         return reindex.find(I)->second;
     });
 
-    double volume;                                    // computed in 'compute_cell_geometry' below
-    vector<double> outward_normals, face_centroids;   // computed in 'compute_cell_geometry' below
-    array<double, 3> star_point;                      // computed in 'compute_cell_geometry' below
-    compute_cell_geometry(&corners_loc[0], num_corners, &faces_loc[0], num_face_edges, num_faces,
-                          outward_normals, face_centroids, centroid, star_point, volume);
+    double volume; // computed in 'compute_cell_geometry' below
+    vector<double> outward_normals, face_centroids; // computed in 'compute_cell_geometry' below
+    array<double, 3> star_point; // computed in 'compute_cell_geometry' below
+    compute_cell_geometry(&corners_loc[0],
+                          num_corners,
+                          &faces_loc[0],
+                          num_face_edges,
+                          num_faces,
+                          outward_normals,
+                          face_centroids,
+                          centroid,
+                          star_point,
+                          volume);
 
     // // compute all intermediary matrices
-    const auto q = compute_q_3D(&corners_loc[0], int(corners_loc.size() / 3), &faces_loc[0],
-                                num_face_edges, num_faces, volume, outward_normals);
-    //const auto Nr = compute_Nr_3D(&corners_loc[0], num_corners);
-    //const auto Nc = compute_Nc_3D(&corners_loc[0], num_corners);
-    //const auto Wr = compute_Wr_3D(q);
+    const auto q = compute_q_3D(&corners_loc[0],
+                                int(corners_loc.size() / 3),
+                                &faces_loc[0],
+                                num_face_edges,
+                                num_faces,
+                                volume,
+                                outward_normals);
+    // const auto Nr = compute_Nr_3D(&corners_loc[0], num_corners);
+    // const auto Nc = compute_Nc_3D(&corners_loc[0], num_corners);
+    // const auto Wr = compute_Wr_3D(q);
 
     const int dim = 3;
-    //assert(dim == 2 || dim == 3);
+    // assert(dim == 2 || dim == 3);
     const int lsdim = (dim == 2) ? 3 : 6; // dimension of "linear strain space"
     const int totdim = dim * num_corners; // total number of unknowns
     const auto Wc = compute_Wc_3D(q);
-    std::vector<double> matrix(lsdim*totdim,0.0);
-    if(do_stress){
+    std::vector<double> matrix(lsdim * totdim, 0.0);
+    if (do_stress) {
         const auto D = compute_D_3D(young, poisson);
         // compute stiffness matrix components
         const auto DWct = matmul(&D[0], lsdim, lsdim, false, &Wc[0], totdim, lsdim, true);
         matrix = DWct;
-    }else{
-        for(int i = 0; i < lsdim; ++i){
-            for(int j = 0; j < totdim; ++ j){
-                matrix[i*totdim+j] =Wc[j*lsdim+i];
+    } else {
+        for (int i = 0; i < lsdim; ++i) {
+            for (int j = 0; j < totdim; ++j) {
+                matrix[i * totdim + j] = Wc[j * lsdim + i];
             }
         }
     }
 
     std::vector<double> local_disp;
-    local_disp.resize(indexing.size()*3);
+    local_disp.resize(indexing.size() * 3);
     std::vector<int> global_index;
-    global_index.resize(indexing.size()*3);
-    for(size_t i = 0; i < indexing.size(); ++i){
-        for (size_t d = 0; d != 3; ++d){
-            local_disp[3*i+ d] = disp[3*indexing[i] + d];
-            global_index[3*i+ d] = 3*indexing[i] + d;
+    global_index.resize(indexing.size() * 3);
+    for (size_t i = 0; i < indexing.size(); ++i) {
+        for (size_t d = 0; d != 3; ++d) {
+            local_disp[3 * i + d] = disp[3 * indexing[i] + d];
+            global_index[3 * i + d] = 3 * indexing[i] + d;
         }
     }
-    for(int i=0; i < lsdim; ++i){
-        for(int j=0; j < totdim; ++j){
-            stress[i] += matrix[i*totdim + j]*local_disp[j];
-            if(do_matrix){
-                int I = lsdim*cell+i;
+    for (int i = 0; i < lsdim; ++i) {
+        for (int j = 0; j < totdim; ++j) {
+            stress[i] += matrix[i * totdim + j] * local_disp[j];
+            if (do_matrix) {
+                int I = lsdim * cell + i;
                 int J = global_index[j];
-                double val = matrix[i*totdim + j];
-                if(i>2 && do_stress){
-                    val /=2.0;
+                double val = matrix[i * totdim + j];
+                if (i > 2 && do_stress) {
+                    val /= 2.0;
                 }
                 stressmat.push_back(tuple<int, int, double> {I, J, val});
             }
         }
     }
-    if(do_stress){
-        for(int i = 3; i<lsdim; ++i){
-            stress[i] /=2;
+    if (do_stress) {
+        for (int i = 3; i < lsdim; ++i) {
+            stress[i] /= 2;
         }
     }
 }
@@ -2033,11 +2056,14 @@ matprint(const double* data, const int r, const int c, bool transposed, const do
     const pair<int, int> stride = transposed ? make_pair(1, c) : make_pair(c, 1);
 
     for (int i = 0; i != dim.first; ++i)
-      for (int j = 0; j != dim.second; ++j)
-        cout << setw(12) << ((abs(data[i * stride.first + j * stride.second]) <= zthreshold) ? fixed : scientific)
-             << ((abs(data[i * stride.first + j * stride.second]) <= zthreshold) ? setprecision(0) : setprecision(2))
-             << (abs(data[i * stride.first + j * stride.second]) <= zthreshold ? 0 : data[i * stride.first + j * stride.second])
-             << (j == dim.second - 1 ? "\n" : "");
+        for (int j = 0; j != dim.second; ++j)
+            cout << setw(12) << ((abs(data[i * stride.first + j * stride.second]) <= zthreshold) ? fixed : scientific)
+                 << ((abs(data[i * stride.first + j * stride.second]) <= zthreshold) ? setprecision(0)
+                                                                                     : setprecision(2))
+                 << (abs(data[i * stride.first + j * stride.second]) <= zthreshold
+                         ? 0
+                         : data[i * stride.first + j * stride.second])
+                 << (j == dim.second - 1 ? "\n" : "");
 }
 
 // ----------------------------------------------------------------------------
