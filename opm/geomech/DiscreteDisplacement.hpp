@@ -70,6 +70,13 @@ TDDispFS(const Dune::FieldVector<double, 3>& obs,
     disp[2] = disp_tmp.z;
     return disp;
 }
+
+const Dune::FieldVector<double, 6>
+TDStrainFSTri(const Dune::FieldVector<double, 3>& obs,
+              const std::array<Real3, 3>& tri,
+              const Dune::FieldVector<double, 3>& slip,
+              double nu);
+
 template <class Element>
 const Dune::FieldVector<double, 6>
 TDStrainFS(const Dune::FieldVector<double, 3>& obs,
@@ -78,18 +85,10 @@ TDStrainFS(const Dune::FieldVector<double, 3>& obs,
            double nu)
 {
     std::array<Real3, 3> tri = getTri(elem);
-    Real3 obs_tmp = make3(obs[0], obs[1], obs[2]);
-    Real3 slip_tmp = make3(slip[0], slip[1], slip[2]);
-    Real6 strain_tmp = strain_fs(obs_tmp, tri, slip_tmp, nu);
-    Dune::FieldVector<double, 6> strain;
-    strain[0] = strain_tmp.x;
-    strain[1] = strain_tmp.y;
-    strain[2] = strain_tmp.z;
-    strain[3] = strain_tmp.a;
-    strain[4] = strain_tmp.b;
-    strain[5] = strain_tmp.c;
-    return strain;
+    return TDStrainFSTri(obs, tri,slip,nu);
 }
+
+  
 
 double traceSymTensor(const Dune::FieldVector<double,6> symtensor);
 
@@ -104,6 +103,7 @@ tractionSymTensor(const Dune::FieldVector<double,6> symtensor, Dune::FieldVector
 
 //assembleMatrix(Dune::DynamicMatrix<Dune::FieldMatrix<double,1,1>>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid)
 void assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);
+void assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);  
 
 Dune::FieldVector<double, 6>
 strain(const Dune::FieldVector<double, 3>& obs,

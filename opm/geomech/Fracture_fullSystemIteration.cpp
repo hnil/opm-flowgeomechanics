@@ -1,3 +1,5 @@
+#include "config.h"
+
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -16,7 +18,7 @@
 #include <dune/istl/preconditioners.hh>
 #include <dune/istl/solvers.hh>
 
-#include "config.h"
+
 #include <opm/common/ErrorMacros.hpp>
 #include <opm/common/TimingMacros.hpp>
 #include <opm/geomech/Fracture.hpp>
@@ -379,9 +381,13 @@ Fracture::fullSystemIteration(const double tol,const int nlin_iteration)
     const std::vector<int> closed_cells = identify_closed(fractureMatrix(), x, rhs[_0], numWellEquations());
     //dump_vector(closed_cells, debug_filename("closed_cells_").c_str());
     //dump_vector(closed_cells, "closed_cells", true);
-    const auto A = modified_fracture_matrix(fractureMatrix(), closed_cells);
-    //A_.reset(new FMatrix(modified_fracture_matrix(fractureMatrix(), closed_cells)));
-    //auto& A = *A_;
+    //const auto A = modified_fracture_matrix(fractureMatrix(), closed_cells);
+    bool closed_cells_changed = true; // NB need to find out when this is need
+    bool update_mech_matrix = nlin_iteration > 0 || closed_cells_changed;
+    if(update_mech_matrix){
+      A_.reset(new FMatrix(modified_fracture_matrix(fractureMatrix(), closed_cells)));
+    }
+    auto& A = *A_;
 
     // also modify right hand side for closed cells
     for (size_t i = 0; i != closed_cells.size(); ++i)
@@ -406,12 +412,22 @@ Fracture::fullSystemIteration(const double tol,const int nlin_iteration)
     // setup the full system
     const auto& M = *pressure_matrix_;
     const auto& C = *coupling_matrix_;
-    const auto I = makeIdentity(A.N(), numWellEquations(), 1, closed_cells);
-    //I_.reset(new SMatrix(makeIdentity(A.N(), numWellEquations(), 1, closed_cells))); 
-    // system Jacobian (with cross term)  @@ should S be included as a member variable of Fracture?
-    SystemMatrix S {{A, I}, // mechanics system (since A is negative, we leave I positive here)
-                    {C, M}}; // flow system
+    //const auto I = makeIdentity(A.N(), numWellEquations(), 1, closed_cells);
+    if(update_mech_matrix){
+      I_.reset(new SMatrix(makeIdentity(A.N(), numWellEquations(), 1, closed_cells)));
+    }
+    const auto& I = *I_;
 
+    // NB need to se how to modify this matrix as litle as possible and change only the part
+    // of preconditioner need 
+    // system Jacobian (with cross term)  @@ should S be included as a member variable of Fracture?
+    S_.reset(new SystemMatrix({{A, I},// mechanics system (since A is negative, we leave I positive here)
+                               {C, M}})); // flow system
+
+    //SystemMatrix S = {{A, I},// mechanics system (since A is negative, we leave I positive here)
+    //                  {C, M}};
+    auto& S = *S_;
+    
     // system equations
     SystemMatrix S0 = S;
     S0[_1][_0] = 0; // the equations themselves have no cross term

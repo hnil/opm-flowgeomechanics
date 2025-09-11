@@ -286,7 +286,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
 
         // solve flow-mechanical system
         const int nlin_verbosity = prm_.get<double>("solver.verbosity");
-        while (!fullSystemIteration(tol) && iter++ < max_iter) {
+        while (!fullSystemIteration(tol,iter) && iter++ < max_iter) {
             if (nlin_verbosity > 1) {
                 std::cout << "Iteration: " << iter << std::endl;
             }
@@ -407,7 +407,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                                                        fsmap, level, point_wise);
             
             int iter = 0;
-            while (!fullSystemIteration(tol) && iter++ < max_iter) {
+            while (!fullSystemIteration(tol,iter) && iter++ < max_iter) {
             };
             std::cout << "Iterations needed: " << iter << std::endl;
 
@@ -493,7 +493,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 // solve flow-mechanical system
                 int iter = 0;
                 // open file "width" for appending data
-                while (!fullSystemIteration(tol) && iter++ < max_iter) {
+                while (!fullSystemIteration(tol,iter) && iter++ < max_iter) {
                     // @@@@
                     // auto fw = make_vector(fracture_width_);
                     // auto fp = make_vector(fracture_pressure_, fracture_pressure_.size()-1);

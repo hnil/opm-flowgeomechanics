@@ -36,6 +36,24 @@
 #include <dune/grid/yaspgrid.hh>
 #include <dune/grid/yaspgrid/partitioning.hh>
 
+// for system solve
+#include <fstream>
+#include <functional>
+#include <iostream>
+#include <string>
+#include <tuple>
+#include <vector>
+#include <fstream>
+
+#include <dune/common/indices.hh>
+#include <dune/common/typetraits.hh>
+#include <dune/common/fmatrix.hh> // Dune::FieldMatrix
+#include <dune/istl/bcrsmatrix.hh> // Dune::BCRSMatrix
+#include <dune/istl/bvector.hh> // Dune::BlockVector
+#include <dune/istl/multitypeblockvector.hh>
+#include <dune/istl/preconditioners.hh>
+#include <dune/istl/solvers.hh>
+#include <opm/geomech/FractureMechanicsPreconditioner.hpp>
 // for linear solve
 #include <opm/models/io/vtkmultiwriter.hh>
 #include <opm/models/utils/propertysystem.hh>
@@ -289,7 +307,7 @@ private:
     double normalFractureTraction(size_t ix) const;
 
     // one nonlinear iteration of fully coupled system.  Returns 'true' if converged
-  bool fullSystemIteration(const double tol,const int iteration = 0);
+  bool fullSystemIteration(const double tol,const int iteration);
 
     void assembleFractureMatrix() const;
     std::vector<double> stressIntensityK1() const;
@@ -359,12 +377,12 @@ private:
     // for coupled solve
   // using SMatrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>; // sparse matrix
   //using FMatrix = Dune::DynamicMatrix<double>; 
-    // using SystemMatrix = Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<FMatrix, SMatrix>,
-    //                                             Dune::MultiTypeBlockVector<SMatrix, SMatrix>>;
-    // std::unique_ptr<SystemMatrix> S_;
-    //std::unique_ptr<FMatrix> A_; // system matrix without coupling terms    
+    using SystemMatrix = Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<FMatrix, SMatrix>,
+                                                     Dune::MultiTypeBlockVector<SMatrix, SMatrix>>;
+    std::unique_ptr<SystemMatrix> S_;
+    std::unique_ptr<FMatrix> A_; // system matrix without coupling terms    
     //std::unique_ptr<SMatrix> C_; // system matrix without coupling terms    
-    //std::unique_ptr<SMatrix> I_; // system matrix without coupling terms    
+    std::unique_ptr<SMatrix> I_; // system matrix without coupling terms    
   //std::unique_ptr<SMatrix> M_; // system matrix without coupling terms
     // using SystemOperator = Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP>;
     // std::unique_ptr<SystemOperator> S_linop_;

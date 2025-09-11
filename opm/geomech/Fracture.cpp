@@ -1465,7 +1465,7 @@ void Fracture::assembleFractureMatrix() const {
     }
     fracture_matrix_->resize(nc,nc);
     *fracture_matrix_ = 0.0;
-    ddm::assembleMatrix(*fracture_matrix_,E_, nu_,*grid_);
+    ddm::assembleMatrix_fast(*fracture_matrix_,E_, nu_,*grid_);
 }
 
 void Fracture::printPressureMatrix() const // debug purposes
