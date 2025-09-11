@@ -7,7 +7,7 @@ Module: opm-flowgeomechanics
 Description: Simulators and utilities for automatic differentiation
 Version: 2025.10-pre
 Label: 2025.10-pre
-Maintainer: xxxx
-MaintainerName:xxxx
+Maintainer: HalvorMoll.Nilsen@sintef.no
+MaintainerName: Halvor M. Nilsen
 Url: http://opm-project.org
 Depends: dune-istl (>= 2.9) opm-common opm-grid opm-simulators opm-upscaling

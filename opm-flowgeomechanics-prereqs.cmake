@@ -2,8 +2,6 @@
 set (opm-flowgeomechanics_CONFIG_VAR
   HAVE_OPM_GRID
   HAVE_PTHREAD
-  HAVE_EWOMS
-  HAVE_ERT
   HAVE_MPI
   HAVE_PETSC
   HAVE_SUITESPARSE_UMFPACK_H
@@ -50,4 +48,4 @@ set (opm-flowgeomechanics_DEPS
   "Tracy"
   )
 
-find_package_deps(opm-flowgeomech)
+find_package_deps(opm-flowgeomechanics)

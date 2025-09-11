@@ -8,9 +8,9 @@
 #       project. Most likely you are interested in editing one of these   #
 #       files instead:                                                    #
 #                                                                         #
-#       dune.module                              Name and version number  #
-#       CMakeLists_files.cmake                   Path of source files     #
-#       cmake/Modules/${project}-prereqs.cmake   Dependencies             #
+#       dune.module                Name and version number                #
+#       CMakeLists_files.cmake     Path of source files                   #
+#       ${project}-prereqs.cmake   Dependencies                           #
 #                                                                         #
 ###########################################################################
 
@@ -19,12 +19,13 @@ project(opm-flowgeomechanics C CXX)
 
 cmake_minimum_required(VERSION 3.15)
 
+set(USE_OPENMP_DEFAULT OFF) # Use of OpenMP is considered experimental
+
 option(SIBLING_SEARCH "Search for other modules in sibling directories?" ON)
-set( USE_OPENMP_DEFAULT OFF ) # Use of OpenMP is considered experimental
 option(USE_TRACY_PROFILER "Enable tracy profiling" OFF)
 option(USE_HYPRE "Use the Hypre library for linear solvers?" OFF)
+
 # The following was copied from CMakeLists.txt in opm-common.
-# TODO: factor out the common parts in opm-common and opm-simulator as a cmake module
 
 if(SIBLING_SEARCH AND NOT opm-common_DIR)
 	# guess the sibling dir
@@ -47,6 +48,7 @@ if(SIBLING_SEARCH AND NOT opm-common_DIR)
 		endif()
 	endif()
 endif()
+
 if(opm-common_DIR AND NOT IS_DIRECTORY ${opm-common_DIR})
 	message(WARNING "Value ${opm-common_DIR} passed to variable"
 		" opm-common_DIR is not a directory")
@@ -65,7 +67,6 @@ if(USE_HYPRE AND USE_MPI)
   find_package(HYPRE)
   if(HYPRE_FOUND)
     set(HAVE_HYPRE 1)
-    ##list(APPEND opm-flowgeomech_LIBRARIES HYPRE::HYPRE)
   else()
     message(WARNING "Hypre requested but not found. Continuing without Hypre support.")
     set(USE_HYPRE OFF)
@@ -76,14 +77,15 @@ elseif(USE_HYPRE)
   set(HYPRE_FOUND OFF)
 endif()
 
-
-# not the same location as most of the other projects? this hook overrides
+# not the same location as most of the other projects? this hook
+# overrides
 macro (dir_hook)
 endmacro (dir_hook)
 
-# project information is in dune.module. Read this file and set variables.
-# we cannot generate dune.module since it is read by dunecontrol before
-# the build starts, so it makes sense to keep the data there then.
+# project information is in dune.module. Read this file and set
+# variables.  we cannot generate dune.module since it is read by
+# dunecontrol before the build starts, so it makes sense to keep the
+# data there then.
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/Modules)
 include (OpmInit)
 
@@ -96,27 +98,18 @@ include(Findopm-tests)
 # with the find module
 include ("${project}-prereqs")
 
-
-#find_package(amgcl)
-
-
-
-# read the list of components from this file (in the project directory);
-# it should set various lists with the names of the files to include
+# read the list of components from this file (in the project
+# directory); it should set various lists with the names of the files
+# to include
 include (CMakeLists_files.cmake)
 
 macro (config_hook)
 	opm_need_version_of ("dune-common")
 	opm_need_version_of ("dune-istl")
 	if(dune-fem_FOUND)
-			opm_need_version_of ("dune-fem")
+		opm_need_version_of ("dune-fem")
 	endif()
 	opm_need_version_of ("opm-simulators")
-	if(NOT fmt_FOUND)
-		add_definitions(-DFMT_HEADER_ONLY)
-		list(APPEND EXTRA_INCLUDES SYSTEM ${PROJECT_SOURCE_DIR}/external/fmtlib/include)
-	endif()
-	include_directories(${EXTRA_INCLUDES})
 
 	if(USE_TRACY_PROFILER AND Tracy_FOUND)
 		set(USE_TRACY 1)
@@ -148,311 +141,153 @@ endmacro (files_hook)
 macro (tests_hook)
 endmacro (tests_hook)
 
-
 # all setup common to the OPM library modules is done here
 include (OpmLibMain)
 
 include(OpmBashCompletion)
 
+target_link_libraries(opmflowgeomechanics
+	PUBLIC
+		opmupscaling
+		opmsimulators
+)
+
+if(HAVE_HYPRE)
+	target_link_libraries(opmflowgeomechanics
+		PUBLIC
+			HYPRE::HYPRE
+	)
+endif()
+
 add_library(moduleVersionGeoMech OBJECT opm/simulators/utils/moduleVersion.cpp)
 set_property(TARGET moduleVersionGeoMech PROPERTY POSITION_INDEPENDENT_CODE ON)
+target_include_directories(moduleVersionGeoMech PRIVATE "${PROJECT_BINARY_DIR}")
 
-add_library(vem OBJECT opm/geomech/vem/vem.cpp opm/geomech/vem/vemutils.cpp)
-add_library(fracture OBJECT
-	opm/geomech/Fracture.cpp
-	opm/geomech/FractureModel.cpp
-	opm/geomech/FractureWell.cpp
-	opm/geomech/GeometryHelpers.cpp
-	opm/geomech/CutDe.cpp
-	opm/geomech/DiscreteDisplacement.cpp
-	opm/geomech/coupledsolver.cpp
-	opm/geomech/param_interior.cpp
-	opm/geomech/GridStretcher.cpp
-	opm/geomech/RegularTrimesh.cpp
-	opm/geomech/Fracture_fullSystemIteration.cpp
-	opm/geomech/FractureMechanicsPreconditioner.cpp
-	examples/FlexibleSolverMech.cpp)
-if(HAVE_HYPRE)	
-	target_link_libraries(fracture HYPRE::HYPRE)
-endif()
-# target_link_libraries( vem PUBLIC Tracy::TracyClient)
-# Strictly we only depend on the update-version target,
-# but this is not exposed in a super-build.
-#add_dependencies(moduleVersion opmsimulators)
+# Very strictly speaking, moduleVersionGeoMech depends only on the
+# custom "update-version" target from OpmLibMain since it uses the
+# generated file "${PROJECT_BINARY_DIR}/project-verion.h" as an input.
+# However, "update-version" is not available in the "super build"
+# setup, so we instead make sure that opmflowgeomechanics is fully
+# built before we build moduleVersionGeoMech.
+add_dependencies(moduleVersionGeoMech opmflowgeomechanics)
+
 set(CMAKE_PROJECT_NAME "${PROJECT_NAME}")
 add_custom_target(opm-flowgeomechanics_prepare)
 
-# opm_add_test(flow_experimental
-#   ONLY_COMPILE
-#   ALWAYS_ENABLE
-#   DEPENDS opmsimulators
-#   LIBRARIES opmsimulators
-#   SOURCES
-#   examples/flow_experimental.cpp
-#   $<TARGET_OBJECTS:moduleVersionGeoMech>
-# )
-# target_link_libraries(flow_blackoil_tracy Tracy::TracyClient)
-
-opm_add_test(flow_geomech
-	ONLY_COMPILE
-	ALWAYS_ENABLE
-	DEPENDS opmsimulators opmupscaling
-	LIBRARIES opmsimulators opmupscaling vem fracture
-	SOURCES
-	examples/flow_geomech.cpp examples/FlexibleSolverMech.cpp
-	$<TARGET_OBJECTS:moduleVersionGeoMech>
+add_executable(flow_geomech
+	examples/flow_geomech.cpp
 )
+target_link_libraries(flow_geomech
+	PUBLIC
+		opmflowgeomechanics
+	PRIVATE
+		moduleVersionGeoMech
+)
+
 if(USE_TRACY_PROFILER AND Tracy_FOUND)
-	target_link_libraries(flow_geomech Tracy::TracyClient)
+	target_link_libraries(flow_geomech
+		PRIVATE
+			Tracy::TracyClient
+	)
 endif()
 
-opm_add_test(flow_energy_geomech
-	ONLY_COMPILE
-	ALWAYS_ENABLE
-	DEPENDS opmsimulators opmupscaling
-	LIBRARIES opmsimulators opmupscaling vem fracture
-	SOURCES
-	examples/flow_energy_geomech.cpp examples/FlexibleSolverMech.cpp
-	$<TARGET_OBJECTS:moduleVersionGeoMech>
+add_executable(flow_energy_geomech
+	examples/flow_energy_geomech.cpp
 )
+target_link_libraries(flow_energy_geomech
+	PUBLIC
+		opmflowgeomechanics
+	PRIVATE
+		moduleVersionGeoMech
+)
+
 if(USE_TRACY_PROFILER AND Tracy_FOUND)
-	target_link_libraries(flow_energy_geomech Tracy::TracyClient)
+	target_link_libraries(flow_energy_geomech
+		PRIVATE
+			Tracy::TracyClient
+	)
 endif()
 
-opm_add_test(flow_energy_geomech_polygrid
-	ONLY_COMPILE
-	ALWAYS_ENABLE
-	DEPENDS opmsimulators opmupscaling
-	LIBRARIES opmsimulators opmupscaling vem fracture
-	SOURCES
-	examples/flow_energy_geomech_polygrid.cpp examples/FlexibleSolverMech.cpp
-	$<TARGET_OBJECTS:moduleVersionGeoMech>
-)
-if(USE_TRACY_PROFILER AND Tracy_FOUND)
-	target_link_libraries(flow_energy_geomech_polygrid Tracy::TracyClient)
-endif()
-
-opm_add_test(test_elasticity
-	ONLY_COMPILE
-	ALWAYS_ENABLE
-	DEPENDS opmsimulators opmupscaling
-	LIBRARIES opmsimulators opmupscaling vem
-	SOURCES
-	examples/test_elasticity.cpp examples/FlexibleSolverMech.cpp
-	$<TARGET_OBJECTS:moduleVersionGeoMech>
-)
-if(USE_TRACY_PROFILER AND Tracy_FOUND)
-	target_link_libraries(test_elasticity Tracy::TracyClient)
-endif()
-
-opm_add_test(padmodel
-	ONLY_COMPILE
-	ALWAYS_ENABLE
-	DEPENDS opmsimulators
-	LIBRARIES opmsimulators
-	SOURCES
+add_executable(padmodel
 	examples/padmodel.cpp
-	$<TARGET_OBJECTS:moduleVersionGeoMech>
+)
+target_link_libraries(padmodel
+	PUBLIC
+		opmsimulators
 )
 
-
-opm_add_test(test_grid
-	ONLY_COMPILE
-	ALWAYS_ENABLE
-	DEPENDS opmsimulators opmupscaling
-	LIBRARIES opmsimulators opmupscaling
-	SOURCES
-	examples/test_grid.cpp
-	$<TARGET_OBJECTS:moduleVersionGeoMech>
+add_executable(test_foamgrid
+	examples/test_foamgrid.cpp
+)
+target_link_libraries(test_foamgrid
+	PUBLIC
+		opmsimulators opmupscaling
 )
 
-opm_add_test(test_parallelgrid
-	ONLY_COMPILE
-	ALWAYS_ENABLE
-	DEPENDS opmsimulators opmupscaling
-	LIBRARIES opmsimulators opmupscaling
-	SOURCES
-	examples/test_parallelgrid.cpp
-	$<TARGET_OBJECTS:moduleVersionGeoMech>
-)
-opm_add_test(test_parallelgrid_grdecl
-	ONLY_COMPILE
-	ALWAYS_ENABLE
-	DEPENDS opmsimulators opmupscaling
-	LIBRARIES opmsimulators opmupscaling
-	SOURCES
-	examples/test_parallelgrid_grdecl.cpp
-	$<TARGET_OBJECTS:moduleVersionGeoMech>
-)
-if(USE_TRACY_PROFILER AND Tracy_FOUND)
-	target_link_libraries(test_grid Tracy::TracyClient)
-endif()
-
-
-opm_add_test(test_vem_elements
-	ONLY_COMPILE
-	ALWAYS_ENABLE
-	DEPENDS opmsimulators opmupscaling
-	LIBRARIES opmsimulators opmupscaling vem
-	SOURCES
+add_executable(test_vem_elements
 	examples/test_vem_elements.cpp
-	$<TARGET_OBJECTS:moduleVersionGeoMech>
+)
+target_link_libraries(test_vem_elements
+	PUBLIC
+		opmflowgeomechanics
 )
 if(USE_TRACY_PROFILER AND Tracy_FOUND)
-	target_link_libraries(test_vem_elements Tracy::TracyClient)
+	target_link_libraries(test_vem_elements
+		PRIVATE
+			Tracy::TracyClient
+	)
 endif()
 
-opm_add_test(test_vem_assembly
-	ONLY_COMPILE
-	ALWAYS_ENABLE
-	DEPENDS opmsimulators opmupscaling
-	LIBRARIES opmsimulators opmupscaling vem
-	SOURCES
-	examples/test_vem_assembly.cpp
-	$<TARGET_OBJECTS:moduleVersionGeoMech>
-)
-if(USE_TRACY_PROFILER AND Tracy_FOUND)
-	target_link_libraries(test_vem_assembly Tracy::TracyClient)
-endif()
-
-
-#opm_add_test(testpdelab
-#	 ONLY_COMPILE
-#	 ALWAYS_ENABLE
-#	 DEPENDS opmsimulators opmupscaling
-#	 LIBRARIES opmsimulators opmupscaling
-#	 SOURCES
-#	 examples/testpdelab.cpp
-#	 $<TARGET_OBJECTS:moduleVersionGeoMech>
+#add_executable(test_vem_assembly
+#	examples/test_vem_assembly.cpp
 #)
-
-
-opm_add_test(test_foamgrid
-	 ONLY_COMPILE
-	 ALWAYS_ENABLE
-	 DEPENDS opmsimulators opmupscaling
-	 LIBRARIES opmsimulators opmupscaling
-	 SOURCES
-	 examples/test_foamgrid.cpp
-	 $<TARGET_OBJECTS:moduleVersionGeoMech>
-	 )
-
-
-#opm_add_test(test_fracture
-#	 ONLY_COMPILE
-#	 ALWAYS_ENABLE
-#	 DEPENDS opmsimulators opmupscaling
-#	 LIBRARIES opmsimulators opmupscaling
-#	 SOURCES
-#	 examples/test_fracture.cpp
-#	 $<TARGET_OBJECTS:moduleVersionGeoMech>
+#target_link_libraries(test_vem_assembly
+#	PUBLIC
+#		opmflowgeomechanics
 #)
+#if(USE_TRACY_PROFILER AND Tracy_FOUND)
+#	target_link_libraries(test_vem_assembly
+#		PRIVATE
+#			Tracy::TracyClient
+#	)
+#endif()
 
-opm_add_test(plot_reservoir_vtk
-	 ONLY_COMPILE
-	 ALWAYS_ENABLE
-	 DEPENDS opmsimulators opmupscaling
-	 LIBRARIES opmsimulators opmupscaling fracture
-	 SOURCES
-	 examples/plot_reservoir_vtk.cpp
-	 $<TARGET_OBJECTS:moduleVersionGeoMech>
+add_executable(paramtest
+	examples/paramtest.cpp
+)
+target_link_libraries(paramtest
+	PUBLIC
+		opmflowgeomechanics
 )
 
-opm_add_test(single_fracture_sim
-	 ONLY_COMPILE
-	 ALWAYS_ENABLE
-	 DEPENDS opmsimulators opmupscaling
-	 LIBRARIES opmsimulators opmupscaling fracture
-	 SOURCES
-	 examples/single_fracture_sim.cpp
-	 $<TARGET_OBJECTS:moduleVersionGeoMech>
+add_executable(test_trimesh
+	examples/test_trimesh.cpp
+)
+target_link_libraries(test_trimesh
+	PUBLIC
+		opmflowgeomechanics
 )
 
-opm_add_test(paramtest
-	 ONLY_COMPILE
-	 ALWAYS_ENABLE
-	 DEPENDS opmsimulators opmupscaling
-	 LIBRARIES opmsimulators opmupscaling fracture
-	 SOURCES
-	 examples/paramtest.cpp
-	 $<TARGET_OBJECTS:moduleVersionGeoMech>
+add_executable(test_gridstretch
+	examples/test_gridstretch.cpp
+)
+target_link_libraries(test_gridstretch
+	PUBLIC
+		opmflowgeomechanics
 )
 
-opm_add_test(test_trimesh
-	 ONLY_COMPILE
-	 ALWAYS_ENABLE
-	 DEPENDS opmsimulators opmupscaling
-	 LIBRARIES opmsimulators opmupscaling fracture
-	 SOURCES
-	 examples/test_trimesh.cpp
-	 $<TARGET_OBJECTS:moduleVersionGeoMech>
+add_executable(coupled_standalone_test
+	examples/coupled_standalone_test.cpp
+)
+target_link_libraries(coupled_standalone_test
+	PUBLIC
+		opmflowgeomechanics
 )
 
-opm_add_test(test_gridstretch
-	 ONLY_COMPILE
-	 ALWAYS_ENABLE
-	 DEPENDS opmsimulators opmupscaling
-	 LIBRARIES opmsimulators opmupscaling fracture
-	 SOURCES
-	 examples/test_gridstretch.cpp
-	 $<TARGET_OBJECTS:moduleVersionGeoMech>
+add_executable(standalone_sim_test
+	examples/standalone_sim_test.cpp
 )
-
-# opm_add_test(make_test_disk
-#    ONLY_COMPILE
-#		 ALWAYS_ENABLE
-#		 DEPENDS opmsimulators opmupscaling
-#		 LIBRARIES gmsh
-#		 SOURCES
-#		 examples/make_test_disk.cpp
-#		 $<TARGET_OBJECTS:moduleVersionGeoMech>
-# )
-
-opm_add_test(coupled_standalone_test
-	 ONLY_COMPILE
-	 ALWAYS_ENABLE
-	 DEPENDS opmsimulators opmupscaling
-	 LIBRARIES opmsimulators opmupscaling fracture
-	 SOURCES
-	 examples/coupled_standalone_test.cpp
-	 $<TARGET_OBJECTS:moduleVersionGeoMech>
+target_link_libraries(standalone_sim_test
+	PUBLIC
+		opmflowgeomechanics
 )
-
-opm_add_test(standalone_sim_test
-	 ONLY_COMPILE
-	 ALWAYS_ENABLE
-	 DEPENDS opmsimulators opmupscaling
-	 LIBRARIES opmsimulators opmupscaling fracture gmsh
-	 SOURCES
-	 examples/standalone_sim_test.cpp
-	 $<TARGET_OBJECTS:moduleVersionGeoMech>
-)
-
-# target_link_libraries(testpdelab Tracy::TracyClient)
-
-
-
-# if(dune-alugrid_FOUND)
-#   if (NOT BUILD_FLOW_ALU_GRID)
-#     set(FLOW_ALUGRID_ONLY_DEFAULT_ENABLE_IF "FALSE")
-#   else()
-#     set(FLOW_ALUGRID_ONLY_DEFAULT_ENABLE_IF "TRUE")
-#   endif()
-
-#   opm_add_test(flow_alugrid
-#     ONLY_COMPILE
-#     ALWAYS_ENABLE
-#     DEFAULT_ENABLE_IF ${FLOW_ALUGRID_ONLY_DEFAULT_ENABLE_IF}
-#     DEPENDS opmsimulators
-#     LIBRARIES opmsimulators
-#     SOURCES
-#     flow/flow_blackoil_alugrid.cpp
-#     $<TARGET_OBJECTS:moduleVersion>)
-#   target_compile_definitions(flow_alugrid PRIVATE USE_ALUGRID)
-# endif()
-
-
-
-# must link libraries after target 'opmsimulators' has been defined
-#install(DIRECTORY doc/man1 DESTINATION ${CMAKE_INSTALL_MANDIR}
-#  FILES_MATCHING PATTERN "*.1")

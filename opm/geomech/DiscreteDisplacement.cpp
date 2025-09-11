@@ -150,9 +150,9 @@ void assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix, const double E, co
     }
     {
       OPM_TIMEBLOCK(AssembleDDMMatrix);
-#ifdef _OPENMP      
+      //#ifdef _OPENMP      
 #pragma omp parallel for
-#endif      
+      //#endif      
     for(int idx1=0; idx1 < nc; ++idx1){
       auto center = centers[idx1];
       auto normal = normals[idx1];
