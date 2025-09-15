@@ -101,10 +101,12 @@ struct FractureProperties
   double height;
   double width;
   double flux;
-  FractureProperties(double height_, double width_, double flux_):
+  double area;
+  FractureProperties(double height_, double width_, double flux_, double area_):
     height(height_),
     width(width_),
-    flux(flux_)
+    flux(flux_),
+    area(area_)
   {
   };
 };
@@ -184,7 +186,7 @@ public:
     Dune::FieldVector<double, 3> disp(Dune::FieldVector<double, 3> obs) const;
 
     template <typename Scalar>
-    void assignGeomechWellState(ConnFracStatistics<Scalar>& stats) const;
+    void assignGeomechWellState(PerfData<Scalar>& perfData) const;
     void setActive(bool active) { active_ = active; }
     bool isActive() const { return active_; }
     std::array<double,2> hightAndWidth() const; 

@@ -14,15 +14,20 @@ FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::Syst
     OPM_TIMEFUNCTION();
     diag_mech_ = prm.get<bool>("diag_mech");
     diag_flow_ = prm.get<bool>("diag_flow");
+    int verbosity = prm.get<bool>("verbosity");
     mech_press_coupling_ = prm.get<bool>("mech_press_coupling", true);
     if (!diag_mech_) {
         OPM_TIMEBLOCK(SetupLuFactorization);
+        if(verbosity>0){
         std::cout << "FractureMechanicsPreconditioner: using full mechanics preconditioner" << std::endl;
+        }
         luM_ = S[_0][_0];
         MyDenseMatrix<double>::luDecomp(luM_);
     }
     if (!diag_flow_) {
+      if(verbosity>0){
         std::cout << "FractureMechanicsPreconditioner: using full flow preconditioner" << std::endl;
+      }
         flowop_
             = std::make_unique<Dune::MatrixAdapter<Opm::SMatrix, Opm::Vector, Opm::Vector>>(S[_1][_1]);
         using FlowSolverType = Dune::FlexibleSolver<FlowOperatorType>;

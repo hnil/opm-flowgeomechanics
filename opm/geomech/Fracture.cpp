@@ -1045,8 +1045,13 @@ Fracture::wellIndices() const
 
 template <typename Scalar>
 void
-Fracture::assignGeomechWellState(ConnFracStatistics<Scalar>& stats) const
+Fracture::assignGeomechWellState(PerfData<Scalar>& perfData) const
 {
+    auto perfPos = std::find(
+    perfData.cell_index.begin(), perfData.cell_index.end(), this->wellInfo().well_cell);
+    const auto perfIx = std::distance(perfData.cell_index.begin(), perfPos);
+    ConnFracStatistics<Scalar> stats = perfData.connFracStatistics[perfIx];
+
     using Quantity = typename ConnFracStatistics<Scalar>::Quantity;
 
     constexpr auto pressIx = static_cast<std::underlying_type_t<Quantity>>(Quantity::Pressure);
@@ -1069,6 +1074,15 @@ Fracture::assignGeomechWellState(ConnFracStatistics<Scalar>& stats) const
 
         stats.addSamplePoint(samplePoint);
     }
+    // 
+    ConnFractureData<Scalar>& frac_prop = perfData.fracture_data;
+    FractureProperties fprop = calculateFractureProperties();
+    // set properties of fracture to structure used in output
+    frac_prop.height[perfIx] = fprop.height;
+    frac_prop.length[perfIx] = fprop.width;
+    frac_prop.area[perfIx] = fprop.area;
+    frac_prop.flux[perfIx] = fprop.flux;
+    
 }
 
 void
@@ -1265,11 +1279,14 @@ Fracture::calculateFractureProperties() const
     std::array<double, 2> dhvec({0.0, 0.0});
     std::array<double, 2> dwvec({0.0, 0.0});
     double total_flux(0);
+    double area(0.0);
     std::vector<double> leak_of_rate = leakOfRate();
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     for (auto& element : Dune::elements(grid_->leafGridView())) {
+      //NB we do not filter on with
         int eIdx = mapper.index(element);
         auto geom = element.geometry();
+        area += geom.volume();
         auto dist = geom.center() - origo_;
         double dh = dist.dot(axis_[0]);
         double dw = dist.dot(axis_[1]);
@@ -1279,7 +1296,7 @@ Fracture::calculateFractureProperties() const
     }
     double height = dhvec[1] - dhvec[0];
     double width = dwvec[1] - dwvec[0];
-    FractureProperties fracprop(height, width, total_flux);
+    FractureProperties fracprop(height, width, total_flux, area);
     return fracprop;
 }
 
@@ -1570,7 +1587,7 @@ Fracture::printMechMatrix() const // debug purposes
 // external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
 //                                              const Dune::PolyhedralGrid<3,3,double>& grid3D);
 
-template void Fracture::assignGeomechWellState(ConnFracStatistics<float>&) const;
-template void Fracture::assignGeomechWellState(ConnFracStatistics<double>&) const;
+template void Fracture::assignGeomechWellState(PerfData<float>& perfData) const;
+template void Fracture::assignGeomechWellState(PerfData<double>& perfData) const;
 
 } // namespace Opm

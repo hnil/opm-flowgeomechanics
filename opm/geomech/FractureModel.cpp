@@ -349,8 +349,8 @@ FractureModel::assignGeomechWellState(WellState<Scalar>& wellState) const
             }
 
             // Possibly just "fracture.wellInfo().perf" instead.
-            const auto perfIx = std::distance(perfData.cell_index.begin(), perfPos);
-            fracture.assignGeomechWellState(perfData.connFracStatistics[perfIx]);
+            //const auto perfIx = std::distance(perfData.cell_index.begin(), perfPos);
+            fracture.assignGeomechWellState(perfData);//.connFracStatistics[perfIx]);
         }
     }
 }
