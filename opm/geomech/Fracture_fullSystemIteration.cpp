@@ -6,7 +6,7 @@
 #include <string>
 #include <tuple>
 #include <vector>
-
+#include <numeric>
 
 #include <dune/common/indices.hh> // needed for _0, _1, etc.
 //
@@ -468,8 +468,11 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     const int verbosity = prm_.get<double>("solver.linsolver.verbosity");
     const int nlin_verbosity = prm_.get<double>("solver.verbosity");
     if (nlin_verbosity > 1) {
-        std::cout << "rhs:  " << rhs[_0].infinity_norm() << " " << rhs[_1].infinity_norm() << std::endl;
-        std::cout << "dx: " << dx[_0].infinity_norm() << " " << dx[_1].infinity_norm() << std::endl;
+      int num_closed_cells = std::accumulate(closed_cells.begin(), closed_cells.end(), 0);
+      std::cout << "Nonlinear iteration: " << nlin_iteration;// << std::endl; 
+      std::cout << " rhs:  " << rhs[_0].infinity_norm() << " " << rhs[_1].infinity_norm();
+      std::cout <<  " closed_cells: " << num_closed_cells;
+      std::cout << std::endl;
     }
     auto psolver = Dune::BiCGSTABSolver<VectorHP>(S_linop,
                                                   precond,
@@ -481,21 +484,19 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         psolver.apply(dx, rhs, iores); // NB: will modify 'rhs'
     }
 
-    if (nlin_verbosity > 1) {
+    if (nlin_verbosity > 2) {
+      
         std::cout << "x:  " << x[_0].infinity_norm() << " " << x[_1].infinity_norm() << std::endl;
         std::cout << "dx: " << dx[_0].infinity_norm() << " " << dx[_1].infinity_norm() << std::endl;
-        // auto rhstmp = rhs;
-        // S0.mmv(x, rhstmp);
-        std::cout << "rhs org:  " << rhs[_0].infinity_norm() << " " << rhs[_1].infinity_norm()
+        std::cout << "rhs after linsolve:  " << rhs[_0].infinity_norm() <<
+          " " << rhs[_1].infinity_norm()
                   << std::endl;
-        // std::cout << "rhs:  " << rhstmp[_0].infinity_norm() << " " << rhstmp[_1].infinity_norm() <<
-        // std::endl;
     }
     // the following is a heuristic way to limit stepsize to stay within convergence radius
     const double damping = prm_.get<double>("solver.damping");
     const double step_fac = damping; // estimate_step_fac(x, dx) * damping;
     // std::cout << "fac: " << step_fac << std::endl;
-    if (nlin_verbosity > 1) {
+    if (nlin_verbosity > 2) {
         std::cout << "fac: " << step_fac << std::endl;
     }
     dx *= step_fac;
@@ -516,9 +517,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     // dump_vector(dx, debug_filename("dx_w_").c_str(), debug_filename("dx_p_").c_str());
     // dump_vector(dx, "dx_w", "dx_p", true);
     x += dx;
-    if (nlin_verbosity > 1) {
-        // std::cout << "after: x:  " << x[_0].infinity_norm() << " " << x[_1].infinity_norm() <<
-        // std::endl;
+    if (nlin_verbosity > 3) {
         std::cout << "after: dx: " << dx[_0].infinity_norm() << " " << dx[_1].infinity_norm()
                   << std::endl;
     }

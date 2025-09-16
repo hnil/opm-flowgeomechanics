@@ -247,5 +247,7 @@ expand_to_criterion(const RegularTrimesh& mesh,
         double threshold, const std::vector<CellRef>& fixed_cells,
         const int target_cellcount, // target number of cells in final mesh
                     const int cellcount_threshold, // target number of cells in initial mesh to expand (start level will be determined by this)
-        const int max_iteration_on_coarse_level);
+        const int max_iteration_on_coarse_level,
+        std::function<bool()> stop_criterion = []() { return false; }
+        );
 } // namespace Opm

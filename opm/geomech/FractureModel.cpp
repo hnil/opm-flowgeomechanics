@@ -88,18 +88,22 @@ makeDefaultFractureParam()
     fracture_param.put("fractureparam.solver.verbosity", 0);
 
     // fracture linear solve
+    fracture_param.put("fractureparam.solver.remap_solution", false);
     fracture_param.put("fractureparam.solver.linsolver.tol", 1e-10);
+    fracture_param.put("fractureparam.solver.area_change_fac", 1.5);
     fracture_param.put("fractureparam.solver.linsolver.atol", 1e-20);
     fracture_param.put("fractureparam.solver.linsolver.max_iter", 1000);
     fracture_param.put("fractureparam.solver.linsolver.verbosity", 0);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.diag_mech", true);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.diag_flow", true);
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.verbosity", 0);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.mech_press_coupling", false);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.type","umfpack"s);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.verbosity",0 );
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.tol",1 );
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.maxiter",1 );
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.preconditioner.type","DILU"s);
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.preconditioner.verbosity",0);
     // reservoir fracture coupling
     fracture_param.put("fractureparam.reservoir.dist", 1e0);
     fracture_param.put("fractureparam.reservoir.calculate_dist", false);

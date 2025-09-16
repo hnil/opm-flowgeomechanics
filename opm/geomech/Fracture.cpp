@@ -1085,6 +1085,20 @@ Fracture::assignGeomechWellState(PerfData<Scalar>& perfData) const
     
 }
 
+bool
+Fracture::expantionMax(const FractureProperties& fprop)
+{
+    FractureProperties fprop_current = calculateFractureProperties();
+    const double area_change_fac = prm_.get<double>("solver.area_change_fac");
+    if (fprop_current.area > area_change_fac * fprop.area) {
+        std::cout << "Fracture area doubled, stopping expansion" << std::endl;
+        return true;
+    } else {
+        return false;
+    }
+    return false;
+}
+
 void
 Fracture::writePressureSystem() const
 {
@@ -1292,6 +1306,10 @@ Fracture::calculateFractureProperties() const
         double dw = dist.dot(axis_[1]);
         updateMaxMinVector(dhvec, dh);
         updateMaxMinVector(dwvec, dw);
+        if(leak_of_rate.size() != numFractureCells()){
+            //std::cout << "Error in leak_of_rate size" << std::endl;
+            continue;
+        }
         total_flux += leak_of_rate[eIdx] * geom.volume();
     }
     double height = dhvec[1] - dhvec[0];

@@ -377,7 +377,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
 
             bool point_wise = true;
             // solve flow-mechanical system
-            bool remap_solution=false;
+            bool remap_solution= prm_.get<bool>("solver.remap_solution");
             if (remap_solution) {
                 for (size_t i = 0; i < fracture_pressure_.size(); ++i) {
                     assert(std::abs(fracture_pressure_[i][0]) < 1e10);
@@ -423,6 +423,12 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             return result;
         };
 
+        const FractureProperties& fprop_before = calculateFractureProperties();
+        auto stop_criterion= [&]() -> bool
+        { 
+          return expantionMax(fprop_before);
+        };
+
         //const double K1max = prm_.get<double>("KMax");
         const double threshold = 1.0;
         const std::vector<CellRef> fixed_cells = well_source_cellref_;
@@ -435,8 +441,9 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                                 fixed_cells,
                                 target_cellcount,
                                 cellcount_threshold,
-                                max_iter_on_same_level);
+                                max_iter_on_same_level, stop_criterion);
 
+                
 
         
         bool any_removed = removeNewZeroWithCells(mesh,cur_level, initial_mesh);

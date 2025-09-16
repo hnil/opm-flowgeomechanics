@@ -1455,7 +1455,9 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
                     const std::vector<CellRef>& fixed_cells,
                     const int target_cellcount,
                     const int cellcount_threshold,
-                    const int max_iter)
+                    const int max_iter,
+                    function<bool()> stop_criterion
+                 )
 {
     OPM_TIMEFUNCTION();
     RegularTrimesh working_mesh = mesh; // make a working copy of the mesh;
@@ -1473,7 +1475,7 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
     // determine starting level
     // const int target_cellcount = 50; // target number of cells in the final mesh
     // const int cellcount_threshold = 4*target_cellcount; // target number of cells in the initial mesh
-    const int max_cellcount = 2000; // maximum number of cells in the final mesh
+    //const int max_cellcount = 2000; // maximum number of cells in the final mesh
 
     auto fixed_on_level = [&fixed_cells](const int level) -> vector<CellRef> {
         if (level == 0) {
@@ -1501,7 +1503,7 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
         cur_level++;
     }
     cout << "---------- Starting propagation at level: " << cur_level << " --------" << endl;
-    while (true) { // keep looping as long as grid need expansion
+    while (!stop_criterion()) { // keep looping as long as grid need expansion
 
         if (DEBUG_DUMP_GRIDS) {
             string filename = "current_grid_" + to_string(DEBUG_GRID_COUNT) + "_"

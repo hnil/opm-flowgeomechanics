@@ -191,6 +191,7 @@ public:
     bool isActive() const { return active_; }
     std::array<double,2> hightAndWidth() const; 
 private:
+   bool  expantionMax(const FractureProperties& fprop);
    bool removeNewZeroWithCells(RegularTrimesh& mesh,int cur_level,const RegularTrimesh& original_mesh) const;
    std::vector<double> redistribute_values(const std::vector<double>& values,
                                         const std::vector<std::vector<CellRef>>& map1,

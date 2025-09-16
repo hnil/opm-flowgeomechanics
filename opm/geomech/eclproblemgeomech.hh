@@ -288,6 +288,10 @@ namespace Opm{
                     }
                     // stress in output on first step maybe wrong i.e. 2*stress;
                     this->geomechModel_.setFirstSolveTrue();// to do full rebuild next time step
+                }else{
+                    // used set this for initial output of stress all other initial values is zero
+                    // which is always calculated relative to initial configuration
+                    this->geomechModel_.setOutputPutStress(initstress_);
                 }
             }
         }

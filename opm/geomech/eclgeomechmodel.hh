@@ -315,7 +315,10 @@ namespace Opm{
                                                 elacticitysolver_.comm());
                     }
         }
-    
+      void setOutputPutStress(const Dune::BlockVector<Dune::FieldVector<double,6> >& initstress){
+            // used at if initial stress not calculated
+            outputstress_ = initstress;
+      }
       void calculateOutputQuantitiesMech(){//bool relative_solve = true){
             OPM_TIMEBLOCK(CalculateOutputQuantitesMech);
             Opm::Elasticity::Vector field;
@@ -502,7 +505,7 @@ namespace Opm{
         }
 
         const SymTensor outputstress(size_t globalIdx) const{
-	  return outputstress_[globalIdx];
+	        return outputstress_[globalIdx];
         }
 
         const SymTensor effstress(size_t globalIdx) const{
