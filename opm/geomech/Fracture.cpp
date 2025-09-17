@@ -242,7 +242,7 @@ Fracture::removeCells()
 
 void
 Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
-                                const Opm::SingleWellState<double>& wellstate)
+                                const Opm::SingleWellState<double,Fracture::IndexTraits>& wellstate)
 {
     OPM_TIMEFUNCTION();
     // potentially remap filtercake thikness if grid has changed

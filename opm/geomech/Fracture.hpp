@@ -60,6 +60,7 @@
 #include <opm/simulators/linalg/FlexibleSolver.hpp>
 #include <opm/simulators/linalg/PropertyTree.hpp>
 #include <opm/simulators/wells/WellState.hpp>
+#include <opm/material/fluidsystems/BlackOilDefaultFluidSystemIndices.hpp>
 #include <dune/istl/matrixmarket.hh>
 
 #include <opm/geomech/GridStretcher.hpp>
@@ -128,6 +129,7 @@ struct RuntimePerforation;
 class Fracture
 {
 public:
+    using IndexTraits = Opm::BlackOilDefaultFluidSystemIndices;
     using Grid = Dune::FoamGrid<2, 3>;
     using Point3D = Dune::FieldVector<double, 3>;
     using Vector = Dune::BlockVector<Dune::FieldVector<double, 1>>;
@@ -159,7 +161,7 @@ public:
     void updateReservoirProperties(const Simulator& simulator, bool init_constant_vals=false,bool update_filtercake=true);
     
     void updateFilterCakeProps(const Opm::WellConnections& connections,
-                              const Opm::SingleWellState<double>& wellstate);    
+                               const Opm::SingleWellState<double,IndexTraits>& wellstate);    
     void initFracturePressureFromReservoir();
     void initFractureStates();
     void initFractureWidth();

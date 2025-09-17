@@ -322,9 +322,9 @@ FractureModel::getExtraWellIndices(const std::string& wellname) const
     return {};
 }
 
-template <typename Scalar>
+template <typename Scalar,typename IndexTraits>
 void
-FractureModel::assignGeomechWellState(WellState<Scalar>& wellState) const
+FractureModel::assignGeomechWellState(WellState<Scalar,IndexTraits>& wellState) const
 {
     const auto nWells = this->wells_.size();
     for (auto i = 0 * nWells; i < nWells; ++i) {
@@ -504,7 +504,10 @@ Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched)
                 seedNormal[1],
                 seedNormal[2],
             };
-            const auto frac_size = Dune::FieldVector<double, 3> {seedSize[0], seedSize[1], seedSize[2]};
+            //const auto frac_size = Dune::FieldVector<double, 3> {seedSize[0], seedSize[1], seedSize[2]};
+            const auto frac_size = Dune::FieldVector<double, 3> {seedSize.verticalExtent(),
+                                                                 seedSize.horizontalExtent(),
+                                                                 seedSize.width()};
             // hack
             prm_.put("config.axis_scale", frac_size[0]); // vertical scale
             // prm_.put("fractureparam.config.axis_scale", frac_size[1]);// horizontal scale
@@ -531,5 +534,5 @@ Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched)
 // Explicit specialisations.  No other code below separator.
 // ===========================================================================
 
-template void Opm::FractureModel::assignGeomechWellState(WellState<float>&) const;
-template void Opm::FractureModel::assignGeomechWellState(WellState<double>&) const;
+template void Opm::FractureModel::assignGeomechWellState(WellState<float,Fracture::IndexTraits>&) const;
+template void Opm::FractureModel::assignGeomechWellState(WellState<double,Fracture::IndexTraits>&) const;

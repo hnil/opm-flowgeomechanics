@@ -27,7 +27,7 @@ namespace Opm {
 
     class ScheduleState;
 
-    template <typename Scalar>
+  template <typename Scalar,typename IndexTraits>
     class WellState;
 } // namespace Opm
 
@@ -123,8 +123,8 @@ public:
     std::vector<RuntimePerforation>
     getExtraWellIndices(const std::string& wellname) const;
 
-    template <typename Scalar>
-    void assignGeomechWellState(WellState<Scalar>& wellState) const;
+    template <typename Scalar,typename IndexTraits>
+    void assignGeomechWellState(WellState<Scalar,IndexTraits>& wellState) const;
 
     bool addPertsToSchedule(){return prm_.get<bool>("addperfs_to_schedule");}
     // probably this should be collected in one loop since all do full loop over fracture ++ well
