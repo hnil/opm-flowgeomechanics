@@ -1,6 +1,6 @@
 #include "config.h"
 #include "FractureMechanicsPreconditioner.hpp"
-#include <StrumpackSparseSolver.hpp>
+//#include <StrumpackSparseSolver.hpp>
 
 namespace Opm
 {
