@@ -90,9 +90,8 @@ int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
                 inside = false;
               }
             }
-            //auto refEl = Dune::referenceElement(geom);
-            //
-            //refEl.checkInside(local)){
+            auto refEl = Dune::ReferenceElements<double, 3>::cube();
+            assert(inside == refEl.checkInside(local));
             if(inside){
               count +=1;
               outcell = cell;
