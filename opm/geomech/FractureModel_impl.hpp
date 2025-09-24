@@ -64,7 +64,7 @@ namespace Opm {
             }
         }
 
-        external::buildBoundingBoxTree(cell_search_tree_, grid);
+        external::buildBoundingBoxTree(cell_search_tree_, cell_seeds_, grid);
     }
 
     template <class TypeTag, class Simulator>

@@ -148,7 +148,7 @@ namespace Opm{
                     //fracturemodel_->addFractures(schedule[reportStepIdx]);
                     fracturemodel_->addFractures(schedule[end_step]);
 
-                    fracturemodel_->updateFractureReservoirCells();
+                    fracturemodel_->updateFractureReservoirCells(grid);
                     fracturemodel_->initReservoirProperties<TypeTag,Simulator>(simulator_);
                     fracturemodel_->updateReservoirAndWellProperties<TypeTag,Simulator>(simulator_);
                     fracturemodel_->initFractureStates();

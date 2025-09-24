@@ -14,7 +14,7 @@ findCloseCellIndices(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, cvf
     return closeCells;
 }
 void
-buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, const Dune::CpGrid& grid)
+buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& entity_seeds, const Dune::CpGrid& grid)
 {
     using GridView = Dune::CpGrid::LeafGridView;
     const auto& gv = grid.leafGridView();
@@ -26,12 +26,14 @@ buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, const Dun
     std::vector<size_t> cellIndicesForBoundingBoxes;
     std::vector<cvf::BoundingBox> cellBoundingBoxes;
 
-    std::array<double, 3> cornerPointArray;
-    cvf::Vec3d cornerPoint;
+    //    std::array<double, 3> cornerPointArray;
+    //cvf::Vec3d cornerPoint;
     using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
     ElementMapper mapper(gv, Dune::mcmgElementLayout()); // used id sets interally
+    entity_seeds.resize(cellCount);
     for (const auto& element : Dune::elements(gv)) {
         int index = mapper.index(element);
+        entity_seeds[index] = element.seed();
         auto geom = element.geometry();
         assert(geom.corners() == 8);
         cvf::BoundingBox cellBB;
@@ -49,6 +51,44 @@ buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, const Dun
     }
     m_cellSearchTree = new cvf::BoundingBoxTree;
     m_cellSearchTree->buildTreeFromBoundingBoxes(cellBoundingBoxes, &cellIndicesForBoundingBoxes);
+    // check bounding box tree
+    for (const auto& element : Dune::elements(gv)) {
+         int index = mapper.index(element);
+        auto geom = element.geometry();
+        //external::cvf::BoundingBox bb;
+        using Vec3d = external::cvf::Vec3d;
+        auto vertex = geom.center();
+        Vec3d point(vertex[0], vertex[1], vertex[2]);
+        //bb.add(point);
+        int cell = external::cellOfPoint(m_cellSearchTree, grid, entity_seeds, point);
+        assert(cell == index);
+    }
+}
+int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
+                const Dune::CpGrid& grid,
+                const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& entity_seed,
+                const cvf::Vec3d& point){
+        external::cvf::BoundingBox bb;
+        bb.add(point);
+        std::vector<size_t> cells = external::findCloseCellIndices(m_cellSearchTree, bb);
+        int count =0;
+        int outcell = -1;
+        for(const auto& cell: cells){
+            auto element = grid.entity(entity_seed[cell]);
+            auto geom = element.geometry();
+            // auto refEl = Dune::referenceElement(geom);
+            // auto local = geom.local(point);
+            // if(refEl.checkInside(local)){
+            //     count +=1;
+            //     outcell = cell;
+            // }
+        }
+     if(outcell>=0 && count ==1){
+        return outcell;
+     }else{
+        assert(false);
+        return -1;
+     }
 }
 
 void

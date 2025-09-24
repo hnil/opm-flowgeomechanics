@@ -100,14 +100,26 @@ namespace Opm
 struct FractureProperties
 {
   double height;
-  double width;
+  double length;
   double flux;
   double area;
-  FractureProperties(double height_, double width_, double flux_, double area_):
+  double WI;
+  double volume;
+  double filter_volume;
+  double avg_width;
+  double avg_filter_width;
+  FractureProperties(double height_, double length_, double flux_, double area_,
+                     double WI_, double volume_, double filter_volume_,
+                     double avg_width_, double avg_filter_width_):
     height(height_),
-    width(width_),
+    length(length_),
     flux(flux_),
-    area(area_)
+    area(area_),
+    WI(WI_),
+    volume(volume_),
+    filter_volume(filter_volume_),
+    avg_width(avg_width_),
+    avg_filter_width(avg_filter_width_)
   {
   };
 };
@@ -135,7 +147,7 @@ public:
     using Vector = Dune::BlockVector<Dune::FieldVector<double, 1>>;
     using Matrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>;
     using DynamicMatrix = Dune::DynamicMatrix<double>;
-  
+    using EntitySeed = Dune::CpGrid::Codim<0>::Entity::EntitySeed;
 
     void init(const std::string& well,
               const int perf,
@@ -151,7 +163,9 @@ public:
     std::string name() const;
     void write(int reportStep = -1) const;
     void writemulti(double time) const;
-    void updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree);
+  void updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
+                            const Dune::CpGrid& grid,
+                            const std::vector<EntitySeed>& entity_seeds);
 
     // solver related
     void updateReservoirProperties();
@@ -161,7 +175,7 @@ public:
     void updateReservoirProperties(const Simulator& simulator, bool init_constant_vals=false,bool update_filtercake=true);
     
     void updateFilterCakeProps(const Opm::WellConnections& connections,
-                               const Opm::SingleWellState<double,IndexTraits>& wellstate);    
+                               const Opm::SingleWellState<double,IndexTraits>& wellstate,double dt);    
     void initFracturePressureFromReservoir();
     void initFractureStates();
     void initFractureWidth();
@@ -170,6 +184,8 @@ public:
 
     template <class TypeTag, class Simulator>
     void solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& cell_search_tree,
+               //const Dune::CpGrid& grid,
+               const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& entity_seeds,
                const Simulator& simulator);
     FractureProperties calculateFractureProperties() const;
     void printPressureMatrix() const; // debug purposes

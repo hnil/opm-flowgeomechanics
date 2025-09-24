@@ -242,7 +242,7 @@ Fracture::removeCells()
 
 void
 Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
-                                const Opm::SingleWellState<double,Fracture::IndexTraits>& wellstate)
+                                const Opm::SingleWellState<double,Fracture::IndexTraits>& wellstate,double dt)
 {
     OPM_TIMEFUNCTION();
     // potentially remap filtercake thikness if grid has changed
@@ -260,7 +260,7 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
     }
 
     const auto& connection = connections.getFromGlobalIndex(wellinfo_.global_index); // probably wrong
-
+    double filtrate_conn = wellstate.filtrate_conc;
     has_filtercake_ = connection.filterCakeActive();
     if (has_filtercake_) {
         auto& filter_cake = connection.getFilterCake();
@@ -290,7 +290,9 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
                               << " with reservoir cell " << res_cell << std::endl;
                     flux = 0.0;
                 }
-                double dh = flux / (area * (1 - filtercake_poro_));
+                double water_rate = flux;
+                double filtrate_volume = water_rate*filtrate_conn* dt; // m3
+                double dh = filtrate_volume / (area * (1 - filtercake_poro_));
                 assert(dh >= 0);
                 filtercake_thikness_[eIdx] += dh;
             }
@@ -749,7 +751,9 @@ Fracture::surfaceMap(double x, double y)
 }
 
 void
-Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree)
+Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
+                               const Dune::CpGrid& grid,
+                               const std::vector<Fracture::EntitySeed>& entity_seeds)
 {
     reservoir_cells_.resize(numFractureCells());
     using GridView = typename Grid::LeafGridView;
@@ -760,65 +764,24 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
     for (auto& element : elements(grid_->leafGridView())) {
         const auto elemIdx = elemMapper.index(element);
         auto geom = element.geometry();
-        external::cvf::BoundingBox bb;
+        //external::cvf::BoundingBox bb;
         using Vec3d = external::cvf::Vec3d;
-        // if(false)
-        // {
-        // Point3D center = geom.center();
-        // double eps = 1e-3;
-        // Vec3d p1(center[0],center[1],center[2]);
-        // external::cvf::Vec3d  p2(center[0]+eps,center[1]+eps,center[2]+eps);
-        // bb.add(p1);
-        // bb.add(p2);
-        // }else
-        {
-            /*
-            std::array<Vec3d, 3> corners;
-            for (int i = 0; i < geom.corners(); ++i) {
-                auto vertex = geom.corner(i);
-                Vec3d point(vertex[0], vertex[1], vertex[2]);
-                bb.add(point);
-            }
-            */
-            // only lock at centroid
-            auto vertex = geom.center();
-            Vec3d point(vertex[0], vertex[1], vertex[2]);
-            bb.add(point);
-        }
-
-        std::vector<size_t> cells = external::findCloseCellIndices(cellSearchTree, bb);
-        if (cells.size() > 0) {
-            reservoir_cells_[elemIdx] = cells[0];
-            if (cells.size() > 1) {
-                // std::vector<HexIntersectionInfo> intersections;
-                // for ( const auto& globalCellIndex : cells )
-                // {
-                //     cvf::Vec3d    hexCorners[8];  //resinsight numbering, see RigCellGeometryTools.cpp
-                //     RigEclipseWellLogExtractor::hexCornersOpmToResinsight( hexCorners,
-                //     globalCellIndex); RigHexIntersectionTools::lineHexCellIntersection( p1, p2,
-                //     hexCorners, globalCellIndex, &intersections );
-                // }
-                tri_divide += 1;
-            }
-        } else {
-            tri_outside += 1;
-            reservoir_cells_[elemIdx] = -1;
-            // std::cout << "Fallback Search" << std::endl;
-            // int cell = Opm::findCell(grid3D,geom.center());
-        }
+        auto vertex = geom.center();
+        Vec3d point(vertex[0], vertex[1], vertex[2]);
+        //bb.add(point);
+        reservoir_cells_[elemIdx]  = external::cellOfPoint(cellSearchTree, grid, entity_seeds, point);
     }
-    std::cout << "For Fracture : " << this->name() << " : " << tri_divide
-              << " triangles should be devided" << std::endl;
-    std::cout << "For Fracture : " << this->name() << " : " << tri_outside << " triangles outside"
-              << std::endl;
-    std::cout << "Total triangles: " << numFractureCells() << std::endl;
     auto it = std::find(reservoir_cells_.begin(), reservoir_cells_.end(), -1);
     auto extended_fractures = prm_.get<bool>("extended_fractures");
     if (!(it == reservoir_cells_.end()) && !(extended_fractures)) {
         std::cout << "Remove fracture outside of model" << std::endl;
         // remove fracture outside of model
         this->removeCells();
-        this->updateReservoirCells(cellSearchTree);
+        this->updateReservoirCells(cellSearchTree, grid, entity_seeds);
+    }else{
+      if(!(it == reservoir_cells_.end())){
+          std::cout << "Warning:: Fracture outside of model" << std::endl;
+      }
     }
 }
 
@@ -1004,6 +967,9 @@ Fracture::wellIndices() const
     res_cells.erase(last, res_cells.end());
     std::vector<double> q_cells(res_cells.size(), 0.0);
     std::vector<double> p_cells(res_cells.size(), 0.0);
+    std::vector<double> mob_cells(res_cells.size(), 0.0);
+    std::vector<double> dens_cells(res_cells.size(), 0.0);
+    std::vector<double> z_cells(res_cells.size(), 0.0);
     double q_prev = 0;
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     for (auto& element : Dune::elements(grid_->leafGridView())) {
@@ -1019,7 +985,11 @@ Fracture::wellIndices() const
             OPM_THROW(std::runtime_error, "Cross flow in fracture ??");
         }
         q_cells[ind_wellIdx] += q;
+        // assume all of this is the same so no need for interpolation
         p_cells[ind_wellIdx] = reservoir_pressure_[eIdx]; // is set multiple times
+        mob_cells[ind_wellIdx] = reservoir_mobility_[eIdx]; // is set multiple times
+        dens_cells[ind_wellIdx] = reservoir_density_[eIdx]; // is set multiple times
+        z_cells[ind_wellIdx] = reservoir_cell_z_[eIdx]; // is set multiple times
     }
     std::vector<RuntimePerforation> wellIndices(res_cells.size());
     double inj_press = injectionPressure();
@@ -1027,15 +997,15 @@ Fracture::wellIndices() const
         auto& perf = wellIndices[i];
 
         perf.cell = res_cells[i];
-        double dh_res = reservoir_cell_z_[i] * gravity_ * reservoir_density_[i];
-        double perf_density = reservoir_density_[i];
+        double dh_res = z_cells[i] * gravity_ * dens_cells[i];
+        double perf_density = dens_cells[i];
         double dh_perf = gravity_ * perf_density * origo_[2];
         double WI = q_cells[i] / ((inj_press - dh_perf) - (p_cells[i] - dh_res));
         if (WI < 0.0) {
             std::cout << "Negative WI: " << WI << " for cell: " << res_cells[i] << std::endl;
             WI = 0.0;
         }
-        perf.ctf = WI;
+        perf.ctf = WI/mob_cells[i]; // convert to ctf
         perf.depth = this->origo_[2];
         perf.segment = this->wellinfo_.segment;
         perf.perf_range = this->wellinfo_.perf_range;
@@ -1079,10 +1049,14 @@ Fracture::assignGeomechWellState(PerfData<Scalar>& perfData) const
     FractureProperties fprop = calculateFractureProperties();
     // set properties of fracture to structure used in output
     frac_prop.height[perfIx] = fprop.height;
-    frac_prop.length[perfIx] = fprop.width;
+    frac_prop.length[perfIx] = fprop.length;
     frac_prop.area[perfIx] = fprop.area;
     frac_prop.flux[perfIx] = fprop.flux;
-    
+    frac_prop.WI[perfIx] = fprop.WI;
+    frac_prop.volume[perfIx] = fprop.volume;
+    frac_prop.filter_volume[perfIx] = fprop.filter_volume;
+    frac_prop.avg_width[perfIx] = fprop.avg_width;
+    frac_prop.avg_filter_width[perfIx] = fprop.avg_filter_width;
 }
 
 bool
@@ -1294,6 +1268,8 @@ Fracture::calculateFractureProperties() const
     std::array<double, 2> dwvec({0.0, 0.0});
     double total_flux(0);
     double area(0.0);
+    double volume(0.0);
+    double filter_volume(0.0);
     std::vector<double> leak_of_rate = leakOfRate();
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     for (auto& element : Dune::elements(grid_->leafGridView())) {
@@ -1301,6 +1277,8 @@ Fracture::calculateFractureProperties() const
         int eIdx = mapper.index(element);
         auto geom = element.geometry();
         area += geom.volume();
+        volume += geom.volume() * (fracture_width_[eIdx]);// + min_width_);
+        filter_volume += geom.volume() * filtercake_thikness_[eIdx];
         auto dist = geom.center() - origo_;
         double dh = dist.dot(axis_[0]);
         double dw = dist.dot(axis_[1]);
@@ -1313,8 +1291,25 @@ Fracture::calculateFractureProperties() const
         total_flux += leak_of_rate[eIdx] * geom.volume();
     }
     double height = dhvec[1] - dhvec[0];
-    double width = dwvec[1] - dwvec[0];
-    FractureProperties fracprop(height, width, total_flux, area);
+    double length = dwvec[1] - dwvec[0];
+    auto WIs = wellIndices();
+    double WI=0.0;
+    for(auto wi : WIs){
+      WI += wi.ctf;
+    }
+    //double WI = std::accumulate(WIs.begin(), WIs.end(), 0)
+    double avgh = volume/area;
+    double avgfilter_h = filter_volume/area;
+    FractureProperties fracprop(height, 
+                                length, 
+                                total_flux, 
+                                area,
+                                WI,
+                                volume,
+                                filter_volume,
+                                avgh,
+                                avgfilter_h
+                            );
     return fracprop;
 }
 

@@ -371,7 +371,7 @@ namespace Opm{
             for (auto& wellPtr : wellcontainer) {
                 auto wellName = wellPtr->name();
                 const auto& wellcons = geomechModel_.getExtraWellIndices(wellName);
-                wellPtr->addPerforations(wellcons);
+                wellPtr->addFracturePerforations(wellcons);
             }
         }
 

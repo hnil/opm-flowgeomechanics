@@ -124,23 +124,33 @@ namespace external{
 
     // copy from RigEclipseWellLogExtractor
     void buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, const Opm::EclipseGrid& m_grid);
-    void buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, const Dune::CpGrid& grid);
-    template<class Grid>
-    void buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, const Grid& grid){
+    void buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
+                              std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& enity_seed,
+                              const Dune::CpGrid& grid);
+
+    int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, 
+        const Dune::CpGrid& grid,
+        const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& enity_seed,    
+        const cvf::Vec3d& point);
+
+    
+    template<class Grid, class CellSeed>
+    void buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
+                              std::vector<CellSeed>& cell_seeds, 
+                              const Grid& grid){
         using GridView = typename Grid::LeafGridView;
         const auto& gv = grid.leafGridView();
         size_t cellCount = gv.size(0);
         std::vector<size_t>           cellIndicesForBoundingBoxes;
         std::vector<cvf::BoundingBox> cellBoundingBoxes;
-
-        std::array<double, 3> cornerPointArray;
-        cvf::Vec3d cornerPoint;
         using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
         ElementMapper mapper(gv, Dune::mcmgElementLayout()); // used id sets interally
+        cell_seeds.resize(cellCount);
 	    for (const auto& element : Dune::elements(gv))
         {
             int index = mapper.index(element);
             auto geom = element.geometry();
+            cell_seeds[index] = element.seed();
             cvf::BoundingBox cellBB;
             cvf::Vec3d cornerPoint;
             //NB order should not matter when adding to bounding box: dune ordring and resinsight ordering is different

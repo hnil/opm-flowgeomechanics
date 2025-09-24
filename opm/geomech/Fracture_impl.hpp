@@ -175,6 +175,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
             // assume reservoir distance is calculated
         }
         int reportStepIdx = simulator.episodeIndex();
+        
         const auto& schedule =  simulator.vanguard().schedule();
         //const Opm::Well& well = wells[wellinfo_.name];
         //const std::vector<Opm::Well>& wells = problem.wellModel().getLocalWells(reportStepIdx);
@@ -209,7 +210,8 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         const auto& wellstate = wellstates[*well_index];
 
         if(update_filtercake){
-            updateFilterCakeProps(connections, wellstate);
+          double dt = simulator.timeStepSize();
+          updateFilterCakeProps(connections, wellstate, dt);
         } 
         // else {
         //   // remap
@@ -221,9 +223,12 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
 // ----------------------------------------------------------------------------
 template <class TypeTag, class Simulator>
 void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& cell_search_tree,
+                     //const Dune::CpGrid& cpgrid,
+                     const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& entity_seeds,
                      const Simulator& simulator)
 // ----------------------------------------------------------------------------
 {
+  const auto& cpgrid = simulator.vanguard().grid();
     if(!active_){
         std::cout << "Fracture " << this->name() << " is not active, skipping solve." << std::endl;
         return;
@@ -366,7 +371,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 well_source_.push_back(fsmap_inv[cell]);
 
             // Update the rest of the fracture object to adapt to grid change
-            updateReservoirCells(cell_search_tree);
+            updateReservoirCells(cell_search_tree, cpgrid, entity_seeds);
             updateReservoirProperties<TypeTag, Simulator>(simulator, true, false);
             initPressureMatrix();
             //initFractureWidth();
@@ -575,7 +580,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
 
                 // grid has changed its geometry, so we have to recompute discretizations
                 updateCellNormals();
-                updateReservoirCells(cell_search_tree);
+                updateReservoirCells(cell_search_tree, cpgrid, entity_seeds);
                 updateReservoirProperties<TypeTag, Simulator>(simulator, true, false);
                 initPressureMatrix();
                 fracture_matrix_ = nullptr;

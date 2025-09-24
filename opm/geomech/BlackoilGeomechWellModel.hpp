@@ -36,7 +36,7 @@ public:
                     auto wellName = wellPtr->name();
                     const auto& fracturemodel = geomechmodel.fractureModel();
                     auto wellIndices = fracturemodel.getExtraWellIndices(wellName);
-                    wellPtr->addPerforations(wellIndices);
+                    wellPtr->addFracturePerforations(wellIndices);
                 }
             }
         }

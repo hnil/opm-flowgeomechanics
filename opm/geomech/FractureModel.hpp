@@ -38,6 +38,7 @@ class FractureModel{
 public:
     using Point3D = Dune::FieldVector<double,3>;
     using Segment = std::array<unsigned int,2>;
+    using EntitySeed = Dune::CpGrid::Codim<0>::Entity::EntitySeed;
     template<class Grid>
     FractureModel(const Grid& grid,
                   const std::vector<Well>& wells,
@@ -53,27 +54,28 @@ public:
     /// vectors in addition to all current well objects.
     void addFractures(const ScheduleState& sched);
 
-    void updateFractureReservoirCells()
+   void updateFractureReservoirCells(Dune::CpGrid& cpgrid)
     {
         for (auto& well_fracture : well_fractures_) {
             for (auto& fracture : well_fracture) {
-                fracture.updateReservoirCells(cell_search_tree_);
+              fracture.updateReservoirCells(cell_search_tree_,cpgrid, cell_seeds_);
             }
         }
     }
   
-  //void updateFractureReservoirCells(const Dune::CpGrid& cpgrid)
-  template<class Grid>
-  void updateFractureReservoirCells(const Grid& cpgrid)
-    {
-        external::cvf::ref<external::cvf::BoundingBoxTree> cellSearchTree;
-        external::buildBoundingBoxTree(cellSearchTree, cpgrid);
-        for (auto& well_fracture : well_fractures_) {
-            for (auto& fracture : well_fracture) {
-                fracture.updateReservoirCells(cellSearchTree, cpgrid);
-            }
-        }
-    }
+  void updateFractureReservoirCells(const Dune::CpGrid& cpgrid);
+  
+  // template<class Grid>
+  // void updateFractureReservoirCells(const Grid& cpgrid)
+  //   {
+  //       external::cvf::ref<external::cvf::BoundingBoxTree> cellSearchTree;
+  //       external::buildBoundingBoxTree(cellSearchTree, cpgrid);
+  //       for (auto& well_fracture : well_fractures_) {
+  //           for (auto& fracture : well_fracture) {
+  //               fracture.updateReservoirCells(cellSearchTree, cpgrid);
+  //           }
+  //       }
+  //   }
 
     void addWell(const std::string& name,
                  const std::vector<FractureWell::Connection>& conns,
@@ -89,7 +91,7 @@ public:
         for(size_t j=0; j < fractures.size(); ++j){
           if(fractures[j].isActive()){  
             std::cout << "Solving fracture " << fractures[j].name() << std::endl;
-            fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, simulator);
+            fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator);
           }
         }
       }
@@ -150,7 +152,7 @@ private:
     std::vector<std::vector<Fracture>> well_fractures_;
     Opm::PropertyTree prm_;
     external::cvf::ref<external::cvf::BoundingBoxTree> cell_search_tree_;
-
+    std::vector<EntitySeed> cell_seeds_;
     /// Initialise fractures perpendicularly to each reservoir connection.
     void addFracturesPerpWell();
     void addFracturesTensile();
