@@ -54,7 +54,7 @@ public:
     /// vectors in addition to all current well objects.
     void addFractures(const ScheduleState& sched);
 
-   void updateFractureReservoirCells(Dune::CpGrid& cpgrid)
+   void updateFractureReservoirCells(const Dune::CpGrid& cpgrid)
     {
         for (auto& well_fracture : well_fractures_) {
             for (auto& fracture : well_fracture) {
@@ -63,7 +63,7 @@ public:
         }
     }
   
-  void updateFractureReservoirCells(const Dune::CpGrid& cpgrid);
+  //void updateFractureReservoirCells(const Dune::CpGrid& cpgrid);
   
   // template<class Grid>
   // void updateFractureReservoirCells(const Grid& cpgrid)

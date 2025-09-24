@@ -76,12 +76,27 @@ int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
         for(const auto& cell: cells){
             auto element = grid.entity(entity_seed[cell]);
             auto geom = element.geometry();
-            // auto refEl = Dune::referenceElement(geom);
-            // auto local = geom.local(point);
-            // if(refEl.checkInside(local)){
-            //     count +=1;
-            //     outcell = cell;
-            // }
+            Dune::FieldVector<double,3> vec;
+            vec[0] = point[0];
+            vec[1] = point[1];
+            vec[2] = point[2];
+            auto local = geom.local(vec);
+            bool inside = true;
+            for(int i=0; i<3; ++i){
+              if(local[i]<0){
+                inside = false;
+              }
+              if(local[i]>1){
+                inside = false;
+              }
+            }
+            //auto refEl = Dune::referenceElement(geom);
+            //
+            //refEl.checkInside(local)){
+            if(inside){
+              count +=1;
+              outcell = cell;
+            }
         }
      if(outcell>=0 && count ==1){
         return outcell;
