@@ -1020,7 +1020,7 @@ Fracture::assignGeomechWellState(PerfData<Scalar>& perfData) const
     auto perfPos = std::find(
     perfData.cell_index.begin(), perfData.cell_index.end(), this->wellInfo().well_cell);
     const auto perfIx = std::distance(perfData.cell_index.begin(), perfPos);
-    ConnFracStatistics<Scalar> stats = perfData.connFracStatistics[perfIx];
+    ConnFracStatistics<Scalar>& stats = perfData.connFracStatistics[perfIx];
 
     using Quantity = typename ConnFracStatistics<Scalar>::Quantity;
 
