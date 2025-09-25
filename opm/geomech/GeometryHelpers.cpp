@@ -71,35 +71,51 @@ int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
         external::cvf::BoundingBox bb;
         bb.add(point);
         std::vector<size_t> cells = external::findCloseCellIndices(m_cellSearchTree, bb);
-        int count =0;
+        //int count =0;
         int outcell = -1;
+        double min_distance =1e99;
+        Dune::FieldVector<double,3> local;
         for(const auto& cell: cells){
             auto element = grid.entity(entity_seed[cell]);
             auto geom = element.geometry();
+            auto center = geom.center();
             Dune::FieldVector<double,3> vec;
             vec[0] = point[0];
             vec[1] = point[1];
             vec[2] = point[2];
-            auto local = geom.local(vec);
-            bool inside = true;
-            for(int i=0; i<3; ++i){
-              if(local[i]<0){
-                inside = false;
-              }
-              if(local[i]>1){
-                inside = false;
-              }
+            auto d_vec = vec-center;
+            if(d_vec.two_norm() < min_distance){
+                min_distance = d_vec.two_norm();
+                outcell = cell;
             }
-            auto refEl = Dune::ReferenceElements<double, 3>::cube();
-            assert(inside == refEl.checkInside(local));
-            if(inside){
-              count +=1;
-              outcell = cell;
-            }
-        }
-     if(outcell>=0 && count ==1){
+            // // consistent inside is difficult due to round off errors
+            // bool check_inside = false; 
+            // if (check_inside)
+            // {
+            //     local = geom.local(vec);
+            //     bool inside = true;
+            //     for (int i = 0; i < 3; ++i) {
+            //         if (local[i] < 0) {
+            //             inside = false;
+            //         }
+            //         if (local[i] > 1) {
+            //             inside = false;
+            //         }
+            //     }
+            //     auto refEl = Dune::ReferenceElements<double, 3>::cube();
+            //     assert(inside == refEl.checkInside(local));
+            //     if (inside) {
+            //         count += 1;
+            //         outcell = cell;
+            //     }
+            // }
+     }
+     if(outcell>=0){//} && count ==1){
         return outcell;
      }else{
+        // std::cout << "outcell" << outcell << std::endl;
+        // std::cout << "count" << count << std::endl;
+        // std::cout << "local" << local[0] << " " << local[1] << " " << local[2] << " " << std::endl;
         assert(false);
         return -1;
      }
