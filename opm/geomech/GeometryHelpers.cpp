@@ -116,7 +116,9 @@ int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
         // std::cout << "outcell" << outcell << std::endl;
         // std::cout << "count" << count << std::endl;
         // std::cout << "local" << local[0] << " " << local[1] << " " << local[2] << " " << std::endl;
-        assert(false);
+        //assert(false);
+        assert(cells.size()==0);
+        std::cout << "Point outside bounding box?" << std::endl;
         return -1;
      }
 }
