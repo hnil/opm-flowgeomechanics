@@ -231,7 +231,7 @@ n_closest(const Grid& grid)
     std::vector<Elem> distances;
     const ElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
     for (const auto& element : Dune::elements(grid.leafGridView())) {
-        const int eIdx = mapper.index(element);
+      /*const int eIdx = mapper.index(element);*/
         const auto center = element.geometry().center();
         distances.push_back({distances.size(), center.two_norm()});
     }

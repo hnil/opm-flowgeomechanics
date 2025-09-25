@@ -653,7 +653,7 @@ manipulate_deck(const char* deck_file, std::ostream& os)
     int nc_new = actnum.size();
     actnum_status = std::vector<value::status>(nc_new, value::status::deck_value);
 
-    for (int i = 0; i < actnum.size(); ++i) {
+    for (size_t i = 0; i < actnum.size(); ++i) {
         if (actnum[i] == 0) {
             actnum[i] = 1;
             // maybe one sould have used values from deck if resonable and check if deck_value

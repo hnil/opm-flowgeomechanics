@@ -519,7 +519,7 @@ public:
     {
         return kept_indices_;
     }
-    const double fixedBHP()
+    const double& fixedBHP()
     {
         return fixed_bhp_;
     }
@@ -710,8 +710,8 @@ public:
         for (size_t i = 0; i != M_diag_.size(); ++i)
             v[_1][i] = d[_1][i] / M_diag_[i];
     };
-    virtual void post(VectorHP& v) {};
-    virtual void pre(VectorHP& x, VectorHP& b) {};
+  virtual void post(VectorHP& /*v*/) {};
+  virtual void pre(VectorHP& /*x*/, VectorHP& /*b*/) {};
     virtual Dune::SolverCategory::Category category() const
     {
         return Dune::SolverCategory::sequential;

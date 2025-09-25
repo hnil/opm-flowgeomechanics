@@ -85,7 +85,7 @@ boundary_node_indices(const Grid& g)
     vector<int> count(view.size(1), 0); // number of edges (codim 1)
 
     for (const auto& elem : elements(view))
-        for (int i = 0; i != elem.subEntities(1); ++i)
+        for (size_t i = 0; i != elem.subEntities(1); ++i)
             count[view.indexSet().index(elem.subEntity<1>(i))] += 1;
 
     // @@ This is silly - there must be a better way to identify boundary nodes
@@ -183,7 +183,7 @@ meshtest(const string& fname)
     for (auto b : bindices)
         tmp[b] = 1;
     vector<int> iindices;
-    for (int ix = 0; ix != tmp.size(); ++ix)
+    for (size_t ix = 0; ix != tmp.size(); ++ix)
         if (tmp[ix] == 0)
             iindices.push_back(ix);
 
@@ -371,7 +371,7 @@ lifttest(const string& fname, const string& target)
     // write result to file, using high precision
     ofstream os(target);
     os.precision(16);
-    for (int i = 0; i != result.size() / 3; ++i) {
+    for (size_t i = 0; i != result.size() / 3; ++i) {
         os << result[3 * i] << " " << result[3 * i + 1] << " " << result[3 * i + 2] << endl;
     }
 

@@ -560,7 +560,7 @@ twoDimensionalTest()
 
 
 int
-main(int argc, char* argv[])
+main(int /*argc*/, char* argv[])
 try {
     std::cout << std::endl << "Running example for FoamGrid<1, 2>" << std::endl;
     oneDimensionalTest();
