@@ -163,14 +163,19 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 
             } else {
                 // probably outside reservoir set all to zero
-                double stressval = 300e5;
+                double stressval = 300*300e5;// large value to keep it closed
+                //NB should maybe be interpolated out from reservoir
                 reservoir_stress_[i][0] = stressval;
                 reservoir_stress_[i][1] = stressval;
                 reservoir_stress_[i][2] = stressval; //???
+                //
                 reservoir_pressure_[i] = injectionPressure();
-                reservoir_mobility_[i] = 0.0;
+                reservoir_mobility_[i] = 1000.0;
                 reservoir_density_[i] = 1000.0;
                 reservoir_perm_[i] = 0.0;
+                reservoir_cstress_[i]  = 1e99;
+                reservoir_dist_[i] = 1e99;
+                reservoir_cell_z_[i] = origo_[2];// should maybe be cell center of triangle
             }
             // assume reservoir distance is calculated
         }

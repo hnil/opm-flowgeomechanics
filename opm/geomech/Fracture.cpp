@@ -993,15 +993,25 @@ Fracture::wellIndices() const
     }
     std::vector<RuntimePerforation> wellIndices(res_cells.size());
     double inj_press = injectionPressure();
+    bool cells_outside = false;
     for (size_t i = 0; i < res_cells.size(); ++i) {
         auto& perf = wellIndices[i];
-
         perf.cell = res_cells[i];
+        if(res_cells[i]<0){
+            // will be removed make dummy values
+            cells_outside = true;
+            perf.depth = this->origo_[2];
+            perf.ctf = 0;
+            perf.segment = this->wellinfo_.segment;
+            perf.perf_range = this->wellinfo_.perf_range;
+            continue;
+        }
         double dh_res = z_cells[i] * gravity_ * dens_cells[i];
         double perf_density = dens_cells[i];
         double dh_perf = gravity_ * perf_density * origo_[2];
         double WI = q_cells[i] / ((inj_press - dh_perf) - (p_cells[i] - dh_res));
         if (WI < 0.0) {
+          // keep but could maybe be removed
             std::cout << "Negative WI: " << WI << " for cell: " << res_cells[i] << std::endl;
             WI = 0.0;
         }
@@ -1010,6 +1020,16 @@ Fracture::wellIndices() const
         perf.segment = this->wellinfo_.segment;
         perf.perf_range = this->wellinfo_.perf_range;
     }
+    // remove connections to outside of reservoir
+    if(cells_outside){
+        std::cout << "Cells of fracture outside removed from perforation index" << std::endl;
+        wellIndices.erase(
+                          std::remove_if(wellIndices.begin(),
+                                         wellIndices.end(),
+                          [](const auto& perf){ return perf.cell < 0;}),
+                          wellIndices.end());
+    }
+
     return wellIndices;
 }
 
