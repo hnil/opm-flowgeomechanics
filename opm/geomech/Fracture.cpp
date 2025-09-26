@@ -1400,6 +1400,10 @@ Fracture::initPressureMatrix()
         matrix.entry(j, j) = zero_entry; // 0;
         matrix.entry(i, i) = zero_entry; // 0;
     }
+    // add in case a cell have only no internal boundaries
+    for(int i=0; i < nc; ++i){
+        matrix.entry(i, i) = 0.0; 
+    }
 
     if (numWellEquations() > 0) {
         assert(numWellEquations() == 1); // @@ for now, we assume there is just one well equation

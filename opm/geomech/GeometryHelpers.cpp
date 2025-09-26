@@ -61,7 +61,12 @@ buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, std::vect
         Vec3d point(vertex[0], vertex[1], vertex[2]);
         //bb.add(point);
         int cell = external::cellOfPoint(m_cellSearchTree, grid, entity_seeds, point);
-        assert(cell == index);
+        if (element.partitionType() == Dune::InteriorEntity){
+            assert(cell == index);  
+        }else{
+            // may get the neares cell in partition
+            //assert(cell == -1);  
+        }
     }
 }
 int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
@@ -77,6 +82,10 @@ int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
         Dune::FieldVector<double,3> local;
         for(const auto& cell: cells){
             auto element = grid.entity(entity_seed[cell]);
+            if (element.partitionType() != Dune::InteriorEntity){
+                // outside of parition is considered outside model
+                continue;
+            }
             auto geom = element.geometry();
             auto center = geom.center();
             Dune::FieldVector<double,3> vec;
@@ -88,6 +97,7 @@ int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
                 min_distance = d_vec.two_norm();
                 outcell = cell;
             }
+            //NB should probably point is inside model
             // // consistent inside is difficult due to round off errors
             // bool check_inside = false; 
             // if (check_inside)
@@ -117,8 +127,8 @@ int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
         // std::cout << "count" << count << std::endl;
         // std::cout << "local" << local[0] << " " << local[1] << " " << local[2] << " " << std::endl;
         //assert(false);
-        assert(cells.size()==0);
-        std::cout << "Point outside bounding box?" << std::endl;
+        //assert(cells.size()==0);
+        std::cout << "Point outside bounding box or overlap cells?" << std::endl;
         return -1;
      }
 }

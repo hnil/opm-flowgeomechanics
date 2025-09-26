@@ -339,6 +339,7 @@ namespace Opm{
                     // it is options for not including them in fractures i.e. addconnections
                     if(addPerfsToSchedule_){
                         this->addConnectionsToSchedual();
+                        this->gridView().comm().barrier();
                     }else{
                     // not not working ... more work...
                     // will only work if structure is ok
@@ -474,12 +475,12 @@ namespace Opm{
                 // structure will be changed erase matrix, maybe only rebuilding of linear solver is neede
                 //std::cout << "Rebuilding linear solver for extra connections" << std::endl;
                 this->simulator().model().linearizer().eraseMatrix();
-                //this->simulator().model().newtonMethod().linearSolver().setForceRecreate();
-                if (this->gridView().comm().rank() == 0) {
+                this->simulator().model().newtonMethod().linearSolver().eraseMatrix();
+                //if (this->gridView().comm().rank() == 0) {
                     std::cout << "Adding extra connections to "
                                  "schedule for report step: "
                               << reportStep << std::endl;
-                }
+                //}
             }
 
             bool commit_wellstate = false;
