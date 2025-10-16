@@ -604,9 +604,15 @@ manipulate_deck(const char* deck_file, std::ostream& os)
 
 
     // int nz_new,upper_equilnum;
-    std::vector<int> actnum_old
-        = const_cast<std::vector<int>&>(gridsec.get<ParserKeywords::ACTNUM>().back().getIntData());
-    GridSize grid_size = getDimens(deck); //(nx, ny, nz);
+    bool has_actnum_old = gridsec.hasKeyword<ParserKeywords::ACTNUM>();
+    GridSize grid_size = getDimens(deck); //(nx, ny, nz);       
+    std::vector<int> actnum_old;
+    if(has_actnum_old){
+        actnum_old = gridsec.get<ParserKeywords::ACTNUM>().back().getIntData();
+    }else{
+        actnum_old = std::vector<int>(grid_size.nx*grid_size.ny*grid_size.nz,1);
+    }
+
     extendDimens(grid_size, extend_param, deck);
     // extend BCCON only downwards
     for (const auto& records : gridsec) {
@@ -633,36 +639,59 @@ manipulate_deck(const char* deck_file, std::ostream& os)
 
     extendGridSection<double>(gridsec, grid_size, extend_param, type_tag::fdouble);
     extendGridSection<int>(gridsec, grid_size, extend_param, type_tag::integer);
-    std::vector<int>& actnum
-        = const_cast<std::vector<int>&>(gridsec.get<ParserKeywords::ACTNUM>().back().getIntData());
+
+    bool has_actnum = gridsec.hasKeyword<ParserKeywords::ACTNUM>();
+    std::vector<double> tmp;// dummy
+    if(has_actnum){
+        std::vector<int>& actnum
+            = const_cast<std::vector<int>&>(gridsec.get<ParserKeywords::ACTNUM>().back().getIntData());
     // TODO need to handle cases where this is not given ..
-    std::vector<double>& ntg
-        = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::NTG>().back().getRawDoubleData());
-    std::vector<double>& poro = const_cast<std::vector<double>&>(
+        bool has_ntg = gridsec.hasKeyword<ParserKeywords::NTG>(); 
+
+        std::vector<double>& ntg = tmp;
+        if(has_ntg){
+            ntg = const_cast<std::vector<double>&>(gridsec.get<ParserKeywords::NTG>().back().getRawDoubleData());
+        }    
+        std::vector<double>& poro = const_cast<std::vector<double>&>(
         gridsec.get<ParserKeywords::PORO>().back().getRawDoubleData());
-    std::vector<double>& permx = const_cast<std::vector<double>&>(
-        gridsec.get<ParserKeywords::PERMX>().back().getRawDoubleData());
-    std::vector<double>& permy = const_cast<std::vector<double>&>(
-        gridsec.get<ParserKeywords::PERMY>().back().getRawDoubleData());
-    std::vector<double>& permz = const_cast<std::vector<double>&>(
-        gridsec.get<ParserKeywords::PERMZ>().back().getRawDoubleData());
-    std::vector<value::status>& actnum_status = const_cast<std::vector<value::status>&>(
-        gridsec.get<ParserKeywords::ACTNUM>().back().getValueStatus());
-    // int nc_new = grid_size.nx*grid_size.ny*extend_param.nz_new;
-    // actnum.resize(nc_new);
-    int nc_new = actnum.size();
-    actnum_status = std::vector<value::status>(nc_new, value::status::deck_value);
+        std::vector<double>& permx = const_cast<std::vector<double>&>(
+            gridsec.get<ParserKeywords::PERMX>().back().getRawDoubleData());
+        bool has_permy = gridsec.hasKeyword<ParserKeywords::PERMY>();
+        std::vector<double>& permy = tmp; // dummy
+        if(has_permy){    
+            permy = const_cast<std::vector<double>&>(    
+                gridsec.get<ParserKeywords::PERMY>().back().getRawDoubleData());
+        }
+        bool has_permz = gridsec.hasKeyword<ParserKeywords::PERMZ>();
+        std::vector<double>& permz = tmp; // dummy 
+        if(has_permz){
+            permz = const_cast<std::vector<double>&>(
+                gridsec.get<ParserKeywords::PERMZ>().back().getRawDoubleData());
+        }
+    
+        std::vector<value::status>& actnum_status = const_cast<std::vector<value::status>&>(
+            gridsec.get<ParserKeywords::ACTNUM>().back().getValueStatus());
+        // int nc_new = grid_size.nx*grid_size.ny*extend_param.nz_new;
+        // actnum.resize(nc_new);
+        int nc_new = actnum.size();
+        actnum_status = std::vector<value::status>(nc_new, value::status::deck_value);
 
-    for (size_t i = 0; i < actnum.size(); ++i) {
-        if (actnum[i] == 0) {
-            actnum[i] = 1;
-            // maybe one sould have used values from deck if resonable and check if deck_value
-            poro[i] = extend_param.upper_poro;
-            permx[i] = 0.0;
-            permy[i] = 0.0;
-            permz[i] = 0.0;
-
-            ntg[i] = 1.0;
+        for (size_t i = 0; i < actnum.size(); ++i) {
+            if (actnum[i] == 0) {
+                actnum[i] = 1;
+             // maybe one sould have used values from deck if resonable and check if deck_value
+                poro[i] = extend_param.upper_poro;
+                permx[i] = 0.0;
+                if(has_permy){
+                    permy[i] = 0.0;
+                }
+                if(has_permz){
+                    permz[i] = 0.0;
+                }
+                if(has_ntg){
+                    ntg[i] = 1.0;
+                }
+         }
         }
         // actnum[i] = 1;
     }
@@ -789,7 +818,7 @@ main(int argc, char** argv)
 
     while (true) {
         int c;
-        c = getopt(argc, argv, "c:o:");
+        c = getopt(argc, argv, "c:o:p");
         if (c == -1)
             break;
 
