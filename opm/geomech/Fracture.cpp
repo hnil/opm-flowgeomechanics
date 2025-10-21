@@ -286,8 +286,10 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
                 double flux = trans * dp;
                 reservoir_flux[res_cell] += flux;
                 if (flux < 0) {
-                    std::cout << "Negative flux " << flux << " for element index " << eIdx
-                              << " with reservoir cell " << res_cell << std::endl;
+                    if(prm_.get<bool>("verbose",false)){
+                        std::cout << "Negative flux " << flux << " for element index " << eIdx
+                                  << " with reservoir cell " << res_cell << std::endl;
+                    }
                     flux = 0.0;
                 }
                 double water_rate = flux;
@@ -954,8 +956,49 @@ Fracture::leakOfRate() const
 }
 
 std::vector<RuntimePerforation>
-Fracture::wellIndices() const
+Fracture::wellIndices() const{
+    OPM_TIMEFUNCTION();
+  // find union of cell indices
+  assert(well_indices_.size() == 2 || well_indices_.size() == 0);
+  std::set<int> cells;
+  for(const auto& winds : well_indices_){
+    for (const auto& wind : winds){
+      cells.insert(wind.cell);
+    }
+  }
+  // map
+  int count = 0;
+  std::map<int,int> cell_pind;
+  for(const auto& cell : cells) {
+    cell_pind[cell] = count;
+    count += 1;
+  }
+  std::vector<int>  hsize(cells.size(),0);
+  std::vector<RuntimePerforation> wellindices(cells.size());
+  //std::vector<RuntimePerforation> wellindices(cells.size(),0);
+  for(const auto& winds : well_indices_){
+    for (const auto& wind : winds){
+      int ind = cell_pind[wind.cell];
+      if(hsize[ind] == 0){
+        wellindices[ind] = wind;
+      }else{
+        wellindices[ind].ctf += wind.ctf;
+        wellindices[ind].pressure += wind.pressure;
+      }     
+      hsize[ind] +=1;
+    }
+  }
+  for(int i=0; i < hsize.size(); ++i){
+    wellindices[i].ctf /= hsize[i];
+    wellindices[i].pressure /= hsize[i];
+  }
+  return wellindices;
+}
+
+std::vector<RuntimePerforation>
+Fracture::wellIndices_() const
 {
+    OPM_TIMEFUNCTION();
     // find unique reservoir cells
     if (leakof_.size() == 0) {
         // if pressure is not assembled return empty
@@ -970,6 +1013,9 @@ Fracture::wellIndices() const
     std::vector<double> mob_cells(res_cells.size(), 0.0);
     std::vector<double> dens_cells(res_cells.size(), 0.0);
     std::vector<double> z_cells(res_cells.size(), 0.0);
+    std::vector<double> traction(res_cells.size(), 0.0);
+    std::vector<double> area(res_cells.size(), 0.0);
+    
     double q_prev = 0;
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     for (auto& element : Dune::elements(grid_->leafGridView())) {
@@ -984,7 +1030,10 @@ Fracture::wellIndices() const
         if (q_prev * q < 0) {
             OPM_THROW(std::runtime_error, "Cross flow in fracture ??");
         }
+        double loc_area = element.geometry().volume();
+        area[ind_wellIdx] += loc_area;
         q_cells[ind_wellIdx] += q;
+        traction[ind_wellIdx] += ddm::tractionSymTensor(reservoir_stress_[eIdx], cell_normals_[eIdx])*loc_area; //normalFractureTraction(elIx);
         // assume all of this is the same so no need for interpolation
         p_cells[ind_wellIdx] = reservoir_pressure_[eIdx]; // is set multiple times
         mob_cells[ind_wellIdx] = reservoir_mobility_[eIdx]; // is set multiple times
@@ -1002,6 +1051,9 @@ Fracture::wellIndices() const
             cells_outside = true;
             perf.depth = this->origo_[2];
             perf.ctf = 0;
+            perf.ref_ctf = 0;
+            perf.pressure = inj_press;
+            perf.ref_pressure = inj_press-10e5;// dummy 
             perf.segment = this->wellinfo_.segment;
             perf.perf_range = this->wellinfo_.perf_range;
             continue;
@@ -1019,6 +1071,15 @@ Fracture::wellIndices() const
         perf.depth = this->origo_[2];
         perf.segment = this->wellinfo_.segment;
         perf.perf_range = this->wellinfo_.perf_range;
+        perf.pressure = inj_press;
+        double tmp_press =  traction[i]/area[i];
+        //if(tmp_press < inj_press){
+        //    perf.ref_pressure = tmp_press;        
+        //    perf.ref_ctf = 0.0; // should be the closed value
+        //}else{
+        perf.ref_pressure = inj_press- 10e5; // dummy value
+        perf.ref_ctf = perf.ctf; 
+        //}
     }
     // remove connections to outside of reservoir
     if(cells_outside){
@@ -1253,6 +1314,8 @@ Fracture::redistribute_values(const std::vector<double>& values,
     std::vector<double> weight(map2.size(), 0.0);
 
     for (const auto& e : g2gmap) {
+        assert(std::get<0>(e) < values.size());
+        assert(std::get<1>(e) < redistributed_values.size());
         redistributed_values[std::get<1>(e)] += values[std::get<0>(e)] * std::get<2>(e);
         weight[std::get<1>(e)] += std::get<2>(e);
     }

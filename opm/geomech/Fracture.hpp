@@ -209,6 +209,7 @@ public:
     bool isActive() const { return active_; }
     std::array<double,2> hightAndWidth() const; 
 private:
+   std::vector<RuntimePerforation> wellIndices_() const;
    bool  expantionMax(const FractureProperties& fprop);
    bool removeNewZeroWithCells(RegularTrimesh& mesh,int cur_level,const RegularTrimesh& original_mesh) const;
    std::vector<double> redistribute_values(const std::vector<double>& values,
@@ -391,7 +392,7 @@ private:
     double E_;
     double nu_;
     double min_width_; // minimum width of fracture, used for convergence criterion
-    double gravity_{0.0};//{9.81}; // gravity acceleration, used for leakoff calculations
+    double gravity_{9.81};//{9.81}; // gravity acceleration, used for leakoff calculations
     std::vector<double> fracture_dgh_; // gravity contribution to fracture pressure, used for leakoff calculations  
     PropertyTree prm_;
     double total_WI_well_{0.0}; // total well index for the well, used for leakoff calculations
@@ -409,7 +410,7 @@ private:
     // std::unique_ptr<SystemOperator> S_linop_;
     // using CoupledFractureSolver = Dune::InverseOperator<VectorHP, VectorHP>;
     // std::unique_ptr<CoupledFractureSolver> coupled_solver_;
-    
+    std::vector<std::vector<RuntimePerforation>> well_indices_; // for each perf, the corresponding well index info
 };
 } // namespace Opm
 

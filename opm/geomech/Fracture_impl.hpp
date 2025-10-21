@@ -330,11 +330,15 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
 
         if(true){
             fracture_width_ = 1e-3; // Ensure not completely closed
-            fracture_pressure_ = perf_pressure_;
+            //fracture_pressure_ = perf_pressure_;
         }
         // start by assuming pressure equal to confining stress (will also set
         // fracture_pressure_ to its correct size
-        normalFractureTraction(fracture_pressure_);
+        auto traction = fracture_pressure_;
+        normalFractureTraction(traction);
+        for(int i=0; i < traction.size();++i){
+            fracture_pressure_[i] = std::max(traction[i], fracture_pressure_[i]);
+        }
 
         // It is implicitly assumed for now that there is just one well equation.
         // We initialize with an existing value. @@
@@ -362,6 +366,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             const int numcell_threshold = prm_.get<int>("solver.numcell_threshold");
             auto [grid, fsmap, bmap] =
             trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources,/* smoothed triangels */ false, numcell_threshold); // well cells kept intact!
+            auto org_map = grid_mesh_map_; 
             grid_mesh_map_ = fsmap;
             setFractureGrid(std::move(grid)); // true -> coarsen interior
             // generate the inverse map of fsmap_ (needed below)
@@ -394,9 +399,9 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                     assert(std::abs(fracture_width_[i][0]) < 0.6);
                 }
                 auto old_fracture_width_ = fracture_width_;
-                redistribute_values(fracture_width_, grid_mesh_map_, fsmap, level, point_wise);
+                redistribute_values(fracture_width_, org_map, fsmap, level, point_wise);
 
-                redistribute_values(fracture_pressure_, grid_mesh_map_, fsmap, level, point_wise);
+                redistribute_values(fracture_pressure_, org_map, fsmap, level, point_wise);
                 // solve flow-mechanical system
                 for (size_t i = 0; i < fracture_pressure_.size(); ++i) {
                     assert(std::abs(fracture_pressure_[i][0]) < 1e10);
@@ -419,7 +424,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             int iter = 0;
             while (!fullSystemIteration(tol,iter) && iter++ < max_iter) {
             };
-            std::cout << "Iterations needed: " << iter << std::endl;
+            std::cout << "Nonlinear iterations needed with fixed expansion: " << iter << std::endl;
 
             // compute K1 stress intensity
             const std::vector<double> K1_not_nan = Fracture::stressIntensityK1();
@@ -604,6 +609,19 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         {
             OPM_THROW(std::runtime_error, "Unknowns solution method");
         }
+        bool first_solve = well_indices_.size() == 0;
+        if(first_solve){
+            well_indices_.resize(2);
+        }
+        auto well_indices = wellIndices_();
+        if(first_solve){
+            well_indices_[0] = well_indices;
+            well_indices_[1] = well_indices;
+        }else{
+            well_indices_[1] = well_indices_[0];
+            well_indices_[0] = well_indices;
+        }
+           
 }
 
 } // namespace Opm

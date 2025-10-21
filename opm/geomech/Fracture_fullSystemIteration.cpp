@@ -472,6 +472,8 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
       std::cout << "Nonlinear iteration: " << nlin_iteration;// << std::endl; 
       std::cout << " rhs:  " << rhs[_0].infinity_norm() << " " << rhs[_1].infinity_norm();
       std::cout <<  " closed_cells: " << num_closed_cells;
+      std::cout << " cells m: " << rhs[_0].size();
+      std::cout << " cells p: " << rhs[_1].size();
       std::cout << std::endl;
     }
     auto psolver = Dune::BiCGSTABSolver<VectorHP>(S_linop,
