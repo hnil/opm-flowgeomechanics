@@ -34,6 +34,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <limits>
 
 namespace
 {
@@ -78,6 +79,7 @@ Fracture::init(const std::string& well,
                const Opm::PropertyTree& prm)
 {
     OPM_TIMEFUNCTION();
+    max_flow_time_step_ = std::numeric_limits<double>::max();
     prm_ = prm;
     min_width_ = prm_.get<double>("config.min_width", 1e-3);
     wellinfo_ = WellInfo({well, perf, well_cell, global_index, segment, perf_range});
@@ -957,11 +959,36 @@ Fracture::leakOfRate() const
 
 std::vector<RuntimePerforation>
 Fracture::wellIndices() const{
+   std::vector<RuntimePerforation> wellindices;
+   if(well_indices_.size() == 2){
+         wellindices = wellIndicesAvrg(well_indices_);
+   }
+   for(int i=0; i < wellindices.size(); ++i){
+     wellindices[i].ref_ctf = wellindices[i].ctf;
+     wellindices[i].ref_pressure = wellindices[i].pressure;
+   }
+   return wellindices;
+}
+
+double damping_factor_perf = 0.5;
+double damping_factor_wi = 0.5;
+
+void Fracture::setPerfPressure(double perfpressure){
+    if(well_indices_.size() >0){
+        perf_pressure_ = perfpressure;
+    }else{
+        // dampted updating for stability of fracture growth
+        perf_pressure_ = (perf_pressure_ + damping_factor_perf*perfpressure)/(1.0+damping_factor_perf);//(perfpressure-perf_pressure_)*damping_factor;
+    }
+}
+
+std::vector<RuntimePerforation>
+Fracture::wellIndicesAvrg(const std::vector<std::vector<RuntimePerforation>>& well_indices){
     OPM_TIMEFUNCTION();
   // find union of cell indices
-  assert(well_indices_.size() == 2 || well_indices_.size() == 0);
+  assert(well_indices.size() == 2);// || well_indices_.size() == 0);
   std::set<int> cells;
-  for(const auto& winds : well_indices_){
+  for(const auto& winds : well_indices){
     for (const auto& wind : winds){
       cells.insert(wind.cell);
     }
@@ -973,24 +1000,35 @@ Fracture::wellIndices() const{
     cell_pind[cell] = count;
     count += 1;
   }
-  std::vector<int>  hsize(cells.size(),0);
+ 
   std::vector<RuntimePerforation> wellindices(cells.size());
   //std::vector<RuntimePerforation> wellindices(cells.size(),0);
-  for(const auto& winds : well_indices_){
+  int tind=0;
+  std::vector<double> weight_ctf(well_indices.size(),0.0);
+  weight_ctf[0] = damping_factor_wi;
+  weight_ctf[1] = 1.0;
+  double total_weight = 0.0;
+  for(const auto& winds : well_indices){
     for (const auto& wind : winds){
       int ind = cell_pind[wind.cell];
-      if(hsize[ind] == 0){
-        wellindices[ind] = wind;
-      }else{
-        wellindices[ind].ctf += wind.ctf;
-        wellindices[ind].pressure += wind.pressure;
-      }     
-      hsize[ind] +=1;
+      wellindices[ind] = wind;
+      wellindices[ind].ctf = 0.0;
+      wellindices[ind].ref_ctf = 0.0;
+      //wellindices[ind].pressure = 0.0;
     }
   }
-  for(int i=0; i < hsize.size(); ++i){
-    wellindices[i].ctf /= hsize[i];
-    wellindices[i].pressure /= hsize[i];
+  for(int tind=0; tind < well_indices.size(); ++tind){ 
+    for (const auto& wind : well_indices[tind]){
+      int ind = cell_pind[wind.cell];
+      wellindices[ind].ctf += weight_ctf[tind]*wind.ctf;
+      //wellindices[ind].pressure *= damping_factor*wind.pressure;
+    }
+    total_weight += weight_ctf[tind];
+  }
+
+  for(int i=0; i < wellindices.size(); ++i){
+        wellindices[i].ctf /= total_weight;
+        //wellindices[i].pressure /= total_weight;
   }
   return wellindices;
 }
@@ -1077,6 +1115,8 @@ Fracture::wellIndices_() const
         //    perf.ref_pressure = tmp_press;        
         //    perf.ref_ctf = 0.0; // should be the closed value
         //}else{
+        //perf.ref_pressure = tmp_press;//inj_press- 10e5; // dummy value
+        //perf.ref_ctf = 0.0;//perf.ctf; 
         perf.ref_pressure = inj_press- 10e5; // dummy value
         perf.ref_ctf = perf.ctf; 
         //}
@@ -1145,10 +1185,13 @@ Fracture::expantionMax(const FractureProperties& fprop)
 {
     FractureProperties fprop_current = calculateFractureProperties();
     const double area_change_fac = prm_.get<double>("solver.area_change_fac");
+    const double dt_lim = prm_.get<double>("solver.dt_limit");
     if (fprop_current.area > area_change_fac * fprop.area) {
         std::cout << "Fracture area doubled, stopping expansion" << std::endl;
+        max_flow_time_step_  = dt_lim;
         return true;
     } else {
+      max_flow_time_step_  = std::numeric_limits<double>::max();// no limit
         return false;
     }
     return false;

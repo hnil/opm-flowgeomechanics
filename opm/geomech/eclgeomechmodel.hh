@@ -226,7 +226,7 @@ namespace Opm{
                 pressure_[dofIdx] = pressure;
                 mechPotentialForce_[dofIdx] = diffpress*pcoeff;
                 mechPotentialPressForce_[dofIdx] = diffpress*pcoeff;
-                assert(pcoeff<=1.0);
+                assert(pcoeff<=(1.0+1e-12));
                 mechPotentialPressForceFracture_[dofIdx] = diffpress*(1.0-pcoeff);
                 bool thermal_expansion = getPropValue<TypeTag, Properties::EnableEnergy>();
 

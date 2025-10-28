@@ -613,13 +613,15 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         if(first_solve){
             well_indices_.resize(2);
         }
-        auto well_indices = wellIndices_();
+        auto well_indices_new = wellIndices_();//calculate wellindices
+        auto well_indices_old = wellIndices();// use the function used from simulator at prevois step
         if(first_solve){
-            well_indices_[0] = well_indices;
-            well_indices_[1] = well_indices;
+            well_indices_[0] = well_indices_new;
+            well_indices_[1] = well_indices_new;
         }else{
-            well_indices_[1] = well_indices_[0];
-            well_indices_[0] = well_indices;
+            //well_indices_[1] = well_indices_[0];
+            well_indices_[1] = well_indices_old;
+            well_indices_[0] = well_indices_new;
         }
            
 }

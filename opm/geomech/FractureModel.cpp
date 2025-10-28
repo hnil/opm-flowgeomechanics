@@ -91,6 +91,7 @@ makeDefaultFractureParam()
     fracture_param.put("fractureparam.solver.remap_solution", false);
     fracture_param.put("fractureparam.solver.linsolver.tol", 1e-10);
     fracture_param.put("fractureparam.solver.area_change_fac", 1.5);
+    fracture_param.put("fractureparam.solver.dt_limit", 1.0*60.0*60.0*24.0);
     fracture_param.put("fractureparam.solver.linsolver.atol", 1e-20);
     fracture_param.put("fractureparam.solver.linsolver.max_iter", 1000);
     fracture_param.put("fractureparam.solver.linsolver.verbosity", 0);

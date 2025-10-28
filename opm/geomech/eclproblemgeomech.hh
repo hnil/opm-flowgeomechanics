@@ -365,6 +365,11 @@ namespace Opm{
  
         }
 
+      double maxNextTimeStep(){
+        double dt_max = Parent::maxNextTimeStep();
+        double dt_max_frac = geomechModel_.fractureModel().maxFlowTimeStep();
+        return std::min(dt_max,dt_max_frac);
+      }
         void addConnectionsToWell(){
             //return;
         // add extra connections from fractures direclty to the well structure

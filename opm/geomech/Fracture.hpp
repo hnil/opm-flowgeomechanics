@@ -194,11 +194,12 @@ public:
     void writePressureSystem()  const;
     void setFractureGrid(std::unique_ptr<Fracture::Grid> gptr = nullptr); // a hack to allow use of another grid
     std::vector<RuntimePerforation> wellIndices() const;
+    static std::vector<RuntimePerforation> wellIndicesAvrg(const std::vector<std::vector<RuntimePerforation>>& well_indices);
     WellInfo& wellInfo(){return wellinfo_;}
     const WellInfo& wellInfo() const { return wellinfo_; }
     std::vector<double> leakOfRate() const;
     double injectionPressure() const;
-    void setPerfPressure(double perfpressure){perf_pressure_ = perfpressure;}
+    void setPerfPressure(double perfpressure);//{perf_pressure_ = perfpressure;}
     Dune::FieldVector<double, 6> stress(Dune::FieldVector<double, 3> obs) const;
     Dune::FieldVector<double, 6> strain(Dune::FieldVector<double, 3> obs) const;
     Dune::FieldVector<double, 3> disp(Dune::FieldVector<double, 3> obs) const;
@@ -207,7 +208,8 @@ public:
     void assignGeomechWellState(PerfData<Scalar>& perfData) const;
     void setActive(bool active) { active_ = active; }
     bool isActive() const { return active_; }
-    std::array<double,2> hightAndWidth() const; 
+    std::array<double,2> hightAndWidth() const;
+    double maxFlowTimeStep() const{return max_flow_time_step_;}
 private:
    std::vector<RuntimePerforation> wellIndices_() const;
    bool  expantionMax(const FractureProperties& fprop);
@@ -411,6 +413,7 @@ private:
     // using CoupledFractureSolver = Dune::InverseOperator<VectorHP, VectorHP>;
     // std::unique_ptr<CoupledFractureSolver> coupled_solver_;
     std::vector<std::vector<RuntimePerforation>> well_indices_; // for each perf, the corresponding well index info
+  double max_flow_time_step_{-1.0};
 };
 } // namespace Opm
 
