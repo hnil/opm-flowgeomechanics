@@ -80,6 +80,9 @@ Fracture::init(const std::string& well,
 {
     OPM_TIMEFUNCTION();
     max_flow_time_step_ = std::numeric_limits<double>::max();
+    if(prm_.get<double>("config.gravity_off", true)){
+        gravity_ = 0.0;
+    }
     prm_ = prm;
     min_width_ = prm_.get<double>("config.min_width", 1e-3);
     wellinfo_ = WellInfo({well, perf, well_cell, global_index, segment, perf_range});
@@ -1185,7 +1188,7 @@ Fracture::expantionMax(const FractureProperties& fprop)
 {
     FractureProperties fprop_current = calculateFractureProperties();
     const double area_change_fac = prm_.get<double>("solver.area_change_fac");
-    const double dt_lim = prm_.get<double>("solver.dt_limit");
+    const double dt_lim = prm_.get<double>("solver.dt_limit")*86400.0;
     if (fprop_current.area > area_change_fac * fprop.area) {
         std::cout << "Fracture area doubled, stopping expansion" << std::endl;
         max_flow_time_step_  = dt_lim;

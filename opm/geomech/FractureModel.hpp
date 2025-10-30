@@ -102,20 +102,20 @@ public:
     template <class TypeTag, class Simulator>
     double maxFlowTimeStep(const Simulator& simulator) const
     {
-      double dt_min = std::numeric_limits<double>();
+      double dt_min = std::numeric_limits<double>::max();
         for (size_t i = 0; i < wells_.size(); ++i) {
             const std::vector<Fracture>& fractures = well_fractures_[i];
             for (size_t j = 0; j < fractures.size(); ++j) {
                 if (fractures[j].isActive()) {
-                    double dt_max = fractures[i].maxFlowTimeStep();
+                    double dt_max = fractures[j].maxFlowTimeStep();
                     if (dt_max > 0) {
                         dt_min = std::min(dt_max, dt_min);
                     }
                 }
             }
-            dt_min = simulator.grid().comm().min(dt_min);
-            return dt_min;
         }
+        dt_min = simulator.vanguard().grid().comm().min(dt_min);
+        return dt_min;  
     }
 
         void updateReservoirProperties();

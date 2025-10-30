@@ -365,10 +365,14 @@ namespace Opm{
  
         }
 
-      double maxNextTimeStep(){
-        double dt_max = Parent::maxNextTimeStep();
-        double dt_max_frac = geomechModel_.fractureModel().maxFlowTimeStep();
-        return std::min(dt_max,dt_max_frac);
+      double maxNextTimeStepSize() const override{
+        double dt_max = Parent::maxNextTimeStepSize();
+        if(geomechModel_.fractureModelActive()){
+            const auto& simulator = this->simulator();
+            double dt_max_frac = geomechModel_.fractureModel().template maxFlowTimeStep<TypeTag,Simulator>(simulator);
+            dt_max = std::min(dt_max,dt_max_frac);
+        }
+        return dt_max;
       }
         void addConnectionsToWell(){
             //return;
