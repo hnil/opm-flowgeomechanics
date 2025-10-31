@@ -97,7 +97,7 @@ public:
                     fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator);
                 }
             }
-        }
+        }        
     }
 
     template <class TypeTag, class Simulator>

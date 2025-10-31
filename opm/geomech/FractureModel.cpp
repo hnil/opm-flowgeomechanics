@@ -555,3 +555,4 @@ Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched)
 
 template void Opm::FractureModel::assignGeomechWellState(WellState<float,Fracture::IndexTraits>&) const;
 template void Opm::FractureModel::assignGeomechWellState(WellState<double,Fracture::IndexTraits>&) const;
+Opm::DeferredLogger Opm::FractureModel::fractureLogger = Opm::DeferredLogger();

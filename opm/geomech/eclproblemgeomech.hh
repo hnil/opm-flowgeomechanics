@@ -77,7 +77,9 @@ namespace Opm{
                 fracture_param_ = fracture_param;
                 
             }
-            fracture_param_.write_json(std::cout, true);
+            std::stringstream os;
+            fracture_param_.write_json(os, true);
+            OpmLog::info(os.str());
 
             hasFractures_ = this->simulator().vanguard().eclState().runspec().frac();//fracture_param_.get<bool>("hasfractures");
             addPerfsToSchedule_ = fracture_param_.get<bool>("add_perfs_to_schedule");
@@ -324,6 +326,10 @@ namespace Opm{
                 
             }
             OPM_END_PARALLEL_TRY_CATCH("Begin time step geomech failed: ", this->simulator().vanguard().grid().comm());
+            const auto& comm = this->simulator().vanguard().grid().comm();
+            Opm::DeferredLogger global_logger = gatherDeferredLogger(FractureModel::fractureLogger, comm);
+            FractureModel::fractureLogger.clearMessages();
+            global_logger.logMessages();
         }
         void endTimeStep(){
             if (this->gridView().comm().rank() == 0){
@@ -352,6 +358,10 @@ namespace Opm{
                 }
             }
             OPM_END_PARALLEL_TRY_CATCH("End time step geomech failed: ", this->simulator().vanguard().grid().comm());
+            const auto& comm = this->simulator().vanguard().grid().comm();
+            Opm::DeferredLogger global_logger = gatherDeferredLogger(FractureModel::fractureLogger, comm);
+            FractureModel::fractureLogger.clearMessages();
+            global_logger.logMessages();
             Parent::endTimeStep();
             //
             if(Parameters::Get<Parameters::EnableWriteAllSolutions>()){
@@ -424,12 +434,16 @@ namespace Opm{
                         .cartesianIndex(wellconn.cell);
 
                     if (origConns.hasGlobalIndex(cartesianIdx)) {
-                        std::cout << "Connection already exists for cell: "
-                                  << wellconn.cell << std::endl;
-                        continue;
+                      std::stringstream os;
+                       os << "Connection already exists for cell: "
+                          << wellconn.cell;// << std::endl;
+                       FractureModel::fractureLogger.info(os.str());
+                       continue;
                     }else{
-                        std::cout << "New connection for cell: "
-                                  << wellconn.cell << std::endl;
+                      std::stringstream os;
+                      os << "New connection for cell: "
+                         << wellconn.cell;// << std::endl;
+                      FractureModel::fractureLogger.info(os.str());
                     }
 
                     // get ijk
@@ -467,11 +481,11 @@ namespace Opm{
 
                 if (! extra.empty()) {
                     const auto* pl = (extra.size() != 1) ? "s" : "";
-
-                    std::cout << "Adding " << extra.size()
+                    std::stringstream os;
+                    os << "Adding " << extra.size()
                               << "extra connection" << pl << " for well: "
                               << wellName << std::endl;
-
+                    FractureModel::fractureLogger.info(os.str());
                     extra_perfs.insert_or_assign(wellName, std::move(extra));
                 }
             }
@@ -486,9 +500,11 @@ namespace Opm{
                 this->simulator().model().linearizer().eraseMatrix();
                 this->simulator().model().newtonMethod().linearSolver().eraseMatrix();
                 //if (this->gridView().comm().rank() == 0) {
-                    std::cout << "Adding extra connections to "
+                std::stringstream os;
+                    os << "Adding extra connections to "
                                  "schedule for report step: "
                               << reportStep << std::endl;
+                    FractureModel::fractureLogger.info(os.str());    
                 //}
             }
 

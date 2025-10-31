@@ -1,5 +1,6 @@
 #include <config.h>
 
+#include "FractureModel.hpp"
 #include "GeometryHelpers.hpp"
 #include "RegularTrimesh.hpp"
 #include <algorithm>
@@ -1479,18 +1480,18 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
 
     auto fixed_on_level = [&fixed_cells](const int level) -> vector<CellRef> {
         if (level == 0) {
-            for (const auto& cell : fixed_cells)
-                std::cout << "{" << cell[0] << ", " << cell[1] << ", " << cell[2] << "} ";
-            std::cout << std::endl;
+            // for (const auto& cell : fixed_cells)
+            //     std::cout << "{" << cell[0] << ", " << cell[1] << ", " << cell[2] << "} ";
+            // std::cout << std::endl;
             return fixed_cells;
         } else {
             vector<CellRef> result;
             for (const auto& cell : fixed_cells)
                 result.push_back(RegularTrimesh::fine_to_coarse(cell, level));
             // dump vector result to cout
-            for (const auto& cell : result)
-                std::cout << "{" << cell[0] << ", " << cell[1] << ", " << cell[2] << "} ";
-            std::cout << std::endl;
+            // for (const auto& cell : result)
+            //     std::cout << "{" << cell[0] << ", " << cell[1] << ", " << cell[2] << "} ";
+            // std::cout << std::endl;
             return result;
         }
     };
@@ -1502,7 +1503,9 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
         working_mesh.removeSawtooths();
         cur_level++;
     }
-    cout << "---------- Starting propagation at level: " << cur_level << " --------" << endl;
+    std::stringstream os;
+    os << "---------- Starting propagation at level: " << cur_level << " --------";// << endl;
+    Opm::FractureModel::fractureLogger.info(os.str());
     while (!stop_criterion()) { // keep looping as long as grid need expansion
 
         if (DEBUG_DUMP_GRIDS) {
