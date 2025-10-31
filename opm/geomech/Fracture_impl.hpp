@@ -355,6 +355,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         auto score_function = [&](const RegularTrimesh& trimesh, const int level) -> std::vector<double> {
             const int max_iter = prm_.get<int>("solver.max_iter");
             const double tol = prm_.get<double>("solver.tolerance");//,1e-8);
+            const int nlin_verbosity = prm_.get<double>("solver.verbosity");
             *trimesh_ = trimesh;
             // save well sources before grid change
             std::vector<CellRef> wsources = well_source_cellref_; 
@@ -424,7 +425,9 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             int iter = 0;
             while (!fullSystemIteration(tol,iter) && iter++ < max_iter) {
             };
-            std::cout << "Nonlinear iterations needed with fixed expansion: " << iter << std::endl;
+            if(nlin_verbosity > 1){
+                std::cout << "Nonlinear iterations needed with fixed expansion: " << iter << std::endl;
+            }
 
             // compute K1 stress intensity
             const std::vector<double> K1_not_nan = Fracture::stressIntensityK1();

@@ -13,6 +13,7 @@
 #include <opm/input/eclipse/Schedule/Well/WellConnections.hpp>
 
 #include <opm/simulators/linalg/PropertyTree.hpp>
+#include <opm/simulators/utils/DeferredLogger.hpp>
 
 #include <algorithm>
 #include <array>
@@ -163,7 +164,7 @@ public:
         {
             return prm_;
         }
-
+        static Opm::DeferredLogger fractureLogger;
     private:
         bool vtkwritewells_ = false; // write wells to VTK files
         template <class TypeTag, class Simulator>
@@ -194,6 +195,7 @@ public:
         /// including well fracturing seed points and fracturing plane normal
         /// vectors in addition to all current well objects.
         void addFracturesWellSeed(const ScheduleState& sched);
+
     };
 }
 #include "FractureModel_impl.hpp"

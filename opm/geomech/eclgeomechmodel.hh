@@ -62,25 +62,25 @@ namespace Opm{
         void beginIteration(){
             //Parent::beginIteration();
             if(simulator_.gridView().comm().rank() == 0){
-                std::cout << "Geomech begin iteration" << std::endl;
+                OpmLog::info("Geomech begin iteration\n");
             }
         }
         void endIteration(){
             //Parent::endIteration();
             if(simulator_.gridView().comm().rank() == 0){
-                std::cout << "Geomech end iteration" << std::endl;
+                OpmLog::info("Geomech end iteration\n");
             }
         }
         void beginTimeStep(){
             //Parent::beginIteration();
             if(simulator_.gridView().comm().rank() == 0){
-                std::cout << "Geomech begin time step" << std::endl;
+                OpmLog::info("Geomech begin time step\n");
             }
         }
         void endTimeStep(){
             // always do post solve
             if(simulator_.gridView().comm().rank() == 0){
-                std::cout << "Geomech model endstimeStep" << std::endl;
+                OpmLog::info("Geomech model endstimeStep\n");
             }
             this->solveGeomechAndFracture();
         }
@@ -100,20 +100,27 @@ namespace Opm{
             const auto& schedule =  this->simulator_.vanguard().schedule();
             int end_step = schedule.size() - 1;
             bool no_seeds = schedule[end_step].wseed().empty();
-            if(simulator_.gridView().comm().rank() == 0){
-             if(!no_seeds){
-                //std::cout << "No fracture seeds found, on this step " << reportStepIdx << std::endl;
-                std::cout << "Fracture seeds found, on this step " << std::endl;
-            }else{
-                std::cout << "No fracture seeds found, on this step "  << std::endl;
-            }
-            if(fracturemodel_){
-                std::cout << "Fracture model already initialized, solving fractures using previous fractures" << std::endl;
-            }
+            if (simulator_.gridView().comm().rank() == 0) {
+                std::stringstream os;
+                if (!no_seeds) {
+                    // std::cout << "No fracture seeds found, on this step " << reportStepIdx <<
+                    // std::endl;
+                    os << "Fracture seeds found, on this step " << std::endl;
+                } else {
+                    os << "No fracture seeds found, on this step " << std::endl;
+                }
+                if (fracturemodel_) {
+                    os << "Fracture model already initialized, solving fractures using previous "
+                          "fractures"
+                       << std::endl;
+                }
+                OpmLog::info(os.str());
             }
             if(!no_seeds && !fracturemodel_){
                     if(simulator_.gridView().comm().rank() == 0){
-                    std::cout << "Fracture model not initialized, initializing now. report step" <<  reportStepIdx << std::endl;
+                        std::stringstream os;    
+                        os << "Fracture model not initialized, initializing now. report step" <<  reportStepIdx << std::endl;
+                        OpmLog::info(os.str());
                     }
                     const auto& problem = simulator_.problem();
                     //NB could probably be moved to some initialization
@@ -159,15 +166,21 @@ namespace Opm{
             }
             // get reservoir properties on fractures
             // simulator need
+            
             if(fracturemodel_){
+                
                 if(simulator_.gridView().comm().rank() == 0){
-                    std::cout << "Frac modelfound, updating reservoir properties and solving fractures" << std::endl;
+                    std::ostringstream os;
+                    os << "Frac modelfound, updating reservoir properties and solving fractures" << std::endl;
+                    OpmLog::info(os.str());
                 }
                 fracturemodel_->updateReservoirAndWellProperties<TypeTag,Simulator>(simulator_);
                 fracturemodel_->solve<TypeTag, Simulator>(simulator_);
             }else{
                 if(simulator_.gridView().comm().rank() == 0){
-                    std::cout << "Fracture model not initialized, not solving fractures" << std::endl;
+                    std::ostringstream os;
+                    os << "Fracture model not initialized, not solving fractures" << std::endl;
+                    OpmLog::info(os.str());
                 }
             }
                 // copy from apply action
@@ -204,7 +217,7 @@ namespace Opm{
       
         void updatePotentialForces(bool relative_solve = true){
             if(simulator_.gridView().comm().rank() == 0){
-                std::cout << "Update Forces" << std::endl;
+                OpmLog::info("Update Forces\n");
             }
             size_t numDof = simulator_.model().numGridDof();
             const auto& problem = simulator_.problem();
@@ -265,7 +278,7 @@ namespace Opm{
                 double gravity = 0.0;
                 if(use_body_force){
                     gravity = 9.81;
-                    std::cout << "Using body force in geomechanics to 2000 kg/m^3" << std::endl;
+                    OpmLog::info("Using body force in geomechanics to 2000 kg/m^3 \n");
                 }
                 int nc = simulator_.gridView().size(0);
                 std::vector<double> density(nc, 2000.0);
@@ -430,7 +443,7 @@ namespace Opm{
         // used in eclproblemgeomech
         void init(bool /*restart*/){
             if(simulator_.gridView().comm().rank() == 0){
-                std::cout << "Geomech init" << std::endl;
+                OpmLog::info("Geomech init\n");
             }
             size_t numDof = simulator_.model().numGridDof();
             pressure_.resize(numDof);
