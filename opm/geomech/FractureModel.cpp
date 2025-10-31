@@ -69,8 +69,8 @@ makeDefaultFractureParam()
     // fracture_param.put("fractureparam.config.axis_scale", 1.50);
     //  propagation properties
     // fracture_param.put("fractureparam.solver.method", "if_propagate_trimesh"s);
-    //fracture_param.put("fractureparam.solver.method", "if_propagate_trimesh"s);
-    if(false){//dynamic coarseing
+    fracture_param.put("fractureparam.solver.method", "if_propagate_trimesh"s);
+    if(true){//dynamic coarseing
         fracture_param.put("fractureparam.solver.target_cellcount", 100);
         fracture_param.put("fractureparam.solver.cellcount_threshold", 400);
         fracture_param.put("fractureparam.solver.numcell_threshold", 10);
@@ -106,10 +106,17 @@ makeDefaultFractureParam()
     fracture_param.put("fractureparam.solver.linsolver.atol", 1e-20);
     fracture_param.put("fractureparam.solver.linsolver.max_iter", 1000);
     fracture_param.put("fractureparam.solver.linsolver.verbosity", 0);
-    fracture_param.put("fractureparam.solver.linsolver.preconditioner.diag_mech", false);
-    fracture_param.put("fractureparam.solver.linsolver.preconditioner.diag_flow", false);
+    if(true){
+        fracture_param.put("fractureparam.solver.linsolver.preconditioner.diag_mech", true);// for large systems seem sto better with better preconditioner
+        fracture_param.put("fractureparam.solver.linsolver.preconditioner.diag_flow", true);
+        fracture_param.put("fractureparam.solver.linsolver.preconditioner.mech_press_coupling", false);
+    }else{
+        fracture_param.put("fractureparam.solver.linsolver.preconditioner.diag_mech", false);// for large systems seem sto better with better preconditioner
+        fracture_param.put("fractureparam.solver.linsolver.preconditioner.diag_flow", false);
+        fracture_param.put("fractureparam.solver.linsolver.preconditioner.mech_press_coupling", true);
+    }
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.verbosity", 0);
-    fracture_param.put("fractureparam.solver.linsolver.preconditioner.mech_press_coupling", true);
+    
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.type","umfpack"s);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.verbosity",0 );
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.tol",1 );
@@ -118,7 +125,7 @@ makeDefaultFractureParam()
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.preconditioner.verbosity",0);
     // reservoir fracture coupling
     fracture_param.put("fractureparam.reservoir.dist", 1e0);
-    fracture_param.put("fractureparam.reservoir.calculate_dist", false);
+    fracture_param.put("fractureparam.reservoir.calculate_dist", true);
     fracture_param.put("fractureparam.reservoir.mobility", 1.3e-3);
     fracture_param.put("fractureparam.reservoir.perm", 1e-13);
 

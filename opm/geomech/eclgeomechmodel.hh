@@ -136,11 +136,15 @@ namespace Opm{
                     //
                     
 
-
-                    fracturemodel_ = std::make_unique<FractureModel>(grid,
+                    try{
+                        fracturemodel_ = std::make_unique<FractureModel>(grid,
                                                                      wells,
                                                                      param
                         );
+                    }catch (...){
+                       fracturemodel_ = nullptr;
+                       OPM_THROW(std::runtime_error,"Error in initialising fracture model");
+                    }
                     // not to get the reservoir properties along the well before initialising the well
                     // most important stress
                     fracturemodel_->updateReservoirWellProperties<TypeTag,Simulator>(simulator_);
