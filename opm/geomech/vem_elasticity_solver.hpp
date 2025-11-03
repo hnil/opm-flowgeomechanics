@@ -220,7 +220,7 @@ class VemElasticitySolver
             std::size_t pressureIndex = 0;
             //NB NB ! need other operator in parallel
             setCopyRowsToZero();    
-            std::cout << "Make parallel solver" << std::endl;
+            //std::cout << "Make parallel solver" << std::endl;
             comm_->communicator().barrier();
             using ParOperatorType = Dune::OverlappingSchwarzOperator<Matrix, Vector, Vector, CommunicationType>;
             auto pop = std::make_unique<ParOperatorType>(this->getOperator(), *comm_);

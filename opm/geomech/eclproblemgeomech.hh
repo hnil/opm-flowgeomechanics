@@ -247,7 +247,7 @@ namespace Opm{
                     //this->geomechModel_.setStress(initstress_);
                 }else{
 //                    OPM_THROW(std::runtime_error, "Missing stress initialization keywords");
-                    std::cout << "No stress equilibration specified .. try to equilibrate" << std::endl;    
+                    //std::cout << "No stress equilibration specified .. try to equilibrate" << std::endl;    
                 }
                 // entity_seed_.resize(gv.size(0));
                 // for(const auto& elem : elements(gv)){
@@ -281,7 +281,10 @@ namespace Opm{
                 const auto& initconfig = eclState.getInitConfig();
                 if (!initconfig.hasStressEquil()) {
                     this->model().invalidateAndUpdateIntensiveQuantities(0);
-                    std::cout << "No stress equilibration specified .. try to equilibrate" << std::endl;
+                    std::stringstream os;
+                    os << "No stress equilibration specified .. try to equilibrate";// << std::endl;
+                    //FractureModel::fractureLogger.info(os.str());
+                    OpmLog::info(os.str());
                     initstress_.resize(numDof);
                     geomechModel_.solveGeomechanics(/*use_body_force*/ true, /*relative_solve*/ false);
                     //auto pure_stress = 
