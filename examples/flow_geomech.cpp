@@ -64,7 +64,9 @@ namespace Properties
     {
         static constexpr bool value = false;
     };
-
+    template<class TypeTag>
+        struct EnergyModuleType<TypeTag, TTag::EclFlowProblemMechNoTemp>
+        { static constexpr EnergyModules value = EnergyModules::NoTemperature; };
 
 } // namespace Properties
 } // namespace Opm

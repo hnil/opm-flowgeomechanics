@@ -63,6 +63,9 @@ namespace Opm
             static constexpr bool value = true;
         };
 
+        template<class TypeTag>
+        struct EnergyModuleType<TypeTag, TTag::EclFlowProblemMech>
+        { static constexpr EnergyModules value = EnergyModules::FullyImplicitThermal; };
 
         // template <class TypeTag>
         // struct VtkWriteMoleFractions<TypeTag, TTag::EclFlowProblemMech> {
