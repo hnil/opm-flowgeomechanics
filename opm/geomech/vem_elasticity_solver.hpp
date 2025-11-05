@@ -47,6 +47,7 @@
 #include <opm/input/eclipse/Schedule/BCProp.hpp>
 #include <opm/simulators/linalg/FlexibleSolver.hpp>
 #include <opm/geomech/DuneCommunicationHelpers.hpp>
+#include <opm/geomech/vem/vem.hpp>
 //#include <opm/simulators/linalg/FlexibleSolver_impl.hpp>
 namespace Opm {
 namespace Elasticity {
@@ -156,6 +157,7 @@ class VemElasticitySolver
     //! \param[in] loadcase The strain load case. Set to -1 to skip
     //! \param[in] matrix Whether or not to assemble the matrix
     void assemble(const Vector& pressure, bool matrix,bool vector, bool reduce_system);
+    void assemble_fem(const Vector& pressure, bool matrix,bool vector, bool reduce_system);
 
 
     //! \brief Solve Au = b for u
@@ -339,7 +341,25 @@ class VemElasticitySolver
     //const std::vector<std::array<double,6>>& stress(){return stress_;}
     const Dune::BlockVector<Dune::FieldVector<ctype,6>>& stress() const{return stress_;}
     const Dune::BlockVector<Dune::FieldVector<ctype,6>>& strain() const{return strain_;}
-
+    void setStabilityChoice(int stability_choice_int){
+      //vem::StabilityChoice stability_choice_ = vem::D_RECIPE;
+      std::stringstream os;
+      os << "Setting stability choise to " << stability_choice_int;
+      OpmLog::info(os.str());
+        if(stability_choice_int==0){
+            stability_choice_ = vem::SIMPLE;
+        } else if (stability_choice_int==1){
+            stability_choice_ = vem::HARMONIC;
+        } else if (stability_choice_int==2){
+            stability_choice_ = vem::D_RECIPE;
+        } else if (stability_choice_int==3){
+            stability_choice_ = vem::ALLMAX;
+        } else if (stability_choice_int==4){
+            stability_choice_ = vem::ALLMIN;   
+        } else {
+          OPM_THROW(std::runtime_error,"This stability is not implmented");
+        }
+    }
 private:
   void expandDisp(std::vector<double>& dispall,bool expand);
   void assignToVoigt(Dune::BlockVector< Dune::FieldVector<double,6> >& voigt_stress, const Dune::BlockVector< Dune::FieldVector<double,1> >& vemstress);
@@ -391,6 +411,7 @@ private:
     std::shared_ptr< CommunicationType > comm_;
     std::shared_ptr< CommunicationType::ParallelIndexSet > vertexParallelIndexSet_;
     std::shared_ptr< CommunicationType::ParallelIndexSet > dofParallelIndexSet_;
+    vem::StabilityChoice stability_choice_ = vem::D_RECIPE;
   //std::shared_ptr< CommunicationType::RemoteIndices> vertexRemoteIndexSet_;
 
 };

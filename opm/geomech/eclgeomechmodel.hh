@@ -269,8 +269,11 @@ namespace Opm{
         }
         void setupMechSolver(bool use_body_force = false){
                 const auto& problem = simulator_.problem();
+                //NB hack use fracture params to control mechancis
                 Opm::PropertyTree param = problem.getFractureParam();
                 reduce_boundary_ = param.get<bool>("reduce_boundary");
+                int stability_choice_int = param.get<int>("vem_stability_choice",2);
+                elacticitysolver_.setStabilityChoice(stability_choice_int);
                 OPM_TIMEBLOCK(SetupMechSolver);
                 bool do_matrix = true;//assemble matrix
                 bool do_vector = true;//assemble matrix
@@ -288,6 +291,7 @@ namespace Opm{
                 //
                 elacticitysolver_.initForAssembly();
                 elacticitysolver_.assemble(mechPotentialForce_, do_matrix, do_vector,reduce_boundary_);
+                //elacticitysolver_.assemble_fem(mechPotentialForce_, do_matrix, do_vector,reduce_boundary_);
                 FlowLinearSolverParametersGeoMech p;
                 p.init<TypeTag>();
                 // Print parameters to PRT/DBG logs.

@@ -14,7 +14,7 @@
 using namespace std;
 using namespace vem;
 
-namespace
+namespace vem
 {
 
 // ============================================================================
@@ -516,9 +516,12 @@ compute_S(const std::vector<double>& Nc,
     const auto NtN = matmul(&Nc[0], r, c, true, &Nc[0], r, c, false);
 
     // const double alpha = 1;  // @@ use this line for comparison with vemmech
+    //const double gamma = 1.0;
+    const double gamma = 1.0 / 9.0; // since trace is about 9 times E 
     const double alpha = stability_choice == SIMPLE ? volume * trace(D) / trace(NtN)
                                                     : // from Gain et al. 2014
-        (1 / 9.0) * volume * trace(D) * invtrace(NtN); // Andersen et al. 2017
+        gamma*volume * trace(D) * invtrace(NtN); // Andersen et al. 2017                
+        //(1 / 9.0) * volume * trace(D) * invtrace(NtN); // Andersen et al. 2017
 
     return identity_matrix(alpha, dim * num_corners);
 }
@@ -532,7 +535,8 @@ compute_S_D_recipe(const std::vector<double>& EWcDWct, const int dofs, const dou
 
     const double h = cbrt(volume); // diameter of cell scales with cube root of volume
     for (int i = 0; i != dofs; ++i)
-        result[i + dofs * i] = max(h, EWcDWct[i + dofs * i]); // extract diagonal from matrix
+        result[i + dofs * i] = EWcDWct[i + dofs * i]; // extract diagonal from matrix
+        //result[i + dofs * i] = max(h, EWcDWct[i + dofs * i]); // extract diagonal from matrix
 
     return result;
 }
@@ -562,9 +566,42 @@ final_assembly(const vector<double>& Wc,
     const auto DWct = matmul(&D[0], lsdim, lsdim, false, &Wc[0], totdim, lsdim, true);
     const auto EWcDWct = matmul(&Wc[0], totdim, lsdim, false, &DWct[0], lsdim, totdim, false, volume);
 
-    const auto S = stability_choice == D_RECIPE
-        ? compute_S_D_recipe(EWcDWct, totdim, volume)
-        : compute_S(Nc, D, num_nodes, volume, dim, stability_choice);
+    std::vector<double> S;
+    if(stability_choice == D_RECIPE){
+        const auto SD= compute_S_D_recipe(EWcDWct, totdim, volume);
+        S=SD;
+        double val = trace(D)/9.0;
+        val *= cbrt(volume);
+        for (int i = 0; i != totdim; ++i){
+            int ind = i + totdim * i;    
+            S[ind]= max(val,S[ind]);
+        }
+    } else if((stability_choice == SIMPLE) || (stability_choice == HARMONIC)){
+        S  = compute_S(Nc, D, num_nodes, volume, dim, stability_choice);
+    } else if( stability_choice == ALLMAX){
+        const auto SD= compute_S_D_recipe(EWcDWct, totdim, volume);
+        const auto SS = compute_S(Nc, D, num_nodes, volume, dim, SIMPLE);
+        const auto SH = compute_S(Nc, D, num_nodes, volume, dim, HARMONIC);
+        S = SD;
+        for(int i=0;i< int(S.size());++i){
+            S[i]= max(S[i],SS[i]);
+            S[i]= max(S[i],SH[i]);
+        }
+    }else if( stability_choice == ALLMIN){
+        const auto SD= compute_S_D_recipe(EWcDWct, totdim, volume);
+        const auto SS = compute_S(Nc, D, num_nodes, volume, dim, SIMPLE);
+        const auto SH = compute_S(Nc, D, num_nodes, volume, dim, HARMONIC);
+        S = SD;
+        for(int i=0;i< int(S.size());++i){
+            S[i]= min(S[i],SS[i]);
+            S[i]= min(S[i],SH[i]);
+        }
+    }else{
+        throw invalid_argument("Unknown stability choice in final_assembly");  
+    }
+    // const auto S = stability_choice == D_RECIPE
+    //     ? compute_S_D_recipe(EWcDWct, totdim, volume)
+    //     : compute_S(Nc, D, num_nodes, volume, dim, stability_choice);
 
     const auto SImP = matmul(&S[0], totdim, totdim, false, &ImP[0], totdim, totdim, false);
     const auto ImpSImp = matmul(&ImP[0], totdim, totdim, true, &SImP[0], totdim, totdim, false);

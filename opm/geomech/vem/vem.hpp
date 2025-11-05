@@ -9,7 +9,9 @@ namespace vem
   enum StabilityChoice {
     SIMPLE = 1,     // the basic stability term described in (Gain et al., 2014)
     HARMONIC = 2,   // modified stability term more robust for high aspect ratios (Andersen et al., 2017)
-    D_RECIPE = 3    // another modified stability based on the diagonal of the consistency matrix
+    D_RECIPE = 3,
+    ALLMAX = 4,
+    ALLMIN = 5    // another modified stability based on the diagonal of the consistency matrix
   };
   
 // ============================================================================
@@ -499,6 +501,22 @@ void matprint(const double* data, const int r, const int c, bool transposed, con
 //         in row-major order.
 std::vector<double> sparse2full(const std::vector<std::tuple<int, int, double>>& nz, const int r, const int c);
 // -----------------------------------------------------------------------------------------------
+void
+reduce_system(std::vector<std::tuple<int, int, double>>& A,
+              std::vector<double>& b,
+              const int num_fixed_dofs,
+              const int* const fixed_dof_ixs,
+              const double* const fixed_dof_values);
+void set_boundary_conditions(std::vector<std::tuple<int, int, double>>& A,
+                             std::vector<double>& b,
+                        const int num_fixed_dofs,
+                        const int* const fixed_dof_ixs,
+                        const double* const fixed_dof_values);         
+
 }; // end namespace vem
+
+
+
+
 
 #endif
