@@ -272,7 +272,7 @@ namespace Opm{
                 //NB hack use fracture params to control mechancis
                 Opm::PropertyTree param = problem.getFractureParam();
                 reduce_boundary_ = param.get<bool>("reduce_boundary");
-                int stability_choice_int = param.get<int>("vem_stability_choice",2);
+                int stability_choice_int = param.get<int>("vem_stability_choice",3);
                 elacticitysolver_.setStabilityChoice(stability_choice_int);
                 OPM_TIMEBLOCK(SetupMechSolver);
                 bool do_matrix = true;//assemble matrix

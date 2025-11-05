@@ -346,19 +346,10 @@ class VemElasticitySolver
       std::stringstream os;
       os << "Setting stability choise to " << stability_choice_int;
       OpmLog::info(os.str());
-        if(stability_choice_int==0){
-            stability_choice_ = vem::SIMPLE;
-        } else if (stability_choice_int==1){
-            stability_choice_ = vem::HARMONIC;
-        } else if (stability_choice_int==2){
-            stability_choice_ = vem::D_RECIPE;
-        } else if (stability_choice_int==3){
-            stability_choice_ = vem::ALLMAX;
-        } else if (stability_choice_int==4){
-            stability_choice_ = vem::ALLMIN;   
-        } else {
+      if(stability_choice_int< 1 || stability_choice_int>6){
           OPM_THROW(std::runtime_error,"This stability is not implmented");
-        }
+      }
+      stability_choice_ = static_cast<vem::StabilityChoice>(stability_choice_int); 
     }
 private:
   void expandDisp(std::vector<double>& dispall,bool expand);

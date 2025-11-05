@@ -596,6 +596,21 @@ final_assembly(const vector<double>& Wc,
             S[i]= min(S[i],SS[i]);
             S[i]= min(S[i],SH[i]);
         }
+    }else if( stability_choice == EXPERIMENTAL){
+        double val = trace(D)/9.0;
+        //val *= 4.0;//cbrt(volume);
+        S = identity_matrix(val, totdim);
+        for(int node=0; node< num_nodes;++node){
+            for (int d=0;d< dim;++d){
+                int dof = node*dim + d;
+                int ind = dof + totdim * dof;
+                if(d ==2){    
+                    S[ind]= val*4.0;
+                } else {
+                    S[ind]= val*4.0;
+                }
+            }
+        }
     }else{
         throw invalid_argument("Unknown stability choice in final_assembly");  
     }

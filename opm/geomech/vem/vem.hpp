@@ -11,7 +11,8 @@ namespace vem
     HARMONIC = 2,   // modified stability term more robust for high aspect ratios (Andersen et al., 2017)
     D_RECIPE = 3,
     ALLMAX = 4,
-    ALLMIN = 5    // another modified stability based on the diagonal of the consistency matrix
+    ALLMIN = 5,
+    EXPERIMENTAL = 6    // another modified stability based on the diagonal of the consistency matrix
   };
   
 // ============================================================================
