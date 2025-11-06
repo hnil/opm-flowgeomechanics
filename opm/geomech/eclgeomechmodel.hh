@@ -280,10 +280,12 @@ namespace Opm{
                 int stability_choice_int = param.get<int>("vem_stability_choice",3);
                 bool vem_source = param.get<bool>("vem_source",true);
                 bool vem_force = param.get<bool>("vem_force",true);
+                bool vem_stress = param.get<bool>("vem_stress",true);
                 bool stab_on_stress = param.get<bool>("stab_on_stress",false);
                 elacticitysolver_.setOptions(stability_choice_int,
                                              vem_source, vem_force,
-                                             stab_on_stress);
+                                             stab_on_stress,
+                                             vem_stress);
                 OPM_TIMEBLOCK(SetupMechSolver);
                 bool do_matrix = true;//assemble matrix
                 bool do_vector = true;//assemble matrix

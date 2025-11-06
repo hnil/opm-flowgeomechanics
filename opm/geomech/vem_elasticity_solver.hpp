@@ -344,10 +344,12 @@ class VemElasticitySolver
   void setOptions(int stability_choice_int,
                   bool vem_source,
                   bool vem_force,
-                  bool stab_on_stress){
+                  bool stab_on_stress,
+                  bool vem_stress){
      vem_source_ = vem_source;
      vem_force_ = vem_force;
-     stab_on_stress_ = stab_on_stress; 
+     stab_on_stress_ = stab_on_stress;
+     vem_stress_ = vem_stress; 
       //vem::StabilityChoice stability_choice_ = vem::D_RECIPE;
       std::stringstream os;
       os << "Setting stability choise to " << stability_choice_int;
@@ -412,6 +414,7 @@ private:
     bool vem_source_ = true;
     bool vem_force_ = true;
     bool stab_on_stress_ = false;
+    bool vem_stress_ = false;
   //std::shared_ptr< CommunicationType::RemoteIndices> vertexRemoteIndexSet_;
 
 };

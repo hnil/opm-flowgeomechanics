@@ -479,7 +479,7 @@ potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const p
             static constexpr int dim = 3; // GridType::dimension;
             static constexpr int comp = 3 + (dim - 2) * 3;
             static constexpr int bfunc = 4 + (dim - 2) * 4;
-            static constexpr int esize = dim * bfunc;
+            //static constexpr int esize = dim * bfunc;
             Dune::GeometryType gt = elem.type();
             using ctype = double;
             Dune::FieldVector<ctype, dim * bfunc> ES;
@@ -534,7 +534,8 @@ potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const p
     }
 }
 Dune::BlockVector<Dune::FieldVector<double,1>> smoothCellVector(const Dune::CpGrid& grid,const Dune::BlockVector<Dune::FieldVector<double,1>>& cell_vector){
-  auto gv = grid.leafGridView();
+  
+  const auto& gv = grid.leafGridView();
   Dune::BlockVector<Dune::FieldVector<double,1>> smoothed_cell_vector(cell_vector.size());
   for(const auto& elem : elements(gv)){
     int cellIdx = gv.indexSet().index(elem);
@@ -556,4 +557,72 @@ Dune::BlockVector<Dune::FieldVector<double,1>> smoothCellVector(const Dune::CpGr
   }
   return smoothed_cell_vector;
 }
+
+Dune::BlockVector<Dune::FieldVector<double,6>>  computeStressFem(const Dune::CpGrid& grid,
+                                                                const Dune::BlockVector<Dune::FieldVector<double,1>>& disp,
+                                                                const std::vector <double>& young,
+                                                                const std::vector <double>& poisson){
+        std::cout << "Compute stress via FEM" <<std::endl;                                                          
+        static constexpr int dim = 3; // GridType::dimension;
+        static constexpr int comp = 3 + (dim - 2) * 3;
+        static constexpr int bfunc = 4 + (dim - 2) * 4;
+        //        static constexpr int esize = dim * bfunc;
+      Opm::Elasticity::Elasticity elasticity(grid);
+       const auto& gv = grid.leafGridView();
+        using ctype = double;
+        Dune::FieldMatrix<ctype, comp, comp> C;
+        Dune::FieldVector<ctype, comp> eps0;
+        eps0 = 0;
+        // eps0[loadcase] = 1; // NB do not understand
+        Dune::BlockVector<Dune::FieldVector<double,6>> sigmacells(grid.numCells());                                                       
+        for (const auto& elem: elements(gv)){
+            int cellIdx = gv.indexSet().index(elem);
+            double rho = 0.0;
+            Opm::Elasticity::Isotropic  material(1.0, young[cellIdx], poisson[cellIdx], rho);
+             bool valid = material.getConstitutiveMatrix(C);
+            // determine geometry type of the current element and get the matching reference element
+            Dune::GeometryType gt = elem.type();
+
+            Dune::FieldVector<ctype, bfunc * dim> v;
+            for (int li = 0; li < 8; ++li) { // nomber for nodes of reference element
+                int node_index1 = gv.indexSet().subIndex(elem, li, dim);
+                for (int ki = 0; ki < dim; ++ki) {
+                    int ldof1 = li * dim + ki;
+                    v[ldof1] = disp[node_index1*dim+ki][0];
+                }
+            }
+            
+            Dune::FieldVector<ctype, comp> sigma;
+            sigma = 0;
+            double volume = 0;
+            // get a quadrature rule of order two for the given geometry type
+            const Dune::QuadratureRule<ctype, dim>& rule = Dune::QuadratureRules<ctype, dim>::rule(gt, 2);
+            for (typename Dune::QuadratureRule<ctype, dim>::const_iterator r = rule.begin(); r != rule.end(); ++r) {
+                // compute the jacobian inverse transposed to transform the gradients
+                Dune::FieldMatrix<ctype, dim, dim> jacInvTra = elem.geometry().jacobianInverseTransposed(r->position());
+
+                ctype detJ = elem.geometry().integrationElement(r->position());
+
+                volume += detJ * r->weight();
+
+                Dune::FieldMatrix<ctype, comp, dim * bfunc> lB;
+                elasticity.getBmatrix(lB, r->position(), jacInvTra);
+
+                Dune::FieldVector<ctype, comp> s;
+                elasticity.getStressVector(s, v, eps0, lB, C);
+                s *= detJ * r->weight();
+                sigma += s;
+            }
+            sigma /= volume;
+            // if (Escale > 0) {
+            //     sigma /= Escale / Emin;
+            // }
+            // switch to voits notation
+            std::swap(sigma[4],sigma[5]);
+            
+            sigmacells[cellIdx] = sigma;
+        }
+        return sigmacells;
+    }
+
 } // namespace vem

@@ -91,10 +91,18 @@ namespace Elasticity {
             //dispalldune.resize(3 * grid_.leafGridView().size(3));
             //this->expandSolution(dispalldune, this->u);
             // Dune::BlockVector< DuneFieldVector<double,1> >
-            Vector stress(6 * grid_.leafGridView().size(0));
-            stressmat_.mv(dispalldune,stress);
-            stress_.resize(num_cells_);
-            assignToVoigt(stress_,stress);
+            if(vem_stress_){
+              Vector stress(6 * grid_.leafGridView().size(0));
+              stressmat_.mv(dispalldune,stress);
+              stress_.resize(num_cells_);
+              
+              assignToVoigt(stress_,stress);
+            }else{
+              stress_ = vem::computeStressFem(grid_,
+                                dispalldune,
+                                ymodule_,
+                                pratio_);
+            }
         
     }
     IMPL_FUNC(void, expandDisp(std::vector<double>& dispall,bool expand))

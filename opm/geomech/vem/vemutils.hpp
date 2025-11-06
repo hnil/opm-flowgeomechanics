@@ -93,7 +93,10 @@ potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const p
                                  bool get_matrix);
 
 Dune::BlockVector<Dune::FieldVector<double,1>> smoothCellVector(const Dune::CpGrid& grid,const Dune::BlockVector<Dune::FieldVector<double,1>>& cell_vector);                                
-
+Dune::BlockVector<Dune::FieldVector<double,6>>  computeStressFem(const Dune::CpGrid& grid,
+                                                                const Dune::BlockVector<Dune::FieldVector<double,1>>& disp,
+                                                                const std::vector <double>& young,
+                                                                const std::vector <double>& poisson);
                  
   
 }
