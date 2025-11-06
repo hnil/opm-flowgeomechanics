@@ -341,12 +341,18 @@ class VemElasticitySolver
     //const std::vector<std::array<double,6>>& stress(){return stress_;}
     const Dune::BlockVector<Dune::FieldVector<ctype,6>>& stress() const{return stress_;}
     const Dune::BlockVector<Dune::FieldVector<ctype,6>>& strain() const{return strain_;}
-    void setStabilityChoice(int stability_choice_int){
+  void setOptions(int stability_choice_int,
+                  bool vem_source,
+                  bool vem_force,
+                  bool stab_on_stress){
+     vem_source_ = vem_source;
+     vem_force_ = vem_force;
+     stab_on_stress_ = stab_on_stress; 
       //vem::StabilityChoice stability_choice_ = vem::D_RECIPE;
       std::stringstream os;
       os << "Setting stability choise to " << stability_choice_int;
       OpmLog::info(os.str());
-      if(stability_choice_int< 1 || stability_choice_int>6){
+      if(stability_choice_int< 1 || stability_choice_int>7){
           OPM_THROW(std::runtime_error,"This stability is not implmented");
       }
       stability_choice_ = static_cast<vem::StabilityChoice>(stability_choice_int); 
@@ -403,6 +409,9 @@ private:
     std::shared_ptr< CommunicationType::ParallelIndexSet > vertexParallelIndexSet_;
     std::shared_ptr< CommunicationType::ParallelIndexSet > dofParallelIndexSet_;
     vem::StabilityChoice stability_choice_ = vem::D_RECIPE;
+    bool vem_source_ = true;
+    bool vem_force_ = true;
+    bool stab_on_stress_ = false;
   //std::shared_ptr< CommunicationType::RemoteIndices> vertexRemoteIndexSet_;
 
 };

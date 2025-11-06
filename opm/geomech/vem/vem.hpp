@@ -1,6 +1,6 @@
 #ifndef _VEM_HPP
 #define _VEM_HPP
-
+#include <map>
 #include <array>
 #include <tuple>
 #include <vector>
@@ -12,7 +12,8 @@ namespace vem
     D_RECIPE = 3,
     ALLMAX = 4,
     ALLMIN = 5,
-    EXPERIMENTAL = 6    // another modified stability based on the diagonal of the consistency matrix
+    EXPERIMENTAL = 6,
+    FEM = 7    // another modified stability based on the diagonal of the consistency matrix
   };
   
 // ============================================================================
@@ -288,7 +289,9 @@ compute_stress_3D(const double* const points,
                   std::vector<std::array<double,6>>& stress,
                   std::vector<std::tuple<int, int, double>>& stressmat,
                   bool do_matrix,
-                  bool do_stress
+                  bool do_stress,
+                  vem::StabilityChoice stability_choice,
+                  bool stab_on_stress
     );    
 
 
@@ -512,8 +515,54 @@ void set_boundary_conditions(std::vector<std::tuple<int, int, double>>& A,
                              std::vector<double>& b,
                         const int num_fixed_dofs,
                         const int* const fixed_dof_ixs,
-                        const double* const fixed_dof_values);         
+                        const double* const fixed_dof_values);
 
+  void compute_bodyforce_3D(const double* const points,
+                     const int* const face_corners,
+                     const int* const num_face_corners,
+                     const int num_faces,
+                     const double* const centroid,
+                     const double* const bforce, // 3D body force
+                     double* b_global);
+
+void
+compute_applied_forces_3D(const double* const points,
+                          const int* const num_face_corners,
+                          const int* const face_corners,
+                          const int num_neumann_faces,
+                          const int* neumann_faces,
+                          const double* const neumann_forces,
+                          double* b_global);
+std::map<int, int>
+global_to_local_indexing(const int* const faces,
+                         const int* const num_face_edges,
+                         const int num_faces,
+                         std::vector<int>& indexing);
+
+template <int Dim>
+std::vector<double>
+pick_points(const double* const pts, const int* const p_ixs, int num_points);
+
+void
+compute_cell_geometry(const double* points,
+                      const int num_points,
+                      const int* const faces,
+                      const int* const num_face_edges,
+                      const int num_faces,
+                      std::vector<double>& outward_normals,
+                      std::vector<double>& face_centroids,
+                      std::array<double, 3>& cell_centroid,
+                      std::array<double, 3>& star_point,
+                      double& volume);
+
+std::vector<double> 
+compute_q_3D(const double* const corners,
+             const int num_corners,
+             const int* const faces,
+             const int* const num_face_edges,
+             const int num_faces,
+             const double volume,
+             const std::vector<double>& outward_normals);        
 }; // end namespace vem
 
 

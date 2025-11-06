@@ -541,32 +541,9 @@ compute_S_D_recipe(const std::vector<double>& EWcDWct, const int dofs, const dou
     return result;
 }
 
-
-// ----------------------------------------------------------------------------
-// Assemble the VEM stiffness matrix for a single element, based on a number
-// of intermediary matrices and values, as defined in (Gain, 2014)
-// DOI:10.1016/j.cma.2014.05.005
-void
-final_assembly(const vector<double>& Wc,
-               const vector<double>& D,
-               const vector<double>& Nc,
-               const vector<double>& ImP,
-               const StabilityChoice stability_choice,
-               const double volume,
-               const double num_nodes,
-               const double dim,
-               double* target)
-// ----------------------------------------------------------------------------
-{
-    assert(dim == 2 || dim == 3);
-    const int lsdim = (dim == 2) ? 3 : 6; // dimension of "linear strain space"
-    const int totdim = dim * num_nodes; // total number of unknowns
-
-    // compute stiffness matrix components
-    const auto DWct = matmul(&D[0], lsdim, lsdim, false, &Wc[0], totdim, lsdim, true);
-    const auto EWcDWct = matmul(&Wc[0], totdim, lsdim, false, &DWct[0], lsdim, totdim, false, volume);
-
-    std::vector<double> S;
+std::vector<double> getStabilityMatrix(vem::StabilityChoice stability_choice,const std::vector<double>&  EWcDWct,const std::vector<double>& Nc,const std::vector<double>& D,
+                                       int num_nodes,double volume,int  dim,double totdim){
+    std::vector<double> S;        
     if(stability_choice == D_RECIPE){
         const auto SD= compute_S_D_recipe(EWcDWct, totdim, volume);
         S=SD;
@@ -598,22 +575,51 @@ final_assembly(const vector<double>& Wc,
         }
     }else if( stability_choice == EXPERIMENTAL){
         double val = trace(D)/9.0;
-        //val *= 4.0;//cbrt(volume);
+        val *= 4.0;//cbrt(volume);
         S = identity_matrix(val, totdim);
-        for(int node=0; node< num_nodes;++node){
-            for (int d=0;d< dim;++d){
-                int dof = node*dim + d;
-                int ind = dof + totdim * dof;
-                if(d ==2){    
-                    S[ind]= val*4.0;
-                } else {
-                    S[ind]= val*4.0;
-                }
-            }
-        }
+        // for(int node=0; node< num_nodes;++node){
+        //     for (int d=0;d< dim;++d){
+        //         int dof = node*dim + d;
+        //         int ind = dof + totdim * dof;
+        //         if(d ==2){    
+        //             S[ind]= val*4.0;
+        //         } else {
+        //             S[ind]= val*100.0;
+        //         }
+        //     }
+        // }
     }else{
         throw invalid_argument("Unknown stability choice in final_assembly");  
     }
+    return S;
+}
+
+// ----------------------------------------------------------------------------
+// Assemble the VEM stiffness matrix for a single element, based on a number
+// of intermediary matrices and values, as defined in (Gain, 2014)
+// DOI:10.1016/j.cma.2014.05.005
+void
+final_assembly(const vector<double>& Wc,
+               const vector<double>& D,
+               const vector<double>& Nc,
+               const vector<double>& ImP,
+               const StabilityChoice stability_choice,
+               const double volume,
+               const double num_nodes,
+               const double dim,
+               double* target)
+// ----------------------------------------------------------------------------
+{
+    assert(dim == 2 || dim == 3);
+    const int lsdim = (dim == 2) ? 3 : 6; // dimension of "linear strain space"
+    const int totdim = dim * num_nodes; // total number of unknowns
+
+    // compute stiffness matrix components
+    const auto DWct = matmul(&D[0], lsdim, lsdim, false, &Wc[0], totdim, lsdim, true);
+    const auto EWcDWct = matmul(&Wc[0], totdim, lsdim, false, &DWct[0], lsdim, totdim, false, volume);
+
+    std::vector<double> S = getStabilityMatrix(stability_choice, EWcDWct, Nc, D, num_nodes, volume, dim, totdim);
+    
     // const auto S = stability_choice == D_RECIPE
     //     ? compute_S_D_recipe(EWcDWct, totdim, volume)
     //     : compute_S(Nc, D, num_nodes, volume, dim, stability_choice);
@@ -1904,7 +1910,10 @@ compute_stress_3D(const double* const points,
                   std::vector<std::array<double, 6>>& stress,
                   vector<tuple<int, int, double>>& stressmat,
                   bool do_matrix,
-                  bool do_stress)
+                  bool do_stress,
+                  vem::StabilityChoice stability_choice,
+                  bool stab_on_stress
+                )
 // ----------------------------------------------------------------------------
 {
     // preliminary computations
@@ -2300,4 +2309,5 @@ pick_points_3D(const double* pts, const int* const p_ixs, int num_points)
     return pick_points<3>(pts, p_ixs, num_points);
 }
 
+  
 }; // end namespace vem

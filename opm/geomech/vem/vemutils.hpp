@@ -10,6 +10,7 @@
 #include <dune/alugrid/grid.hh>
 #endif
 #include <opm/geomech/boundaryutils.hh>
+#include <opm/geomech/vem/vem.hpp>
 namespace vem
 {
     using PolyGrid = Dune::PolyhedralGrid<3, 3>;
@@ -61,6 +62,39 @@ void getGridVectors(const Dune::CpGrid& grid, std::vector<double>& coords,
                        std::vector<int>& num_cell_faces,
                        std::vector<int>& num_face_corners,
                        std::vector<int>& face_corners);
+  int assemble_mech_system_3D_dune(const Dune::CpGrid& grid, const double* const points,
+                        const int num_cells,
+                        const int* const num_cell_faces, // cell faces per cell
+                        const int* const num_face_corners, // corners per face
+                        const int* const face_corners,
+                        const double* const young,
+                        const double* const poisson,
+                        const double* const body_force, // 3 * number of cells
+                        const int num_fixed_dofs, // dirichlet
+                        const int* const fixed_dof_ixs, // indices must be sorted
+                        const double* const fixed_dof_values,
+                        const int num_neumann_faces,
+                        const int* const neumann_faces,
+                        const double* const neumann_forces, // 3 * number of neumann faces
+                        std::vector<std::tuple<int, int, double>>& A_entries,
+                        std::vector<double>& b,
+                             const vem::StabilityChoice stability_choice,
+                             bool reduce_boundary);
 
+void
+potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const points,
+                            const int num_cells,
+                            const int* const num_cell_faces, // cell faces per cell
+                            const int* const num_face_corners, // corners per cellface
+                            const int* const face_corners,
+                            const double* const field,
+                                 std::vector<double>& fgrad,
+                                 std::vector<std::tuple<int, int, double>>& div,
+                                 bool get_matrix);
+
+Dune::BlockVector<Dune::FieldVector<double,1>> smoothCellVector(const Dune::CpGrid& grid,const Dune::BlockVector<Dune::FieldVector<double,1>>& cell_vector);                                
+
+                 
+  
 }
 #endif

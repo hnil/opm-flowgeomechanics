@@ -266,6 +266,11 @@ namespace Opm{
                 //NB check sign !!
                 mechPotentialForce_[dofIdx] *= 1.0;
             }
+            Opm::PropertyTree param = problem.getFractureParam();
+            bool smooth = param.get<bool>("smooth_force",false);
+            if(smooth){
+              mechPotentialForce_ = vem::smoothCellVector(simulator_.vanguard().grid(),mechPotentialForce_);
+            }
         }
         void setupMechSolver(bool use_body_force = false){
                 const auto& problem = simulator_.problem();
@@ -273,7 +278,12 @@ namespace Opm{
                 Opm::PropertyTree param = problem.getFractureParam();
                 reduce_boundary_ = param.get<bool>("reduce_boundary");
                 int stability_choice_int = param.get<int>("vem_stability_choice",3);
-                elacticitysolver_.setStabilityChoice(stability_choice_int);
+                bool vem_source = param.get<bool>("vem_source",true);
+                bool vem_force = param.get<bool>("vem_force",true);
+                bool stab_on_stress = param.get<bool>("stab_on_stress",false);
+                elacticitysolver_.setOptions(stability_choice_int,
+                                             vem_source, vem_force,
+                                             stab_on_stress);
                 OPM_TIMEBLOCK(SetupMechSolver);
                 bool do_matrix = true;//assemble matrix
                 bool do_vector = true;//assemble matrix

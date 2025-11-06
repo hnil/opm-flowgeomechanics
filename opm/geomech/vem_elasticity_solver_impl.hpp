@@ -141,7 +141,9 @@ namespace Elasticity {
                                    stress,
                                    stressmat,
                                    false,
-                                   true
+                                   true,
+                                   stability_choice_,
+                                   stab_on_stress_
                 );
             // copy to dune definitions
             stress_.resize(num_cells_);
@@ -192,14 +194,17 @@ namespace Elasticity {
                                    strain,
                                    stressmat,
                                    false,
-                                   false
+                                   false,
+                                   stability_choice_,
+                                   stab_on_stress_
+                                   
                 );
             // copy to dune definitions
             strain_.resize(num_cells_);
 	        assignToVoigtSymMat(strain_,strain);
         
     }
-
+    
     IMPL_FUNC(void, assemble(const Vector& pressure, bool do_matrix, bool do_vector,bool reduce_boundary))
 {
     OPM_TIMEBLOCK(assemble);
@@ -228,9 +233,15 @@ namespace Elasticity {
         OPM_TIMEBLOCK(assembleVEMSystem);
         vector<tuple<int, int, double>> A_entries;
         
-        {
+        if(false){
             OPM_TIMEBLOCK(assembleVEM);
             vem::assemble_mech_system_3D(&coords_[0], num_cells_, &num_cell_faces_[0], &num_face_corners_[0],
+                       &face_corners_[0], &ymodule_[0], &pratio_[0], &body_force_[0],
+                       num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0],
+                       num_neumann_faces, nullptr, nullptr,
+                       A_entries, rhs_force_, stability_choice_,reduce_boundary);
+        }else{
+          vem::assemble_mech_system_3D_dune(grid_, &coords_[0], num_cells_, &num_cell_faces_[0], &num_face_corners_[0],
                        &face_corners_[0], &ymodule_[0], &pratio_[0], &body_force_[0],
                        num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0],
                        num_neumann_faces, nullptr, nullptr,
@@ -254,8 +265,9 @@ namespace Elasticity {
         //
         vector<double> rhs_tmp(pressure.size(),0);
         vector<double> pressure_tmp(pressure.size(),0);
-        vector<tuple<int, int, double>> divmat;
-        vem::potential_gradient_force_3D(&coords_[0],
+        vector<tuple<int, int, double>> divmat; 
+        if(vem_source_){
+          vem::potential_gradient_force_3D(&coords_[0],
                                          num_cells_,
                                          &num_cell_faces_[0],
                                          &num_face_corners_[0],
@@ -264,6 +276,17 @@ namespace Elasticity {
                                          rhs_tmp,
                                          divmat,
                                          true);
+        }else{          
+          vem::potential_gradient_force_3D_dune(grid_,&coords_[0],
+                                             num_cells_,
+                                             &num_cell_faces_[0],
+                                             &num_face_corners_[0],
+                                             &face_corners_[0],
+                                             &pressure_tmp[0],
+                                             rhs_tmp,
+                                             divmat,
+                                             true);
+        }       
         // sort(divmat_.begin(),
         //      divmat_.end(),
         //      [](const auto& aa, const auto& bb) { return std::get<1>(aa) < std::get<1>(bb); });
@@ -313,7 +336,9 @@ namespace Elasticity {
                                stresstmp,
                                stressmat,
                                true,
-                               true
+                               true,
+                               stability_choice_,
+                               stab_on_stress_
         );
         stressmat_.setBuildMode(Matrix::implicit);
         stressmat_.setImplicitBuildModeParameters (3*3*3, 0.4);
@@ -333,7 +358,9 @@ namespace Elasticity {
                                stresstmp,
                                strainmat,
                                true,
-                               false
+                               false,
+                               stability_choice_,
+                               stab_on_stress_
         );
         strainmat_.setBuildMode(Matrix::implicit);
         strainmat_.setImplicitBuildModeParameters (3*3*3, 0.4);
