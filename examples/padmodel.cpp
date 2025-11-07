@@ -19,6 +19,7 @@
 
 #include <opm/input/eclipse/EclipseState/IOConfig/IOConfig.hpp>
 #include <opm/input/eclipse/EclipseState/InitConfig/InitConfig.hpp>
+#include <opm/input/eclipse/EclipseState/Runspec.hpp>
 
 #include <opm/input/eclipse/Deck/Deck.hpp>
 #include <opm/input/eclipse/Deck/DeckSection.hpp>
@@ -858,11 +859,16 @@ main(int argc, char** argv)
 
         const auto& deck = manipulate_deck(argv[arg_offset], os);
         if (copy_binary) {
-            Opm::InitConfig init_config(deck);
-            if (init_config.restartRequested()) {
-                Opm::IOConfig io_config(deck);
-                fs::path restart_file(io_config.getRestartFileName(
-                    init_config.getRestartRootName(), init_config.getRestartStep(), false));
+            if (const auto init_config = Opm::InitConfig { deck, Opm::Runspec {deck}.phases() };
+                init_config.restartRequested())
+            {
+                const auto io_config = Opm::IOConfig { deck };
+
+                const auto restart_file = fs::path {
+                    io_config.getRestartFileName(init_config.getRestartRootName(),
+                                                 init_config.getRestartStep(), false)
+                };
+
                 copy_file(input_arg.parent_path(), restart_file, output_dir);
             }
 
