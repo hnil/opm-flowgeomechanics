@@ -15,7 +15,7 @@
 
 #include "dune_utilities.hpp"
 namespace Opm {
-  void cellCellCommunication(Dune::CpGrid grid, Dune::MPIHelper& mpihelper){
+  void cellCellCommunication(const Dune::CpGrid& grid, Dune::MPIHelper& mpihelper){
     Dune::Communication<MPI_Comm> world_comm = Dune::MPIHelper::getCommunication();
     const auto& gv = grid.leafGridView();
     auto indexset = gv.indexSet();
@@ -130,7 +130,7 @@ namespace Opm {
     }
   }
 
-  void vertexVertexCommunication(Dune::CpGrid grid, Dune::MPIHelper& mpihelper){
+  void vertexVertexCommunication(const Dune::CpGrid& grid, Dune::MPIHelper& mpihelper){
     Dune::Communication<MPI_Comm> world_comm = Dune::MPIHelper::getCommunication();
     const auto& gv = grid.leafGridView();
     auto indexset = gv.indexSet();
@@ -247,7 +247,7 @@ namespace Opm {
 
   template <int codim>
   void
-  entityEntityCommunication(Dune::CpGrid grid, Dune::MPIHelper& mpihelper)
+  entityEntityCommunication(const Dune::CpGrid& grid, Dune::MPIHelper& mpihelper)
   {
       Dune::Codim<codim> mycodim;
       // Dune::PartitionType::AllPartition

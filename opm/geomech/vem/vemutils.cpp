@@ -1,8 +1,10 @@
+#include "config.h"
 #include "vemutils.hpp"
 #include <opm/elasticity/elasticity.hpp>
 #include <opm/elasticity/materials.hh>
 #include <dune/geometry/quadraturerules.hh>
 #include <dune/istl/bcrsmatrix.hh>
+#include <dune/grid/common/mcmgmapper.hh>
 namespace vem
 {
 using PolyGrid = Dune::PolyhedralGrid<3, 3>;
@@ -194,6 +196,55 @@ getGridVectors(const Dune::CpGrid& grid,
     //  }
     //     assert(false);
 }
+
+bool cellFemCell(const Dune::CpGrid& grid, int cellIdx,
+        Dune::CartesianIndexMapper<Dune::CpGrid>& cartMapper){
+        bool is_ok = true;
+        int nf = grid.numCellFaces(cellIdx);
+        // if(nf != 6){
+        //     //not needed
+        //     is_ok = false;
+        //     return false;
+        // }
+        //auto cartMapper = Dune::CartesianIndexMapper<Dune::CpGrid>(grid);
+        // using ElementMapper =   
+        //   Dune::MultipleCodimMultipleGeomTypeMapper<typename Dune::CpGrid::LeafGridView>;
+        
+        for (int f = 0; f < nf; ++f) {
+            auto face = grid.cellFace(cellIdx, f);
+            auto faceSize = grid.numFaceVertices(face);
+            // if(faceSize !=4){
+            //     is_ok = false;
+            //     return false;
+            // }
+            auto out_cell = grid.faceCell(face, 1);
+            auto in_cell = grid.faceCell(face, 0);
+
+            if(in_cell<0 || out_cell <0){
+              // assume boundary is ok
+                //is_ok = false;
+                //return false;
+                continue;
+
+            }
+            std::array<int,3> cartCoord1;
+            cartMapper.cartesianCoordinate(in_cell, cartCoord1);
+            std::array<int,3> cartCoord2;
+            cartMapper.cartesianCoordinate(out_cell, cartCoord2);
+            if(cartCoord1[0] ==cartCoord2[0] && cartCoord1[1] ==cartCoord2[1]){
+                // same column
+                continue;
+            }
+            if(std::abs(cartCoord1[2]-cartCoord2[2]) != 0){
+                // not normal
+                is_ok = false;
+                return false;
+            }
+        }
+        assert(is_ok==true);
+        return true;    
+    }
+
     int
 assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points,
                         const int num_cells,
@@ -256,15 +307,63 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
       Opm::Elasticity::Elasticity E(grid);
 
     //----------------------------------------------
+    // find if cells are of fem type
+      const auto gv = grid.leafGridView();
+      std::vector<bool> cell_fem_type(gv.size(0),false);
+      bool use_fem_type = StabilityChoice::FEM == stability_choice;
+      if(use_fem_type){
+        //const auto& idx  = grid.getCellIndexSet();
+        //const auto& rIdx = grid.getCellRemoteIndices();
+        // Dune::Interface cominterface;
+        // using OwnerSet = Dune::OwnerOverlapCopyCommunication<int, int>::OwnerSet;//Dune::EnumItem<AttributeSet,Dune::OwnerOverlapCopyAttributeSet::owner>;
+        // using AllSet =  Dune::OwnerOverlapCopyCommunication<int, int>::AllSet;//Dune::AllSet<AttributeSet>;
+        // OwnerSet soureFlags;
+        // //AllSet destFlags;
+        // AllSet destFlags;
+        // cominterface.build(rIdx, soureFlags, destFlags);
+        // Dune::BufferedCommunicator cell_cell_comm;
+        // using Vector = std::vector<bool>;
+        // cell_cell_comm.template build<Vector>(cominterface);
+        auto cartMapper = Dune::CartesianIndexMapper<Dune::CpGrid>(grid);
+        Dune::MultipleCodimMultipleGeomTypeMapper<typename Dune::CpGrid::LeafGridView> elementMapper(gv,Dune::mcmgElementLayout());
+        for(const auto elem : elements(gv)){
+          int c = elementMapper.index(elem);
+          //int c = gv.indexSet().index(elem);
+          bool is_femcell = cellFemCell(grid,c, cartMapper);
+          cell_fem_type[c] = is_femcell;
+        }
+        //cell_cell_comm.template forward<Dune::CopyGatherScatter<Vector>>(cell_fem_type, cell_fem_type);
+        // couldhave used this from linear solver interfae
+        //cell_cell_comm.copyOwnerToAll(fem_type, fem_type);
+        if(grid.comm().size()>1){
+           //grid.cellScatterGatherInterface() const;
+           //gridpointScatterGatherInterface()
+          const auto& cellcomm = grid.cellCommunication();
+          cellcomm.copyOwnerToAll(cell_fem_type,cell_fem_type);
+        }
+      }
+      
+      
 
-    
-    const auto gv = grid.leafGridView();
+
     for(const auto elem : elements(gv)){
         int c = gv.indexSet().index(elem);  
         // computing local stiffness matrix, writing its entries into the global matrix
        
-        
+        auto loc_stability_choice =  stability_choice;
         bool vem_type = StabilityChoice::FEM != stability_choice;
+        if(!vem_type){
+          // check if we can do vem on this cell
+          //auto cartMapper = Dune::CartesianIndexMapper<Dune::CpGrid>(grid);
+          // maybe move out the desition for parallel case
+          bool is_femcell = cell_fem_type[c];//cellFemCell(grid,c, cartMapper);
+          if(!is_femcell){
+            // if fem and not a "normal" cell switch to vem
+            vem_type = true;
+            loc_stability_choice = StabilityChoice::D_RECIPE;
+          }
+        }
+
         if(vem_type){
           assemble_stiffness_matrix_3D(points,
                                      &face_corners[fcorners_start],
@@ -272,7 +371,7 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
                                      num_cell_faces[c],
                                      young[c],
                                      poisson[c],
-                                     stability_choice,
+                                     loc_stability_choice,
                                      centroid,
                                      loc_indexing,
                                      loc);
@@ -414,6 +513,7 @@ potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const p
     int cur_fcor_start = 0;
     int cur_cface_start = 0;
     //    for (int cell = 0; cell != num_cells; ++cell) {
+    
     Opm::Elasticity::Elasticity elasticity(grid);
     const auto gv = grid.leafGridView();
     for(const auto elem : elements(gv)){
@@ -624,5 +724,6 @@ Dune::BlockVector<Dune::FieldVector<double,6>>  computeStressFem(const Dune::CpG
         }
         return sigmacells;
     }
+   
 
 } // namespace vem
