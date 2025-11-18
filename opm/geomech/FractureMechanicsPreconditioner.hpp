@@ -53,6 +53,8 @@ public:
     }
 
 private:
+void applymech_last(Opm::VectorHP& v, const Opm::VectorHP& d);
+void applymech_first(Opm::VectorHP& v, const Opm::VectorHP& d);
 template <typename Mat>
 Vector diagvec(const Mat& M)
   {
