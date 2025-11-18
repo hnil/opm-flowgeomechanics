@@ -96,6 +96,22 @@ void populateNoFracture(ExtendParam& extend_param)
     extend_param.upper_poro = 0.1;
     extend_param.nz_lower = 3;
     extend_param.bottom_lower = 3600;
+
+    std::string default_json(R"(
+{
+    "nz_upper": 2,
+    "top_upper": 1000,
+    "nz_lower": 3,
+    "bottom_lower": 3600,
+    "upper_poro": 0.1,
+    "min_dist": 10,
+    "no_gap": true,
+    "monotonic_zcorn": true,
+    "vert_coord": true
+}
+)");
+    std::cout << "Using default fracture parameters:\n"
+              << default_json << std::endl;
 }
 
 void populateFromFile(std::string_view filename,
@@ -104,7 +120,8 @@ void populateFromFile(std::string_view filename,
     const auto fracture_param = Opm::PropertyTree {
         std::string { filename }
     };
-
+    std::cout << "Fracture parameters from file '" << filename << "':\n";
+    fracture_param.write_json(std::cout,true);
     // set seed values
     extend_param.nz_upper = fracture_param.get<int>("nz_upper");
     extend_param.top_upper = fracture_param.get<double>("top_upper");
@@ -128,7 +145,6 @@ getExtendParam(std::string_view filename)
     catch (const std::exception& e) {
         std::cout << "Error reading fracture parameter file: '" << filename << "'\n"
                   << "Defaulting to no fractures." << std::endl;
-
         populateNoFracture(extend_param);
     }
 
@@ -254,7 +270,7 @@ extendGridSection(Opm::GRIDSection& gridsec,
             default_value = T{1};
         }
 
-        std::cout << "Extend data_size: " << records.name() << std::endl;
+        //std::cout << "Extend data_size: " << records.name() << std::endl;
 
         auto& val_status = const_cast<std::vector<Opm::value::status>&>(item.getValueStatus());
 
@@ -294,14 +310,14 @@ void extendBCCon(Opm::GRIDSection& gridSect,
             continue;
         }
 
-        std::cout << "Extending BCCON" << std::endl;
+        //std::cout << "Extending BCCON" << std::endl;
 
         for (const auto& record : records) {
             int& K1 = const_cast<int&>(record.getItem("K1").getData<int>()[0]);
             int& K2 = const_cast<int&>(record.getItem("K2").getData<int>()[0]);
 
             const auto direction = record.getItem("DIRECTION").getTrimmedString(0);
-            std::cout << direction << std::endl;
+            //std::cout << direction << std::endl;
 
             if (direction == "Z+") {
                 const int shift = extend_param.nz_upper + extend_param.nz_lower;
@@ -558,7 +574,7 @@ extendRegions(Opm::REGIONSSection& regions,
             exteded_val = upper_equilnum;
         }
 
-        std::cout << "Extend regions: " << records.name() << std::endl;
+        //std::cout << "Extend regions: " << records.name() << std::endl;
         auto& val_status = const_cast<std::vector<Opm::value::status>&>(item.getValueStatus());
 
         std::vector<int> val_new(nc_new);
@@ -642,7 +658,7 @@ extendSchedule(Opm::SCHEDULESection& schedule,
             continue;
         }
 
-        std::cout << "Extending schedule record: " << records.name() << std::endl;
+        //std::cout << "Extending schedule record: " << records.name() << std::endl;
 
         if (records.name() == "WSEED") {
             for (const auto& record : records) {
@@ -684,7 +700,12 @@ manipulate_deck(std::string_view deck_file,
     auto deck = Opm::Parser{}.parseFile(std::string {deck_file}, parseContext, errors);
     auto extend_param = getExtendParam(param_file);
 
+    std::cout << "Reading deck file: " << deck_file << std::endl;
+
+
+    
     // write out json file
+
     std::cout << "Extend parameters:\n"
               << "nz_upper: "          << extend_param.nz_upper        << '\n'
               << "top_upper: "         << extend_param.top_upper       << '\n'
@@ -743,12 +764,12 @@ manipulate_deck(std::string_view deck_file,
             continue;
         }
 
-        std::cout << "Exending '" << records.name() << '\'' << std::endl;
+        //std::cout << "Exending '" << records.name() << '\'' << std::endl;
 
         const int nz_upper = extend_param.nz_upper;
 
         for (const auto& record : records) {
-            std::cout << "Record: " << record << std::endl;
+            //std::cout << "Record: " << record << std::endl;
 
             int& K1 = const_cast<int&>(record.getItem("K1").getData<int>()[0]);
             int& K2 = const_cast<int&>(record.getItem("K2").getData<int>()[0]);
@@ -780,19 +801,22 @@ will be stripped and the value types will be validated.
 By passing the option -o you can redirect the output to a file
 or a directory.
 
+It will also pad the grid vertically according to parameters
+specified in a json file (default fracture_param.json).
+
 Print on stdout:
 
-   manipulatedeck  /path/to/case/CASE.DATA
+   manipulatedeck  /path/to/case/CASE.DATA -p fracture_param.json
 
 
 Print MY_CASE.DATA in /tmp:
 
-    manipulatedeck -o /tmp /path/to/MY_CASE.DATA
+    manipulatedeck -o /tmp /path/to/MY_CASE.DATA -p fracture_param.json
 
 
 Print NEW_CASE in cwd:
 
-    opmpack -o NEW_CASE.DATA path/to/MY_CASE.DATA
+    opmpack -o NEW_CASE.DATA path/to/MY_CASE.DATA -p fracture_param.json
 
 As an alternative to the -o option you can use -c; that is equivalent to -o -
 but restart and import files referred to in the deck are also copied. The -o and
