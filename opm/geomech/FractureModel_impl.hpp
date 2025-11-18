@@ -67,18 +67,78 @@ namespace Opm {
         external::buildBoundingBoxTree(cell_search_tree_, cell_seeds_, grid);
     }
 
+  template<class WellState>
+    int findPerf(const WellState& wellstate, int cell_index_frac){
+        const auto& perf_data = wellstate.perf_data;
+        auto it = std::find(perf_data.cell_index.begin(),
+                            perf_data.cell_index.end(),
+                            cell_index_frac);
+                            // check if perforation exists
+        if(it == perf_data.cell_index.end()) {
+            std::cerr << "Warning: Could not find perforation for well " << wellstate.name
+                    << " in cell index " << cell_index_frac << std::endl;         
+            return -1;
+        }// skip if not found
+                            
+        int perf_index = it - perf_data.cell_index.begin();
+        return perf_index;
+    }
+
     template <class TypeTag, class Simulator>
     void FractureModel::updateWellProperties(const Simulator& simulator)
     {
+       const int water_index = 0;//FluidSystem::waterPhaseIdx
         for (size_t i=0; i < wells_.size(); ++i) {
             // TO DO set wells to active even without fractures
+            double injection_rate = 0.0;
+            double total_wellindex = 0.0;
             {
-                
-            }  
+              auto well_index = simulator.problem().wellModel().wellState().index(wells_[i].name());
+                if(well_index.has_value()){
+                    const auto& wellmodel = simulator.problem().wellModel();
+                    const auto& wellstate = wellmodel.wellState().well(*well_index);
+                    //const auto& reportStepIndex = simulator.episodeIndex();
+                    const auto& wellstate_nupcol = wellmodel.nupcolWellState().well(*well_index);
+                    const auto& wells = wellmodel.localNonshutWells();
+                    const auto& well = wells[*well_index];
+                    assert(well->name() == wells_[i].name());
+                    // get cell index from well perforation data
+                    // check if well is open
+                    if(wellstate.status == ::Opm::WellStatus::OPEN) {
+                      //for (const auto& perf : wellstate.perf_data) {
+                      for (int perf_index=0; perf_index < wellstate.perf_data.cell_index.size(); ++perf_index) {    
+                            //water_rate += perf.flux[TypeTag::FluidSystem    ::waterPhaseIdx];
+                            //total_wellindex += perf.well_index;// nead to multiply with formation damange
+                            //int  perf_index =  findPerf(wellstate, cell_idx);
+                            ///if(perf_index == -1) continue; // skip if not found
+                            const int cell_idx = wellstate.perf_data.cell_index[perf_index];
+                            const auto& intQuants = simulator.model()
+                                .intensiveQuantities(cell_idx, /*timeIdx=*/0);
+                            using Scalar = double;
+                            const auto trans_mult = simulator.problem().template wellTransMultiplier<Scalar>(intQuants,cell_idx);
+                            const auto effective_well_indexs = well->wellIndex(perf_index, 
+                                                                              intQuants, 
+                                                                              trans_mult, 
+                                                                              wellstate_nupcol, 
+                                                                              /*with_fracture*/ false);
+                            
+                             const auto effective_well_index   =  effective_well_indexs[water_index];
+                            total_wellindex += effective_well_index;
+
+                        }
+                        injection_rate = wellstate.reservoir_rates[water_index];   
+                    }   
+                 }  
+            }
+            assert(well_fractures_[i].size() < 2);// for now asser this if not better "well model is need"
             for (auto& fracture : well_fractures_[i]){
+              WellInfo wellinfo = fracture.wellInfo();
+              std::cout << " Well " << wellinfo.name << " injection "
+                        << injection_rate << " WI " << total_wellindex << std::endl;  
+                fracture.setWellRateAndWI(injection_rate, total_wellindex);
                 // do update wells
                 // set well properties
-                WellInfo wellinfo = fracture.wellInfo();
+
                 // need to be double checked how to assosiate correct perforation/segment
                 int perf_index_frac = wellinfo.perf;
                 int cell_index_frac = wellinfo.well_cell;
@@ -102,20 +162,17 @@ namespace Opm {
                 wells_[i].setActive(true);
                 // get well perforation
                 const auto& perf_data = wellstate.perf_data;
-                auto it = std::find(perf_data.cell_index.begin(),
-                                    perf_data.cell_index.end(),
-                                    cell_index_frac);
-                // check if perforation exists
-                if(it == perf_data.cell_index.end()) {
-                    std::cerr << "Warning: Could not find perforation for well " << wellinfo.name
-                              << " in cell index " << cell_index_frac << std::endl;
+                int  perf_index =  findPerf(wellstate,cell_index_frac);
+                if(perf_index == -1) {
                     fracture.setActive(false);
                     wells_[i].setPerfActive(perf_index_frac,false);          
                     continue; // skip if not found
                 }
-                int perf_index = it- perf_data.cell_index.begin();
                 double perf_pressure = perf_data.pressure[perf_index];
-                std::cout << "Perf index flow " << perf_index << " fracture " << perf_index_frac << " pressure " << perf_pressure << std::endl;
+                std::cout << "Perf index perf " << perf_index << " fracture " << perf_index_frac << " pressure " << perf_pressure << std::endl;
+                // std::cout << 
+                //std::cout << " Well " << perf_pressure << std::endl;
+                //std::cout << "Perf index åerf " << perf_index << " fracture " << perf_index_frac << " pressure " << perf_pressure << std::endl;
                 fracture.setPerfPressure(perf_pressure);
                 wells_[i].setPerfPressure(perf_index_frac, perf_pressure);
                 fracture.setActive(true);

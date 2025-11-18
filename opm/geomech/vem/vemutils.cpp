@@ -201,11 +201,15 @@ bool cellFemCell(const Dune::CpGrid& grid, int cellIdx,
         Dune::CartesianIndexMapper<Dune::CpGrid>& cartMapper){
         bool is_ok = true;
         int nf = grid.numCellFaces(cellIdx);
-        // if(nf != 6){
-        //     //not needed
-        //     is_ok = false;
-        //     return false;
-        // }
+
+        bool only_nice = true; // only take normal hex 
+        if (only_nice) {
+            if (nf != 6) {
+                // not needed
+                is_ok = false;
+                return false;
+            }
+        }
         //auto cartMapper = Dune::CartesianIndexMapper<Dune::CpGrid>(grid);
         // using ElementMapper =   
         //   Dune::MultipleCodimMultipleGeomTypeMapper<typename Dune::CpGrid::LeafGridView>;
@@ -213,10 +217,12 @@ bool cellFemCell(const Dune::CpGrid& grid, int cellIdx,
         for (int f = 0; f < nf; ++f) {
             auto face = grid.cellFace(cellIdx, f);
             auto faceSize = grid.numFaceVertices(face);
-            // if(faceSize !=4){
-            //     is_ok = false;
-            //     return false;
-            // }
+            if (only_nice) {
+                if (faceSize != 4) {
+                    is_ok = false;
+                    return false;
+                }
+            }
             auto out_cell = grid.faceCell(face, 1);
             auto in_cell = grid.faceCell(face, 0);
 
@@ -639,6 +645,7 @@ Dune::BlockVector<Dune::FieldVector<double,1>> smoothCellVector(const Dune::CpGr
   Dune::BlockVector<Dune::FieldVector<double,1>> smoothed_cell_vector(cell_vector.size());
   for(const auto& elem : elements(gv)){
     int cellIdx = gv.indexSet().index(elem);
+    double value = cell_vector[cellIdx][0];
     double sum = 0.0;
     int count = 0;
     for (const auto& intersection : intersections(gv, elem)) {
@@ -647,13 +654,13 @@ Dune::BlockVector<Dune::FieldVector<double,1>> smoothCellVector(const Dune::CpGr
         }
         auto neigh = intersection.outside();
         int cell_outside = gv.indexSet().index(neigh);
-        sum += cell_vector[cell_outside][0];
+        sum += cell_vector[cell_outside][0]-value;
         count += 1;
     }
     // include self
-    sum += cell_vector[cellIdx][0];
-    count += 1;
-    smoothed_cell_vector[cellIdx][0] = sum / double(count);
+    //sum += cell_vector[cellIdx][0];
+    //count += 1;
+    smoothed_cell_vector[cellIdx][0] = value + sum / double(count);
   }
   return smoothed_cell_vector;
 }

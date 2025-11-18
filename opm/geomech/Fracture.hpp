@@ -200,6 +200,7 @@ public:
     std::vector<double> leakOfRate() const;
     double injectionPressure() const;
     void setPerfPressure(double perfpressure);//{perf_pressure_ = perfpressure;}
+    void setWellRateAndWI(double wellrate, double WI);//{well_rate_ = wellrate; total_wellindex_ = WI;}
     Dune::FieldVector<double, 6> stress(Dune::FieldVector<double, 3> obs) const;
     Dune::FieldVector<double, 6> strain(Dune::FieldVector<double, 3> obs) const;
     Dune::FieldVector<double, 3> disp(Dune::FieldVector<double, 3> obs) const;
@@ -211,6 +212,7 @@ public:
     std::array<double,2> hightAndWidth() const;
     double maxFlowTimeStep() const{return max_flow_time_step_;}
 private:
+   void summary_of_solve();
    std::vector<RuntimePerforation> wellIndices_() const;
    bool  expantionMax(const FractureProperties& fprop);
    bool removeNewZeroWithCells(RegularTrimesh& mesh,int cur_level,const RegularTrimesh& original_mesh) const;
@@ -413,7 +415,9 @@ private:
     // using CoupledFractureSolver = Dune::InverseOperator<VectorHP, VectorHP>;
     // std::unique_ptr<CoupledFractureSolver> coupled_solver_;
     std::vector<std::vector<RuntimePerforation>> well_indices_; // for each perf, the corresponding well index info
-  double max_flow_time_step_{-1.0};
+    double max_flow_time_step_{-1.0};
+    double well_rate_;
+    double total_wellindex_;
 };
 } // namespace Opm
 

@@ -428,7 +428,7 @@ Fracture::setFractureGrid(std::unique_ptr<Fracture::Grid> gptr)
         grid_stretcher_ = std::unique_ptr<GridStretcher>(new GridStretcher(*grid_));
 
     // set sparsity of pressure matrix, but do not compute its entries
-    initPressureMatrix();
+    //initPressureMatrix(); need to be done after reservoir cells are known
 
     // Since the grid has been created/updated/changed, any previous mapping to
     // reservoir cells has been invalidated, and the fracture matrix (for
@@ -504,6 +504,21 @@ Fracture::stressIntensityK1() const
     return stressIntensityK1;
 }
 
+void
+Fracture::summary_of_solve(){
+  if(numWellEquations()>0){
+    int nc = numFractureCells();
+    assert( fracture_pressure_.size() == nc + 1);
+    double well_pressure = fracture_pressure_[nc];
+    std::cout << "Perf pressure " << well_pressure << std::endl;
+    const int cell = std::get<0>(perfinj_[0]); // @@ will this be the correct index?
+    const double pres = reservoir_pressure_[cell];
+    const double dp = well_pressure - pres;
+    std::cout << "Reservoir pressure at perf cell " << cell << " is " << pres << " dp " <<   dp << std::endl;    
+  }
+}
+
+  
 void
 Fracture::write(int reportStep) const
 {
@@ -985,6 +1000,17 @@ void Fracture::setPerfPressure(double perfpressure){
     }
 }
 
+void Fracture::setWellRateAndWI(double wellrate, double totalwi){
+    //if(well_indices_.size() >0){
+        well_rate_ = wellrate;
+        total_wellindex_ = totalwi;
+    // }else{
+    //     // dampted updating for stability of fracture growth
+    //     well_rate_ = (well_rate_ + damping_factor_wi*wellrate)/(1.0+damping_factor_wi);//(wellrate-well_rate_)*damping_factor;
+    //     total_wellindex_ = (total_wellindex_ + damping_factor_wi*totalwi)/(1.0+damping_factor_wi);//(totalwi-total_wellindex_)*damping_factor;
+    // }
+}
+
 std::vector<RuntimePerforation>
 Fracture::wellIndicesAvrg(const std::vector<std::vector<RuntimePerforation>>& well_indices){
     OPM_TIMEFUNCTION();
@@ -1446,8 +1472,7 @@ void
 Fracture::initPressureMatrix()
 {
     // size_t num_columns = 0;
-    //  index of the neighbour
-    //
+    //  index of the neighbour    //
     // Flow from wells to fracture cells
     double fWI = prm_.get<double>("fractureWI");
     perfinj_.clear();
@@ -1518,9 +1543,12 @@ Fracture::initPressureMatrix()
         assert(numWellEquations() == 1); // @@ for now, we assume there is just one well equation
         // add elements for last row and column
         const int weqix = nc - 1; // index of well equation
-        for (int i : well_source_) {
+        //for (int i : well_source_) {
+        for (const auto& pi : perfinj_) {
+            const int i = std::get<0>(pi);
             matrix.entry(i, weqix) = 0.0;
             matrix.entry(weqix, i) = 0.0;
+            matrix.entry(i, i) = 0.0;
         }
         matrix.entry(weqix, weqix) = 0.0;
     }
@@ -1578,8 +1606,10 @@ Fracture::assemblePressure()
     } else if (control_type == "rate_well") {
         assert(numWellEquations() == 1); // @@ for now, we assume there is just one well equation
         const int nc = numFractureCells() + numWellEquations();
+        const int cell = std::get<0>(perfinj_[0]); // @@ will this be the correct index? 
         const double lambda = reservoir_mobility_[0]; // @@ If not constant, this might be wrong
-        const double WI_lambda = control.get<double>("WI") * lambda;
+        // control.get<double>("WI")
+        const double WI_lambda = total_wellindex_ * lambda;
         matrix[nc - 1][nc - 1] = WI_lambda;
         // NB: well_source_[i] is assumed to be the same as get<0>(perfinj_[i])
         for (const auto& pi : perfinj_) {

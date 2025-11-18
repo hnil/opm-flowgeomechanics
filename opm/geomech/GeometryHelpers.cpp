@@ -60,8 +60,8 @@ buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, std::vect
         auto vertex = geom.center();
         Vec3d point(vertex[0], vertex[1], vertex[2]);
         //bb.add(point);
-        int cell = external::cellOfPoint(m_cellSearchTree, grid, entity_seeds, point);
         if (element.partitionType() == Dune::InteriorEntity){
+            int cell = external::cellOfPoint(m_cellSearchTree, grid, entity_seeds, point);
             assert(cell == index);  
         }else{
             // may get the neares cell in partition
@@ -128,7 +128,9 @@ int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
         // std::cout << "local" << local[0] << " " << local[1] << " " << local[2] << " " << std::endl;
         //assert(false);
         //assert(cells.size()==0);
+        //std::stringstream os;
         std::cout << "Point outside bounding box or overlap cells?" << std::endl;
+        //OpmLog::info(os.str())
         return -1;
      }
 }
