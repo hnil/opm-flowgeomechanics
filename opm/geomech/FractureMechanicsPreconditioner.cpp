@@ -16,6 +16,7 @@ FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::Syst
     diag_flow_ = prm.get<bool>("diag_flow");
     int verbosity = prm.get<bool>("verbosity");
     mech_press_coupling_ = prm.get<bool>("mech_press_coupling", true);
+    mech_first_ = prm_.get<bool>("mech_first");
     if (!diag_mech_) {
         OPM_TIMEBLOCK(SetupLuFactorization);
         if(verbosity>0){
@@ -36,8 +37,20 @@ FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::Syst
     }
 }
 
+
 void
 FractureMechanicsPreconditioner::apply(Opm::VectorHP& v, const Opm::VectorHP& d)
+{
+    OPM_TIMEFUNCTION_LOCAL();
+    if (mech_first_){
+        applymech_first(v, d);
+    } else {
+        applymech_last(v, d);
+    }
+}
+
+void
+FractureMechanicsPreconditioner::applymech_first(Opm::VectorHP& v, const Opm::VectorHP& d)
 {
     // SystemMatrix S {{A, I}, // mechanics system (since A is negative, we leave I positive here)
     //               {C, M}}; // flow system
@@ -76,7 +89,7 @@ FractureMechanicsPreconditioner::apply(Opm::VectorHP& v, const Opm::VectorHP& d)
 
     if (diag_flow_) {
         for (size_t i = 0; i != M_diag_.size(); ++i) {
-            v[_1][i] = d[_1][i] / M_diag_[i];
+            v[_1][i] = rhs_flow[i] / M_diag_[i];
         }
     } else {
         Dune::InverseOperatorResult res;
@@ -84,6 +97,61 @@ FractureMechanicsPreconditioner::apply(Opm::VectorHP& v, const Opm::VectorHP& d)
         // throw std::runtime_error("FractureMechanicsPreconditioner: full flow preconditioner not
         // implemented");
     }
+};
+
+void
+FractureMechanicsPreconditioner::applymech_last(Opm::VectorHP& v, const Opm::VectorHP& d)
+{
+    // SystemMatrix S {{A, I}, // mechanics system (since A is negative, we leave I positive here)
+    //               {C, M}}; // flow system
+    OPM_TIMEFUNCTION_LOCAL();
+    if (diag_flow_) {
+        for (size_t i = 0; i != M_diag_.size(); ++i) {
+            v[_1][i] = d[_1][i] / M_diag_[i];
+        }
+    } else {
+        Dune::InverseOperatorResult res;
+        auto tmp = d[_1];
+        flow_solver_->apply(v[_1], tmp, res);
+        // throw std::runtime_error("FractureMechanicsPreconditioner: full flow preconditioner not
+        // implemented");
+    }
+
+    auto rhs_mech = d[_0];
+    if (mech_press_coupling_) {
+        A_[_0][_1].mmv(v[_1], rhs_mech); // -1.0); // rhs_flow -= A_[_1][_0] * v[_0]
+    }
+
+    if (diag_mech_) {
+        for (size_t i = 0; i != A_diag_.size(); ++i) {
+            v[_0][i] = rhs_mech[i] / A_diag_[i];
+        }
+    } else {
+        // solve full mechanics system
+        if (true) {
+            auto tmp = rhs_mech;
+            // A_[_0][_0].solve(v[_0],tmp);
+            this->backSolve(v[_0], tmp);
+        } else {
+            // DenseMatrix<double> A(n, n);
+            // for(int i=0; i< n; ++i){
+            //   for(int j=0; i< n; ++j){
+            //     A(i,j) = A[_0][_0][i][j];
+            //   }
+            // }
+            //  structured::StructuredOptions<double> options;
+            //  structured::ClusterTree tree(n);
+            //  tree.refine(options.leaf_size());
+            //  auto H = structured::construct_from_dense(A, options);
+        }
+        // auto diff = tmp;
+        // diff -= v[_0];
+        // auto err = diff.two_norm();///v[_0].two_norm();
+        // assert(err<1e-8);
+    }
+    
+
+    
 };
 
 void
