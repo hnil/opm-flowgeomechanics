@@ -626,6 +626,9 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             well_indices_[1] = well_indices_old;
             well_indices_[0] = well_indices_new;
         }
+        // summary of solve
+        summary_of_solve();
+        
            
 }
 

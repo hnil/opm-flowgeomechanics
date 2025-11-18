@@ -200,19 +200,29 @@ updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
 
         const double t1 = std::get<2>(e);
         const double t2 = std::get<3>(e);
-        const double h1 = aperture[i] + min_width;
-        const double h2 = aperture[j] + min_width;
+        double  dh1 = 1.0;
+        double  dh2 = 1.0;
+        if(aperture[i][0] <= 0.0) dh1 = 0.0;
+        if(aperture[j][0] <= 0.0) dh2 = 0.0;
+        assert(aperture[i][0]>=0.0);
+        assert(aperture[j][0]>=0.0);        
+        const double h1 = std::max(aperture[i][0],min_width);//aperture[i] + min_width;
+        const double h2 = std::max(aperture[j][0],min_width);//aperture[j] + min_width;
         const double p1 = pressure[i];
         const double p2 = pressure[j];
 
         const double q = (h1 * h1 * h1) * (h2 * h2 * h2) * (t1 * t2); // numerator
-        const double d1q = 3 * (h1 * h1) * (h2 * h2 * h2) * (t1 * t2);
-        const double d2q = 3 * (h1 * h1 * h1) * (h2 * h2) * (t1 * t2);
+        const double d1q = 3 * (h1 * h1) * (h2 * h2 * h2) * (t1 * t2)* dh1;
+        const double d2q = 3 * (h1 * h1 * h1) * (h2 * h2) * (t1 * t2)* dh2;
 
-        const double r = 12 * (h1 * h1 * t1 + h2 * h2 * t2); // denominator
-        const double d1r = 36 * (h1 * h1) * t1;
-        const double d2r = 36 * (h2 * h2) * t2;
-
+        //const double r = 12 * (h1 * h1 * t1 + h2 * h2 * t2); // denominator
+        const double r = 12 * (h1 * h1 * h1 * t1 + h2 * h2* h2 * t2); // denominator
+        const double d1r = 36 * (h1 * h1) * t1 *dh1;
+        const double d2r = 36 * (h2 * h2) * t2 *dh1;
+        //const double d1r = 24 * (h1) * t1;
+        //const double d2r = 24 * (h2) * t2;
+        assert(r >= 0.0);
+        assert(q >= 0.0);
         const double dTdh1 = (r == 0) ? 0.0 : (d1q * r - q * d1r) / (r * r);
         const double dTdh2 = (r == 0) ? 0.0 : (d2q * r - q * d2r) / (r * r);
 
@@ -226,11 +236,13 @@ updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
         C[j][i] += dTdh1 * (p2 - p1) * krull;
     }
     // zeroing out columns corresponding to closed cells
+    if(false){
     for (size_t col = 0; col != closed_cells.size(); ++col)
         if (closed_cells[col])
             for (size_t row = 0; row != C.N(); ++row)
                 if (C.exists(row, col))
                     C[row][col] = 0;
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -399,7 +411,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
 
     // update the coupling matrix (possibly create it if not already initialized)
     auto fracture_head(fracture_pressure_);
-    assert(fracture_dgh_.size() == fracture_pressure_.size());
+    assert(fracture_dgh_.size() == (fracture_pressure_.size()-numWellEquations()));
     for (size_t i = 0; i < fracture_dgh_.size(); ++i) {
         fracture_head[i] = fracture_pressure_[i] - fracture_dgh_[i];
     }

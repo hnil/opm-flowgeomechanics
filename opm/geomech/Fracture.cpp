@@ -858,8 +858,10 @@ Fracture::addSource()
         size_t j = std::get<1>(matel);
         double t1 = std::get<2>(matel);
         double t2 = std::get<3>(matel);
-        double h1 = fracture_width_[i] + min_width_;
-        double h2 = fracture_width_[j] + min_width_;
+        //double h1 = fracture_width_[i] + min_width_;
+        //double h2 = fracture_width_[j] + min_width_;
+        const double h1 = std::max(fracture_width_[i][0],min_width_);
+        const double h2 = std::max(fracture_width_[j][0],min_width_);
         // harmonic mean of surface flow
         double value = 12. / (h1 * h1 * h1 * t1) + 12. / (h2 * h2 * h2 * t2);
 
@@ -916,12 +918,12 @@ Fracture::addSource()
         }
     } else if (control_type == "rate_well") {
         assert(numWellEquations() == 1); // @@ for now, we assume there is just one well equation
-        const double r = control.get<double>("rate") / 24 / 60 / 60; // convert to m3/sec
-        const double WI = control.get<double>("WI");
+        const double well_rate = well_rate_;//control.get<double>("rate") / 24 / 60 / 60; // convert to m3/sec
+        const double WI = total_wellindex_;//control.get<double>("WI");
         const int cell = std::get<0>(perfinj_[0]); // @@ will this be the correct index?
         const double pres = reservoir_pressure_[cell];
-        const double lambda = reservoir_mobility_[0]; // @@ only correct if mobility is constant!
-        rhs_pressure_[rhs_pressure_.size() - 1] = r + WI * lambda * pres; // well source term
+        const double lambda = reservoir_mobility_[cell]; // @@ only correct if mobility is constant!        
+        rhs_pressure_[rhs_pressure_.size() - 1] = well_rate + WI * lambda * pres; // well source term
     } else {
         OPM_THROW(std::runtime_error, "Unknowns control");
     }
@@ -1568,8 +1570,10 @@ Fracture::assemblePressure()
         size_t j = std::get<1>(matel);
         double t1 = std::get<2>(matel);
         double t2 = std::get<3>(matel);
-        double h1 = fracture_width_[i] + min_width_;
-        double h2 = fracture_width_[j] + min_width_;
+        //double h1 = fracture_width_[i] + min_width_;
+        //double h2 = fracture_width_[j] + min_width_;
+        const double h1 = std::max(fracture_width_[i][0],min_width_);
+        const double h2 = std::max(fracture_width_[j][0],min_width_);
         // harmonic mean of surface flow
         double value = 12. / (h1 * h1 * h1 * t1) + 12. / (h2 * h2 * h2 * t2);
 
