@@ -871,13 +871,13 @@ Fracture::addSource()
         const double mobility = 0.5 * (reservoir_mobility_[i] + reservoir_mobility_[j]);
         value = 1 / value;
         value *= mobility;
-        double dh = (fracture_dgh_[i] - fracture_dgh_[j]);//NB -1.0??
+        double dh = (fracture_dgh_[i] - fracture_dgh_[j])*(-1.0);//NB -1.0??
         rhs_pressure_[i] -= value * dh;
         rhs_pressure_[j] += value * dh;
     }
 
     for (size_t i = 0; i < reservoir_pressure_.size(); ++i) {
-        rhs_pressure_[i] += leakof_[i] * reservoir_pressure_[i];
+        rhs_pressure_[i] += leakof_[i] * reservoir_pressure_[i];// gravity i handeld in next loop
     }
     // gravity contribution from fracture to reservoir
     for (auto element : Dune::elements(grid_->leafGridView())) {
@@ -973,7 +973,9 @@ Fracture::leakOfRate() const
     for (auto& element : Dune::elements(grid_->leafGridView())) {
         int eIdx = mapper.index(element);
         auto geom = element.geometry();
-        double dp = (fracture_pressure_[eIdx] - reservoir_pressure_[eIdx]);
+        double dh_res = reservoir_cell_z_[eIdx] * gravity_ * reservoir_density_[eIdx];
+        double dh_frac = fracture_dgh_[eIdx];
+        double dp = ((fracture_pressure_[eIdx]-dh_frac) - (reservoir_pressure_[eIdx]-dh_res));
         double q = leakof_[eIdx] * dp;
         leakofrate[eIdx] = q / geom.volume();
     }
@@ -1092,7 +1094,9 @@ Fracture::wellIndices_() const
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     for (auto& element : Dune::elements(grid_->leafGridView())) {
         int eIdx = mapper.index(element);
-        double dp = (fracture_pressure_[eIdx] - reservoir_pressure_[eIdx]);
+        double dh_res = reservoir_cell_z_[eIdx] * gravity_ * reservoir_density_[eIdx];
+        double dh_frac = fracture_dgh_[eIdx];
+        double dp = ((fracture_pressure_[eIdx]-dh_frac) - (reservoir_pressure_[eIdx]-dh_res));
         double q = leakof_[eIdx] * dp;
         int res_cell = reservoir_cells_[eIdx];
         // just to search
@@ -1191,9 +1195,10 @@ Fracture::assignGeomechWellState(PerfData<Scalar>& perfData) const
         auto samplePoint = typename ConnFracStatistics<Scalar>::SamplePoint {};
 
         samplePoint[pressIx] = this->fracture_pressure_[cellIx][0];
-
+        double dh_res = reservoir_cell_z_[cellIx] * gravity_ * reservoir_density_[cellIx];
+        double dh_frac = fracture_dgh_[cellIx];
         samplePoint[rateIx] = this->leakof_[cellIx]
-            * (this->fracture_pressure_[cellIx][0] - this->reservoir_pressure_[cellIx]);
+          * ((this->fracture_pressure_[cellIx][0]-dh_frac)- (this->reservoir_pressure_[cellIx]-dh_res));
 
         samplePoint[widthIx] = this->fracture_width_[cellIx][0];
 
