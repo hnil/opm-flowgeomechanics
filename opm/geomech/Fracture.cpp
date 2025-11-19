@@ -80,10 +80,11 @@ Fracture::init(const std::string& well,
 {
     OPM_TIMEFUNCTION();
     max_flow_time_step_ = std::numeric_limits<double>::max();
-    if(prm_.get<double>("config.gravity_off", true)){
+    prm_ = prm;
+    if(prm_.get<bool>("config.gravity_off", true)){
         gravity_ = 0.0;
     }
-    prm_ = prm;
+
     min_width_ = prm_.get<double>("config.min_width", 1e-3);
     wellinfo_ = WellInfo({well, perf, well_cell, global_index, segment, perf_range});
 
@@ -610,7 +611,7 @@ Fracture::writemulti(double time) const
 
     for (size_t i = 0; i < fracture_width_.size(); ++i) {
         fracture_width[i] = fracture_width_[i][0];
-        flow_width[i] = fracture_width_[i][0] + min_width_;
+        flow_width[i] = std::max(fracture_width_[i][0], min_width_);
         fracture_pressure[i] = fracture_pressure_[i][0];
         reservoir_cells[i] = reservoir_cells_[i]; // only converts to double
         reservoir_traction[i] = ddm::tractionSymTensor(reservoir_stress_[i], cell_normals_[i]);
@@ -862,13 +863,15 @@ Fracture::addSource()
         //double h2 = fracture_width_[j] + min_width_;
         const double h1 = std::max(fracture_width_[i][0],min_width_);
         const double h2 = std::max(fracture_width_[j][0],min_width_);
+        //const double h1 = min_width_;
+        //const double h2 = min_width_;
         // harmonic mean of surface flow
         double value = 12. / (h1 * h1 * h1 * t1) + 12. / (h2 * h2 * h2 * t2);
 
         const double mobility = 0.5 * (reservoir_mobility_[i] + reservoir_mobility_[j]);
         value = 1 / value;
         value *= mobility;
-        double dh = (fracture_dgh_[i] - fracture_dgh_[j]);
+        double dh = (fracture_dgh_[i] - fracture_dgh_[j]);//NB -1.0??
         rhs_pressure_[i] -= value * dh;
         rhs_pressure_[j] += value * dh;
     }
@@ -1611,7 +1614,7 @@ Fracture::assemblePressure()
         assert(numWellEquations() == 1); // @@ for now, we assume there is just one well equation
         const int nc = numFractureCells() + numWellEquations();
         const int cell = std::get<0>(perfinj_[0]); // @@ will this be the correct index? 
-        const double lambda = reservoir_mobility_[0]; // @@ If not constant, this might be wrong
+        const double lambda = reservoir_mobility_[cell]; // @@ If not constant, this might be wrong
         // control.get<double>("WI")
         const double WI_lambda = total_wellindex_ * lambda;
         matrix[nc - 1][nc - 1] = WI_lambda;
