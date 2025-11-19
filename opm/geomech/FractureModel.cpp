@@ -109,6 +109,7 @@ makeDefaultFractureParam()
     if(true){
         fracture_param.put("fractureparam.solver.linsolver.preconditioner.diag_mech", true);// for large systems seem sto better with better preconditioner
         fracture_param.put("fractureparam.solver.linsolver.preconditioner.diag_flow", true);
+        fracture_param.put("fractureparam.solver.linsolver.preconditioner.mech_first", false);
         fracture_param.put("fractureparam.solver.linsolver.preconditioner.mech_press_coupling", false);
     }else{
         fracture_param.put("fractureparam.solver.linsolver.preconditioner.diag_mech", false);// for large systems seem sto better with better preconditioner
@@ -137,7 +138,7 @@ makeDefaultFractureParam()
 
     fracture_param.put("fractureparam.KMax", 1e6); // in input file
     fracture_param.put("fractureparam.extended_fractures", true);
-    fracture_param.put("fractureparam.fractureWI", 0.1);
+    fracture_param.put("fractureparam.fractureWI", 1e-6);
     fracture_param.put("fractureparam.write_pressure_system", false);
     fracture_param.put("fractureparam.write_fracture_system", false);
     fracture_param.put("fractureparam.pressuresolver", "umfpack"s);
