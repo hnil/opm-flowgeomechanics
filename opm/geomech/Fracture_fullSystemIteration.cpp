@@ -178,9 +178,10 @@ updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
                      const size_t num_cells,
                      const size_t num_wells,
                      const std::vector<Htrans>& htrans,
-                     const ResVector& pressure,
+                     const ResVector& pressure,// is realy head
                      const ResVector& aperture,
                      const std::vector<int>& closed_cells,
+                     const std::vector<double>& reservoir_mobility,
                      double min_width)
 {
     OPM_TIMEFUNCTION();
@@ -202,14 +203,14 @@ updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
         const double t2 = std::get<3>(e);
         double  dh1 = 1.0;
         double  dh2 = 1.0;
-        if(aperture[i][0] <= 0.0) dh1 = 0.0;
-        if(aperture[j][0] <= 0.0) dh2 = 0.0;
+        if(aperture[i][0] <= min_width) dh1 = 0.0;
+        if(aperture[j][0] <= min_width) dh2 = 0.0;
         assert(aperture[i][0]>=0.0);
         assert(aperture[j][0]>=0.0);        
         const double h1 = std::max(aperture[i][0],min_width);//aperture[i] + min_width;
         const double h2 = std::max(aperture[j][0],min_width);//aperture[j] + min_width;
-        const double p1 = pressure[i];
-        const double p2 = pressure[j];
+        const double p1 = pressure[i];//-fracture_dgh[i];
+        const double p2 = pressure[j];//-fracture_dgh[j];; pressure should already be head
 
         const double q = (h1 * h1 * h1) * (h2 * h2 * h2) * (t1 * t2); // numerator
         const double d1q = 3 * (h1 * h1) * (h2 * h2 * h2) * (t1 * t2)* dh1;
@@ -218,7 +219,7 @@ updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
         //const double r = 12 * (h1 * h1 * t1 + h2 * h2 * t2); // denominator
         const double r = 12 * (h1 * h1 * h1 * t1 + h2 * h2* h2 * t2); // denominator
         const double d1r = 36 * (h1 * h1) * t1 *dh1;
-        const double d2r = 36 * (h2 * h2) * t2 *dh1;
+        const double d2r = 36 * (h2 * h2) * t2 *dh2;
         //const double d1r = 24 * (h1) * t1;
         //const double d2r = 24 * (h2) * t2;
         assert(r >= 0.0);
@@ -226,22 +227,23 @@ updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
         const double dTdh1 = (r == 0) ? 0.0 : (d1q * r - q * d1r) / (r * r);
         const double dTdh2 = (r == 0) ? 0.0 : (d2q * r - q * d2r) / (r * r);
 
-        const double krull = 1; // 1e4; // @@ Not sure if this should be removed?
+        const double mobility = 0.5 * (reservoir_mobility[i] + reservoir_mobility[j]);
+        //const double krull = 1; // 1e4; // @@ Not sure if this should be removed?
         // diagonal elements
-        C[i][i] += dTdh1 * (p1 - p2) * krull;
-        C[j][j] += dTdh2 * (p2 - p1) * krull;
+        C[i][i] += dTdh1 * (p1 - p2) * mobility;
+        C[j][j] += dTdh2 * (p2 - p1) * mobility;
 
         // off-diagonal elements
-        C[i][j] += dTdh2 * (p1 - p2) * krull;
-        C[j][i] += dTdh1 * (p2 - p1) * krull;
+        C[i][j] += dTdh2 * (p1 - p2) * mobility;
+        C[j][i] += dTdh1 * (p2 - p1) * mobility;
     }
     // zeroing out columns corresponding to closed cells
-    if(false){
-    for (size_t col = 0; col != closed_cells.size(); ++col)
+    if(true){
+      for (size_t col = 0; col != closed_cells.size(); ++col)
         if (closed_cells[col])
-            for (size_t row = 0; row != C.N(); ++row)
-                if (C.exists(row, col))
-                    C[row][col] = 0;
+          for (size_t row = 0; row != C.N(); ++row)
+            if (C.exists(row, col))
+              C[row][col] = 0;
     }
 }
 
@@ -420,9 +422,10 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
                          pressure_matrix_->N() - numWellEquations(), // num cells
                          numWellEquations(), // num wells
                          htrans_,
-                         fracture_head,
+                         fracture_head,//Note use head here
                          fracture_width_,
                          closed_cells,
+                         reservoir_mobility_,
                          min_width_);
     // setup the full system
     const auto& M = *pressure_matrix_;
@@ -449,8 +452,11 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     S0[_1][_0] = 0; // the equations themselves have no cross term
     // dump_vector(rhs, debug_filename("rhs_w_").c_str(), debug_filename("rhs_p_").c_str());
     // dump_vector(rhs, "rhs_w", "rhs_p", true);
+    
     S0.mmv(x, rhs); // rhs = rhs - S0 * x;   (we are working in the tanget plane)
+    auto rhs_org(rhs);
 
+    
     // Verify that equations have been chosen correctly
     // for (size_t i = 0; i != fracture_width_.size(); ++i)
     //   assert( !(rhs[_0][i] >= 0.0 && x[_0][i] <= 0.0));
@@ -506,6 +512,17 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
           " " << rhs[_1].infinity_norm()
                   << std::endl;
     }
+    if (nlin_verbosity > 2) {
+      auto x_new(dx);
+      //x_new += dx;
+      auto rhs2_tmp(rhs_org);
+      S.mmv(x_new, rhs2_tmp);
+      std::cout << "Check res : rhs after linsolve:  " << rhs2_tmp[_0].infinity_norm() << 
+        " " << rhs2_tmp[_1].infinity_norm() << std::endl;
+
+      
+    }
+    
     // the following is a heuristic way to limit stepsize to stay within convergence radius
     const double damping = prm_.get<double>("solver.damping");
     const double step_fac = damping; // estimate_step_fac(x, dx) * damping;
@@ -542,7 +559,19 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         // fracture_width_[i][0] = std::min(max_width, fracture_width_[i][0]); // ensure non-negativity
     }
     fracture_pressure_ = x[_1];
+    if (nlin_verbosity > 2) {
+      VectorHP rhs_tmp {x}; // same size as system, content set below
+      normalFractureTraction(rhs_tmp[_0], false); // right-hand side equals the normal fracture traction
+      rhs_tmp[_1] = rhs_pressure_;
+      for (size_t i = 0; i != closed_cells.size(); ++i)
+        if (closed_cells[i])
+            rhs_tmp[_0][i] = 0;
+      S0.mmv(x, rhs_tmp);
+      std::cout << "New: rhs after linsolve:  " << rhs_tmp[_0].infinity_norm() << 
+        " " << rhs_tmp[_1].infinity_norm() << std::endl;
+    }
 
+    
     return false;
 }
 
