@@ -315,6 +315,7 @@ private:
     std::unique_ptr<Grid> grid_;
     Point3D origo_;
     std::array<Point3D, 3> axis_;
+    std::array<Point3D, 3> naxis_;
     WellInfo wellinfo_;
     bool active_{false}; // is fracture active?
     std::unique_ptr<Dune::VTKWriter<Grid::LeafGridView>> vtkwriter_;

@@ -97,6 +97,7 @@ Fracture::init(const std::string& well,
     double init_scale = prm_.get<double>("config.axis_scale");
     for (int i = 0; i < 3; ++i) {
         axis_[i] /= axis_[i].two_norm();
+        naxis_[i] = axis_[i];
         axis_[i] *= init_scale;
     }
     std::cout << "axis" << axis_[0][0] << "," << axis_[0][1] << "," << axis_[0][2] << " " << axis_[1][0]
@@ -515,7 +516,26 @@ Fracture::summary_of_solve(){
     const int cell = std::get<0>(perfinj_[0]); // @@ will this be the correct index?
     const double pres = reservoir_pressure_[cell];
     const double dp = well_pressure - pres;
-    std::cout << "Reservoir pressure at perf cell " << cell << " is " << pres << " dp " <<   dp << std::endl;    
+    FractureProperties fprop = calculateFractureProperties();
+    // set properties of fracture to structure used in output
+    // frac_prop.height[perfIx] = fprop.height;
+    // frac_prop.length[perfIx] = fprop.length;
+    // frac_prop.area[perfIx] = fprop.area;
+    // frac_prop.flux[perfIx] = fprop.flux;
+    // frac_prop.WI[perfIx] = fprop.WI;
+    // frac_prop.volume[perfIx] = fprop.volume;
+    // frac_prop.filter_volume[perfIx] = fprop.filter_volume;
+    // frac_prop.avg_width[perfIx] = fprop.avg_width;
+    // frac_prop.avg_filter_width[perfIx] = fprop.avg_filter_width;
+    // frac_prop.inj_pressure[perfIx] = fprop.inj_pressure;
+    // frac_prop.inj_bhp[perfIx] = fprop.inj_bhp;
+    // frac_prop.inj_wellrate[perfIx] = fprop.inj_wellrate;
+    // fracture rate
+    std::cout << "Reservoir pressure at perf cell " << cell << " is " << pres << " dp " <<   dp << " frac flux " << fprop.flux << std::endl;
+    std::cout << "Fracture properties: " << std::endl;
+    std::cout << " Height: " << fprop.height << " Length: " << fprop.length << " Area: " << fprop.area << std::endl;
+    std::cout << " Volume: " << fprop.volume << " Avg width: " << fprop.avg_width << std::endl;
+    std::cout << " WI: " << fprop.WI << " Inj pressure: " << fprop.inj_pressure << " Inj bhp: " << fprop.inj_bhp << " Inj rate: " << fprop.inj_wellrate << std::endl;       
   }
 }
 
@@ -1507,8 +1527,8 @@ Fracture::calculateFractureProperties() const
         volume += geom.volume() * (fracture_width_[eIdx]);// + min_width_);
         filter_volume += geom.volume() * filtercake_thikness_[eIdx];
         auto dist = geom.center() - origo_;
-        double dh = dist.dot(axis_[0]);
-        double dw = dist.dot(axis_[1]);
+        double dh = dist.dot(naxis_[0]);
+        double dw = dist.dot(naxis_[1]);
         updateMaxMinVector(dhvec, dh);
         updateMaxMinVector(dwvec, dw);
         if(leak_of_rate.size() != numFractureCells()){
