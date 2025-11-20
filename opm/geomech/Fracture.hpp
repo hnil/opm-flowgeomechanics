@@ -24,6 +24,8 @@
 #ifndef OPM_FRACTURE_HH
 #define OPM_FRACTURE_HH
 
+
+
 #include <dune/common/exceptions.hh>
 #include <dune/foamgrid/foamgrid.hh>
 #include <dune/grid/common/mcmgmapper.hh> // mapper class
@@ -31,7 +33,7 @@
 #include <dune/grid/io/file/vtk/vtkwriter.hh>
 #include <dune/grid/utility/persistentcontainer.hh>
 #include <opm/grid/CpGrid.hpp>
-
+#include <opm/input/eclipse/Units/Units.hpp>
 #include "GeometryHelpers.hpp"
 #include <dune/grid/yaspgrid.hh>
 #include <dune/grid/yaspgrid/partitioning.hh>
@@ -108,9 +110,13 @@ struct FractureProperties
   double filter_volume;
   double avg_width;
   double avg_filter_width;
+  double inj_pressure;
+  double inj_bhp;
+  double inj_wellrate;
   FractureProperties(double height_, double length_, double flux_, double area_,
                      double WI_, double volume_, double filter_volume_,
-                     double avg_width_, double avg_filter_width_):
+                     double avg_width_, double avg_filter_width_,
+                     double inj_pressure, double inj_bhp, double inj_wellrate):
     height(height_),
     length(length_),
     flux(flux_),
@@ -119,7 +125,10 @@ struct FractureProperties
     volume(volume_),
     filter_volume(filter_volume_),
     avg_width(avg_width_),
-    avg_filter_width(avg_filter_width_)
+    avg_filter_width(avg_filter_width_),
+    inj_pressure(inj_pressure),
+    inj_bhp(inj_bhp),
+    inj_wellrate(inj_wellrate)
   {
   };
 };
@@ -199,8 +208,9 @@ public:
     const WellInfo& wellInfo() const { return wellinfo_; }
     std::vector<double> leakOfRate() const;
     double injectionPressure() const;
-    void setPerfPressure(double perfpressure);//{perf_pressure_ = perfpressure;}
-    void setWellRateAndWI(double wellrate, double WI);//{well_rate_ = wellrate; total_wellindex_ = WI;}
+  double injectionBhp() const;// {return injectionPressure() - dp_perf_;};
+  void setPerfProps(double perfpressure,double perf_depth, double perfrate);//{perf_pressure_ = perfpressure;}
+    void setWellProps(double wellrate, double WI, double wi_dp, double wi_respress, double ref_depth);//{well_rate_ = wellrate; total_wellindex_ = WI;}
     Dune::FieldVector<double, 6> stress(Dune::FieldVector<double, 3> obs) const;
     Dune::FieldVector<double, 6> strain(Dune::FieldVector<double, 3> obs) const;
     Dune::FieldVector<double, 3> disp(Dune::FieldVector<double, 3> obs) const;
@@ -396,7 +406,7 @@ private:
     double E_;
     double nu_;
     double min_width_; // minimum width of fracture, used for convergence criterion
-    double gravity_{9.81};//{9.81}; // gravity acceleration, used for leakoff calculations
+    double gravity_{Opm::unit::gravity};//{9.81}; // gravity acceleration, used for leakoff calculations
     std::vector<double> fracture_dgh_; // gravity contribution to fracture pressure, used for leakoff calculations  
     PropertyTree prm_;
     double total_WI_well_{0.0}; // total well index for the well, used for leakoff calculations
@@ -418,6 +428,16 @@ private:
     double max_flow_time_step_{-1.0};
     double well_rate_;
     double total_wellindex_;
+    //double dz_perf_{0.0};
+    double wi_dz_{0.0};
+    double wi_respress_{0.0};
+    double well_ref_depth_{0.0};
+    double perf_ref_depth_{0.0};
+  //double ref_depth_{0.0};
+    double well_perf_rate_{0.0};
+    double density_{1000.0};// default to water
+    double density_perf_{1000.0};
+    double mobility_water_perf_{1000.0};
 };
 } // namespace Opm
 

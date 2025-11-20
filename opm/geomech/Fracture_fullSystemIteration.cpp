@@ -475,6 +475,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     // solve system equations
     const Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP> S_linop(S);
     TailoredPrecondDiag precond_old(S); // cannot be 'const' due to BiCGstabsolver interface
+    const std::string solver_type = prm_.get<std::string>("solver.linsolver.solver");
     Opm::PropertyTree lprm = prm_.get_child("solver.linsolver.preconditioner");
     Opm::FractureMechanicsPreconditioner precond(S, lprm);
     Dune::InverseOperatorResult iores; // cannot be 'const' due to BiCGstabsolver interface
@@ -494,14 +495,43 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
       std::cout << " cells p: " << rhs[_1].size();
       std::cout << std::endl;
     }
-    auto psolver = Dune::BiCGSTABSolver<VectorHP>(S_linop,
-                                                  precond,
-                                                  lintol, // 1e-20, // desired rhs reduction factor
-                                                  max_iter, // max number of iterations
-                                                  verbosity); // verbose
+
+    using AbstractPrecondType = Dune::PreconditionerWithUpdate<VectorHP, VectorHP>;
+    using AbstractSolverType = Dune::InverseOperator<VectorHP, VectorHP>;
+    std::shared_ptr<AbstractSolverType> psolver;
+    if(solver_type == "bicgstab"){
+        lintol = std::max(linsolve_tol, linsolve_atol / res);
+        psolver = std::make_shared<Dune::BiCGSTABSolver<VectorHP>>(S_linop,
+                                                      precond,
+                                                      lintol, // 1e-20, // desired rhs reduction factor
+                                                      max_iter, // max number of iterations
+                                                      verbosity); // verbose
+    }else if(solver_type == "gmres"){
+         int restart = prm_.get<int>("solver.linsolver.restart",100);
+         psolver = std::make_shared<Dune::RestartedGMResSolver<VectorHP>>(S_linop,
+                                                                precond,
+                                                                lintol, // 1e-20, // desired rhs reduction factor
+                                                                restart,
+                                                                max_iter, // max number of iterations
+                                                                verbosity); // verbose    
+
+    }else if(solver_type == "fgmres"){
+          // fgmres used if preconditioner is not-liner i.e. do approximative solves inside
+         int restart = prm_.get<int>("solver.linsolver.restart",100);
+         psolver = std::make_shared<Dune::RestartedFlexibleGMResSolver<VectorHP>>(S_linop,
+                                                                                  precond,
+                                                                                  lintol, // 1e-20, // desired rhs reduction factor
+                                                                                  restart,
+                                                                                  max_iter, // max number of iterations
+                                                                                  verbosity); // verbose    
+
+    }else{
+        OPM_THROW(std::runtime_error, "Unknown linear solver type: for fracture");
+    }
+
     {
         OPM_TIMEBLOCK(SolveCoupledSystem);
-        psolver.apply(dx, rhs, iores); // NB: will modify 'rhs'
+        psolver->apply(dx, rhs, iores); // NB: will modify 'rhs'
     }
 
     if (nlin_verbosity > 2) {

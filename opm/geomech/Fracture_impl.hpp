@@ -108,7 +108,15 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
           double dist = prm_.get<double>("reservoir.dist");
           reservoir_dist_.resize(ncf, dist);
         }
-        
+        {
+        // well cell properties 
+        const auto& intQuants = simulator.model().intensiveQuantities(wellinfo_.well_cell, /*timeIdx*/ 0);
+        const auto& fs = intQuants.fluidState();
+        density_perf_ = fs.density(FluidSystem::waterPhaseIdx).value();
+        mobility_water_perf_ = intQuants.mobility(FluidSystem::waterPhaseIdx).value();
+        }
+
+
         double numax = 0, Emax = 0;
         //auto& enitity_seeds = problem.elementEntitySeeds();//used for radom axes better way?
         // get properties from rservoir

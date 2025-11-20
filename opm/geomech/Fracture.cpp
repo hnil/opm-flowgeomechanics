@@ -149,7 +149,7 @@ Fracture::init(const std::string& well,
         setFractureGrid();
     }
 
-    setPerfPressure(0.0); // This can be changed by subsequently calling this
+    //setPerfPressure(0.0); // This can be changed by subsequently calling this
                           // function when the fracture is connected to the
                           // reservoir
 
@@ -582,6 +582,7 @@ Fracture::writemulti(double time) const
     //  need to have copies in case of async outout (and interface to functions)
     std::vector<double> K1 = this->stressIntensityK1();
     std::vector<double> fracture_pressure(numFractureCells(), 0.0);
+    std::vector<double> leakof_dp(numFractureCells(), 0.0);
     std::vector<double> filtercake_thikness = filtercake_thikness_; //.size(),0.0);
     std::vector<double> reservoir_pressure = reservoir_pressure_; //.size(),0.0);
     std::vector<double> reservoir_dist = reservoir_dist_; //.size(),0.0);
@@ -592,6 +593,7 @@ Fracture::writemulti(double time) const
     std::vector<double> fracture_force(reservoir_stress_.size(), 0);
     std::vector<double> reservoir_cells(reservoir_cells_.size(), 0.0);
     std::vector<double> fracture_width(fracture_width_.size(), 0.0);
+    std::vector<double> fracture_head(fracture_width_.size(), 0.0);
     std::vector<double> flow_width(fracture_width_.size(), 0.0);
     std::vector<double> rhs_width(rhs_width_.size(), 0.0);
     std::vector<double> well_index(numFractureCells(), 0.0);
@@ -616,6 +618,11 @@ Fracture::writemulti(double time) const
         reservoir_cells[i] = reservoir_cells_[i]; // only converts to double
         reservoir_traction[i] = ddm::tractionSymTensor(reservoir_stress_[i], cell_normals_[i]);
         fracture_force[i] = reservoir_traction[i] - fracture_pressure[i];
+        leakof_dp[i] = fracture_pressure[i] - reservoir_pressure[i] -(fracture_dgh_[i]- reservoir_cell_z_[i]*gravity_*reservoir_density_[i]);
+         // make relative to origo
+        fracture_head[i] = (fracture_pressure[i] - fracture_dgh_[i])-
+          (injectionPressure()-(perf_ref_depth_*gravity_*density_perf_));
+           //make it relative to origo
         assert(filtercake_thikness[i] >= 0.0);
     }
 
@@ -643,8 +650,14 @@ Fracture::writemulti(double time) const
     if (fracture_pressure.size() > 0) {
         vtkmultiwriter_->attachScalarElementData(fracture_pressure, "FracturePressure");
     }
+    if (fracture_head.size() > 0) {
+        vtkmultiwriter_->attachScalarElementData(fracture_head, "FractureHead");
+    }
     if (reservoir_pressure.size() > 0) {
         vtkmultiwriter_->attachScalarElementData(reservoir_pressure, "ReservoirPressure");
+    }
+    if (leakof_dp.size() > 0) {
+        vtkmultiwriter_->attachScalarElementData(leakof_dp, "LeakofDP");
     }
     if (filtercake_thikness.size() > 0) {
         vtkmultiwriter_->attachScalarElementData(filtercake_thikness, "FilterCakeThickness");
@@ -868,7 +881,7 @@ Fracture::addSource()
         // harmonic mean of surface flow
         double value = 12. / (h1 * h1 * h1 * t1) + 12. / (h2 * h2 * h2 * t2);
 
-        const double mobility = 0.5 * (reservoir_mobility_[i] + reservoir_mobility_[j]);
+        const double mobility = 0.5 * (reservoir_mobility_[i] + reservoir_mobility_[j]);//NB shoul chane to mobility_water_perf_;
         value = 1 / value;
         value *= mobility;
         double dh = (fracture_dgh_[i] - fracture_dgh_[j])*(-1.0);//NB -1.0??
@@ -920,16 +933,54 @@ Fracture::addSource()
             rhs_pressure_[cell] += value * (perf_pressure_ - dh);
         }
     } else if (control_type == "rate_well") {
+      // this tries to make control equation for single phase standard wells with one phase and static reservoir
         assert(numWellEquations() == 1); // @@ for now, we assume there is just one well equation
         const double well_rate = well_rate_;//control.get<double>("rate") / 24 / 60 / 60; // convert to m3/sec
         const double WI = total_wellindex_;//control.get<double>("WI");
         const int cell = std::get<0>(perfinj_[0]); // @@ will this be the correct index?
         const double pres = reservoir_pressure_[cell];
-        const double lambda = reservoir_mobility_[cell]; // @@ only correct if mobility is constant!        
-        rhs_pressure_[rhs_pressure_.size() - 1] = well_rate + WI * lambda * pres; // well source term
+        const double density = reservoir_density_[cell];
+        const double lambda = reservoir_mobility_[cell]; // @@ only correct if mobility is constant!
+        if (true) {
+            rhs_pressure_[rhs_pressure_.size() - 1] = well_rate + WI * lambda * pres; // well source term
+        } else {
+            double wi_dzfac = wi_dz_; // sum wi dz
+            wi_dzfac += wi_respress_; // sum wi res_press
+            wi_dzfac
+                += (-WI
+                    * (perf_ref_depth_
+                       - well_ref_depth_)); // counvert to perf_ref_depth from bhp ref_depth for primary
+                                            // variable reservoir_pressure_[nc] i.e. perf pressure
+            rhs_pressure_[rhs_pressure_.size() - 1] = well_rate + lambda * wi_dzfac * density;
+
+            for (const auto& perfinj : perfinj_) {
+                int cell = std::get<0>(perfinj);
+                double value = std::get<1>(perfinj);
+                assert(origo_[2] == perf_ref_depth_);
+                double dh_perf = perf_ref_depth_ * gravity_ * reservoir_density_[cell];
+                double dh_cell = fracture_dgh_[cell];
+                ;
+                double dh = dh_perf - dh_cell;
+                rhs_pressure_[cell] += value * (perf_pressure_ - dh);
+            }
+        }
     } else {
         OPM_THROW(std::runtime_error, "Unknowns control");
     }
+}
+
+double
+Fracture::injectionBhp() const
+{
+
+  //if(!(perfinj_.size()>0)){
+     // no solves done
+  //   return 0.0;
+ // }
+  double dz = perf_ref_depth_ - well_ref_depth_;;
+  //double density = reservoir_density_[std::get<0>(perfinj_[0])];// hack may have small inconsistency
+  double density = density_perf_;
+  return injectionPressure() - dz*gravity_*density;
 }
 
 double
@@ -998,19 +1049,28 @@ Fracture::wellIndices() const{
 double damping_factor_perf = 0.5;
 double damping_factor_wi = 0.5;
 
-void Fracture::setPerfPressure(double perfpressure){
+void Fracture::setPerfProps(double perfpressure, double depth, double perfrate){
     if(well_indices_.size() >0){
         perf_pressure_ = perfpressure;
     }else{
         // dampted updating for stability of fracture growth
         perf_pressure_ = (perf_pressure_ + damping_factor_perf*perfpressure)/(1.0+damping_factor_perf);//(perfpressure-perf_pressure_)*damping_factor;
     }
+    well_perf_rate_ = perfrate;
+    perf_ref_depth_ = depth;
 }
 
-void Fracture::setWellRateAndWI(double wellrate, double totalwi){
+void Fracture::setWellProps(double wellrate,
+                            double totalwi,
+                            double wi_dz,
+                            double wi_respress,
+                            double ref_depth){
     //if(well_indices_.size() >0){
         well_rate_ = wellrate;
         total_wellindex_ = totalwi;
+        wi_dz_ = wi_dz;
+        wi_respress_ = wi_respress;
+        well_ref_depth_ = ref_depth;
     // }else{
     //     // dampted updating for stability of fracture growth
     //     well_rate_ = (well_rate_ + damping_factor_wi*wellrate)/(1.0+damping_factor_wi);//(wellrate-well_rate_)*damping_factor;
@@ -1137,7 +1197,7 @@ Fracture::wellIndices_() const
         double dh_res = z_cells[i] * gravity_ * dens_cells[i];
         double perf_density = dens_cells[i];
         double dh_perf = gravity_ * perf_density * origo_[2];
-        double WI = q_cells[i] / ((inj_press - dh_perf) - (p_cells[i] - dh_res));
+        double WI = q_cells[i] / ((inj_press - dh_perf) - (p_cells[i] - dh_res));//NB d_perf def
         if (WI < 0.0) {
           // keep but could maybe be removed
             std::cout << "Negative WI: " << WI << " for cell: " << res_cells[i] << std::endl;
@@ -1217,6 +1277,9 @@ Fracture::assignGeomechWellState(PerfData<Scalar>& perfData) const
     frac_prop.filter_volume[perfIx] = fprop.filter_volume;
     frac_prop.avg_width[perfIx] = fprop.avg_width;
     frac_prop.avg_filter_width[perfIx] = fprop.avg_filter_width;
+    frac_prop.inj_pressure[perfIx] = fprop.inj_pressure;
+    frac_prop.inj_bhp[perfIx] = fprop.inj_bhp;
+    frac_prop.inj_wellrate[perfIx] = fprop.inj_wellrate;
 }
 
 bool
@@ -1465,6 +1528,9 @@ Fracture::calculateFractureProperties() const
     //double WI = std::accumulate(WIs.begin(), WIs.end(), 0)
     double avgh = volume/area;
     double avgfilter_h = filter_volume/area;
+    double inj_pressure = injectionPressure();
+    double inj_bhp = injectionBhp();
+    double inj_wellrate = well_rate_;//only copy of wellrate from wells
     FractureProperties fracprop(height, 
                                 length, 
                                 total_flux, 
@@ -1473,7 +1539,10 @@ Fracture::calculateFractureProperties() const
                                 volume,
                                 filter_volume,
                                 avgh,
-                                avgfilter_h
+                                avgfilter_h,
+                                inj_pressure,
+                                inj_bhp,
+                                inj_wellrate
                             );
     return fracprop;
 }

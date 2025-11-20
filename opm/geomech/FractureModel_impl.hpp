@@ -87,11 +87,16 @@ namespace Opm {
     template <class TypeTag, class Simulator>
     void FractureModel::updateWellProperties(const Simulator& simulator)
     {
-       const int water_index = 0;//FluidSystem::waterPhaseIdx
+       using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
+       //const int water_index = 0;//FluidSystem::waterPhaseIdx
         for (size_t i=0; i < wells_.size(); ++i) {
             // TO DO set wells to active even without fractures
             double injection_rate = 0.0;
+            double well_depth = 0.0;
             double total_wellindex = 0.0;
+            double wi_dz = 0.0;
+            double wi_respress = 0.0;
+            std::vector<double> perf_depths;// well.perfDepth()[perf_index]; 
             {
               auto well_index = simulator.problem().wellModel().wellState().index(wells_[i].name());
                 if(well_index.has_value()){
@@ -122,11 +127,18 @@ namespace Opm {
                                                                               wellstate_nupcol, 
                                                                               /*with_fracture*/ false);
                             
-                             const auto effective_well_index   =  effective_well_indexs[water_index];
+                             const auto effective_well_index   =  effective_well_indexs[FluidSystem::waterPhaseIdx];
+                            double density = intQuants.fluidState().density(FluidSystem::waterPhaseIdx).value();
                             total_wellindex += effective_well_index;
+                            double dzwell = (well->perfDepth()[perf_index]- well->refDepth());  
+                            wi_dz += effective_well_index*dzwell;
+                            double pressure = intQuants.fluidState().pressure(FluidSystem::waterPhaseIdx).value();
+                            wi_respress += effective_well_index*pressure;
 
                         }
-                        injection_rate = wellstate.reservoir_rates[water_index];   
+                        injection_rate = wellstate.reservoir_rates[FluidSystem::waterPhaseIdx];
+                        well_depth = well->refDepth();
+                        perf_depths = well->perfDepth();
                     }   
                  }  
             }
@@ -135,7 +147,7 @@ namespace Opm {
               WellInfo wellinfo = fracture.wellInfo();
               std::cout << " Well " << wellinfo.name << " injection "
                         << injection_rate << " WI " << total_wellindex << std::endl;  
-                fracture.setWellRateAndWI(injection_rate, total_wellindex);
+              fracture.setWellProps(injection_rate,  total_wellindex,  wi_dz,  wi_respress,  well_depth);
                 // do update wells
                 // set well properties
 
@@ -169,11 +181,13 @@ namespace Opm {
                     continue; // skip if not found
                 }
                 double perf_pressure = perf_data.pressure[perf_index];
-                std::cout << "Perf index perf " << perf_index << " fracture " << perf_index_frac << " pressure " << perf_pressure << std::endl;
+                double perf_rate = perf_data.rates[perf_index];//[FluidSystem::waterPhaseIdx];
+                std::cout << "Perf index perf " << perf_index << " fracture " << perf_index_frac << " pressure " << perf_pressure << " rate " << perf_rate << std::endl;
                 // std::cout << 
                 //std::cout << " Well " << perf_pressure << std::endl;
                 //std::cout << "Perf index åerf " << perf_index << " fracture " << perf_index_frac << " pressure " << perf_pressure << std::endl;
-                fracture.setPerfPressure(perf_pressure);
+                double perf_depth = perf_depths[perf_index];
+                fracture.setPerfProps(perf_pressure, perf_depth, perf_rate);
                 wells_[i].setPerfPressure(perf_index_frac, perf_pressure);
                 fracture.setActive(true);
                 wells_[i].setPerfActive(perf_index_frac,true);
