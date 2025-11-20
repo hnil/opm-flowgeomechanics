@@ -926,7 +926,8 @@ Fracture::addSource()
         for (const auto& perfinj : perfinj_) {
             int cell = std::get<0>(perfinj);
             double value = std::get<1>(perfinj);
-            double dh_perf = origo_[2] * gravity_ * reservoir_density_[cell];
+            //double dh_perf = origo_[2] * gravity_ * reservoir_density_[cell];
+            double dh_perf = perf_ref_depth_ * gravity_ * reservoir_density_[cell];
             double dh_cell = fracture_dgh_[cell];
             ;
             double dh = dh_perf - dh_cell;
@@ -944,24 +945,22 @@ Fracture::addSource()
         if (true) {
             rhs_pressure_[rhs_pressure_.size() - 1] = well_rate + WI * lambda * pres; // well source term
         } else {
-            double wi_dzfac = wi_dz_; // sum wi dz
+            double wi_dzfac = wi_dz_*density*gravity_; // sum wi dz
             wi_dzfac += wi_respress_; // sum wi res_press
-            wi_dzfac
-                += (-WI
-                    * (perf_ref_depth_
-                       - well_ref_depth_)); // counvert to perf_ref_depth from bhp ref_depth for primary
+            wi_dzfac += (-WI* (perf_ref_depth_- well_ref_depth_))*gravity_*density; // counvert to perf_ref_depth from bhp ref_depth for primary
                                             // variable reservoir_pressure_[nc] i.e. perf pressure
-            rhs_pressure_[rhs_pressure_.size() - 1] = well_rate + lambda * wi_dzfac * density;
-
+            rhs_pressure_[rhs_pressure_.size() - 1] = well_rate + lambda * wi_dzfac;
+        }
+        if (false){
             for (const auto& perfinj : perfinj_) {
                 int cell = std::get<0>(perfinj);
-                double value = std::get<1>(perfinj);
+                double value = std::get<1>(perfinj)*mobility_water_perf_;
                 assert(origo_[2] == perf_ref_depth_);
                 double dh_perf = perf_ref_depth_ * gravity_ * reservoir_density_[cell];
                 double dh_cell = fracture_dgh_[cell];
                 ;
                 double dh = dh_perf - dh_cell;
-                rhs_pressure_[cell] += value * (perf_pressure_ - dh);
+                rhs_pressure_[cell] += value * (-dh);
             }
         }
     } else {
@@ -1690,12 +1689,12 @@ Fracture::assemblePressure()
         const int cell = std::get<0>(perfinj_[0]); // @@ will this be the correct index? 
         const double lambda = reservoir_mobility_[cell]; // @@ If not constant, this might be wrong
         // control.get<double>("WI")
-        const double WI_lambda = total_wellindex_ * lambda;
+        const double WI_lambda = total_wellindex_ * lambda; // we could ahve used total mobility here
         matrix[nc - 1][nc - 1] = WI_lambda;
         // NB: well_source_[i] is assumed to be the same as get<0>(perfinj_[i])
         for (const auto& pi : perfinj_) {
             const int i = std::get<0>(pi);
-            const double value = std::get<1>(pi) * lambda;
+            const double value = std::get<1>(pi) * mobility_water_perf_;// only flow in fracture not into reservoir
             matrix[nc - 1][i] = -value; // well equation
             matrix[nc - 1][nc - 1] += value; // well equation
             matrix[i][nc - 1] = -value;
