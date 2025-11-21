@@ -150,14 +150,13 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 double npn = pn.dot(normal); 
                 reservoir_perm_[i] = npn;
                 reservoir_cstress_[i] = cstress;
+                const auto& currentData = grid.currentData();
+                const auto& elem = Dune::cpgrid::Entity<0>(*currentData.back(), cell, true);
+                //auto cell_center = ghelper.centroid(i);
+                const auto& geom = elem.geometry();
+                auto cell_center = geom.center();
                 if(calculate_dist){
-                  //assert(false);
-                  const auto& currentData = grid.currentData();
-                  const auto& elem = Dune::cpgrid::Entity<0>(*currentData.back(), cell, true);
-                  //auto cell_center = ghelper.centroid(i);
-                  const auto& geom = elem.geometry();
-                  auto cell_center = geom.center();
-                  reservoir_cell_z_[i] = cell_center[2];
+                  //assert(false);                  
                   double dist = 0;
                   int num_corners = geom.corners();
                   for(int li=0; li < geom.corners();++li){
@@ -168,6 +167,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                   dist /= num_corners;
                   reservoir_dist_[i] = dist;
                 }
+                reservoir_cell_z_[i] = cell_center[2];      
                 
             } else {
                 // probably outside reservoir set all to zero
@@ -335,19 +335,21 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         // ----------------------------------------------------------------------------
     } else if (method == "if_propagate_trimesh") {
         // ----------------------------------------------------------------------------
-
-        if(true){
-            fracture_width_ = 1e-3; // Ensure not completely closed
+        std::cout << "Solve Fracture Pressure using Iterative Fracture with Trimesh Propagation" << std::endl;
+        bool reinitialize= !(prm_.get<bool>("solver.remap_solution"));
+        if(reinitialize){
+            //if(true){
+                fracture_width_ = 1e-3; // Ensure not completely closed
             //fracture_pressure_ = perf_pressure_;
+            //}
+            // start by assuming pressure equal to confining stress (will also set
+            // fracture_pressure_ to its correct size
+            auto traction = fracture_pressure_;
+            normalFractureTraction(traction);
+            for(int i=0; i < traction.size();++i){
+                fracture_pressure_[i] = std::max(traction[i], fracture_pressure_[i]);
+            }
         }
-        // start by assuming pressure equal to confining stress (will also set
-        // fracture_pressure_ to its correct size
-        auto traction = fracture_pressure_;
-        normalFractureTraction(traction);
-        for(int i=0; i < traction.size();++i){
-            fracture_pressure_[i] = std::max(traction[i], fracture_pressure_[i]);
-        }
-
         // It is implicitly assumed for now that there is just one well equation.
         // We initialize with an existing value. @@
         if (numWellEquations() > 0)
@@ -409,8 +411,16 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 }
                 auto old_fracture_width_ = fracture_width_;
                 redistribute_values(fracture_width_, org_map, fsmap, level, point_wise);
-
+                double well_value = 0.0;
+                if (numWellEquations() > 0){
+                    well_value = fracture_pressure_[fracture_pressure_.size() - 1];
+                }
                 redistribute_values(fracture_pressure_, org_map, fsmap, level, point_wise);
+                if (numWellEquations() > 0){
+                  assert(fracture_pressure_.size() == fracture_width_.size());
+                    fracture_pressure_.resize(fracture_pressure_.size() + 1);
+                    fracture_pressure_[fracture_pressure_.size() - 1] = well_value;
+                }
                 // solve flow-mechanical system
                 for (size_t i = 0; i < fracture_pressure_.size(); ++i) {
                     assert(std::abs(fracture_pressure_[i][0]) < 1e10);

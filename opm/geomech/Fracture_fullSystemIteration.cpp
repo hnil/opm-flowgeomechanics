@@ -428,8 +428,19 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
                          reservoir_mobility_,
                          min_width_);
     // setup the full system
+    if(prm_.get<bool>("solver.drop_fluid_mech_linearization",true)){
+      *coupling_matrix_ = 0;
+    }else{
+      if(rhs[_0].infinity_norm() > prm_.get<double>("solver.drop_tol_h",1e5) ||
+         rhs[_1].infinity_norm() > prm_.get<double>("solver.drop_tol_p",1.0) ){
+        *coupling_matrix_ = 0;
+        // maybe change linear solver
+      }
+
+    }
     const auto& M = *pressure_matrix_;
     const auto& C = *coupling_matrix_;
+    
     // const auto I = makeIdentity(A.N(), numWellEquations(), 1, closed_cells);
     if (update_mech_matrix) {
         I_.reset(new SMatrix(makeIdentity(A.N(), numWellEquations(), 1, closed_cells)));

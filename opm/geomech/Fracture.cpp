@@ -280,7 +280,7 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
         std::map<int, double> reservoir_flux;
         if ((leakof_.size()
              > 0)) { // should be first step with seed fracture is clean could have used rates from solve
-            assert(leakof_.size() == fracture_pressure_.size());
+            assert(leakof_.size() == fracture_pressure_.size()-numWellEquations());
             ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
             for (auto& element : Dune::elements(grid_->leafGridView())) {
                 int eIdx = mapper.index(element);

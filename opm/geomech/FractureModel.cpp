@@ -62,7 +62,7 @@ makeDefaultFractureParam()
     fracture_param.put("fractureparam.config.initial_fracture_width", 1e-4);
     fracture_param.put("fractureparam.config.min_width", 0.0);
     fracture_param.put("fractureparam.config.trires", 10);
-    fracture_param.put("fractureparam.config.gravity_off", true);
+    fracture_param.put("fractureparam.config.gravity_off", false);
 
     // fracture_param.put("fractureparam.config.num_exp", 3);
     // fracture_param.put("fractureparam.config.num_lin", 2);
