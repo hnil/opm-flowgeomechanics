@@ -196,7 +196,7 @@ namespace Opm{
                 // write first solution in standard format
                 // this may ad some extra output of static variables
                 //int reportStepIdx = simulator_.episodeIndex();
-                if(first_output_ ==false){
+                if(first_output_){
                     //fracturemodel_->write(reportStepIdx);
                     // hack to get correct number of fracture output
                     fracturemodel_->writemulti(0.0);
