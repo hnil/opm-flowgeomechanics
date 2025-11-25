@@ -3,26 +3,30 @@
 
 #include <opm/common/ErrorMacros.hpp>
 
-#include <opm/elasticity/material.hh>
-#include <opm/elasticity/materials.hh>
+#include <opm/common/utility/Serializer.hpp>
 
+#include <opm/geomech/FlowGeomechLinearSolverParameters.hpp>
+#include <opm/geomech/boundaryutils.hh>
 #include <opm/geomech/eclgeomechmodel.hh>
 #include <opm/geomech/vtkgeomechmodule.hh>
-#include <opm/geomech/boundaryutils.hh>
-#include <opm/geomech/FlowGeomechLinearSolverParameters.hpp>
 
 #include <opm/material/densead/Evaluation.hpp>
 #include <opm/material/densead/Math.hpp>
-#include <opm/elasticity/material.hh>
+
+#include <opm/grid/common/CommunicationUtils.hpp>
 
 #include <opm/simulators/flow/FlowProblem.hpp>
-#include <opm/simulators/linalg/PropertyTree.hpp>
 #include <opm/simulators/flow/Transmissibility.hpp>
+#include <opm/simulators/linalg/PropertyTree.hpp>
+#include <opm/simulators/utils/MPIPacker.hpp>
+#include <opm/simulators/utils/ParallelCommunication.hpp>
+
+#include <opm/elasticity/material.hh>
+#include <opm/elasticity/materials.hh>
 
 #include <array>
 #include <cstddef>
 #include <functional>
-#include <iostream>
 #include <limits>
 #include <memory>
 #include <sstream>
@@ -442,16 +446,23 @@ namespace Opm{
                           << wellconn.cell;// << std::endl;
                        FractureModel::fractureLogger.info(os.str());
                        continue;
-                    }else{
-                      std::stringstream os;
-                      os << "New connection for cell: "
-                         << wellconn.cell;// << std::endl;
-                      FractureModel::fractureLogger.info(os.str());
                     }
 
                     // get ijk
                     std::array<int, 3> ijk{};
                     simulator.vanguard().cartesianCoordinate(wellconn.cell, ijk);
+
+                    {
+                        std::stringstream os;
+
+                        os << "New connection for cell: "
+                           << wellconn.cell << " ("
+                           << (ijk[0] + 1)  << ", "
+                           << (ijk[1] + 1)  << ", "
+                           << (ijk[2] + 1)  << ')';
+
+                        FractureModel::fractureLogger.info(os.str());
+                    }
 
                     // Making preliminary connection to be added in schedule
                     // with correct numbering
@@ -484,19 +495,21 @@ namespace Opm{
 
                 if (! extra.empty()) {
                     const auto* pl = (extra.size() != 1) ? "s" : "";
+
                     std::stringstream os;
                     os << "Adding " << extra.size()
-                              << "extra connection" << pl << " for well: "
-                              << wellName << std::endl;
+                       << " extra connection" << pl << " for well: "
+                       << wellName;
                     FractureModel::fractureLogger.info(os.str());
+
                     extra_perfs.insert_or_assign(wellName, std::move(extra));
                 }
             }
-            int loc_new_connections = extra_perfs.size();
-            int num_new_connections = this->gridView().comm().sum(loc_new_connections);
-            if (!(num_new_connections > 0)) {
+
+            if (this->gridView().comm().sum(static_cast<int>(extra_perfs.size())) == 0) {
                 return;
-            }else{
+            }
+            else {
                 // add to schedule
                 // structure will be changed erase matrix, maybe only rebuilding of linear solver is neede
                 //std::cout << "Rebuilding linear solver for extra connections" << std::endl;
@@ -504,25 +517,37 @@ namespace Opm{
                 this->simulator().model().newtonMethod().linearSolver().eraseMatrix();
                 //if (this->gridView().comm().rank() == 0) {
                 std::stringstream os;
-                    os << "Adding extra connections to "
-                                 "schedule for report step: "
-                              << reportStep << std::endl;
-                    FractureModel::fractureLogger.info(os.str());    
+                os << "Adding extra connections to schedule for report step: "
+                   << reportStep;
+                FractureModel::fractureLogger.info(os.str());
                 //}
             }
 
-            bool commit_wellstate = false;
             auto sim_update = schedule.modifyCompletions(reportStep, extra_perfs);
 
-            // should not be used
-            auto updateTrans = [](const bool){};
+            {
+                // Some, or all, of the 'extra_perfs' are entirely new
+                // connections created by the fracturing process.  Inform the
+                // summary vector calculation engine of these new connections so
+                // that they may be included in the summary output if needed.
+
+                const auto root = 0;
+                const auto newConns = CollectDynamicConns {
+                    Mpi::Packer { this->gridView().comm() }
+                }(this->gridView().comm(), root, sim_update.new_frac_wconns);
+
+                if (this->gridView().comm().rank() == root) {
+                    this->eclWriter_->recordNewDynamicWellConns(newConns);
+                }
+            }
 
             // alwas rebuild wells
             sim_update.well_structure_changed = true;
 
+            bool commit_wellstate = false;
             this->actionHandler_.applySimulatorUpdate(reportStep,
                                                       sim_update,
-                                                      updateTrans,
+                                                      /* updateTrans = */ [](const bool) {},
                                                       commit_wellstate);
             if (commit_wellstate) {
                 this->wellModel().commitWGState();
@@ -602,7 +627,69 @@ namespace Opm{
         
       //const std::vector< GridView::Codim<0>::EntitySeed >& elementEntitySeed(){return entitity_seed_;}
       //const std::vector< CellSeedType >& elementEntitySeed(){return entity_seed_;}
+
     private:
+        class CollectDynamicConns : private Serializer<Mpi::Packer>
+        {
+        public:
+            using DynamicConns =
+                std::vector<std::pair<std::string, std::vector<std::size_t>>>;
+
+            explicit CollectDynamicConns(const Mpi::Packer& pack)
+                : Serializer<Mpi::Packer> { pack }
+            {}
+
+            DynamicConns
+            operator()(const Parallel::Communication comm,
+                       const int                     root,
+                       const DynamicConns&           newConns)
+            {
+                if (comm.size() == 1) {
+                    return newConns;
+                }
+
+                this->pack(newConns);
+
+                std::tie(this->rankBuffers_, this->rankStart_) =
+                    gatherv(this->m_buffer, comm, root);
+
+                if (comm.rank() != root) {
+                    // Non-root processes don't need any new connection objects.
+                    return {};
+                }
+
+                auto allNewConns = DynamicConns{};
+                for (auto rank = 0*comm.size(); rank < comm.size(); ++rank) {
+                    auto rankNewConns = this->deserialise(rank);
+
+                    allNewConns.insert(allNewConns.end(),
+                                       std::make_move_iterator(rankNewConns.begin()),
+                                       std::make_move_iterator(rankNewConns.end()));
+                }
+
+                return allNewConns;
+            }
+
+        private:
+            std::vector<char> rankBuffers_{};
+            std::vector<int> rankStart_{};
+
+            DynamicConns deserialise(const std::size_t rank)
+            {
+                auto newConns = DynamicConns{};
+
+                auto begin = this->rankBuffers_.begin() + this->rankStart_[rank + 0];
+                auto end   = this->rankBuffers_.begin() + this->rankStart_[rank + 1];
+
+                this->m_buffer.assign(begin, end);
+                this->m_packSize = std::distance(begin, end);
+
+                this->unpack(newConns);
+
+                return newConns;
+            }
+        };
+
         GeomechModel geomechModel_;
 
         std::vector<double> ymodule_;
