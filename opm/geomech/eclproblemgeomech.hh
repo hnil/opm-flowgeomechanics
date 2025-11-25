@@ -371,6 +371,10 @@ namespace Opm{
             global_logger.logMessages();
             Parent::endTimeStep();
             //
+            // if(first_fracture_solve_){
+            //     first_fracture_solve_ = false;
+            //     geomechModel_.writeFractureSolutionFirst();
+            // }
             if(Parameters::Get<Parameters::EnableWriteAllSolutions>()){
               //OPM_BEGIN_PARALLEL_TRY_CATCH();
                 geomechModel_.writeFractureSolution();
@@ -711,6 +715,7 @@ namespace Opm{
         bool hasFractures_;
         bool addPerfsToSchedule_;
         Opm::PropertyTree fracture_param_;
+        bool first_fracture_solve_ {true};
       //std::vector< CellSeedType > entity_seed_;
         //private:
         //std::unique_ptr<TimeStepper> adaptiveTimeStepping_;

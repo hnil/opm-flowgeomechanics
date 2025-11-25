@@ -594,12 +594,15 @@ void
 Fracture::writemulti(double time) const
 {
     OPM_TIMEFUNCTION();
+    // NB it time == 0.0 we should
+    bool first = (time == 0.0);
     std::stringstream message;
     message << "Writing fracture data to VTK files at time: " << time << "grid_size"
             << numFractureCells() << std::endl;
     OpmLog::info(message.str());
     // vtkmultiwriter_->gridChanged();// need to be called if grid is changed
     //  need to have copies in case of async outout (and interface to functions)
+    
     std::vector<double> K1 = this->stressIntensityK1();
     std::vector<double> fracture_pressure(numFractureCells(), 0.0);
     std::vector<double> leakof_dp(numFractureCells(), 0.0);
@@ -627,30 +630,33 @@ Fracture::writemulti(double time) const
         }
     }
     // loop for need things only with fracture
-    for (size_t i = 0; i < rhs_width_.size(); ++i) {
-        rhs_width[i] = rhs_width_[i][0];
-    }
 
-    for (size_t i = 0; i < fracture_width_.size(); ++i) {
-        fracture_width[i] = fracture_width_[i][0];
-        flow_width[i] = std::max(fracture_width_[i][0], min_width_);
-        fracture_pressure[i] = fracture_pressure_[i][0];
-        reservoir_cells[i] = reservoir_cells_[i]; // only converts to double
-        reservoir_traction[i] = ddm::tractionSymTensor(reservoir_stress_[i], cell_normals_[i]);
-        fracture_force[i] = reservoir_traction[i] - fracture_pressure[i];
-        leakof_dp[i] = fracture_pressure[i] - reservoir_pressure[i] -(fracture_dgh_[i]- reservoir_cell_z_[i]*gravity_*reservoir_density_[i]);
-         // make relative to origo
-        fracture_head[i] = (fracture_pressure[i] - fracture_dgh_[i])-
-          (injectionPressure()-(perf_ref_depth_*gravity_*density_perf_));
-           //make it relative to origo
-        assert(filtercake_thikness[i] >= 0.0);
-    }
+        for (size_t i = 0; i < rhs_width_.size(); ++i) {
+            rhs_width[i] = rhs_width_[i][0];
+        }
 
-    for (size_t i = 0; i < numFractureCells(); ++i) {
-        // maybe slow
-        well_index[i] = wellIndMap[reservoir_cells_[i]];
+        for (size_t i = 0; i < fracture_width_.size(); ++i) {
+            fracture_width[i] = fracture_width_[i][0];
+            flow_width[i] = std::max(fracture_width_[i][0], min_width_);
+            fracture_pressure[i] = fracture_pressure_[i][0];
+            reservoir_cells[i] = reservoir_cells_[i]; // only converts to double
+            reservoir_traction[i] = ddm::tractionSymTensor(reservoir_stress_[i], cell_normals_[i]);
+            fracture_force[i] = reservoir_traction[i] - fracture_pressure[i];
+            leakof_dp[i] = fracture_pressure[i] - reservoir_pressure[i]
+                - (fracture_dgh_[i] - reservoir_cell_z_[i] * gravity_ * reservoir_density_[i]);
+            // make relative to origo
+            fracture_head[i] = (fracture_pressure[i] - fracture_dgh_[i])
+                - (injectionPressure() - (perf_ref_depth_ * gravity_ * density_perf_));
+            // make it relative to origo
+            assert(filtercake_thikness[i] >= 0.0);
+        }
+    if (!first) {    
+        for (size_t i = 0; i < numFractureCells(); ++i) {
+                // maybe slow
+                well_index[i] = wellIndMap[reservoir_cells_[i]];
+        }
+       
     }
-
     vtkmultiwriter_->beginWrite(time);
 
 
@@ -1537,8 +1543,8 @@ Fracture::calculateFractureProperties() const
         }
         total_flux += leak_of_rate[eIdx] * geom.volume();
     }
-    double height = dhvec[1] - dhvec[0];
-    double length = dwvec[1] - dwvec[0];
+    double height = (dhvec[1] - dhvec[0])/2.0;
+    double length = (dwvec[1] - dwvec[0])/2.0;
     auto WIs = wellIndices();
     double WI=0.0;
     for(auto wi : WIs){
@@ -1749,12 +1755,16 @@ Fracture::removeNewZeroWithCells(RegularTrimesh& mesh,
                     assert(cur_level > 0);
                     const auto& fine_cells = RegularTrimesh::coarse_to_fine(cellref, cur_level);
                     bool any_active = false;
+                    bool all_active = true;
                     for (const auto& fine_cell : fine_cells) {
                         if (initial_mesh.isActive(fine_cell)) {
                             any_active = true;
+                        }else{
+                            all_active = false;
                         }
                     }
-                    if (!any_active) {
+                    //if (!any_active) {
+                    if (!all_active) {
                         mesh.setInactive(cellref);
                         any_removed = true;
                     }

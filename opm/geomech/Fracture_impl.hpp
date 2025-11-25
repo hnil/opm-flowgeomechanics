@@ -167,7 +167,8 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                   dist /= num_corners;
                   reservoir_dist_[i] = dist;
                 }
-                reservoir_cell_z_[i] = cell_center[2];      
+                reservoir_cell_z_[i] = cell_center[2];
+                   
                 
             } else {
                 // probably outside reservoir set all to zero
@@ -186,6 +187,14 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 reservoir_cell_z_[i] = origo_[2];// should maybe be cell center of triangle
             }
             // assume reservoir distance is calculated
+        }
+        fracture_dgh_.resize(ncf);
+        for (auto element : Dune::elements(grid_->leafGridView())) {
+           // int i = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView,
+            // Dune::mcmgElementLayout>::index(element);
+            int i = grid_->leafGridView().indexSet().index(element);
+            double z = element.geometry().center()[2];
+            fracture_dgh_[i] = gravity_ * reservoir_density_[i] * z;
         }
         int reportStepIdx = simulator.episodeIndex();
         

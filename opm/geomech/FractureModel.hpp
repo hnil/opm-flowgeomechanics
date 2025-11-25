@@ -10,6 +10,7 @@
 
 #include <opm/input/eclipse/Schedule/Well/Connection.hpp>
 #include <opm/input/eclipse/Schedule/Well/Well.hpp>
+#include <opm/input/eclipse/Schedule/Well/WellFractureSeeds.hpp>
 #include <opm/input/eclipse/Schedule/Well/WellConnections.hpp>
 
 #include <opm/simulators/linalg/PropertyTree.hpp>
@@ -85,6 +86,32 @@ public:
 
     void write(int ReportStep = -1) const;
     void writemulti(double time) const;
+
+    template<class wseed_collection>
+    void updateActive(const wseed_collection& current_wseed){
+        for (auto& well_fracture : well_fractures_) {
+            for (auto& fracture : well_fracture) {
+                fracture.setActive(false);
+            }
+        }
+        if(current_wseed().empty()){
+            return;
+        }
+        for (auto& well_fracture : well_fractures_) {
+            for (auto& fracture : well_fracture) {
+                auto wellInfo = fracture.wellInfo();
+                if(current_wseed.has(wellInfo.name)){
+                    const auto& well_wseed = current_wseed(wellInfo.name);
+                    for(const auto& seedcell : well_wseed.seedCells()){
+                        if(seedcell == wellInfo.global_index){
+                            fracture.setActive(true);
+                            std::cout << "Activating fracture " << fracture.name() << std::endl;    
+                        }
+                    }
+                }
+            }
+        }
+    }    
 
     template <class TypeTag, class Simulator>
     void solve(const Simulator& simulator)

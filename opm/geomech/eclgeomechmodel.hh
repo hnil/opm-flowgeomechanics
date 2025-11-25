@@ -162,19 +162,22 @@ namespace Opm{
                     fracturemodel_->updateFractureReservoirCells(grid);
                     fracturemodel_->initReservoirProperties<TypeTag,Simulator>(simulator_);
                     fracturemodel_->updateReservoirAndWellProperties<TypeTag,Simulator>(simulator_);
+                    fracturemodel_->updateActive(schedule[reportStepIdx].wseed);
                     fracturemodel_->initFractureStates();
+                    this->writeFractureSolutionFirst();
             }
             // get reservoir properties on fractures
             // simulator need
             
-            if(fracturemodel_){
-                
+            if(fracturemodel_ && !schedule[reportStepIdx].wseed().empty()){
+                const auto& current_wseed = schedule[reportStepIdx].wseed;    
                 if(simulator_.gridView().comm().rank() == 0){
                     std::ostringstream os;
                     os << "Frac modelfound, updating reservoir properties and solving fractures" << std::endl;
                     OpmLog::info(os.str());
                 }
-                fracturemodel_->updateReservoirAndWellProperties<TypeTag,Simulator>(simulator_);
+                fracturemodel_->updateReservoirAndWellProperties<TypeTag,Simulator>(simulator_);// set all fractures active if well is active
+                fracturemodel_->updateActive(current_wseed);//only set fracture active if seed is active
                 fracturemodel_->solve<TypeTag, Simulator>(simulator_);
             }else{
                 if(simulator_.gridView().comm().rank() == 0){
@@ -188,7 +191,17 @@ namespace Opm{
        }
        
 
-
+        void writeFractureSolutionFirst(){
+            const auto& problem = simulator_.problem();
+            if(problem.hasFractures() && fracturemodel_){
+                // write first solution in standard format
+                // this may ad some extra output of static variables
+                //int reportStepIdx = simulator_.episodeIndex();
+                    //fracturemodel_->write(reportStepIdx);
+                    // hack to get correct number of fracture output
+                    fracturemodel_->writemulti(0.0);
+            }
+        }
         
         void writeFractureSolution(){
             const auto& problem = simulator_.problem();
@@ -196,12 +209,6 @@ namespace Opm{
                 // write first solution in standard format
                 // this may ad some extra output of static variables
                 //int reportStepIdx = simulator_.episodeIndex();
-                if(first_output_){
-                    //fracturemodel_->write(reportStepIdx);
-                    // hack to get correct number of fracture output
-                    fracturemodel_->writemulti(0.0);
-                    first_output_ = false;
-                } 
                 double time = simulator_.time();
                 fracturemodel_->writemulti(time);
             }
@@ -689,7 +696,6 @@ namespace Opm{
         }
     private:
         bool first_solve_{true};
-        bool first_output_{true};
         bool write_system_{false};
         bool reduce_boundary_{false};
         bool include_fracture_contributions_{false};
