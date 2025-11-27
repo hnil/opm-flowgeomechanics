@@ -14,10 +14,10 @@
 #                                                                         #
 ###########################################################################
 
+cmake_minimum_required(VERSION 3.28)
+
 # Mandatory call to project
 project(opm-flowgeomechanics C CXX)
-
-cmake_minimum_required(VERSION 3.15)
 
 set(USE_OPENMP_DEFAULT OFF) # Use of OpenMP is considered experimental
 
@@ -290,4 +290,45 @@ add_executable(standalone_sim_test
 target_link_libraries(standalone_sim_test
 	PUBLIC
 		opmflowgeomechanics
+)
+
+# ---------------------------------------------------------------------------
+
+set(Test_NumProc 4)
+if (MPIEXEC_MAX_NUMPROCS LESS Test_NumProc)
+	set(Test_NumProc ${MPIEXEC_MAX_NUMPROCS})
+endif()
+
+add_test(NAME Run.Blackoil_Thermal_BC.Parallel
+	COMMAND
+	${MPIEXEC_EXECUTABLE}
+	${MPIEXEC_NUMPROC_FLAG} ${Test_NumProc}
+	${MPIEXEC_PREFLAGS}
+	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
+	${MPIEXEC_POSTFLAGS}
+	--ecl-deck-file-name=${CMAKE_CURRENT_LIST_DIR}/data/MECHTEST/BLACKOILTHERMAL_BC.DATA
+	--enable-esmry=false
+	--output-dir=results/np-${Test_NumProc}/flow_energy_geomech/Blackoil_Thermal_BC
+)
+
+set_tests_properties(Run.Blackoil_Thermal_BC.Parallel
+	PROPERTIES
+	PROCESSORS ${Test_NumProc}
+	FIXTURES_SETUP Generate_SimResults
+)
+
+add_test(NAME Compare.Blackoil_Thermal_BC.Parallel
+	COMMAND
+	$<SHELL_PATH:${COMPARE_ECL_COMMAND}>
+	-a
+	results/np-${Test_NumProc}/flow_energy_geomech/Blackoil_Thermal_BC/BLACKOILTHERMAL_BC
+	results/np-${Test_NumProc}/flow_energy_geomech/Blackoil_Thermal_BC/BLACKOILTHERMAL_BC
+	2.0e-2
+	1.0e-5
+)
+
+set_tests_properties(Compare.Blackoil_Thermal_BC.Parallel
+	PROPERTIES
+	PROCESSORS 1
+	FIXTURES_REQUIRED Generate_SimResults
 )

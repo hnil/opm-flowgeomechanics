@@ -88,14 +88,14 @@ PRATIO
 BIOTCOEF
        9610*0.9 /
 
-POELCOEF
-       9610*0.3 /
+--POELCOEF
+--       9610*0.3 /
 
 THELCOEF
        9610*0.1e5 /
 
-THERMEXR
-      9610*1 /
+--THERMEXR
+--      9610*1 /
 
 BCCON
 1 1 1 1 31 1 10 X- /
