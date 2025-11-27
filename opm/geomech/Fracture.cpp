@@ -1754,7 +1754,7 @@ Fracture::removeNewZeroWithCells(RegularTrimesh& mesh,
     ElementMapper elemMapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     for (auto& cell : elements(grid_->leafGridView())) {
         const auto index = elemMapper.index(cell);
-        if (fracture_width_[index][0] == 0){// || (fractureForce(index) > force_limit)) {
+        if ((fracture_width_[index][0] == 0) || (fractureForce(index) > force_limit)) { // maybe to strong.
             auto cellrefs = grid_mesh_map_[index];
             for (const auto& cellref : cellrefs) {
                 if (cur_level == 0) {
