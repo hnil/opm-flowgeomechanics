@@ -370,7 +370,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         
         // local function taking a trimesh, updates the Fracture object with it and
         // runs a simulation.  Its return value should be a vector of doubles:
-
+        
         auto score_function = [&](const RegularTrimesh& trimesh, const int level) -> std::vector<double> {
             const int max_iter = prm_.get<int>("solver.max_iter");
             const double tol = prm_.get<double>("solver.tolerance");//,1e-8);
@@ -452,6 +452,8 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             int iter = 0;
             while (!fullSystemIteration(tol,iter) && iter++ < max_iter) {
             };
+            // remove closed cells which was not open before ??
+            
             if(nlin_verbosity > 1){
                 std::cout << "Nonlinear iterations needed with fixed expansion: " << iter << std::endl;
             }
@@ -465,6 +467,15 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 const double KI = K1_not_nan[bmap[boundary_cells[i]]];
                 result[i] = KI/KImax;
             }
+            //
+            const double force_limit = prm_.get<double>("solver.force_limit", 0.0);
+            for (size_t i = 0; i != result.size(); ++i){
+                int bind = bmap[boundary_cells[i]];
+                if(fractureForce(bind) > force_limit ){
+                    result[i] = -1.0; // do not expand here
+                }
+            }
+
             return result;
         };
 

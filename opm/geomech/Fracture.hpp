@@ -222,6 +222,9 @@ public:
     std::array<double,2> hightAndWidth() const;
     double maxFlowTimeStep() const{return max_flow_time_step_;}
 private:
+   double reservoirTraction(int i) const;
+   double fractureForce(int i) const;
+   double leakofDp(int i) const;
    void summary_of_solve();
    std::vector<RuntimePerforation> wellIndices_() const;
    bool  expantionMax(const FractureProperties& fprop);

@@ -65,21 +65,25 @@ namespace Opm{
             geomechModel_(simulator)
         {
             std::string filename = Parameters::Get<Parameters::FractureParamFile>();
-            try{
-                Opm::PropertyTree fracture_param(filename);
-                // set seed values
-                fracture_param_ = fracture_param;
-            }
-            catch(...){
-                std::stringstream ss;
-                ss << "No fracture parameter file: " << filename << " : no fractures added ";
-                //ss << e.what();
-                OpmLog::warning(ss.str());
+            if (filename == "notafile") {
                 Opm::PropertyTree fracture_param = makeDefaultFractureParam();
-                fracture_param.put("hasfractures",false);
-                //fracture_param.put("fractureparams.numfractures",1);
+                fracture_param.put("hasfractures", false);
+                // fracture_param.put("fractureparams.numfractures",1);
                 fracture_param_ = fracture_param;
-                
+            } else {
+                try {
+                    Opm::PropertyTree fracture_param(filename);
+                    // set seed values
+                    fracture_param_ = fracture_param;
+                } catch (...) {
+                    std::stringstream ss;
+                    ss << "No fracture parameter file or error reading it: " << filename
+                       << " : Simulation stopped: correct file or use default";
+                    // ss << e.what();
+                    OpmLog::warning(ss.str());
+                    // stop simulation
+                    OPM_THROW(std::runtime_error, ss.str());
+                }
             }
             std::stringstream os;
             fracture_param_.write_json(os, true);

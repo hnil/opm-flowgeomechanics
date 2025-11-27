@@ -301,7 +301,7 @@ namespace Opm{
                 // set boundary
                 double gravity = 0.0;
                 if(use_body_force){
-                    gravity = 9.81;
+                    gravity = Opm::unit::gravity;
                     OpmLog::info("Using body force in geomechanics to 2000 kg/m^3 \n");
                 }
                 int nc = simulator_.gridView().size(0);

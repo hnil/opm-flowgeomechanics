@@ -590,6 +590,17 @@ Fracture::write(int reportStep) const
     vtkwriter_->write(filename.c_str());
 };
 
+double Fracture::reservoirTraction(int i) const{  
+   return ddm::tractionSymTensor(reservoir_stress_[i], cell_normals_[i]);
+}
+double Fracture::fractureForce(int i) const{
+  return reservoirTraction(i) - fracture_pressure_[i];
+}
+
+double Fracture::leakofDp(int i) const{
+   return fracture_pressure_[i][0] - reservoir_pressure_[i]
+                - (fracture_dgh_[i] - reservoir_cell_z_[i] * gravity_ * reservoir_density_[i]);
+}
 void
 Fracture::writemulti(double time) const
 {
@@ -640,10 +651,10 @@ Fracture::writemulti(double time) const
             flow_width[i] = std::max(fracture_width_[i][0], min_width_);
             fracture_pressure[i] = fracture_pressure_[i][0];
             reservoir_cells[i] = reservoir_cells_[i]; // only converts to double
-            reservoir_traction[i] = ddm::tractionSymTensor(reservoir_stress_[i], cell_normals_[i]);
-            fracture_force[i] = reservoir_traction[i] - fracture_pressure[i];
-            leakof_dp[i] = fracture_pressure[i] - reservoir_pressure[i]
-                - (fracture_dgh_[i] - reservoir_cell_z_[i] * gravity_ * reservoir_density_[i]);
+            reservoir_traction[i] = reservoirTraction(i);//ddm::tractionSymTensor(reservoir_stress_[i], cell_normals_[i]);
+            fracture_force[i] = fractureForce(i);//reservoir_traction[i] - fracture_pressure[i];
+            leakof_dp[i] = leakofDp(i);//fracture_pressure[i] - reservoir_pressure[i]
+                //- (fracture_dgh_[i] - reservoir_cell_z_[i] * gravity_ * reservoir_density_[i]);
             // make relative to origo
             fracture_head[i] = (fracture_pressure[i] - fracture_dgh_[i])
                 - (injectionPressure() - (perf_ref_depth_ * gravity_ * density_perf_));
@@ -1736,13 +1747,14 @@ Fracture::removeNewZeroWithCells(RegularTrimesh& mesh,
                                  int cur_level,
                                  const RegularTrimesh& initial_mesh) const
 {
+    const double force_limit = prm_.get<double>("solver.force_limit", 0.0);
     bool any_removed = false;
     using GridView = typename Grid::LeafGridView;
     using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
     ElementMapper elemMapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     for (auto& cell : elements(grid_->leafGridView())) {
         const auto index = elemMapper.index(cell);
-        if (fracture_width_[index] == 0) {
+        if (fracture_width_[index][0] == 0){// || (fractureForce(index) > force_limit)) {
             auto cellrefs = grid_mesh_map_[index];
             for (const auto& cellref : cellrefs) {
                 if (cur_level == 0) {
