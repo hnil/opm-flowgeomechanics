@@ -126,8 +126,20 @@ namespace Opm {
                                                                               trans_mult, 
                                                                               wellstate_nupcol, 
                                                                               /*with_fracture*/ false);
-                            
-                             const auto effective_well_index   =  effective_well_indexs[FluidSystem::waterPhaseIdx];
+
+                                                 
+                            //const auto mobibility = well->getMobility(simulator, perf_index, mob);
+                            double lambda = 0.0;
+                            int numPhases = 3;
+                            for (unsigned phaseIdx = 0; phaseIdx < numPhases; ++phaseIdx) {
+                                    if (FluidSystem::phaseIsActive(phaseIdx)) {
+                                            // assume sum should only be water;
+                                            auto val = intQuants.mobility(phaseIdx);
+                                            //val*=intQuants.fluidState().invB(phaseIdx);
+                                            lambda += val.value();
+                                    }
+                            }   
+                            const auto effective_well_index   =  effective_well_indexs[FluidSystem::waterPhaseIdx]*lambda;
                             double density = intQuants.fluidState().density(FluidSystem::waterPhaseIdx).value();
                             total_wellindex += effective_well_index;
                             double dzwell = (well->perfDepth()[perf_index]- well->refDepth());  
@@ -137,6 +149,7 @@ namespace Opm {
 
                         }
                         injection_rate = wellstate.reservoir_rates[FluidSystem::waterPhaseIdx];
+                        //injection_rate = wellstate.surface_rates[FluidSystem::waterPhaseIdx];
                         well_depth = well->refDepth();
                         perf_depths = well->perfDepth();
                     }   

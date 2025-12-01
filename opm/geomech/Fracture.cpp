@@ -974,17 +974,19 @@ Fracture::addSource()
       // this tries to make control equation for single phase standard wells with one phase and static reservoir
         assert(numWellEquations() == 1); // @@ for now, we assume there is just one well equation
         const double well_rate = well_rate_;//control.get<double>("rate") / 24 / 60 / 60; // convert to m3/sec
-        const double WI = total_wellindex_;//control.get<double>("WI");
+        const double WI = total_wellindex_; //eclude lambdacontrol.get<double>("WI");
         const int cell = std::get<0>(perfinj_[0]); // @@ will this be the correct index?
         const double pres = reservoir_pressure_[cell];
         const double density = reservoir_density_[cell];
-        const double lambda = reservoir_mobility_[cell]; // @@ only correct if mobility is constant!
-        if (true) {
+        //const double lambda = reservoir_mobility_[cell]; // @@ only correct if mobility is constant!
+        const double lambda = 1.0;
+        if (false) {
             rhs_pressure_[rhs_pressure_.size() - 1] = well_rate + WI * lambda * pres; // well source term
         } else {
-            double wi_dzfac = wi_dz_*density*gravity_; // sum wi dz
-            wi_dzfac += wi_respress_; // sum wi res_press
-            wi_dzfac += (-WI* (perf_ref_depth_- well_ref_depth_))*gravity_*density; // counvert to perf_ref_depth from bhp ref_depth for primary
+            double wi_dzfac = wi_respress_; 
+            wi_dzfac -= wi_dz_*density*gravity_; // sum wi dz
+            //wi_dzfac += wi_respress_; // sum wi res_press
+            wi_dzfac += (WI* (perf_ref_depth_- well_ref_depth_))*gravity_*density; // counvert to perf_ref_depth from bhp ref_depth for primary
                                             // variable reservoir_pressure_[nc] i.e. perf pressure
             rhs_pressure_[rhs_pressure_.size() - 1] = well_rate + lambda * wi_dzfac;
         }
@@ -1566,7 +1568,8 @@ Fracture::calculateFractureProperties() const
     double avgfilter_h = filter_volume/area;
     double inj_pressure = injectionPressure();
     double inj_bhp = injectionBhp();
-    double inj_wellrate = well_rate_;//only copy of wellrate from wells
+    double surface_factor = 1.0; //NB to do convert to surface volume
+    double inj_wellrate = well_rate_*surface_factor;//only copy of wellrate from wells
     FractureProperties fracprop(height, 
                                 length, 
                                 total_flux, 
@@ -1724,7 +1727,7 @@ Fracture::assemblePressure()
         assert(numWellEquations() == 1); // @@ for now, we assume there is just one well equation
         const int nc = numFractureCells() + numWellEquations();
         const int cell = std::get<0>(perfinj_[0]); // @@ will this be the correct index? 
-        const double lambda = reservoir_mobility_[cell]; // @@ If not constant, this might be wrong
+        const double lambda = 1.0;//reservoir_mobility_[cell]; // @@ If not constant, this might be wrong
         // control.get<double>("WI")
         const double WI_lambda = total_wellindex_ * lambda; // we could ahve used total mobility here
         matrix[nc - 1][nc - 1] = WI_lambda;
