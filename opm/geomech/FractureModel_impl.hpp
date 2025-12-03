@@ -104,12 +104,13 @@ namespace Opm {
                     const auto& wellstate = wellmodel.wellState().well(*well_index);
                     //const auto& reportStepIndex = simulator.episodeIndex();
                     const auto& wellstate_nupcol = wellmodel.nupcolWellState().well(*well_index);
-                    const auto& wells = wellmodel.localNonshutWells();
-                    const auto& well = wells[*well_index];
-                    assert(well->name() == wells_[i].name());
                     // get cell index from well perforation data
                     // check if well is open
                     if(wellstate.status == ::Opm::WellStatus::OPEN) {
+                      const auto& wells = wellmodel.localNonshutWells();
+                      const auto& well = wells[*well_index];
+                      assert(well->name() == wells_[i].name());
+                      
                       //for (const auto& perf : wellstate.perf_data) {
                       for (int perf_index=0; perf_index < wellstate.perf_data.cell_index.size(); ++perf_index) {    
                             //water_rate += perf.flux[TypeTag::FluidSystem    ::waterPhaseIdx];
