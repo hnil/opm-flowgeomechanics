@@ -840,7 +840,7 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
     all_reservoir_areas_.resize(numFractureCells());
     all_reservoir_cells_.resize(numFractureCells());
     all_reservoir_centers_.resize(numFractureCells());
-    bool full_intersections = prm_.get<bool>("full_intersections", true);
+    bool full_intersections = prm_.get<bool>("solver.full_intersections", true);
     for (auto& element : elements(grid_->leafGridView())) {
         const auto elemIdx = elemMapper.index(element);
         auto geom = element.geometry();
@@ -1145,6 +1145,7 @@ void Fracture::setWellProps(double wellrate,
 
 std::vector<RuntimePerforation>
 Fracture::wellIndicesAvrg(const std::vector<std::vector<RuntimePerforation>>& well_indices){
+    // average int time between to well indices.
     OPM_TIMEFUNCTION();
   // find union of cell indices
   assert(well_indices.size() == 2);// || well_indices_.size() == 0);
@@ -1203,7 +1204,24 @@ Fracture::wellIndices_() const
         // if pressure is not assembled return empty
         return {};
     }
+    bool only_to_one = !(prm_.get<bool>("solver.divide_wellidx",false));
     std::vector<int> res_cells = reservoir_cells_;
+    std::vector<int> tot_areas(all_reservoir_cells_.size(), 0.0);
+    if(only_to_one){
+        res_cells = reservoir_cells_;
+    }else{
+        for(size_t ind=0; ind < all_reservoir_cells_.size(); ++ind){
+            double total_area = 0.0;
+            auto cells = all_reservoir_cells_[ind];
+            for(size_t lind=0; lind < cells.size(); ++lind){
+                res_cells.push_back(cells[lind]);
+                total_area += all_reservoir_areas_[ind][ind];
+            }
+            tot_areas[ind] = total_area;
+        }
+    }
+
+    
     std::sort(res_cells.begin(), res_cells.end());
     auto last = std::unique(res_cells.begin(), res_cells.end());
     res_cells.erase(last, res_cells.end());
@@ -1214,32 +1232,48 @@ Fracture::wellIndices_() const
     std::vector<double> z_cells(res_cells.size(), 0.0);
     std::vector<double> traction(res_cells.size(), 0.0);
     std::vector<double> area(res_cells.size(), 0.0);
-    
+    std::vector<double> leakofrate = this->leakOfRate();
     double q_prev = 0;
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     for (auto& element : Dune::elements(grid_->leafGridView())) {
         int eIdx = mapper.index(element);
-        double dh_res = reservoir_cell_z_[eIdx] * gravity_ * reservoir_density_[eIdx];
-        double dh_frac = fracture_dgh_[eIdx];
-        double dp = ((fracture_pressure_[eIdx]-dh_frac) - (reservoir_pressure_[eIdx]-dh_res));
-        double q = leakof_[eIdx] * dp;
-        int res_cell = reservoir_cells_[eIdx];
+        auto geom = element.geometry();
+        double q = leakofrate[eIdx]*geom.volume(); // just to avoid warning
+        
+        std::vector<int> local_res_cells;
+        if(only_to_one){
+            local_res_cells.push_back(reservoir_cells_[eIdx]);
+        }else{
+            local_res_cells = all_reservoir_cells_[eIdx];
+        }    
         // just to search
-        auto it = std::find(res_cells.begin(), res_cells.end(), res_cell);
-        int ind_wellIdx = it - res_cells.begin();
-        assert(!(it == res_cells.end()));
-        if (q_prev * q < 0) {
-            OPM_THROW(std::runtime_error, "Cross flow in fracture ??");
+        for(int lind=0; lind < local_res_cells.size(); ++lind){
+            int res_cell = local_res_cells[lind];
+            double area_frac = 1.0;
+            if(!only_to_one){
+                area_frac = all_reservoir_areas_[eIdx][lind]/tot_areas[eIdx];
+            }
+            auto it = std::find(res_cells.begin(), res_cells.end(), res_cell);
+            int ind_wellIdx = it - res_cells.begin();
+            assert(!(it == res_cells.end()));
+            if (q_prev * q < 0) {
+                OPM_THROW(std::runtime_error, "Cross flow in fracture ??");
+            }
+            double loc_area = area_frac*element.geometry().volume();
+            area[ind_wellIdx] += loc_area;
+            q_cells[ind_wellIdx] += area_frac*q;
+            if(reservoir_cells_[eIdx] == res_cell){
+                traction[ind_wellIdx] += ddm::tractionSymTensor(reservoir_stress_[eIdx], cell_normals_[eIdx])*loc_area; //normalFractureTraction(elIx);
+                // assume all of this is the same so no need for interpolation
+                p_cells[ind_wellIdx] = reservoir_pressure_[eIdx]; // is set multiple times
+                mob_cells[ind_wellIdx] = reservoir_mobility_[eIdx]; // is set multiple times
+                dens_cells[ind_wellIdx] = reservoir_density_[eIdx]; // is set multiple times
+                z_cells[ind_wellIdx] = reservoir_cell_z_[eIdx]; // is set multiple times
+            }else{
+                // need to collect this values if no cell has centroid nearest to this
+                // reservoir cell
+            }
         }
-        double loc_area = element.geometry().volume();
-        area[ind_wellIdx] += loc_area;
-        q_cells[ind_wellIdx] += q;
-        traction[ind_wellIdx] += ddm::tractionSymTensor(reservoir_stress_[eIdx], cell_normals_[eIdx])*loc_area; //normalFractureTraction(elIx);
-        // assume all of this is the same so no need for interpolation
-        p_cells[ind_wellIdx] = reservoir_pressure_[eIdx]; // is set multiple times
-        mob_cells[ind_wellIdx] = reservoir_mobility_[eIdx]; // is set multiple times
-        dens_cells[ind_wellIdx] = reservoir_density_[eIdx]; // is set multiple times
-        z_cells[ind_wellIdx] = reservoir_cell_z_[eIdx]; // is set multiple times
     }
     std::vector<RuntimePerforation> wellIndices(res_cells.size());
     double inj_press = injectionPressure();
@@ -1248,7 +1282,7 @@ Fracture::wellIndices_() const
         auto& perf = wellIndices[i];
         perf.cell = res_cells[i];
         if(res_cells[i]<0){
-            // will be removed make dummy values
+            // NB will be removed make dummy values
             cells_outside = true;
             perf.depth = this->origo_[2];
             perf.ctf = 0;
@@ -1262,27 +1296,35 @@ Fracture::wellIndices_() const
         double dh_res = z_cells[i] * gravity_ * dens_cells[i];
         double perf_density = dens_cells[i];
         double dh_perf = gravity_ * perf_density * origo_[2];
-        double WI = q_cells[i] / ((inj_press - dh_perf) - (p_cells[i] - dh_res));//NB d_perf def
+        double WI = 0.0;
+        if(mob_cells[i] <= 0.0){
+            std::cout << "Warning zero mobility for perf cell: " << res_cells[i] << std::endl;
+            WI = 0.0;
+        }else{
+            WI = q_cells[i] / ((inj_press - dh_perf) - (p_cells[i] - dh_res));//NB d_perf def
+        }
         if (WI < 0.0) {
           // keep but could maybe be removed
             std::cout << "Negative WI: " << WI << " for cell: " << res_cells[i] << std::endl;
             WI = 0.0;
         }
         perf.ctf = WI/mob_cells[i]; // convert to ctf
-        perf.depth = this->origo_[2];
-        perf.segment = this->wellinfo_.segment;
-        perf.perf_range = this->wellinfo_.perf_range;
-        perf.pressure = inj_press;
-        double tmp_press =  traction[i]/area[i];
-        //if(tmp_press < inj_press){
-        //    perf.ref_pressure = tmp_press;        
-        //    perf.ref_ctf = 0.0; // should be the closed value
-        //}else{
-        //perf.ref_pressure = tmp_press;//inj_press- 10e5; // dummy value
-        //perf.ref_ctf = 0.0;//perf.ctf; 
-        perf.ref_pressure = inj_press- 10e5; // dummy value
-        perf.ref_ctf = perf.ctf; 
-        //}
+        {
+                // NBsould probably be removed
+            perf.depth = this->origo_[2];
+            perf.segment = this->wellinfo_.segment;
+            perf.perf_range = this->wellinfo_.perf_range;
+            perf.pressure = inj_press;
+            double tmp_press =  traction[i]/area[i];
+            //if(tmp_press < inj_press){
+            //    perf.ref_pressure = tmp_press;        
+            //    perf.ref_ctf = 0.0; // should be the closed value
+            //}else{
+            //perf.ref_pressure = tmp_press;//inj_press- 10e5; // dummy value
+            //perf.ref_ctf = 0.0;//perf.ctf; 
+            perf.ref_pressure = inj_press- 10e5; // dummy value
+            perf.ref_ctf = perf.ctf; 
+        }
     }
     // remove connections to outside of reservoir
     if(cells_outside){
