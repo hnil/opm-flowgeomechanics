@@ -360,6 +360,9 @@ private:
     std::vector<int> well_source_; // indices to well cells
     // for reservoir
     std::vector<int> reservoir_cells_;
+    std::vector<std::vector<int>> all_reservoir_cells_;
+    std::vector<std::vector<double>> all_reservoir_areas_;
+    std::vector<std::vector<Dune::FieldVector<double,3>>> all_reservoir_centers_;
     // std::vector< Dune::FieldMatrix<double, 3, 3> > reservoir_perm_;
     std::vector<double> reservoir_perm_;
     std::vector<double> reservoir_cstress_;

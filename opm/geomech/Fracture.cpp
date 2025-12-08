@@ -36,6 +36,8 @@
 #include <vector>
 #include <limits>
 
+
+
 namespace
 {
 
@@ -828,12 +830,17 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
                                const Dune::CpGrid& grid,
                                const std::vector<Fracture::EntitySeed>& entity_seeds)
 {
+    OPM_TIMEFUNCTION();
     reservoir_cells_.resize(numFractureCells());
     using GridView = typename Grid::LeafGridView;
     using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
     ElementMapper elemMapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     int tri_divide = 0;
     int tri_outside = 0;
+    all_reservoir_areas_.resize(numFractureCells());
+    all_reservoir_cells_.resize(numFractureCells());
+    all_reservoir_centers_.resize(numFractureCells());
+    bool full_intersections = prm_.get<bool>("full_intersections", true);
     for (auto& element : elements(grid_->leafGridView())) {
         const auto elemIdx = elemMapper.index(element);
         auto geom = element.geometry();
@@ -843,6 +850,26 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
         Vec3d point(vertex[0], vertex[1], vertex[2]);
         //bb.add(point);
         reservoir_cells_[elemIdx]  = external::cellOfPoint(cellSearchTree, grid, entity_seeds, point);
+        // calculate area
+        std::vector<std::array<double,3>> tri_corners;
+        {
+            for (size_t i = 0; i < geom.corners(); ++i) {
+                auto corner = geom.corner(i);
+                std::array<double,3> tmp({corner[0], corner[1], corner[2]});
+                tri_corners.push_back(tmp);
+            }
+        }
+
+        if(full_intersections){
+            std::vector<int> rcells;
+            std::vector<double> areas;
+            std::vector<Dune::FieldVector<double,3>> centers;
+            std::vector<std::array<double,3>> hex_corners;
+            external::cellsOfTri(rcells, areas, centers, cellSearchTree, grid, entity_seeds, tri_corners);
+            all_reservoir_areas_[elemIdx] = areas;
+            all_reservoir_cells_[elemIdx] = rcells;
+            all_reservoir_centers_[elemIdx] = centers;
+        }
     }
     auto it = std::find(reservoir_cells_.begin(), reservoir_cells_.end(), -1);
     auto extended_fractures = prm_.get<bool>("extended_fractures");
@@ -1438,9 +1465,66 @@ Fracture::initFracturePressureFromReservoir()
     }
 }
 
+
+
+
 void
 Fracture::updateLeakoff()
 {
+
+    // find boundary nodes.
+    //Dune::Codim<> {}
+    constexpr int dim = 2;
+    constexpr Dune::Codim<2> codimVertex;
+    constexpr Dune::Codim<1> codimFace;
+    constexpr Dune::Codim<0> codimCell;
+    auto gv = grid_->leafGridView();
+    auto& indexSet = gv.indexSet();
+    std::vector<bool> isBoundaryNode(indexSet.size(codimVertex), false);
+    for (const auto& element : elements(gv)) {
+        for (const auto& is : intersections(gv, element)) {
+            if (is.boundary()) {
+              //auto geom = is.geometry();
+               auto lf = is.indexInInside();
+               auto face = element.subEntity<codimFace>(lf);
+               //for (const auto& vertex : Dune::subEntities(face, codimVertex)){
+               //}
+               int nv = face.subEntities(codimVertex);
+               assert(nv == 2);
+               const auto refElement = Dune::ReferenceElements<double,dim>::general(element.type());
+               for (int v = 0; v < nv; v++) {
+                 auto&& vertex = element.template subEntity<dim>(refElement.subEntity(lf, dim-1, v, dim));
+                 //auto vertex = face.subEntity(codimVertex,v);
+                   //boundaryVerts.insert(indexSet.index(vertex));
+                 auto vid = indexSet.index(vertex);
+                 isBoundaryNode[vid] = true;
+               }
+            }
+        }
+    } 
+    // find all cells with  aboundary node
+    std::vector<bool> elementHasBoundaryNode(gv.size(codimCell), false);
+    for (const auto& element : elements(gv)) {
+        auto eidx = indexSet.index(element);
+        // for (const auto& is : intersections(gv, element)) {
+        //     if (is.boundary()) {
+        //       elementHasBoundaryNode[eidx] = true;
+        //     }
+        // }
+        if(true){
+        int nv = element.subEntities(codimVertex);
+        //for (const auto& f : Dune::subEntities(element, codimVertex))
+        for (int i = 0; i < nv; i++) {
+          auto vertex = element.subEntity<codimVertex>(i);
+            auto vid = indexSet.index(vertex);
+            if (isBoundaryNode[vid]) {
+                elementHasBoundaryNode[eidx] = true;
+                break; // no need to check more vertices
+            }
+        }
+        }
+    }
+    bool no_leakof_outercells = prm_.get<bool>("solver.no_leakof_outercells",false);
     const size_t nc = numFractureCells();
     leakof_.resize(nc, 0.0);
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
@@ -1460,6 +1544,9 @@ Fracture::updateLeakoff()
                 // assert(filtercake_thikness_[eIdx] > 0.0);
             }
             leakof_[eIdx] = 1 / invtrans;
+            if(elementHasBoundaryNode[eIdx] && no_leakof_outercells){
+              leakof_[eIdx] = 0.0;
+            }
         }
     }
 }

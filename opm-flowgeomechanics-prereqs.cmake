@@ -30,6 +30,8 @@ set (opm-flowgeomechanics_DEPS
   # matrix library
   "BLAS REQUIRED"
   "LAPACK REQUIRED"
+  "CGAL REQUIRED"
+  "GMP REQUIRED"    
   # Look for MPI support
   "MPI"
   # PETSc numerical backend

@@ -26,6 +26,7 @@
 list (APPEND MAIN_SOURCE_FILES
 	opm/geomech/coupledsolver.cpp
 	opm/geomech/CutDe.cpp
+	opm/geomech/CGAL_helper.cpp
 	opm/geomech/DiscreteDisplacement.cpp
 	opm/geomech/FlexibleSolverMech.cpp
 	opm/geomech/Fracture_fullSystemIteration.cpp
@@ -54,6 +55,7 @@ list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/convex_boundary.hpp
 	opm/geomech/coupledsolver.hpp
 	opm/geomech/CutDe.hpp
+	opm/geomech/CGAL_helper.hpp
 	opm/geomech/DiscreteDisplacement.hpp
 	opm/geomech/DuneCommunicationHelpers.hpp
 	opm/geomech/dune_utilities.hpp

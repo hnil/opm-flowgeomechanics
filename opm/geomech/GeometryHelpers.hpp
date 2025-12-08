@@ -132,7 +132,13 @@ namespace external{
         const Dune::CpGrid& grid,
         const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& enity_seed,    
         const cvf::Vec3d& point);
-
+        
+    void cellsOfTri(std::vector<int>& cells,std::vector<double>& areas,
+                    std::vector<Dune::FieldVector<double,3>>& centroids,
+                  const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
+                  const Dune::CpGrid& grid,
+                const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& entity_seed,
+                const std::vector<std::array<double,3>>& points);
     
     template<class Grid, class CellSeed>
     void buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,

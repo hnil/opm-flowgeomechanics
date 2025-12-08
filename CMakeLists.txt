@@ -53,7 +53,8 @@ if(opm-common_DIR AND NOT IS_DIRECTORY ${opm-common_DIR})
 	message(WARNING "Value ${opm-common_DIR} passed to variable"
 		" opm-common_DIR is not a directory")
 endif()
-
+#find_package(CGAL REQUIRED)
+#find_package(METIS REQUIRED)	
 find_package(opm-common REQUIRED)
 
 include(OpmInit)
@@ -179,7 +180,7 @@ add_executable(flow_geomech
 )
 target_link_libraries(flow_geomech
 	PUBLIC
-		opmflowgeomechanics
+		opmflowgeomechanics  
 	PRIVATE
 		moduleVersionGeoMech
 )
@@ -196,7 +197,7 @@ add_executable(flow_energy_geomech
 )
 target_link_libraries(flow_energy_geomech
 	PUBLIC
-		opmflowgeomechanics
+		opmflowgeomechanics CGAL::CGAL gmp  
 	PRIVATE
 		moduleVersionGeoMech
 )

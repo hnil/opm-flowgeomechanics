@@ -1,4 +1,5 @@
 #include "GeometryHelpers.hpp"
+#include <opm/geomech/CGAL_helper.hpp>
 #include "config.h"
 namespace external
 {
@@ -69,6 +70,7 @@ buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, std::vect
         }
     }
 }
+
 int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
                 const Dune::CpGrid& grid,
                 const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& entity_seed,
@@ -134,6 +136,56 @@ int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
         return -1;
      }
 }
+
+void
+cellsOfTri(std::vector<int>& cells,
+           std::vector<double>& areas,
+           std::vector<Dune::FieldVector<double,3>>& centroids,
+           const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
+           const Dune::CpGrid& grid,
+           const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& entity_seed,
+           const std::vector<std::array<double, 3>>& tri_corners)
+{
+    external::cvf::BoundingBox bb;
+    for (const auto& tpoint : tri_corners) {
+        cvf::Vec3d point(tpoint[0], tpoint[1], tpoint[2]);
+        bb.add(point);
+    }
+    cells.resize(0);
+    areas.resize(0);
+    std::vector<size_t> cells_tmp = external::findCloseCellIndices(m_cellSearchTree, bb);
+    // int count =0;
+    int outcell = -1;
+    double min_distance = 1e99;
+    Dune::FieldVector<double, 3> local;
+    for (const auto& cell : cells_tmp) {
+        auto element = grid.entity(entity_seed[cell]);
+        if (element.partitionType() != Dune::InteriorEntity) {
+            // outside of parition is considered outside model
+            continue;
+        }
+        std::vector<std::array<double, 3>> hex_corners;
+        {
+            auto geom_hex = entity_seed[cell].geometry();
+            for (size_t i = 0; i < size_t(geom_hex.corners()); ++i) {
+                auto corner = geom_hex.corner(i);
+                std::array<double, 3> tmp({corner[0], corner[1], corner[2]});
+                hex_corners.push_back(tmp);
+            }
+        }
+        double area = area_of_intersection(hex_corners, tri_corners);
+        if (area > 1e-12) {
+            cells.push_back(cell);
+            areas.push_back(area);
+            auto centroid = element.geometry().center();
+            centroids.push_back(centroid);
+        }
+    }
+}
+
+
+
+
 
 void
 buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, const Opm::EclipseGrid& m_grid)
