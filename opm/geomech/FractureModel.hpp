@@ -122,6 +122,8 @@ public:
                 if (fractures[j].isActive()) {
                     std::cout << "Solving fracture " << fractures[j].name() << std::endl;
                     fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator);
+                    // post solve update
+                    //fractures[j].updateFilterCakePropertiesPost<TypeTag, Simulator>(simulator);
                 }
             }
         }        

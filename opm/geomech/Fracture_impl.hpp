@@ -242,6 +242,47 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         // }
     }
 
+
+
+template <class TypeTag, class Simulator>
+void Fracture::updateFilterCakePropertiesPost(const Simulator& simulator)//, bool init_constant_vals,bool update_filtercake)
+    {
+        // if `init_contant_vals` is true, the fields that should normally not
+        // change, i.e.  E_, nu_ and reservoir_perm_ will be updated. This should
+        // normally only be needed the first time.
+
+        int reportStepIdx = simulator.episodeIndex();
+        const auto& schedule =  simulator.vanguard().schedule();
+        //const Opm::Well& well = wells[wellinfo_.name];
+        //const std::vector<Opm::Well>& wells = problem.wellModel().getLocalWells(reportStepIdx);
+        // get properties from well connections in case of filter cake
+        if(schedule[reportStepIdx].wells.has(wellinfo_.name) == false){
+            std::cerr << "Warning: Well " << wellinfo_.name << " not found in schedule step " << reportStepIdx << std::endl;
+            return;
+        }
+        const auto& well = schedule[reportStepIdx].wells(wellinfo_.name);
+        //const auto& well = problem.wellModel().getWellEcl(wellinfo_.name);
+        const auto& connections = well.getConnections();
+        
+        //const auto& connection = connections[wellinfo_.perf];// probably wrong
+        if(connections.hasGlobalIndex(wellinfo_.global_index) == false){
+            std::cerr << "Warning: Well connection with global index " << wellinfo_.global_index << " not found in schedule step " << reportStepIdx << std::endl;
+            return;
+        }
+        const auto& wellstates = simulator.problem().wellModel().wellState();
+        const auto& well_index = wellstates.index(wellinfo_.name);
+        if (!well_index.has_value()) {
+            std::cerr << "Warning: Well " << wellinfo_.name << " not found in well state at step " << reportStepIdx << std::endl;
+            has_filtercake_ = false;// prevois state did not have this well
+            return;
+        }
+        const auto& wellstate = wellstates[*well_index];
+
+        double dt = simulator.timeStepSize();
+        updateFilterCakeProps(connections, wellstate, dt);
+
+    }   
+
 // ----------------------------------------------------------------------------
 template <class TypeTag, class Simulator>
 void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& cell_search_tree,

@@ -1673,7 +1673,7 @@ Fracture::calculateFractureProperties() const
         auto geom = element.geometry();
         area += geom.volume();
         volume += geom.volume() * (fracture_width_[eIdx]);// + min_width_);
-        filter_volume += geom.volume() * filtercake_thikness_[eIdx];
+        filter_volume += geom.volume() * filtercake_thikness_[eIdx];//
         auto dist = geom.center() - origo_;
         double dh = dist.dot(naxis_[0]);
         double dw = dist.dot(naxis_[1]);
@@ -1699,13 +1699,14 @@ Fracture::calculateFractureProperties() const
     double inj_bhp = injectionBhp();
     double surface_factor = 1.0; //NB to do convert to surface volume
     double inj_wellrate = well_rate_*surface_factor;//only copy of wellrate from wells
+    double solid_filter_volume = filter_volume*(1 - filtercake_poro_);// return the solid volume
     FractureProperties fracprop(height, 
                                 length, 
                                 total_flux, 
                                 area,
                                 WI,
                                 volume,
-                                filter_volume,
+                                solid_filter_volume,
                                 avgh,
                                 avgfilter_h,
                                 inj_pressure,

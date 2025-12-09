@@ -175,7 +175,8 @@ public:
   void updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
                             const Dune::CpGrid& grid,
                             const std::vector<EntitySeed>& entity_seeds);
-
+    template <class TypeTag, class Simulator>
+    void updateFilterCakePropertiesPost(const Simulator& simulator);
     // solver related
     void updateReservoirProperties();
     void removeCells();
