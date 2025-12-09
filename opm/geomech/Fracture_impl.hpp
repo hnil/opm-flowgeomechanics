@@ -231,10 +231,10 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         }
         const auto& wellstate = wellstates[*well_index];
 
-        if(update_filtercake){
-          double dt = simulator.timeStepSize();
-          updateFilterCakeProps(connections, wellstate, dt);
-        } 
+        // if(update_filtercake){
+        //   double dt = simulator.timeStepSize();
+        //   updateFilterCakeProps(connections, wellstate, dt);
+        // } 
         // else {
         //   // remap
         //   int ncf = reservoir_cells_.size();
