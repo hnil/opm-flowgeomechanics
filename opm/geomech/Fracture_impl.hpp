@@ -120,6 +120,45 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         double numax = 0, Emax = 0;
         //auto& enitity_seeds = problem.elementEntitySeeds();//used for radom axes better way?
         // get properties from rservoir
+
+
+        std::vector<int> unique_reservoir_cells_;//NB move to member?
+        for(auto & cells : all_reservoir_cells_){
+            for(auto & cell : cells){
+                unique_reservoir_cells_.push_back(cell);
+            }
+        }
+        std::sort(unique_reservoir_cells_.begin(),unique_reservoir_cells_.end());
+        auto last = std::unique (unique_reservoir_cells_.begin(), unique_reservoir_cells_.end());
+        unique_reservoir_cells_.erase(last,unique_reservoir_cells_.end());
+        
+
+        for (size_t i = 0; i < unique_reservoir_cells_.size(); ++i) {
+            int cell = unique_reservoir_cells_[i];
+            if (!(cell < 0)) {
+                const auto& intQuants = simulator.model().intensiveQuantities(cell, /*timeIdx*/ 0);
+                const auto& fs = intQuants.fluidState();
+                double reservoir_mobility = 0.0;
+                enum { numPhases = getPropValue<TypeTag, Properties::NumPhases>() };
+                for (unsigned phaseIdx = 0; phaseIdx < numPhases; ++phaseIdx) {
+                    if (FluidSystem::phaseIsActive(phaseIdx)) {
+                        // assume sum should only be water;
+                        auto val = intQuants.mobility(phaseIdx);
+                        reservoir_mobility += val.value();
+                    }
+                }
+                const auto& currentData = grid.currentData();
+                const auto& elem = Dune::cpgrid::Entity<0>(*currentData.back(), cell, true);
+                const auto& geom = elem.geometry();
+                const auto& cell_center = elem.geometry().center();
+                map_reservoir_mobility_[cell] = reservoir_mobility;
+                map_reservoir_density_[cell] = fs.density(FluidSystem::waterPhaseIdx).value();
+                auto pval = fs.pressure(FluidSystem::waterPhaseIdx);
+                map_reservoir_pressure_[cell] = pval.value();
+                map_reservoir_cell_z_[cell] = cell_center[2];
+            }
+        }
+
         for (size_t i = 0; i < ncf; ++i) {
             int cell = reservoir_cells_[i];
             if (!(cell < 0)) {

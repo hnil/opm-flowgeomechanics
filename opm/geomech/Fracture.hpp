@@ -370,6 +370,14 @@ private:
     std::vector<double> reservoir_mobility_;
     std::vector<double> reservoir_density_;
     std::vector<double> reservoir_cell_z_;
+    //
+    std::vector<int> unique_reservoir_cells_;
+    std::map<int,double> map_reservoir_mobility_;
+    std::map<int,double> map_reservoir_density_;
+    std::map<int,double> map_reservoir_cell_z_;
+    std::map<int,double> map_reservoir_pressure_;
+    //
+
     std::vector<double> reservoir_dist_;
     std::vector<double> reservoir_pressure_;
     std::vector<Dune::FieldVector<double, 6>> reservoir_stress_;

@@ -1206,7 +1206,7 @@ Fracture::wellIndices_() const
     }
     bool only_to_one = !(prm_.get<bool>("solver.divide_wellidx",false));
     std::vector<int> res_cells = reservoir_cells_;
-    std::vector<int> tot_areas(all_reservoir_cells_.size(), 0.0);
+    std::vector<double> tot_areas(all_reservoir_cells_.size(), 0.0);
     if(only_to_one){
         res_cells = reservoir_cells_;
     }else{
@@ -1215,8 +1215,9 @@ Fracture::wellIndices_() const
             auto cells = all_reservoir_cells_[ind];
             for(size_t lind=0; lind < cells.size(); ++lind){
                 res_cells.push_back(cells[lind]);
-                total_area += all_reservoir_areas_[ind][ind];
+                total_area += all_reservoir_areas_[ind][lind];
             }
+            // this area should be the same as areal of cell if it is inside full model
             tot_areas[ind] = total_area;
         }
     }
@@ -1270,6 +1271,20 @@ Fracture::wellIndices_() const
                 dens_cells[ind_wellIdx] = reservoir_density_[eIdx]; // is set multiple times
                 z_cells[ind_wellIdx] = reservoir_cell_z_[eIdx]; // is set multiple times
             }else{
+                // logic could be changed after introduction of map
+              auto getFromMap = [](const std::map<int,double> map, int key){
+                if (auto search = map.find(key); search != map.end()){
+                  return search->second;
+                }else{
+                  assert(false);
+                  return 0.0;
+                }
+              };
+
+              p_cells[ind_wellIdx] = getFromMap(map_reservoir_pressure_,res_cell); // is set multiple times
+              mob_cells[ind_wellIdx] = getFromMap(map_reservoir_mobility_,res_cell); // is set multiple time
+              dens_cells[ind_wellIdx] = getFromMap(map_reservoir_density_,res_cell); // is set multiple time
+              z_cells[ind_wellIdx] = getFromMap(map_reservoir_cell_z_,res_cell); // 
                 // need to collect this values if no cell has centroid nearest to this
                 // reservoir cell
             }
