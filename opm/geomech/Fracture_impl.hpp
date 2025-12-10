@@ -497,6 +497,8 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             if (remap_solution) {
                 for (size_t i = 0; i < fracture_pressure_.size(); ++i) {
                     assert(std::abs(fracture_pressure_[i][0]) < 1e10);
+                }
+                for (size_t i = 0; i < fracture_width_.size(); ++i) {
                     assert(std::abs(fracture_width_[i][0]) < 0.6);
                 }
                 auto old_fracture_width_ = fracture_width_;
@@ -511,10 +513,14 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                     fracture_pressure_.resize(fracture_pressure_.size() + 1);
                     fracture_pressure_[fracture_pressure_.size() - 1] = well_value;
                 }
-                // solve flow-mechanical system
                 for (size_t i = 0; i < fracture_pressure_.size(); ++i) {
                     assert(std::abs(fracture_pressure_[i][0]) < 1e10);
+                }
+                for (size_t i = 0; i < fracture_width_.size(); ++i) {
                     assert(std::abs(fracture_width_[i][0]) < 0.6);
+                }
+                // solve flow-mechanical system
+                for (size_t i = 0; i < fracture_pressure_.size(); ++i) {
                     if(fracture_pressure_[i] == 0.0){
                       // not initialized values
                       fracture_pressure_[i] = reservoir_pressure_[i];
