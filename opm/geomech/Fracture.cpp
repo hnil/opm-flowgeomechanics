@@ -263,7 +263,7 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
     
     double qw_sum = 0.0;
     double qwpos_sum = 0.0;
-
+    // should we do this based on fracture cross flow?        
     for (int i = 0; i < perfdata.cell_index.size(); ++i) {
         int cell_index = perfdata.cell_index[i];
         // similar as in WellFilterCake.cpp:148
@@ -298,6 +298,7 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
         std::map<int, double> reservoir_flux;
         if ((leakof_.size()
              > 0)) { // should be first step with seed fracture is clean could have used rates from solve
+            std::vector<double> leakof_rate = leakOfRate();        
             assert(leakof_.size() == fracture_pressure_.size()-numWellEquations());
             ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
             for (auto& element : Dune::elements(grid_->leafGridView())) {
@@ -306,9 +307,7 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
                 double area = geom.volume(); // is the area of this face
                 int res_cell = reservoir_cells_[eIdx];
                 reservoir_areas[res_cell] += area;
-                double dp = (fracture_pressure_[eIdx] - reservoir_pressure_[eIdx]);
-                double trans = leakof_[eIdx];
-                double flux = trans * dp;
+                double flux = leakof_rate[eIdx]; // m3/s
                 reservoir_flux[res_cell] += flux;
                 if (flux < 0) {
                     if(prm_.get<bool>("verbose",false)){

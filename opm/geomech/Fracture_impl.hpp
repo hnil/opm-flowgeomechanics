@@ -438,11 +438,13 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             for(int i=0; i < traction.size();++i){
                 fracture_pressure_[i] = std::max(traction[i], fracture_pressure_[i]);
             }
+            if (numWellEquations() > 0){
+                fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
+            }
         }
         // It is implicitly assumed for now that there is just one well equation.
         // We initialize with an existing value. @@
-        if (numWellEquations() > 0)
-            fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
+        
 
         // save original grid and filtercake, to allow us to map it onto evolved grids
         const auto filtercake_thickness_0 = filtercake_thikness_; // copy
