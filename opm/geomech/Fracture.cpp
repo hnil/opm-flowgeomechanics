@@ -260,16 +260,32 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
     std::map<int, double> WI_fluxes;
     int water_index = 0;
     int np = 3;
+    
+    double qw_sum = 0.0;
+    double qwpos_sum = 0.0;
+
     for (int i = 0; i < perfdata.cell_index.size(); ++i) {
         int cell_index = perfdata.cell_index[i];
         // similar as in WellFilterCake.cpp:148
         const auto& connection_rates = perfdata.phase_rates;
         const double water_rate = std::max(0.0, connection_rates[i * np + water_index]);
+        qwpos_sum += std::max(0.0, water_rate);
+        qw_sum += water_rate;
         WI_fluxes[cell_index] = water_rate;
+    }
+    double xfact = 1.0;
+    if (qwpos_sum > 1.0e-12) {
+        xfact = qw_sum / qwpos_sum;
+    }else{
+      if(qwpos_sum == qw_sum){
+        xfact = 1.0;
+      }else{
+        xfact = 0.0;
+      }
     }
 
     const auto& connection = connections.getFromGlobalIndex(wellinfo_.global_index); // probably wrong
-    double filtrate_conn = wellstate.filtrate_conc;
+    double filtrate_conn = wellstate.filtrate_conc*xfact;
     has_filtercake_ = connection.filterCakeActive();
     if (has_filtercake_) {
         auto& filter_cake = connection.getFilterCake();
