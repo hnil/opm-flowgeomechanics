@@ -283,6 +283,7 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
         xfact = 0.0;
       }
     }
+    //NB need to be checked
 
     const auto& connection = connections.getFromGlobalIndex(wellinfo_.global_index); // probably wrong
     double filtrate_conn = wellstate.filtrate_conc*xfact;
@@ -1126,15 +1127,13 @@ Fracture::wellIndices() const{
    return wellindices;
 }
 
-double damping_factor_perf = 0.5;
-double damping_factor_wi = 0.5;
-
 void Fracture::setPerfProps(double perfpressure, double depth, double perfrate){
+    double damping_factor_perf = prm_.get<double>("solver.damping_factor_perf",2.0);
     if(well_indices_.size() >0){
         perf_pressure_ = perfpressure;
     }else{
         // dampted updating for stability of fracture growth
-        perf_pressure_ = (perf_pressure_ + damping_factor_perf*perfpressure)/(1.0+damping_factor_perf);//(perfpressure-perf_pressure_)*damping_factor;
+        perf_pressure_ = (perf_pressure_*damping_factor_perf+ perfpressure)/(1.0+damping_factor_perf);//(perfpressure-perf_pressure_)*damping_factor;
     }
     well_perf_rate_ = perfrate;
     perf_ref_depth_ = depth;
@@ -1159,7 +1158,7 @@ void Fracture::setWellProps(double wellrate,
 }
 
 std::vector<RuntimePerforation>
-Fracture::wellIndicesAvrg(const std::vector<std::vector<RuntimePerforation>>& well_indices){
+Fracture::wellIndicesAvrg(const std::vector<std::vector<RuntimePerforation>>& well_indices) const{
     // average int time between to well indices.
     OPM_TIMEFUNCTION();
   // find union of cell indices
@@ -1182,8 +1181,9 @@ Fracture::wellIndicesAvrg(const std::vector<std::vector<RuntimePerforation>>& we
   //std::vector<RuntimePerforation> wellindices(cells.size(),0);
   int tind=0;
   std::vector<double> weight_ctf(well_indices.size(),0.0);
-  weight_ctf[0] = damping_factor_wi;
-  weight_ctf[1] = 1.0;
+  double damping_factor_wi = prm_.get<double>("solver.damping_factor_wi",2.0);
+  weight_ctf[0] = 1.0;
+  weight_ctf[1] = damping_factor_wi;
   double total_weight = 0.0;
   for(const auto& winds : well_indices){
     for (const auto& wind : winds){

@@ -34,7 +34,7 @@ namespace Opm {
 } // namespace Opm
 
 namespace Opm{
-    PropertyTree makeDefaultFractureParam();
+    PropertyTree makeDefaultFractureParam(bool rate_control = false);
 class FractureModel{
     //using CartesianIndexMapper = Dune::CartesianIndexMapper<Dune::CpGrid>;
 public:

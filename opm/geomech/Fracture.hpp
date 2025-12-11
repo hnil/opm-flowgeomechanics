@@ -204,7 +204,7 @@ public:
     void writePressureSystem()  const;
     void setFractureGrid(std::unique_ptr<Fracture::Grid> gptr = nullptr); // a hack to allow use of another grid
     std::vector<RuntimePerforation> wellIndices() const;
-    static std::vector<RuntimePerforation> wellIndicesAvrg(const std::vector<std::vector<RuntimePerforation>>& well_indices);
+    std::vector<RuntimePerforation> wellIndicesAvrg(const std::vector<std::vector<RuntimePerforation>>& well_indices) const;
     WellInfo& wellInfo(){return wellinfo_;}
     const WellInfo& wellInfo() const { return wellinfo_; }
     std::vector<double> leakOfRate() const;

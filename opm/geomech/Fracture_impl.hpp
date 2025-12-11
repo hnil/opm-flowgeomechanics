@@ -398,6 +398,14 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 std::cout << "Iteration: " << iter << std::endl;
             }
         };
+        if(iter >= max_iter){
+            bool failure_on_convergence = prm_.get<bool>("solver.failure_on_nonconvergence",false);
+            if(failure_on_convergence){
+                throw std::runtime_error("Fracture solver did not converge within " + std::to_string(max_iter) + " iterations.");
+            }else{
+                std::cout << "Warning: Fracture solver did not converge within " << max_iter << " iterations." << std::endl;
+            }
+        }
 
         // @@ debug
         const std::vector<double> K1_not_nan = Fracture::stressIntensityK1();
@@ -511,7 +519,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 }
                 redistribute_values(fracture_pressure_, org_map, fsmap, level, point_wise);
                 if (numWellEquations() > 0){
-                  assert(fracture_pressure_.size() == fracture_width_.size());
+                    assert(fracture_pressure_.size() == fracture_width_.size());
                     fracture_pressure_.resize(fracture_pressure_.size() + 1);
                     fracture_pressure_[fracture_pressure_.size() - 1] = well_value;
                 }
@@ -542,7 +550,14 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             while (!fullSystemIteration(tol,iter) && iter++ < max_iter) {
             };
             // remove closed cells which was not open before ??
-            
+            if(iter >= max_iter){
+                bool failure_on_convergence = prm_.get<bool>("solver.failure_on_nonconvergence",false);
+                if(failure_on_convergence){
+                    throw std::runtime_error("Fracture solver did not converge within " + std::to_string(max_iter) + " iterations.");
+                }else{
+                    std::cout << "Warning: Fracture solver did not converge within " << max_iter << " iterations." << std::endl;
+                }
+            }
             if(nlin_verbosity > 1){
                 std::cout << "Nonlinear iterations needed with fixed expansion: " << iter << std::endl;
             }
@@ -661,6 +676,14 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                     //   int krull=0;
                     //}
                 };
+                if(iter >= max_iter){
+                    bool failure_on_convergence = prm_.get<bool>("solver.failure_on_nonconvergence",false);
+                    if(failure_on_convergence){
+                        throw std::runtime_error("Fracture solver did not converge within " + std::to_string(max_iter) + " iterations.");
+                    }else{
+                        std::cout << "Warning: Fracture solver did not converge within " << max_iter << " iterations." << std::endl;
+                    }
+                }
                 std::cout << "Iterations needed: " << iter << std::endl;
 
 
