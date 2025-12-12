@@ -856,7 +856,7 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
     all_reservoir_areas_.resize(numFractureCells());
     all_reservoir_cells_.resize(numFractureCells());
     all_reservoir_centers_.resize(numFractureCells());
-    bool full_intersections = prm_.get<bool>("solver.full_intersections", true);
+    bool full_intersections = prm_.get<bool>("solver.s", false);
     for (auto& element : elements(grid_->leafGridView())) {
         const auto elemIdx = elemMapper.index(element);
         auto geom = element.geometry();

@@ -474,7 +474,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             // setup fracture with new grid
             const int MAX_NUM_COARSENING = prm_.get<int>("solver.max_num_coarsening"); // should be enough for all practical purposes
             const int numcell_threshold = prm_.get<int>("solver.numcell_threshold");
-            bool smooth_boundary = prm_.get<bool>("solver.smooth_boundary","false");
+            bool smooth_boundary = prm_.get<bool>("solver.smooth_boundary",false);
             auto [grid, fsmap, bmap] =
             trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources,/* smoothed triangels */ smooth_boundary, numcell_threshold); // well cells kept intact!
             auto org_map = grid_mesh_map_; 
