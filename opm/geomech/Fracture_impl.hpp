@@ -501,10 +501,11 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             coupling_matrix_ = nullptr;
 
 
-            bool point_wise = true;
+
             // solve flow-mechanical system
             bool remap_solution= prm_.get<bool>("solver.remap_solution");
             if (remap_solution) {
+
                 for (size_t i = 0; i < fracture_pressure_.size(); ++i) {
                     assert(std::abs(fracture_pressure_[i][0]) < 1e10);
                 }
@@ -512,12 +513,13 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                     assert(std::abs(fracture_width_[i][0]) < 0.6);
                 }
                 auto old_fracture_width_ = fracture_width_;
-                redistribute_values(fracture_width_, org_map, fsmap, level, point_wise);
+                redistribute_values(fracture_width_, org_map, fsmap, level, /*point_wise*/true);
                 double well_value = 0.0;
                 if (numWellEquations() > 0){
                     well_value = fracture_pressure_[fracture_pressure_.size() - 1];
+                    fracture_pressure_.resize(fracture_pressure_.size() - 1);
                 }
-                redistribute_values(fracture_pressure_, org_map, fsmap, level, point_wise);
+                redistribute_values(temp_fracture_pressure_, org_map, fsmap, level, /*point_wise*/true);
                 if (numWellEquations() > 0){
                     assert(fracture_pressure_.size() == fracture_width_.size());
                     fracture_pressure_.resize(fracture_pressure_.size() + 1);
@@ -544,7 +546,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             // filtercake is explicite
             filtercake_thikness_ = redistribute_values(filtercake_thickness_0,
                                                        grid_mesh_map_0,
-                                                       fsmap, level, point_wise);
+                                                       fsmap, level, /*point_wise*/ true);
             
             int iter = 0;
             while (!fullSystemIteration(tol,iter) && iter++ < max_iter) {
