@@ -62,6 +62,7 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.config.min_width", 0.0);// normaly taken from deck
     fracture_param.put("fractureparam.config.trires", 5);
     fracture_param.put("fractureparam.config.gravity_off", false);
+    fracture_param.put("fractureparam.config.scale_filtrate", true);
 
 
     fracture_param.put("fractureparam.solver.method", "if_propagate_trimesh"s);

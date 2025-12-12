@@ -284,7 +284,18 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
       }
     }
     //NB need to be checked
-
+    bool scale_filtrate = prm_.get<bool>("config.scale_filtrate", false);
+    double scale_factor = 1.0;
+    if(scale_filtrate){
+        // overkill but simplest
+        auto frac_prop = this->calculateFractureProperties();
+        double frac_flux = frac_prop.flux; // m3/s
+        double sim_frac_flux = wellstate.frac_rate;
+        //NB maybe we should only use posive fluxes (cross flow problems)
+        if(frac_flux > 1.0e-12){
+            scale_factor = std::max(0.0,sim_frac_flux) / frac_flux;
+        }   
+    }
     const auto& connection = connections.getFromGlobalIndex(wellinfo_.global_index); // probably wrong
     double filtrate_conn = wellstate.filtrate_conc*xfact;
     has_filtercake_ = connection.filterCakeActive();
@@ -318,7 +329,8 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
                     flux = 0.0;
                 }
                 double water_rate = flux;
-                double filtrate_volume = water_rate*filtrate_conn* dt; // m3
+                double water_rate_scaled = water_rate*scale_factor;// account for difference fracture and flow solution
+                double filtrate_volume = water_rate_scaled*filtrate_conn* dt; // m3
                 double dh = filtrate_volume / (area * (1 - filtercake_poro_));
                 assert(dh >= 0);
                 filtercake_thikness_[eIdx] += dh;
