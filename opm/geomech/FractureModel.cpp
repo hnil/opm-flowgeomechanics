@@ -36,7 +36,7 @@ makeDefaultFractureParam(bool rate_control)
 {
     using namespace std::string_literals;
     PropertyTree fracture_param;
-    fracture_param.put("hasfractures", false);
+    fracture_param.put("hasfractures", true); //used ??
     fracture_param.put("add_perfs_to_schedule", true);
     // solution method method for coupled system only postsolve tested so far
     fracture_param.put("solver.method", "PostSolve"s);
@@ -50,23 +50,26 @@ makeDefaultFractureParam(bool rate_control)
 
     //
     fracture_param.put("fractureparam.reduce_boundary", false);
+    fracture_param.put("fractureparam.vem_stability_choice", 3);
+    fracture_param.put("fractureparam.smooth_force", false);
     fracture_param.put("fractureparam.addconnections", true);
     // very experimental to calculate stress contributions from fracture to cell values
     fracture_param.put("fractureparam.include_fracture_contributions", false);
 
     // seed to be in input file
+    fracture_param.put("fractureparam.config.type", "well_seed"s);// well seed should not be used any more
     fracture_param.put("fractureparam.config.initial_fracture_width", 1e-4);
     fracture_param.put("fractureparam.config.min_width", 0.0);// normaly taken from deck
     fracture_param.put("fractureparam.config.trires", 5);
-    fracture_param.put("fractureparam.config.gravity_off", true);
+    fracture_param.put("fractureparam.config.gravity_off", false);
 
 
     fracture_param.put("fractureparam.solver.method", "if_propagate_trimesh"s);
     fracture_param.put("fractureparam.solver.target_cellcount", 300);
     fracture_param.put("fractureparam.solver.cellcount_threshold", 300);
-    fracture_param.put("fractureparam.solver.numcell_threshold", 1000);
+    fracture_param.put("fractureparam.solver.numcell_threshold", 100000);// probably 1200 should be ok
     fracture_param.put("fractureparam.solver.max_num_coarsening", 0);
-    fracture_param.put("fractureparam.solver.max_iter_on_same_level", 1000000);
+    fracture_param.put("fractureparam.solver.max_iter_on_same_level", 100000000);
     
     // used ??
     fracture_param.put("fractureparam.solver.efac", 0.5);
@@ -77,13 +80,13 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.solver.max_iter", 100);
     fracture_param.put("fractureparam.solver.tolerance", 1e-6);
     fracture_param.put("fractureparam.solver.damping", 1e0);
-    fracture_param.put("fractureparam.solver.min_width", 0.0);
+    fracture_param.put("fractureparam.solver.min_width", 0.001);// NB should not be used
     fracture_param.put("fractureparam.solver.max_width", 0.5);
     fracture_param.put("fractureparam.solver.max_change", 1e5);
     // end used ??
 
     fracture_param.put("fractureparam.solver.max_dwidth", 5e-3);
-    fracture_param.put("fractureparam.solver.max_dp", 5e6);
+    fracture_param.put("fractureparam.solver.max_dp", 1000000000);// NB probably better value 5e6
     fracture_param.put("fractureparam.solver.verbosity", 2);
 
     // fracture linear solve
@@ -91,11 +94,16 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.solver.linsolver.tol", 1e-8);
     fracture_param.put("fractureparam.solver.area_change_fac", 3.0);
     fracture_param.put("fractureparam.solver.dt_limit", 0.1);// in days
-    fracture_param.put("fractureparam.solver.damping_factor_perf", 2.0);
-    fracture_param.put("fractureparam.solver.damping_factor_wi", 2.0);
+    if(rate_control){
+        fracture_param.put("fractureparam.solver.damping_factor_perf", 0.0);// doesnot matter
+        fracture_param.put("fractureparam.solver.damping_factor_wi", 0.0);
+    }else{
+        fracture_param.put("fractureparam.solver.damping_factor_perf", 2.0);
+        fracture_param.put("fractureparam.solver.damping_factor_wi", 2.0);
+    }
     fracture_param.put("fractureparam.solver.failure_on_nonconvergence", false);
     fracture_param.put("fractureparam.solver.force_limit", 0.0);
-    fracture_param.put("fractureparam.solver.smooth_boundary", true);
+    fracture_param.put("fractureparam.solver.smooth_boundary", false);
     fracture_param.put("fractureparam.solver.full_intersections", false);
     fracture_param.put("fractureparam.solver.divide_wellidx", false);
     fracture_param.put("fractureparam.solver.no_leakof_outercells",false);
@@ -111,7 +119,7 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.mech_first", false);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.mech_press_coupling", true);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.verbosity", 0);  
-    fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.type","umfpack"s);
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.solver","umfpack"s);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.verbosity",0 );
     // not used if not solver is iterative
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.tol",1 );
