@@ -457,7 +457,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         // save original grid and filtercake, to allow us to map it onto evolved grids
         const auto filtercake_thickness_0 = filtercake_thikness_; // copy
         const auto grid_mesh_map_0 = grid_mesh_map_; 
-        
+        double total_filtercake_0 = filterCakeVolume();
         // local function taking a trimesh, updates the Fracture object with it and
         // runs a simulation.  Its return value should be a vector of doubles:
         
@@ -543,11 +543,18 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 initFracturePressureFromReservoir();
             }
 
-            // filtercake is explicite
+            // total amount of filtercake be
+        
+
             filtercake_thikness_ = redistribute_values(filtercake_thickness_0,
                                                        grid_mesh_map_0,
                                                        fsmap, level, /*point_wise*/ true);
-            
+            double total_filtercake = filterCakeVolume();
+            if(std::abs(total_filtercake - total_filtercake_0) > 1e-6 && (nlin_verbosity > 1)){
+                std::cout << "Total filtercake thickness before remapping: " << total_filtercake_0 << std::endl;
+                std::cout << "Total filtercake thickness after remapping: " << total_filtercake << std::endl;
+                //assert(false);
+            }
             int iter = 0;
             while (!fullSystemIteration(tol,iter) && iter++ < max_iter) {
             };

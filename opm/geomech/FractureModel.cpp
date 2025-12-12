@@ -91,8 +91,8 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.solver.linsolver.tol", 1e-8);
     fracture_param.put("fractureparam.solver.area_change_fac", 3.0);
     fracture_param.put("fractureparam.solver.dt_limit", 0.1);// in days
-    fracture_param.put("fractureparam.solver.damping_factor_perf", 0.0);
-    fracture_param.put("fractureparam.solver.damping_factor_wi", 0.0);
+    fracture_param.put("fractureparam.solver.damping_factor_perf", 2.0);
+    fracture_param.put("fractureparam.solver.damping_factor_wi", 2.0);
     fracture_param.put("fractureparam.solver.failure_on_nonconvergence", false);
     fracture_param.put("fractureparam.solver.force_limit", 0.0);
     fracture_param.put("fractureparam.solver.smooth_boundary", true);

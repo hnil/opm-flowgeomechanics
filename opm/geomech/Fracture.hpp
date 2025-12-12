@@ -222,6 +222,7 @@ public:
     bool isActive() const { return active_; }
     std::array<double,2> hightAndWidth() const;
     double maxFlowTimeStep() const{return max_flow_time_step_;}
+    double filterCakeVolume() const;
 private:
    double reservoirTraction(int i) const;
    double fractureForce(int i) const;

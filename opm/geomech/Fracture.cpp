@@ -1622,6 +1622,18 @@ Fracture::updateLeakoff()
         }
     }
 }
+double
+Fracture::filterCakeVolume() const
+{
+    double total_filtercake_0 = 0.0;
+    for (const auto& elment : Dune::elements(grid_->leafGridView())) {
+        int i = grid_->leafGridView().indexSet().index(elment);
+        auto geom = elment.geometry();
+        double area = geom.volume();
+        total_filtercake_0 += filtercake_thikness_[i] * area;
+    }
+    return total_filtercake_0;
+}
 
 void
 Fracture::redistribute_values(Dune::BlockVector<Dune::FieldVector<double, 1>>& values,
