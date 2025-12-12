@@ -308,7 +308,7 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
                 double area = geom.volume(); // is the area of this face
                 int res_cell = reservoir_cells_[eIdx];
                 reservoir_areas[res_cell] += area;
-                double flux = leakof_rate[eIdx]; // m3/s
+                double flux = leakof_rate[eIdx]*area; // m3/s
                 reservoir_flux[res_cell] += flux;
                 if (flux < 0) {
                     if(prm_.get<bool>("verbose",false)){
