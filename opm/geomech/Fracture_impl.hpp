@@ -519,7 +519,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                     well_value = fracture_pressure_[fracture_pressure_.size() - 1];
                     fracture_pressure_.resize(fracture_pressure_.size() - 1);
                 }
-                redistribute_values(temp_fracture_pressure_, org_map, fsmap, level, /*point_wise*/true);
+                redistribute_values(fracture_pressure_, org_map, fsmap, level, /*point_wise*/true);
                 if (numWellEquations() > 0){
                     assert(fracture_pressure_.size() == fracture_width_.size());
                     fracture_pressure_.resize(fracture_pressure_.size() + 1);
