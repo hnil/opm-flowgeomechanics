@@ -67,7 +67,6 @@ namespace Opm{
             std::string filename = Parameters::Get<Parameters::FractureParamFile>();
             if (filename == "notafile") {
                 Opm::PropertyTree fracture_param = makeDefaultFractureParam();
-                fracture_param.put("hasfractures", false);
                 // fracture_param.put("fractureparams.numfractures",1);
                 fracture_param_ = fracture_param;
             } else {

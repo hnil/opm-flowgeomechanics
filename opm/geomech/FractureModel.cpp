@@ -74,8 +74,8 @@ makeDefaultFractureParam(bool rate_control)
     // used ??
     fracture_param.put("fractureparam.solver.efac", 0.5);
     fracture_param.put("fractureparam.solver.rfac", 0.1);
-    fracture_param.put("fractureparam.solver.damping_w", 0.5);
-    fracture_param.put("fractureparam.solver.damping_p", 0.5);
+    //fracture_param.put("fractureparam.solver.damping_w", 0.5);
+    //fracture_param.put("fractureparam.solver.damping_p", 0.5);
     fracture_param.put("fractureparam.solver.max_expand_iter", 20);
     fracture_param.put("fractureparam.solver.max_iter", 100);
     fracture_param.put("fractureparam.solver.tolerance", 1e-6);
