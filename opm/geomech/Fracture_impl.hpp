@@ -206,7 +206,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                   dist /= num_corners;
                   reservoir_dist_[i] = dist;
                 }
-                reservoir_cell_z_[i] = cell_center[2];
+                reservoir_cell_z_[i] = cell_center[2]/2.0;
                    
                 
             } else {

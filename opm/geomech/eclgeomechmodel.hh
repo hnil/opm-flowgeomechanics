@@ -683,7 +683,14 @@ namespace Opm{
                 return true;
             }           
         }
-        const FractureModel& fractureModel() const{
+        
+      void updateFilterCakePropertiesOnFractures(){
+        if(this->fractureModelActive()){
+          fracturemodel_->updateFilterCakeProperties<TypeTag,Simulator>(simulator_);
+        }
+      }
+
+      const FractureModel& fractureModel() const{
             if(!fracturemodel_){
                 std::cout << "Fracture model not initialized, returning nullptr" << std::endl;
                 throw std::runtime_error("Fracture model not initialized");

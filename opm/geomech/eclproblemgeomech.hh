@@ -373,6 +373,12 @@ namespace Opm{
             FractureModel::fractureLogger.clearMessages();
             global_logger.logMessages();
             Parent::endTimeStep();
+            if(this->simulator().vanguard().eclState().runspec().mech()){
+                if(this->hasFractures() ){
+                    // need to be here ?? to have updated values
+                    this->geomechModel_.updateFilterCakePropertiesOnFractures();
+                }
+            }
             //
             // if(first_fracture_solve_){
             //     first_fracture_solve_ = false;

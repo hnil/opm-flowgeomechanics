@@ -123,10 +123,20 @@ public:
                     std::cout << "Solving fracture " << fractures[j].name() << std::endl;
                     fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator);
                     // post solve update
-                    fractures[j].updateFilterCakePropertiesPost<TypeTag, Simulator>(simulator);
+                    
                 }
             }
         }        
+    }
+
+    template <class TypeTag, class Simulator>
+    void updateFilterCakeProperties(const Simulator& simulator){
+         for (size_t i = 0; i < wells_.size(); ++i) {
+            std::vector<Fracture>& fractures = well_fractures_[i];
+            for (size_t j = 0; j < fractures.size(); ++j) {
+                fractures[j].updateFilterCakePropertiesPost<TypeTag, Simulator>(simulator);
+            }
+        }
     }
 
     template <class TypeTag, class Simulator>

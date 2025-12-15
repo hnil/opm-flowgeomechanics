@@ -1627,7 +1627,7 @@ Fracture::updateLeakoff()
                 // assert(filtercake_perm_ > 0.0);
                 // assert(filtercake_thikness_[eIdx] > 0.0);
             }
-            leakof_[eIdx] = 1 / invtrans;
+            leakof_[eIdx] = 2.0 / invtrans;
             if(elementHasBoundaryNode[eIdx] && no_leakof_outercells){
               leakof_[eIdx] = 0.0;
             }
