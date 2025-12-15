@@ -1622,7 +1622,7 @@ Fracture::updateLeakoff()
             double invtrans = 1 / leakof_[eIdx];
             assert(filtercake_thikness_[eIdx] >= 0.0);
             if (filtercake_thikness_[eIdx] > 0.0) {
-                double fitercaketrans = res_mob * filtercake_perm_ * area / filtercake_thikness_[eIdx];
+                double fitercaketrans = res_mob * filtercake_perm_ * area / (filtercake_thikness_[eIdx]/2.0); // div by 2 since filtercake thikness is sum of filtercake on each side
                 invtrans += 1 / fitercaketrans;
                 // assert(filtercake_perm_ > 0.0);
                 // assert(filtercake_thikness_[eIdx] > 0.0);
