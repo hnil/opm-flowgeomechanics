@@ -151,12 +151,13 @@ target_link_libraries(opmflowgeomechanics
 	PUBLIC
 		opmupscaling
 		opmsimulators
+	  CGAL::CGAL gmp  
 )
 
 if(HAVE_HYPRE)
 	target_link_libraries(opmflowgeomechanics
 		PUBLIC
-			HYPRE::HYPRE
+			HYPRE::HYPRE 
 	)
 endif()
 
@@ -197,7 +198,7 @@ add_executable(flow_energy_geomech
 )
 target_link_libraries(flow_energy_geomech
 	PUBLIC
-		opmflowgeomechanics CGAL::CGAL gmp  
+		opmflowgeomechanics 
 	PRIVATE
 		moduleVersionGeoMech
 )
