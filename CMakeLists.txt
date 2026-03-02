@@ -294,6 +294,18 @@ target_link_libraries(standalone_sim_test
 		opmflowgeomechanics
 )
 
+add_executable(test_fracture_pressure_ad
+	examples/test_fracture_pressure_ad.cpp
+)
+target_link_libraries(test_fracture_pressure_ad
+	PUBLIC
+		opmflowgeomechanics
+)
+
+add_test(NAME Test.FracturePressureAD
+	COMMAND test_fracture_pressure_ad
+)
+
 # ---------------------------------------------------------------------------
 
 set(Test_NumProc 4)
