@@ -83,6 +83,8 @@ Opm::FracturePressureInput makeSimpleTestInput()
     input.min_width = 1e-4;
 
     // Linear chain: 0 -- 1 -- 2 -- 3
+    // Htrans tuples follow the original convention: (nIdx, eIdx, geo_trans_e, geo_trans_n)
+    // where eIdx < nIdx to avoid double-counting faces.
     input.htrans = {
         Opm::Htrans{1, 0, 2.0, 2.0},
         Opm::Htrans{2, 1, 1.5, 1.5},

@@ -98,6 +98,7 @@ public:
 
     LocalAD operator/(const LocalAD& rhs) const
     {
+        assert(rhs.value != 0.0);
         LocalAD r;
         r.value = value / rhs.value;
         const double inv2 = 1.0 / (rhs.value * rhs.value);
@@ -144,6 +145,7 @@ public:
     // scalar / AD
     friend LocalAD operator/(double s, const LocalAD& a)
     {
+        assert(a.value != 0.0);
         LocalAD r;
         r.value = s / a.value;
         const double neg_s_over_a2 = -s / (a.value * a.value);
