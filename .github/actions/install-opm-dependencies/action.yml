@@ -1,0 +1,92 @@
+name: 'Install OPM Dependencies'
+description: 'Installs system packages and builds OPM modules needed by opm-flowgeomechanics via a superbuild'
+inputs:
+  opm-fork:
+    description: 'GitHub user/org hosting the OPM forks'
+    required: false
+    default: 'hnil'
+  opm-branch:
+    description: 'Branch for opm-common, opm-grid, opm-simulators, opm-upscaling'
+    required: false
+    default: 'geomech_hypre'
+runs:
+  using: 'composite'
+  steps:
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          build-essential cmake ninja-build git ca-certificates pkg-config \
+          libboost-all-dev \
+          libdune-common-dev libdune-geometry-dev libdune-grid-dev \
+          libdune-istl-dev libdune-localfunctions-dev \
+          libblas-dev liblapack-dev libsuitesparse-dev \
+          libopenmpi-dev openmpi-bin mpi-default-dev \
+          libtrilinos-zoltan-dev \
+          libhdf5-mpi-dev libsuperlu-dev \
+          libcgal-dev libgmp-dev \
+          libfmt-dev \
+          zlib1g-dev
+
+    - name: Clone OPM modules and dune-foamgrid
+      shell: bash
+      run: |
+        WORKSPACE="${RUNNER_TEMP}/opm-superbuild"
+        mkdir -p "${WORKSPACE}"
+
+        for module in common grid simulators upscaling; do
+          git clone --depth 1 --branch ${{ inputs.opm-branch }} \
+            "https://github.com/${{ inputs.opm-fork }}/opm-${module}.git" \
+            "${WORKSPACE}/opm-${module}"
+        done
+
+        git clone --depth 1 \
+          https://gitlab.dune-project.org/extensions/dune-foamgrid.git \
+          "${WORKSPACE}/dune-foamgrid"
+
+    - name: Build and install dune-foamgrid
+      shell: bash
+      run: |
+        WORKSPACE="${RUNNER_TEMP}/opm-superbuild"
+        cmake -S "${WORKSPACE}/dune-foamgrid" \
+              -B "${WORKSPACE}/dune-foamgrid/build" -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_TESTING=OFF \
+              -DCMAKE_INSTALL_PREFIX=/usr/local
+        cmake --build "${WORKSPACE}/dune-foamgrid/build" -j $(nproc)
+        sudo cmake --install "${WORKSPACE}/dune-foamgrid/build"
+
+    - name: Superbuild OPM modules
+      shell: bash
+      run: |
+        WORKSPACE="${RUNNER_TEMP}/opm-superbuild"
+
+        # Generate superbuild CMakeLists.txt
+        cat > "${WORKSPACE}/CMakeLists.txt" <<'SUPERBUILD'
+        project(opm)
+        cmake_minimum_required(VERSION 3.26)
+        foreach(TARGET opm-common opm-grid opm-simulators opm-upscaling)
+          set(${TARGET}_DIR ${CMAKE_BINARY_DIR}/${TARGET})
+        endforeach()
+        set(SIBLING_SEARCH 0)
+        set_property(GLOBAL PROPERTY ALLOW_DUPLICATE_CUSTOM_TARGETS 1)
+        add_subdirectory(opm-common)
+        add_subdirectory(opm-grid)
+        add_dependencies(opmgrid opmcommon)
+        add_subdirectory(opm-simulators)
+        add_dependencies(opmsimulators opmgrid)
+        add_subdirectory(opm-upscaling)
+        add_dependencies(opmupscaling opmgrid)
+        SUPERBUILD
+
+        cmake -S "${WORKSPACE}" -B "${WORKSPACE}/build" -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DBUILD_TESTING=OFF \
+          -DCMAKE_INSTALL_PREFIX=/usr/local
+        cmake --build "${WORKSPACE}/build" -j $(nproc)
+        sudo cmake --install "${WORKSPACE}/build"
+
+    - name: Clean up build trees
+      shell: bash
+      run: rm -rf "${RUNNER_TEMP}/opm-superbuild"
