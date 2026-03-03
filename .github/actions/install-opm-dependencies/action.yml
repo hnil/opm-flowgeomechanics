@@ -9,6 +9,10 @@ inputs:
     description: 'Branch for opm-common, opm-grid, opm-simulators, opm-upscaling'
     required: false
     default: 'geomech_hypre'
+  dune-foamgrid-branch:
+    description: 'Branch/tag for dune-foamgrid (must be compatible with system DUNE packages)'
+    required: false
+    default: 'releases/2.9'
 runs:
   using: 'composite'
   steps:
@@ -41,7 +45,9 @@ runs:
             "${WORKSPACE}/opm-${module}"
         done
 
-        git clone --depth 1 \
+        # Pin dune-foamgrid to a release branch compatible with the
+        # system DUNE packages (Ubuntu 24.04 ships DUNE 2.9).
+        git clone --depth 1 --branch ${{ inputs.dune-foamgrid-branch }} \
           https://gitlab.dune-project.org/extensions/dune-foamgrid.git \
           "${WORKSPACE}/dune-foamgrid"
 
