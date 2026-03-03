@@ -173,13 +173,22 @@ using Htrans = std::tuple<size_t, size_t, double, double>;
 using BCRSMatrix1x1 = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>;
 using BlockVector1 = Dune::BlockVector<Dune::FieldVector<double, 1>>;
 
+// Precomputed fluid property for a single fracture cell, carrying the
+// value and its derivative with respect to the fracture cell pressure.
+struct CellFluidProperty
+{
+    double value = 0.0;
+    double dval_dp = 0.0;  // d(value)/d(fracture_pressure)
+};
+
 // Input data for the pressure assembly (standalone, independent of Fracture class)
 struct FracturePressureInput
 {
     std::vector<Htrans> htrans;
     std::vector<double> fracture_width;
     std::vector<double> fracture_pressure;
-    std::vector<double> reservoir_mobility;
+    std::vector<CellFluidProperty> density;    // per-cell density with pressure derivative
+    std::vector<CellFluidProperty> viscosity;  // per-cell viscosity with pressure derivative
     std::vector<double> leakof;
     double min_width = 1e-6;
     size_t num_cells = 0;
@@ -298,9 +307,23 @@ assemblePressureAD(const FracturePressureInput& input)
         AD4 inv_trans = AD4::constant(12.0) / (h1_cubed * AD4::constant(t1))
                       + AD4::constant(12.0) / (h2_cubed * AD4::constant(t2));
 
-        const double mobility = 0.5 * (input.reservoir_mobility[i]
-                                      + input.reservoir_mobility[j]);
-        AD4 trans = AD4::constant(mobility) / inv_trans;
+        // Compute per-cell mobility = density / viscosity as AD quantities.
+        // Pressure derivatives of density and viscosity are mapped to the
+        // local derivative slots P_I (for cell i) and P_J (for cell j).
+        AD4 rho_i(input.density[i].value);
+        rho_i.derivatives[P_I] = input.density[i].dval_dp;
+        AD4 mu_i(input.viscosity[i].value);
+        mu_i.derivatives[P_I] = input.viscosity[i].dval_dp;
+        AD4 mob_i = rho_i / mu_i;
+
+        AD4 rho_j(input.density[j].value);
+        rho_j.derivatives[P_J] = input.density[j].dval_dp;
+        AD4 mu_j(input.viscosity[j].value);
+        mu_j.derivatives[P_J] = input.viscosity[j].dval_dp;
+        AD4 mob_j = rho_j / mu_j;
+
+        AD4 mobility = AD4::constant(0.5) * (mob_i + mob_j);
+        AD4 trans = mobility / inv_trans;
 
         // flux from cell i to cell j
         AD4 flux = trans * (p_i_ad - p_j_ad);
@@ -382,8 +405,9 @@ assemblePressureOriginal(const FracturePressureInput& input)
         const double h2 = std::max(input.fracture_width[j], input.min_width);
 
         double value = 12.0 / (h1 * h1 * h1 * t1) + 12.0 / (h2 * h2 * h2 * t2);
-        const double mobility = 0.5 * (input.reservoir_mobility[i]
-                                      + input.reservoir_mobility[j]);
+        const double mob_i = input.density[i].value / input.viscosity[i].value;
+        const double mob_j = input.density[j].value / input.viscosity[j].value;
+        const double mobility = 0.5 * (mob_i + mob_j);
         value = 1.0 / value;
         value *= mobility;
 

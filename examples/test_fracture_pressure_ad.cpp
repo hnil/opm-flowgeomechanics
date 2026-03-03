@@ -97,8 +97,12 @@ Opm::FracturePressureInput makeSimpleTestInput()
     // Pressures
     input.fracture_pressure = {1e6, 8e5, 1.2e6, 9e5};
 
-    // Mobilities
-    input.reservoir_mobility = {1e4, 1e4, 1e4, 1e4};
+    // Density and viscosity per cell (with zero pressure derivatives for
+    // backward-compatible tests; mobility = density/viscosity = 1000/0.001 = 1e6).
+    // Using constant properties here: rho=1000 kg/m3, mu=1e-4 Pa.s
+    // gives mobility = 1e4 (same as the old reservoir_mobility values).
+    input.density   = {{1000.0, 0.0}, {1000.0, 0.0}, {1000.0, 0.0}, {1000.0, 0.0}};
+    input.viscosity = {{0.1, 0.0}, {0.1, 0.0}, {0.1, 0.0}, {0.1, 0.0}};
 
     // Leakoff
     input.leakof = {10.0, 20.0, 15.0, 25.0};
@@ -296,6 +300,100 @@ bool test_residual_consistency()
     return true;
 }
 
+bool test_mobility_pressure_derivatives()
+{
+    std::cout << "Test 7: Mobility pressure derivatives via finite differences ..."
+              << std::endl;
+
+    // Use values where flow terms are dominant and well-resolved.
+    // Large widths make transmissibility O(1); moderate pressures keep
+    // the residual at a scale where FD perturbations are detectable.
+    Opm::FracturePressureInput input;
+    input.num_cells = 4;
+    input.min_width = 1e-6;
+
+    input.htrans = {
+        Opm::Htrans{1, 0, 2.0, 2.0},
+        Opm::Htrans{2, 1, 1.5, 1.5},
+        Opm::Htrans{3, 2, 1.0, 1.0}
+    };
+
+    input.fracture_width = {0.05, 0.08, 0.04, 0.06};
+    input.fracture_pressure = {2.0, 1.5, 2.5, 1.8};
+    input.leakof = {0.0, 0.0, 0.0, 0.0}; // no leakoff to focus on flow terms
+    input.control_type = "rate";
+    input.num_well_equations = 0;
+
+    // Density and viscosity with non-zero pressure derivatives
+    input.density   = {{1000.0, 0.5}, {1010.0, 0.6}, {1020.0, 0.4}, {1030.0, 0.7}};
+    input.viscosity = {{1e-3, -1e-7}, {1.1e-3, -1.2e-7}, {0.9e-3, -0.8e-7}, {1.2e-3, -1.1e-7}};
+
+    auto ad_result = Opm::assemblePressureAD(input);
+    auto res_base = computeResidual(input);
+
+    const double eps = 1e-7;
+    bool ok = true;
+
+    for (size_t k = 0; k < input.num_cells; ++k) {
+        auto input_pert = input;
+        input_pert.fracture_pressure[k] += eps;
+        input_pert.density[k].value   += input.density[k].dval_dp * eps;
+        input_pert.viscosity[k].value += input.viscosity[k].dval_dp * eps;
+
+        auto res_pert = computeResidual(input_pert);
+
+        for (size_t i = 0; i < input.num_cells; ++i) {
+            const double fd = (res_pert[i][0] - res_base[i][0]) / eps;
+
+            double pmat_val = 0.0;
+            auto row = (*ad_result.pressure_matrix)[i];
+            auto col_it = row.find(k);
+            if (col_it != row.end())
+                pmat_val = (*col_it)[0][0];
+
+            double rel_err = 0.0;
+            const double scale = std::max(std::abs(fd), std::abs(pmat_val));
+            if (scale > 1e-10)
+                rel_err = std::abs(fd - pmat_val) / scale;
+
+            if (rel_err > 1e-4) {
+                std::cerr << "  FD mismatch at dR[" << i << "]/dp[" << k
+                          << "]: AD=" << pmat_val << " FD=" << fd
+                          << " rel_err=" << rel_err << std::endl;
+                ok = false;
+            }
+        }
+    }
+
+    if (!ok) {
+        std::cerr << "  FAILED" << std::endl;
+        return false;
+    }
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
+bool test_varying_fluid_properties()
+{
+    std::cout << "Test 8: Non-uniform density/viscosity across cells ..."
+              << std::endl;
+    auto input = makeSimpleTestInput();
+
+    // Set different density/viscosity per cell (no pressure derivatives)
+    input.density   = {{800.0, 0.0}, {900.0, 0.0}, {1000.0, 0.0}, {1100.0, 0.0}};
+    input.viscosity = {{1e-1, 0.0}, {2e-1, 0.0}, {5e-2, 0.0}, {1e-1, 0.0}};
+
+    auto ad_result = Opm::assemblePressureAD(input);
+    auto orig_matrix = Opm::assemblePressureOriginal(input);
+
+    if (!compareMatrices(*ad_result.pressure_matrix, *orig_matrix, 1e-12)) {
+        std::cerr << "  FAILED" << std::endl;
+        return false;
+    }
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
 } // anonymous namespace
 
 // ============================================================================
@@ -310,6 +408,8 @@ int main()
     if (!test_pressure_control())                   ++failures;
     if (!test_rate_well_control())                  ++failures;
     if (!test_residual_consistency())               ++failures;
+    if (!test_mobility_pressure_derivatives())      ++failures;
+    if (!test_varying_fluid_properties())           ++failures;
 
     std::cout << "\n=== "
               << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED")
