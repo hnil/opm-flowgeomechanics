@@ -1,0 +1,6 @@
+opm-common/
+opm-grid/
+opm-simulators/
+opm-upscaling/
+_codeql_detected_source_root
+build/

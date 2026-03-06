@@ -1,0 +1,32 @@
+name: "Copilot Setup Steps"
+on: copilot_setup_steps
+
+permissions:
+  contents: read
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OPM build dependencies
+        uses: ./.github/actions/install-opm-dependencies
+
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: copilot-${{ runner.os }}
+
+      - name: Set environment for AI agent builds
+        run: |
+          # Allow MPI oversubscription so tests needing more MPI ranks
+          # than physical cores can still run on small runners.
+          echo "OMPI_MCA_rmaps_base_oversubscribe=1" >> "$GITHUB_ENV"
+          echo "OMPI_ALLOW_RUN_AS_ROOT=1" >> "$GITHUB_ENV"
+          echo "OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1" >> "$GITHUB_ENV"
+
+          # Enable ccache for faster rebuilds
+          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
