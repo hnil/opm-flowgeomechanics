@@ -334,3 +334,40 @@ set_tests_properties(Compare.Blackoil_Thermal_BC.Parallel
 	PROCESSORS 1
 	FIXTURES_REQUIRED Generate_SimResults
 )
+
+# ---------------------------------------------------------------------------
+# Regression test: simple full simulation with flow_geomech
+# ---------------------------------------------------------------------------
+
+add_test(NAME Run.SPE1_Geomech_Mini.Parallel
+	COMMAND
+	${MPIEXEC_EXECUTABLE}
+	${MPIEXEC_NUMPROC_FLAG} ${Test_NumProc}
+	${MPIEXEC_PREFLAGS}
+	$<SHELL_PATH:$<TARGET_FILE:flow_geomech>>
+	${MPIEXEC_POSTFLAGS}
+	--ecl-deck-file-name=${CMAKE_CURRENT_LIST_DIR}/data/SPE1CASE2_MECH_MINI.DATA
+	--enable-esmry=false
+	--output-dir=results/np-${Test_NumProc}/flow_geomech/SPE1_Geomech_Mini
+)
+
+set_tests_properties(Run.SPE1_Geomech_Mini.Parallel
+	PROPERTIES
+	PROCESSORS ${Test_NumProc}
+)
+
+# ---------------------------------------------------------------------------
+# Unit tests for individually testable components
+# ---------------------------------------------------------------------------
+
+add_test(NAME Unit.VemElements
+	COMMAND $<TARGET_FILE:test_vem_elements>
+)
+
+add_test(NAME Unit.Trimesh.IrregularGrid
+	COMMAND $<TARGET_FILE:test_trimesh> 1
+)
+
+add_test(NAME Unit.Trimesh.GridRefinement
+	COMMAND $<TARGET_FILE:test_trimesh> 3
+)
