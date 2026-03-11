@@ -302,6 +302,14 @@ target_link_libraries(test_fracture_pressure_ad
 		opmflowgeomechanics
 )
 
+add_executable(test_patch_recovery
+	examples/test_patch_recovery.cpp
+)
+target_link_libraries(test_patch_recovery
+	PUBLIC
+		opmflowgeomechanics
+)
+
 add_test(NAME Test.FracturePressureAD
 	COMMAND test_fracture_pressure_ad
 )
@@ -382,4 +390,8 @@ add_test(NAME Unit.Trimesh.IrregularGrid
 
 add_test(NAME Unit.Trimesh.GridRefinement
 	COMMAND $<TARGET_FILE:test_trimesh> 3
+)
+
+add_test(NAME Unit.PatchRecovery
+	COMMAND $<TARGET_FILE:test_patch_recovery>
 )

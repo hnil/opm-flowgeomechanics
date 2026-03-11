@@ -93,6 +93,14 @@ potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const p
                                  bool get_matrix);
 
 Dune::BlockVector<Dune::FieldVector<double,1>> smoothCellVector(const Dune::CpGrid& grid,const Dune::BlockVector<Dune::FieldVector<double,1>>& cell_vector);                                
+
+/// Patch recovery: given per-cell scalar values, perform least-squares
+/// approximation to nodes and then interpolate back to cells.
+/// A linear field (f = a + b*x + c*y + d*z) is reproduced exactly.
+Dune::BlockVector<Dune::FieldVector<double,1>>
+patchRecovery(const Dune::CpGrid& grid,
+              const Dune::BlockVector<Dune::FieldVector<double,1>>& cell_values);
+
 Dune::BlockVector<Dune::FieldVector<double,6>>  computeStressFem(const Dune::CpGrid& grid,
                                                                 const Dune::BlockVector<Dune::FieldVector<double,1>>& disp,
                                                                 const std::vector <double>& young,
