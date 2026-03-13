@@ -15,12 +15,13 @@
 
 #include <opm/grid/common/CommunicationUtils.hpp>
 
+
 #include <opm/simulators/flow/FlowProblem.hpp>
 #include <opm/simulators/flow/Transmissibility.hpp>
 #include <opm/simulators/linalg/PropertyTree.hpp>
 #include <opm/simulators/utils/MPIPacker.hpp>
 #include <opm/simulators/utils/ParallelCommunication.hpp>
-
+#include <opm/simulators/wells/RuntimePerforation.hpp>
 #include <opm/elasticity/material.hh>
 #include <opm/elasticity/materials.hh>
 
@@ -89,7 +90,7 @@ namespace Opm{
             OpmLog::info(os.str());
 
             hasFractures_ = this->simulator().vanguard().eclState().runspec().frac();//fracture_param_.get<bool>("hasfractures");
-            addPerfsToSchedule_ = fracture_param_.get<bool>("add_perfs_to_schedule");
+            //addPerfsToSchedule_ = fracture_param_.get<bool>("add_perfs_to_schedule");
             if(this->simulator().vanguard().eclState().runspec().mech()){
               this->model().addOutputModule(std::make_unique<VtkGeoMechModule<TypeTag>>(simulator));
             }
@@ -353,15 +354,15 @@ namespace Opm{
                 if(this->hasFractures() && this->geomechModel().fractureModelActive()){
                     // method for handling extra connections from fractures
                     // it is options for not including them in fractures i.e. addconnections
-                    if(addPerfsToSchedule_){
+                    //if(addPerfsToSchedule_){
                         this->addConnectionsToSchedual();
                         this->gridView().comm().barrier();
-                    }else{
+                    //}else{
                     // not not working ... more work...
                     // will only work if structure is ok
-                        assert(false);
-                        this->addConnectionsToWell();
-                    }
+                    //    assert(false);
+                    //    this->addConnectionsToWell();
+                    //}
                 
                     this->geomechModel_.fractureModel().
                         assignGeomechWellState(this->wellModel_.wellState());
@@ -404,13 +405,25 @@ namespace Opm{
         }
         return dt_max;
       }
-        void addConnectionsToWell(){
-            //return;
-        // add extra connections from fractures direclty to the well structure
+
+        std::vector<std::vector<RuntimePerforation> >getAllExtraWellIndices()
+        {
+            std::vector<std::vector<RuntimePerforation> > all_indices;
             auto& wellcontainer = this->wellModel().localNonshutWells();
             for (auto& wellPtr : wellcontainer) {
                 auto wellName = wellPtr->name();
                 const auto& wellcons = geomechModel_.getExtraWellIndices(wellName);
+                all_indices.push_back(wellcons);
+            }
+            return all_indices;
+        }
+      
+        void addConnectionsToWell(){
+            auto& wellcontainer = this->wellModel().localNonshutWells();
+            for (auto& wellPtr : wellcontainer) {
+                auto wellName = wellPtr->name();
+                const auto& wellcons = geomechModel_.getExtraWellIndices(wellName);
+
                 wellPtr->addFracturePerforations(wellcons);
             }
         }
@@ -722,7 +735,7 @@ namespace Opm{
 
         // for fracture calculation
         bool hasFractures_;
-        bool addPerfsToSchedule_;
+        //bool addPerfsToSchedule_;
         Opm::PropertyTree fracture_param_;
         bool first_fracture_solve_ {true};
       //std::vector< CellSeedType > entity_seed_;
