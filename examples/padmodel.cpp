@@ -875,6 +875,7 @@ extendSolution(const ExtendParam&    extend_param,
             extendEQUIL(const_cast<Opm::DeckKeyword&>(keyword));
         }
         else if ((keyword.name() == "RSVD") ||
+                 (keyword.name() == "RVVD") ||
                  (keyword.name() == "RTEMPVD") ||
                  (keyword.name() == "PBVD") ||
                  (keyword.name() == "PDVD"))
