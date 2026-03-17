@@ -316,6 +316,12 @@ namespace Opm{
             }
             Parent::timeIntegration();
         }
+        void emptyFractureLogger(){
+            const auto& comm = this->simulator().vanguard().grid().comm();
+            Opm::DeferredLogger global_logger = gatherDeferredLogger(FractureModel::fractureLogger, comm);
+            FractureModel::fractureLogger.clearMessages();
+            global_logger.logMessages();
+        }
         void beginTimeStep(){
             if (this->gridView().comm().rank() == 0){
                 std::cout << "----------------------Start beginTimeStep-------------------\n"
@@ -336,11 +342,8 @@ namespace Opm{
                 }
                 
             }
-            OPM_END_PARALLEL_TRY_CATCH("Begin time step geomech failed: ", this->simulator().vanguard().grid().comm());
-            const auto& comm = this->simulator().vanguard().grid().comm();
-            Opm::DeferredLogger global_logger = gatherDeferredLogger(FractureModel::fractureLogger, comm);
-            FractureModel::fractureLogger.clearMessages();
-            global_logger.logMessages();
+            OPM_END_PARALLEL_TRY_CATCH("Begin time step geomech failed:",this->simulator().vanguard().grid().comm());
+            this->emptyFractureLogger();
         }
         void endTimeStep(){
             if (this->gridView().comm().rank() == 0){
@@ -369,10 +372,7 @@ namespace Opm{
                 }
             }
             OPM_END_PARALLEL_TRY_CATCH("End time step geomech failed: ", this->simulator().vanguard().grid().comm());
-            const auto& comm = this->simulator().vanguard().grid().comm();
-            Opm::DeferredLogger global_logger = gatherDeferredLogger(FractureModel::fractureLogger, comm);
-            FractureModel::fractureLogger.clearMessages();
-            global_logger.logMessages();
+            this->emptyFractureLogger();
             Parent::endTimeStep();
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 if(this->hasFractures() ){
@@ -393,7 +393,6 @@ namespace Opm{
             //
             //Parent::FlowProblemType::endTimeStep();
             //Parent::endStepApplyAction();
- 
         }
 
       double maxNextTimeStepSize() const override{
@@ -430,6 +429,13 @@ namespace Opm{
 
         void addConnectionsToSchedual()
         {
+            const auto& prm = this->getFractureParam();
+            int verbosity = prm.get("fractureparam.verbosity", 1);
+            if(verbosity >0){
+                std::stringstream os;
+                os << "Adding connections to schedule" << std::endl;
+                FractureModel::fractureLogger.info(os.str());
+            }
             //return;
         // add extra connections to schedule and use the action framework to handle it
             //const auto& problem = simulator_.problem();
@@ -446,6 +452,8 @@ namespace Opm{
             //auto mapper = simulator.vanguard().cartesianMapper();
             //auto& wellcontainer = this->wellModel().localNonshutWells();
             //for (auto& wellPtr : wellcontainer) {
+            int new_conns = 0;
+            int old_conns = 0;
             for (const auto& wellName : schedule.wellNames(reportStep)) {
                 const auto wellcons = geomechModel_.getExtraWellIndices(wellName);
 
@@ -467,18 +475,22 @@ namespace Opm{
                         .cartesianIndex(wellconn.cell);
 
                     if (origConns.hasGlobalIndex(cartesianIdx)) {
-                      std::stringstream os;
-                       os << "Connection already exists for cell: "
-                          << wellconn.cell;// << std::endl;
-                       FractureModel::fractureLogger.info(os.str());
-                       continue;
+                        
+                        if (verbosity > 2) {
+                            std::stringstream os;
+                            os << "Connection already exists for cell: "
+                               << wellconn.cell; // << std::endl;
+                            FractureModel::fractureLogger.info(os.str());
+                        }
+                        old_conns += 1;
+                        continue;
                     }
 
                     // get ijk
                     std::array<int, 3> ijk{};
                     simulator.vanguard().cartesianCoordinate(wellconn.cell, ijk);
-
-                    {
+                    new_conns += 1;
+                    if(verbosity > 1) {
                         std::stringstream os;
 
                         os << "New connection for cell: "
@@ -542,10 +554,12 @@ namespace Opm{
                 this->simulator().model().linearizer().eraseMatrix();
                 this->simulator().model().newtonMethod().linearSolver().eraseMatrix();
                 //if (this->gridView().comm().rank() == 0) {
-                std::stringstream os;
-                os << "Adding extra connections to schedule for report step: "
-                   << reportStep;
-                FractureModel::fractureLogger.info(os.str());
+                if(verbosity > 0) {
+                    std::stringstream os;
+                    os << "Adding extra connections to schedule for report step: "
+                   << reportStep << " old connections: " << old_conns << " new connections: " << new_conns;
+                    FractureModel::fractureLogger.info(os.str());
+                }
                 //}
             }
 

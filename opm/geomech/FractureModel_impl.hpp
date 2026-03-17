@@ -86,7 +86,8 @@ namespace Opm {
 
     template <class TypeTag, class Simulator>
     void FractureModel::updateWellProperties(const Simulator& simulator)
-    {
+    {   
+       int verbosity = prm_.get<int>("verbosity");
        using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
        //const int water_index = 0;//FluidSystem::waterPhaseIdx
         for (size_t i=0; i < wells_.size(); ++i) {
@@ -159,8 +160,12 @@ namespace Opm {
             assert(well_fractures_[i].size() < 2);// for now asser this if not better "well model is need"
             for (auto& fracture : well_fractures_[i]){
               WellInfo wellinfo = fracture.wellInfo();
-              std::cout << " Well " << wellinfo.name << " injection "
-                        << injection_rate << " WI " << total_wellindex << std::endl;  
+              if(verbosity > 1){
+                std::stringstream os;
+                os << " Well " << wellinfo.name << " injection "
+                        << injection_rate << " WI " << total_wellindex << std::endl;
+                OpmLog::info(os.str());
+              }  
               fracture.setWellProps(injection_rate,  total_wellindex,  wi_dz,  wi_respress,  well_depth);
                 // do update wells
                 // set well properties
@@ -196,7 +201,11 @@ namespace Opm {
                 }
                 double perf_pressure = perf_data.pressure[perf_index];
                 double perf_rate = perf_data.rates[perf_index];//[FluidSystem::waterPhaseIdx];
-                std::cout << "Perf index perf " << perf_index << " fracture " << perf_index_frac << " pressure " << perf_pressure << " rate " << perf_rate << std::endl;
+                if(verbosity > 1){
+                    std::stringstream os;
+                    os << "Perf index perf " << perf_index << " fracture " << perf_index_frac << " pressure " << perf_pressure << " rate " << perf_rate << std::endl;
+                    OpmLog::info(os.str());
+                }
                 // std::cout << 
                 //std::cout << " Well " << perf_pressure << std::endl;
                 //std::cout << "Perf index åerf " << perf_index << " fracture " << perf_index_frac << " pressure " << perf_pressure << std::endl;

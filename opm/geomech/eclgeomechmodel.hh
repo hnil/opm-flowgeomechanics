@@ -100,16 +100,22 @@ namespace Opm{
             const auto& schedule =  this->simulator_.vanguard().schedule();
             int end_step = schedule.size() - 1;
             bool no_seeds = schedule[end_step].wseed().empty();
+            const auto& prm = this->simulator_.problem().getFractureParam();
+            int verbosity = prm.get("fractureparam.verbosity",1);
             if (simulator_.gridView().comm().rank() == 0) {
                 std::stringstream os;
                 if (!no_seeds) {
                     // std::cout << "No fracture seeds found, on this step " << reportStepIdx <<
                     // std::endl;
-                    os << "Fracture seeds found, on this step " << std::endl;
+                    if(verbosity > 1){
+                        os << "Fracture seeds found, on this step " << std::endl;
+                    }
                 } else {
-                    os << "No fracture seeds found, on this step " << std::endl;
+                    if(verbosity > 1){
+                        os << "No fracture seeds found, on this step " << std::endl;
+                    }
                 }
-                if (fracturemodel_) {
+                if (fracturemodel_ && (verbosity > 1)) {
                     os << "Fracture model already initialized, solving fractures using previous "
                           "fractures"
                        << std::endl;
@@ -117,7 +123,7 @@ namespace Opm{
                 OpmLog::info(os.str());
             }
             if(!no_seeds && !fracturemodel_){
-                    if(simulator_.gridView().comm().rank() == 0){
+                    if(simulator_.gridView().comm().rank() == 0 && verbosity > 1){
                         std::stringstream os;    
                         os << "Fracture model not initialized, initializing now. report step" <<  reportStepIdx << std::endl;
                         OpmLog::info(os.str());
@@ -172,9 +178,11 @@ namespace Opm{
             if(fracturemodel_ && !schedule[reportStepIdx].wseed().empty()){
                 const auto& current_wseed = schedule[reportStepIdx].wseed;    
                 if(simulator_.gridView().comm().rank() == 0){
-                    std::ostringstream os;
-                    os << "Frac modelfound, updating reservoir properties and solving fractures" << std::endl;
-                    OpmLog::info(os.str());
+                    if(verbosity > 1){
+                        std::ostringstream os;
+                        os << "Frac modelfound, updating reservoir properties and solving fractures";// << std::endl;
+                        OpmLog::info(os.str());
+                    }
                 }
                 fracturemodel_->updateReservoirAndWellProperties<TypeTag,Simulator>(simulator_);// set all fractures active if well is active
                 fracturemodel_->updateActive(current_wseed);//only set fracture active if seed is active
@@ -182,7 +190,7 @@ namespace Opm{
             }else{
                 if(simulator_.gridView().comm().rank() == 0){
                     std::ostringstream os;
-                    os << "Fracture model not initialized, not solving fractures" << std::endl;
+                    os << "Fracture model not initialized, not solving fractures";// << std::endl;
                     OpmLog::info(os.str());
                 }
             }
@@ -226,7 +234,7 @@ namespace Opm{
       
         void updatePotentialForces(bool relative_solve = true){
             if(simulator_.gridView().comm().rank() == 0){
-                OpmLog::info("Update Forces\n");
+                OpmLog::info("Update Forces for Geomechanics");
             }
             size_t numDof = simulator_.model().numGridDof();
             const auto& problem = simulator_.problem();

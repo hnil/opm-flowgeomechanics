@@ -1503,9 +1503,13 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
         working_mesh.removeSawtooths();
         cur_level++;
     }
-    std::stringstream os;
-    os << "---------- Starting propagation at level: " << cur_level << " --------";// << endl;
-    Opm::FractureModel::fractureLogger.info(os.str());
+    int verbosity = 10;
+    if(verbosity > 1){
+        std::stringstream os;
+        os << "---------- Starting propagation at level: " << cur_level << " --------";// << endl;
+        Opm::FractureModel::fractureLogger.info(os.str());
+    }
+    
     while (!stop_criterion()) { // keep looping as long as grid need expansion
 
         if (DEBUG_DUMP_GRIDS) {
@@ -1562,6 +1566,8 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
             iter_count++;
         }
     }
+    cout << "Solver converged with expantion iterations: " << iter_count << " at level: " << cur_level << endl;
+    cout << " ** ---------- FINAL MESH HAS " << working_mesh.numCells() << " CELLS ---------- **" << endl;
     cout << " ** ---------- CONVERGED BOUNDARY MESH ---------- **" << endl;
 
     return {working_mesh, cur_level};

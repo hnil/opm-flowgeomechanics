@@ -25,43 +25,68 @@ namespace Opm
 
                   bool
                   fractureChanged(const std::vector<std::vector<RuntimePerforation>>& allWellIndices)
-                  {
+                  {                    
                        const auto& prm = this->simulator_.problem().getFractureParam();
                        double ctf_threshold = prm.get("solver.ctf_change_threshold",1e-15);
+                       int verbosity = prm.get("solver.verbosity",1);
                       const auto allWellIndices_new
                           = this->simulator_.problem().getAllExtraWellIndices();
+                      bool structure_changed = false;    
+                      double max_ctf_change = 0.0;
                       if ( !( allWellIndices.size() == allWellIndices_new.size()) ) {
-                          return true;
+                           structure_changed = true;
+                          //return true;
                       } else {
-                          bool changed = false;
+                          //bool changed = false;
                           for (size_t k = 0; k < allWellIndices.size(); ++k) {
                               const auto& wellIndices = allWellIndices[k];
                               const auto& wellIndices_new = allWellIndices_new[k];
                               if (!(wellIndices.size() == wellIndices_new.size())) {
+                                  structure_changed = true;
                                   return true;
                               } else {
                                   for (size_t i = 0; i < wellIndices.size(); ++i) {
                                       if (!(wellIndices[i].cell == wellIndices_new[i].cell)) {
-                                          changed = true;
-                                          return true;
+                                          //changed = true;
+                                          structure_changed = true;
+                                        //    std::cout << "Fracture structure changed for well cell " << wellIndices[i].cell << std::endl;        
+                                        //  return true;
                                       };
-                                      if (std::abs(wellIndices[i].ctf - wellIndices_new[i].ctf) > ctf_threshold) {
-                                          std::cout << "Fracture ctf changed for well  cell " << wellIndices[i].cell << std::endl;
-                                          std::cout << "ctf changed from " << wellIndices[i].ctf << " to " << wellIndices_new[i].ctf << std::endl;
-                                          changed = true;
-                                          return true;
+                                      double ctf_change = std::abs(wellIndices[i].ctf - wellIndices_new[i].ctf);
+                                      max_ctf_change = std::max(max_ctf_change, ctf_change);
+                                      if (max_ctf_change  > ctf_threshold) {
+                                        if (verbosity > 1){
+                                          std::stringstream os;
+                                          os << "Fracture ctf changed for well  cell " << wellIndices[i].cell << std::endl;
+                                          os << "ctf changed from " << wellIndices[i].ctf << " to " << wellIndices_new[i].ctf << std::endl;
+                                          OpmLog::info(os.str());
+                                        }
+                                        //  changed = true;
+                                        //  return true;
                                       }
                                   }
                               }
                           }
-                          if (changed) {
-                              assert(false);
-                              return true;
-                          }else{
-                              return false;
-                          }
+                        //   if (changed) {
+                        //       assert(false);
+                        //       return true;
+                        //   }else{
+                        //       return false;
+                        //   }
                       }
-                      assert(false);
+                      if(structure_changed){
+                        std::stringstream os;                
+                        os << "Fracture structure changed, max ctf change: " << max_ctf_change << std::endl;
+                        OpmLog::info(os.str());
+                        return true;
+                      }
+                      std::stringstream os;                
+                      os << "Fracture ctf changed, max ctf change: " << max_ctf_change << std::endl;
+                      OpmLog::info(os.str());
+                      if(max_ctf_change > ctf_threshold){
+                        
+                        return true;
+                      }
                       return false;
                   }
 
@@ -84,7 +109,7 @@ namespace Opm
                     assert(false);
                 } else {
                     assert(false);
-                    std::cout << "Geomech nonlinearIterationNewton with mechanical solve:" << iteration << std::endl;
+                    std::cout << "Geomech nonlinearIterationNewton with mechanical solve:" << iteration;// << std::endl;
                     Parent::nonlinearIterationNewton(iteration, timer, nonlinear_solver);
                 }
                 return report;       
@@ -97,10 +122,12 @@ namespace Opm
             const PropertyTree& prm = this->simulator_.problem().getGeomechParam();
             bool implicit_flow = prm.get<bool>("solver.implicit_flow");
             SimulatorReportSingle report;
-            std::cout << "Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve:" << iteration << std::endl;
-            std::cout << "Nonlinear itration Flow Solve:" << std::endl;
+            std::stringstream os;
+            os << "Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: " << iteration << std::endl;
+            //std::cout << "Nonlinear itration Flow Solve:" << std::endl;
             report = Parent::nonlinearIteration(iteration, timer, nonlinear_solver);
-            std::cout << "Flow solve report converged: " << report.converged << std::endl;
+            os << "Flow solve report converged: " << report.converged;// << std::endl;
+            OpmLog::info(os.str());
             bool do_mech = true;
             bool do_fracture = true;
             if(implicit_flow){
@@ -120,20 +147,26 @@ namespace Opm
             
 
             if(do_mech || do_fracture){
-                std::cout << "Solve Geomechanics:" << std::endl;
+                std::stringstream os;
+                os << "Solve Geomechanics:";// << std::endl;
+                OpmLog::info(os.str());
                 this->simulator_.problem().geomechModel().solveGeomechanics();
             }
             if(do_fracture && this->simulator_.problem().hasFractures()){
-                std::cout << "Solve Fractures:" << std::endl;
+                //std::cout << "Solve Fractures:" << std::endl;
+                std::stringstream os;
+                //os << "Geomech nonlinearIteration with mechanical and fracture solve:" << iteration << std::endl;
+                os << "Solve Fractures:";
+                OpmLog::info(os.str());
                 const auto allwellIndices = this->simulator_.problem().getAllExtraWellIndices();
                 this->simulator_.problem().geomechModel().solveFractures();
-                std::cout << "Geomech nonlinearIteration with mechanical and fracture solve:" << iteration << std::endl;
                 bool addconnections = prm.get<bool>("fractureparam.addconnections");
                 if(addconnections){
-                    std::cout << "Add connections in iterations" << std::endl;
+                    //std::cout << "Add connections in iterations" << std::endl;
                     this->simulator_.problem().addConnectionsToSchedual();
                     this->simulator_.problem().wellModel().beginTimeStep();
                     this->simulator_.problem().addConnectionsToWell();
+                    this->simulator_.problem().emptyFractureLogger();
                     auto tmp_report = Parent::nonlinearIteration(0, timer, nonlinear_solver);
                 }
                 bool fracture_changed = this->fractureChanged(allwellIndices);
@@ -259,7 +292,7 @@ namespace Opm
             if(iteration < mech_max_it){
                 //simulator_.problem().geomechModel().solveFracture();
                 this->simulator_.problem().geomechModel().solveGeomechanics();
-                std::cout << "Geomech nonlinearIteration with mechanical solve:" << iteration << std::endl;
+                std::cout << "Geomech nonlinearIteration with mechanical solve:";// << iteration << std::endl;
                 // TODO check convergence properly
                 report.converged = false;
             }
