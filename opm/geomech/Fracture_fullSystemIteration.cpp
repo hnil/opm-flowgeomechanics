@@ -51,6 +51,8 @@ using SystemMatrix = Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<FMatr
                                                 Dune::MultiTypeBlockVector<SMatrix, SMatrix>>;
 
 using Htrans = std::tuple<size_t, size_t, double, double>;
+using LinearPrecondType = Opm::FractureMechanicsPreconditioner;
+using LinearSolverBase = Dune::InverseOperator<VectorHP, VectorHP>;
 
 // ============================ Debugging functions ============================
 // ----------------------------------------------------------------------------
@@ -149,6 +151,91 @@ makeIdentity(size_t num,
 
     M.compress();
     return M;
+}
+void modifyIdentity(SMatrix& M,
+                  double fac = 1,
+                  std::vector<int> zero_rows = std::vector<int>()){
+                  int num =   M.N();
+    for (size_t i = 0; i != num; ++i){
+        M[i][i] = fac;
+    }
+    // set zero rows, if applicable
+    for (size_t i = 0; i != zero_rows.size(); ++i){
+        if (zero_rows[i]){
+            M[i][i] = 0;
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+template <class DstMatrix, class SrcMatrix>
+void
+copyMatrixValuesWithSameSparsity(DstMatrix& dst, const SrcMatrix& src)
+// ----------------------------------------------------------------------------
+{
+    assert(dst.N() == src.N());
+    assert(dst.M() == src.M());
+
+    auto srcRowIt = src.begin();
+    auto dstRowIt = dst.begin();
+    for (; srcRowIt != src.end() && dstRowIt != dst.end(); ++srcRowIt, ++dstRowIt) {
+        assert(srcRowIt.index() == dstRowIt.index());
+
+        auto srcColIt = srcRowIt->begin();
+        auto dstColIt = dstRowIt->begin();
+        for (; srcColIt != srcRowIt->end() && dstColIt != dstRowIt->end(); ++srcColIt, ++dstColIt) {
+            assert(srcColIt.index() == dstColIt.index());
+            *dstColIt = *srcColIt;
+        }
+
+        assert(srcColIt == srcRowIt->end());
+        assert(dstColIt == dstRowIt->end());
+    }
+
+    assert(srcRowIt == src.end());
+    assert(dstRowIt == dst.end());
+}
+
+// ----------------------------------------------------------------------------
+std::unique_ptr<LinearSolverBase>
+setupLinearSolver(const std::string& solver_type,
+                  const Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP>& linop,
+                  LinearPrecondType& precond,
+                  const Opm::PropertyTree& prm,
+                  const double lintol,
+                  const int max_iter,
+                  const int verbosity)
+// ----------------------------------------------------------------------------
+{
+    if (solver_type == "bicgstab") {
+        return std::make_unique<Dune::BiCGSTABSolver<VectorHP>>(linop,
+                                                                 precond,
+                                                                 lintol,
+                                                                 max_iter,
+                                                                 verbosity);
+    }
+
+    if (solver_type == "gmres") {
+        const int restart = prm.get<int>("solver.linsolver.restart", 100);
+        return std::make_unique<Dune::RestartedGMResSolver<VectorHP>>(linop,
+                                                                       precond,
+                                                                       lintol,
+                                                                       restart,
+                                                                       max_iter,
+                                                                       verbosity);
+    }
+
+    if (solver_type == "fgmres") {
+        const int restart = prm.get<int>("solver.linsolver.restart", 100);
+        return std::make_unique<Dune::RestartedFlexibleGMResSolver<VectorHP>>(linop,
+                                                                               precond,
+                                                                               lintol,
+                                                                               restart,
+                                                                               max_iter,
+                                                                               verbosity);
+    }
+
+    OPM_THROW(std::runtime_error, "Unknown linear solver type: for fracture");
 }
 
 // ----------------------------------------------------------------------------
@@ -336,6 +423,24 @@ modified_fracture_matrix(const FMatrix& A, const std::vector<int>& closed_cells)
     return result;
 }
 
+void modified_fracture_matrix(FMatrix& Aold, const FMatrix& A, const std::vector<int>& closed_cells)
+// ----------------------------------------------------------------------------
+{
+    OPM_TIMEFUNCTION();
+    //Dune::DynamicMatrix result(A);
+    assert(Aold.N() == A.N());
+    assert(Aold.M() == A.M());
+    for(size_t i=0; i < A.N(); ++i){
+      for(size_t j=0; j < A.M(); ++j){
+        Aold[i][j] = A[i][j];
+      }
+    }
+    for (size_t row = 0; row != A.N(); ++row)
+        if (closed_cells[row])
+            for (size_t col = 0; col != A.N(); ++col)
+                Aold[row][col] = (row == col);
+}
+
 }; // end anonymous namespace
 
 namespace Opm
@@ -396,15 +501,31 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     // make a version of the fracture matrix that has trivial equations for closed cells
     const std::vector<int> closed_cells
         = identify_closed(fractureMatrix(), x, rhs[_0], numWellEquations());
+    // closed as changed
+    bool closed_cells_changed = false;
+    if(closed_cells_.size() != closed_cells.size()){
+      closed_cells_changed = true;
+    }else{
+      for(size_t i=0; i!=closed_cells.size(); ++i){
+        if(closed_cells_[i] != closed_cells[i]){
+          closed_cells_changed = true;
+          break;
+        }
+      }
+    }
+    //closed_cells_changed = true; // @@@
+    closed_cells_ = closed_cells;
     // dump_vector(closed_cells, debug_filename("closed_cells_").c_str());
     // dump_vector(closed_cells, "closed_cells", true);
     // const auto A = modified_fracture_matrix(fractureMatrix(), closed_cells);
-    bool closed_cells_changed = true; // NB need to find out when this is need
-    bool update_mech_matrix = nlin_iteration > 0 || closed_cells_changed;
-    if (update_mech_matrix) {
+    //bool update_mech_matrix = nlin_iteration > 0 || closed_cells_changed;
+    bool first_iteration = (nlin_iteration == 0);
+    if (first_iteration) {
         A_.reset(new FMatrix(modified_fracture_matrix(fractureMatrix(), closed_cells)));
+    }else{
+        modified_fracture_matrix(*A_, fractureMatrix(), closed_cells);
     }
-    auto& A = *A_;
+    const auto& A = *A_;
 
     // also modify right hand side for closed cells
     for (size_t i = 0; i != closed_cells.size(); ++i)
@@ -442,29 +563,61 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     const auto& C = *coupling_matrix_;
     
     // const auto I = makeIdentity(A.N(), numWellEquations(), 1, closed_cells);
-    if (update_mech_matrix) {
+    if (first_iteration) {
         I_.reset(new SMatrix(makeIdentity(A.N(), numWellEquations(), 1, closed_cells)));
+    }else{
+        modifyIdentity(*I_, 1, closed_cells);
     }
     const auto& I = *I_;
 
+    const auto& row1 = Dune::makeMultiTypeBlockVectorRef(A, I);
+    const auto& row2 = Dune::makeMultiTypeBlockVectorRef(C, M);
+    const auto& SS = Dune::makeMultiTypeBlockMatrixRef(row1, row2);
+    //const auto SS_ref = std::make_unique<SystemMatrixRef>(SS); // copy to make sure we have a contiguous storage for the preconditioner
     // NB need to se how to modify this matrix as litle as possible and change only the part
     // of preconditioner need
     // system Jacobian (with cross term)  @@ should S be included as a member variable of Fracture?
-    S_.reset(
-        new SystemMatrix({{A, I}, // mechanics system (since A is negative, we leave I positive here)
-                          {C, M}})); // flow system
+    //S_.reset(
+    //    new SystemMatrix({{A, I}, // mechanics system (since A is negative, we leave I positive here)
+    //                      {C, M}})); // flow system
+    // this make a copy of the A,I,C,M
+
+    if(first_iteration){
+        S_ = std::make_unique<SystemMatrix>(SS); // copy to make sure we have a contiguous storage for the preconditioner
+    } else{
+        OPM_TIMEBLOCK(Modify_System_Matrix);
+        // modify S in place to avoid copying the whole matrix
+        auto& S = *S_;
+        for(size_t i=0; i!=A.N(); ++i){
+            for(size_t j=0; j!=A.M(); ++j){
+                S[_0][_0][i][j] = A[i][j];
+            }
+        }
+        copyMatrixValuesWithSameSparsity(S[_0][_1], I);
+        copyMatrixValuesWithSameSparsity(S[_1][_0], C);
+        copyMatrixValuesWithSameSparsity(S[_1][_1], M);
+    }  
+    
 
     // SystemMatrix S = {{A, I},// mechanics system (since A is negative, we leave I positive here)
     //                   {C, M}};
     auto& S = *S_;
 
     // system equations
-    SystemMatrix S0 = S;
-    S0[_1][_0] = 0; // the equations themselves have no cross term
-    // dump_vector(rhs, debug_filename("rhs_w_").c_str(), debug_filename("rhs_p_").c_str());
-    // dump_vector(rhs, "rhs_w", "rhs_p", true);
+    //SystemMatrix S0 = S;
+    //S0[_1][_0] = 0; // the equations themselves have no cross term
+    // // dump_vector(rhs, debug_filename("rhs_w_").c_str(), debug_filename("rhs_p_").c_str());
+    // // dump_vector(rhs, "rhs_w", "rhs_p", true);
     
-    S0.mmv(x, rhs); // rhs = rhs - S0 * x;   (we are working in the tanget plane)
+    //S0.mmv(x, rhs); // rhs = rhs - S0 * x;   (we are working in the tanget plane)
+    // write explicit using S
+    
+       // S[_1][_0].mmv(x[_0], rhs[_1]);
+        S[_1][_1].mmv(x[_1], rhs[_1]);
+        S[_0][_0].mmv(x[_0], rhs[_0]);
+        S[_0][_1].mmv(x[_1], rhs[_0]);   
+    //}
+   
     auto rhs_org(rhs);
 
     
@@ -484,12 +637,22 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
 
 
     // solve system equations
-    const Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP> S_linop(S);
-    TailoredPrecondDiag precond_old(S); // cannot be 'const' due to BiCGstabsolver interface
+    //const Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP> S_linop(S);
+    if(first_iteration){
+        S_linop_ = std::make_unique<Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP>>(S); // store for use in preconditioner
+    }
+    //TailoredPrecondDiag precond_old(S); // cannot be 'const' due to BiCGstabsolver interface
     const std::string solver_type = prm_.get<std::string>("solver.linsolver.solver");
     Opm::PropertyTree lprm = prm_.get_child("solver.linsolver.preconditioner");
-    Opm::FractureMechanicsPreconditioner precond(S, lprm);
-    Dune::InverseOperatorResult iores; // cannot be 'const' due to BiCGstabsolver interface
+    //Opm::FractureMechanicsPreconditioner precond(S, lprm);
+    Dune::InverseOperatorResult iores;
+    bool new_precond = first_iteration || closed_cells_changed;
+    if(new_precond ){
+        frac_flow_precond_.reset(new Opm::FractureMechanicsPreconditioner(S, lprm));
+    }else{
+        // need to modify code to use original storage for
+        frac_flow_precond_->update(S,/*new_lu_mech*/ false);
+    }
     const double linsolve_tol = prm_.get<double>("solver.linsolver.tol");
     const double linsolve_atol = prm_.get<double>("solver.linsolver.atol");
     double res = rhs.two_norm2();
@@ -507,42 +670,16 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
       std::cout << std::endl;
     }
 
-    using AbstractPrecondType = Dune::PreconditionerWithUpdate<VectorHP, VectorHP>;
-    using AbstractSolverType = Dune::InverseOperator<VectorHP, VectorHP>;
-    std::shared_ptr<AbstractSolverType> psolver;
-    if(solver_type == "bicgstab"){
-        lintol = std::max(linsolve_tol, linsolve_atol / res);
-        psolver = std::make_shared<Dune::BiCGSTABSolver<VectorHP>>(S_linop,
-                                                      precond,
-                                                      lintol, // 1e-20, // desired rhs reduction factor
-                                                      max_iter, // max number of iterations
-                                                      verbosity); // verbose
-    }else if(solver_type == "gmres"){
-         int restart = prm_.get<int>("solver.linsolver.restart",100);
-         psolver = std::make_shared<Dune::RestartedGMResSolver<VectorHP>>(S_linop,
-                                                                precond,
-                                                                lintol, // 1e-20, // desired rhs reduction factor
-                                                                restart,
-                                                                max_iter, // max number of iterations
-                                                                verbosity); // verbose    
-
-    }else if(solver_type == "fgmres"){
-          // fgmres used if preconditioner is not-liner i.e. do approximative solves inside
-         int restart = prm_.get<int>("solver.linsolver.restart",100);
-         psolver = std::make_shared<Dune::RestartedFlexibleGMResSolver<VectorHP>>(S_linop,
-                                                                                  precond,
-                                                                                  lintol, // 1e-20, // desired rhs reduction factor
-                                                                                  restart,
-                                                                                  max_iter, // max number of iterations
-                                                                                  verbosity); // verbose    
-
-    }else{
-        OPM_THROW(std::runtime_error, "Unknown linear solver type: for fracture");
+    //std::unique_ptr<LinearSolverBase> psolver;
+    auto& precond = *frac_flow_precond_;
+    //using LinearSolverBase = Dune::InverseOperator<VectorHP, VectorHP>;
+    if (new_precond) {
+        psolver_ = setupLinearSolver(solver_type, *S_linop_, precond, prm_, lintol, max_iter, verbosity);
     }
 
     {
         OPM_TIMEBLOCK(SolveCoupledSystem);
-        psolver->apply(dx, rhs, iores); // NB: will modify 'rhs'
+        psolver_->apply(dx, rhs, iores); // NB: will modify 'rhs'
     }
 
     if (nlin_verbosity > 2) {
@@ -600,17 +737,17 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         // fracture_width_[i][0] = std::min(max_width, fracture_width_[i][0]); // ensure non-negativity
     }
     fracture_pressure_ = x[_1];
-    if (nlin_verbosity > 2) {
-      VectorHP rhs_tmp {x}; // same size as system, content set below
-      normalFractureTraction(rhs_tmp[_0], false); // right-hand side equals the normal fracture traction
-      rhs_tmp[_1] = rhs_pressure_;
-      for (size_t i = 0; i != closed_cells.size(); ++i)
-        if (closed_cells[i])
-            rhs_tmp[_0][i] = 0;
-      S0.mmv(x, rhs_tmp);
-      std::cout << "New: rhs after linsolve:  " << rhs_tmp[_0].infinity_norm() << 
-        " " << rhs_tmp[_1].infinity_norm() << std::endl;
-    }
+    // if (nlin_verbosity > 2) {
+    //   VectorHP rhs_tmp {x}; // same size as system, content set below
+    //   normalFractureTraction(rhs_tmp[_0], false); // right-hand side equals the normal fracture traction
+    //   rhs_tmp[_1] = rhs_pressure_;
+    //   for (size_t i = 0; i != closed_cells.size(); ++i)
+    //     if (closed_cells[i])
+    //         rhs_tmp[_0][i] = 0;
+    //   S0.mmv(x, rhs_tmp);
+    //   std::cout << "New: rhs after linsolve:  " << rhs_tmp[_0].infinity_norm() << 
+    //     " " << rhs_tmp[_1].infinity_norm() << std::endl;
+    // }
 
     
     return false;

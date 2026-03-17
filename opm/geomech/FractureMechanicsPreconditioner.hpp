@@ -52,7 +52,7 @@ public:
     {
         return Dune::SolverCategory::sequential;
     }
-    void update(const Opm::SystemMatrix& S);
+    void update(const Opm::SystemMatrix& S,bool new_lu_mech);
     // void update(){
     //     // default to recomputing the preconditioner, but in some cases (e.g. when only a few cells are closed) we can just update the existing preconditioner
     //     assert(false);

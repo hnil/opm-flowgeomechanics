@@ -86,6 +86,20 @@
 
 
 namespace Dune{
+   // Support FieldTraits for reference-based vectors
+  template <typename... Args>
+  struct FieldTraits< MultiTypeBlockVector<Args&...> >
+  {
+    using field_type = typename MultiTypeBlockVector<Args&...>::field_type;
+    using real_type  = typename FieldTraits<field_type>::real_type;
+  };
+  template<typename FirstRow, typename... Args>
+  struct FieldTraits< MultiTypeBlockMatrix<FirstRow&, Args&...> >
+  {
+    using field_type = typename MultiTypeBlockMatrix<FirstRow&, Args&...>::field_type;
+    using real_type  = typename FieldTraits<field_type>::real_type;
+  };
+  
   /**
      @brief A reference-only MultiTypeBlockMatrix type
 
@@ -101,6 +115,23 @@ namespace Dune{
   auto makeMultiTypeBlockMatrixRef(FirstRow& firstRow, Args&... args)
   {
     return MultiTypeBlockMatrixRef<FirstRow, Args...>(firstRow, args...);
+  }
+
+    /**
+     @brief A MultiTypeBlockVector that stores only references to elements
+
+     This is a non-owning view of vector elements.
+   */
+  template <typename... Args>
+  using MultiTypeBlockVectorRef = MultiTypeBlockVector<Args&...>;
+
+  /**
+     @brief Create a reference-only view for MultiTypeBlockVector elements
+   */
+  template <typename... Args>
+  auto makeMultiTypeBlockVectorRef(Args&... args)
+  {
+    return MultiTypeBlockVectorRef<Args...>(args...);
   }
 }
 
@@ -452,7 +483,12 @@ private:
   //using FMatrix = Dune::DynamicMatrix<double>; 
     using SystemMatrix = Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<FMatrix, SMatrix>,
                                                      Dune::MultiTypeBlockVector<SMatrix, SMatrix>>;
+    using SystemMatrixRef = Dune::MultiTypeBlockMatrixRef<Dune::MultiTypeBlockVectorRef<FMatrix, SMatrix>,
+                                                     Dune::MultiTypeBlockVectorRef<SMatrix, SMatrix>>;
+    //using SystemMatrix = Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<std::reference_wrapper<FMatrix>,std::reference_wrapper<SMatrix>>,
+    //                                                Dune::MultiTypeBlockVector<std::reference_wrapper<SMatrix>, std::reference_wrapper<SMatrix>>>;                                                 
     std::unique_ptr<SystemMatrix> S_;
+    std::unique_ptr<SystemMatrixRef> SRef__;
     std::unique_ptr<FMatrix> A_; // system matrix without coupling terms    
     //std::unique_ptr<SMatrix> C_; // system matrix without coupling terms    
     std::unique_ptr<SMatrix> I_; // system matrix without coupling terms    
@@ -481,6 +517,10 @@ private:
     //using AbstractPreconditioner = Dune::PreconditionerWithUpdate<VectorHP, VectorHP>;
     using AbstractPreconditioner = FractureMechanicsPreconditioner;//<VectorHP, VectorHP>;
     std::unique_ptr<AbstractPreconditioner> frac_flow_precond_; // have zero width) in the current iteration, used for modifying the system matrix and convergence criterion
+    std::unique_ptr<Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP>> S_linop_;
+    using LinearSolverBase = Dune::InverseOperator<VectorHP, VectorHP>;
+    std::unique_ptr<LinearSolverBase> psolver_;
+
 };
 } // namespace Opm
 
