@@ -84,6 +84,26 @@
 
 #include <opm/input/eclipse/Schedule/Well/WellConnections.hpp>
 
+
+namespace Dune{
+  /**
+     @brief A reference-only MultiTypeBlockMatrix type
+
+     This variant stores only references to rows and does not own data.
+   */
+  template<typename FirstRow, typename... Args>
+  using MultiTypeBlockMatrixRef = MultiTypeBlockMatrix<FirstRow&, Args&...>;
+
+  /**
+     @brief Create a reference-only MultiTypeBlockMatrix
+   */
+  template<typename FirstRow, typename... Args>
+  auto makeMultiTypeBlockMatrixRef(FirstRow& firstRow, Args&... args)
+  {
+    return MultiTypeBlockMatrixRef<FirstRow, Args...>(firstRow, args...);
+  }
+}
+
 namespace Opm {
     template <typename Scalar>
     class ConnFracStatistics;
@@ -455,6 +475,12 @@ private:
     double density_{1000.0};// default to water
     double density_perf_{1000.0};
     double mobility_water_perf_{1000.0};
+
+    // handling preconditioner
+    std::vector<int> closed_cells_; // indices of cells that are closed (i.e. 
+    //using AbstractPreconditioner = Dune::PreconditionerWithUpdate<VectorHP, VectorHP>;
+    using AbstractPreconditioner = FractureMechanicsPreconditioner;//<VectorHP, VectorHP>;
+    std::unique_ptr<AbstractPreconditioner> frac_flow_precond_; // have zero width) in the current iteration, used for modifying the system matrix and convergence criterion
 };
 } // namespace Opm
 

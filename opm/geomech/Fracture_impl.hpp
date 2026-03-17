@@ -336,7 +336,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         return;
     }
     OPM_TIMEBLOCK(SolveFracture);
-    std::cout << "Solve Fracture Pressure" << std::endl;
+    //std::cout << "Solve Fracture Pressure" << std::endl;
     std::string method = prm_.get<std::string>("solver.method");
     if (method == "nothing") {
     } else if (method == "simple") {
@@ -435,6 +435,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         std::cout << "Solve Fracture Pressure using Iterative Fracture with Trimesh Propagation" << std::endl;
         bool reinitialize= !(prm_.get<bool>("solver.remap_solution"));
         if(reinitialize){
+            std::cout << "Reinitializing fracture states before IF with trimesh propagation" << std::endl;
             //if(true){
                 fracture_width_ = 1e-3; // Ensure not completely closed
             //fracture_pressure_ = perf_pressure_;
@@ -567,7 +568,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                     std::cout << "Warning: Fracture solver did not converge within " << max_iter << " iterations." << std::endl;
                 }
             }
-            if(nlin_verbosity > 1){
+            if(nlin_verbosity > 0){
                 std::cout << "Nonlinear iterations needed with fixed expansion: " << iter << std::endl;
             }
 

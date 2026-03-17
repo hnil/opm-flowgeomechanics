@@ -40,6 +40,7 @@ using Dune::Indices::_1;
   
 class FractureMechanicsPreconditioner : 
    public Dune::Preconditioner<VectorHP, VectorHP>
+   //public Dune::PreconditionerWithUpdate<VectorHP, VectorHP>
 {
     
 public:
@@ -51,7 +52,13 @@ public:
     {
         return Dune::SolverCategory::sequential;
     }
-
+    void update(const Opm::SystemMatrix& S);
+    // void update(){
+    //     // default to recomputing the preconditioner, but in some cases (e.g. when only a few cells are closed) we can just update the existing preconditioner
+    //     assert(false);
+    //     update(A_);
+    // };
+    //bool hasPerfectUpdate() const override { return false; }
 private:
 void applymech_last(Opm::VectorHP& v, const Opm::VectorHP& d);
 void applymech_first(Opm::VectorHP& v, const Opm::VectorHP& d);

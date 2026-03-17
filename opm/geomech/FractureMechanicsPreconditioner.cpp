@@ -36,7 +36,19 @@ FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::Syst
             *flowop_, prm_.get_child("flow_solver"), std::function<Vector()>(), 1);
     }
 }
-
+void FractureMechanicsPreconditioner::update(const Opm::SystemMatrix& S){
+    if (!diag_mech_) {
+        OPM_TIMEBLOCK(SetupLuFactorization);
+        luM_ = S[_0][_0];
+        MyDenseMatrix<double>::luDecomp(luM_);
+    }
+    if (!diag_flow_) {
+         using FlowSolverType = Dune::FlexibleSolver<FlowOperatorType>;
+         flow_solver_ = std::make_unique<FlowSolverType>(
+            *flowop_, prm_.get_child("flow_solver"), std::function<Vector()>(), 1);    
+        //flow_solver_->update(*flowop_);
+    }
+}
 
 void
 FractureMechanicsPreconditioner::apply(Opm::VectorHP& v, const Opm::VectorHP& d)
