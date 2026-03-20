@@ -438,10 +438,13 @@ private:
     Dune::BlockVector<Dune::FieldVector<double, 3>> cell_normals_;
 
     // solution variables (only to avoid memory allocation, do not trust their state)
-    mutable Dune::BlockVector<Dune::FieldVector<double, 1>> fracture_width_;
+
     mutable Dune::BlockVector<Dune::FieldVector<double, 1>> rhs_width_;
-    mutable Dune::BlockVector<Dune::FieldVector<double, 1>> fracture_pressure_;
     mutable Dune::BlockVector<Dune::FieldVector<double, 1>> rhs_pressure_;
+
+// State variables
+    mutable Dune::BlockVector<Dune::FieldVector<double, 1>> fracture_width_;
+    mutable Dune::BlockVector<Dune::FieldVector<double, 1>> fracture_pressure_;
 
     // transmissibilities
     using Htrans = std::tuple<size_t, size_t, double, double>;

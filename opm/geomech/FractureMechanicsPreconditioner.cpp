@@ -37,6 +37,7 @@ FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::Syst
     }
 }
 void FractureMechanicsPreconditioner::update(const Opm::SystemMatrix& S,bool new_lu_mech){
+
     if (!diag_mech_ && new_lu_mech) {
         OPM_TIMEBLOCK(SetupLuFactorization);
         //luM_ = S[_0][_0];
@@ -48,6 +49,10 @@ void FractureMechanicsPreconditioner::update(const Opm::SystemMatrix& S,bool new
         }
         MyDenseMatrix<double>::luDecomp(luM_);
     }
+    if(diag_mech_ && new_lu_mech){
+        // if we are using a diagonal mechanics preconditioner, we need to update the diagonal entries
+        setDiagvec(A_diag_,S[_0][_0]);
+    }
     if (!diag_flow_) {
          OPM_TIMEBLOCK(SetupFlowPreconditioner);
          flow_solver_->preconditioner().update();
@@ -55,6 +60,9 @@ void FractureMechanicsPreconditioner::update(const Opm::SystemMatrix& S,bool new
         //  flow_solver_ = std::make_unique<FlowSolverType>(
         //     *flowop_, prm_.get_child("flow_solver"), std::function<Vector()>(), 1);    
         //flow_solver_->update(*flowop_);
+    }else{
+        // if we are using a diagonal flow preconditioner, we need to update the diagonal entries
+        setDiagvec(M_diag_,S[_1][_1]);
     }
 }
 

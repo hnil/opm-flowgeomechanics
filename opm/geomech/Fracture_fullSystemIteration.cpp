@@ -344,7 +344,16 @@ convergence_test(const VectorHP& res, const double tol_flow, double tol_mech)
 
     // std::cout << "tol mech is: " << tol_mech << std::endl;
     // std::cout << "tol flow is: " << tol_flow << std::endl;
-    return res[_0].infinity_norm() < tol_mech && res[_1].infinity_norm() < tol_flow;
+    bool converged = res[_0].infinity_norm() < tol_mech && res[_1].infinity_norm() < tol_flow;
+    if(converged){
+      std::cout << "Converged with residual norm[0] is " << res[_0].infinity_norm()<<std::endl;
+      std::cout << "Converged with residual norm[1] is " << res[_1].infinity_norm()<<std::endl;
+    }
+    // else{
+    //   std::cout << "Not converged with residual norm[0] is " << res[_0].infinity_norm()<<std::endl;
+    //   std::cout << "Not converged with residual norm[1] is " << res[_1].infinity_norm()<<std::endl;
+    // }
+    return converged;
     // return res.infinity_norm() < tol;
 }
 
@@ -630,9 +639,11 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     // for convergence, we use 'tol' directly for the mechanics system (where
     // residuals are expected to scale with pressure), and 'tol * ||M||' for the
     // flow system (where residuals scale with M*p)
+    double tol_flow = tol;//*std::max(A.infinity_norm(), M.infinity_norm()) * std::numeric_limits<double>::epsilon();
+    double tol_mech = tol;// * M.infinity_norm();
     if (convergence_test(rhs,
-                         tol * M.infinity_norm(),
-                         std::max(tol, A.infinity_norm() * std::numeric_limits<double>::epsilon())))
+                         tol_mech,
+                         tol_flow))
         return true;
 
 
@@ -653,10 +664,12 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         // need to modify code to use original storage for
         frac_flow_precond_->update(S,/*new_lu_mech*/ false);
     }
+    // make possible use abs tolerance for linear solver
+    double res = rhs.two_norm2();
     const double linsolve_tol = prm_.get<double>("solver.linsolver.tol");
     const double linsolve_atol = prm_.get<double>("solver.linsolver.atol");
-    double res = rhs.two_norm2();
     double lintol = std::max(linsolve_tol, linsolve_atol / res);
+    
     const int max_iter = prm_.get<double>("solver.linsolver.max_iter");
     const int verbosity = prm_.get<double>("solver.linsolver.verbosity");
     const int nlin_verbosity = prm_.get<double>("solver.verbosity");
@@ -683,7 +696,6 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     }
 
     if (nlin_verbosity > 2) {
-      
         std::cout << "x:  " << x[_0].infinity_norm() << " " << x[_1].infinity_norm() << std::endl;
         std::cout << "dx: " << dx[_0].infinity_norm() << " " << dx[_1].infinity_norm() << std::endl;
         std::cout << "rhs after linsolve:  " << rhs[_0].infinity_norm() <<
