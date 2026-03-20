@@ -394,6 +394,100 @@ bool test_varying_fluid_properties()
     return true;
 }
 
+bool test_standalone_pressure_and_coupling()
+{
+    std::cout << "Test 9: Standalone AD assembly produces both pressure and coupling matrices ..."
+              << std::endl;
+    auto input = makeSimpleTestInput();
+
+    // The AD assembler should produce both matrices from one call
+    auto ad_result = Opm::assemblePressureAD(input);
+
+    // Verify pressure matrix is non-null and has correct dimensions
+    if (!ad_result.pressure_matrix) {
+        std::cerr << "  FAILED (pressure_matrix is null)" << std::endl;
+        return false;
+    }
+    if (!ad_result.coupling_matrix) {
+        std::cerr << "  FAILED (coupling_matrix is null)" << std::endl;
+        return false;
+    }
+
+    const size_t n = input.num_cells;
+    if (ad_result.pressure_matrix->N() != n || ad_result.pressure_matrix->M() != n) {
+        std::cerr << "  FAILED (pressure_matrix wrong size)" << std::endl;
+        return false;
+    }
+    if (ad_result.coupling_matrix->N() != n || ad_result.coupling_matrix->M() != n) {
+        std::cerr << "  FAILED (coupling_matrix wrong size)" << std::endl;
+        return false;
+    }
+
+    // Verify that pressure matrix matches original
+    auto orig_matrix = Opm::assemblePressureOriginal(input);
+    if (!compareMatrices(*ad_result.pressure_matrix, *orig_matrix, 1e-12)) {
+        std::cerr << "  FAILED (pressure matrix mismatch)" << std::endl;
+        return false;
+    }
+
+    // Coupling matrix should be non-zero for widths above min_width
+    bool has_nonzero = false;
+    auto& cmat = *ad_result.coupling_matrix;
+    for (auto row_it = cmat.begin(); row_it != cmat.end(); ++row_it)
+        for (auto col_it = row_it->begin(); col_it != row_it->end(); ++col_it)
+            if (std::abs((*col_it)[0][0]) > 1e-15)
+                has_nonzero = true;
+
+    if (!has_nonzero) {
+        std::cerr << "  FAILED (coupling_matrix is all zeros despite widths > min_width)"
+                  << std::endl;
+        return false;
+    }
+
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
+bool test_standalone_with_well_equations()
+{
+    std::cout << "Test 10: Standalone AD assembly with well equations (rate_well) ..."
+              << std::endl;
+    auto input = makeSimpleTestInput();
+    input.control_type = "rate_well";
+    input.num_well_equations = 1;
+    input.perfinj = {std::tuple<int,double>{0, 50.0}, std::tuple<int,double>{2, 30.0}};
+    input.total_wellindex = 200.0;
+    input.mobility_water_perf = 1000.0;
+    input.fracture_pressure.push_back(1e6); // extra entry for well equation
+
+    auto ad_result = Opm::assemblePressureAD(input);
+
+    // Both matrices should have size (nc + nw) x (nc + nw)
+    const size_t total = input.num_cells + input.num_well_equations;
+    if (ad_result.pressure_matrix->N() != total) {
+        std::cerr << "  FAILED (pressure_matrix wrong size: "
+                  << ad_result.pressure_matrix->N() << " vs " << total << ")"
+                  << std::endl;
+        return false;
+    }
+    if (ad_result.coupling_matrix->N() != total) {
+        std::cerr << "  FAILED (coupling_matrix wrong size: "
+                  << ad_result.coupling_matrix->N() << " vs " << total << ")"
+                  << std::endl;
+        return false;
+    }
+
+    // Verify pressure matrix matches original
+    auto orig_matrix = Opm::assemblePressureOriginal(input);
+    if (!compareMatrices(*ad_result.pressure_matrix, *orig_matrix, 1e-12)) {
+        std::cerr << "  FAILED (pressure matrix mismatch with well equations)" << std::endl;
+        return false;
+    }
+
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
 } // anonymous namespace
 
 // ============================================================================
@@ -410,6 +504,8 @@ int main()
     if (!test_residual_consistency())               ++failures;
     if (!test_mobility_pressure_derivatives())      ++failures;
     if (!test_varying_fluid_properties())           ++failures;
+    if (!test_standalone_pressure_and_coupling())   ++failures;
+    if (!test_standalone_with_well_equations())     ++failures;
 
     std::cout << "\n=== "
               << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED")

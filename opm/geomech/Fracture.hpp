@@ -67,6 +67,7 @@
 
 #include <opm/geomech/GridStretcher.hpp>
 #include <opm/geomech/RegularTrimesh.hpp>
+#include <opm/geomech/FracturePressureAssemblerAD.hpp>
 
 
 
@@ -339,6 +340,7 @@ private:
 
     // help function for solving
     void assemblePressure();
+    void assemblePressureAndCouplingAD(const std::vector<int>& closed_cells);
     void addSource();
     void initPressureMatrix();
     void setupPressureSolver();

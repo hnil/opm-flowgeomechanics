@@ -306,6 +306,18 @@ add_test(NAME Test.FracturePressureAD
 	COMMAND test_fracture_pressure_ad
 )
 
+add_executable(test_ddm_assembly
+	examples/test_ddm_assembly.cpp
+)
+target_link_libraries(test_ddm_assembly
+	PUBLIC
+		opmflowgeomechanics
+)
+
+add_test(NAME Test.DDMAssembly
+	COMMAND test_ddm_assembly
+)
+
 # ---------------------------------------------------------------------------
 
 set(Test_NumProc 4)
