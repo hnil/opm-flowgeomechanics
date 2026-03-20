@@ -361,6 +361,76 @@ Fracture::identify_closed(const FMatrix& A, const VectorHP& x, const ResVector& 
     // std::fill(result.begin(), result.end(), 1); // @@@
     return result;
 }
+
+// ----------------------------------------------------------------------------
+void
+Fracture::assemblePressureAndCouplingAD(const std::vector<int>& closed_cells)
+// ----------------------------------------------------------------------------
+{
+    OPM_TIMEFUNCTION();
+    updateLeakoff();
+
+    const size_t nc = numFractureCells();
+    const size_t nw = numWellEquations();
+    const std::string control_type = prm_.get_child("control").get<std::string>("type");
+
+    // Build standalone input from Fracture member data
+    FracturePressureInput input;
+    input.num_cells = nc;
+    input.min_width = min_width_;
+    input.htrans = htrans_;
+    input.control_type = control_type;
+    input.num_well_equations = nw;
+    input.perfinj.assign(perfinj_.begin(), perfinj_.end());
+    input.total_wellindex = total_wellindex_;
+    input.mobility_water_perf = mobility_water_perf_;
+
+    // Convert fracture_width_ (BlockVector<FieldVector<double,1>>) to std::vector<double>
+    input.fracture_width.resize(nc + nw);
+    for (size_t i = 0; i < nc + nw; ++i)
+        input.fracture_width[i] = fracture_width_[i][0];
+
+    // Convert fracture_pressure_ to std::vector<double>, using head (pressure - dgh)
+    input.fracture_pressure.resize(nc + nw);
+    for (size_t i = 0; i < nc + nw; ++i) {
+        input.fracture_pressure[i] = fracture_pressure_[i][0];
+        if (i < fracture_dgh_.size())
+            input.fracture_pressure[i] -= fracture_dgh_[i];
+    }
+
+    // Map reservoir_mobility_ to density/viscosity: use mobility as density, viscosity = 1
+    // This yields mobility = density/viscosity = reservoir_mobility_[i] / 1.0
+    input.density.resize(nc + nw);
+    input.viscosity.resize(nc + nw);
+    for (size_t i = 0; i < nc; ++i) {
+        input.density[i] = {reservoir_mobility_[i], 0.0};
+        input.viscosity[i] = {1.0, 0.0};
+    }
+    for (size_t i = nc; i < nc + nw; ++i) {
+        input.density[i] = {1.0, 0.0};
+        input.viscosity[i] = {1.0, 0.0};
+    }
+
+    input.leakof = leakof_;
+
+    // Run the AD-based assembly (produces both pressure and coupling matrices)
+    auto result = assemblePressureAD(input);
+
+    // Store the pressure matrix
+    pressure_matrix_ = std::move(result.pressure_matrix);
+
+    // Store the coupling matrix
+    coupling_matrix_ = std::move(result.coupling_matrix);
+
+    // Zero out coupling matrix columns for closed cells
+    auto& C = *coupling_matrix_;
+    for (size_t col = 0; col < closed_cells.size(); ++col)
+        if (closed_cells[col])
+            for (size_t row = 0; row < C.N(); ++row)
+                if (C.exists(row, col))
+                    C[row][col] = 0;
+}
+
 // ----------------------------------------------------------------------------
 bool
 Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
@@ -375,7 +445,10 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     // update pressure matrix with the current values of `fracture_width_` and
     // `fracture_pressure_`
     // std::cout << "---- Assemble pressure" << std::endl;
-    assemblePressure(); // update pressure matrix
+    const bool use_ad = prm_.get<bool>("solver.use_ad_pressure_assembly", false);
+    if (!use_ad) {
+        assemblePressure(); // update pressure matrix (original method)
+    }
     addSource(); // update right-hand side of pressure system;
 
     // std::cout << "---- Various " << std::endl;
@@ -411,22 +484,27 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         if (closed_cells[i])
             rhs[_0][i] = 0;
 
-    // update the coupling matrix (possibly create it if not already initialized)
-    auto fracture_head(fracture_pressure_);
-    assert(fracture_dgh_.size() == (fracture_pressure_.size()-numWellEquations()));
-    for (size_t i = 0; i < fracture_dgh_.size(); ++i) {
-        fracture_head[i] = fracture_pressure_[i] - fracture_dgh_[i];
-    }
+    if (use_ad) {
+        // Use the standalone AD assembler for both pressure matrix and coupling matrix
+        assemblePressureAndCouplingAD(closed_cells);
+    } else {
+        // update the coupling matrix (possibly create it if not already initialized)
+        auto fracture_head(fracture_pressure_);
+        assert(fracture_dgh_.size() == (fracture_pressure_.size()-numWellEquations()));
+        for (size_t i = 0; i < fracture_dgh_.size(); ++i) {
+            fracture_head[i] = fracture_pressure_[i] - fracture_dgh_[i];
+        }
 
-    updateCouplingMatrix(coupling_matrix_,
-                         pressure_matrix_->N() - numWellEquations(), // num cells
-                         numWellEquations(), // num wells
-                         htrans_,
-                         fracture_head,//Note use head here
-                         fracture_width_,
-                         closed_cells,
-                         reservoir_mobility_,
-                         min_width_);
+        updateCouplingMatrix(coupling_matrix_,
+                             pressure_matrix_->N() - numWellEquations(), // num cells
+                             numWellEquations(), // num wells
+                             htrans_,
+                             fracture_head,//Note use head here
+                             fracture_width_,
+                             closed_cells,
+                             reservoir_mobility_,
+                             min_width_);
+    }
     // setup the full system
     if(prm_.get<bool>("solver.drop_fluid_mech_linearization",true)){
       *coupling_matrix_ = 0;
