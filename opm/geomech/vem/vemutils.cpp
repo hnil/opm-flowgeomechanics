@@ -5,6 +5,7 @@
 #include <dune/geometry/quadraturerules.hh>
 #include <dune/istl/bcrsmatrix.hh>
 #include <dune/grid/common/mcmgmapper.hh>
+#include <cmath>
 namespace vem
 {
 using PolyGrid = Dune::PolyhedralGrid<3, 3>;
@@ -663,6 +664,153 @@ Dune::BlockVector<Dune::FieldVector<double,1>> smoothCellVector(const Dune::CpGr
     smoothed_cell_vector[cellIdx][0] = value + sum / double(count);
   }
   return smoothed_cell_vector;
+}
+
+Dune::BlockVector<Dune::FieldVector<double,1>>
+patchRecovery(const Dune::CpGrid& grid,
+              const Dune::BlockVector<Dune::FieldVector<double,1>>& cell_values)
+{
+    static constexpr int dim = 3;
+    const auto& gv = grid.leafGridView();
+    const int num_nodes = grid.size(dim);
+    const int num_cells = grid.size(0);
+
+    // Step 1: Build node-to-cell adjacency.
+    // For each node, collect indices of cells that share the node.
+    std::vector<std::vector<int>> node_cells(num_nodes);
+    for (const auto& elem : elements(gv)) {
+        int cellIdx = gv.indexSet().index(elem);
+        for (int li = 0; li < elem.geometry().corners(); ++li) {
+            int nodeIdx = gv.indexSet().subIndex(elem, li, dim);
+            node_cells[nodeIdx].push_back(cellIdx);
+        }
+    }
+
+    // Step 2: For each node, perform least-squares fit of a linear function
+    //   f(x,y,z) = a0 + a1*x + a2*y + a3*z
+    // to (centroid, value) pairs from surrounding cells.
+    // Then evaluate at node position.
+    // We solve the 4x4 normal equations: (A^T A) c = A^T b
+    // where A is the Vandermonde-like matrix [1, x_i, y_i, z_i]
+    // and b is the vector of cell values.
+
+    // Precompute cell centroids.
+    std::vector<std::array<double, 3>> cell_centroids(num_cells);
+    for (const auto& elem : elements(gv)) {
+        int cellIdx = gv.indexSet().index(elem);
+        auto center = elem.geometry().center();
+        cell_centroids[cellIdx] = {center[0], center[1], center[2]};
+    }
+
+    // Precompute node positions.
+    std::vector<std::array<double, 3>> node_coords(num_nodes);
+    for (const auto& v : vertices(gv)) {
+        int nodeIdx = gv.indexSet().index(v);
+        auto pos = v.geometry().corner(0);
+        node_coords[nodeIdx] = {pos[0], pos[1], pos[2]};
+    }
+
+    // Compute node values via least-squares.
+    std::vector<double> node_values(num_nodes, 0.0);
+    for (int n = 0; n < num_nodes; ++n) {
+        const auto& adj = node_cells[n];
+        int nAdj = static_cast<int>(adj.size());
+        if (nAdj == 0) {
+            node_values[n] = 0.0;
+            continue;
+        }
+
+        // Build 4x4 normal equations (A^T A) and 4x1 rhs (A^T b).
+        // Columns: [1, x, y, z]
+        double AtA[4][4] = {};
+        double Atb[4] = {};
+        for (int i = 0; i < nAdj; ++i) {
+            int ci = adj[i];
+            double row[4] = {1.0,
+                             cell_centroids[ci][0],
+                             cell_centroids[ci][1],
+                             cell_centroids[ci][2]};
+            double val = cell_values[ci][0];
+            for (int p = 0; p < 4; ++p) {
+                for (int q = 0; q < 4; ++q)
+                    AtA[p][q] += row[p] * row[q];
+                Atb[p] += row[p] * val;
+            }
+        }
+
+        // Solve the 4x4 system by Gaussian elimination with partial pivoting.
+        // Copy AtA into augmented matrix [A|b].
+        double M[4][5];
+        for (int p = 0; p < 4; ++p) {
+            for (int q = 0; q < 4; ++q)
+                M[p][q] = AtA[p][q];
+            M[p][4] = Atb[p];
+        }
+
+        bool singular = false;
+        for (int col = 0; col < 4; ++col) {
+            // partial pivoting
+            int maxRow = col;
+            for (int row = col + 1; row < 4; ++row)
+                if (std::abs(M[row][col]) > std::abs(M[maxRow][col]))
+                    maxRow = row;
+            if (maxRow != col)
+                for (int k = 0; k < 5; ++k)
+                    std::swap(M[col][k], M[maxRow][k]);
+
+            if (std::abs(M[col][col]) < 1e-14) {
+                singular = true;
+                break;
+            }
+
+            for (int row = col + 1; row < 4; ++row) {
+                double factor = M[row][col] / M[col][col];
+                for (int k = col; k < 5; ++k)
+                    M[row][k] -= factor * M[col][k];
+            }
+        }
+
+        double coeffs[4] = {};
+        if (!singular) {
+            // back substitution
+            for (int row = 3; row >= 0; --row) {
+                coeffs[row] = M[row][4];
+                for (int k = row + 1; k < 4; ++k)
+                    coeffs[row] -= M[row][k] * coeffs[k];
+                coeffs[row] /= M[row][row];
+            }
+        } else {
+            // Fallback: simple average of cell values.
+            double sum = 0.0;
+            for (int i = 0; i < nAdj; ++i)
+                sum += cell_values[adj[i]][0];
+            coeffs[0] = sum / nAdj;
+            coeffs[1] = coeffs[2] = coeffs[3] = 0.0;
+        }
+
+        // Evaluate polynomial at node position.
+        node_values[n] = coeffs[0]
+                       + coeffs[1] * node_coords[n][0]
+                       + coeffs[2] * node_coords[n][1]
+                       + coeffs[3] * node_coords[n][2];
+    }
+
+    // Step 3: Interpolate node values back to cells.
+    // For hex cells, evaluation of the trilinear basis functions at the
+    // cell centre gives equal weight 1/N to each of the N corners.
+    Dune::BlockVector<Dune::FieldVector<double,1>> result(num_cells);
+    for (const auto& elem : elements(gv)) {
+        int cellIdx = gv.indexSet().index(elem);
+        int nc = elem.geometry().corners();
+        double sum = 0.0;
+        for (int li = 0; li < nc; ++li) {
+            int nodeIdx = gv.indexSet().subIndex(elem, li, dim);
+            sum += node_values[nodeIdx];
+        }
+        result[cellIdx][0] = sum / nc;
+    }
+
+    return result;
 }
 
 Dune::BlockVector<Dune::FieldVector<double,6>>  computeStressFem(const Dune::CpGrid& grid,
