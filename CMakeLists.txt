@@ -151,7 +151,7 @@ target_link_libraries(opmflowgeomechanics
 	PUBLIC
 		opmupscaling
 		opmsimulators
-	  CGAL::CGAL gmp  
+	  CGAL::CGAL GMP::gmp GMP::gmpxx  
 )
 
 if(HAVE_HYPRE)
