@@ -842,8 +842,10 @@ void extendDepthTable(const ExtendParam& extend_param,
         const auto& values = table.getItem(0).getData<double>();
 
         // Constant extrapolation above formation.
-        i.front().push_back(extend_param.top_upper);
-        i.front().push_back(values[0 + 1]);
+        if (extend_param.top_upper < values.front()) {
+            i.front().push_back(extend_param.top_upper);
+            i.front().push_back(values[0 + 1]);
+        }
 
         // Input table unchanged within formation's depth range.
         for (const auto& value : values) {
@@ -851,8 +853,10 @@ void extendDepthTable(const ExtendParam& extend_param,
         }
 
         // Constant extrapolation below formation.
-        i.front().push_back(extend_param.bottom_lower);
-        i.front().push_back(values.back());
+        if (extend_param.bottom_lower > values[values.size() - 2]) {
+            i.front().push_back(extend_param.bottom_lower);
+            i.front().push_back(values.back());
+        }
 
         newPropertyVD.addRecord(Opm::DeckRecord { std::move(i) });
     }
@@ -875,6 +879,7 @@ extendSolution(const ExtendParam&    extend_param,
             extendEQUIL(const_cast<Opm::DeckKeyword&>(keyword));
         }
         else if ((keyword.name() == "RSVD") ||
+                 (keyword.name() == "RVVD") ||
                  (keyword.name() == "RTEMPVD") ||
                  (keyword.name() == "PBVD") ||
                  (keyword.name() == "PDVD"))

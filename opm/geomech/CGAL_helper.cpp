@@ -17,7 +17,7 @@ std::vector<Point_3> intersect_hex_with_plane(const Mesh& mesh, const Plane_3& p
 
         if (result)
         {
-            if (const Point_3* ip = boost::get<Point_3>(&*result))
+            if (const Point_3* ip = std::get_if<Point_3>(&*result))
                 pts.push_back(*ip);
         }
     }
