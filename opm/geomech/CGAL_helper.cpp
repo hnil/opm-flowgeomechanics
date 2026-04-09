@@ -1,6 +1,9 @@
 #include "CGAL_helper.hpp"
+#include <variant>
+#include <optional>
 // namespace Opm{
 //   namespace CGAL{
+template <typename T> struct typeOf;
 std::vector<Point_3> intersect_hex_with_plane(const Mesh& mesh, const Plane_3& plane)
 {
     std::vector<Point_3> pts;
@@ -15,10 +18,18 @@ std::vector<Point_3> intersect_hex_with_plane(const Mesh& mesh, const Plane_3& p
         Segment_3 seg(p, q);
         auto result = CGAL::intersection(seg, plane);
 
+	//typeOf<decltype(result)> typeOfResult;
+
         if (result)
         {
-            if (const Point_3* ip = std::get_if<Point_3>(&*result))
-                pts.push_back(*ip);
+	  // old cgal
+	  //if (const Point_3* ip = boost::get<Point_3>(&*result))
+	  //       pts.push_back(*ip);
+	  const auto& vresult = result.value();
+	  if (std::holds_alternative<Point_3>(vresult))
+	    pts.push_back(std::get<Point_3>(vresult));
+	  //if (const Point_3* ip = std::get<Point_3>(*result))
+	  //    pts.push_back(ip);
         }
     }
 

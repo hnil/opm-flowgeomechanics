@@ -9,6 +9,37 @@
 #include <dune/common/indices.hh> // needed for _0, _1, etc.
 #include <opm/simulators/linalg/PropertyTree.hpp>
 #include <opm/simulators/linalg/FlexibleSolver.hpp>
+
+namespace Opm{
+  // ----------------------------------------------------------------------------
+template <class DstMatrix, class SrcMatrix>
+void
+copyMatrixValuesWithSameSparsity(DstMatrix& dst, const SrcMatrix& src)
+// ----------------------------------------------------------------------------
+{
+    assert(dst.N() == src.N());
+    assert(dst.M() == src.M());
+
+    auto srcRowIt = src.begin();
+    auto dstRowIt = dst.begin();
+    for (; srcRowIt != src.end() && dstRowIt != dst.end(); ++srcRowIt, ++dstRowIt) {
+        assert(srcRowIt.index() == dstRowIt.index());
+
+        auto srcColIt = srcRowIt->begin();
+        auto dstColIt = dstRowIt->begin();
+        for (; srcColIt != srcRowIt->end() && dstColIt != dstRowIt->end(); ++srcColIt, ++dstColIt) {
+            assert(srcColIt.index() == dstColIt.index());
+            *dstColIt = *srcColIt;
+        }
+
+        assert(srcColIt == srcRowIt->end());
+        assert(dstColIt == dstRowIt->end());
+    }
+
+    assert(srcRowIt == src.end());
+    assert(dstRowIt == dst.end());
+}
+}
 namespace Opm{
   using Vector = Dune::BlockVector<Dune::FieldVector<double, 1>>;//Opm::Fracture::Vector
 using VectorHP = Dune::MultiTypeBlockVector<Vector, Vector>;
@@ -40,6 +71,7 @@ using Dune::Indices::_1;
   
 class FractureMechanicsPreconditioner : 
    public Dune::Preconditioner<VectorHP, VectorHP>
+   //public Dune::PreconditionerWithUpdate<VectorHP, VectorHP>
 {
     
 public:
@@ -51,7 +83,13 @@ public:
     {
         return Dune::SolverCategory::sequential;
     }
-
+    void update(const Opm::SystemMatrix& S,bool new_lu_mech);
+    // void update(){
+    //     // default to recomputing the preconditioner, but in some cases (e.g. when only a few cells are closed) we can just update the existing preconditioner
+    //     assert(false);
+    //     update(A_);
+    // };
+    //bool hasPerfectUpdate() const override { return false; }
 private:
 void applymech_last(Opm::VectorHP& v, const Opm::VectorHP& d);
 void applymech_first(Opm::VectorHP& v, const Opm::VectorHP& d);
@@ -63,11 +101,18 @@ Vector diagvec(const Mat& M)
             res[i] = M[i][i];
         return res;
    }
+   template <typename Mat>
+  void setDiagvec(Vector& res, const Mat& M)
+  {
+        assert(res.size() == M.M() && res.size() == M.N());
+        for (size_t i = 0; i != res.size(); ++i)
+            res[i] = M[i][i];
+   } 
   void backSolve(Vector& x,const Vector& rhs_in);
     const SystemMatrix& A_;
     mutable FMatrix luM_;
-    const Vector A_diag_;
-    const Vector M_diag_;
+    mutable Vector A_diag_;
+    mutable Vector M_diag_;
     Opm::PropertyTree prm_;
     using FlowOperatorType = Dune::MatrixAdapter<SMatrix, Vector, Vector>;
     std::unique_ptr< FlowOperatorType> flowop_;

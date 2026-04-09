@@ -22,6 +22,7 @@ FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::Syst
         if(verbosity>0){
         std::cout << "FractureMechanicsPreconditioner: using full mechanics preconditioner" << std::endl;
         }
+        // luM_ = S[_0][_0];
         luM_ = S[_0][_0];
         MyDenseMatrix<double>::luDecomp(luM_);
     }
@@ -29,19 +30,47 @@ FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::Syst
       if(verbosity>0){
         std::cout << "FractureMechanicsPreconditioner: using full flow preconditioner" << std::endl;
       }
-        flowop_
-            = std::make_unique<Dune::MatrixAdapter<Opm::SMatrix, Opm::Vector, Opm::Vector>>(S[_1][_1]);
-        using FlowSolverType = Dune::FlexibleSolver<FlowOperatorType>;
-        flow_solver_ = std::make_unique<FlowSolverType>(
-            *flowop_, prm_.get_child("flow_solver"), std::function<Vector()>(), 1);
+      flowop_ = std::make_unique<Dune::MatrixAdapter<Opm::SMatrix, Opm::Vector, Opm::Vector>>(S[_1][_1]);
+       using FlowSolverType = Dune::FlexibleSolver<FlowOperatorType>;
+       flow_solver_ = std::make_unique<FlowSolverType>(
+             *flowop_, prm_.get_child("flow_solver"), std::function<Vector()>(), 1);
     }
 }
+void FractureMechanicsPreconditioner::update(const Opm::SystemMatrix& S,bool new_lu_mech){
 
+    if (!diag_mech_ && new_lu_mech) {
+        OPM_TIMEBLOCK(SetupLuFactorization);
+        //luM_ = S[_0][_0];
+        //copy to dense matrix for lu factorization
+        for(size_t i = 0; i != S[_0][_0].M(); ++i){
+            for(size_t j = 0; j != S[_0][_0].N(); ++j){
+                luM_[i][j] = S[_0][_0][i][j];
+            }
+        }
+        MyDenseMatrix<double>::luDecomp(luM_);
+    }
+    if(diag_mech_ && new_lu_mech){
+        // if we are using a diagonal mechanics preconditioner, we need to update the diagonal entries
+        setDiagvec(A_diag_,S[_0][_0]);
+    }
+    if (!diag_flow_) {
+         OPM_TIMEBLOCK(SetupFlowPreconditioner);
+         flow_solver_->preconditioner().update();
+        //  using FlowSolverType = Dune::FlexibleSolver<FlowOperatorType>;
+        //  flow_solver_ = std::make_unique<FlowSolverType>(
+        //     *flowop_, prm_.get_child("flow_solver"), std::function<Vector()>(), 1);    
+        //flow_solver_->update(*flowop_);
+    }else{
+        // if we are using a diagonal flow preconditioner, we need to update the diagonal entries
+        setDiagvec(M_diag_,S[_1][_1]);
+    }
+}
 
 void
 FractureMechanicsPreconditioner::apply(Opm::VectorHP& v, const Opm::VectorHP& d)
 {
-    OPM_TIMEFUNCTION_LOCAL();
+    //OPM_TIMEFUNCTION_LOCAL();
+    OPM_TIMEFUNCTION();
     if (mech_first_){
         applymech_first(v, d);
     } else {
@@ -62,6 +91,7 @@ FractureMechanicsPreconditioner::applymech_first(Opm::VectorHP& v, const Opm::Ve
     } else {
         // solve full mechanics system
         if (true) {
+            OPM_TIMEBLOCK(ApplyMechPreconditioner);
             auto tmp = d[_0];
             // A_[_0][_0].solve(v[_0],tmp);
             this->backSolve(v[_0], tmp);
@@ -92,6 +122,7 @@ FractureMechanicsPreconditioner::applymech_first(Opm::VectorHP& v, const Opm::Ve
             v[_1][i] = rhs_flow[i] / M_diag_[i];
         }
     } else {
+        OPM_TIMEBLOCK(ApplyFlowPreconditioner);
         Dune::InverseOperatorResult res;
         flow_solver_->apply(v[_1], rhs_flow, res);
         // throw std::runtime_error("FractureMechanicsPreconditioner: full flow preconditioner not
@@ -110,6 +141,7 @@ FractureMechanicsPreconditioner::applymech_last(Opm::VectorHP& v, const Opm::Vec
             v[_1][i] = d[_1][i] / M_diag_[i];
         }
     } else {
+         OPM_TIMEBLOCK(ApplyFlowPreconditioner);
         Dune::InverseOperatorResult res;
         auto tmp = d[_1];
         flow_solver_->apply(v[_1], tmp, res);
@@ -129,6 +161,7 @@ FractureMechanicsPreconditioner::applymech_last(Opm::VectorHP& v, const Opm::Vec
     } else {
         // solve full mechanics system
         if (true) {
+            OPM_TIMEBLOCK(ApplyMechPreconditioner);
             auto tmp = rhs_mech;
             // A_[_0][_0].solve(v[_0],tmp);
             this->backSolve(v[_0], tmp);

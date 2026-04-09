@@ -84,6 +84,57 @@
 
 #include <opm/input/eclipse/Schedule/Well/WellConnections.hpp>
 
+
+namespace Dune{
+   // Support FieldTraits for reference-based vectors
+  template <typename... Args>
+  struct FieldTraits< MultiTypeBlockVector<Args&...> >
+  {
+    using field_type = typename MultiTypeBlockVector<Args&...>::field_type;
+    using real_type  = typename FieldTraits<field_type>::real_type;
+  };
+  template<typename FirstRow, typename... Args>
+  struct FieldTraits< MultiTypeBlockMatrix<FirstRow&, Args&...> >
+  {
+    using field_type = typename MultiTypeBlockMatrix<FirstRow&, Args&...>::field_type;
+    using real_type  = typename FieldTraits<field_type>::real_type;
+  };
+  
+  /**
+     @brief A reference-only MultiTypeBlockMatrix type
+
+     This variant stores only references to rows and does not own data.
+   */
+  template<typename FirstRow, typename... Args>
+  using MultiTypeBlockMatrixRef = MultiTypeBlockMatrix<FirstRow&, Args&...>;
+
+  /**
+     @brief Create a reference-only MultiTypeBlockMatrix
+   */
+  template<typename FirstRow, typename... Args>
+  auto makeMultiTypeBlockMatrixRef(FirstRow& firstRow, Args&... args)
+  {
+    return MultiTypeBlockMatrixRef<FirstRow, Args...>(firstRow, args...);
+  }
+
+    /**
+     @brief A MultiTypeBlockVector that stores only references to elements
+
+     This is a non-owning view of vector elements.
+   */
+  template <typename... Args>
+  using MultiTypeBlockVectorRef = MultiTypeBlockVector<Args&...>;
+
+  /**
+     @brief Create a reference-only view for MultiTypeBlockVector elements
+   */
+  template <typename... Args>
+  auto makeMultiTypeBlockVectorRef(Args&... args)
+  {
+    return MultiTypeBlockVectorRef<Args...>(args...);
+  }
+}
+
 namespace Opm {
     template <typename Scalar>
     class ConnFracStatistics;
@@ -387,10 +438,13 @@ private:
     Dune::BlockVector<Dune::FieldVector<double, 3>> cell_normals_;
 
     // solution variables (only to avoid memory allocation, do not trust their state)
-    mutable Dune::BlockVector<Dune::FieldVector<double, 1>> fracture_width_;
+
     mutable Dune::BlockVector<Dune::FieldVector<double, 1>> rhs_width_;
-    mutable Dune::BlockVector<Dune::FieldVector<double, 1>> fracture_pressure_;
     mutable Dune::BlockVector<Dune::FieldVector<double, 1>> rhs_pressure_;
+
+// State variables
+    mutable Dune::BlockVector<Dune::FieldVector<double, 1>> fracture_width_;
+    mutable Dune::BlockVector<Dune::FieldVector<double, 1>> fracture_pressure_;
 
     // transmissibilities
     using Htrans = std::tuple<size_t, size_t, double, double>;
@@ -432,7 +486,12 @@ private:
   //using FMatrix = Dune::DynamicMatrix<double>; 
     using SystemMatrix = Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<FMatrix, SMatrix>,
                                                      Dune::MultiTypeBlockVector<SMatrix, SMatrix>>;
+    using SystemMatrixRef = Dune::MultiTypeBlockMatrixRef<Dune::MultiTypeBlockVectorRef<FMatrix, SMatrix>,
+                                                     Dune::MultiTypeBlockVectorRef<SMatrix, SMatrix>>;
+    //using SystemMatrix = Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<std::reference_wrapper<FMatrix>,std::reference_wrapper<SMatrix>>,
+    //                                                Dune::MultiTypeBlockVector<std::reference_wrapper<SMatrix>, std::reference_wrapper<SMatrix>>>;                                                 
     std::unique_ptr<SystemMatrix> S_;
+    std::unique_ptr<SystemMatrixRef> SRef__;
     std::unique_ptr<FMatrix> A_; // system matrix without coupling terms    
     //std::unique_ptr<SMatrix> C_; // system matrix without coupling terms    
     std::unique_ptr<SMatrix> I_; // system matrix without coupling terms    
@@ -455,6 +514,16 @@ private:
     double density_{1000.0};// default to water
     double density_perf_{1000.0};
     double mobility_water_perf_{1000.0};
+
+    // handling preconditioner
+    std::vector<int> closed_cells_; // indices of cells that are closed (i.e. 
+    //using AbstractPreconditioner = Dune::PreconditionerWithUpdate<VectorHP, VectorHP>;
+    using AbstractPreconditioner = FractureMechanicsPreconditioner;//<VectorHP, VectorHP>;
+    std::unique_ptr<AbstractPreconditioner> frac_flow_precond_; // have zero width) in the current iteration, used for modifying the system matrix and convergence criterion
+    std::unique_ptr<Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP>> S_linop_;
+    using LinearSolverBase = Dune::InverseOperator<VectorHP, VectorHP>;
+    std::unique_ptr<LinearSolverBase> psolver_;
+
 };
 } // namespace Opm
 

@@ -105,22 +105,22 @@ namespace Elasticity {
             }
         
     }
-    IMPL_FUNC(void, expandDisp(std::vector<double>& dispall,bool expand))
-    {
-        dispall.resize(3 * grid_.leafGridView().size(3));
-            {
-                if (expand) {
-                    Vector dispalldune;
-                    dispalldune.resize(3 * grid_.leafGridView().size(3));
-                    this->expandSolution(dispalldune, this->u);
-                    for (size_t i = 0; i < dispall.size(); ++i) {
-                        dispall[i] = dispalldune[i]; // fieldvector<double,1> can be converted to double
-                    }
-                } else {
-                    dispall = this->u;
-                }
-            }
-    }
+    // IMPL_FUNC(void, expandDisp(std::vector<double>& dispall,bool expand))
+    // {
+    //     dispall.resize(3 * grid_.leafGridView().size(3));
+    //         {
+    //             if (expand) {
+    //                 Vector dispalldune;
+    //                 dispalldune.resize(3 * grid_.leafGridView().size(3));
+    //                 this->expandSolution(dispalldune, this->u);
+    //                 for (size_t i = 0; i < dispall.size(); ++i) {
+    //                     dispall[i] = dispalldune[i]; // fieldvector<double,1> can be converted to double
+    //                 }
+    //             } else {
+    //                 dispall = this->u;
+    //             }
+    //         }
+    // }
     IMPL_FUNC(void, calculateStress())
     {
         bool expand = true;

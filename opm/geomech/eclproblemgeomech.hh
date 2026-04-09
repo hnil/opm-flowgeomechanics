@@ -15,12 +15,13 @@
 
 #include <opm/grid/common/CommunicationUtils.hpp>
 
+
 #include <opm/simulators/flow/FlowProblem.hpp>
 #include <opm/simulators/flow/Transmissibility.hpp>
 #include <opm/simulators/linalg/PropertyTree.hpp>
 #include <opm/simulators/utils/MPIPacker.hpp>
 #include <opm/simulators/utils/ParallelCommunication.hpp>
-
+#include <opm/simulators/wells/RuntimePerforation.hpp>
 #include <opm/elasticity/material.hh>
 #include <opm/elasticity/materials.hh>
 
@@ -89,7 +90,7 @@ namespace Opm{
             OpmLog::info(os.str());
 
             hasFractures_ = this->simulator().vanguard().eclState().runspec().frac();//fracture_param_.get<bool>("hasfractures");
-            addPerfsToSchedule_ = fracture_param_.get<bool>("add_perfs_to_schedule");
+            //addPerfsToSchedule_ = fracture_param_.get<bool>("add_perfs_to_schedule");
             if(this->simulator().vanguard().eclState().runspec().mech()){
               this->model().addOutputModule(std::make_unique<VtkGeoMechModule<TypeTag>>(simulator));
             }
@@ -315,6 +316,12 @@ namespace Opm{
             }
             Parent::timeIntegration();
         }
+        void emptyFractureLogger(){
+            const auto& comm = this->simulator().vanguard().grid().comm();
+            Opm::DeferredLogger global_logger = gatherDeferredLogger(FractureModel::fractureLogger, comm);
+            FractureModel::fractureLogger.clearMessages();
+            global_logger.logMessages();
+        }
         void beginTimeStep(){
             if (this->gridView().comm().rank() == 0){
                 std::cout << "----------------------Start beginTimeStep-------------------\n"
@@ -335,11 +342,8 @@ namespace Opm{
                 }
                 
             }
-            OPM_END_PARALLEL_TRY_CATCH("Begin time step geomech failed: ", this->simulator().vanguard().grid().comm());
-            const auto& comm = this->simulator().vanguard().grid().comm();
-            Opm::DeferredLogger global_logger = gatherDeferredLogger(FractureModel::fractureLogger, comm);
-            FractureModel::fractureLogger.clearMessages();
-            global_logger.logMessages();
+            OPM_END_PARALLEL_TRY_CATCH("Begin time step geomech failed:",this->simulator().vanguard().grid().comm());
+            this->emptyFractureLogger();
         }
         void endTimeStep(){
             if (this->gridView().comm().rank() == 0){
@@ -353,25 +357,22 @@ namespace Opm{
                 if(this->hasFractures() && this->geomechModel().fractureModelActive()){
                     // method for handling extra connections from fractures
                     // it is options for not including them in fractures i.e. addconnections
-                    if(addPerfsToSchedule_){
+                    //if(addPerfsToSchedule_){
                         this->addConnectionsToSchedual();
                         this->gridView().comm().barrier();
-                    }else{
+                    //}else{
                     // not not working ... more work...
                     // will only work if structure is ok
-                        assert(false);
-                        this->addConnectionsToWell();
-                    }
+                    //    assert(false);
+                    //    this->addConnectionsToWell();
+                    //}
                 
                     this->geomechModel_.fractureModel().
                         assignGeomechWellState(this->wellModel_.wellState());
                 }
             }
             OPM_END_PARALLEL_TRY_CATCH("End time step geomech failed: ", this->simulator().vanguard().grid().comm());
-            const auto& comm = this->simulator().vanguard().grid().comm();
-            Opm::DeferredLogger global_logger = gatherDeferredLogger(FractureModel::fractureLogger, comm);
-            FractureModel::fractureLogger.clearMessages();
-            global_logger.logMessages();
+            this->emptyFractureLogger();
             Parent::endTimeStep();
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 if(this->hasFractures() ){
@@ -392,7 +393,6 @@ namespace Opm{
             //
             //Parent::FlowProblemType::endTimeStep();
             //Parent::endStepApplyAction();
- 
         }
 
       double maxNextTimeStepSize() const override{
@@ -404,19 +404,38 @@ namespace Opm{
         }
         return dt_max;
       }
-        void addConnectionsToWell(){
-            //return;
-        // add extra connections from fractures direclty to the well structure
+
+        std::vector<std::vector<RuntimePerforation> >getAllExtraWellIndices()
+        {
+            std::vector<std::vector<RuntimePerforation> > all_indices;
             auto& wellcontainer = this->wellModel().localNonshutWells();
             for (auto& wellPtr : wellcontainer) {
                 auto wellName = wellPtr->name();
                 const auto& wellcons = geomechModel_.getExtraWellIndices(wellName);
+                all_indices.push_back(wellcons);
+            }
+            return all_indices;
+        }
+      
+        void addConnectionsToWell(){
+            auto& wellcontainer = this->wellModel().localNonshutWells();
+            for (auto& wellPtr : wellcontainer) {
+                auto wellName = wellPtr->name();
+                const auto& wellcons = geomechModel_.getExtraWellIndices(wellName);
+
                 wellPtr->addFracturePerforations(wellcons);
             }
         }
 
         void addConnectionsToSchedual()
         {
+            const auto& prm = this->getFractureParam();
+            int verbosity = prm.get("fractureparam.verbosity", 1);
+            if(verbosity >0){
+                std::stringstream os;
+                os << "Adding connections to schedule" << std::endl;
+                FractureModel::fractureLogger.info(os.str());
+            }
             //return;
         // add extra connections to schedule and use the action framework to handle it
             //const auto& problem = simulator_.problem();
@@ -433,6 +452,8 @@ namespace Opm{
             //auto mapper = simulator.vanguard().cartesianMapper();
             //auto& wellcontainer = this->wellModel().localNonshutWells();
             //for (auto& wellPtr : wellcontainer) {
+            int new_conns = 0;
+            int old_conns = 0;
             for (const auto& wellName : schedule.wellNames(reportStep)) {
                 const auto wellcons = geomechModel_.getExtraWellIndices(wellName);
 
@@ -454,18 +475,22 @@ namespace Opm{
                         .cartesianIndex(wellconn.cell);
 
                     if (origConns.hasGlobalIndex(cartesianIdx)) {
-                      std::stringstream os;
-                       os << "Connection already exists for cell: "
-                          << wellconn.cell;// << std::endl;
-                       FractureModel::fractureLogger.info(os.str());
-                       continue;
+                        
+                        if (verbosity > 2) {
+                            std::stringstream os;
+                            os << "Connection already exists for cell: "
+                               << wellconn.cell; // << std::endl;
+                            FractureModel::fractureLogger.info(os.str());
+                        }
+                        old_conns += 1;
+                        continue;
                     }
 
                     // get ijk
                     std::array<int, 3> ijk{};
                     simulator.vanguard().cartesianCoordinate(wellconn.cell, ijk);
-
-                    {
+                    new_conns += 1;
+                    if(verbosity > 1) {
                         std::stringstream os;
 
                         os << "New connection for cell: "
@@ -529,10 +554,12 @@ namespace Opm{
                 this->simulator().model().linearizer().eraseMatrix();
                 this->simulator().model().newtonMethod().linearSolver().eraseMatrix();
                 //if (this->gridView().comm().rank() == 0) {
-                std::stringstream os;
-                os << "Adding extra connections to schedule for report step: "
-                   << reportStep;
-                FractureModel::fractureLogger.info(os.str());
+                if(verbosity > 0) {
+                    std::stringstream os;
+                    os << "Adding extra connections to schedule for report step: "
+                   << reportStep << " old connections: " << old_conns << " new connections: " << new_conns;
+                    FractureModel::fractureLogger.info(os.str());
+                }
                 //}
             }
 
@@ -722,7 +749,7 @@ namespace Opm{
 
         // for fracture calculation
         bool hasFractures_;
-        bool addPerfsToSchedule_;
+        //bool addPerfsToSchedule_;
         Opm::PropertyTree fracture_param_;
         bool first_fracture_solve_ {true};
       //std::vector< CellSeedType > entity_seed_;
