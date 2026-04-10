@@ -24,7 +24,7 @@
 #include <opm/geomech/FractureMechanicsPreconditioner.hpp>
 
 using namespace std;
-
+#define EXP_REF 0
 namespace
 {
 static int DEBUG_COUNT = 0;
@@ -578,10 +578,12 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         modifyIdentity(*I_, 1, closed_cells);
     }
     const auto& I = *I_;
-
+#if EXP_REF    
     const auto& row1 = Dune::makeMultiTypeBlockVectorRef(A, I);
     const auto& row2 = Dune::makeMultiTypeBlockVectorRef(C, M);
     const auto& SS = Dune::makeMultiTypeBlockMatrixRef(row1, row2);
+#endif
+  
     //const auto SS_ref = std::make_unique<SystemMatrixRef>(SS); // copy to make sure we have a contiguous storage for the preconditioner
     // NB need to se how to modify this matrix as litle as possible and change only the part
     // of preconditioner need
@@ -592,7 +594,15 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     // this make a copy of the A,I,C,M
 
     if(first_iteration){
+#if EXP_REF           
         S_ = std::make_unique<SystemMatrix>(SS); // copy to make sure we have a contiguous storage for the preconditioner
+#else
+        //S_ = std::make_unique<SystemMatrix>({{A, I}, // mechanics system (since A is negative, we leave I positive here)
+        //                                      {C, M}}); // flow system
+        S_.reset(new SystemMatrix({{A, I},                       
+                                   {C, M}}));
+
+#endif
     } else{
         OPM_TIMEBLOCK(Modify_System_Matrix);
         // modify S in place to avoid copying the whole matrix
