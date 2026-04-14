@@ -23,11 +23,14 @@ std::vector<Point_3> intersect_hex_with_plane(const Mesh& mesh, const Plane_3& p
         if (result)
         {
 	  // old cgal
-	  //if (const Point_3* ip = boost::get<Point_3>(&*result))
-	  //       pts.push_back(*ip);
-	  const auto& vresult = result.value();
+#if 1          
+	  if (const Point_3* ip = boost::get<Point_3>(&*result))
+	         pts.push_back(*ip);
+#else // modern/mac branch
+      const auto& vresult = result.value();
 	  if (std::holds_alternative<Point_3>(vresult))
 	    pts.push_back(std::get<Point_3>(vresult));
+#endif      
 	  //if (const Point_3* ip = std::get<Point_3>(*result))
 	  //    pts.push_back(ip);
         }

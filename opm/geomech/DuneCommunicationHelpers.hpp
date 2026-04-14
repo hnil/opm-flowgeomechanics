@@ -507,6 +507,7 @@ namespace Opm {
           auto ind = entity_indexset.at(gid);
           assert(index == ind.local().local());
           if(numpros[ind.local().local()] != 1) {
+            ok = false;
            if(!verbose || true){
               std::cout << "Num procs " << numpros[ind.local().local()]; 
               std::cout << " Global " << ind.global(); 
@@ -573,7 +574,7 @@ namespace Opm {
       not_ok = world_comm.sum(not_ok);
       if(not_ok > 0){
           std::cout << "Owner is not a partition of unity" << std::endl;
-          //DUNE_THROW(Dune::Exception, "Owner is not a partition of unity");
+          DUNE_THROW(Dune::Exception, "Owner is not a partition of unity");
       }
       if(verbose){
       for (int rank = 0; rank < world_comm.size(); ++rank) {

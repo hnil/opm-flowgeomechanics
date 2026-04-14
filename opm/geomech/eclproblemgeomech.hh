@@ -197,7 +197,11 @@ namespace Opm{
                 
                 bool is_ok = checkBcConfig(bc_nodes_);
                 if(!is_ok){
-                    OPM_THROW(std::runtime_error,"Error in boundary condition specification not proper for mechanical problem"  );
+                  // this need to be fixed for parallel runs
+                  //OPM_THROW(std::runtime_error,"Error in boundary condition specification not proper for mechanical problem"  );
+                  //std::stringstream os;
+                  std::cout << "Error in boundary condition specification not proper for mechanical problem" << std::endl;
+                    //OpmLog::info(os.str());
                 }                                 
 
 

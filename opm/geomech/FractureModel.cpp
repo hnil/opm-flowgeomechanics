@@ -37,6 +37,7 @@ makeDefaultFractureParam(bool rate_control)
     using namespace std::string_literals;
     PropertyTree fracture_param;
     fracture_param.put("hasfractures", true); //used ??
+    fracture_param.put("verbosity", 1); //used ??
     fracture_param.put("add_perfs_to_schedule", true);
     // solution method method for coupled system only postsolve tested so far
     fracture_param.put("solver.method", "PostSolve"s);
@@ -44,6 +45,7 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("solver.max_mech_it", 2);
 
     // solve method for fracture
+    fracture_param.put("fractureparam.verbosity", 1);
     fracture_param.put("fractureparam.method.iterate", true);
     fracture_param.put("fractureparam.method.max_it", 3);
     fracture_param.put("fractureparam.method.tolerance", 1e-4);
@@ -57,6 +59,7 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.include_fracture_contributions", false);
 
     // seed to be in input file
+    fracture_param.put("fractureparam.config.verbosity", 1);// well seed should not be used any more
     fracture_param.put("fractureparam.config.type", "well_seed"s);// well seed should not be used any more
     fracture_param.put("fractureparam.config.initial_fracture_width", 1e-4);
     fracture_param.put("fractureparam.config.min_width", 0.0);// normaly taken from deck
@@ -64,7 +67,7 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.config.gravity_off", false);
     fracture_param.put("fractureparam.config.scale_filtrate", true);
 
-
+    fracture_param.put("fractureparam.solver.verbosity", 1);
     fracture_param.put("fractureparam.solver.method", "if_propagate_trimesh"s);
     fracture_param.put("fractureparam.solver.target_cellcount", 300);
     fracture_param.put("fractureparam.solver.cellcount_threshold", 300);

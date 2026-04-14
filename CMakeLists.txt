@@ -368,6 +368,7 @@ add_test(NAME Run.SPE1_Geomech_Mini.Parallel
 	${MPIEXEC_POSTFLAGS}
 	--ecl-deck-file-name=${CMAKE_CURRENT_LIST_DIR}/data/SPE1CASE2_MECH_MINI.DATA
 	--enable-esmry=false
+	--add-corners=true
 	--output-dir=results/np-${Test_NumProc}/flow_geomech/SPE1_Geomech_Mini
 )
 
@@ -380,7 +381,7 @@ set_tests_properties(Run.SPE1_Geomech_Mini.Parallel
 # Regression test: SIMPLE_MECH run with custom parameter + linear solver setup
 # ---------------------------------------------------------------------------
 
-add_test(NAME Run.SIMPLE_MECH_Frac.EnergyGeomech
+add_test(NAME Run.SIMPLE_MECH.EnergyGeomech
 	COMMAND
 	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
 	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_nx_11_ny_11_nz_25.DATA
@@ -389,12 +390,12 @@ add_test(NAME Run.SIMPLE_MECH_Frac.EnergyGeomech
 	--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
 )
 
-set_tests_properties(Run.SIMPLE_MECH_Frac.EnergyGeomech
+set_tests_properties(Run.SIMPLE_MECH.EnergyGeomech
 	PROPERTIES
 	PROCESSORS 1
 )
 
-add_test(NAME Run.SIMPLE_MECH_Frac.EnergyGeomech.Parallel
+add_test(NAME Run.SIMPLE_MECH.EnergyGeomech.Parallel
 	COMMAND
 	${MPIEXEC_EXECUTABLE}
 	${MPIEXEC_NUMPROC_FLAG} ${Test_NumProc}
@@ -410,11 +411,28 @@ add_test(NAME Run.SIMPLE_MECH_Frac.EnergyGeomech.Parallel
 	--output-dir=results/np-${Test_NumProc}/flow_energy_geomech/SIMPLE_MECH
 )
 
-set_tests_properties(Run.SIMPLE_MECH_Frac.EnergyGeomech.Parallel
+set_tests_properties(Run.SIMPLE_MECH.EnergyGeomech.Parallel
 	PROPERTIES
 	PROCESSORS ${Test_NumProc}
 )
 
+# fracture test
+
+add_test(NAME Run.SIMPLE_MECH_FRAC.EnergyGeomech
+	COMMAND
+	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
+	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_nx_11_ny_11_nz_25_FRAC.DATA
+	--parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
+	--output-dir=test
+	--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
+)
+
+set_tests_properties(Run.SIMPLE_MECH_FRAC.EnergyGeomech
+	PROPERTIES
+	PROCESSORS 1
+)
+
+	
 # ---------------------------------------------------------------------------
 # Unit tests for individually testable components
 # ---------------------------------------------------------------------------
