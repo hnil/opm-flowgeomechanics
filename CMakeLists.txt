@@ -14,7 +14,7 @@
 #                                                                         #
 ###########################################################################
 
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.26)
 
 # Mandatory call to project
 project(opm-flowgeomechanics C CXX)
@@ -151,7 +151,7 @@ target_link_libraries(opmflowgeomechanics
 	PUBLIC
 		opmupscaling
 		opmsimulators
-	  CGAL::CGAL gmp  
+	  CGAL::CGAL GMP::gmp GMP::gmpxx  
 )
 
 if(HAVE_HYPRE)

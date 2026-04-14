@@ -1,5 +1,7 @@
 #include "config.h"
+#ifdef HAVE_OPENMP
 #include <omp.h>
+#endif
 #include <opm/common/TimingMacros.hpp>
 #include <opm/geomech/DiscreteDisplacement.hpp>
 namespace ddm
