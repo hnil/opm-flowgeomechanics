@@ -377,6 +377,45 @@ set_tests_properties(Run.SPE1_Geomech_Mini.Parallel
 )
 
 # ---------------------------------------------------------------------------
+# Regression test: SIMPLE_MECH run with custom parameter + linear solver setup
+# ---------------------------------------------------------------------------
+
+add_test(NAME Run.SIMPLE_MECH_Frac.EnergyGeomech
+	COMMAND
+	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
+	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_nx_11_ny_11_nz_25.DATA
+	--parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
+	--output-dir=test
+	--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
+)
+
+set_tests_properties(Run.SIMPLE_MECH_Frac.EnergyGeomech
+	PROPERTIES
+	PROCESSORS 1
+)
+
+add_test(NAME Run.SIMPLE_MECH_Frac.EnergyGeomech.Parallel
+	COMMAND
+	${MPIEXEC_EXECUTABLE}
+	${MPIEXEC_NUMPROC_FLAG} ${Test_NumProc}
+	${MPIEXEC_PREFLAGS}
+	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
+	${MPIEXEC_POSTFLAGS}
+	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_nx_11_ny_11_nz_25.DATA
+	--parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
+	--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
+	--add-corners=true
+	--edge-conformal=true
+	--enable-esmry=false
+	--output-dir=results/np-${Test_NumProc}/flow_energy_geomech/SIMPLE_MECH
+)
+
+set_tests_properties(Run.SIMPLE_MECH_Frac.EnergyGeomech.Parallel
+	PROPERTIES
+	PROCESSORS ${Test_NumProc}
+)
+
+# ---------------------------------------------------------------------------
 # Unit tests for individually testable components
 # ---------------------------------------------------------------------------
 

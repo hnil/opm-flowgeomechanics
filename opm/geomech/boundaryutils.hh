@@ -203,6 +203,8 @@ namespace Opm{
                         }
                     }
                 }
+            }else{
+                return;
             }
             auto compare = [](std::tuple<size_t,MechBCValue> const &t1,
                               std::tuple<size_t,MechBCValue> const &t2)

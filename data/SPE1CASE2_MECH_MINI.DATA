@@ -62,6 +62,7 @@ WELLDIMS
 UNIFIN
 UNIFOUT
 
+    
 GRID
 
 -- The INIT keyword is used to request an .INIT file. The .INIT file
@@ -115,6 +116,15 @@ BIOTCOEF
        16*0.5/
 
 
+BCCON
+1 1 1  1 4 1 1 X- /
+2 4 4  1 4 1 1 X+ /
+3 1 4  1 1 1 1 Y- /
+4 1 4 4 4 1 1 Y+ /
+5 1 4 1 4 1 1 Z- /
+6 1 4 1 4 1 1 Z+ /
+/    
+    
 ECHO
 
 PROPS
@@ -365,6 +375,15 @@ RPTRST
 -- BHP upper limit (item 7) should not be exceeding the highest
 -- pressure in the PVT table=9014.7psia (default is 100 000psia) 
 
+BCPROP
+1 NONE * * * * FIXED 1 0 0/
+2 NONE * * * * FIXED 1 0 0/
+3 NONE * * * * FIXED 0 1 0 /
+4 NONE * * * * FIXED 0 1 0 /
+5 NONE * * * * FIXED 0 0 1 /
+--6 NONE * * * * FIXED/
+/
+    
 TSTEP
 --Advance the simulater once a month for TEN years:
 31 28 31 30 31 30 31 31 30 31 30 31 
