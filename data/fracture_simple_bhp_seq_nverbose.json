@@ -1,0 +1,107 @@
+{
+    "hasfractures": "true",
+    "add_perfs_to_schedule": "true",
+    "verbosity":0,
+    "solver": {
+        "verbosity":0,
+        "method": "SeqMechFrac",
+        "implicit_flow": "true",
+        "max_mech_it": "90",
+        "max_frac_it": "90",
+        "ctf_change_threshold":"1e-15"
+    },
+    "fractureparam": {
+        "method": {
+            "iterate": "true",
+            "max_it": "3",
+            "tolerance": "0.0001"
+        },
+        "verbosity":0,
+        "reduce_boundary": "false",
+	    "vem_stability_choice": "1",
+        "vem_source":"true",
+        "vem_stress":"true",
+        "vem_force":"true",
+        "stab_on_stress":"false",
+        "smooth_force": "false", 	
+        "addconnections": "true",
+        "include_fracture_contributions": "false",
+        "config": {
+            "type": "well_seed",
+            "initial_fracture_width": "0.0001",
+            "min_width": "0",
+            "trires": "10",
+	        "gravity_off": "true"
+        },
+        "solver": {
+            "method": "if_propagate_trimesh",
+            "area_change_fac": 1.5,
+			"dt_limit": 10,
+            "damping_factor_perf": 2.0,
+            "damping_factor_wi": 0.0,
+            "smooth_boundary": "false",
+            "full_intersections": "true",
+            "divide_wellidx": "true",
+            "no_leakof_outercells":"false",
+            "remap_solution":"true",
+            "target_cellcount": "400",
+            "cellcount_threshold": "800",
+            "numcell_threshold": "1500",
+            "max_num_coarsening": "0",
+            "max_iter_on_same_level": "100000000",
+            "efac": "0.5",
+            "rfac": "0.10000000000000001",
+            "max_expand_iter": "20",
+            "max_iter": "100",
+            "tolerance": "9.9999999999999995e-07",
+            "damping": "1",
+            "min_width": "0.001",
+            "max_width": "0.5",
+            "max_dwidth": "0.0050000000000000001",
+            "max_dp": "1000000000",
+            "max_change": "100000",
+            "verbosity": "1",
+            "linsolver": {
+                "tol": "1e-10",
+                "atol": "1e-20",
+                "max_iter": "1000",
+                "verbosity": "0",
+                "solver": "bicgstab",
+                "preconditioner":{
+                    "verbosity": 0,
+                    "diag_mech": "false",
+                    "diag_flow": "false",
+                    "mech_first": false,
+                    "mech_press_coupling": "true",
+                    "flow_solver":{
+                        "solver": "umfpack",
+                        "verbosity": "0",
+                        "tol": "1",
+                        "maxiter": 1,
+                        "preconditioner":{
+                            "type":"DILU"
+                        }
+                    }
+                }
+            }
+        },
+        "reservoir": {
+            "dist": "1",
+            "calculate_dist": "true",
+            "mobility": "0.0012999999999999999",
+            "perm": "1e-13"
+        },
+        "control": {
+            "type": "perf_pressure",
+            "rate": "0.029000000000000001",
+            "WI": "9.9999999999999994e-6"
+        },
+        "KMax": "1000000",
+        "extended_fractures": "true",
+        "fractureWI": "1e-6",
+        "write_pressure_system": "false",
+        "write_fracture_system": "false",
+        "pressuresolver": "umfpack",
+        "fracturesolver": "notused"
+    }
+}

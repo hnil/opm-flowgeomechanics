@@ -115,7 +115,7 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.solver.linsolver.atol", 1e-20);
     fracture_param.put("fractureparam.solver.linsolver.tol", 1e-10);
     fracture_param.put("fractureparam.solver.linsolver.max_iter", 1000);
-    fracture_param.put("fractureparam.solver.linsolver.verbosity", 2);
+    fracture_param.put("fractureparam.solver.linsolver.verbosity", 0);
     fracture_param.put("fractureparam.solver.linsolver.solver", "bicgstab"s);
     // preconditioner
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.diag_mech", false);// for large systems seem sto better with better preconditioner

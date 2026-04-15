@@ -423,7 +423,7 @@ add_test(NAME Run.SIMPLE_MECH_FRAC.EnergyGeomech
 	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
 	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_nx_11_ny_11_nz_25_FRAC.DATA
 	--parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
-	--output-dir=test
+	--output-dir=test_default
 	--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
 )
 
@@ -432,7 +432,37 @@ set_tests_properties(Run.SIMPLE_MECH_FRAC.EnergyGeomech
 	PROCESSORS 1
 )
 
-	
+add_test(NAME Run.SIMPLE_MECH_FRAC_SEQ_BHP.EnergyGeomech
+	COMMAND
+	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
+	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_nx_11_ny_11_nz_25_FRAC_SEQ.DATA
+	--parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
+	--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_bhp_seq_nverbose.json
+	--output-dir=test_bhp_seq
+	--enable-write-all-solutions=true
+	--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
+)
+
+set_tests_properties(Run.SIMPLE_MECH_FRAC_SEQ_BHP.EnergyGeomech
+	PROPERTIES
+	PROCESSORS 1
+)
+
+add_test(NAME Run.SIMPLE_MECH_FRAC_SEQ_RATE.EnergyGeomech
+	COMMAND
+	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
+	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_nx_11_ny_11_nz_25_FRAC_SEQ.DATA
+	--parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
+	--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_rate_seq_nverbose.json
+	--output-dir=test_rate_seq
+	--enable-write-all-solutions=true
+	--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
+)
+
+set_tests_properties(Run.SIMPLE_MECH_FRAC_SEQ_RATE.EnergyGeomech
+	PROPERTIES
+	PROCESSORS 1
+)	
 # ---------------------------------------------------------------------------
 # Unit tests for individually testable components
 # ---------------------------------------------------------------------------
