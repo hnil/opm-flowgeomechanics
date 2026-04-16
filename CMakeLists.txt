@@ -310,6 +310,45 @@ target_link_libraries(test_patch_recovery
 		opmflowgeomechanics
 )
 
+####################33
+function(add_mechtest_compareECLFiles)
+  set(oneValueArgs CASENAME FILENAME SIMULATOR ABS_TOL REL_TOL DIR DIR_PREFIX PREFIX RESTART_STEP RESTART_SCHED)
+  set(multiValueArgs TEST_ARGS)
+  cmake_parse_arguments(PARAM "$" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
+  
+  set(RESULT_PATH ${CMAKE_CURRENT_LIST_DIR}/result/${PARAM_CASENAME})
+  set(TEST_ARGS ${PARAM_TEST_ARGS})
+  set(DRIVER_ARGS -i ${CMAKE_CURRENT_LIST_DIR}/data
+                  -r ${RESULT_PATH}
+                  -b ${PROJECT_BINARY_DIR}/bin
+                  -f ${PARAM_FILENAME}
+                  -a ${PARAM_ABS_TOL}
+                  -t ${PARAM_REL_TOL}
+                  -c ${COMPARE_ECL_COMMAND}
+				  -o ${PARAM_CASENAME})
+ #                 -d ${RST_DECK_COMMAND})
+ # if(PARAM_RESTART_STEP)
+ #   list(APPEND DRIVER_ARGS -s ${PARAM_RESTART_STEP})
+ # endif()
+ # if(PARAM_RESTART_SCHED STREQUAL "false" OR PARAM_RESTART_SCHED STREQUAL "true")
+ #   list(APPEND DRIVER_ARGS -h ${PARAM_RESTART_SCHED})
+ # endif()
+  opm_add_test(${PARAM_CASENAME}_${PARAM_SIMULATOR}+${PARAM_FILENAME} NO_COMPILE
+               EXE_NAME ${PARAM_SIMULATOR}
+               DRIVER_ARGS ${DRIVER_ARGS}
+               TEST_ARGS ${TEST_ARGS})
+  set_tests_properties(${PARAM_CASENAME}_${PARAM_SIMULATOR}+${PARAM_FILENAME} 	PROPERTIES
+                        DIRNAME ${PARAM_DIR}
+                        FILENAME ${PARAM_FILENAME}
+                        SIMULATOR ${PARAM_SIMULATOR}
+                        TESTNAME ${PARAM_CASENAME})
+endfunction()
+
+
+#######################3333
+
+
+
 add_test(NAME Test.FracturePressureAD
 	COMMAND test_fracture_pressure_ad
 )
@@ -339,21 +378,21 @@ set_tests_properties(Run.Blackoil_Thermal_BC.Parallel
 	FIXTURES_SETUP Generate_SimResults
 )
 
-add_test(NAME Compare.Blackoil_Thermal_BC.Parallel
-	COMMAND
-	$<SHELL_PATH:${COMPARE_ECL_COMMAND}>
-	-a
-	results/np-${Test_NumProc}/flow_energy_geomech/Blackoil_Thermal_BC/BLACKOILTHERMAL_BC
-	results/np-${Test_NumProc}/flow_energy_geomech/Blackoil_Thermal_BC/BLACKOILTHERMAL_BC
-	2.0e-2
-	1.0e-5
-)
+# add_test(NAME Compare.Blackoil_Thermal_BC.Parallel
+# 	COMMAND
+# 	$<SHELL_PATH:${COMPARE_ECL_COMMAND}>
+# 	-a
+# 	results/np-${Test_NumProc}/flow_energy_geomech/Blackoil_Thermal_BC/BLACKOILTHERMAL_BC
+# 	results/np-${Test_NumProc}/flow_energy_geomech/Blackoil_Thermal_BC/BLACKOILTHERMAL_BC
+# 	2.0e-2
+# 	1.0e-5
+# )
 
-set_tests_properties(Compare.Blackoil_Thermal_BC.Parallel
-	PROPERTIES
-	PROCESSORS 1
-	FIXTURES_REQUIRED Generate_SimResults
-)
+# set_tests_properties(Compare.Blackoil_Thermal_BC.Parallel
+# 	PROPERTIES
+# 	PROCESSORS 1
+# 	FIXTURES_REQUIRED Generate_SimResults
+# )
 
 # ---------------------------------------------------------------------------
 # Regression test: simple full simulation with flow_geomech
@@ -384,7 +423,7 @@ set_tests_properties(Run.SPE1_Geomech_Mini.Parallel
 add_test(NAME Run.SIMPLE_MECH.EnergyGeomech
 	COMMAND
 	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
-	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_nx_11_ny_11_nz_25.DATA
+	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA
 	--parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
 	--output-dir=test
 	--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
@@ -402,7 +441,7 @@ add_test(NAME Run.SIMPLE_MECH.EnergyGeomech.Parallel
 	${MPIEXEC_PREFLAGS}
 	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
 	${MPIEXEC_POSTFLAGS}
-	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_nx_11_ny_11_nz_25.DATA
+	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA
 	--parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
 	--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
 	--add-corners=true
@@ -416,53 +455,120 @@ set_tests_properties(Run.SIMPLE_MECH.EnergyGeomech.Parallel
 	PROCESSORS ${Test_NumProc}
 )
 
+## regressuin
+opm_set_test_driver(${PROJECT_SOURCE_DIR}/tests/run-mechRegressionTest.sh "")
+
+# Set absolute tolerance to be used passed to the macros in the following tests
+set(abs_tol 2e-2)
+set(rel_tol 1e-5)	
+add_mechtest_compareECLFiles(CASENAME REGTEST_geomech
+                         FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25
+                         SIMULATOR flow_energy_geomech
+                         ABS_TOL ${abs_tol}
+                         REL_TOL ${rel_tol}
+                         DIR ${CMAKE_CURRENT_LIST_DIR}/data/
+						 PREFIX geomech)
+
+add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac
+                         FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC
+                         SIMULATOR flow_energy_geomech
+                         ABS_TOL ${abs_tol}
+                         REL_TOL ${rel_tol}
+                         DIR ${CMAKE_CURRENT_LIST_DIR}/data/
+						 PREFIX geomech_frac)
+
+add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp
+                         FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ
+                         SIMULATOR flow_energy_geomech
+                         ABS_TOL ${abs_tol}
+                         REL_TOL ${rel_tol}
+                         DIR ${CMAKE_CURRENT_LIST_DIR}/data/
+						 PREFIX geomech_frac_seq_bhp
+						 TEST_ARGS --parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini 
+						--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_bhp_seq_nverbose.json
+						--enable-write-all-solutions=true
+						--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
+						--threads-per-process=4)
+
+add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_rate
+                         FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ
+                         SIMULATOR flow_energy_geomech
+                         ABS_TOL ${abs_tol}
+                         REL_TOL ${rel_tol}
+                         DIR ${CMAKE_CURRENT_LIST_DIR}/data/
+						 PREFIX geomech_frac_seq_rate
+						 TEST_ARGS --parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini 
+						--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_rate_seq_nverbose.json 
+						--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
+						--threads-per-process=4)
+
+
+
+
 # fracture test
 
-add_test(NAME Run.SIMPLE_MECH_FRAC.EnergyGeomech
+add_test(NAME Run.SIMPLE_MECH_FRAC_MPI.EnergyGeomech
 	COMMAND
 	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
-	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_nx_11_ny_11_nz_25_FRAC.DATA
+	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA
 	--parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
 	--output-dir=test_default
+	--add-corners=true
 	--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
 )
 
-set_tests_properties(Run.SIMPLE_MECH_FRAC.EnergyGeomech
+set_tests_properties(Run.SIMPLE_MECH_FRAC_MPI.EnergyGeomech
 	PROPERTIES
-	PROCESSORS 1
+	PROCESSORS 4
 )
 
-add_test(NAME Run.SIMPLE_MECH_FRAC_SEQ_BHP.EnergyGeomech
+add_test(NAME Run.SIMPLE_MECH_FRAC_THREAD.EnergyGeomech
 	COMMAND
 	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
-	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_nx_11_ny_11_nz_25_FRAC_SEQ.DATA
+	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA
 	--parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
-	--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_bhp_seq_nverbose.json
-	--output-dir=test_bhp_seq
-	--enable-write-all-solutions=true
+	--output-dir=test_default
+	--add-corners=true
+	--threads-per-process=4
 	--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
 )
 
-set_tests_properties(Run.SIMPLE_MECH_FRAC_SEQ_BHP.EnergyGeomech
+set_tests_properties(Run.SIMPLE_MECH_FRAC_THREAD.EnergyGeomech
 	PROPERTIES
 	PROCESSORS 1
 )
 
-add_test(NAME Run.SIMPLE_MECH_FRAC_SEQ_RATE.EnergyGeomech
-	COMMAND
-	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
-	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_nx_11_ny_11_nz_25_FRAC_SEQ.DATA
-	--parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
-	--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_rate_seq_nverbose.json
-	--output-dir=test_rate_seq
-	--enable-write-all-solutions=true
-	--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
-)
+# add_test(NAME Run.SIMPLE_MECH_FRAC_SEQ_BHP.EnergyGeomech
+# 	COMMAND
+# 	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
+# 	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA
+# 	--parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
+# 	--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_bhp_seq_nverbose.json
+# 	--output-dir=test_bhp_seq
+# 	--enable-write-all-solutions=true
+# 	--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
+# )
 
-set_tests_properties(Run.SIMPLE_MECH_FRAC_SEQ_RATE.EnergyGeomech
-	PROPERTIES
-	PROCESSORS 1
-)	
+# set_tests_properties(Run.SIMPLE_MECH_FRAC_SEQ_BHP.EnergyGeomech
+# 	PROPERTIES
+# 	PROCESSORS 1
+# )
+
+# add_test(NAME Run.SIMPLE_MECH_FRAC_SEQ_RATE.EnergyGeomech
+# 	COMMAND
+# 	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
+# 	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA
+# 	--parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
+# 	--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_rate_seq_nverbose.json
+# 	--output-dir=test_rate_seq
+# 	--enable-write-all-solutions=true
+# 	--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
+# )
+
+# set_tests_properties(Run.SIMPLE_MECH_FRAC_SEQ_RATE.EnergyGeomech
+# 	PROPERTIES
+# 	PROCESSORS 1
+# )	
 # ---------------------------------------------------------------------------
 # Unit tests for individually testable components
 # ---------------------------------------------------------------------------
