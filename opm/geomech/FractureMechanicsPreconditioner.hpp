@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <memory>
+#include <type_traits>
 #include <opm/common/TimingMacros.hpp>
 #include <dune/istl/bcrsmatrix.hh>
 #include <dune/istl/bvector.hh>
@@ -93,12 +94,22 @@ public:
 private:
 void applymech_last(Opm::VectorHP& v, const Opm::VectorHP& d);
 void applymech_first(Opm::VectorHP& v, const Opm::VectorHP& d);
+template <typename T>
+double diagScalar(const T& d) const
+  {
+    if constexpr (std::is_arithmetic_v<std::decay_t<T>>) {
+      return d;
+    }
+    else {
+      return d[0][0];
+    }
+   }
 template <typename Mat>
 Vector diagvec(const Mat& M)
   {
         Vector res(M.M());
         for (size_t i = 0; i != res.size(); ++i)
-            res[i] = M[i][i];
+      res[i] = diagScalar(M[i][i]);
         return res;
    }
    template <typename Mat>
@@ -106,7 +117,7 @@ Vector diagvec(const Mat& M)
   {
         assert(res.size() == M.M() && res.size() == M.N());
         for (size_t i = 0; i != res.size(); ++i)
-            res[i] = M[i][i];
+      res[i] = diagScalar(M[i][i]);
    } 
   void backSolve(Vector& x,const Vector& rhs_in);
     const SystemMatrix& A_;

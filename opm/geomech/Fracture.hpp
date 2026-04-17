@@ -62,6 +62,7 @@
 #include <opm/simulators/linalg/FlexibleSolver.hpp>
 #include <opm/simulators/linalg/PropertyTree.hpp>
 #include <opm/simulators/wells/WellState.hpp>
+#include <opm/simulators/wells/RuntimePerforation.hpp>
 #include <opm/material/fluidsystems/BlackOilDefaultFluidSystemIndices.hpp>
 #include <dune/istl/matrixmarket.hh>
 
@@ -493,7 +494,6 @@ private:
     //using SystemMatrix = Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<std::reference_wrapper<FMatrix>,std::reference_wrapper<SMatrix>>,
     //                                                Dune::MultiTypeBlockVector<std::reference_wrapper<SMatrix>, std::reference_wrapper<SMatrix>>>;                                                 
     std::unique_ptr<SystemMatrix> S_;
-    std::unique_ptr<SystemMatrixRef> SRef__;
     std::unique_ptr<FMatrix> A_; // system matrix without coupling terms    
     //std::unique_ptr<SMatrix> C_; // system matrix without coupling terms    
     std::unique_ptr<SMatrix> I_; // system matrix without coupling terms    

@@ -363,9 +363,18 @@ ResVector
 diagvec(const Mat& M)
 // ----------------------------------------------------------------------------
 {
+    auto diagScalar = [](const auto& d) -> double {
+        using T = std::decay_t<decltype(d)>;
+        if constexpr (std::is_arithmetic_v<T>) {
+            return d;
+        }
+        else {
+            return d[0][0];
+        }
+    };
     ResVector res(M.M());
     for (size_t i = 0; i != res.size(); ++i)
-        res[i] = M[i][i];
+        res[i] = diagScalar(M[i][i]);
     return res;
 }
 
