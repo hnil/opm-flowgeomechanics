@@ -38,7 +38,7 @@ makeTestGrid(int layers)
 {
     Opm::RegularTrimesh trimesh(layers);
     auto [grid, map, bcells] = trimesh.createDuneGrid(0, {}, false);
-    return grid;
+    return std::move(grid);
 }
 
 // Compare two dense matrices element-by-element

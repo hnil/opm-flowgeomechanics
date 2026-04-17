@@ -12,14 +12,8 @@ using namespace std;
 typedef Dune::YaspGrid<3>::LeafGridView GridView;
 typedef Dune::Entity<0, 3, const Dune::YaspGrid<3>, Dune::YaspEntity> Cell;
 typedef Dune::Entity<1, 3, const Dune::YaspGrid<3>, Dune::YaspEntity> Face;
-typedef Dune::IndexSet<const Dune::YaspGrid<3>,
-                       Dune::YaspIndexSet<const Dune::YaspGrid<3>, true>,
-                       unsigned int,
-                       std::vector<Dune::GeometryType>>
-    IndexSet;
-
-
 // ----------------------------------------------------------------------------
+template <class IndexSet>
 vector<int>
 make_nodemap(const IndexSet& ixset, const Cell& cell)
 // ----------------------------------------------------------------------------
