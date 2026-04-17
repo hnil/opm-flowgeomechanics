@@ -5,7 +5,9 @@
 #include <dune/geometry/quadraturerules.hh>
 #include <dune/istl/bcrsmatrix.hh>
 #include <dune/grid/common/mcmgmapper.hh>
+
 #include <cmath>
+#include <deque>
 namespace vem
 {
 using PolyGrid = Dune::PolyhedralGrid<3, 3>;
@@ -675,136 +677,160 @@ patchRecovery(const Dune::CpGrid& grid,
     const int num_nodes = grid.size(dim);
     const int num_cells = grid.size(0);
 
-    // Step 1: Build node-to-cell adjacency.
-    // For each node, collect indices of cells that share the node.
     std::vector<std::vector<int>> node_cells(num_nodes);
     for (const auto& elem : elements(gv)) {
-        int cellIdx = gv.indexSet().index(elem);
+        const int cellIdx = gv.indexSet().index(elem);
         for (int li = 0; li < elem.geometry().corners(); ++li) {
-            int nodeIdx = gv.indexSet().subIndex(elem, li, dim);
+            const int nodeIdx = gv.indexSet().subIndex(elem, li, dim);
             node_cells[nodeIdx].push_back(cellIdx);
         }
     }
 
-    // Step 2: For each node, perform least-squares fit of a linear function
-    //   f(x,y,z) = a0 + a1*x + a2*y + a3*z
-    // to (centroid, value) pairs from surrounding cells.
-    // Then evaluate at node position.
-    // We solve the 4x4 normal equations: (A^T A) c = A^T b
-    // where A is the Vandermonde-like matrix [1, x_i, y_i, z_i]
-    // and b is the vector of cell values.
-
-    // Precompute cell centroids.
     std::vector<std::array<double, 3>> cell_centroids(num_cells);
     for (const auto& elem : elements(gv)) {
-        int cellIdx = gv.indexSet().index(elem);
-        auto center = elem.geometry().center();
+        const int cellIdx = gv.indexSet().index(elem);
+        const auto center = elem.geometry().center();
         cell_centroids[cellIdx] = {center[0], center[1], center[2]};
     }
 
-    // Precompute node positions.
-    std::vector<std::array<double, 3>> node_coords(num_nodes);
-    for (const auto& v : vertices(gv)) {
-        int nodeIdx = gv.indexSet().index(v);
-        auto pos = v.geometry().corner(0);
-        node_coords[nodeIdx] = {pos[0], pos[1], pos[2]};
+    std::vector<std::vector<int>> cell_neighbors(num_cells);
+    for (const auto& elem : elements(gv)) {
+        const int cellIdx = gv.indexSet().index(elem);
+        for (const auto& intersection : intersections(gv, elem)) {
+            if (!intersection.boundary())
+                cell_neighbors[cellIdx].push_back(gv.indexSet().index(intersection.outside()));
+        }
     }
 
-    // Compute node values via least-squares.
-    std::vector<double> node_values(num_nodes, 0.0);
-    for (int n = 0; n < num_nodes; ++n) {
-        const auto& adj = node_cells[n];
-        int nAdj = static_cast<int>(adj.size());
-        if (nAdj == 0) {
-            node_values[n] = 0.0;
-            continue;
+    std::vector<std::array<double, 3>> node_coords(num_nodes);
+    for (const auto& elem : elements(gv)) {
+        for (int li = 0; li < elem.geometry().corners(); ++li) {
+            const int nodeIdx = gv.indexSet().subIndex(elem, li, dim);
+            const auto pos = elem.geometry().corner(li);
+            node_coords[nodeIdx] = {pos[0], pos[1], pos[2]};
         }
+    }
 
-        // Build 4x4 normal equations (A^T A) and 4x1 rhs (A^T b).
-        // Columns: [1, x, y, z]
-        double AtA[4][4] = {};
-        double Atb[4] = {};
-        for (int i = 0; i < nAdj; ++i) {
-            int ci = adj[i];
-            double row[4] = {1.0,
-                             cell_centroids[ci][0],
-                             cell_centroids[ci][1],
-                             cell_centroids[ci][2]};
-            double val = cell_values[ci][0];
+    auto tryFitAtNode = [&](const std::vector<int>& patch,
+                            const std::array<double, 3>& node_coord,
+                            double& node_value) {
+        if (patch.size() < 4)
+            return false;
+
+        double normal_matrix[4][4] = {};
+        double rhs[4] = {};
+        for (const int patch_cell_idx : patch) {
+            const double dx = cell_centroids[patch_cell_idx][0] - node_coord[0];
+            const double dy = cell_centroids[patch_cell_idx][1] - node_coord[1];
+            const double dz = cell_centroids[patch_cell_idx][2] - node_coord[2];
+            const double row[4] = {1.0, dx, dy, dz};
+            const double value = cell_values[patch_cell_idx][0];
             for (int p = 0; p < 4; ++p) {
+                rhs[p] += row[p] * value;
                 for (int q = 0; q < 4; ++q)
-                    AtA[p][q] += row[p] * row[q];
-                Atb[p] += row[p] * val;
+                    normal_matrix[p][q] += row[p] * row[q];
             }
         }
 
-        // Solve the 4x4 system by Gaussian elimination with partial pivoting.
-        // Copy AtA into augmented matrix [A|b].
-        double M[4][5];
+        double augmented[4][5];
+        double max_entry = 0.0;
         for (int p = 0; p < 4; ++p) {
-            for (int q = 0; q < 4; ++q)
-                M[p][q] = AtA[p][q];
-            M[p][4] = Atb[p];
-        }
-
-        bool singular = false;
-        for (int col = 0; col < 4; ++col) {
-            // partial pivoting
-            int maxRow = col;
-            for (int row = col + 1; row < 4; ++row)
-                if (std::abs(M[row][col]) > std::abs(M[maxRow][col]))
-                    maxRow = row;
-            if (maxRow != col)
-                for (int k = 0; k < 5; ++k)
-                    std::swap(M[col][k], M[maxRow][k]);
-
-            if (std::abs(M[col][col]) < 1e-14) {
-                singular = true;
-                break;
+            for (int q = 0; q < 4; ++q) {
+                augmented[p][q] = normal_matrix[p][q];
+                max_entry = std::max(max_entry, std::abs(augmented[p][q]));
             }
+            augmented[p][4] = rhs[p];
+        }
+        if (max_entry == 0.0)
+            return false;
+
+        constexpr double pivot_tol = 1e-10;
+        for (int col = 0; col < 4; ++col) {
+            int pivot_row = col;
+            for (int row = col + 1; row < 4; ++row) {
+                if (std::abs(augmented[row][col]) > std::abs(augmented[pivot_row][col]))
+                    pivot_row = row;
+            }
+            for (int k = 0; k < 5; ++k)
+                std::swap(augmented[col][k], augmented[pivot_row][k]);
+
+            if (std::abs(augmented[col][col]) < pivot_tol * max_entry)
+                return false;
 
             for (int row = col + 1; row < 4; ++row) {
-                double factor = M[row][col] / M[col][col];
+                const double factor = augmented[row][col] / augmented[col][col];
                 for (int k = col; k < 5; ++k)
-                    M[row][k] -= factor * M[col][k];
+                    augmented[row][k] -= factor * augmented[col][k];
             }
         }
 
         double coeffs[4] = {};
-        if (!singular) {
-            // back substitution
-            for (int row = 3; row >= 0; --row) {
-                coeffs[row] = M[row][4];
-                for (int k = row + 1; k < 4; ++k)
-                    coeffs[row] -= M[row][k] * coeffs[k];
-                coeffs[row] /= M[row][row];
-            }
-        } else {
-            // Fallback: simple average of cell values.
-            double sum = 0.0;
-            for (int i = 0; i < nAdj; ++i)
-                sum += cell_values[adj[i]][0];
-            coeffs[0] = sum / nAdj;
-            coeffs[1] = coeffs[2] = coeffs[3] = 0.0;
+        for (int row = 3; row >= 0; --row) {
+            coeffs[row] = augmented[row][4];
+            for (int k = row + 1; k < 4; ++k)
+                coeffs[row] -= augmented[row][k] * coeffs[k];
+            coeffs[row] /= augmented[row][row];
         }
 
-        // Evaluate polynomial at node position.
-        node_values[n] = coeffs[0]
-                       + coeffs[1] * node_coords[n][0]
-                       + coeffs[2] * node_coords[n][1]
-                       + coeffs[3] * node_coords[n][2];
+        node_value = coeffs[0];
+        return true;
+    };
+
+    std::vector<double> node_values(num_nodes, 0.0);
+    for (int node_idx = 0; node_idx < num_nodes; ++node_idx) {
+        const auto& seed_cells = node_cells[node_idx];
+        if (seed_cells.empty()) {
+            node_values[node_idx] = 0.0;
+            continue;
+        }
+
+        std::vector<int> patch;
+        patch.reserve(seed_cells.size() + 8);
+        std::vector<char> visited(num_cells, 0);
+        std::deque<int> queue;
+
+        for (const int cell_idx : seed_cells) {
+            if (!visited[cell_idx]) {
+                visited[cell_idx] = 1;
+                patch.push_back(cell_idx);
+                queue.push_back(cell_idx);
+            }
+        }
+
+        double fitted_value = 0.0;
+        while (true) {
+            if (tryFitAtNode(patch, node_coords[node_idx], fitted_value)) {
+                node_values[node_idx] = fitted_value;
+                break;
+            }
+
+            if (queue.empty()) {
+                double sum = 0.0;
+                for (const int cell_idx : patch)
+                    sum += cell_values[cell_idx][0];
+                node_values[node_idx] = sum / patch.size();
+                break;
+            }
+
+            const int current = queue.front();
+            queue.pop_front();
+            for (const int neighbor : cell_neighbors[current]) {
+                if (!visited[neighbor]) {
+                    visited[neighbor] = 1;
+                    patch.push_back(neighbor);
+                    queue.push_back(neighbor);
+                }
+            }
+        }
     }
 
-    // Step 3: Interpolate node values back to cells.
-    // For hex cells, evaluation of the trilinear basis functions at the
-    // cell centre gives equal weight 1/N to each of the N corners.
     Dune::BlockVector<Dune::FieldVector<double,1>> result(num_cells);
     for (const auto& elem : elements(gv)) {
-        int cellIdx = gv.indexSet().index(elem);
-        int nc = elem.geometry().corners();
+        const int cellIdx = gv.indexSet().index(elem);
+        const int nc = elem.geometry().corners();
         double sum = 0.0;
         for (int li = 0; li < nc; ++li) {
-            int nodeIdx = gv.indexSet().subIndex(elem, li, dim);
+            const int nodeIdx = gv.indexSet().subIndex(elem, li, dim);
             sum += node_values[nodeIdx];
         }
         result[cellIdx][0] = sum / nc;

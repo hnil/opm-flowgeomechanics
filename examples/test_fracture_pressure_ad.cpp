@@ -12,9 +12,12 @@
 
 #include <config.h>
 
+#include <array>
 #include <cmath>
 #include <iostream>
 #include <vector>
+
+#include "reference_test_data.hpp"
 
 #include <opm/geomech/FracturePressureAssemblerAD.hpp>
 
@@ -55,6 +58,39 @@ bool compareMatrices(const Opm::BCRSMatrix1x1& a,
                           << val_a << " vs " << val_b
                           << " (diff=" << std::abs(val_a - val_b) << ")"
                           << std::endl;
+                ok = false;
+            }
+        }
+    }
+    return ok;
+}
+
+template <size_t N>
+bool compareSparseMatrixToReference(const Opm::BCRSMatrix1x1& matrix,
+                                    const std::array<std::array<double, N>, N>& reference,
+                                    double abs_tol,
+                                    double rel_tol)
+{
+    if (matrix.N() != N || matrix.M() != N) {
+        std::cerr << "  Matrix dimensions differ: "
+                  << matrix.N() << "x" << matrix.M() << " vs "
+                  << N << "x" << N << std::endl;
+        return false;
+    }
+
+    bool ok = true;
+    for (size_t i = 0; i < N; ++i) {
+        for (size_t j = 0; j < N; ++j) {
+            const double actual = matrix.exists(i, j) ? matrix[i][j][0][0] : 0.0;
+            const double expected = reference[i][j];
+            const double abs_err = std::abs(actual - expected);
+            const double scale = std::max(std::abs(actual), std::abs(expected));
+            const double rel_err = (scale > 1e-15) ? abs_err / scale : abs_err;
+            if (abs_err > abs_tol && rel_err > rel_tol) {
+                std::cerr << "  Reference mismatch at (" << i << "," << j << "): "
+                          << actual << " vs " << expected
+                          << " (abs_err=" << abs_err
+                          << ", rel_err=" << rel_err << ")" << std::endl;
                 ok = false;
             }
         }
@@ -262,9 +298,35 @@ bool test_coupling_matrix_matches_original()
     return true;
 }
 
+bool test_reference_pressure_and_coupling_case()
+{
+    std::cout << "Test 4: Reference pressure and coupling case is unchanged ..."
+              << std::endl;
+
+    auto input = makeSimpleTestInput();
+    auto ad_result = Opm::assemblePressureAD(input);
+
+    const bool pressure_ok = compareSparseMatrixToReference(*ad_result.pressure_matrix,
+                                                            Opm::ReferenceTestData::pressure_matrix_case,
+                                                            1e-12,
+                                                            1e-12);
+    const bool coupling_ok = compareSparseMatrixToReference(*ad_result.coupling_matrix,
+                                                            Opm::ReferenceTestData::coupling_matrix_case,
+                                                            1e-12,
+                                                            1e-12);
+
+    if (!pressure_ok || !coupling_ok) {
+        std::cerr << "  FAILED" << std::endl;
+        return false;
+    }
+
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
 bool test_coupling_zero_below_min_width()
 {
-    std::cout << "Test 4: Coupling matrix zero when all widths < min_width ..."
+    std::cout << "Test 5: Coupling matrix zero when all widths < min_width ..."
               << std::endl;
     auto input = makeSimpleTestInput();
 
@@ -297,7 +359,7 @@ bool test_coupling_zero_below_min_width()
 
 bool test_pressure_control()
 {
-    std::cout << "Test 5: Pressure matrix with pressure control ..."
+    std::cout << "Test 6: Pressure matrix with pressure control ..."
               << std::endl;
     auto input = makeSimpleTestInput();
     input.control_type = "pressure";
@@ -316,7 +378,7 @@ bool test_pressure_control()
 
 bool test_rate_well_control()
 {
-    std::cout << "Test 6: Pressure matrix with rate_well control ..."
+    std::cout << "Test 7: Pressure matrix with rate_well control ..."
               << std::endl;
     auto input = makeSimpleTestInput();
     input.control_type = "rate_well";
@@ -341,7 +403,7 @@ bool test_rate_well_control()
 
 bool test_residual_consistency()
 {
-    std::cout << "Test 7: Residual R = A*p consistency ..."
+    std::cout << "Test 8: Residual R = A*p consistency ..."
               << std::endl;
     auto input = makeSimpleTestInput();
 
@@ -377,7 +439,7 @@ bool test_residual_consistency()
 
 bool test_mobility_pressure_derivatives()
 {
-    std::cout << "Test 8: Mobility pressure derivatives via finite differences ..."
+    std::cout << "Test 9: Mobility pressure derivatives via finite differences ..."
               << std::endl;
 
     // Use values where flow terms are dominant and well-resolved.
@@ -450,7 +512,7 @@ bool test_mobility_pressure_derivatives()
 
 bool test_varying_fluid_properties()
 {
-    std::cout << "Test 9: Non-uniform density/viscosity across cells ..."
+    std::cout << "Test 10: Non-uniform density/viscosity across cells ..."
               << std::endl;
     auto input = makeSimpleTestInput();
 
@@ -471,7 +533,7 @@ bool test_varying_fluid_properties()
 
 bool test_standalone_pressure_and_coupling()
 {
-    std::cout << "Test 10: Standalone AD assembly produces both pressure and coupling matrices ..."
+    std::cout << "Test 11: Standalone AD assembly produces both pressure and coupling matrices ..."
               << std::endl;
     auto input = makeSimpleTestInput();
 
@@ -525,7 +587,7 @@ bool test_standalone_pressure_and_coupling()
 
 bool test_standalone_with_well_equations()
 {
-    std::cout << "Test 11: Standalone AD assembly with well equations (rate_well) ..."
+    std::cout << "Test 12: Standalone AD assembly with well equations (rate_well) ..."
               << std::endl;
     auto input = makeSimpleTestInput();
     input.control_type = "rate_well";
@@ -574,6 +636,7 @@ int main()
     if (!test_pressure_matrix_matches_original())  ++failures;
     if (!test_coupling_matrix_finite_differences()) ++failures;
     if (!test_coupling_matrix_matches_original())   ++failures;
+    if (!test_reference_pressure_and_coupling_case()) ++failures;
     if (!test_coupling_zero_below_min_width())      ++failures;
     if (!test_pressure_control())                   ++failures;
     if (!test_rate_well_control())                  ++failures;

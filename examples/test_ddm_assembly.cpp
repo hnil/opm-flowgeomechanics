@@ -10,9 +10,12 @@
 
 #include <config.h>
 
+#include <array>
 #include <cmath>
 #include <iostream>
 #include <vector>
+
+#include "reference_test_data.hpp"
 
 #include <dune/common/dynmatrix.hh>
 #include <dune/foamgrid/foamgrid.hh>
@@ -71,6 +74,39 @@ bool compareMatrices(const FullMatrix& a,
     }
     if (ok)
         std::cout << "  Max absolute difference: " << max_diff << std::endl;
+    return ok;
+}
+
+template <size_t N>
+bool compareMatrixToReference(const FullMatrix& matrix,
+                              const std::array<std::array<double, N>, N>& reference,
+                              double abs_tol,
+                              double rel_tol)
+{
+    if (matrix.N() != N || matrix.M() != N) {
+        std::cerr << "  Matrix dimensions differ: "
+                  << matrix.N() << "x" << matrix.M() << " vs "
+                  << N << "x" << N << std::endl;
+        return false;
+    }
+
+    bool ok = true;
+    for (size_t i = 0; i < N; ++i) {
+        for (size_t j = 0; j < N; ++j) {
+            const double actual = matrix[i][j];
+            const double expected = reference[i][j];
+            const double abs_err = std::abs(actual - expected);
+            const double scale = std::max(std::abs(actual), std::abs(expected));
+            const double rel_err = (scale > 1e-15) ? abs_err / scale : abs_err;
+            if (abs_err > abs_tol && rel_err > rel_tol) {
+                std::cerr << "  Reference mismatch at (" << i << "," << j << "): "
+                          << actual << " vs " << expected
+                          << " (abs_err=" << abs_err
+                          << ", rel_err=" << rel_err << ")" << std::endl;
+                ok = false;
+            }
+        }
+    }
     return ok;
 }
 
@@ -239,6 +275,32 @@ bool test_different_material_properties()
     return true;
 }
 
+bool test_reference_matrix_case()
+{
+    std::cout << "Test: DDM reference matrix case is unchanged ..." << std::endl;
+
+    auto grid = makeTestGrid(1);
+    if (!grid) {
+        std::cerr << "  FAILED (could not create grid)" << std::endl;
+        return false;
+    }
+
+    const int nc = grid->leafGridView().size(0);
+    const double E = 1e9;
+    const double nu = 0.25;
+
+    FullMatrix matrix(nc, nc, 0.0);
+    ddm::assembleMatrix_fast(matrix, E, nu, *grid);
+
+    if (!compareMatrixToReference(matrix, Opm::ReferenceTestData::ddm_matrix_case, 1e-6, 1e-12)) {
+        std::cerr << "  FAILED" << std::endl;
+        return false;
+    }
+
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
 } // anonymous namespace
 
 // ============================================================================
@@ -252,6 +314,7 @@ int main()
     if (!test_diagonal_dominance())     ++failures;
     if (!test_matrix_nonzero())         ++failures;
     if (!test_different_material_properties()) ++failures;
+    if (!test_reference_matrix_case())  ++failures;
 
     std::cout << "\n=== "
               << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED")
