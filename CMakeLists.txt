@@ -531,7 +531,7 @@ add_test(NAME Run.SIMPLE_MECH_FRAC_MPI.EnergyGeomech
 
 set_tests_properties(Run.SIMPLE_MECH_FRAC_MPI.EnergyGeomech
 	PROPERTIES
-	PROCESSORS 4
+	PROCESSORS ${Test_NumProc}
 )
 
 add_test(NAME Run.SIMPLE_MECH_FRAC_THREAD.EnergyGeomech

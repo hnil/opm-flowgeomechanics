@@ -100,8 +100,9 @@ public:
     {
         assert(rhs.value != 0.0);
         LocalAD r;
-        r.value = value / rhs.value;
-        const double inv2 = 1.0 / (rhs.value * rhs.value);
+        const double inv_rhs = 1.0 / rhs.value;
+        r.value = value * inv_rhs;
+        const double inv2 = inv_rhs * inv_rhs;
         for (int i = 0; i < NumDerivs; ++i)
             r.derivatives[i] = (derivatives[i] * rhs.value - value * rhs.derivatives[i]) * inv2;
         return r;
@@ -147,8 +148,9 @@ public:
     {
         assert(a.value != 0.0);
         LocalAD r;
-        r.value = s / a.value;
-        const double neg_s_over_a2 = -s / (a.value * a.value);
+        const double inv_a = 1.0 / a.value;
+        r.value = s * inv_a;
+        const double neg_s_over_a2 = -(s * inv_a) * inv_a;
         for (int i = 0; i < NumDerivs; ++i)
             r.derivatives[i] = neg_s_over_a2 * a.derivatives[i];
         return r;
@@ -305,7 +307,7 @@ assemblePressureAD(const FracturePressureInput& input)
         AD4 h1_cubed = h1 * h1 * h1;
         AD4 h2_cubed = h2 * h2 * h2;
         AD4 inv_trans = AD4::constant(12.0) / (h1_cubed * AD4::constant(t1))
-                      + AD4::constant(12.0) / (h2_cubed * AD4::constant(t2));
+                  + AD4::constant(12.0) / (h2_cubed * AD4::constant(t2));
 
         // Compute per-cell mobility = density / viscosity as AD quantities.
         // Pressure derivatives of density and viscosity are mapped to the
@@ -323,7 +325,7 @@ assemblePressureAD(const FracturePressureInput& input)
         AD4 mob_j = rho_j / mu_j;
 
         AD4 mobility = AD4::constant(0.5) * (mob_i + mob_j);
-        AD4 trans = mobility / inv_trans;
+        AD4 trans = mobility * (AD4::constant(1.0) / inv_trans);
 
         // flux from cell i to cell j
         AD4 flux = trans * (p_i_ad - p_j_ad);
