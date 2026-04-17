@@ -62,6 +62,58 @@ bool compareMatrices(const Opm::BCRSMatrix1x1& a,
     return ok;
 }
 
+// Reproduce the legacy coupling-matrix calculation from
+// Fracture_fullSystemIteration.cpp:updateCouplingMatrix() for standalone tests.
+std::unique_ptr<Opm::BCRSMatrix1x1>
+assembleCouplingOriginal(const Opm::FracturePressureInput& input)
+{
+    const size_t nc = input.num_cells;
+    auto mat = Opm::buildMatrixStructure(input.htrans, nc);
+    auto& matrix = *mat;
+    matrix = 0;
+
+    for (const auto& ht : input.htrans) {
+        const size_t i = std::get<0>(ht);
+        const size_t j = std::get<1>(ht);
+        const double t1 = std::get<2>(ht);
+        const double t2 = std::get<3>(ht);
+
+        double dh1 = 1.0;
+        double dh2 = 1.0;
+        if (input.fracture_width[i] <= input.min_width)
+            dh1 = 0.0;
+        if (input.fracture_width[j] <= input.min_width)
+            dh2 = 0.0;
+
+        const double h1 = std::max(input.fracture_width[i], input.min_width);
+        const double h2 = std::max(input.fracture_width[j], input.min_width);
+        const double p1 = input.fracture_pressure[i];
+        const double p2 = input.fracture_pressure[j];
+
+        const double q = h1 * h1 * h1 * h2 * h2 * h2 * t1 * t2;
+        const double d1q = 3.0 * h1 * h1 * h2 * h2 * h2 * t1 * t2 * dh1;
+        const double d2q = 3.0 * h1 * h1 * h1 * h2 * h2 * t1 * t2 * dh2;
+
+        const double r = 12.0 * (h1 * h1 * h1 * t1 + h2 * h2 * h2 * t2);
+        const double d1r = 36.0 * h1 * h1 * t1 * dh1;
+        const double d2r = 36.0 * h2 * h2 * t2 * dh2;
+
+        const double dTdh1 = (r == 0.0) ? 0.0 : (d1q * r - q * d1r) / (r * r);
+        const double dTdh2 = (r == 0.0) ? 0.0 : (d2q * r - q * d2r) / (r * r);
+
+        const double mob_i = input.density[i].value / input.viscosity[i].value;
+        const double mob_j = input.density[j].value / input.viscosity[j].value;
+        const double mobility = 0.5 * (mob_i + mob_j);
+
+        matrix[i][i] += dTdh1 * (p1 - p2) * mobility;
+        matrix[j][j] += dTdh2 * (p2 - p1) * mobility;
+        matrix[i][j] += dTdh2 * (p1 - p2) * mobility;
+        matrix[j][i] += dTdh1 * (p2 - p1) * mobility;
+    }
+
+    return mat;
+}
+
 // Compute residual R = A*p  where A is the original pressure matrix
 Opm::BlockVector1 computeResidual(const Opm::FracturePressureInput& input)
 {
@@ -192,9 +244,27 @@ bool test_coupling_matrix_finite_differences()
     return true;
 }
 
+bool test_coupling_matrix_matches_original()
+{
+    std::cout << "Test 3: Comparing coupling matrices (AD vs original) ..."
+              << std::endl;
+    auto input = makeSimpleTestInput();
+
+    auto ad_result = Opm::assemblePressureAD(input);
+    auto orig_coupling = assembleCouplingOriginal(input);
+
+    if (!compareMatrices(*ad_result.coupling_matrix, *orig_coupling, 1e-12)) {
+        std::cerr << "  FAILED" << std::endl;
+        return false;
+    }
+
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
 bool test_coupling_zero_below_min_width()
 {
-    std::cout << "Test 3: Coupling matrix zero when all widths < min_width ..."
+    std::cout << "Test 4: Coupling matrix zero when all widths < min_width ..."
               << std::endl;
     auto input = makeSimpleTestInput();
 
@@ -227,7 +297,7 @@ bool test_coupling_zero_below_min_width()
 
 bool test_pressure_control()
 {
-    std::cout << "Test 4: Pressure matrix with pressure control ..."
+    std::cout << "Test 5: Pressure matrix with pressure control ..."
               << std::endl;
     auto input = makeSimpleTestInput();
     input.control_type = "pressure";
@@ -246,7 +316,7 @@ bool test_pressure_control()
 
 bool test_rate_well_control()
 {
-    std::cout << "Test 5: Pressure matrix with rate_well control ..."
+    std::cout << "Test 6: Pressure matrix with rate_well control ..."
               << std::endl;
     auto input = makeSimpleTestInput();
     input.control_type = "rate_well";
@@ -271,7 +341,7 @@ bool test_rate_well_control()
 
 bool test_residual_consistency()
 {
-    std::cout << "Test 6: Residual R = A*p consistency ..."
+    std::cout << "Test 7: Residual R = A*p consistency ..."
               << std::endl;
     auto input = makeSimpleTestInput();
 
@@ -307,7 +377,7 @@ bool test_residual_consistency()
 
 bool test_mobility_pressure_derivatives()
 {
-    std::cout << "Test 7: Mobility pressure derivatives via finite differences ..."
+    std::cout << "Test 8: Mobility pressure derivatives via finite differences ..."
               << std::endl;
 
     // Use values where flow terms are dominant and well-resolved.
@@ -380,7 +450,7 @@ bool test_mobility_pressure_derivatives()
 
 bool test_varying_fluid_properties()
 {
-    std::cout << "Test 8: Non-uniform density/viscosity across cells ..."
+    std::cout << "Test 9: Non-uniform density/viscosity across cells ..."
               << std::endl;
     auto input = makeSimpleTestInput();
 
@@ -401,7 +471,7 @@ bool test_varying_fluid_properties()
 
 bool test_standalone_pressure_and_coupling()
 {
-    std::cout << "Test 9: Standalone AD assembly produces both pressure and coupling matrices ..."
+    std::cout << "Test 10: Standalone AD assembly produces both pressure and coupling matrices ..."
               << std::endl;
     auto input = makeSimpleTestInput();
 
@@ -455,7 +525,7 @@ bool test_standalone_pressure_and_coupling()
 
 bool test_standalone_with_well_equations()
 {
-    std::cout << "Test 10: Standalone AD assembly with well equations (rate_well) ..."
+    std::cout << "Test 11: Standalone AD assembly with well equations (rate_well) ..."
               << std::endl;
     auto input = makeSimpleTestInput();
     input.control_type = "rate_well";
@@ -503,6 +573,7 @@ int main()
 
     if (!test_pressure_matrix_matches_original())  ++failures;
     if (!test_coupling_matrix_finite_differences()) ++failures;
+    if (!test_coupling_matrix_matches_original())   ++failures;
     if (!test_coupling_zero_below_min_width())      ++failures;
     if (!test_pressure_control())                   ++failures;
     if (!test_rate_well_control())                  ++failures;
