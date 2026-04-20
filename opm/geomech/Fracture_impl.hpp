@@ -78,7 +78,7 @@ make_vector(const Vec& data, size_t sz = 0)
 }
 
 template <class TypeTag, class Simulator>
-void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_constant_vals,bool update_filtercake)
+void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_constant_vals,bool /*update_filtercake*/)
     {
         // if `init_contant_vals` is true, the fields that should normally not
         // change, i.e.  E_, nu_ and reservoir_perm_ will be updated. This should
@@ -117,7 +117,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         }
 
 
-        double numax = 0, Emax = 0;
+        //double numax = 0, Emax = 0;
         //auto& enitity_seeds = problem.elementEntitySeeds();//used for radom axes better way?
         // get properties from rservoir
 
@@ -149,7 +149,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 }
                 const auto& currentData = grid.currentData();
                 const auto& elem = Dune::cpgrid::Entity<0>(*currentData.back(), cell, true);
-                const auto& geom = elem.geometry();
+                //const auto& geom = elem.geometry();
                 const auto& cell_center = elem.geometry().center();
                 map_reservoir_mobility_[cell] = reservoir_mobility;
                 map_reservoir_density_[cell] = fs.density(FluidSystem::waterPhaseIdx).value();
@@ -444,7 +444,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             // fracture_pressure_ to its correct size
             auto traction = fracture_pressure_;
             normalFractureTraction(traction);
-            for(int i=0; i < traction.size();++i){
+            for(size_t i=0; i < traction.size();++i){
                 fracture_pressure_[i] = std::max(traction[i], fracture_pressure_[i]);
             }
             if (numWellEquations() > 0){
@@ -758,8 +758,8 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 initPressureMatrix();
                 fracture_matrix_ = nullptr;
 
-                const auto& pts = grid_stretcher_->nodecoords();
-                const auto bix = grid_stretcher_->boundaryNodeIndices();
+                //const auto& pts = grid_stretcher_->nodecoords();
+                //const auto bix = grid_stretcher_->boundaryNodeIndices();
                 // for(auto i : bix)
                 //   os << pts[i][0] << " " << pts[i][1] << " " << pts[i][2] << "\n";
                 // os.close();

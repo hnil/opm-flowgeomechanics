@@ -225,7 +225,7 @@ public:
     std::string name() const;
     void write(int reportStep = -1) const;
     void writemulti(double time) const;
-  void updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
+    void updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
                             const Dune::CpGrid& grid,
                             const std::vector<EntitySeed>& entity_seeds);
     template <class TypeTag, class Simulator>
@@ -262,8 +262,8 @@ public:
     const WellInfo& wellInfo() const { return wellinfo_; }
     std::vector<double> leakOfRate() const;
     double injectionPressure() const;
-  double injectionBhp() const;// {return injectionPressure() - dp_perf_;};
-  void setPerfProps(double perfpressure,double perf_depth, double perfrate);//{perf_pressure_ = perfpressure;}
+    double injectionBhp() const;// {return injectionPressure() - dp_perf_;};
+    void setPerfProps(double perfpressure,double perf_depth, double perfrate);//{perf_pressure_ = perfpressure;}
     void setWellProps(double wellrate, double WI, double wi_dp, double wi_respress, double ref_depth);//{well_rate_ = wellrate; total_wellindex_ = WI;}
     Dune::FieldVector<double, 6> stress(Dune::FieldVector<double, 3> obs) const;
     Dune::FieldVector<double, 6> strain(Dune::FieldVector<double, 3> obs) const;
@@ -276,6 +276,9 @@ public:
     std::array<double,2> hightAndWidth() const;
     double maxFlowTimeStep() const{return max_flow_time_step_;}
     double filterCakeVolume() const;
+    void resetFracture();
+    void moveForwardInTime();
+
 private:
    double reservoirTraction(int i) const;
    double fractureForce(int i) const;
@@ -314,7 +317,7 @@ private:
     template <class TypeTag, class Simulator>
     void initReservoirProperties(const Simulator& simulator)
     {
-        using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
+        //using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
         const auto& problem = simulator.problem();
         // NB burde truleg interpolere
         // NB reservoir dist not calculated
@@ -371,6 +374,17 @@ private:
     std::vector<std::vector<CellRef>> grid_mesh_map_; // @@ index mapping from cells in grid_ to trimesh_.
                                                       // @@ NB: in general many-to-many
     std::unique_ptr<Grid> grid_;
+    // grid definition in case of step fails
+    std::unique_ptr<Grid> grid_prev_;
+    std::unique_ptr<GridStretcher> grid_stretcher_prev_; //@@ experimental, for stretching grids
+    std::unique_ptr<Opm::RegularTrimesh> trimesh_prev_; // @@ experimental, implicitly defined grids
+    std::vector<std::vector<CellRef>> grid_mesh_map_prev_; // @@ index mapping from cells in grid_ to trimesh_.
+                                                      // @@ NB: in general many-to-many
+     std::vector<double> filtercake_thikness_prev_; // properties of filter cake, if any
+    // copy of state variables
+  
+    
+
     Point3D origo_;
     std::array<Point3D, 3> axis_;
     std::array<Point3D, 3> naxis_;
@@ -426,7 +440,7 @@ private:
     std::vector<double> reservoir_density_;
     std::vector<double> reservoir_cell_z_;
     //
-    std::vector<int> unique_reservoir_cells_;
+    //std::vector<int> unique_reservoir_cells_;
     std::map<int,double> map_reservoir_mobility_;
     std::map<int,double> map_reservoir_density_;
     std::map<int,double> map_reservoir_cell_z_;
@@ -449,13 +463,18 @@ private:
     mutable Dune::BlockVector<Dune::FieldVector<double, 1>> fracture_width_;
     mutable Dune::BlockVector<Dune::FieldVector<double, 1>> fracture_pressure_;
 
+
+    // copy of state variables
+    Dune::BlockVector<Dune::FieldVector<double, 1>> fracture_width_prev_;
+    Dune::BlockVector<Dune::FieldVector<double, 1>> fracture_pressure_prev_;
+
     // transmissibilities
     using Htrans = std::tuple<size_t, size_t, double, double>;
     std::vector<Htrans> htrans_;
     std::vector<std::tuple<int,double>> perfinj_;
     double perf_pressure_;
     std::vector<double> leakof_;
-    //
+    
     PropertyTree prmpressure_;
     using PressureOperatorType = Dune::MatrixAdapter<Matrix, Vector, Vector>;
     using FlexibleSolverType = Dune::FlexibleSolver<PressureOperatorType>;

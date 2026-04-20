@@ -158,8 +158,9 @@ public:
         return dt_min;  
     }
 
-        void updateReservoirProperties();
+        void updateReservoirProperties(); // for testing without simulator
         void initFractureStates();
+
         template <class TypeTag, class Simulator>
         void initReservoirProperties(const Simulator& simulator)
         {
@@ -175,7 +176,24 @@ public:
             this->updateReservoirProperties<TypeTag, Simulator>(simulator);
             this->updateWellProperties<TypeTag, Simulator>(simulator);
         }
-
+        template <class TypeTag, class Simulator>
+        void resetFractures(const Simulator& simulator)
+        {
+            for (size_t i = 0; i < wells_.size(); ++i) {
+                for (auto& fracture : well_fractures_[i]) {
+                    fracture.resetFracture();
+                }
+            }
+            this->updateReservoirProperties<TypeTag, Simulator>(simulator);
+            this->updateWellProperties<TypeTag, Simulator>(simulator);
+        }
+        void moveForwardInTime(){
+            for (size_t i = 0; i < wells_.size(); ++i) {
+                for (auto& fracture : well_fractures_[i]) {
+                    fracture.moveForwardInTime();
+                }
+            }
+        }
 
         template <class TypeTag, class Simulator>
         void updateReservoirWellProperties(const Simulator& simulator)
@@ -204,6 +222,7 @@ public:
             return prm_;
         }
         static Opm::DeferredLogger fractureLogger;
+
     private:
         bool vtkwritewells_ = false; // write wells to VTK files
         template <class TypeTag, class Simulator>

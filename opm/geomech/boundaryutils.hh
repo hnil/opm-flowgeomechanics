@@ -235,7 +235,7 @@ namespace Opm{
             }
 
             for(int i=0; i< int(org_bc_nodes.size()); ++i){
-                int node = std::get<0>(org_bc_nodes[i]);
+                auto node = std::get<0>(org_bc_nodes[i]);
                 assert(node<mymap.size());
                 int index = mymap[node];
                 assert(index>-1);

@@ -264,7 +264,7 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
     double qw_sum = 0.0;
     double qwpos_sum = 0.0;
     // should we do this based on fracture cross flow?        
-    for (int i = 0; i < perfdata.cell_index.size(); ++i) {
+    for (size_t i = 0; i < perfdata.cell_index.size(); ++i) {
         int cell_index = perfdata.cell_index[i];
         // similar as in WellFilterCake.cpp:148
         const auto& connection_rates = perfdata.phase_rates;
@@ -540,7 +540,7 @@ void
 Fracture::summary_of_solve(){
   if(numWellEquations()>0){
     int nc = numFractureCells();
-    assert( fracture_pressure_.size() == nc + 1);
+    assert( int(fracture_pressure_.size()) == nc + 1);
     double well_pressure = fracture_pressure_[nc];
     std::cout << "Perf pressure " << well_pressure << std::endl;
     const int cell = std::get<0>(perfinj_[0]); // @@ will this be the correct index?
@@ -861,7 +861,7 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
     OPM_TIMEFUNCTION();
     reservoir_cells_.resize(numFractureCells());
     using GridView = typename Grid::LeafGridView;
-    using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
+    //using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
     ElementMapper elemMapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     int tri_divide = 0;
     int tri_outside = 0;
@@ -1132,7 +1132,7 @@ Fracture::wellIndices() const{
    if(well_indices_.size() == 2){
          wellindices = wellIndicesAvrg(well_indices_);
    }
-   for(int i=0; i < wellindices.size(); ++i){
+   for(size_t i=0; i < wellindices.size(); ++i){
      wellindices[i].ref_ctf = wellindices[i].ctf;
      wellindices[i].ref_pressure = wellindices[i].pressure;
    }
@@ -1191,7 +1191,7 @@ Fracture::wellIndicesAvrg(const std::vector<std::vector<RuntimePerforation>>& we
  
   std::vector<RuntimePerforation> wellindices(cells.size());
   //std::vector<RuntimePerforation> wellindices(cells.size(),0);
-  int tind=0;
+  //int tind=0;
   std::vector<double> weight_ctf(well_indices.size(),0.0);
   double damping_factor_wi = prm_.get<double>("solver.damping_factor_wi",2.0);
   weight_ctf[0] = 1.0;
@@ -1206,7 +1206,7 @@ Fracture::wellIndicesAvrg(const std::vector<std::vector<RuntimePerforation>>& we
       //wellindices[ind].pressure = 0.0;
     }
   }
-  for(int tind=0; tind < well_indices.size(); ++tind){ 
+  for(size_t tind=0; tind < well_indices.size(); ++tind){ 
     for (const auto& wind : well_indices[tind]){
       int ind = cell_pind[wind.cell];
       wellindices[ind].ctf += weight_ctf[tind]*wind.ctf;
@@ -1215,7 +1215,7 @@ Fracture::wellIndicesAvrg(const std::vector<std::vector<RuntimePerforation>>& we
     total_weight += weight_ctf[tind];
   }
 
-  for(int i=0; i < wellindices.size(); ++i){
+  for(size_t i=0; i < wellindices.size(); ++i){
         wellindices[i].ctf /= total_weight;
         //wellindices[i].pressure /= total_weight;
   }
@@ -1275,7 +1275,7 @@ Fracture::wellIndices_() const
             local_res_cells = all_reservoir_cells_[eIdx];
         }    
         // just to search
-        for(int lind=0; lind < local_res_cells.size(); ++lind){
+        for(int lind=0; lind < int(local_res_cells.size()); ++lind){
             int res_cell = local_res_cells[lind];
             double area_frac = 1.0;
             if(!only_to_one){
@@ -1646,6 +1646,38 @@ Fracture::filterCakeVolume() const
     }
     return total_filtercake_0;
 }
+void Fracture::resetFracture()
+{
+    //grid_ = grid_prev_ 
+    //grid_strecher_ = grid_stretcher_prev_; //@@ experimental, for stretching grids
+    trimesh_ = trimesh_prev_ ? std::make_unique<Opm::RegularTrimesh>(*trimesh_prev_) : nullptr; // @@ experimental, implicitly defined grids
+    //grid_mesh_map_ = grid_mesh_map_prev_; // @@ index mapping from cells in grid_ to trimesh_.
+    const int MAX_NUM_COARSENING = prm_.get<int>("solver.max_num_coarsening"); // should be enough for all practical purposes
+    const int numcell_threshold = prm_.get<int>("solver.numcell_threshold");
+    bool smooth_boundary = prm_.get<bool>("solver.smooth_boundary",false);
+    std::vector<CellRef> wsources = well_source_cellref_; 
+    auto [grid, fsmap, bmap] =
+            trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources,/* smoothed triangels */ smooth_boundary, numcell_threshold); // well cells kept intact!
+    grid_mesh_map_= fsmap;                                                  // @@ NB: in general many-to-many
+ 
+    // copy of state variables
+    fracture_width_ = fracture_width_prev_;
+    filtercake_thikness_ = filtercake_thikness_prev_; // properties of filter cake, if any
+    //NB after this function all poperties have to be reset
+    
+}
+void Fracture::moveForwardInTime()
+{
+    // copy current state to "previous" state
+    //grid_prev_ = grid_ ? std::make_unique<Grid>(*grid_) : nullptr;
+    //grid_stretcher_prev_ = grid_strecher_ ? std::make_unique<Opm::RegularGridStretcher>(*grid_strecher_) : nullptr;
+    trimesh_prev_ = trimesh_ ? std::make_unique<Opm::RegularTrimesh>(*trimesh_) : nullptr;
+    //grid_mesh_map_prev_ = grid_mesh_map_;
+    fracture_width_prev_ = fracture_width_;
+    filtercake_thikness_prev_ = filtercake_thikness_; // properties of filter cake, if any
+}
+
+
 
 void
 Fracture::redistribute_values(Dune::BlockVector<Dune::FieldVector<double, 1>>& values,
