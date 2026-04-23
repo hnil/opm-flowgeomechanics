@@ -550,6 +550,21 @@ set_tests_properties(Run.SIMPLE_MECH_FRAC_THREAD.EnergyGeomech
 	PROCESSORS 1
 )
 
+add_test(NAME Run.SIMPLE_MECH_FRAC_RESET.EnergyGeomech
+	COMMAND
+	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
+	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_RESET.DATA
+	--parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac_frac.ini
+	--output-dir=test_frac_reset
+	--add-corners=true
+	--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
+)
+
+set_tests_properties(Run.SIMPLE_MECH_FRAC_RESET.EnergyGeomech
+	PROPERTIES
+	PROCESSORS 1
+)
+
 # add_test(NAME Run.SIMPLE_MECH_FRAC_SEQ_BHP.EnergyGeomech
 # 	COMMAND
 # 	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>

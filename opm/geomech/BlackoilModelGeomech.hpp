@@ -122,12 +122,14 @@ namespace Opm
             const PropertyTree& prm = this->simulator_.problem().getGeomechParam();
             bool implicit_flow = prm.get<bool>("solver.implicit_flow");
             SimulatorReportSingle report;
-            std::stringstream os;
-            os << "Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: " << iteration << std::endl;
-            //std::cout << "Nonlinear itration Flow Solve:" << std::endl;
-            report = Parent::nonlinearIteration(iteration, timer, nonlinear_solver);
-            os << "Flow solve report converged: " << report.converged;// << std::endl;
-            OpmLog::info(os.str());
+            {
+                std::stringstream os;
+                os << "Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: " << iteration << std::endl;
+                //std::cout << "Nonlinear itration Flow Solve:" << std::endl;
+                report = Parent::nonlinearIteration(iteration, timer, nonlinear_solver);
+                os << "Flow solve report converged: " << report.converged;// << std::endl;         
+                OpmLog::info(os.str());
+            }
             bool do_mech = true;
             bool do_fracture = true;
             if(implicit_flow){
@@ -143,7 +145,7 @@ namespace Opm
                 }
             }
             
-            const PropertyTree& prm_frac = this->simulator_.problem().getFractureParam();
+            //const PropertyTree& prm_frac = this->simulator_.problem().getFractureParam();
             
 
             if(do_mech || do_fracture){
@@ -287,7 +289,7 @@ namespace Opm
             }else{
                 report = Parent::nonlinearIteration(iteration, timer, nonlinear_solver);
             }
-            const PropertyTree& prm_frac = this->simulator_.problem().getFractureParam();
+            //const PropertyTree& prm_frac = this->simulator_.problem().getFractureParam();
             int mech_max_it = prm.get<int>("solver.max_mech_it");
             if(iteration < mech_max_it){
                 //simulator_.problem().geomechModel().solveFracture();
@@ -303,6 +305,10 @@ namespace Opm
         //                                      const SimulatorTimerInterface& timer,
         //                                     NonlinearSolverType& nonlinear_solver){
         //                                     }
+
+        //void updateFailed(){
+        //    Parent::updateFailed();
+        //}
 
         private:
         

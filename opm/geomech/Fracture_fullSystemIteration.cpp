@@ -337,7 +337,7 @@ updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
 
 // ----------------------------------------------------------------------------
 inline bool
-convergence_test(const VectorHP& res, const double tol_flow, double tol_mech)
+convergence_test(const VectorHP& res, const double tol_flow, double tol_mech, int verbosity)
 // ----------------------------------------------------------------------------
 {
     // std::cout << "Residual norm[0] is " << res[_0].infinity_norm()<<std::endl;
@@ -345,8 +345,9 @@ convergence_test(const VectorHP& res, const double tol_flow, double tol_mech)
 
     // std::cout << "tol mech is: " << tol_mech << std::endl;
     // std::cout << "tol flow is: " << tol_flow << std::endl;
+
     bool converged = res[_0].infinity_norm() < tol_mech && res[_1].infinity_norm() < tol_flow;
-    if(converged){
+    if(converged && verbosity > 0){
       std::cout << "Converged with residual norm[0] is " << res[_0].infinity_norm()<<std::endl;
       std::cout << "Converged with residual norm[1] is " << res[_1].infinity_norm()<<std::endl;
     }
@@ -728,11 +729,12 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     // for convergence, we use 'tol' directly for the mechanics system (where
     // residuals are expected to scale with pressure), and 'tol * ||M||' for the
     // flow system (where residuals scale with M*p)
-    double tol_flow = tol;//*std::max(A.infinity_norm(), M.infinity_norm()) * std::numeric_limits<double>::epsilon();
-    double tol_mech = tol;// * M.infinity_norm();
+    const double tol_flow = tol;//*std::max(A.infinity_norm(), M.infinity_norm()) * std::numeric_limits<double>::epsilon();
+    const double tol_mech = tol;// * M.infinity_norm();
+    const int nlin_verbosity = prm_.get<double>("solver.verbosity");
     if (convergence_test(rhs,
                          tol_mech,
-                         tol_flow))
+                         tol_flow, nlin_verbosity))
         return true;
 
 
@@ -761,7 +763,6 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     
     const int max_iter = prm_.get<double>("solver.linsolver.max_iter");
     const int verbosity = prm_.get<double>("solver.linsolver.verbosity");
-    const int nlin_verbosity = prm_.get<double>("solver.verbosity");
     if (nlin_verbosity > 1) {
       int num_closed_cells = std::accumulate(closed_cells.begin(), closed_cells.end(), 0);
       std::cout << "Nonlinear iteration: " << nlin_iteration;// << std::endl; 

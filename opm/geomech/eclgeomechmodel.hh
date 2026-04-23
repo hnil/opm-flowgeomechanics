@@ -76,6 +76,9 @@ namespace Opm{
             if(simulator_.gridView().comm().rank() == 0){
                 OpmLog::info("Geomech begin time step\n");
             }
+            if(fracturemodel_){
+                fracturemodel_->moveForwardInTime();
+            }
         }
         void endTimeStep(){
             // always do post solve
@@ -429,7 +432,7 @@ namespace Opm{
             OPM_TIMEBLOCK(endTimeStepMech);
             this->updatePotentialForces(relative_solve);
             // for now assemble and set up solver her
-            const auto& problem = simulator_.problem();
+            //const auto& problem = simulator_.problem();
             if(first_solve_){
                 this->setupMechSolver(use_body_force);
             }else{
@@ -527,7 +530,7 @@ namespace Opm{
             auto disp =  celldisplacement_[globalIdx];
             if(include_fracture_contributions_ && with_fracture){
                 for(auto& elem: Dune::elements(simulator_.vanguard().grid().leafGridView())){
-                    size_t globalIdx = simulator_.problem().elementMapper().index(elem);
+                    //size_t locglobalIdx = simulator_.problem().elementMapper().index(elem);
                     auto geom = elem.geometry();
                     auto center = geom.center();
                     Dune::FieldVector<double,3> obs = {center[0],center[1],center[2]};
@@ -567,7 +570,7 @@ namespace Opm{
             auto strain = strain_[globalIdx];
             if(include_fracture_contributions_ && with_fracture){
                 for(auto& elem: Dune::elements(simulator_.vanguard().grid().leafGridView())){
-                    size_t globalIdx = simulator_.problem().elementMapper().index(elem);
+                    //size_t locglobalIdx = simulator_.problem().elementMapper().index(elem);
                     auto geom = elem.geometry();
                     auto center = geom.center();
                     Dune::FieldVector<double,3> obs = {center[0],center[1],center[2]};
@@ -591,7 +594,7 @@ namespace Opm{
             if(include_fracture_contributions_ && with_fracture){
                 assert(false);
                 for(auto& elem: Dune::elements(simulator_.vanguard().grid().leafGridView())){
-                    size_t globalIdx = simulator_.problem().elementMapper().index(elem);
+                    //size_t loglobalIdx = simulator_.problem().elementMapper().index(elem);
                     auto geom = elem.geometry();
                     auto center = geom.center();
                     Dune::FieldVector<double,3> obs = {center[0],center[1],center[2]};
@@ -708,6 +711,11 @@ namespace Opm{
         void setFirstSolveTrue(){
             elacticitysolver_.resetOperator();
             first_solve_ = true;
+        }
+        void resetFractureModel(){
+            if(fracturemodel_){
+                fracturemodel_->resetFractures<TypeTag, Simulator>(simulator_);
+            }
         }
     private:
         bool first_solve_{true};

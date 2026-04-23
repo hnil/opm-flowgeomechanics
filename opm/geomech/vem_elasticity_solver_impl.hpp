@@ -403,7 +403,7 @@ namespace Elasticity {
             rhs[i] += rhs_pressure[idx_free_[i]];
         }
         }else{
-            assert(rhs_force_.size() == grid_.leafGridView().size(3)*3);
+            assert(int(rhs_force_.size()) == int(grid_.leafGridView().size(3)*3));
             assert(rhs.size() == rhs_pressure.size());
             for(size_t i=0; i< rhs_pressure.size(); ++i){
               rhs[i] += rhs_pressure[i];
@@ -418,10 +418,10 @@ namespace Elasticity {
     }
 }
 
-IMPL_FUNC(void, assemble_fem(const Vector& pressure, bool do_matrix, bool do_vector, bool reduce_boundary))
+IMPL_FUNC(void, assemble_fem(const Vector& /*pressure*/, bool do_matrix, bool do_vector, bool reduce_boundary))
 {
   this->resetOperator();
-  static constexpr int dim = 3;//GridType::dimension;
+  //static constexpr int dim = 3;//GridType::dimension;
   static constexpr int comp = 3 + (dim - 2) * 3;
   static constexpr int bfunc = 4 + (dim - 2) * 4;
   static constexpr int esize = dim*bfunc;

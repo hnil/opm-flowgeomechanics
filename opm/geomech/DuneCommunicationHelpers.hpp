@@ -375,7 +375,7 @@ namespace Opm {
   makeEntityEntityCommunication(const Dune::CpGrid& grid, bool verbose = false);
 
   template <int codim, class Grid>
-  Dune::OwnerOverlapCopyCommunication<int, int>::ParallelIndexSet makeEntityEntityCommunication(const Grid& grid, bool verbose = false){
+  Dune::OwnerOverlapCopyCommunication<int, int>::ParallelIndexSet makeEntityEntityCommunication(const Grid& /*grid*/, bool verbose = false){
     //static_assert(false);
     assert(false);// dummy to get polygrid which is not prallel to compile
     Dune::OwnerOverlapCopyCommunication<int, int>::ParallelIndexSet entity_indexset;

@@ -16,7 +16,7 @@ public:
     //using BlackoilWellModel::BlackoilWellModel;
 
     using NeighborSet = typename Parent::NeighborSet;
-    void addNeighbors(std::vector<NeighborSet>& neighbors) const
+    void addNeighbors(std::vector<NeighborSet>& /*neighbors*/) const
     {
         if (!this->param_.matrix_add_well_contributions_) {
             return;

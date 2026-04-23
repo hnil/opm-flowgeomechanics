@@ -273,7 +273,7 @@ namespace Opm{
                 // }
             }
         }
-        void initialSolutionApplied(){
+        void initialSolutionApplied() override{
             OPM_TIMEBLOCK(initialSolutionApplied);
             Parent::initialSolutionApplied();
             const auto& simulator = this->simulator();
@@ -331,7 +331,7 @@ namespace Opm{
             FractureModel::fractureLogger.clearMessages();
             global_logger.logMessages();
         }
-        void beginTimeStep(){
+        void beginTimeStep() override{
             if (this->gridView().comm().rank() == 0){
                 std::cout << "----------------------Start beginTimeStep-------------------\n"
                 << std::flush;
@@ -340,7 +340,7 @@ namespace Opm{
             OPM_BEGIN_PARALLEL_TRY_CATCH();
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 if(this->hasFractures()){
-                  if(!(cstress_.size() == this->gridView().size(0))){
+                  if(!(int(cstress_.size()) == int(this->gridView().size(0)))){
                         OPM_THROW(std::runtime_error,"CSTRESS not set but fractures exists");
                     }
                 }
@@ -354,7 +354,7 @@ namespace Opm{
             OPM_END_PARALLEL_TRY_CATCH("Begin time step geomech failed:",this->simulator().vanguard().grid().comm());
             this->emptyFractureLogger();
         }
-        void endTimeStep(){
+        void endTimeStep() override{
             if (this->gridView().comm().rank() == 0){
                 std::cout << "----------------------Start endTimeStep-------------------\n"
                 << std::flush;
@@ -604,7 +604,7 @@ namespace Opm{
         }
 
 
-        void endEpisode(){
+        void endEpisode() override{
             Parent::endEpisode();
             if(!Parameters::Get<Parameters::EnableWriteAllSolutions>()){
                 geomechModel_.writeFractureSolution();
@@ -676,7 +676,18 @@ namespace Opm{
         
       //const std::vector< GridView::Codim<0>::EntitySeed >& elementEntitySeed(){return entitity_seed_;}
       //const std::vector< CellSeedType >& elementEntitySeed(){return entity_seed_;}
+        void updateFailed(){
+            Parent::updateFailed();
+            geomechModel_.resetFractureModel();
+        }
 
+        void advanceTimeLevel(){
+            Parent::advanceTimeLevel();
+            //this->simulator_.problem().geomechModel().advanceTimeLevel();// this is done in begin timestep
+            //wellModel_.serialize(res);
+            //aquiferModel_.serialize(res);
+        }
+ 
     private:
         class CollectDynamicConns : private Serializer<Mpi::Packer>
         {

@@ -1648,9 +1648,15 @@ Fracture::filterCakeVolume() const
 }
 void Fracture::resetFracture()
 {
+    if (!trimesh_prev_) {
+        // No checkpoint available: moveForwardInTime was never called before this
+        // step, which happens when the fracture model was first initialized during
+        // a Newton iteration that subsequently failed. Nothing to restore.
+        return;
+    }
     //grid_ = grid_prev_ 
     //grid_strecher_ = grid_stretcher_prev_; //@@ experimental, for stretching grids
-    trimesh_ = trimesh_prev_ ? std::make_unique<Opm::RegularTrimesh>(*trimesh_prev_) : nullptr; // @@ experimental, implicitly defined grids
+    trimesh_ = std::make_unique<Opm::RegularTrimesh>(*trimesh_prev_); // @@ experimental, implicitly defined grids
     //grid_mesh_map_ = grid_mesh_map_prev_; // @@ index mapping from cells in grid_ to trimesh_.
     const int MAX_NUM_COARSENING = prm_.get<int>("solver.max_num_coarsening"); // should be enough for all practical purposes
     const int numcell_threshold = prm_.get<int>("solver.numcell_threshold");

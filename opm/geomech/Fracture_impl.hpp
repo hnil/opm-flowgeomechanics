@@ -570,7 +570,10 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             }
             if(nlin_verbosity > 0){
                 std::cout << "Nonlinear iterations needed with fixed expansion: " << iter << std::endl;
-            }
+                std::cout << " fracture cells: " << fracture_width_.size();
+                std::cout << " closed cells: " << closed_cells_.size();
+                std::cout << std::endl;
+             }
 
             // compute K1 stress intensity
             const std::vector<double> K1_not_nan = Fracture::stressIntensityK1();

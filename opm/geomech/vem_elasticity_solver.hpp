@@ -224,7 +224,7 @@ class VemElasticitySolver
             setCopyRowsToZero();    
             //std::cout << "Make parallel solver" << std::endl;
             comm_->communicator().barrier();
-            using ParOperatorType = Dune::OverlappingSchwarzOperator<Matrix, Vector, Vector, CommunicationType>;
+            //using ParOperatorType = Dune::OverlappingSchwarzOperator<Matrix, Vector, Vector, CommunicationType>;
             auto pop = std::make_unique<ParOperatorType>(this->getOperator(), *comm_);
             using FlexibleSolverType = Dune::FlexibleSolver<ParOperatorType>;
             auto tsolver = std::make_unique<FlexibleSolverType>(*pop, *comm_, prm,
