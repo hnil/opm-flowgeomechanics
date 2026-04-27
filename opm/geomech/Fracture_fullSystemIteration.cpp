@@ -759,7 +759,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     // flow system (where residuals scale with M*p)
     const double tol_flow = tol;//*std::max(A.infinity_norm(), M.infinity_norm()) * std::numeric_limits<double>::epsilon();
     const double tol_mech = tol;// * M.infinity_norm();
-    const int nlin_verbosity = prm_.get<double>("solver.verbosity");
+    const int nlin_verbosity = prm_.get<int>("solver.verbosity", 0);
     if (convergence_test(rhs,
                          tol_mech,
                          tol_flow, nlin_verbosity))
@@ -790,7 +790,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     double lintol = std::max(linsolve_tol, linsolve_atol / res);
     
     const int max_iter = prm_.get<double>("solver.linsolver.max_iter");
-    const int verbosity = prm_.get<double>("solver.linsolver.verbosity");
+    const int verbosity = prm_.get<double>("solver.linsolver.verbosity", 0);
     if (nlin_verbosity > 1) {
       int num_closed_cells = std::accumulate(closed_cells.begin(), closed_cells.end(), 0);
       std::cout << "Nonlinear iteration: " << nlin_iteration;// << std::endl; 

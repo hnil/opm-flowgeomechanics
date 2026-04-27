@@ -14,7 +14,7 @@ FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::Syst
     OPM_TIMEFUNCTION();
     diag_mech_ = prm.get<bool>("diag_mech");
     diag_flow_ = prm.get<bool>("diag_flow");
-    int verbosity = prm.get<bool>("verbosity");
+    int verbosity = prm.get<bool>("verbosity",0);
     mech_press_coupling_ = prm.get<bool>("mech_press_coupling", true);
     mech_first_ = prm_.get<bool>("mech_first");
     if (!diag_mech_) {

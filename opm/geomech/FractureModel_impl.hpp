@@ -87,7 +87,7 @@ namespace Opm {
     template <class TypeTag, class Simulator>
     void FractureModel::updateWellProperties(const Simulator& simulator)
     {   
-       int verbosity = prm_.get<int>("verbosity");
+       int verbosity = prm_.get<int>("verbosity",0);
        using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
        //const int water_index = 0;//FluidSystem::waterPhaseIdx
         for (size_t i=0; i < wells_.size(); ++i) {
