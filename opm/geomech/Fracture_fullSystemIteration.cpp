@@ -29,7 +29,7 @@ using namespace std;
 namespace
 {
 static int DEBUG_COUNT = 0;
-string
+[[maybe_unused]] string
 debug_filename(const string& prefix, const string& suffix = ".txt")
 {
     std::ostringstream oss;
@@ -58,7 +58,7 @@ using LinearSolverBase = Dune::InverseOperator<VectorHP, VectorHP>;
 // ============================ Debugging functions ============================
 // ----------------------------------------------------------------------------
 // template<class MatrixType> void dump_matrix(const MatrixType& m, const char* const name)
-void
+[[maybe_unused]] void
 dump_matrix(const FMatrix& m, const char* const name)
 // ----------------------------------------------------------------------------
 {
@@ -73,7 +73,7 @@ dump_matrix(const FMatrix& m, const char* const name)
 
 // ----------------------------------------------------------------------------
 // template<>
-void
+[[maybe_unused]] void
 dump_matrix(const SMatrix& m, const char* const name)
 // ----------------------------------------------------------------------------
 {
@@ -89,7 +89,7 @@ dump_matrix(const SMatrix& m, const char* const name)
 }
 
 // ----------------------------------------------------------------------------
-void
+[[maybe_unused]] void
 dump_vector(const vector<int>& v, const char* const name, bool append = false)
 // ----------------------------------------------------------------------------
 {
@@ -101,7 +101,7 @@ dump_vector(const vector<int>& v, const char* const name, bool append = false)
 }
 
 // ----------------------------------------------------------------------------
-void
+[[maybe_unused]] void
 dump_vector(const ResVector& v, const char* const name, bool append = false)
 // ----------------------------------------------------------------------------
 {
@@ -119,7 +119,7 @@ dump_vector(const ResVector& v, const char* const name, bool append = false)
 }
 
 // ----------------------------------------------------------------------------
-void
+[[maybe_unused]] void
 dump_vector(const VectorHP& v, const char* const name1, const char* const name2, bool append = false)
 // ----------------------------------------------------------------------------
 {
@@ -157,7 +157,7 @@ void modifyIdentity(SMatrix& M,
                   double fac = 1,
                   std::vector<int> zero_rows = std::vector<int>()){
                   int num =   M.N();
-    for (size_t i = 0; i != num; ++i){
+    for (int i = 0; i != num; ++i){
         M[i][i] = fac;
     }
     // set zero rows, if applicable
@@ -403,7 +403,7 @@ private:
 
 
 // ----------------------------------------------------------------------------
-double
+[[maybe_unused]] double
 estimate_step_fac(const VectorHP& x, const VectorHP& dx)
 // ----------------------------------------------------------------------------
 {
@@ -461,19 +461,47 @@ std::vector<int>
 Fracture::identify_closed(const FMatrix& A, const VectorHP& x, const ResVector& rhs, const int nwells)
 // ----------------------------------------------------------------------------
 {
+    
     OPM_TIMEFUNCTION();
+    std::string closing_type = prm_.get<std::string>("solver.closing_type", "org");
     ResVector tmp(rhs);
     const auto I = makeIdentity(A.N(), nwells);
 
     // computing rhs - A x[0] - I x[1]
-    const ResVector& h = x[_0];
-    const ResVector& p = x[_1];
-    A.mmv(h, tmp);
-    I.mmv(p, tmp);
     std::vector<int> result;
-    for (size_t i = 0; i != A.N(); ++i)
-        result.push_back(tmp[i] >= 0 && h[i] <= 0.0);
-
+    if(closing_type == "org"){
+        const ResVector& h = x[_0];
+        const ResVector& p = x[_1];
+        // maybe use other pressure if closed
+        A.mmv(h, tmp);
+        I.mmv(p, tmp);
+        for (size_t i = 0; i != A.N(); ++i)
+            result.push_back(tmp[i] >= 0 && h[i] <= 0.0);
+    } else if(closing_type == "open") {
+            result.resize(A.N(), 1);
+    } else if(closing_type == "simple"){
+     // sum forces over faces
+        result.resize(A.N(), 0);
+        //double sum_force = 0.0;
+        for (auto element : Dune::elements(grid_->leafGridView())) {
+           // int i = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView,
+            // Dune::mcmgElementLayout>::index(element);
+            int i = grid_->leafGridView().indexSet().index(element);
+            //double area = element.geometry().volume();
+            double pressure = fracture_pressure_[i][0];
+            //NB maybe use other pressure if closed
+            if((this->fractureForce(i)-pressure) < 0){
+                result[i] = 1;
+            } else {
+                result[i] = 0;
+            }
+        }
+    } else {
+        std::stringstream ss;
+        ss << "Unknown closing type: " << closing_type;
+        OPM_THROW(std::runtime_error, ss.str());
+    }
+        
     // std::fill(result.begin(), result.end(), 1); // @@@
     return result;
 }
@@ -556,7 +584,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
 
     ++DEBUG_COUNT;
     // min_width_ = prm_.get<double>("solver.min_width"); // min with only used for flow calculations
-    const double max_width = prm_.get<double>("solver.max_width");
+    //const double max_width = prm_.get<double>("solver.max_width");
 
     // update pressure matrix with the current values of `fracture_width_` and
     // `fracture_pressure_`
@@ -814,13 +842,13 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     auto& dx0 = dx[_0];
     double max_dwidth = prm_.get<double>("solver.max_dwidth");
     // for(auto& dx0v: dx0){
-    for (int i = 0; i != fracture_width_.size(); ++i) {
+    for (size_t i = 0; i != fracture_width_.size(); ++i) {
         dx0[i][0] = std::max(-max_dwidth, std::min(max_dwidth, dx0[i][0]));
     }
     auto& dx1 = dx[_1];
     double max_dp = prm_.get<double>("solver.max_dp");
     // for(auto& dx1v: dx1){
-    for (int i = 0; i != fracture_pressure_.size(); ++i) {
+    for (size_t i = 0; i != fracture_pressure_.size(); ++i) {
         dx1[i][0] = std::max(-max_dp, std::min(max_dp, dx1[i][0]));
     }
 
@@ -834,7 +862,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     }
     // copying modified variables back to member variables
     fracture_width_ = x[_0];
-    for (int i = 0; i != fracture_width_.size(); ++i) {
+    for (size_t i = 0; i != fracture_width_.size(); ++i) {
         fracture_width_[i][0] = std::max(0.0, fracture_width_[i][0]); // ensure non-negativity
         // fracture_width_[i][0] = std::min(max_width, fracture_width_[i][0]); // ensure non-negativity
     }

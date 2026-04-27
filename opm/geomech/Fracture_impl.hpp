@@ -569,9 +569,10 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 }
             }
             if(nlin_verbosity > 0){
+                int num_closed_cells = std::accumulate(closed_cells_.begin(), closed_cells_.end(), 0);
                 std::cout << "Nonlinear iterations needed with fixed expansion: " << iter << std::endl;
                 std::cout << " fracture cells: " << fracture_width_.size();
-                std::cout << " closed cells: " << closed_cells_.size();
+                std::cout << " closed cells: " << num_closed_cells;
                 std::cout << std::endl;
              }
 

@@ -1654,23 +1654,33 @@ void Fracture::resetFracture()
         // a Newton iteration that subsequently failed. Nothing to restore.
         return;
     }
-    //grid_ = grid_prev_ 
-    //grid_strecher_ = grid_stretcher_prev_; //@@ experimental, for stretching grids
-    trimesh_ = std::make_unique<Opm::RegularTrimesh>(*trimesh_prev_); // @@ experimental, implicitly defined grids
-    //grid_mesh_map_ = grid_mesh_map_prev_; // @@ index mapping from cells in grid_ to trimesh_.
-    const int MAX_NUM_COARSENING = prm_.get<int>("solver.max_num_coarsening"); // should be enough for all practical purposes
-    const int numcell_threshold = prm_.get<int>("solver.numcell_threshold");
-    bool smooth_boundary = prm_.get<bool>("solver.smooth_boundary",false);
-    std::vector<CellRef> wsources = well_source_cellref_; 
+    // Restore trimesh from checkpoint.  Use the saved well-source CellRefs so
+    // that the Dune grid and grid_mesh_map_ are consistent with the checkpoint.
+    trimesh_ = std::make_unique<Opm::RegularTrimesh>(*trimesh_prev_);
+    const int MAX_NUM_COARSENING = prm_.get<int>("solver.max_num_coarsening");
+    const int numcell_threshold  = prm_.get<int>("solver.numcell_threshold");
+    bool smooth_boundary = prm_.get<bool>("solver.smooth_boundary", false);
+    std::vector<CellRef> wsources = well_source_cellref_prev_;
     auto [grid, fsmap, bmap] =
-            trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources,/* smoothed triangels */ smooth_boundary, numcell_threshold); // well cells kept intact!
-    grid_mesh_map_= fsmap;                                                  // @@ NB: in general many-to-many
- 
-    // copy of state variables
-    fracture_width_ = fracture_width_prev_;
-    filtercake_thikness_ = filtercake_thikness_prev_; // properties of filter cake, if any
-    //NB after this function all poperties have to be reset
-    
+        trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources, smooth_boundary, numcell_threshold);
+    grid_mesh_map_ = fsmap;
+    // Restore grid and cell normals (setFractureGrid clears reservoir_cells_;
+    // they will be repopulated by FractureModel::resetFractures via
+    // updateFractureReservoirCells + initReservoirProperties).
+    setFractureGrid(std::move(grid));
+    // Restore well source indices from checkpoint
+    well_source_cellref_ = well_source_cellref_prev_;
+    well_source_         = well_source_prev_;
+    // Restore state variables from checkpoint
+    fracture_width_      = fracture_width_prev_;
+    fracture_pressure_   = fracture_pressure_prev_;
+    filtercake_thikness_ = filtercake_thikness_prev_;
+    // Invalidate derived/computed state
+    coupling_matrix_ = nullptr;
+    fracture_matrix_ = nullptr;
+    rhs_pressure_.resize(0);
+    // Note: reservoir_cells_, all_reservoir_cells_, reservoir_properties_, etc.
+    // are recalculated by FractureModel::resetFractures after this call returns.
 }
 void Fracture::moveForwardInTime()
 {
@@ -1680,7 +1690,13 @@ void Fracture::moveForwardInTime()
     trimesh_prev_ = trimesh_ ? std::make_unique<Opm::RegularTrimesh>(*trimesh_) : nullptr;
     //grid_mesh_map_prev_ = grid_mesh_map_;
     fracture_width_prev_ = fracture_width_;
+    fracture_pressure_prev_ = fracture_pressure_;
     filtercake_thikness_prev_ = filtercake_thikness_; // properties of filter cake, if any
+    // save well source indices (needed to rebuild the dune grid on reset)
+    well_source_cellref_prev_ = well_source_cellref_;
+    well_source_prev_ = well_source_;
+    // reservoir cell mappings are NOT stored here; they are recomputed on reset
+    // via FractureModel::resetFractures → updateFractureReservoirCells + initReservoirProperties.
 }
 
 

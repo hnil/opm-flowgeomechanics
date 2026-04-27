@@ -380,7 +380,10 @@ private:
     std::unique_ptr<Opm::RegularTrimesh> trimesh_prev_; // @@ experimental, implicitly defined grids
     std::vector<std::vector<CellRef>> grid_mesh_map_prev_; // @@ index mapping from cells in grid_ to trimesh_.
                                                       // @@ NB: in general many-to-many
-     std::vector<double> filtercake_thikness_prev_; // properties of filter cake, if any
+    std::vector<double> filtercake_thikness_prev_; // properties of filter cake, if any
+    // well source checkpoints (needed to rebuild the dune grid on reset)
+    std::vector<CellRef> well_source_cellref_prev_;
+    std::vector<int> well_source_prev_;
     // copy of state variables
   
     

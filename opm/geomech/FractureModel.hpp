@@ -184,6 +184,12 @@ public:
                     fracture.resetFracture();
                 }
             }
+            // Recompute reservoir-cell mapping (grid was restored so nodes moved)
+            const auto& cpgrid = simulator.vanguard().grid();
+            updateFractureReservoirCells(cpgrid);
+            // Recompute all reservoir properties (init_constant_vals=true so that
+            // E_, nu_, permeability, cstress etc. are refreshed for the new cells)
+            this->initReservoirProperties<TypeTag, Simulator>(simulator);
             this->updateReservoirProperties<TypeTag, Simulator>(simulator);
             this->updateWellProperties<TypeTag, Simulator>(simulator);
         }
