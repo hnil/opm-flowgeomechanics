@@ -169,7 +169,11 @@ namespace Opm
                     this->simulator_.problem().wellModel().beginTimeStep();
                     this->simulator_.problem().addConnectionsToWell();
                     this->simulator_.problem().emptyFractureLogger();
-                    auto tmp_report = Parent::nonlinearIteration(0, timer, nonlinear_solver);
+                    auto& local_deferredLogger = FractureModel::fractureLogger;
+                    this->simulator_.problem().wellModel().calculateExplicitQuantities(local_deferredLogger);
+                    this->simulator_.problem().wellModel().prepareTimeStep(local_deferredLogger);
+
+                    //auto tmp_report = Parent::nonlinearIteration(0, timer, nonlinear_solver);// move storage cash on first iteration
                 }
                 bool fracture_changed = this->fractureChanged(allwellIndices);
                 std::cout << "Fracture changed: " << fracture_changed << std::endl;
