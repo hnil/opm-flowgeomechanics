@@ -365,6 +365,18 @@ add_test(NAME Test.DDMAssembly
 	COMMAND test_ddm_assembly
 )
 
+add_executable(example_penny_crack_ddm
+	examples/example_penny_crack_ddm.cpp
+)
+target_link_libraries(example_penny_crack_ddm
+	PUBLIC
+		opmflowgeomechanics
+)
+
+add_test(NAME Test.DDM.PennyCrack
+	COMMAND example_penny_crack_ddm
+)
+
 # ---------------------------------------------------------------------------
 
 set(Test_NumProc 4)

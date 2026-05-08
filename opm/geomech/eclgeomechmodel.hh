@@ -340,7 +340,7 @@ namespace Opm{
                 elacticitysolver_.setupSolver(prm);
                 elacticitysolver_.comm()->communicator().barrier();
                 first_solve_ = false;
-                write_system_ = prm.get<int>("verbosity") > 10;
+                write_system_ = prm.get<int>("verbosity", 0) > 10;
         }
         void writeMechSystem(){
             OPM_TIMEBLOCK(WriteMechSystem);
