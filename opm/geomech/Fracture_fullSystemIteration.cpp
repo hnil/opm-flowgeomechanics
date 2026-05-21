@@ -326,7 +326,7 @@ updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
         C[j][i] += dTdh1 * (p2 - p1) * mobility;
     }
     // zeroing out columns corresponding to closed cells
-    if(true){
+    if(false){
       for (size_t col = 0; col != closed_cells.size(); ++col)
         if (closed_cells[col])
           for (size_t row = 0; row != C.N(); ++row)
@@ -567,12 +567,12 @@ Fracture::assemblePressureAndCouplingAD(const std::vector<int>& closed_cells)
     coupling_matrix_ = std::move(result.coupling_matrix);
 
     // Zero out coupling matrix columns for closed cells
-    auto& C = *coupling_matrix_;
-    for (size_t col = 0; col < closed_cells.size(); ++col)
-        if (closed_cells[col])
-            for (size_t row = 0; row < C.N(); ++row)
-                if (C.exists(row, col))
-                    C[row][col] = 0;
+    // auto& C = *coupling_matrix_;
+    // for (size_t col = 0; col < closed_cells.size(); ++col)
+    //     if (closed_cells[col])
+    //         for (size_t row = 0; row < C.N(); ++row)
+    //             if (C.exists(row, col))
+    //                 C[row][col] = 0;
 }
 
 // ----------------------------------------------------------------------------

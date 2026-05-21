@@ -11,6 +11,8 @@ namespace Opm
         using Simulator = typename Parent::Simulator;
         using Scalar = typename Parent::Scalar;
         using ModelParameters = typename Parent::ModelParameters;
+        using EqVector = GetPropType<TypeTag, Properties::EqVector>;
+        using SolutionVector = GetPropType<TypeTag, Properties::SolutionVector>;
         //using Scalar = GetPropType<TypeTag, Properties::Scalar>;
         //using ModelParameters = BlackoilModelParameters<Scalar>;
         BlackoilModelGeomech(Simulator& simulator,
@@ -21,6 +23,90 @@ namespace Opm
                   {
                     
                   }
+
+        private:
+        struct StorageCacheBackup
+        {
+            bool enabled{false};
+            std::vector<std::vector<EqVector>> values;
+            std::vector<std::vector<unsigned char>> valid;
+        };
+
+        StorageCacheBackup backupStorageCache(const unsigned num_time_indices = 2) const
+        {
+            StorageCacheBackup backup;
+            const auto& flow_model = this->simulator_.model();
+            if (!flow_model.enableStorageCache()) {
+                return backup;
+            }
+
+            backup.enabled = true;
+            const unsigned num_dof = flow_model.numGridDof();
+            backup.values.assign(num_time_indices, std::vector<EqVector>(num_dof, EqVector(0.0)));
+            backup.valid.assign(num_time_indices, std::vector<unsigned char>(num_dof, 0));
+
+            for (unsigned time_idx = 0; time_idx < num_time_indices; ++time_idx) {
+                for (unsigned dof_idx = 0; dof_idx < num_dof; ++dof_idx) {
+                    if (flow_model.storageCacheIsUpToDate(dof_idx, time_idx)) {
+                        backup.values[time_idx][dof_idx] = flow_model.cachedStorage(dof_idx, time_idx);
+                        backup.valid[time_idx][dof_idx] = 1;
+                    }
+                }
+            }
+
+            return backup;
+        }
+
+        void restoreStorageCache(const StorageCacheBackup& backup) const
+        {
+            if (!backup.enabled) {
+                return;
+            }
+
+            const auto& flow_model = this->simulator_.model();
+            for (unsigned time_idx = 0; time_idx < backup.values.size(); ++time_idx) {
+                flow_model.invalidateStorageCache(time_idx);
+                for (unsigned dof_idx = 0; dof_idx < backup.valid[time_idx].size(); ++dof_idx) {
+                    if (backup.valid[time_idx][dof_idx]) {
+                        flow_model.updateCachedStorage(dof_idx, time_idx, backup.values[time_idx][dof_idx]);
+                    }
+                }
+            }
+        }
+
+        SolutionVector backupSolution0() const
+        {
+            return this->simulator_.model().solution(0);
+        }
+
+        void restoreSolution0(const SolutionVector& solution_backup)
+        {
+            auto& flow_model = this->simulator_.model();
+            flow_model.solution(0) = solution_backup;
+            flow_model.invalidateAndUpdateIntensiveQuantities(0);
+        }
+
+        template <class NonlinearSolverType>
+        SimulatorReportSingle runParentFirstIterationPreservingState(
+            const SimulatorTimerInterface& timer,
+            NonlinearSolverType& nonlinear_solver)
+        {
+            std::cout << "Running parent first iteration to set up the system and caches, while preserving state for geomechanics solve" << std::endl;
+            // this is a hack to call all setup need for the system without changing states which matter for the calculations
+            const auto storage_cache_backup = this->backupStorageCache();
+            const auto solution_backup = this->backupSolution0();
+            // keep state0 = state1 while settin up the system again
+            auto& flow_model = this->simulator_.model();
+            //flow_model.solution(0) = flow_model.solution(1); // well solve but will make excplict quantities change
+            //flow_model.invalidateAndUpdateIntensiveQuantities(0);
+            auto report = Parent::nonlinearIteration(0, timer, nonlinear_solver);
+            this->restoreSolution0(solution_backup);
+            this->restoreStorageCache(storage_cache_backup);
+            std::cout << "Finished parent first iteration" << std::endl;
+            return report;
+        }
+
+        public:
 
 
                   bool
@@ -164,18 +250,22 @@ namespace Opm
                 this->simulator_.problem().geomechModel().solveFractures();
                 bool addconnections = prm.get<bool>("fractureparam.addconnections");
                 if(addconnections){
-                    //std::cout << "Add connections in iterations" << std::endl;
-                    this->simulator_.problem().addConnectionsToSchedual();
-                    this->simulator_.problem().wellModel().beginTimeStep();
-                    this->simulator_.problem().addConnectionsToWell();
+                    std::cout << "Add connections in iterations" << std::endl;
+                    this->simulator_.problem().addConnectionsToSchedual();// add new connections in the schedual
+                    this->simulator_.problem().wellModel().beginTimeStep(); // reinitialize well structure
+                    this->simulator_.problem().addConnectionsToWell(); // set the new well indices
                     this->simulator_.problem().emptyFractureLogger();
                     auto& local_deferredLogger = FractureModel::fractureLogger;
-                    this->simulator_.problem().wellModel().calculateExplicitQuantities(local_deferredLogger);
-                    this->simulator_.problem().wellModel().prepareTimeStep(local_deferredLogger);
+                    //this->simulator_.problem().wellModel().calculateExplicitQuantities(local_deferredLogger); //calcualte new explicite quantities TOFIX hould us old values
+                    //this->simulator_.problem().wellModel().prepareTimeStep(local_deferredLogger);// hopefully set up all well realated stuff correctly
 
-                    //auto tmp_report = Parent::nonlinearIteration(0, timer, nonlinear_solver);// move storage cash on first iteration
+                    [[maybe_unused]] auto tmp_report =
+                        this->runParentFirstIterationPreservingState(timer, nonlinear_solver);
+                    std::cout << "End connections in iterations" << std::endl;
                 }
-                bool fracture_changed = this->fractureChanged(allwellIndices);
+                auto& comm = this->simulator_.gridView().comm();
+                bool fracture_changed_local = this->fractureChanged(allwellIndices);
+                bool fracture_changed = comm.max(fracture_changed_local);
                 std::cout << "Fracture changed: " << fracture_changed << std::endl;
                 // TODO check convergence properly
                 if(fracture_changed){
@@ -184,7 +274,8 @@ namespace Opm
                 // if(implicit_flow){
                 //     // may do some extra things and + updating explicite quantities
                 //     auto tmp_report = Parent::nonlinearIteration(0, timer, nonlinear_solver);
-                // }                
+                // }
+                comm.barrier();                
             }
             
             return report;
