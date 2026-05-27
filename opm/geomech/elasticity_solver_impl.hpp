@@ -447,8 +447,14 @@ IMPL_FUNC(void, solve())
     u.resize(rhs.size());
     u = 0;
     tsolver_->apply(u, rhs, r);
+    ++num_solves_;
+    last_linear_iterations_ = r.iterations;
+    total_linear_iterations_ += r.iterations;
+    last_linear_solve_converged_ = r.converged;
     //std::cout << "\tsolution norm: " << u.two_norm() << std::endl;
   } catch (Dune::ISTLError& e) {
+    last_linear_iterations_ = 0;
+    last_linear_solve_converged_ = false;
     std::cerr << "exception thrown " << e << std::endl;
   }
 }

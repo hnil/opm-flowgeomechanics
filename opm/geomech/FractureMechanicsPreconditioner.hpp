@@ -70,12 +70,33 @@ using Dune::Indices::_0;
 using Dune::Indices::_1;
 
   
+// Block preconditioner for the coupled fracture width / pressure linear system.
+//
+// The operator is assembled as
+//   [ A  I ]
+//   [ C  M ]
+// where A is the dense mechanics block, M is the sparse flow block, and I/C are
+// the cross-coupling terms. The preconditioner supports three application modes:
+//
+// - mech_last: solve the flow block first and then apply the mechanics solve to
+//   the pressure-corrected mechanics residual.
+// - mech_first: solve the mechanics block first and then apply the flow solve to
+//   the mechanics-corrected flow residual.
+// - fixed_stress: keep the exact mechanics solve, but replace the flow solve by
+//   a fixed-stress Schur approximation built from M and the diagonal of A.
+//
+// The mechanics solve is either diagonal or dense-LU based. The flow solve is
+// either diagonal or delegated to FlexibleSolver, which makes it cheap to test
+// exact sparse-flow solves on difficult coupled cases.
 class FractureMechanicsPreconditioner : 
    public Dune::Preconditioner<VectorHP, VectorHP>
    //public Dune::PreconditionerWithUpdate<VectorHP, VectorHP>
 {
     
 public:
+  // prm expects the fracture linsolver preconditioner subtree. The relevant
+  // switches are diag_mech, diag_flow, mech_first, fixed_stress,
+  // mech_press_coupling, and flow_solver.*.
   FractureMechanicsPreconditioner(const SystemMatrix& S, Opm::PropertyTree prm);
   virtual void apply(VectorHP& v, const VectorHP& d);
     virtual void post(VectorHP& /*v*/) { };
@@ -84,6 +105,9 @@ public:
     {
         return Dune::SolverCategory::sequential;
     }
+    // Refresh the internal factors after the outer nonlinear step assembles a
+    // new coupled system. new_lu_mech controls whether the dense mechanics LU is
+    // rebuilt or only the flow-side data is refreshed.
     void update(const Opm::SystemMatrix& S,bool new_lu_mech);
     // void update(){
     //     // default to recomputing the preconditioner, but in some cases (e.g. when only a few cells are closed) we can just update the existing preconditioner
@@ -92,8 +116,12 @@ public:
     // };
     //bool hasPerfectUpdate() const override { return false; }
 private:
+// Flow-first block triangular application.
 void applymech_last(Opm::VectorHP& v, const Opm::VectorHP& d);
+// Mechanics-first block triangular application.
 void applymech_first(Opm::VectorHP& v, const Opm::VectorHP& d);
+// Mechanics-first application with a fixed-stress Schur approximation on flow.
+void applyfixed_stress(Opm::VectorHP& v, const Opm::VectorHP& d);
 template <typename Mat>
 Vector diagvec(const Mat& M)
   {
@@ -109,7 +137,12 @@ Vector diagvec(const Mat& M)
         for (size_t i = 0; i != res.size(); ++i)
       res[i] = Opm::diagScalar(M[i][i]);
    } 
-  void backSolve(Vector& x,const Vector& rhs_in);
+  // Assemble the fixed-stress flow operator M - C * diag(A)^{-1} * I using the
+  // sparsity of M augmented with active C entries.
+  void updateFixedStressFlowMatrix(const Opm::SystemMatrix& S);
+  void solveMechanics(Vector& x, const Vector& rhs) const;
+  void solveFlow(Vector& x, const Vector& rhs);
+  void backSolve(Vector& x,const Vector& rhs_in) const;
     const SystemMatrix& A_;
     mutable FMatrix luM_;
     mutable Vector A_diag_;
@@ -118,12 +151,16 @@ Vector diagvec(const Mat& M)
     using FlowOperatorType = Dune::MatrixAdapter<SMatrix, Vector, Vector>;
     std::unique_ptr< FlowOperatorType> flowop_;
     std::unique_ptr< Dune::FlexibleSolver<FlowOperatorType> > flow_solver_;
+    std::unique_ptr<SMatrix> fixed_stress_matrix_;
+    std::unique_ptr<FlowOperatorType> fixed_stress_flowop_;
+    std::unique_ptr<Dune::FlexibleSolver<FlowOperatorType>> fixed_stress_flow_solver_;
   //
   bool diag_mech_{true};
   bool diag_flow_{true};
   bool mech_press_coupling_{false};
   bool press_mech_coupling_{false};
   bool mech_first_{true};
+  bool fixed_stress_{false};
 };
 
 } // namespace Opm::Geomech

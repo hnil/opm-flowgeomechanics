@@ -20,6 +20,7 @@
 #include <dune/grid/common/mcmgmapper.hh>
 #include <dune/geometry/quadraturerules.hh>
 #include <dune/istl/ilu.hh>
+#include <dune/istl/solver.hh>
 #include <dune/istl/solvers.hh>
 #include <dune/istl/preconditioners.hh>
 #include <opm/grid/CpGrid.hpp>
@@ -131,6 +132,10 @@ class ElasticitySolver
     //! \brief Solve Au = b for u
     //! \param[in] loadcase The load case to solve
     void solve();
+    int numSolves() const { return num_solves_; }
+    int lastLinearIterations() const { return last_linear_iterations_; }
+    int totalLinearIterations() const { return total_linear_iterations_; }
+    bool lastLinearSolveConverged() const { return last_linear_solve_converged_; }
     void setBodyForce(double gravity){
         const int num_cells = gv.leafGridView().size(0); // entities of codim 0
         // assemble the mechanical system
@@ -255,6 +260,11 @@ class ElasticitySolver
 
     //! \brief Tolerance used to decide whether or not a coordinate falls on a plane/line/point.
     ctype tol;
+
+    int num_solves_ = 0;
+    int last_linear_iterations_ = 0;
+    int total_linear_iterations_ = 0;
+    bool last_linear_solve_converged_ = false;
 
     //! \brief Minimum E-modulus (scaling factor)
     ctype Escale;

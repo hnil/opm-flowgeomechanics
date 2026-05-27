@@ -310,6 +310,14 @@ target_link_libraries(test_patch_recovery
 		opmflowgeomechanics
 )
 
+add_executable(replay_fracture_linear_system
+	examples/replay_fracture_linear_system.cpp
+)
+target_link_libraries(replay_fracture_linear_system
+	PUBLIC
+		opmflowgeomechanics
+)
+
 ####################33
 function(add_mechtest_compareECLFiles)
   set(oneValueArgs CASENAME FILENAME SIMULATOR ABS_TOL REL_TOL DIR DIR_PREFIX PREFIX RESTART_STEP RESTART_SCHED)
@@ -637,4 +645,43 @@ add_test(NAME Unit.Trimesh.GridRefinement
 
 add_test(NAME Unit.PatchRecovery
 	COMMAND $<TARGET_FILE:test_patch_recovery>
+)
+
+set(FRACTURE_LINEAR_REPLAY_PREFIX
+	${CMAKE_CURRENT_LIST_DIR}/tests/fracture_linear_system_nlin_11/fracture_linear_system_nlin_11_linear_failure)
+
+add_test(NAME Unit.FractureLinearReplay.Pressure
+	COMMAND $<TARGET_FILE:replay_fracture_linear_system>
+	${FRACTURE_LINEAR_REPLAY_PREFIX}
+	--pressure=active
+)
+
+add_test(NAME Unit.FractureLinearReplay.CoupledFailure
+	COMMAND $<TARGET_FILE:replay_fracture_linear_system>
+	${FRACTURE_LINEAR_REPLAY_PREFIX}
+	--coupled
+)
+set_tests_properties(Unit.FractureLinearReplay.CoupledFailure
+	PROPERTIES WILL_FAIL TRUE
+)
+
+add_test(NAME Unit.FractureLinearReplay.CoupledScaled
+	COMMAND $<TARGET_FILE:replay_fracture_linear_system>
+	${FRACTURE_LINEAR_REPLAY_PREFIX}
+	--coupled
+	--scaling=blockmax
+)
+
+add_test(NAME Unit.FractureLinearReplay.CoupledMechFirst
+	COMMAND $<TARGET_FILE:replay_fracture_linear_system>
+	${FRACTURE_LINEAR_REPLAY_PREFIX}
+	--coupled
+	--solver-json=${CMAKE_CURRENT_LIST_DIR}/tests/fracture_linear_system_nlin_11/fracture_linear_system_nlin_11_linear_failure_linsolver_mech_first.json
+)
+
+add_test(NAME Unit.FractureLinearReplay.CoupledFixedStress
+	COMMAND $<TARGET_FILE:replay_fracture_linear_system>
+	${FRACTURE_LINEAR_REPLAY_PREFIX}
+	--coupled
+	--solver-json=${CMAKE_CURRENT_LIST_DIR}/tests/fracture_linear_system_nlin_11/fracture_linear_system_nlin_11_linear_failure_linsolver_fixed_stress.json
 )

@@ -508,6 +508,7 @@ IMPL_FUNC(void, solve())
 {
   try {
     Dune::InverseOperatorResult r;
+    ++num_solves_;
     Vector& rhs = this->getLoadVector();
     if(sol_.size() != rhs.size()){
         sol_.resize(rhs.size());
@@ -522,9 +523,13 @@ IMPL_FUNC(void, solve())
         tsolver_->apply(dx, rhs_tmp, r);
         sol_ += dx;
     }
+    last_linear_iterations_ = r.iterations;
+    total_linear_iterations_ += r.iterations;
+    last_linear_solve_converged_ = r.converged;
         // MAYBe do other initialization or shift solution.
     
   } catch (Dune::ISTLError& e) {
+    last_linear_solve_converged_ = false;
     std::cerr << "exception thrown " << e << std::endl;
   }
 }

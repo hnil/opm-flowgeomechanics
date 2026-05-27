@@ -12,6 +12,11 @@
 
 #include <opm/input/eclipse/Schedule/Schedule.hpp>
 
+#include <dune/common/timer.hh>
+
+#include <iomanip>
+#include <sstream>
+
 namespace Opm{
     template<typename TypeTag>
     class EclGeoMechModel : public BaseAuxiliaryModule<TypeTag>
@@ -190,6 +195,23 @@ namespace Opm{
                 fracturemodel_->updateReservoirAndWellProperties<TypeTag,Simulator>(simulator_);// set all fractures active if well is active
                 fracturemodel_->updateActive(current_wseed);//only set fracture active if seed is active
                 fracturemodel_->solve<TypeTag, Simulator>(simulator_);
+                if(simulator_.gridView().comm().rank() == 0){
+                    const auto& last_stats = fracturemodel_->lastSolveStats();
+                    const auto& total_stats = fracturemodel_->totalSolveStats();
+                    std::ostringstream os;
+                    os << "Fracture solve stats: fractures_solved=" << last_stats.fractures_solved
+                       << " (total " << total_stats.fractures_solved << ")"
+                       << ", nonlinear_iterations=" << last_stats.nonlinear_iterations
+                       << " (total " << total_stats.nonlinear_iterations << ")"
+                       << ", linear_solves=" << last_stats.linear_solves
+                       << " (total " << total_stats.linear_solves << ")"
+                       << ", linear_iterations=" << last_stats.linear_iterations
+                       << " (total " << total_stats.linear_iterations << ")"
+                       << ", solve_time_s=" << last_stats.solve_time_seconds
+                       << " (total " << total_stats.solve_time_seconds << ")"
+                       << ", converged=" << (last_stats.converged ? "true" : "false");
+                    OpmLog::info(os.str());
+                }
             }else{
                 if(simulator_.gridView().comm().rank() == 0){
                     std::ostringstream os;
@@ -462,7 +484,20 @@ namespace Opm{
             setupAndUpdateGemechanics(use_body_force , relative_solve);
             {
                 OPM_TIMEBLOCK(SolveMechanicalSystem);
+                Dune::Timer solve_timer;
                 elacticitysolver_.solve();
+                last_mechanical_solve_time_seconds_ = solve_timer.stop();
+                total_mechanical_solve_time_seconds_ += last_mechanical_solve_time_seconds_;
+                if(simulator_.gridView().comm().rank() == 0){
+                    std::ostringstream os;
+                    os << "Mechanical solve stats: solves=" << elacticitysolver_.numSolves()
+                       << ", linear_iterations=" << elacticitysolver_.lastLinearIterations()
+                       << " (total " << elacticitysolver_.totalLinearIterations() << ")"
+                       << ", solve_time_s=" << last_mechanical_solve_time_seconds_
+                       << " (total " << total_mechanical_solve_time_seconds_ << ")"
+                       << ", converged=" << (elacticitysolver_.lastLinearSolveConverged() ? "true" : "false");
+                    OpmLog::info(os.str());
+                }
                 if(write_system_){
                     this->writeMechSystem();
                 }
@@ -694,6 +729,37 @@ namespace Opm{
                 return true;
             }           
         }
+
+        std::string finalTimingSummary() const
+        {
+            std::ostringstream os;
+            auto report_time = [&os](const char* label, const double value)
+            {
+                os << std::left << std::setw(28) << label
+                   << std::right << std::setw(7) << std::fixed << std::setprecision(2) << value
+                   << " s\n";
+            };
+            auto report_count = [&os](const char* label, const int value)
+            {
+                os << std::left << std::setw(28) << label
+                   << std::right << std::setw(7) << value << "\n";
+            };
+
+            report_time("  Mechanical solve time:", total_mechanical_solve_time_seconds_);
+            report_count("Overall Mechanical Solves:", elacticitysolver_.numSolves());
+            report_count("Overall Mech Lin Iters:", elacticitysolver_.totalLinearIterations());
+
+            if (simulator_.problem().hasFractures()) {
+                const auto total_stats = fracturemodel_ ? fracturemodel_->totalSolveStats() : FractureSolveStats{};
+                report_time("  Fracture solve time:", total_stats.solve_time_seconds);
+                report_count("Overall Fracture Solves:", total_stats.fractures_solved);
+                report_count("Overall Fracture Nl Iters:", total_stats.nonlinear_iterations);
+                report_count("Overall Fracture Lin Solves:", total_stats.linear_solves);
+                report_count("Overall Fracture Lin Iters:", total_stats.linear_iterations);
+            }
+
+            return os.str();
+        }
         
       void updateFilterCakePropertiesOnFractures(){
         if(this->fractureModelActive()){
@@ -722,6 +788,8 @@ namespace Opm{
         bool write_system_{false};
         bool reduce_boundary_{false};
         bool include_fracture_contributions_{false};
+        double last_mechanical_solve_time_seconds_{0.0};
+        double total_mechanical_solve_time_seconds_{0.0};
         Simulator& simulator_;
 
         Dune::BlockVector<Dune::FieldVector<double,1>> pressure_;

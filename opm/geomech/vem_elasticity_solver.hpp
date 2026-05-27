@@ -163,6 +163,10 @@ class VemElasticitySolver
     //! \brief Solve Au = b for u
     //! \param[in] loadcase The load case to solve
     void solve();
+    int numSolves() const { return num_solves_; }
+    int lastLinearIterations() const { return last_linear_iterations_; }
+    int totalLinearIterations() const { return total_linear_iterations_; }
+    bool lastLinearSolveConverged() const { return last_linear_solve_converged_; }
 
     const CommunicationType* comm() const { return comm_.get(); }
 
@@ -415,6 +419,10 @@ private:
     bool vem_force_ = true;
     bool stab_on_stress_ = false;
     bool vem_stress_ = false;
+        int num_solves_ = 0;
+        int last_linear_iterations_ = 0;
+        int total_linear_iterations_ = 0;
+        bool last_linear_solve_converged_ = true;
   //std::shared_ptr< CommunicationType::RemoteIndices> vertexRemoteIndexSet_;
 
 };

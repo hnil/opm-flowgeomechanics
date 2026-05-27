@@ -116,17 +116,20 @@ public:
     template <class TypeTag, class Simulator>
     void solve(const Simulator& simulator)
     {
+        last_solve_stats_ = {};
         for (size_t i = 0; i < wells_.size(); ++i) {
             std::vector<Fracture>& fractures = well_fractures_[i];
             for (size_t j = 0; j < fractures.size(); ++j) {
                 if (fractures[j].isActive()) {
                     std::cout << "Solving fracture " << fractures[j].name() << std::endl;
                     fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator);
+                    last_solve_stats_ += fractures[j].lastSolveStats();
                     // post solve update
                     
                 }
             }
-        }        
+        }
+        total_solve_stats_ += last_solve_stats_;
     }
 
     template <class TypeTag, class Simulator>
@@ -227,6 +230,8 @@ public:
         {
             return prm_;
         }
+        const FractureSolveStats& lastSolveStats() const { return last_solve_stats_; }
+        const FractureSolveStats& totalSolveStats() const { return total_solve_stats_; }
         static Opm::DeferredLogger fractureLogger;
 
     private:
@@ -247,6 +252,8 @@ public:
         std::vector<FractureWell> wells_;
         std::vector<std::vector<Fracture>> well_fractures_;
         Opm::PropertyTree prm_;
+        FractureSolveStats last_solve_stats_{};
+        FractureSolveStats total_solve_stats_{};
         external::cvf::ref<external::cvf::BoundingBoxTree> cell_search_tree_;
         std::vector<EntitySeed> cell_seeds_;
         /// Initialise fractures perpendicularly to each reservoir connection.

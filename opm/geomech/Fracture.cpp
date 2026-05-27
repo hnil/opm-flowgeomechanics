@@ -1489,7 +1489,10 @@ Fracture::solvePressure()
         fracture_pressure_.resize(rhs_pressure_.size());
         fracture_pressure_ = 0;
         pressure_solver_->apply(fracture_pressure_, rhs_pressure_, r);
+        ++last_solve_stats_.linear_solves;
+        last_solve_stats_.linear_iterations += r.iterations;
     } catch (Dune::ISTLError& e) {
+        last_solve_stats_.converged = false;
         std::cerr << "exception thrown " << e << std::endl;
     }
 }
@@ -1500,6 +1503,7 @@ void
 Fracture::solveFractureWidth()
 {
     fractureMatrix().solve(fracture_width_, rhs_width_);
+    ++last_solve_stats_.linear_solves;
     double max_width = prm_.get<double>("solver.max_width");
     double min_width = prm_.get<double>("solver.min_width");
     for (int i = 0; i < fracture_width_.size(); ++i) {
@@ -1913,7 +1917,7 @@ Fracture::initPressureMatrix()
 void
 Fracture::assemblePressure()
 {
-    updateLeakoff();
+    //updateLeakoff();
 
     auto& matrix = *pressure_matrix_;
     matrix = 0.0;

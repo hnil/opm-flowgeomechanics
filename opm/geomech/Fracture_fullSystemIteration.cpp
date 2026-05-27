@@ -1,8 +1,10 @@
 #include "config.h"
 
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -13,6 +15,7 @@
 #include <dune/common/fmatrix.hh> // Dune::FieldMatrix
 #include <dune/istl/bcrsmatrix.hh> // Dune::BCRSMatrix
 #include <dune/istl/bvector.hh> // Dune::BlockVector
+#include <dune/istl/matrixmarket.hh>
 #include <dune/istl/multitypeblockvector.hh>
 #include <dune/istl/preconditioners.hh>
 #include <dune/istl/solvers.hh>
@@ -125,6 +128,77 @@ dump_vector(const VectorHP& v, const char* const name1, const char* const name2,
 {
     dump_vector(v[_0], name1, append);
     dump_vector(v[_1], name2, append);
+}
+
+// ----------------------------------------------------------------------------
+double
+sparse_value_or_zero(const SMatrix& matrix, const size_t row, const size_t col)
+// ----------------------------------------------------------------------------
+{
+    auto entry = matrix[row].find(col);
+    return (entry == matrix[row].end()) ? 0.0 : (*entry)[0][0];
+}
+
+// ----------------------------------------------------------------------------
+double
+max_abs_matrix_difference(const SMatrix& lhs, const SMatrix& rhs)
+// ----------------------------------------------------------------------------
+{
+    assert(lhs.N() == rhs.N());
+    assert(lhs.M() == rhs.M());
+
+    double max_diff = 0.0;
+    for (auto row_it = lhs.begin(); row_it != lhs.end(); ++row_it) {
+        const size_t row = row_it.index();
+        for (auto col_it = row_it->begin(); col_it != row_it->end(); ++col_it) {
+            const size_t col = col_it.index();
+            const double diff = std::abs((*col_it)[0][0] - sparse_value_or_zero(rhs, row, col));
+            max_diff = std::max(max_diff, diff);
+        }
+    }
+
+    for (auto row_it = rhs.begin(); row_it != rhs.end(); ++row_it) {
+        const size_t row = row_it.index();
+        for (auto col_it = row_it->begin(); col_it != row_it->end(); ++col_it) {
+            const size_t col = col_it.index();
+            const double diff = std::abs((*col_it)[0][0] - sparse_value_or_zero(lhs, row, col));
+            max_diff = std::max(max_diff, diff);
+        }
+    }
+
+    return max_diff;
+}
+
+// ----------------------------------------------------------------------------
+std::string
+linear_system_dump_stem(const Opm::PropertyTree& prm,
+                        const int nlin_iteration,
+                        const std::string& reason)
+// ----------------------------------------------------------------------------
+{
+    const std::string prefix = prm.get<std::string>("solver.linear_system_dump_prefix",
+                                                    "fracture_linear_system");
+    std::ostringstream oss;
+    oss << prefix << "_nlin_" << nlin_iteration << "_" << reason;
+    return oss.str();
+}
+
+// ----------------------------------------------------------------------------
+std::string
+linear_system_info_filename(const std::string& stem)
+// ----------------------------------------------------------------------------
+{
+    const auto info_filename = std::filesystem::path(stem + "_info.json");
+    return std::filesystem::absolute(info_filename).string();
+}
+
+// ----------------------------------------------------------------------------
+void
+write_property_tree_json(const Opm::PropertyTree& tree, const std::string& filename)
+// ----------------------------------------------------------------------------
+{
+    std::ofstream os(filename);
+    tree.write_json(os, true);
 }
 
 // ============================= Helper functions =============================
@@ -336,6 +410,92 @@ updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
 }
 
 // ----------------------------------------------------------------------------
+std::unique_ptr<SMatrix>
+assemble_coupling_original(const Opm::FracturePressureInput& input,
+                           const std::vector<int>& closed_cells)
+// ----------------------------------------------------------------------------
+{
+    ResVector pressure(input.num_cells + input.num_well_equations);
+    ResVector aperture(input.num_cells + input.num_well_equations);
+    std::vector<double> mobility(input.num_cells, 0.0);
+
+    for (size_t i = 0; i < pressure.size(); ++i) {
+        pressure[i][0] = input.fracture_pressure[i];
+        aperture[i][0] = input.fracture_width[i];
+    }
+
+    for (size_t i = 0; i < input.num_cells; ++i) {
+        mobility[i] = input.density[i].value / input.viscosity[i].value;
+    }
+
+    auto coupling = initCouplingMatrixSparsity(input.htrans,
+                                               input.num_cells,
+                                               input.num_well_equations);
+    updateCouplingMatrix(coupling,
+                         input.num_cells,
+                         input.num_well_equations,
+                         input.htrans,
+                         pressure,
+                         aperture,
+                         closed_cells,
+                         mobility,
+                         input.min_width);
+    return coupling;
+}
+
+// ----------------------------------------------------------------------------
+void
+dump_linear_system_snapshot(const std::string& stem,
+                            const SystemMatrix& system,
+                            const VectorHP& rhs,
+                            const VectorHP& x,
+                            const std::vector<int>& closed_cells,
+                            const bool use_ad,
+                            const Opm::PropertyTree& prm,
+                            const Opm::FracturePressureInput& input,
+                            const Dune::InverseOperatorResult* iores = nullptr)
+// ----------------------------------------------------------------------------
+{
+    dump_matrix(system[_0][_0], (stem + "_A.txt").c_str());
+    Dune::storeMatrixMarket(system[_0][_1], stem + "_I.mtx");
+    Dune::storeMatrixMarket(system[_1][_0], stem + "_C_active.mtx");
+    Dune::storeMatrixMarket(system[_1][_1], stem + "_M_active.mtx");
+    Dune::storeMatrixMarket(rhs[_0], stem + "_rhs_w.mtx");
+    Dune::storeMatrixMarket(rhs[_1], stem + "_rhs_p.mtx");
+    Dune::storeMatrixMarket(x[_0], stem + "_x_w.mtx");
+    Dune::storeMatrixMarket(x[_1], stem + "_x_p.mtx");
+    dump_vector(closed_cells, (stem + "_closed_cells.txt").c_str());
+
+    const auto ad_result = assemblePressureAD(input);
+    const auto original_pressure = assemblePressureOriginal(input);
+    const auto original_coupling = assemble_coupling_original(input, closed_cells);
+
+    Dune::storeMatrixMarket(*ad_result.pressure_matrix, stem + "_M_ad.mtx");
+    Dune::storeMatrixMarket(*ad_result.coupling_matrix, stem + "_C_ad.mtx");
+    Dune::storeMatrixMarket(*original_pressure, stem + "_M_original.mtx");
+    Dune::storeMatrixMarket(*original_coupling, stem + "_C_original.mtx");
+
+    Opm::PropertyTree info;
+    info.put("use_ad_pressure_assembly", use_ad);
+    info.put("active_pressure_matrix", std::string(use_ad ? "ad" : "original"));
+    info.put("mechanics_size", system[_0][_0].N());
+    info.put("pressure_size", system[_1][_1].N());
+    info.put("pressure_max_abs_diff_ad_vs_original",
+             max_abs_matrix_difference(*ad_result.pressure_matrix, *original_pressure));
+    info.put("coupling_max_abs_diff_ad_vs_original",
+             max_abs_matrix_difference(*ad_result.coupling_matrix, *original_coupling));
+    if (iores) {
+        info.put("linear.converged", iores->converged);
+        info.put("linear.iterations", iores->iterations);
+    }
+
+    write_property_tree_json(info, stem + "_info.json");
+    write_property_tree_json(prm.get_child("solver.linsolver"), stem + "_linsolver.json");
+    write_property_tree_json(prm.get_child("solver.linsolver.preconditioner.flow_solver"),
+                             stem + "_flow_solver.json");
+}
+
+// ----------------------------------------------------------------------------
 inline bool
 convergence_test(const VectorHP& res, const double tol_flow, double tol_mech, int verbosity)
 // ----------------------------------------------------------------------------
@@ -513,49 +673,7 @@ Fracture::assemblePressureAndCouplingAD(const std::vector<int>& closed_cells)
 {
     OPM_TIMEFUNCTION();
     updateLeakoff();
-
-    const size_t nc = numFractureCells();
-    const size_t nw = numWellEquations();
-    const std::string control_type = prm_.get_child("control").get<std::string>("type");
-
-    // Build standalone input from Fracture member data
-    FracturePressureInput input;
-    input.num_cells = nc;
-    input.min_width = min_width_;
-    input.htrans = htrans_;
-    input.control_type = control_type;
-    input.num_well_equations = nw;
-    input.perfinj.assign(perfinj_.begin(), perfinj_.end());
-    input.total_wellindex = total_wellindex_;
-    input.mobility_water_perf = mobility_water_perf_;
-
-    // Convert fracture_width_ (BlockVector<FieldVector<double,1>>) to std::vector<double>
-    input.fracture_width.resize(nc + nw);
-    for (size_t i = 0; i < nc + nw; ++i)
-        input.fracture_width[i] = fracture_width_[i][0];
-
-    // Convert fracture_pressure_ to std::vector<double>, using head (pressure - dgh)
-    input.fracture_pressure.resize(nc + nw);
-    for (size_t i = 0; i < nc + nw; ++i) {
-        input.fracture_pressure[i] = fracture_pressure_[i][0];
-        if (i < fracture_dgh_.size())
-            input.fracture_pressure[i] -= fracture_dgh_[i];
-    }
-
-    // Map reservoir_mobility_ to density/viscosity: use mobility as density, viscosity = 1
-    // This yields mobility = density/viscosity = reservoir_mobility_[i] / 1.0
-    input.density.resize(nc + nw);
-    input.viscosity.resize(nc + nw);
-    for (size_t i = 0; i < nc; ++i) {
-        input.density[i] = {reservoir_mobility_[i], 0.0};
-        input.viscosity[i] = {1.0, 0.0};
-    }
-    for (size_t i = nc; i < nc + nw; ++i) {
-        input.density[i] = {1.0, 0.0};
-        input.viscosity[i] = {1.0, 0.0};
-    }
-
-    input.leakof = leakof_;
+    const auto input = makePressureAssemblyInput();
 
     // Run the AD-based assembly (produces both pressure and coupling matrices)
     auto result = assemblePressureAD(input);
@@ -576,11 +694,56 @@ Fracture::assemblePressureAndCouplingAD(const std::vector<int>& closed_cells)
 }
 
 // ----------------------------------------------------------------------------
+FracturePressureInput
+Fracture::makePressureAssemblyInput() const
+// ----------------------------------------------------------------------------
+{
+    const size_t nc = numFractureCells();
+    const size_t nw = numWellEquations();
+
+    FracturePressureInput input;
+    input.num_cells = nc;
+    input.min_width = min_width_;
+    input.htrans = htrans_;
+    input.control_type = prm_.get_child("control").get<std::string>("type");
+    input.num_well_equations = nw;
+    input.perfinj.assign(perfinj_.begin(), perfinj_.end());
+    input.total_wellindex = total_wellindex_;
+    input.mobility_water_perf = mobility_water_perf_;
+    input.leakof = leakof_;
+
+    input.fracture_width.resize(nc + nw);
+    input.fracture_pressure.resize(nc + nw);
+    input.density.resize(nc + nw);
+    input.viscosity.resize(nc + nw);
+
+    for (size_t i = 0; i < nc + nw; ++i) {
+        input.fracture_width[i] = fracture_width_[i][0];
+        input.fracture_pressure[i] = fracture_pressure_[i][0];
+        if (i < fracture_dgh_.size()) {
+            input.fracture_pressure[i] -= fracture_dgh_[i];
+        }
+    }
+
+    for (size_t i = 0; i < nc; ++i) {
+        input.density[i] = {reservoir_mobility_[i], 0.0};
+        input.viscosity[i] = {1.0, 0.0};
+    }
+    for (size_t i = nc; i < nc + nw; ++i) {
+        input.density[i] = {1.0, 0.0};
+        input.viscosity[i] = {1.0, 0.0};
+    }
+
+    return input;
+}
+
+// ----------------------------------------------------------------------------
 bool
 Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
 // ----------------------------------------------------------------------------
 {
     OPM_TIMEFUNCTION();
+    ++last_solve_stats_.nonlinear_iterations;
 
     ++DEBUG_COUNT;
     // min_width_ = prm_.get<double>("solver.min_width"); // min with only used for flow calculations
@@ -590,10 +753,12 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     // `fracture_pressure_`
     // std::cout << "---- Assemble pressure" << std::endl;
     const bool use_ad = prm_.get<bool>("solver.use_ad_pressure_assembly", false);
+    updateLeakoff();
     if (!use_ad) {
         assemblePressure(); // update pressure matrix (original method)
     }
     addSource(); // update right-hand side of pressure system;
+    
 
     // std::cout << "---- Various " << std::endl;
     //  initialize vector of unknown, and vector represnting direction in tangent space
@@ -669,7 +834,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     if(prm_.get<bool>("solver.drop_fluid_mech_linearization",true)){
       *coupling_matrix_ = 0;
     }else{
-      if(rhs[_0].infinity_norm() > prm_.get<double>("solver.drop_tol_h",1e5) ||
+      if(rhs[_0].infinity_norm() > prm_.get<double>("solver.drop_tol_h",1e1) ||
          rhs[_1].infinity_norm() > prm_.get<double>("solver.drop_tol_p",1.0) ){
         *coupling_matrix_ = 0;
         // maybe change linear solver
@@ -780,8 +945,8 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     if(new_precond ){
         frac_flow_precond_.reset(new Opm::FractureMechanicsPreconditioner(S, lprm));
     }else{
-        // need to modify code to use original storage for
-        frac_flow_precond_->update(S,/*new_lu_mech*/ false);
+        const bool update_mech_on_reuse = lprm.get<bool>("update_mech_on_reuse", false);
+        frac_flow_precond_->update(S, update_mech_on_reuse);
     }
     // make possible use abs tolerance for linear solver
     double res = rhs.two_norm2();
@@ -808,9 +973,50 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         psolver_ = setupLinearSolver(solver_type, *S_linop_, precond, prm_, lintol, max_iter, verbosity);
     }
 
+    if (prm_.get<bool>("solver.write_coupled_linear_system", false)) {
+        dump_linear_system_snapshot(linear_system_dump_stem(prm_, nlin_iteration, "manual"),
+                                    S,
+                                    rhs_org,
+                                    x,
+                                    closed_cells,
+                                    use_ad,
+                                    prm_,
+                                    makePressureAssemblyInput());
+    }
+
     {
         OPM_TIMEBLOCK(SolveCoupledSystem);
         psolver_->apply(dx, rhs, iores); // NB: will modify 'rhs'
+    }
+    ++last_solve_stats_.linear_solves;
+    last_solve_stats_.linear_iterations += iores.iterations;
+
+    if (!iores.converged) {
+        std::string dump_info_filename;
+        if (prm_.get<bool>("solver.dump_linear_system_on_failure", true)) {
+            const auto dump_stem = linear_system_dump_stem(prm_, nlin_iteration, "linear_failure");
+            dump_info_filename = linear_system_info_filename(dump_stem);
+            dump_linear_system_snapshot(dump_stem,
+                                        S,
+                                        rhs_org,
+                                        x,
+                                        closed_cells,
+                                        use_ad,
+                                        prm_,
+                                        makePressureAssemblyInput(),
+                                        &iores);
+            std::cerr << "Fracture coupled linear solver failed. Snapshot info written to "
+                      << dump_info_filename << std::endl;
+        }
+
+        last_solve_stats_.converged = false;
+        OPM_THROW(std::runtime_error,
+                  "Fracture coupled linear solver failed to converge after "
+                      + std::to_string(iores.iterations)
+                      + " iterations."
+                      + (dump_info_filename.empty()
+                             ? std::string()
+                             : " Snapshot info: " + dump_info_filename));
     }
 
     if (nlin_verbosity > 2) {

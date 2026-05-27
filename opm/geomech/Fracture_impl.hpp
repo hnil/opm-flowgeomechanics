@@ -332,9 +332,13 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
 {
   const auto& cpgrid = simulator.vanguard().grid();
     if(!active_){
+                last_solve_stats_ = {};
         std::cout << "Fracture " << this->name() << " is not active, skipping solve." << std::endl;
         return;
     }
+        Dune::Timer solve_timer;
+        last_solve_stats_ = {};
+        last_solve_stats_.fractures_solved = 1;
     OPM_TIMEBLOCK(SolveFracture);
     //std::cout << "Solve Fracture Pressure" << std::endl;
     std::string method = prm_.get<std::string>("solver.method");
@@ -399,6 +403,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             }
         };
         if(iter >= max_iter){
+            last_solve_stats_.converged = false;
             bool failure_on_convergence = prm_.get<bool>("solver.failure_on_nonconvergence",false);
             if(failure_on_convergence){
                 throw std::runtime_error("Fracture solver did not converge within " + std::to_string(max_iter) + " iterations.");
@@ -561,6 +566,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             };
             // remove closed cells which was not open before ??
             if(iter >= max_iter){
+                last_solve_stats_.converged = false;
                 bool failure_on_convergence = prm_.get<bool>("solver.failure_on_nonconvergence",false);
                 if(failure_on_convergence){
                     throw std::runtime_error("Fracture solver did not converge within " + std::to_string(max_iter) + " iterations.");
@@ -691,6 +697,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                     //}
                 };
                 if(iter >= max_iter){
+                    last_solve_stats_.converged = false;
                     bool failure_on_convergence = prm_.get<bool>("solver.failure_on_nonconvergence",false);
                     if(failure_on_convergence){
                         throw std::runtime_error("Fracture solver did not converge within " + std::to_string(max_iter) + " iterations.");
@@ -769,6 +776,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 // os.close();
             }
             if (count >= max_expand_iter) {
+                last_solve_stats_.converged = false;
                 std::cout << "Fracture expansion did not converge within the maximum number of iterations" << std::endl;
             }
         }
@@ -790,6 +798,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             well_indices_[1] = well_indices_old;
             well_indices_[0] = well_indices_new;
         }
+        last_solve_stats_.solve_time_seconds = solve_timer.stop();
         // summary of solve
         summary_of_solve();
         

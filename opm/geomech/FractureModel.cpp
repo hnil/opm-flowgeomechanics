@@ -111,6 +111,9 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.solver.full_intersections", false);
     fracture_param.put("fractureparam.solver.divide_wellidx", false);
     fracture_param.put("fractureparam.solver.no_leakof_outercells",false);
+    fracture_param.put("fractureparam.solver.write_coupled_linear_system", false);
+    fracture_param.put("fractureparam.solver.dump_linear_system_on_failure", true);
+    fracture_param.put("fractureparam.solver.linear_system_dump_prefix", "fracture_linear_system"s);
     // linear solver
     fracture_param.put("fractureparam.solver.linsolver.atol", 1e-20);
     fracture_param.put("fractureparam.solver.linsolver.tol", 1e-10);
@@ -120,8 +123,10 @@ makeDefaultFractureParam(bool rate_control)
     // preconditioner
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.diag_mech", false);// for large systems seem sto better with better preconditioner
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.diag_flow", false);
-    fracture_param.put("fractureparam.solver.linsolver.preconditioner.mech_first", false);
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.mech_first", true);
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.fixed_stress", false);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.mech_press_coupling", true);
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.update_mech_on_reuse", false);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.verbosity", 0);  
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.solver","umfpack"s);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.verbosity",0 );

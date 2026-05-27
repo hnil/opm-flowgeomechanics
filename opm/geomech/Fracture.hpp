@@ -48,6 +48,7 @@
 #include <fstream>
 
 #include <dune/common/indices.hh>
+#include <dune/common/timer.hh>
 #include <dune/common/typetraits.hh>
 #include <dune/common/fmatrix.hh> // Dune::FieldMatrix
 #include <dune/istl/bcrsmatrix.hh> // Dune::BCRSMatrix
@@ -197,6 +198,27 @@ struct WellInfo
     std::optional<std::pair<double, double>> perf_range{};
 };
 
+  struct FractureSolveStats
+  {
+    int fractures_solved = 0;
+    int nonlinear_iterations = 0;
+    int linear_solves = 0;
+    int linear_iterations = 0;
+    double solve_time_seconds = 0.0;
+    bool converged = true;
+
+    FractureSolveStats& operator+=(const FractureSolveStats& other)
+    {
+      fractures_solved += other.fractures_solved;
+      nonlinear_iterations += other.nonlinear_iterations;
+      linear_solves += other.linear_solves;
+      linear_iterations += other.linear_iterations;
+      solve_time_seconds += other.solve_time_seconds;
+      converged = converged && other.converged;
+      return *this;
+    }
+  };
+
 struct RuntimePerforation;
 
 /// This class carries all parameters for the NewtonIterationBlackoilInterleaved class.
@@ -273,6 +295,7 @@ public:
     void assignGeomechWellState(PerfData<Scalar>& perfData) const;
     void setActive(bool active) { active_ = active; }
     bool isActive() const { return active_; }
+    const FractureSolveStats& lastSolveStats() const { return last_solve_stats_; }
     std::array<double,2> hightAndWidth() const;
     double maxFlowTimeStep() const{return max_flow_time_step_;}
     double filterCakeVolume() const;
@@ -408,6 +431,7 @@ private:
     int nlinear_;
 
     // help function for solving
+    FracturePressureInput makePressureAssemblyInput() const;
     void assemblePressure();
     void assemblePressureAndCouplingAD(const std::vector<int>& closed_cells);
     void addSource();
@@ -547,6 +571,7 @@ private:
     std::unique_ptr<Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP>> S_linop_;
     using LinearSolverBase = Dune::InverseOperator<VectorHP, VectorHP>;
     std::unique_ptr<LinearSolverBase> psolver_;
+    FractureSolveStats last_solve_stats_{};
 
 };
 } // namespace Opm
