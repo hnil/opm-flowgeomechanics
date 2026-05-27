@@ -517,7 +517,32 @@ add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp
                          DIR ${CMAKE_CURRENT_LIST_DIR}/data/
 						 PREFIX geomech_frac_seq_bhp
 						 TEST_ARGS --parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini 
-						--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_bhp_seq_nverbose.json
+						--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_bhp_seq_legacy_full.json
+						--enable-write-all-solutions=true
+						--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
+						--threads-per-process=4)
+
+add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp_recommended
+                         FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ
+                         SIMULATOR flow_energy_geomech
+                         ABS_TOL ${abs_tol}
+                         REL_TOL ${rel_tol}
+                         DIR ${CMAKE_CURRENT_LIST_DIR}/data/
+						 PREFIX geomech_frac_seq_bhp_recommended
+						 TEST_ARGS --parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
+						--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_bhp_seq_recommended_full.json
+						--enable-write-all-solutions=true
+						--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
+						--threads-per-process=4)
+
+add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp_default
+                         FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ
+                         SIMULATOR flow_energy_geomech
+                         ABS_TOL ${abs_tol}
+                         REL_TOL ${rel_tol}
+                         DIR ${CMAKE_CURRENT_LIST_DIR}/data/
+						 PREFIX geomech_frac_seq_bhp_default
+						 TEST_ARGS --parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
 						--enable-write-all-solutions=true
 						--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
 						--threads-per-process=4)

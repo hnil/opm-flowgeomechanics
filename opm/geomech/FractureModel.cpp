@@ -140,6 +140,7 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.solver.guard_state", true);
     fracture_param.put("fractureparam.solver.guard_max_abs_width", 1e30);
     fracture_param.put("fractureparam.solver.guard_max_abs_pressure", 1e30);
+    fracture_param.put("fractureparam.solver.closed_cell_policy", "sticky"s);
     fracture_param.put("fractureparam.solver.close_force_tolerance", 0.0);
     fracture_param.put("fractureparam.solver.reopen_force_tolerance", 0.0);
     fracture_param.put("fractureparam.solver.reopen_width_tolerance", 0.0);

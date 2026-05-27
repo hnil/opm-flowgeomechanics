@@ -18,6 +18,7 @@
 #include "reference_test_data.hpp"
 
 #include <dune/common/dynmatrix.hh>
+#include <dune/common/dynvector.hh>
 #include <dune/foamgrid/foamgrid.hh>
 #include <dune/grid/common/mcmgmapper.hh>
 
@@ -33,6 +34,7 @@ namespace
 
 using Grid = Dune::FoamGrid<2, 3>;
 using FullMatrix = Dune::DynamicMatrix<double>;
+using DenseVector = Dune::DynamicVector<double>;
 
 // Create a small planar FoamGrid from a RegularTrimesh with the given
 // number of layers around the center cell.
@@ -74,6 +76,36 @@ bool compareMatrices(const FullMatrix& a,
     }
     if (ok)
         std::cout << "  Max absolute difference: " << max_diff << std::endl;
+    return ok;
+}
+
+bool compareVectors(const DenseVector& a,
+                    const DenseVector& b,
+                    double tol)
+{
+    if (a.size() != b.size()) {
+        std::cerr << "  Vector dimensions differ: "
+                  << a.size() << " vs " << b.size() << std::endl;
+        return false;
+    }
+
+    bool ok = true;
+    double max_diff = 0.0;
+    for (size_t i = 0; i < a.size(); ++i) {
+        const double diff = std::abs(a[i] - b[i]);
+        max_diff = std::max(max_diff, diff);
+        const double scale = std::max(std::abs(a[i]), std::abs(b[i]));
+        const double rel = (scale > 1e-15) ? diff / scale : diff;
+        if (rel > tol) {
+            std::cerr << "  Vector mismatch at (" << i << "): "
+                      << a[i] << " vs " << b[i]
+                      << " (rel_err=" << rel << ")" << std::endl;
+            ok = false;
+        }
+    }
+
+    if (ok)
+        std::cout << "  Max vector absolute difference: " << max_diff << std::endl;
     return ok;
 }
 
@@ -301,6 +333,48 @@ bool test_reference_matrix_case()
     return true;
 }
 
+bool test_matrix_free_apply_matches_dense(int layers)
+{
+    std::cout << "Test: matrix-free DDM apply matches dense assembled matrix (layers="
+              << layers << ") ..." << std::endl;
+
+    auto grid = makeTestGrid(layers);
+    if (!grid) {
+        std::cerr << "  FAILED (could not create grid)" << std::endl;
+        return false;
+    }
+
+    const int nc = grid->leafGridView().size(0);
+    const double E = 1e9;
+    const double nu = 0.25;
+
+    FullMatrix matrix(nc, nc, 0.0);
+    ddm::assembleMatrix_fast(matrix, E, nu, *grid);
+
+    DenseVector x(nc, 0.0);
+    for (int i = 0; i < nc; ++i)
+        x[i] = 0.1 + 0.05 * static_cast<double>((i % 7) + 1);
+
+    DenseVector dense_result(nc, 0.0);
+    for (int row = 0; row < nc; ++row) {
+        double value = 0.0;
+        for (int col = 0; col < nc; ++col)
+            value += matrix[row][col] * x[col];
+        dense_result[row] = value;
+    }
+
+    DenseVector matrix_free_result;
+    ddm::applyMatrix_fast(matrix_free_result, x, E, nu, *grid);
+
+    if (!compareVectors(dense_result, matrix_free_result, 1e-12)) {
+        std::cerr << "  FAILED" << std::endl;
+        return false;
+    }
+
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
 } // anonymous namespace
 
 // ============================================================================
@@ -315,6 +389,8 @@ int main()
     if (!test_matrix_nonzero())         ++failures;
     if (!test_different_material_properties()) ++failures;
     if (!test_reference_matrix_case())  ++failures;
+    if (!test_matrix_free_apply_matches_dense(1)) ++failures;
+    if (!test_matrix_free_apply_matches_dense(2)) ++failures;
 
     std::cout << "\n=== "
               << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED")

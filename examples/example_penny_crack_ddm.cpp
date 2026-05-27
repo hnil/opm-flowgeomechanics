@@ -30,9 +30,15 @@
 
 #include <config.h>
 
+#include <algorithm>
 #include <array>
+#include <chrono>
+#include <cstdlib>
 #include <cmath>
 #include <iostream>
+#include <memory>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -40,6 +46,10 @@
 #include <dune/common/dynvector.hh>
 #include <dune/foamgrid/foamgrid.hh>
 #include <dune/grid/common/mcmgmapper.hh>
+#include <dune/istl/bvector.hh>
+#include <dune/istl/operators.hh>
+#include <dune/istl/preconditioners.hh>
+#include <dune/istl/solvers.hh>
 
 #include <opm/geomech/DiscreteDisplacement.hpp>
 #include <opm/geomech/RegularTrimesh.hpp>
@@ -54,6 +64,564 @@ namespace
 using Grid     = Dune::FoamGrid<2, 3>;
 using GridView = Grid::LeafGridView;
 using Mapper   = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
+using DenseVector = Dune::DynamicVector<double>;
+using DenseElimVector = Dune::BlockVector<Dune::FieldVector<double, 1>>;
+using Clock = std::chrono::steady_clock;
+
+enum class SolverBackend {
+    Direct,
+    LuReuse,
+    MatrixFreeBiCGSTAB,
+    MatrixFreeGMRes,
+    All,
+};
+
+struct CommandLineOptions {
+    double E = 1.0e9;
+    double nu = 0.25;
+    double p = 1.0e6;
+    std::vector<int> validation_layers {5, 8};
+    std::vector<int> benchmark_layers;
+    int profile_layers = 5;
+    bool print_profile = true;
+    bool run_validation = true;
+    SolverBackend backend = SolverBackend::Direct;
+    int solve_repeats = 1;
+    double cod_tol = 0.15;
+    double K1_tol = 0.30;
+    double linear_tol = 1e-8;
+    int max_iter = 1000;
+    int gmres_restart = 100;
+    int solver_verbosity = 0;
+};
+
+struct SolveTimings {
+    double dense_assembly_ms = 0.0;
+    double cache_setup_ms = 0.0;
+    double factorization_ms = 0.0;
+    double preconditioner_ms = 0.0;
+    double solve_ms = 0.0;
+    double total_ms = 0.0;
+};
+
+struct SolveStats {
+    int iterations = 0;
+    int operator_applications = 0;
+    bool converged = true;
+};
+
+struct SolveResult {
+    std::unique_ptr<Grid> grid;
+    DenseVector opening;
+    double a_eff = 0.0;
+    int nc = 0;
+    SolveTimings timings;
+    SolveStats stats;
+};
+
+class DenseLUSolver
+{
+public:
+    class MatrixAccess : public Dune::DynamicMatrix<double>
+    {
+    public:
+        static void factorize(Dune::DynamicMatrix<double>& matrix)
+        {
+            DenseElimVector tmp(matrix.N());
+            typename Dune::DynamicMatrix<double>::template Elim<DenseElimVector> elim(tmp);
+            Dune::Simd::Mask<double> nonsing(true);
+            Dune::DynamicMatrix<double>::luDecomposition(matrix, elim, nonsing, false, false);
+        }
+    };
+
+    explicit DenseLUSolver(const Dune::DynamicMatrix<double>& matrix)
+        : lu_(matrix)
+    {
+    }
+
+    void factorize()
+    {
+        MatrixAccess::factorize(lu_);
+    }
+
+    void solve(DenseVector& x, const DenseVector& rhs) const
+    {
+        x.resize(rhs.size());
+        for (int i = 0; i < static_cast<int>(lu_.rows()); ++i) {
+            x[i] = rhs[i];
+            for (int j = 0; j < i; ++j) {
+                x[i] -= lu_[i][j] * x[j];
+            }
+        }
+
+        for (int i = static_cast<int>(lu_.rows()) - 1; i >= 0; --i) {
+            for (size_t j = static_cast<size_t>(i) + 1; j < lu_.rows(); ++j) {
+                x[i] -= lu_[i][j] * x[j];
+            }
+            x[i] /= lu_[i][i];
+        }
+    }
+
+private:
+    Dune::DynamicMatrix<double> lu_;
+};
+
+struct MatrixFreeGeometryCache {
+    std::vector<Dune::FieldVector<double, 3>> centers;
+    std::vector<Dune::FieldVector<double, 3>> normals;
+    std::vector<std::array<ddm::Real3, 3>> tris;
+};
+
+MatrixFreeGeometryCache build_geometry_cache(const Grid& grid)
+{
+    MatrixFreeGeometryCache cache;
+    Mapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
+    const int nc = grid.leafGridView().size(0);
+
+    cache.centers.resize(nc);
+    cache.normals.resize(nc);
+    cache.tris.resize(nc);
+
+    for (auto elem : elements(grid.leafGridView())) {
+        const int idx = mapper.index(elem);
+        cache.centers[idx] = elem.geometry().center();
+        cache.normals[idx] = ddm::normalOfElement(elem);
+        cache.tris[idx] = ddm::getTri(elem);
+    }
+
+    return cache;
+}
+
+double matrix_free_normal_traction(const Dune::FieldVector<double, 3>& center,
+                                   const Dune::FieldVector<double, 3>& normal,
+                                   const std::array<ddm::Real3, 3>& tri,
+                                   const double slip_value,
+                                   const double E,
+                                   const double nu)
+{
+    Dune::FieldVector<double, 3> slip(0.0);
+    slip[0] = slip_value;
+    const auto strain = ddm::TDStrainFSTri(center, tri, slip, nu);
+    const auto stress = ddm::strainToStress(E, nu, strain);
+    return ddm::tractionSymTensor(stress, normal);
+}
+
+class MatrixFreeDDMOperator : public Dune::LinearOperator<DenseVector, DenseVector>
+{
+public:
+    using field_type = typename DenseVector::field_type;
+
+    MatrixFreeDDMOperator(const MatrixFreeGeometryCache& cache, const double E, const double nu)
+        : cache_(cache)
+        , E_(E)
+        , nu_(nu)
+    {
+    }
+
+    void apply(const DenseVector& x, DenseVector& y) const override
+    {
+        const int nc = static_cast<int>(cache_.centers.size());
+        y.resize(nc);
+
+#pragma omp parallel for
+        for (int row = 0; row < nc; ++row) {
+            double value = 0.0;
+            for (int col = 0; col < nc; ++col) {
+                value += matrix_free_normal_traction(cache_.centers[row],
+                                                     cache_.normals[row],
+                                                     cache_.tris[col],
+                                                     x[col],
+                                                     E_,
+                                                     nu_);
+            }
+            y[row] = value;
+        }
+
+        ++apply_calls_;
+    }
+
+    void applyscaleadd(field_type alpha, const DenseVector& x, DenseVector& y) const override
+    {
+        DenseVector tmp;
+        apply(x, tmp);
+        if (y.size() != tmp.size()) {
+            y.resize(tmp.size());
+            y = 0.0;
+        }
+        for (size_t i = 0; i < tmp.size(); ++i)
+            y[i] += alpha * tmp[i];
+    }
+
+    Dune::SolverCategory::Category category() const override
+    {
+        return Dune::SolverCategory::sequential;
+    }
+
+    void resetApplyCount() const
+    {
+        apply_calls_ = 0;
+    }
+
+    int applyCount() const
+    {
+        return apply_calls_;
+    }
+
+private:
+    const MatrixFreeGeometryCache& cache_;
+    double E_;
+    double nu_;
+    mutable int apply_calls_ = 0;
+};
+
+class DiagonalPreconditioner : public Dune::Preconditioner<DenseVector, DenseVector>
+{
+public:
+    explicit DiagonalPreconditioner(const DenseVector& diagonal)
+        : inv_diag_(diagonal.size())
+    {
+        for (size_t i = 0; i < diagonal.size(); ++i) {
+            const double value = diagonal[i];
+            inv_diag_[i] = (std::abs(value) > 1e-30) ? 1.0 / value : 1.0;
+        }
+    }
+
+    void apply(DenseVector& v, const DenseVector& d) override
+    {
+        v.resize(d.size());
+        for (size_t i = 0; i < d.size(); ++i)
+            v[i] = inv_diag_[i] * d[i];
+    }
+
+    void pre(DenseVector&, DenseVector&) override {}
+    void post(DenseVector&) override {}
+
+    Dune::SolverCategory::Category category() const override
+    {
+        return Dune::SolverCategory::sequential;
+    }
+
+private:
+    DenseVector inv_diag_;
+};
+
+DenseVector build_diagonal(const MatrixFreeGeometryCache& cache, const double E, const double nu)
+{
+    DenseVector diagonal(cache.centers.size());
+
+#pragma omp parallel for
+    for (int row = 0; row < static_cast<int>(cache.centers.size()); ++row) {
+        diagonal[row] = matrix_free_normal_traction(cache.centers[row],
+                                                    cache.normals[row],
+                                                    cache.tris[row],
+                                                    1.0,
+                                                    E,
+                                                    nu);
+    }
+
+    return diagonal;
+}
+
+double elapsed_ms(const Clock::time_point start, const Clock::time_point end)
+{
+    return std::chrono::duration<double, std::milli>(end - start).count();
+}
+
+bool starts_with(const std::string& value, const std::string& prefix)
+{
+    return value.rfind(prefix, 0) == 0;
+}
+
+std::vector<int> parse_int_list(const std::string& text)
+{
+    std::vector<int> values;
+    std::stringstream stream(text);
+    std::string token;
+    while (std::getline(stream, token, ',')) {
+        if (token.empty()) {
+            continue;
+        }
+        const int value = std::stoi(token);
+        if (value <= 0) {
+            throw std::invalid_argument("Layers must be positive integers");
+        }
+        values.push_back(value);
+    }
+
+    if (values.empty()) {
+        throw std::invalid_argument("Expected at least one layer value");
+    }
+
+    return values;
+}
+
+SolverBackend parse_solver_backend(const std::string& text)
+{
+    if (text == "direct") {
+        return SolverBackend::Direct;
+    }
+    if (text == "lu_reuse") {
+        return SolverBackend::LuReuse;
+    }
+    if (text == "matrix_free_bicgstab") {
+        return SolverBackend::MatrixFreeBiCGSTAB;
+    }
+    if (text == "matrix_free_gmres") {
+        return SolverBackend::MatrixFreeGMRes;
+    }
+    if (text == "all") {
+        return SolverBackend::All;
+    }
+
+    throw std::invalid_argument("Unknown solver backend: " + text);
+}
+
+const char* backend_name(const SolverBackend backend)
+{
+    switch (backend) {
+    case SolverBackend::Direct:
+        return "direct";
+    case SolverBackend::LuReuse:
+        return "lu_reuse";
+    case SolverBackend::MatrixFreeBiCGSTAB:
+        return "matrix_free_bicgstab";
+    case SolverBackend::MatrixFreeGMRes:
+        return "matrix_free_gmres";
+    case SolverBackend::All:
+        return "all";
+    }
+    return "unknown";
+}
+
+std::vector<SolverBackend> selected_backends(const SolverBackend backend)
+{
+    if (backend == SolverBackend::All) {
+        return {
+            SolverBackend::Direct,
+            SolverBackend::LuReuse,
+            SolverBackend::MatrixFreeBiCGSTAB,
+            SolverBackend::MatrixFreeGMRes,
+        };
+    }
+    return {backend};
+}
+
+bool is_matrix_free_backend(const SolverBackend backend)
+{
+    return backend == SolverBackend::MatrixFreeBiCGSTAB
+        || backend == SolverBackend::MatrixFreeGMRes;
+}
+
+void print_usage(const char* executable)
+{
+    std::cout << "Usage: " << executable << " [options]\n"
+              << "  --solver=direct|lu_reuse|matrix_free_bicgstab|matrix_free_gmres|all\n"
+              << "                                   Solver backend to benchmark\n"
+              << "  --layers=5,8                    Validation layers\n"
+              << "  --benchmark-layers=18,24        Extra benchmark-only layer counts\n"
+              << "  --profile-layers=5              Layer count for COD profile output\n"
+              << "  --solve-repeats=1               Number of repeated solves for the same matrix\n"
+              << "  --young=<value>                 Young's modulus [Pa]\n"
+              << "  --nu=<value>                    Poisson ratio\n"
+              << "  --pressure=<value>              Net pressure [Pa]\n"
+              << "  --cod-tol=<value>               Relative COD tolerance\n"
+              << "  --k1-tol=<value>                Relative K_I tolerance\n"
+              << "  --tol=<value>                   Iterative solver residual reduction target\n"
+              << "  --max-iter=<value>              Iterative solver iteration limit\n"
+              << "  --gmres-restart=<value>         GMRES restart length\n"
+              << "  --solver-verbosity=<value>      Iterative solver verbosity\n"
+              << "  --skip-profile                  Skip COD profile printout\n"
+              << "  --skip-validation               Skip analytic validation checks\n"
+              << "  --help                          Show this help\n";
+}
+
+CommandLineOptions parse_options(int argc, char** argv)
+{
+    CommandLineOptions options;
+    for (int arg = 1; arg < argc; ++arg) {
+        const std::string option = argv[arg];
+        if (option == "--help" || option == "-h") {
+            print_usage(argv[0]);
+            std::exit(0);
+        }
+        if (option == "--skip-profile") {
+            options.print_profile = false;
+            continue;
+        }
+        if (option == "--skip-validation") {
+            options.run_validation = false;
+            continue;
+        }
+        if (starts_with(option, "--solver=")) {
+            options.backend = parse_solver_backend(option.substr(9));
+            continue;
+        }
+        if (starts_with(option, "--layers=")) {
+            options.validation_layers = parse_int_list(option.substr(9));
+            continue;
+        }
+        if (starts_with(option, "--benchmark-layers=")) {
+            options.benchmark_layers = parse_int_list(option.substr(19));
+            continue;
+        }
+        if (starts_with(option, "--profile-layers=")) {
+            options.profile_layers = std::stoi(option.substr(17));
+            if (options.profile_layers <= 0) {
+                throw std::invalid_argument("Profile layers must be positive");
+            }
+            continue;
+        }
+        if (starts_with(option, "--solve-repeats=")) {
+            options.solve_repeats = std::stoi(option.substr(16));
+            if (options.solve_repeats <= 0) {
+                throw std::invalid_argument("Solve repeats must be positive");
+            }
+            continue;
+        }
+        if (starts_with(option, "--young=")) {
+            options.E = std::stod(option.substr(8));
+            continue;
+        }
+        if (starts_with(option, "--nu=")) {
+            options.nu = std::stod(option.substr(5));
+            continue;
+        }
+        if (starts_with(option, "--pressure=")) {
+            options.p = std::stod(option.substr(11));
+            continue;
+        }
+        if (starts_with(option, "--cod-tol=")) {
+            options.cod_tol = std::stod(option.substr(10));
+            continue;
+        }
+        if (starts_with(option, "--k1-tol=")) {
+            options.K1_tol = std::stod(option.substr(9));
+            continue;
+        }
+        if (starts_with(option, "--tol=")) {
+            options.linear_tol = std::stod(option.substr(6));
+            continue;
+        }
+        if (starts_with(option, "--max-iter=")) {
+            options.max_iter = std::stoi(option.substr(11));
+            if (options.max_iter <= 0) {
+                throw std::invalid_argument("Max iterations must be positive");
+            }
+            continue;
+        }
+        if (starts_with(option, "--gmres-restart=")) {
+            options.gmres_restart = std::stoi(option.substr(16));
+            if (options.gmres_restart <= 0) {
+                throw std::invalid_argument("GMRES restart must be positive");
+            }
+            continue;
+        }
+        if (starts_with(option, "--solver-verbosity=")) {
+            options.solver_verbosity = std::stoi(option.substr(19));
+            continue;
+        }
+
+        throw std::invalid_argument("Unknown option: " + option);
+    }
+
+    return options;
+}
+
+SolveResult solve_penny_problem(const int layers,
+                                const double E,
+                                const double nu,
+                                const double p,
+                                const SolverBackend backend,
+                                const int solve_repeats)
+{
+    const auto total_start = Clock::now();
+    const double h = 1.0;
+
+    Opm::RegularTrimesh trimesh(layers,
+                                {0.0, 0.0, 0.0},
+                                {1.0, 0.0, 0.0},
+                                {0.5, std::sqrt(3.0) / 2.0, 0.0},
+                                {h, h});
+
+    auto [grid, cellmap, bcells] = trimesh.createDuneGrid(0, {}, false);
+    const int nc = grid->leafGridView().size(0);
+
+    double r_max = 0.0;
+    for (auto elem : elements(grid->leafGridView())) {
+        auto center = elem.geometry().center();
+        const double r = std::sqrt(center[0] * center[0] + center[1] * center[1]);
+        r_max = std::max(r_max, r);
+    }
+    const double a_eff = r_max + 0.5 * h;
+
+    Dune::DynamicMatrix<double> A(nc, nc, 0.0);
+    const auto assembly_start = Clock::now();
+    ddm::assembleMatrix_fast(A, E, nu, *grid);
+    const auto assembly_end = Clock::now();
+
+    DenseVector rhs(nc, -p);
+    DenseVector opening(nc, 0.0);
+
+    SolveTimings timings;
+    timings.assembly_ms = elapsed_ms(assembly_start, assembly_end);
+
+    if (backend == SolverBackend::Direct) {
+        const auto solve_start = Clock::now();
+        for (int repeat = 0; repeat < solve_repeats; ++repeat) {
+            auto A_work = A;
+            A_work.solve(opening, rhs);
+        }
+        const auto solve_end = Clock::now();
+        timings.solve_ms = elapsed_ms(solve_start, solve_end);
+    }
+    else if (backend == SolverBackend::LuReuse) {
+        auto lu_solver = DenseLUSolver(A);
+
+        const auto factor_start = Clock::now();
+        lu_solver.factorize();
+        const auto factor_end = Clock::now();
+        timings.factorization_ms = elapsed_ms(factor_start, factor_end);
+
+        const auto solve_start = Clock::now();
+        for (int repeat = 0; repeat < solve_repeats; ++repeat) {
+            lu_solver.solve(opening, rhs);
+        }
+        const auto solve_end = Clock::now();
+        timings.solve_ms = elapsed_ms(solve_start, solve_end);
+    }
+
+    timings.total_ms = elapsed_ms(total_start, Clock::now());
+
+    return {std::move(grid), std::move(opening), a_eff, nc, timings};
+}
+
+void print_benchmark_summary(const int layers,
+                             const SolveResult& result,
+                             const SolverBackend backend,
+                             const int solve_repeats)
+{
+    std::cout << "  Benchmark backend=" << backend_name(backend)
+              << " layers=" << layers
+              << " cells=" << result.nc
+              << " repeats=" << solve_repeats << "\n"
+              << "    assembly_ms=" << result.timings.assembly_ms << "\n";
+    if (backend == SolverBackend::LuReuse) {
+        std::cout << "    factorization_ms=" << result.timings.factorization_ms << "\n"
+                  << "    triangular_solve_ms=" << result.timings.solve_ms;
+        if (solve_repeats > 0) {
+            std::cout << " (per_rhs=" << result.timings.solve_ms / solve_repeats << ")";
+        }
+        std::cout << "\n";
+    }
+    else {
+        std::cout << "    direct_solve_ms=" << result.timings.solve_ms;
+        if (solve_repeats > 0) {
+            std::cout << " (per_rhs=" << result.timings.solve_ms / solve_repeats << ")";
+        }
+        std::cout << "\n";
+    }
+    std::cout << "    total_ms=" << result.timings.total_ms << std::endl;
+}
 
 // ============================================================================
 // Analytic solutions
@@ -99,64 +667,24 @@ run_test(const int layers,
          const double E,
          const double nu,
          const double p,
+         const SolverBackend backend,
+         const int solve_repeats,
          const double cod_rel_tol,
          const double K1_rel_tol)
 {
-    // ------------------------------------------------------------------
-    // Build the penny-shaped crack mesh.
-    // Use the layers constructor with default edge length 1, so the
-    // approximate crack radius is `layers` units.
-    // ------------------------------------------------------------------
     const double h = 1.0; // element edge length
+    auto result = solve_penny_problem(layers, E, nu, p, backend, solve_repeats);
+    auto& grid = *result.grid;
 
-    Opm::RegularTrimesh trimesh(layers,
-                                {0.0, 0.0, 0.0},
-                                {1.0, 0.0, 0.0},
-                                {0.5, std::sqrt(3.0) / 2.0, 0.0},
-                                {h, h});
-
-    auto [grid, cellmap, bcells] = trimesh.createDuneGrid(0, {}, false);
-
-    const int nc = grid->leafGridView().size(0);
+    const int nc = result.nc;
     std::cout << "  layers=" << layers
               << "  cells=" << nc << std::endl;
+    Mapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
 
-    // ------------------------------------------------------------------
-    // Determine the effective crack radius from the mesh.
-    // Use the maximum element-centroid radius rounded up by h/2 so that
-    // the analytic formula covers the full discrete crack.
-    // ------------------------------------------------------------------
-    Mapper mapper(grid->leafGridView(), Dune::mcmgElementLayout());
-
-    double r_max = 0.0;
-    for (auto elem : elements(grid->leafGridView())) {
-        auto center = elem.geometry().center();
-        const double r = std::sqrt(center[0] * center[0] + center[1] * center[1]);
-        r_max = std::max(r_max, r);
-    }
-    // Effective crack radius: outermost element centroid + half edge length
-    const double a_eff = r_max + 0.5 * h;
+    const double a_eff = result.a_eff;
 
     std::cout << "  Effective crack radius a_eff = " << a_eff << " m" << std::endl;
-
-    // ------------------------------------------------------------------
-    // Assemble the DDM influence matrix.
-    // A[i][j] = normal traction at centre of element i due to unit
-    //           normal displacement discontinuity (opening) at element j.
-    // ------------------------------------------------------------------
-    Dune::DynamicMatrix<double> A(nc, nc, 0.0);
-    ddm::assembleMatrix_fast(A, E, nu, *grid);
-
-    // ------------------------------------------------------------------
-    // Set up RHS: uniform net pressure p on all elements.
-    // Solve:  A * w = p
-    // where w is the vector of total crack openings per element.
-    // ------------------------------------------------------------------
-    Dune::DynamicVector<double> rhs(nc, p);
-    Dune::DynamicVector<double> opening(nc, 0.0);
-
-    // Note: DynamicMatrix::solve() performs LU factorisation in-place.
-    A.solve(opening, rhs);
+    print_benchmark_summary(layers, result, backend, solve_repeats);
 
     // ------------------------------------------------------------------
     // Compare DDM openings with the analytic COD profile.
@@ -166,17 +694,16 @@ run_test(const int layers,
 
     double sum_rel_err   = 0.0;
     double max_rel_err   = 0.0;
-    double sum_abs_err   = 0.0;
     int    n_interior    = 0;
 
-    for (auto elem : elements(grid->leafGridView())) {
+    for (auto elem : elements(grid.leafGridView())) {
         const int  idx    = mapper.index(elem);
         auto       center = elem.geometry().center();
         const double rx   = center[0];
         const double ry   = center[1];
         const double r    = std::sqrt(rx * rx + ry * ry);
 
-        const double w_ddm      = opening[idx];
+        const double w_ddm      = result.opening[idx];
         const double w_analytic = analytic_cod(r, a_eff, p, E, nu);
 
         // Only compare interior elements (well away from the discretised rim)
@@ -184,7 +711,6 @@ run_test(const int layers,
             const double abs_err = std::abs(w_ddm - w_analytic);
             const double rel_err = abs_err / w_analytic;
             sum_rel_err += rel_err;
-            sum_abs_err += abs_err;
             max_rel_err  = std::max(max_rel_err, rel_err);
             ++n_interior;
         }
@@ -207,7 +733,7 @@ run_test(const int layers,
     double K1_sum   = 0.0;
     int    K1_count = 0;
 
-    for (auto elem : elements(grid->leafGridView())) {
+    for (auto elem : elements(grid.leafGridView())) {
         const int  idx    = mapper.index(elem);
         auto       center = elem.geometry().center();
         const double rx   = center[0];
@@ -217,7 +743,7 @@ run_test(const int layers,
         // Only use elements in the outermost ring (tip-distance in [0, 1.5*h])
         const double s = a_eff - r;
         if (s > 0.0 && s < 1.5 * h) {
-            const double w   = opening[idx];
+            const double w   = result.opening[idx];
             const double K1  = K1_from_cod(w, s, E, nu);
             if (K1 > 0.0) {
                 K1_sum  += K1;
@@ -263,52 +789,32 @@ void
 print_cod_profile(const int layers,
                   const double E,
                   const double nu,
-                  const double p)
+                  const double p,
+                  const SolverBackend backend,
+                  const int solve_repeats)
 {
-    const double h = 1.0;
+    auto result = solve_penny_problem(layers, E, nu, p, backend, solve_repeats);
+    auto& grid = *result.grid;
+    Mapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
 
-    Opm::RegularTrimesh trimesh(layers,
-                                {0.0, 0.0, 0.0},
-                                {1.0, 0.0, 0.0},
-                                {0.5, std::sqrt(3.0) / 2.0, 0.0},
-                                {h, h});
-
-    auto [grid, cellmap, bcells] = trimesh.createDuneGrid(0, {}, false);
-    const int nc = grid->leafGridView().size(0);
-
-    Mapper mapper(grid->leafGridView(), Dune::mcmgElementLayout());
-
-    double r_max = 0.0;
-    for (auto elem : elements(grid->leafGridView())) {
-        auto center = elem.geometry().center();
-        const double r = std::sqrt(center[0] * center[0] + center[1] * center[1]);
-        r_max = std::max(r_max, r);
-    }
-    const double a_eff = r_max + 0.5 * h;
-
-    Dune::DynamicMatrix<double> A(nc, nc, 0.0);
-    ddm::assembleMatrix_fast(A, E, nu, *grid);
-
-    Dune::DynamicVector<double> rhs(nc, p);
-    Dune::DynamicVector<double> opening(nc, 0.0);
-    A.solve(opening, rhs);
+    print_benchmark_summary(layers, result, backend, solve_repeats);
 
     std::cout << "\n  COD profile (layers=" << layers
-              << ", a_eff=" << a_eff << "):\n";
+              << ", a_eff=" << result.a_eff << "):\n";
     std::cout << "    r [m]      DDM w [m]   Analytic w [m]  Rel.err [%]\n";
 
     // Collect (r, w) pairs, sort by r, print
     std::vector<std::pair<double, double>> rv;
-    for (auto elem : elements(grid->leafGridView())) {
+    for (auto elem : elements(grid.leafGridView())) {
         const int  idx    = mapper.index(elem);
         auto       center = elem.geometry().center();
         const double r    = std::sqrt(center[0] * center[0] + center[1] * center[1]);
-        rv.push_back({r, opening[idx]});
+        rv.push_back({r, result.opening[idx]});
     }
     std::sort(rv.begin(), rv.end());
 
     for (auto& [r, w_ddm] : rv) {
-        const double w_an  = analytic_cod(r, a_eff, p, E, nu);
+        const double w_an  = analytic_cod(r, result.a_eff, p, E, nu);
         const double rel   = (w_an > 1e-16) ? std::abs(w_ddm - w_an) / w_an * 100.0 : 0.0;
         std::cout << "    " << r << "  " << w_ddm << "  " << w_an
                   << "  " << rel << "\n";
@@ -319,54 +825,74 @@ print_cod_profile(const int layers,
 
 // ============================================================================
 int
-main()
+main(int argc, char** argv)
 // ============================================================================
 {
-    // ------------------------------------------------------------------
-    // Material and loading parameters
-    // ------------------------------------------------------------------
-    const double E  = 1.0e9; // Young's modulus [Pa]
-    const double nu = 0.25;  // Poisson's ratio  [-]
-    const double p  = 1.0e6; // Net internal pressure [Pa]
+    CommandLineOptions options;
+    try {
+        options = parse_options(argc, argv);
+    }
+    catch (const std::exception& error) {
+        std::cerr << "Error: " << error.what() << "\n\n";
+        print_usage(argv[0]);
+        return 2;
+    }
 
     std::cout << "======================================================\n";
     std::cout << " Penny-shaped crack DDM vs analytic comparison\n";
     std::cout << "======================================================\n";
-    std::cout << "  E  = " << E  << " Pa\n";
-    std::cout << "  nu = " << nu << "\n";
-    std::cout << "  p  = " << p  << " Pa\n\n";
-
-    // ------------------------------------------------------------------
-    // Print COD profile for one resolution to aid visual inspection
-    // ------------------------------------------------------------------
-    std::cout << "--- COD profile (layers=5) ---\n";
-    print_cod_profile(5, E, nu, p);
-
-    // ------------------------------------------------------------------
-    // Validation tests at two mesh resolutions.
-    //
-    // Tolerances are set conservatively since the DDM on a coarse
-    // triangular mesh introduces discretisation errors.  The COD interior
-    // tolerance of 15 % is appropriate for the coarse mesh (layers=5).
-    // At finer resolution (layers=8) the error should be comfortably
-    // below the same threshold.
-    //
-    // The K_I estimate uses the LEFM near-tip formula and a single ring of
-    // boundary elements; a 30 % tolerance accommodates both the geometric
-    // discretisation error and the variability in tip-distance s.
-    // ------------------------------------------------------------------
-    const double cod_tol = 0.15; // 15 % relative COD tolerance
-    const double K1_tol  = 0.30; // 30 % relative K_I tolerance
+    std::cout << "  E  = " << options.E  << " Pa\n";
+    std::cout << "  nu = " << options.nu << "\n";
+    std::cout << "  p  = " << options.p  << " Pa\n";
+    std::cout << "  solver = " << backend_name(options.backend) << "\n";
+    std::cout << "  solve_repeats = " << options.solve_repeats << "\n\n";
 
     int failures = 0;
+    for (const auto backend : selected_backends(options.backend)) {
+        std::cout << "=== Backend: " << backend_name(backend) << " ===\n";
 
-    std::cout << "\n--- Test: layers=5 ---\n";
-    if (!run_test(5, E, nu, p, cod_tol, K1_tol))
-        ++failures;
+        if (options.print_profile) {
+            std::cout << "--- COD profile (layers=" << options.profile_layers << ") ---\n";
+            print_cod_profile(options.profile_layers,
+                              options.E,
+                              options.nu,
+                              options.p,
+                              backend,
+                              options.solve_repeats);
+        }
 
-    std::cout << "\n--- Test: layers=8 ---\n";
-    if (!run_test(8, E, nu, p, cod_tol, K1_tol))
-        ++failures;
+        if (!options.print_profile && !options.run_validation) {
+            std::cout << "--- Benchmark only (layers=" << options.profile_layers << ") ---\n";
+            const auto result = solve_penny_problem(options.profile_layers,
+                                                    options.E,
+                                                    options.nu,
+                                                    options.p,
+                                                    backend,
+                                                    options.solve_repeats);
+            print_benchmark_summary(options.profile_layers,
+                                    result,
+                                    backend,
+                                    options.solve_repeats);
+        }
+
+        if (options.run_validation) {
+            for (const int layers : options.validation_layers) {
+                std::cout << "\n--- Test: layers=" << layers << " ---\n";
+                if (!run_test(layers,
+                              options.E,
+                              options.nu,
+                              options.p,
+                              backend,
+                              options.solve_repeats,
+                              options.cod_tol,
+                              options.K1_tol)) {
+                    ++failures;
+                }
+            }
+        }
+
+        std::cout << std::endl;
+    }
 
     std::cout << "\n======================================================\n";
     std::cout << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED")

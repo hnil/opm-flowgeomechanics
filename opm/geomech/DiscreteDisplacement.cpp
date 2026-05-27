@@ -6,6 +6,58 @@
 #include <opm/geomech/DiscreteDisplacement.hpp>
 namespace ddm
 {
+namespace
+{
+using DDMGrid = Dune::FoamGrid<2, 3>;
+using DDMGridView = DDMGrid::LeafGridView;
+using DDMElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<DDMGridView>;
+
+struct GeometryCache
+{
+    std::vector<Dune::FieldVector<double, 3>> centers;
+    std::vector<Dune::FieldVector<double, 3>> normals;
+    std::vector<std::array<Real3, 3>> tris;
+};
+
+GeometryCache buildGeometryCache(const DDMGrid& grid)
+{
+    DDMElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
+    const int nc = grid.leafGridView().size(0);
+
+    GeometryCache cache;
+    cache.centers.resize(nc);
+    cache.normals.resize(nc);
+    cache.tris.resize(nc);
+
+    OPM_TIMEBLOCK(GeometryOFfoamgrid);
+    for (auto elem : elements(grid.leafGridView())) {
+        const int idx = mapper.index(elem);
+        cache.centers[idx] = elem.geometry().center();
+        cache.normals[idx] = normalOfElement(elem);
+        cache.tris[idx] = getTri(elem);
+    }
+
+    return cache;
+}
+
+double kernelNormalTraction(const Dune::FieldVector<double, 3>& center,
+                            const Dune::FieldVector<double, 3>& normal,
+                            const std::array<Real3, 3>& tri,
+                            const double slip_value,
+                            const double E,
+                            const double nu)
+{
+    Dune::FieldVector<double, 3> slip;
+    slip[0] = slip_value;
+    slip[1] = 0.0;
+    slip[2] = 0.0;
+
+    const Dune::FieldVector<double, 6> strain = TDStrainFSTri(center, tri, slip, nu);
+    const Dune::FieldVector<double, 6> stress = strainToStress(E, nu, strain);
+    return tractionSymTensor(stress, normal);
+}
+} // namespace
+
 double
 fractureK1(double dist, double width, double E, double nu)
 {
@@ -75,7 +127,6 @@ symTensor2Matrix(const Dune::FieldVector<double, 6> symtensor)
 double
 tractionSymTensor(const Dune::FieldVector<double, 6> symtensor, Dune::FieldVector<double, 3> normal)
 {
-    const Dune::FieldVector<double, 6> stress;
     assert(std::abs(normal.two_norm() - 1) < 1e-13);
     double traction = 0.0;
     for (int i = 0; i < 3; ++i) {
@@ -114,10 +165,7 @@ assembleMatrix(Dune::DynamicMatrix<double>& matrix,
 
 {
     OPM_TIMEFUNCTION();
-    using Grid = Dune::FoamGrid<2, 3>;
-    using GridView = typename Grid::LeafGridView;
-    using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
-    ElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
+    DDMElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
     for (auto elem1 : elements(grid.leafGridView())) {
         int idx1 = mapper.index(elem1);
         auto geom = elem1.geometry();
@@ -150,50 +198,51 @@ assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix,
 
 {
     OPM_TIMEFUNCTION();
-    using Grid = Dune::FoamGrid<2, 3>;
-    using GridView = typename Grid::LeafGridView;
-    using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
-    ElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
-    int nc = grid.leafGridView().size(0);
-    std::vector<Dune::FieldVector<double, 3>> centers(nc);
-    std::vector<Dune::FieldVector<double, 3>> normals(nc);
-    std::vector<std::array<Real3, 3>> tris(nc);
-    {
-        OPM_TIMEBLOCK(GeometryOFfoamgrid);
-        for (auto elem1 : elements(grid.leafGridView())) {
-            int idx1 = mapper.index(elem1);
-            auto geom = elem1.geometry();
-            auto center = geom.center();
-            auto normal = normalOfElement(elem1);
-            centers[idx1] = center;
-            normals[idx1] = normal;
-            tris[idx1] = getTri(elem1);
-        }
-    }
+    const int nc = grid.leafGridView().size(0);
+    const auto cache = buildGeometryCache(grid);
     {
         OPM_TIMEBLOCK(AssembleDDMMatrix);
-        // #ifdef _OPENMP
 #pragma omp parallel for
-        // #endif
         for (int idx1 = 0; idx1 < nc; ++idx1) {
-            auto center = centers[idx1];
-            auto normal = normals[idx1];
             for (int idx2 = 0; idx2 < nc; ++idx2) {
-                auto tri = tris[idx2];
-                // check if this is defined in relative coordinates
-                Dune::FieldVector<double, 3> slip; // = make3(1.0,0.0, 0.0);
-                slip[0] = 1;
-                slip[1] = 0;
-                slip[2] = 0;
-
-                // symmetric stress voit notation
-                Dune::FieldVector<double, 6> strain = TDStrainFSTri(center, tri, slip, nu);
-                Dune::FieldVector<double, 6> stress = strainToStress(E, nu, strain);
-                double ntraction = tractionSymTensor(stress, normal);
-                // matrix relate to pure traction not area weighted
-                matrix[idx1][idx2] = ntraction;
+                matrix[idx1][idx2] = kernelNormalTraction(cache.centers[idx1],
+                                                          cache.normals[idx1],
+                                                          cache.tris[idx2],
+                                                          1.0,
+                                                          E,
+                                                          nu);
             }
         }
+    }
+}
+
+void
+applyMatrix_fast(Dune::DynamicVector<double>& result,
+                 const Dune::DynamicVector<double>& x,
+                 const double E,
+                 const double nu,
+                 const Dune::FoamGrid<2, 3>& grid)
+{
+    OPM_TIMEFUNCTION();
+    const int nc = grid.leafGridView().size(0);
+    assert(static_cast<int>(x.size()) == nc);
+
+    result.resize(nc);
+    const auto cache = buildGeometryCache(grid);
+
+    OPM_TIMEBLOCK(ApplyDDMMatrix);
+#pragma omp parallel for
+    for (int idx1 = 0; idx1 < nc; ++idx1) {
+        double value = 0.0;
+        for (int idx2 = 0; idx2 < nc; ++idx2) {
+            value += kernelNormalTraction(cache.centers[idx1],
+                                          cache.normals[idx1],
+                                          cache.tris[idx2],
+                                          x[idx2],
+                                          E,
+                                          nu);
+        }
+        result[idx1] = value;
     }
 }
 

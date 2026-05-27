@@ -670,9 +670,15 @@ Fracture::identify_closed(const FMatrix& A, const VectorHP& x, const ResVector& 
     
     OPM_TIMEFUNCTION();
     std::string closing_type = prm_.get<std::string>("solver.closing_type", "org");
+    const std::string closed_cell_policy = prm_.get<std::string>("solver.closed_cell_policy", "sticky");
     const double close_force_tolerance = prm_.get<double>("solver.close_force_tolerance", 0.0);
     const double reopen_force_tolerance = prm_.get<double>("solver.reopen_force_tolerance", close_force_tolerance);
     const double reopen_width_tolerance = prm_.get<double>("solver.reopen_width_tolerance", 0.0);
+    if (closed_cell_policy != "sticky" && closed_cell_policy != "legacy") {
+        OPM_THROW(std::runtime_error,
+                  "Unknown closed cell policy: " + closed_cell_policy);
+    }
+    const bool legacy_closed_cells = (closed_cell_policy == "legacy");
     ResVector tmp(rhs);
     const auto I = makeIdentity(A.N(), nwells);
     const auto was_closed = [this](const size_t index) {
@@ -688,6 +694,10 @@ Fracture::identify_closed(const FMatrix& A, const VectorHP& x, const ResVector& 
         A.mmv(h, tmp);
         I.mmv(p, tmp);
         for (size_t i = 0; i != A.N(); ++i) {
+            if (legacy_closed_cells) {
+                result.push_back(tmp[i] >= 0.0 && h[i] <= 0.0);
+                continue;
+            }
             const bool close_candidate = tmp[i] >= close_force_tolerance && h[i] <= 0.0;
             const bool reopen_candidate = tmp[i] <= -reopen_force_tolerance
                           && h[i] >= reopen_width_tolerance;
@@ -706,6 +716,10 @@ Fracture::identify_closed(const FMatrix& A, const VectorHP& x, const ResVector& 
             //double area = element.geometry().volume();
             double pressure = fracture_pressure_[i][0];
             //NB maybe use other pressure if closed
+            if (legacy_closed_cells) {
+                result[i] = (this->fractureForce(i) - pressure) < 0;
+                continue;
+            }
             const double closure_balance = this->fractureForce(i) - pressure;
             const bool close_candidate = closure_balance < -close_force_tolerance;
             const bool reopen_candidate = closure_balance > reopen_force_tolerance

@@ -1,4 +1,5 @@
 #pragma once
+#include <cmath>
 #include <iostream>
 #include <opm/simulators/flow/BlackoilModel.hpp>
 namespace Opm
@@ -109,72 +110,72 @@ namespace Opm
         public:
 
 
-                  bool
-                  fractureChanged(const std::vector<std::vector<RuntimePerforation>>& allWellIndices)
-                  {                    
-                       const auto& prm = this->simulator_.problem().getFractureParam();
-                       double ctf_threshold = prm.get("solver.ctf_change_threshold",1e-15);
-                       int verbosity = prm.get("solver.verbosity",1);
-                      const auto allWellIndices_new
-                          = this->simulator_.problem().getAllExtraWellIndices();
-                      bool structure_changed = false;    
-                      double max_ctf_change = 0.0;
-                      if ( !( allWellIndices.size() == allWellIndices_new.size()) ) {
-                           structure_changed = true;
-                          //return true;
-                      } else {
-                          //bool changed = false;
-                          for (size_t k = 0; k < allWellIndices.size(); ++k) {
-                              const auto& wellIndices = allWellIndices[k];
-                              const auto& wellIndices_new = allWellIndices_new[k];
-                              if (!(wellIndices.size() == wellIndices_new.size())) {
-                                  structure_changed = true;
-                                  return true;
-                              } else {
-                                  for (size_t i = 0; i < wellIndices.size(); ++i) {
-                                      if (!(wellIndices[i].cell == wellIndices_new[i].cell)) {
-                                          //changed = true;
-                                          structure_changed = true;
-                                        //    std::cout << "Fracture structure changed for well cell " << wellIndices[i].cell << std::endl;        
-                                        //  return true;
-                                      };
-                                      double ctf_change = std::abs(wellIndices[i].ctf - wellIndices_new[i].ctf);
-                                      max_ctf_change = std::max(max_ctf_change, ctf_change);
-                                      if (max_ctf_change  > ctf_threshold) {
-                                        if (verbosity > 1){
-                                          std::stringstream os;
-                                          os << "Fracture ctf changed for well  cell " << wellIndices[i].cell << std::endl;
-                                          os << "ctf changed from " << wellIndices[i].ctf << " to " << wellIndices_new[i].ctf << std::endl;
-                                          OpmLog::info(os.str());
-                                        }
-                                        //  changed = true;
-                                        //  return true;
-                                      }
-                                  }
-                              }
-                          }
-                        //   if (changed) {
-                        //       assert(false);
-                        //       return true;
-                        //   }else{
-                        //       return false;
-                        //   }
-                      }
-                      if(structure_changed){
-                        std::stringstream os;                
-                        os << "Fracture structure changed, max ctf change: " << max_ctf_change << std::endl;
-                        OpmLog::info(os.str());
-                        return true;
-                      }
-                      std::stringstream os;                
-                      os << "Fracture ctf changed, max ctf change: " << max_ctf_change << std::endl;
-                      OpmLog::info(os.str());
-                      if(max_ctf_change > ctf_threshold){
-                        
-                        return true;
-                      }
-                      return false;
-                  }
+        bool fractureChanged(
+            const std::vector<std::vector<RuntimePerforation>>& allWellIndices) const
+        {
+            const auto& prm = this->simulator_.problem().getFractureParam();
+            const double ctf_threshold_abs = prm.get("solver.ctf_change_threshold", 1e-15);
+            const double ctf_threshold_rel = prm.get("solver.ctf_change_threshold_rel", 0.0);
+            const double ctf_rel_scale = prm.get("solver.ctf_relative_scale", 1.0);
+            const int verbosity = prm.get("solver.verbosity", 1);
+
+            bool structure_changed = false;
+            double max_ctf_change_abs = 0.0;
+            double max_ctf_change_rel = 0.0;
+            const auto allWellIndices_new = this->simulator_.problem().getAllExtraWellIndices();
+            if (allWellIndices.size() != allWellIndices_new.size()) {
+                structure_changed = true;
+            }
+
+            const size_t num_wells = std::min(allWellIndices.size(), allWellIndices_new.size());
+            for (size_t k = 0; k < num_wells; ++k) {
+                const auto& wellIndices = allWellIndices[k];
+                const auto& wellIndices_new = allWellIndices_new[k];
+                if (wellIndices.size() != wellIndices_new.size()) {
+                    structure_changed = true;
+                }
+
+                const size_t num_perfs = std::min(wellIndices.size(), wellIndices_new.size());
+                for (size_t i = 0; i < num_perfs; ++i) {
+                    if (wellIndices[i].cell != wellIndices_new[i].cell) {
+                        structure_changed = true;
+                    }
+
+                    const double ctf_old = wellIndices[i].ctf;
+                    const double ctf_new = wellIndices_new[i].ctf;
+                    const double ctf_change_abs = std::abs(ctf_old - ctf_new);
+                    const double ctf_scale = std::max({std::abs(ctf_old), std::abs(ctf_new), ctf_rel_scale});
+                    const double ctf_change_rel = ctf_change_abs / ctf_scale;
+
+                    max_ctf_change_abs = std::max(max_ctf_change_abs, ctf_change_abs);
+                    max_ctf_change_rel = std::max(max_ctf_change_rel, ctf_change_rel);
+                }
+            }
+
+            bool ctf_changed = false;
+            if (ctf_threshold_rel > 0.0) {
+                ctf_changed = max_ctf_change_abs > ctf_threshold_abs
+                           && max_ctf_change_rel > ctf_threshold_rel;
+            }
+            else {
+                ctf_changed = max_ctf_change_abs > ctf_threshold_abs;
+            }
+
+            if (verbosity > 0) {
+                std::stringstream os;
+                os << "Fracture coupling change: structure_changed=" << (structure_changed ? "true" : "false")
+                   << ", ctf_changed=" << (ctf_changed ? "true" : "false")
+                   << ", max_ctf_change_abs=" << max_ctf_change_abs
+                   << ", max_ctf_change_rel=" << max_ctf_change_rel
+                   << ", abs_threshold=" << ctf_threshold_abs;
+                if (ctf_threshold_rel > 0.0) {
+                    os << ", rel_threshold=" << ctf_threshold_rel;
+                }
+                OpmLog::info(os.str());
+            }
+
+            return structure_changed || ctf_changed;
+        }
 
 
 
@@ -248,8 +249,12 @@ namespace Opm
                 OpmLog::info(os.str());
                 const auto allwellIndices = this->simulator_.problem().getAllExtraWellIndices();
                 this->simulator_.problem().geomechModel().solveFractures();
+                const bool fracture_converged = this->simulator_.problem().geomechModel().fractureModel().lastSolveStats().converged;
+                const bool require_converged_fracture_for_wi_update =
+                    prm.get<bool>("fractureparam.require_converged_fracture_for_wi_update", true);
+
                 bool addconnections = prm.get<bool>("fractureparam.addconnections");
-                if(addconnections){
+                if(addconnections && (!require_converged_fracture_for_wi_update || fracture_converged)){
                     std::cout << "Add connections in iterations" << std::endl;
                     this->simulator_.problem().addConnectionsToSchedual();// add new connections in the schedual
                     this->simulator_.problem().wellModel().beginTimeStep(); // reinitialize well structure
@@ -263,12 +268,19 @@ namespace Opm
                         this->runParentFirstIterationPreservingState(timer, nonlinear_solver);
                     std::cout << "End connections in iterations" << std::endl;
                 }
+                else if (addconnections && require_converged_fracture_for_wi_update && !fracture_converged) {
+                    OpmLog::info("Skipping fracture-driven connection update because fracture solve did not converge");
+                }
                 auto& comm = this->simulator_.gridView().comm();
                 bool fracture_changed_local = this->fractureChanged(allwellIndices);
                 bool fracture_changed = comm.max(fracture_changed_local);
+                bool fracture_converged_global = comm.min(fracture_converged);
                 std::cout << "Fracture changed: " << fracture_changed << std::endl;
                 // TODO check convergence properly
-                if(fracture_changed){
+                if(!fracture_converged_global || fracture_changed){
+                    if (!fracture_converged_global) {
+                        OpmLog::info("Keeping outer nonlinear loop active because fracture solve did not converge");
+                    }
                     report.converged = false;
                  }
                 // if(implicit_flow){
