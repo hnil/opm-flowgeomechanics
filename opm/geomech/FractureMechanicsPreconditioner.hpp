@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <memory>
+#include <string>
 #include <opm/common/TimingMacros.hpp>
 #include <dune/istl/bcrsmatrix.hh>
 #include <dune/istl/bvector.hh>
@@ -116,12 +117,22 @@ public:
     // };
     //bool hasPerfectUpdate() const override { return false; }
 private:
+enum class ApplyMode {
+  MechLast,
+  MechFirst,
+  FixedStress,
+};
+
 // Flow-first block triangular application.
 void applymech_last(Opm::VectorHP& v, const Opm::VectorHP& d);
 // Mechanics-first block triangular application.
 void applymech_first(Opm::VectorHP& v, const Opm::VectorHP& d);
 // Mechanics-first application with a fixed-stress Schur approximation on flow.
 void applyfixed_stress(Opm::VectorHP& v, const Opm::VectorHP& d);
+  ApplyMode selectMode(const SystemMatrix& S);
+  double estimateCouplingIndicator(const SystemMatrix& S) const;
+  void rebuildFlowSolver(const Opm::SystemMatrix& S);
+  static const char* modeName(ApplyMode mode);
 template <typename Mat>
 Vector diagvec(const Mat& M)
   {
@@ -161,6 +172,10 @@ Vector diagvec(const Mat& M)
   bool press_mech_coupling_{false};
   bool mech_first_{true};
   bool fixed_stress_{false};
+  ApplyMode active_mode_{ApplyMode::MechFirst};
+  std::string mode_policy_{"manual"};
+  double mode_switch_coupling_threshold_{1.0};
+  double last_coupling_indicator_{0.0};
 };
 
 } // namespace Opm::Geomech

@@ -125,6 +125,8 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.diag_flow", false);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.mech_first", true);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.fixed_stress", false);
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.mode_policy", "manual"s);
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.mode_switch_coupling_threshold", 0.25);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.mech_press_coupling", true);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.update_mech_on_reuse", false);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.verbosity", 0);  
@@ -135,6 +137,14 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.maxiter",1 );
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.preconditioner.type","DILU"s);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.preconditioner.verbosity",0);
+    fracture_param.put("fractureparam.solver.guard_state", true);
+    fracture_param.put("fractureparam.solver.guard_max_abs_width", 1e30);
+    fracture_param.put("fractureparam.solver.guard_max_abs_pressure", 1e30);
+    fracture_param.put("fractureparam.solver.close_force_tolerance", 0.0);
+    fracture_param.put("fractureparam.solver.reopen_force_tolerance", 0.0);
+    fracture_param.put("fractureparam.solver.reopen_width_tolerance", 0.0);
+    fracture_param.put("fractureparam.solver.max_closed_cell_toggle_count", 1000000000);
+    fracture_param.put("fractureparam.solver.max_closed_cell_toggle_fraction", 1.0);
     
     // reservoir fracture coupling
     fracture_param.put("fractureparam.reservoir.calculate_dist", true);

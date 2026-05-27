@@ -685,3 +685,55 @@ add_test(NAME Unit.FractureLinearReplay.CoupledFixedStress
 	--coupled
 	--solver-json=${CMAKE_CURRENT_LIST_DIR}/tests/fracture_linear_system_nlin_11/fracture_linear_system_nlin_11_linear_failure_linsolver_fixed_stress.json
 )
+
+set(FRACTURE_LINEAR_REPLAY_PREFIX_N4
+	${CMAKE_CURRENT_LIST_DIR}/tests/fracture_linear_system_nlin_4/fracture_linear_system_nlin_4_linear_failure)
+
+add_test(NAME Unit.FractureLinearReplay.N4.CoupledFailure
+	COMMAND $<TARGET_FILE:replay_fracture_linear_system>
+	${FRACTURE_LINEAR_REPLAY_PREFIX_N4}
+	--coupled
+)
+set_tests_properties(Unit.FractureLinearReplay.N4.CoupledFailure
+	PROPERTIES WILL_FAIL TRUE
+)
+
+add_test(NAME Unit.FractureLinearReplay.N4.CoupledFixedStress
+	COMMAND $<TARGET_FILE:replay_fracture_linear_system>
+	${FRACTURE_LINEAR_REPLAY_PREFIX_N4}
+	--coupled
+	--solver-json=${CMAKE_CURRENT_LIST_DIR}/tests/fracture_linear_system_nlin_11/fracture_linear_system_nlin_11_linear_failure_linsolver_fixed_stress.json
+)
+
+add_test(NAME Unit.FractureLinearReplay.N4.CoupledAuto
+	COMMAND $<TARGET_FILE:replay_fracture_linear_system>
+	${FRACTURE_LINEAR_REPLAY_PREFIX_N4}
+	--coupled
+	--solver-json=${CMAKE_CURRENT_LIST_DIR}/tests/fracture_linear_system_nlin_11/fracture_linear_system_nlin_11_linear_failure_linsolver_coupling_auto.json
+)
+
+set(FRACTURE_LINEAR_REPLAY_PREFIX_N22
+	${CMAKE_CURRENT_LIST_DIR}/tests/fracture_linear_system_nlin_22/fracture_linear_system_nlin_22_linear_failure)
+
+add_test(NAME Unit.FractureLinearReplay.N22.CoupledFixedStressFailure
+	COMMAND $<TARGET_FILE:replay_fracture_linear_system>
+	${FRACTURE_LINEAR_REPLAY_PREFIX_N22}
+	--coupled
+	--solver-json=${CMAKE_CURRENT_LIST_DIR}/tests/fracture_linear_system_nlin_11/fracture_linear_system_nlin_11_linear_failure_linsolver_fixed_stress.json
+)
+set_tests_properties(Unit.FractureLinearReplay.N22.CoupledFixedStressFailure
+	PROPERTIES WILL_FAIL TRUE
+)
+
+set(FRACTURE_LINEAR_REPLAY_PREFIX_N67
+	${CMAKE_CURRENT_LIST_DIR}/tests/fracture_linear_system_nlin_67/fracture_linear_system_nlin_67_linear_failure)
+
+add_test(NAME Unit.FractureLinearReplay.N67.CoupledFixedStressFailure
+	COMMAND $<TARGET_FILE:replay_fracture_linear_system>
+	${FRACTURE_LINEAR_REPLAY_PREFIX_N67}
+	--coupled
+	--solver-json=${CMAKE_CURRENT_LIST_DIR}/tests/fracture_linear_system_nlin_11/fracture_linear_system_nlin_11_linear_failure_linsolver_fixed_stress.json
+)
+set_tests_properties(Unit.FractureLinearReplay.N67.CoupledFixedStressFailure
+	PROPERTIES WILL_FAIL TRUE
+)

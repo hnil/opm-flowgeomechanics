@@ -4,6 +4,8 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <cmath>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <tuple>
@@ -57,6 +59,50 @@ using SystemMatrix = Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<FMatr
 using Htrans = std::tuple<size_t, size_t, double, double>;
 using LinearPrecondType = Opm::FractureMechanicsPreconditioner;
 using LinearSolverBase = Dune::InverseOperator<VectorHP, VectorHP>;
+
+void
+validate_state_vector(const ResVector& values, const char* const label, const double max_abs_value)
+{
+    for (size_t i = 0; i < values.size(); ++i) {
+        const double value = values[i][0];
+        if (!std::isfinite(value)) {
+            OPM_THROW(std::runtime_error,
+                      std::string("Fracture nonlinear state contains non-finite ") + label
+                          + " at index " + std::to_string(i));
+        }
+        if (std::abs(value) > max_abs_value) {
+            OPM_THROW(std::runtime_error,
+                      std::string("Fracture nonlinear state contains excessive ") + label
+                          + " at index " + std::to_string(i)
+                          + ": " + std::to_string(value));
+        }
+    }
+}
+
+void
+validate_fracture_state(const VectorHP& x, const Opm::PropertyTree& prm)
+{
+    if (!prm.get<bool>("solver.guard_state", true)) {
+        return;
+    }
+    const double max_abs_width = prm.get<double>("solver.guard_max_abs_width", 1e30);
+    const double max_abs_pressure = prm.get<double>("solver.guard_max_abs_pressure", 1e30);
+    validate_state_vector(x[_0], "width", max_abs_width);
+    validate_state_vector(x[_1], "pressure", max_abs_pressure);
+}
+
+size_t
+count_toggled_cells(const std::vector<int>& previous, const std::vector<int>& current)
+{
+    if (previous.size() != current.size()) {
+        return current.size();
+    }
+    size_t count = 0;
+    for (size_t i = 0; i < current.size(); ++i) {
+        count += (previous[i] != current[i]);
+    }
+    return count;
+}
 
 // ============================ Debugging functions ============================
 // ----------------------------------------------------------------------------
@@ -624,8 +670,14 @@ Fracture::identify_closed(const FMatrix& A, const VectorHP& x, const ResVector& 
     
     OPM_TIMEFUNCTION();
     std::string closing_type = prm_.get<std::string>("solver.closing_type", "org");
+    const double close_force_tolerance = prm_.get<double>("solver.close_force_tolerance", 0.0);
+    const double reopen_force_tolerance = prm_.get<double>("solver.reopen_force_tolerance", close_force_tolerance);
+    const double reopen_width_tolerance = prm_.get<double>("solver.reopen_width_tolerance", 0.0);
     ResVector tmp(rhs);
     const auto I = makeIdentity(A.N(), nwells);
+    const auto was_closed = [this](const size_t index) {
+        return index < closed_cells_.size() && closed_cells_[index] != 0;
+    };
 
     // computing rhs - A x[0] - I x[1]
     std::vector<int> result;
@@ -635,8 +687,12 @@ Fracture::identify_closed(const FMatrix& A, const VectorHP& x, const ResVector& 
         // maybe use other pressure if closed
         A.mmv(h, tmp);
         I.mmv(p, tmp);
-        for (size_t i = 0; i != A.N(); ++i)
-            result.push_back(tmp[i] >= 0 && h[i] <= 0.0);
+        for (size_t i = 0; i != A.N(); ++i) {
+            const bool close_candidate = tmp[i] >= close_force_tolerance && h[i] <= 0.0;
+            const bool reopen_candidate = tmp[i] <= -reopen_force_tolerance
+                          && h[i] >= reopen_width_tolerance;
+            result.push_back(was_closed(i) ? !reopen_candidate : close_candidate);
+        }
     } else if(closing_type == "open") {
             result.resize(A.N(), 1);
     } else if(closing_type == "simple"){
@@ -650,11 +706,11 @@ Fracture::identify_closed(const FMatrix& A, const VectorHP& x, const ResVector& 
             //double area = element.geometry().volume();
             double pressure = fracture_pressure_[i][0];
             //NB maybe use other pressure if closed
-            if((this->fractureForce(i)-pressure) < 0){
-                result[i] = 1;
-            } else {
-                result[i] = 0;
-            }
+            const double closure_balance = this->fractureForce(i) - pressure;
+            const bool close_candidate = closure_balance < -close_force_tolerance;
+            const bool reopen_candidate = closure_balance > reopen_force_tolerance
+                                          && fracture_width_[i][0] >= reopen_width_tolerance;
+            result[i] = was_closed(i) ? !reopen_candidate : close_candidate;
         }
     } else {
         std::stringstream ss;
@@ -765,6 +821,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     VectorHP x {fracture_width_, fracture_pressure_};
     // dump_vector(x, "w", "p", true); // dump current state of fracture
     // dump_vector(x, debug_filename("w_").c_str(), debug_filename("p_").c_str());
+    validate_fracture_state(x, prm_);
 
     VectorHP dx = x;
     dx = 0; // gradient of 'x' (which we aim to compute below)
@@ -774,10 +831,26 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     VectorHP rhs {x}; // same size as system, content set below
     normalFractureTraction(rhs[_0], false); // right-hand side equals the normal fracture traction
     rhs[_1] = rhs_pressure_; // should have been updated in call to `assemblePressure` above
+    const int nlin_verbosity = prm_.get<int>("solver.verbosity", 0);
 
     // make a version of the fracture matrix that has trivial equations for closed cells
-    const std::vector<int> closed_cells
+    std::vector<int> closed_cells
         = identify_closed(fractureMatrix(), x, rhs[_0], numWellEquations());
+    if (!closed_cells_.empty() && closed_cells_.size() == closed_cells.size()) {
+        const size_t toggled_cells = count_toggled_cells(closed_cells_, closed_cells);
+        const size_t max_toggle_count = static_cast<size_t>(std::max(
+            0, prm_.get<int>("solver.max_closed_cell_toggle_count", 1000000000)));
+        const double max_toggle_fraction = prm_.get<double>("solver.max_closed_cell_toggle_fraction", 1.0);
+        const size_t fraction_limit = static_cast<size_t>(max_toggle_fraction * closed_cells.size());
+        const size_t allowed_toggles = std::min(max_toggle_count, std::max<size_t>(fraction_limit, 0));
+        if (toggled_cells > allowed_toggles) {
+            if (nlin_verbosity > 0) {
+                std::cout << "Keeping previous closed-cell state after " << toggled_cells
+                          << " toggles exceeded guard limit " << allowed_toggles << std::endl;
+            }
+            closed_cells = closed_cells_;
+        }
+    }
     // closed as changed
     bool closed_cells_changed = false;
     if(closed_cells_.size() != closed_cells.size()){
@@ -924,7 +997,6 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     // flow system (where residuals scale with M*p)
     const double tol_flow = tol;//*std::max(A.infinity_norm(), M.infinity_norm()) * std::numeric_limits<double>::epsilon();
     const double tol_mech = tol;// * M.infinity_norm();
-    const int nlin_verbosity = prm_.get<int>("solver.verbosity", 0);
     if (convergence_test(rhs,
                          tol_mech,
                          tol_flow, nlin_verbosity))
