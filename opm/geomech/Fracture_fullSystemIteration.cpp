@@ -836,20 +836,14 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     // dump_vector(x, "w", "p", true); // dump current state of fracture
     // dump_vector(x, debug_filename("w_").c_str(), debug_filename("p_").c_str());
     validate_fracture_state(x, prm_);
-
-    VectorHP dx = x;
-    dx = 0; // gradient of 'x' (which we aim to compute below)
-
-
-    // set right hand side
-    VectorHP rhs {x}; // same size as system, content set below
-    normalFractureTraction(rhs[_0], false); // right-hand side equals the normal fracture traction
-    rhs[_1] = rhs_pressure_; // should have been updated in call to `assemblePressure` above
     const int nlin_verbosity = prm_.get<int>("solver.verbosity", 0);
+
+    ResVector mech_rhs(fracture_width_);
+    normalFractureTraction(mech_rhs, false);
 
     // make a version of the fracture matrix that has trivial equations for closed cells
     std::vector<int> closed_cells
-        = identify_closed(fractureMatrix(), x, rhs[_0], numWellEquations());
+        = identify_closed(fractureMatrix(), x, mech_rhs, numWellEquations());
     if (!closed_cells_.empty() && closed_cells_.size() == closed_cells.size()) {
         const size_t toggled_cells = count_toggled_cells(closed_cells_, closed_cells);
         const size_t max_toggle_count = static_cast<size_t>(std::max(
@@ -891,10 +885,10 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     }
     const auto& A = *A_;
 
-    // also modify right hand side for closed cells
+    // Closed cells are held fixed in the mechanics residual and Jacobian block.
     for (size_t i = 0; i != closed_cells.size(); ++i)
         if (closed_cells[i])
-            rhs[_0][i] = 0;
+            mech_rhs[i] = 0;
 
     if (use_ad) {
         // Use the standalone AD assembler for both pressure matrix and coupling matrix
@@ -921,8 +915,8 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     if(prm_.get<bool>("solver.drop_fluid_mech_linearization",true)){
       *coupling_matrix_ = 0;
     }else{
-      if(rhs[_0].infinity_norm() > prm_.get<double>("solver.drop_tol_h",1e1) ||
-         rhs[_1].infinity_norm() > prm_.get<double>("solver.drop_tol_p",1.0) ){
+            if(mech_rhs.infinity_norm() > prm_.get<double>("solver.drop_tol_h",1e1) ||
+                 rhs_pressure_.infinity_norm() > prm_.get<double>("solver.drop_tol_p",1.0) ){
         *coupling_matrix_ = 0;
         // maybe change linear solver
       }
@@ -990,6 +984,14 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     
     //S0.mmv(x, rhs); // rhs = rhs - S0 * x;   (we are working in the tanget plane)
     // write explicit using S
+
+    VectorHP dx = x;
+    dx = 0; // Newton update for the current nonlinear iterate
+
+    // Assemble the Newton residual after the Jacobian blocks have been refreshed.
+    VectorHP rhs {x};
+    rhs[_0] = mech_rhs;
+    rhs[_1] = rhs_pressure_;
     
        // S[_1][_0].mmv(x[_0], rhs[_1]);
         S[_1][_1].mmv(x[_1], rhs[_1]);
