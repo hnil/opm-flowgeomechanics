@@ -26,6 +26,69 @@ namespace Opm
                   }
 
         private:
+        struct CouplingChangeMetrics
+        {
+            bool structure_changed{false};
+            bool ctf_changed{false};
+            bool perf_pressure_changed{false};
+            double max_ctf_change_abs{0.0};
+            double max_ctf_change_rel{0.0};
+            double max_perf_change_abs{0.0};
+            double max_perf_change_rel{0.0};
+            double composite_norm{0.0};
+
+            bool changed() const
+            {
+                return structure_changed || ctf_changed || perf_pressure_changed;
+            }
+        };
+
+        bool shouldUpdateConnections(const CouplingChangeMetrics& metrics,
+                                     const bool legacy_coupling_change_logic,
+                                     const PropertyTree& prm)
+        {
+            if (legacy_coupling_change_logic) {
+                return true;
+            }
+
+            const bool hysteresis_enable = prm.get<bool>("fractureparam.topology_hysteresis.enable", false);
+            if (!hysteresis_enable) {
+                return true;
+            }
+
+            const double on_threshold = prm.get<double>("fractureparam.topology_hysteresis.on_threshold", 1.0);
+            const double off_threshold = prm.get<double>("fractureparam.topology_hysteresis.off_threshold", 0.3);
+            const int confirm_iterations = prm.get<int>("fractureparam.topology_hysteresis.confirm_iterations", 1);
+            const int cooldown_iterations = prm.get<int>("fractureparam.topology_hysteresis.cooldown_iterations", 0);
+            const double emergency_threshold = prm.get<double>("fractureparam.topology_hysteresis.emergency_threshold", 10.0);
+
+            if (topology_cooldown_counter_ > 0 && metrics.composite_norm < emergency_threshold && !metrics.structure_changed) {
+                --topology_cooldown_counter_;
+                return false;
+            }
+
+            const bool trigger_on = metrics.structure_changed || metrics.composite_norm >= on_threshold;
+            const bool trigger_off = (!metrics.structure_changed) && metrics.composite_norm <= off_threshold;
+
+            if (trigger_on) {
+                ++topology_pending_counter_;
+            }
+            else if (trigger_off) {
+                topology_pending_counter_ = 0;
+            }
+
+            if (metrics.composite_norm >= emergency_threshold || topology_pending_counter_ >= confirm_iterations) {
+                topology_pending_counter_ = 0;
+                topology_cooldown_counter_ = std::max(0, cooldown_iterations);
+                return true;
+            }
+
+            return false;
+        }
+
+        mutable int topology_pending_counter_{0};
+        mutable int topology_cooldown_counter_{0};
+
         struct StorageCacheBackup
         {
             bool enabled{false};
@@ -107,24 +170,36 @@ namespace Opm
             return report;
         }
 
+        template <class NonlinearSolverType>
+        SimulatorReportSingle runParentFirstIterationLegacy(
+            const SimulatorTimerInterface& timer,
+            NonlinearSolverType& nonlinear_solver)
+        {
+            std::cout << "Running parent first iteration in legacy mode (no state restore)" << std::endl;
+            auto report = Parent::nonlinearIteration(0, timer, nonlinear_solver);
+            std::cout << "Finished parent first iteration" << std::endl;
+            return report;
+        }
+
         public:
 
 
-        bool fractureChanged(
+        CouplingChangeMetrics evaluateFractureCouplingChange(
             const std::vector<std::vector<RuntimePerforation>>& allWellIndices) const
         {
             const auto& prm = this->simulator_.problem().getFractureParam();
             const double ctf_threshold_abs = prm.get("solver.ctf_change_threshold", 1e-15);
             const double ctf_threshold_rel = prm.get("solver.ctf_change_threshold_rel", 0.0);
             const double ctf_rel_scale = prm.get("solver.ctf_relative_scale", 1.0);
+            const double perf_threshold_abs = prm.get("solver.perf_pressure_change_threshold", 1e30);
+            const double perf_threshold_rel = prm.get("solver.perf_pressure_change_threshold_rel", 0.0);
+            const double perf_rel_scale = prm.get("solver.perf_pressure_relative_scale", 1.0);
             const int verbosity = prm.get("solver.verbosity", 1);
 
-            bool structure_changed = false;
-            double max_ctf_change_abs = 0.0;
-            double max_ctf_change_rel = 0.0;
+            CouplingChangeMetrics metrics;
             const auto allWellIndices_new = this->simulator_.problem().getAllExtraWellIndices();
             if (allWellIndices.size() != allWellIndices_new.size()) {
-                structure_changed = true;
+                metrics.structure_changed = true;
             }
 
             const size_t num_wells = std::min(allWellIndices.size(), allWellIndices_new.size());
@@ -132,13 +207,13 @@ namespace Opm
                 const auto& wellIndices = allWellIndices[k];
                 const auto& wellIndices_new = allWellIndices_new[k];
                 if (wellIndices.size() != wellIndices_new.size()) {
-                    structure_changed = true;
+                    metrics.structure_changed = true;
                 }
 
                 const size_t num_perfs = std::min(wellIndices.size(), wellIndices_new.size());
                 for (size_t i = 0; i < num_perfs; ++i) {
                     if (wellIndices[i].cell != wellIndices_new[i].cell) {
-                        structure_changed = true;
+                        metrics.structure_changed = true;
                     }
 
                     const double ctf_old = wellIndices[i].ctf;
@@ -147,34 +222,84 @@ namespace Opm
                     const double ctf_scale = std::max({std::abs(ctf_old), std::abs(ctf_new), ctf_rel_scale});
                     const double ctf_change_rel = ctf_change_abs / ctf_scale;
 
-                    max_ctf_change_abs = std::max(max_ctf_change_abs, ctf_change_abs);
-                    max_ctf_change_rel = std::max(max_ctf_change_rel, ctf_change_rel);
+                    metrics.max_ctf_change_abs = std::max(metrics.max_ctf_change_abs, ctf_change_abs);
+                    metrics.max_ctf_change_rel = std::max(metrics.max_ctf_change_rel, ctf_change_rel);
+
+                    const double perf_old = wellIndices[i].pressure;
+                    const double perf_new = wellIndices_new[i].pressure;
+                    const double perf_change_abs = std::abs(perf_old - perf_new);
+                    const double perf_scale = std::max({std::abs(perf_old), std::abs(perf_new), perf_rel_scale});
+                    const double perf_change_rel = perf_change_abs / perf_scale;
+
+                    metrics.max_perf_change_abs = std::max(metrics.max_perf_change_abs, perf_change_abs);
+                    metrics.max_perf_change_rel = std::max(metrics.max_perf_change_rel, perf_change_rel);
                 }
             }
 
-            bool ctf_changed = false;
             if (ctf_threshold_rel > 0.0) {
-                ctf_changed = max_ctf_change_abs > ctf_threshold_abs
-                           && max_ctf_change_rel > ctf_threshold_rel;
+                metrics.ctf_changed = metrics.max_ctf_change_abs > ctf_threshold_abs
+                                   && metrics.max_ctf_change_rel > ctf_threshold_rel;
             }
             else {
-                ctf_changed = max_ctf_change_abs > ctf_threshold_abs;
+                metrics.ctf_changed = metrics.max_ctf_change_abs > ctf_threshold_abs;
             }
+
+            if (perf_threshold_rel > 0.0) {
+                metrics.perf_pressure_changed = metrics.max_perf_change_abs > perf_threshold_abs
+                                             && metrics.max_perf_change_rel > perf_threshold_rel;
+            }
+            else {
+                metrics.perf_pressure_changed = metrics.max_perf_change_abs > perf_threshold_abs;
+            }
+
+            const double ctf_abs_norm = (ctf_threshold_abs > 0.0)
+                ? metrics.max_ctf_change_abs / ctf_threshold_abs
+                : 0.0;
+            const double ctf_rel_norm = (ctf_threshold_rel > 0.0)
+                ? metrics.max_ctf_change_rel / ctf_threshold_rel
+                : 0.0;
+            const double perf_abs_norm = (perf_threshold_abs > 0.0)
+                ? metrics.max_perf_change_abs / perf_threshold_abs
+                : 0.0;
+            const double perf_rel_norm = (perf_threshold_rel > 0.0)
+                ? metrics.max_perf_change_rel / perf_threshold_rel
+                : 0.0;
+            metrics.composite_norm = std::max({ctf_abs_norm,
+                                               ctf_rel_norm,
+                                               perf_abs_norm,
+                                               perf_rel_norm,
+                                               metrics.structure_changed ? 1.0 : 0.0});
 
             if (verbosity > 0) {
                 std::stringstream os;
-                os << "Fracture coupling change: structure_changed=" << (structure_changed ? "true" : "false")
-                   << ", ctf_changed=" << (ctf_changed ? "true" : "false")
-                   << ", max_ctf_change_abs=" << max_ctf_change_abs
-                   << ", max_ctf_change_rel=" << max_ctf_change_rel
+                os << "Fracture coupling change: structure_changed=" << (metrics.structure_changed ? "true" : "false")
+                   << ", ctf_changed=" << (metrics.ctf_changed ? "true" : "false")
+                   << ", perf_changed=" << (metrics.perf_pressure_changed ? "true" : "false")
+                   << ", max_ctf_change_abs=" << metrics.max_ctf_change_abs
+                   << ", max_ctf_change_rel=" << metrics.max_ctf_change_rel
+                   << ", max_perf_change_abs=" << metrics.max_perf_change_abs
+                   << ", max_perf_change_rel=" << metrics.max_perf_change_rel
+                   << ", composite_norm=" << metrics.composite_norm
                    << ", abs_threshold=" << ctf_threshold_abs;
                 if (ctf_threshold_rel > 0.0) {
                     os << ", rel_threshold=" << ctf_threshold_rel;
                 }
+                if (perf_threshold_abs < 1e29) {
+                    os << ", perf_abs_threshold=" << perf_threshold_abs;
+                }
+                if (perf_threshold_rel > 0.0) {
+                    os << ", perf_rel_threshold=" << perf_threshold_rel;
+                }
                 OpmLog::info(os.str());
             }
 
-            return structure_changed || ctf_changed;
+            return metrics;
+        }
+
+        bool fractureChanged(
+            const std::vector<std::vector<RuntimePerforation>>& allWellIndices) const
+        {
+            return evaluateFractureCouplingChange(allWellIndices).changed();
         }
 
 
@@ -207,6 +332,10 @@ namespace Opm
                                             const SimulatorTimerInterface& timer,
                                             NonlinearSolverType& nonlinear_solver){
             const PropertyTree& prm = this->simulator_.problem().getGeomechParam();
+            if (iteration == 0) {
+                topology_pending_counter_ = 0;
+                topology_cooldown_counter_ = 0;
+            }
             bool implicit_flow = prm.get<bool>("solver.implicit_flow");
             SimulatorReportSingle report;
             {
@@ -247,14 +376,33 @@ namespace Opm
                 //os << "Geomech nonlinearIteration with mechanical and fracture solve:" << iteration << std::endl;
                 os << "Solve Fractures:";
                 OpmLog::info(os.str());
+                const bool legacy_coupling_change_logic =
+                    prm.get<bool>("fractureparam.solver.legacy_coupling_change_logic", false);
+                const bool legacy_parent_setup_iteration =
+                    prm.get<bool>("fractureparam.solver.legacy_parent_setup_iteration", false);
                 const auto allwellIndices = this->simulator_.problem().getAllExtraWellIndices();
                 this->simulator_.problem().geomechModel().solveFractures();
                 const bool fracture_converged = this->simulator_.problem().geomechModel().fractureModel().lastSolveStats().converged;
                 const bool require_converged_fracture_for_wi_update =
                     prm.get<bool>("fractureparam.require_converged_fracture_for_wi_update", true);
 
+                const auto coupling_metrics_local = this->evaluateFractureCouplingChange(allwellIndices);
+                auto& comm = this->simulator_.gridView().comm();
+                CouplingChangeMetrics coupling_metrics = coupling_metrics_local;
+                coupling_metrics.structure_changed = comm.max(coupling_metrics_local.structure_changed);
+                coupling_metrics.ctf_changed = comm.max(coupling_metrics_local.ctf_changed);
+                coupling_metrics.perf_pressure_changed = comm.max(coupling_metrics_local.perf_pressure_changed);
+                coupling_metrics.composite_norm = comm.max(coupling_metrics_local.composite_norm);
+                const bool fracture_converged_global = comm.min(fracture_converged);
+
                 bool addconnections = prm.get<bool>("fractureparam.addconnections");
-                if(addconnections && (!require_converged_fracture_for_wi_update || fracture_converged)){
+                const bool may_update_connections = addconnections && (legacy_coupling_change_logic
+                    || !require_converged_fracture_for_wi_update
+                    || fracture_converged_global);
+                const bool do_update_connections = may_update_connections
+                    && this->shouldUpdateConnections(coupling_metrics, legacy_coupling_change_logic, prm);
+
+                if(do_update_connections){
                     std::cout << "Add connections in iterations" << std::endl;
                     this->simulator_.problem().addConnectionsToSchedual();// add new connections in the schedual
                     this->simulator_.problem().wellModel().beginTimeStep(); // reinitialize well structure
@@ -265,19 +413,26 @@ namespace Opm
                     //this->simulator_.problem().wellModel().prepareTimeStep(local_deferredLogger);// hopefully set up all well realated stuff correctly
 
                     [[maybe_unused]] auto tmp_report =
-                        this->runParentFirstIterationPreservingState(timer, nonlinear_solver);
+                        legacy_parent_setup_iteration
+                            ? this->runParentFirstIterationLegacy(timer, nonlinear_solver)
+                            : this->runParentFirstIterationPreservingState(timer, nonlinear_solver);
                     std::cout << "End connections in iterations" << std::endl;
+                }
+                else if (may_update_connections && !legacy_coupling_change_logic) {
+                    std::stringstream hos;
+                    hos << "Deferring fracture-driven connection update due to topology hysteresis"
+                        << ", composite_norm=" << coupling_metrics.composite_norm
+                        << ", pending=" << topology_pending_counter_
+                        << ", cooldown=" << topology_cooldown_counter_;
+                    OpmLog::info(hos.str());
                 }
                 else if (addconnections && require_converged_fracture_for_wi_update && !fracture_converged) {
                     OpmLog::info("Skipping fracture-driven connection update because fracture solve did not converge");
                 }
-                auto& comm = this->simulator_.gridView().comm();
-                bool fracture_changed_local = this->fractureChanged(allwellIndices);
-                bool fracture_changed = comm.max(fracture_changed_local);
-                bool fracture_converged_global = comm.min(fracture_converged);
+                const bool fracture_changed = coupling_metrics.changed();
                 std::cout << "Fracture changed: " << fracture_changed << std::endl;
                 // TODO check convergence properly
-                if(!fracture_converged_global || fracture_changed){
+                if((!legacy_coupling_change_logic && !fracture_converged_global) || fracture_changed){
                     if (!fracture_converged_global) {
                         OpmLog::info("Keeping outer nonlinear loop active because fracture solve did not converge");
                     }

@@ -26,6 +26,17 @@
     Sneddon, I. N. (1946). The distribution of stress in the neighbourhood of
     a crack in an elastic solid. Proc. R. Soc. London A, 187, 229-260.
     https://en.wikipedia.org/wiki/Stress_intensity_factor
+
+    Notes on method choice:
+        The current standalone benchmark uses the CutDe full-space triangular
+        dislocation kernel together with a cell-centered collocation DDM
+        discretization. This is a reasonable baseline for coupling to cell-based
+        flow models, where pressure is naturally represented per fracture cell.
+        If higher mechanical accuracy is needed, the next exact step is usually a
+        triangle-integrated or Galerkin DDM operator with dedicated self/near-cell
+        treatment. If larger problems dominate runtime, a near/far split with FMM
+        or hierarchical compression is the usual acceleration path while keeping
+        exact near interactions.
 */
 
 #include <config.h>
@@ -200,6 +211,7 @@ double matrix_free_normal_traction(const Dune::FieldVector<double, 3>& center,
                                    const double nu)
 {
     Dune::FieldVector<double, 3> slip(0.0);
+    // The CutDe wrapper uses TDCS ordering with the normal-opening component first.
     slip[0] = slip_value;
     const auto strain = ddm::TDStrainFSTri(center, tri, slip, nu);
     const auto stress = ddm::strainToStress(E, nu, strain);
@@ -528,11 +540,8 @@ CommandLineOptions parse_options(int argc, char** argv)
 }
 
 SolveResult solve_penny_problem(const int layers,
-                                const double E,
-                                const double nu,
-                                const double p,
-                                const SolverBackend backend,
-                                const int solve_repeats)
+                                const CommandLineOptions& options,
+                                const SolverBackend backend)
 {
     const auto total_start = Clock::now();
     const double h = 1.0;
@@ -554,27 +563,36 @@ SolveResult solve_penny_problem(const int layers,
     }
     const double a_eff = r_max + 0.5 * h;
 
-    Dune::DynamicMatrix<double> A(nc, nc, 0.0);
-    const auto assembly_start = Clock::now();
-    ddm::assembleMatrix_fast(A, E, nu, *grid);
-    const auto assembly_end = Clock::now();
-
-    DenseVector rhs(nc, -p);
+    DenseVector rhs(nc, -options.p);
     DenseVector opening(nc, 0.0);
 
     SolveTimings timings;
-    timings.assembly_ms = elapsed_ms(assembly_start, assembly_end);
+    SolveStats stats;
 
     if (backend == SolverBackend::Direct) {
+        Dune::DynamicMatrix<double> A(nc, nc, 0.0);
+        const auto assembly_start = Clock::now();
+        ddm::assembleMatrix_fast(A, options.E, options.nu, *grid);
+        const auto assembly_end = Clock::now();
+        timings.dense_assembly_ms = elapsed_ms(assembly_start, assembly_end);
+
         const auto solve_start = Clock::now();
-        for (int repeat = 0; repeat < solve_repeats; ++repeat) {
+        for (int repeat = 0; repeat < options.solve_repeats; ++repeat) {
             auto A_work = A;
+            opening = 0.0;
             A_work.solve(opening, rhs);
         }
         const auto solve_end = Clock::now();
         timings.solve_ms = elapsed_ms(solve_start, solve_end);
+        stats.iterations = options.solve_repeats;
     }
     else if (backend == SolverBackend::LuReuse) {
+        Dune::DynamicMatrix<double> A(nc, nc, 0.0);
+        const auto assembly_start = Clock::now();
+        ddm::assembleMatrix_fast(A, options.E, options.nu, *grid);
+        const auto assembly_end = Clock::now();
+        timings.dense_assembly_ms = elapsed_ms(assembly_start, assembly_end);
+
         auto lu_solver = DenseLUSolver(A);
 
         const auto factor_start = Clock::now();
@@ -583,16 +601,79 @@ SolveResult solve_penny_problem(const int layers,
         timings.factorization_ms = elapsed_ms(factor_start, factor_end);
 
         const auto solve_start = Clock::now();
-        for (int repeat = 0; repeat < solve_repeats; ++repeat) {
+        for (int repeat = 0; repeat < options.solve_repeats; ++repeat) {
+            opening = 0.0;
             lu_solver.solve(opening, rhs);
         }
         const auto solve_end = Clock::now();
         timings.solve_ms = elapsed_ms(solve_start, solve_end);
+        stats.iterations = options.solve_repeats;
+    }
+    else if (is_matrix_free_backend(backend)) {
+        const auto cache_start = Clock::now();
+        const auto cache = build_geometry_cache(*grid);
+        const auto cache_end = Clock::now();
+        timings.cache_setup_ms = elapsed_ms(cache_start, cache_end);
+
+        const auto preconditioner_start = Clock::now();
+        const auto diagonal = build_diagonal(cache, options.E, options.nu);
+        DiagonalPreconditioner preconditioner(diagonal);
+        const auto preconditioner_end = Clock::now();
+        timings.preconditioner_ms = elapsed_ms(preconditioner_start, preconditioner_end);
+
+        MatrixFreeDDMOperator op(cache, options.E, options.nu);
+        const auto solve_start = Clock::now();
+
+        int total_iterations = 0;
+        int total_apply_count = 0;
+        bool converged = true;
+
+        if (backend == SolverBackend::MatrixFreeBiCGSTAB) {
+            Dune::BiCGSTABSolver<DenseVector> solver(op,
+                                                     preconditioner,
+                                                     options.linear_tol,
+                                                     options.max_iter,
+                                                     options.solver_verbosity);
+            for (int repeat = 0; repeat < options.solve_repeats; ++repeat) {
+                opening = 0.0;
+                op.resetApplyCount();
+                Dune::InverseOperatorResult result;
+                auto rhs_work = rhs;
+                solver.apply(opening, rhs_work, result);
+                total_iterations += result.iterations;
+                total_apply_count += op.applyCount();
+                converged = converged && result.converged;
+            }
+        }
+        else {
+            Dune::RestartedGMResSolver<DenseVector> solver(op,
+                                                           preconditioner,
+                                                           options.linear_tol,
+                                                           options.gmres_restart,
+                                                           options.max_iter,
+                                                           options.solver_verbosity);
+            for (int repeat = 0; repeat < options.solve_repeats; ++repeat) {
+                opening = 0.0;
+                op.resetApplyCount();
+                Dune::InverseOperatorResult result;
+                auto rhs_work = rhs;
+                solver.apply(opening, rhs_work, result);
+                total_iterations += result.iterations;
+                total_apply_count += op.applyCount();
+                converged = converged && result.converged;
+            }
+        }
+
+        const auto solve_end = Clock::now();
+        timings.solve_ms = elapsed_ms(solve_start, solve_end);
+        stats.iterations = total_iterations;
+        stats.operator_applications = total_apply_count;
+        stats.converged = converged;
     }
 
     timings.total_ms = elapsed_ms(total_start, Clock::now());
 
-    return {std::move(grid), std::move(opening), a_eff, nc, timings};
+    return {std::move(grid), std::move(opening), a_eff, nc, timings, stats};
 }
 
 void print_benchmark_summary(const int layers,
@@ -603,20 +684,41 @@ void print_benchmark_summary(const int layers,
     std::cout << "  Benchmark backend=" << backend_name(backend)
               << " layers=" << layers
               << " cells=" << result.nc
-              << " repeats=" << solve_repeats << "\n"
-              << "    assembly_ms=" << result.timings.assembly_ms << "\n";
+              << " repeats=" << solve_repeats << "\n";
     if (backend == SolverBackend::LuReuse) {
-        std::cout << "    factorization_ms=" << result.timings.factorization_ms << "\n"
+        std::cout << "    dense_assembly_ms=" << result.timings.dense_assembly_ms << "\n"
+                  << "    factorization_ms=" << result.timings.factorization_ms << "\n"
                   << "    triangular_solve_ms=" << result.timings.solve_ms;
         if (solve_repeats > 0) {
             std::cout << " (per_rhs=" << result.timings.solve_ms / solve_repeats << ")";
         }
         std::cout << "\n";
     }
-    else {
-        std::cout << "    direct_solve_ms=" << result.timings.solve_ms;
+    else if (backend == SolverBackend::Direct) {
+        std::cout << "    dense_assembly_ms=" << result.timings.dense_assembly_ms << "\n"
+                  << "    direct_solve_ms=" << result.timings.solve_ms;
         if (solve_repeats > 0) {
             std::cout << " (per_rhs=" << result.timings.solve_ms / solve_repeats << ")";
+        }
+        std::cout << "\n";
+    }
+    else {
+        std::cout << "    cache_setup_ms=" << result.timings.cache_setup_ms << "\n"
+                  << "    diagonal_preconditioner_ms=" << result.timings.preconditioner_ms << "\n"
+                  << "    iterative_solve_ms=" << result.timings.solve_ms;
+        if (solve_repeats > 0) {
+            std::cout << " (per_rhs=" << result.timings.solve_ms / solve_repeats << ")";
+        }
+        std::cout << "\n"
+                  << "    converged=" << (result.stats.converged ? "true" : "false") << "\n"
+                  << "    iterations=" << result.stats.iterations;
+        if (solve_repeats > 0) {
+            std::cout << " (per_rhs=" << static_cast<double>(result.stats.iterations) / solve_repeats << ")";
+        }
+        std::cout << "\n"
+                  << "    operator_applications=" << result.stats.operator_applications;
+        if (solve_repeats > 0) {
+            std::cout << " (per_rhs=" << static_cast<double>(result.stats.operator_applications) / solve_repeats << ")";
         }
         std::cout << "\n";
     }
@@ -664,16 +766,13 @@ K1_from_cod(const double w, const double s, const double E, const double nu)
 /// Returns true if all checks pass.
 bool
 run_test(const int layers,
-         const double E,
-         const double nu,
-         const double p,
+         const CommandLineOptions& options,
          const SolverBackend backend,
-         const int solve_repeats,
          const double cod_rel_tol,
          const double K1_rel_tol)
 {
     const double h = 1.0; // element edge length
-    auto result = solve_penny_problem(layers, E, nu, p, backend, solve_repeats);
+    auto result = solve_penny_problem(layers, options, backend);
     auto& grid = *result.grid;
 
     const int nc = result.nc;
@@ -684,12 +783,17 @@ run_test(const int layers,
     const double a_eff = result.a_eff;
 
     std::cout << "  Effective crack radius a_eff = " << a_eff << " m" << std::endl;
-    print_benchmark_summary(layers, result, backend, solve_repeats);
+    print_benchmark_summary(layers, result, backend, options.solve_repeats);
+
+    if (is_matrix_free_backend(backend) && !result.stats.converged) {
+        std::cerr << "  FAILED: iterative solver did not converge" << std::endl;
+        return false;
+    }
 
     // ------------------------------------------------------------------
     // Compare DDM openings with the analytic COD profile.
     // ------------------------------------------------------------------
-    const double w_max_analytic = analytic_cod(0.0, a_eff, p, E, nu);
+    const double w_max_analytic = analytic_cod(0.0, a_eff, options.p, options.E, options.nu);
     std::cout << "  Analytic max COD (r=0): " << w_max_analytic << " m" << std::endl;
 
     double sum_rel_err   = 0.0;
@@ -704,7 +808,7 @@ run_test(const int layers,
         const double r    = std::sqrt(rx * rx + ry * ry);
 
         const double w_ddm      = result.opening[idx];
-        const double w_analytic = analytic_cod(r, a_eff, p, E, nu);
+        const double w_analytic = analytic_cod(r, a_eff, options.p, options.E, options.nu);
 
         // Only compare interior elements (well away from the discretised rim)
         if (r < a_eff - 1.5 * h && w_analytic > 1e-16) {
@@ -727,7 +831,7 @@ run_test(const int layers,
     // Use the LEFM relation K_I = w*E/(8*(1-nu^2)) * sqrt(2*pi/s)
     // where s = distance from element centroid to crack front (= a_eff - r).
     // ------------------------------------------------------------------
-    const double K1_analytic = analytic_K1(a_eff, p);
+    const double K1_analytic = analytic_K1(a_eff, options.p);
     std::cout << "  Analytic K_I = " << K1_analytic << " Pa*sqrt(m)" << std::endl;
 
     double K1_sum   = 0.0;
@@ -744,7 +848,7 @@ run_test(const int layers,
         const double s = a_eff - r;
         if (s > 0.0 && s < 1.5 * h) {
             const double w   = result.opening[idx];
-            const double K1  = K1_from_cod(w, s, E, nu);
+            const double K1  = K1_from_cod(w, s, options.E, options.nu);
             if (K1 > 0.0) {
                 K1_sum  += K1;
                 ++K1_count;
@@ -787,13 +891,11 @@ run_test(const int layers,
 /// Print the COD profile along x-axis for the given mesh resolution.
 void
 print_cod_profile(const int layers,
-                  const double E,
-                  const double nu,
-                  const double p,
+                  const CommandLineOptions& options,
                   const SolverBackend backend,
                   const int solve_repeats)
 {
-    auto result = solve_penny_problem(layers, E, nu, p, backend, solve_repeats);
+    auto result = solve_penny_problem(layers, options, backend);
     auto& grid = *result.grid;
     Mapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
 
@@ -814,7 +916,7 @@ print_cod_profile(const int layers,
     std::sort(rv.begin(), rv.end());
 
     for (auto& [r, w_ddm] : rv) {
-        const double w_an  = analytic_cod(r, result.a_eff, p, E, nu);
+        const double w_an  = analytic_cod(r, result.a_eff, options.p, options.E, options.nu);
         const double rel   = (w_an > 1e-16) ? std::abs(w_ddm - w_an) / w_an * 100.0 : 0.0;
         std::cout << "    " << r << "  " << w_ddm << "  " << w_an
                   << "  " << rel << "\n";
@@ -853,39 +955,28 @@ main(int argc, char** argv)
 
         if (options.print_profile) {
             std::cout << "--- COD profile (layers=" << options.profile_layers << ") ---\n";
-            print_cod_profile(options.profile_layers,
-                              options.E,
-                              options.nu,
-                              options.p,
-                              backend,
-                              options.solve_repeats);
+            print_cod_profile(options.profile_layers, options, backend, options.solve_repeats);
         }
 
-        if (!options.print_profile && !options.run_validation) {
+        if (!options.print_profile && !options.run_validation && options.benchmark_layers.empty()) {
             std::cout << "--- Benchmark only (layers=" << options.profile_layers << ") ---\n";
-            const auto result = solve_penny_problem(options.profile_layers,
-                                                    options.E,
-                                                    options.nu,
-                                                    options.p,
-                                                    backend,
-                                                    options.solve_repeats);
+            const auto result = solve_penny_problem(options.profile_layers, options, backend);
             print_benchmark_summary(options.profile_layers,
                                     result,
                                     backend,
                                     options.solve_repeats);
         }
 
+        for (const int layers : options.benchmark_layers) {
+            std::cout << "--- Benchmark: layers=" << layers << " ---\n";
+            const auto result = solve_penny_problem(layers, options, backend);
+            print_benchmark_summary(layers, result, backend, options.solve_repeats);
+        }
+
         if (options.run_validation) {
             for (const int layers : options.validation_layers) {
                 std::cout << "\n--- Test: layers=" << layers << " ---\n";
-                if (!run_test(layers,
-                              options.E,
-                              options.nu,
-                              options.p,
-                              backend,
-                              options.solve_repeats,
-                              options.cod_tol,
-                              options.K1_tol)) {
+                if (!run_test(layers, options, backend, options.cod_tol, options.K1_tol)) {
                     ++failures;
                 }
             }

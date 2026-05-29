@@ -48,6 +48,7 @@ double kernelNormalTraction(const Dune::FieldVector<double, 3>& center,
                             const double nu)
 {
     Dune::FieldVector<double, 3> slip;
+    // The CutDe wrapper uses TDCS ordering with the normal-opening component first.
     slip[0] = slip_value;
     slip[1] = 0.0;
     slip[2] = 0.0;

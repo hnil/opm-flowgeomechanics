@@ -1139,13 +1139,129 @@ Fracture::wellIndices() const{
    return wellindices;
 }
 
+double Fracture::applyCouplingUpdate(double current,
+                                     double target,
+                                     double damping_factor,
+                                     const std::string& mode,
+                                     const std::string& channel,
+                                     CouplingMixState& state)
+{
+    auto clamp = [](const double value, const double low, const double high)
+    {
+        return std::max(low, std::min(value, high));
+    };
+
+    const double relax_min = prm_.get<double>("solver.coupling_relax_min", 0.05);
+    const double relax_max = prm_.get<double>("solver.coupling_relax_max", 1.25);
+    const double omega_init_default = 1.0 / (1.0 + std::max(0.0, damping_factor));
+    const double omega_init = prm_.get<double>("solver.coupling_relax_init", omega_init_default);
+    const double acceptance_factor = prm_.get<double>("solver.coupling_acceptance_factor", 1.0);
+    const bool fallback_legacy = prm_.get<bool>("solver.coupling_fallback_legacy", true);
+    const double anderson_alpha_min = prm_.get<double>("solver.coupling_anderson_alpha_min", -1.0);
+    const double anderson_alpha_max = prm_.get<double>("solver.coupling_anderson_alpha_max", 2.0);
+    const double eps = 1e-14;
+
+    const auto legacyUpdate = [&](const double cur, const double tgt)
+    {
+        return (cur * damping_factor + tgt) / (1.0 + damping_factor);
+    };
+
+    if (!state.initialized) {
+        state.initialized = true;
+        state.previous_target = target;
+        state.previous_residual = 0.0;
+        state.has_previous_residual = false;
+        state.omega = clamp(omega_init, relax_min, relax_max);
+        return target;
+    }
+
+    if (mode == "legacy" || mode == "current") {
+        const double mixed = legacyUpdate(current, target);
+        state.previous_target = target;
+        state.previous_residual = target - mixed;
+        state.has_previous_residual = true;
+        return mixed;
+    }
+
+    const double residual = target - current;
+    const double residual_abs = std::abs(residual);
+
+    if (mode == "anderson") {
+        bool accepted = false;
+        if (state.has_previous_residual) {
+            const double denominator = residual - state.previous_residual;
+            if (std::abs(denominator) > eps) {
+                const double alpha = clamp(-residual / denominator, anderson_alpha_min, anderson_alpha_max);
+                const double candidate = alpha * state.previous_target + (1.0 - alpha) * target;
+                const double candidate_residual_abs = std::abs(target - candidate);
+                if (candidate_residual_abs <= acceptance_factor * residual_abs) {
+                    current = candidate;
+                    accepted = true;
+                }
+            }
+        }
+        if (!accepted) {
+            const double aitken_like = clamp(state.omega, relax_min, relax_max);
+            const double candidate = current + aitken_like * residual;
+            const double candidate_residual_abs = std::abs(target - candidate);
+            if (candidate_residual_abs <= acceptance_factor * residual_abs || !fallback_legacy) {
+                current = candidate;
+            }
+            else {
+                current = legacyUpdate(current, target);
+            }
+        }
+    }
+    else {
+        double omega = clamp(state.omega, relax_min, relax_max);
+        if (state.has_previous_residual) {
+            const double denominator = residual - state.previous_residual;
+            if (std::abs(denominator) > eps) {
+                omega = clamp(-omega * state.previous_residual / denominator, relax_min, relax_max);
+            }
+        }
+        const double candidate = current + omega * residual;
+        const double candidate_residual_abs = std::abs(target - candidate);
+        if (candidate_residual_abs <= acceptance_factor * residual_abs || !fallback_legacy) {
+            current = candidate;
+            state.omega = omega;
+        }
+        else {
+            current = legacyUpdate(current, target);
+        }
+    }
+
+    if (prm_.get<int>("solver.verbosity", 0) > 2) {
+        std::stringstream os;
+        os << "Coupling update " << channel
+           << ": mode=" << mode
+           << ", current=" << current
+           << ", target=" << target
+           << ", residual=" << (target - current)
+           << ", omega=" << state.omega;
+        OpmLog::info(os.str());
+    }
+
+    state.previous_target = target;
+    state.previous_residual = target - current;
+    state.has_previous_residual = true;
+    return current;
+}
+
 void Fracture::setPerfProps(double perfpressure, double depth, double perfrate){
-    double damping_factor_perf = prm_.get<double>("solver.damping_factor_perf",2.0);
+    const double damping_factor_perf = prm_.get<double>("solver.damping_factor_perf",2.0);
+    const std::string coupling_mode = prm_.get<std::string>("solver.coupling_update_mode", "legacy");
     if(well_indices_.size() >0){
         perf_pressure_ = perfpressure;
+        perf_pressure_mix_.initialized = false;
+        perf_pressure_mix_.has_previous_residual = false;
     }else{
-        // dampted updating for stability of fracture growth
-        perf_pressure_ = (perf_pressure_*damping_factor_perf+ perfpressure)/(1.0+damping_factor_perf);//(perfpressure-perf_pressure_)*damping_factor;
+        perf_pressure_ = applyCouplingUpdate(perf_pressure_,
+                                             perfpressure,
+                                             damping_factor_perf,
+                                             coupling_mode,
+                                             "perf_pressure",
+                                             perf_pressure_mix_);
     }
     well_perf_rate_ = perfrate;
     perf_ref_depth_ = depth;
@@ -1156,17 +1272,34 @@ void Fracture::setWellProps(double wellrate,
                             double wi_dz,
                             double wi_respress,
                             double ref_depth){
-    //if(well_indices_.size() >0){
+    const bool enable_wi_update = prm_.get<bool>("solver.enable_wi_coupling_update", false);
+    const std::string coupling_mode = prm_.get<std::string>("solver.coupling_update_mode", "legacy");
+    const double damping_factor_wi = prm_.get<double>("solver.damping_factor_wi",2.0);
+    if (enable_wi_update) {
+        well_rate_ = applyCouplingUpdate(well_rate_,
+                                         wellrate,
+                                         damping_factor_wi,
+                                         coupling_mode,
+                                         "well_rate",
+                                         well_rate_mix_);
+        total_wellindex_ = applyCouplingUpdate(total_wellindex_,
+                                               totalwi,
+                                               damping_factor_wi,
+                                               coupling_mode,
+                                               "total_wellindex",
+                                               total_wellindex_mix_);
+    }
+    else {
         well_rate_ = wellrate;
         total_wellindex_ = totalwi;
+        well_rate_mix_.initialized = false;
+        total_wellindex_mix_.initialized = false;
+        well_rate_mix_.has_previous_residual = false;
+        total_wellindex_mix_.has_previous_residual = false;
+    }
         wi_dz_ = wi_dz;
         wi_respress_ = wi_respress;
         well_ref_depth_ = ref_depth;
-    // }else{
-    //     // dampted updating for stability of fracture growth
-    //     well_rate_ = (well_rate_ + damping_factor_wi*wellrate)/(1.0+damping_factor_wi);//(wellrate-well_rate_)*damping_factor;
-    //     total_wellindex_ = (total_wellindex_ + damping_factor_wi*totalwi)/(1.0+damping_factor_wi);//(totalwi-total_wellindex_)*damping_factor;
-    // }
 }
 
 std::vector<RuntimePerforation>
