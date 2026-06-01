@@ -19,6 +19,7 @@
 #include <dune/grid/utility/persistentcontainer.hh>
 #include <dune/istl/io.hh> // needed for printSparseMatrix??
 #include <opm/geomech/DiscreteDisplacement.hpp>
+#include <opm/geomech/FracturePressureAssemblerAD.hpp>
 
 #include <opm/grid/polyhedralgrid.hh>
 
@@ -2059,73 +2060,17 @@ Fracture::initPressureMatrix()
 void
 Fracture::assemblePressure()
 {
-    //updateLeakoff();
-
-    auto& matrix = *pressure_matrix_;
-    matrix = 0.0;
-    // double mobility=1e4; //1e4; // @@ 1.0
-    //  get head in all fracture cells
-    for (auto matel : htrans_) {
-        size_t i = std::get<0>(matel);
-        size_t j = std::get<1>(matel);
-        double t1 = std::get<2>(matel);
-        double t2 = std::get<3>(matel);
-        //double h1 = fracture_width_[i] + min_width_;
-        //double h2 = fracture_width_[j] + min_width_;
-        const double h1 = std::max(fracture_width_[i][0],min_width_);
-        const double h2 = std::max(fracture_width_[j][0],min_width_);
-        // harmonic mean of surface flow
-        double value = 12. / (h1 * h1 * h1 * t1) + 12. / (h2 * h2 * h2 * t2);
-
-        const double mobility = 0.5 * (reservoir_mobility_[i] + reservoir_mobility_[j]);
-        value = 1 / value;
-        value *= mobility;
-        // matrix.entry(i, j) -= value;
-        // matrix.entry(j, i) -= value;
-        // //
-        // matrix.entry(i, i) += value;
-        // matrix.entry(j, j) += value;
-
-        matrix[i][j] -= value;
-        matrix[j][i] -= value;
-        //
-        matrix[i][i] += value;
-        matrix[j][j] += value;
-        // gravity contributions
-    }
-    auto control = prm_.get_child("control");
-    std::string control_type = control.get<std::string>("type");
-    for (size_t i = 0; i < leakof_.size(); ++i) {
-        // matrix.entry(i, i) += leakof_[i];
-        matrix[i][i] += leakof_[i];
-    }
-    if (control_type == "rate") {
-        // no extra tings in matrix
-    } else if (control_type == "pressure" || control_type == "perf_pressure") {
-        for (const auto& perfinj : perfinj_) {
-            int cell = std::get<0>(perfinj);
-            double value = std::get<1>(perfinj);
-            matrix[cell][cell] += value;
-        }
-    } else if (control_type == "rate_well") {
-        assert(numWellEquations() == 1); // @@ for now, we assume there is just one well equation
-        const int nc = numFractureCells() + numWellEquations();
-        const int cell = std::get<0>(perfinj_[0]); // @@ will this be the correct index? 
-        const double lambda = 1.0;//reservoir_mobility_[cell]; // @@ If not constant, this might be wrong
-        // control.get<double>("WI")
-        const double WI_lambda = total_wellindex_ * lambda; // we could ahve used total mobility here
-        matrix[nc - 1][nc - 1] = WI_lambda;
-        // NB: well_source_[i] is assumed to be the same as get<0>(perfinj_[i])
-        for (const auto& pi : perfinj_) {
-            const int i = std::get<0>(pi);
-            const double value = std::get<1>(pi) * mobility_water_perf_;// only flow in fracture not into reservoir
-            matrix[nc - 1][i] = -value; // well equation
-            matrix[nc - 1][nc - 1] += value; // well equation
-            matrix[i][nc - 1] = -value;
-            matrix[i][i] += value;
-        }
+    // Delegate to the standalone implementation shared with unit tests and the
+    // AD assembler path, eliminating the duplicate inline code that lived here.
+    // updateLeakoff() is called by the caller before this function.
+    auto result = assemblePressureOriginal(makePressureAssemblyInput());
+    if (!pressure_matrix_) {
+        // First call: take ownership of the newly created matrix.
+        pressure_matrix_ = std::move(result);
     } else {
-        OPM_THROW(std::runtime_error, "Unknown control of injection into Fracture");
+        // Subsequent calls: copy values into the existing matrix so that any
+        // cached solver (pressure_solver_) still holds a valid reference.
+        *pressure_matrix_ = *result;
     }
 }
 
