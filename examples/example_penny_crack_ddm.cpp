@@ -96,6 +96,7 @@ struct CommandLineOptions {
     int profile_layers = 5;
     bool print_profile = true;
     bool run_validation = true;
+    bool dump_solution = false;
     SolverBackend backend = SolverBackend::Direct;
     int solve_repeats = 1;
     double cod_tol = 0.15;
@@ -530,6 +531,11 @@ CommandLineOptions parse_options(int argc, char** argv)
         }
         if (starts_with(option, "--solver-verbosity=")) {
             options.solver_verbosity = std::stoi(option.substr(19));
+            continue;
+        }
+
+        if (option == "--dump-solution") {
+            options.dump_solution = true;
             continue;
         }
 
@@ -971,6 +977,18 @@ main(int argc, char** argv)
             std::cout << "--- Benchmark: layers=" << layers << " ---\n";
             const auto result = solve_penny_problem(layers, options, backend);
             print_benchmark_summary(layers, result, backend, options.solve_repeats);
+        }
+
+        if (options.dump_solution) {
+            for (const int layers : options.validation_layers) {
+                const auto result = solve_penny_problem(layers, options, backend);
+                std::cout << "\n--- Solution dump: layers=" << layers
+                          << "  nc=" << result.nc << " ---\n";
+                std::cout << std::setprecision(15);
+                for (int i = 0; i < result.nc; ++i) {
+                    std::cout << "  w[" << i << "] = " << result.opening[i] << "\n";
+                }
+            }
         }
 
         if (options.run_validation) {

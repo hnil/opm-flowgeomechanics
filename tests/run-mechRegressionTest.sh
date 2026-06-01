@@ -46,6 +46,10 @@ shift $(($OPTIND-1))
 TEST_ARGS="$@"
 
 mkdir -p ${RESULT_PATH}
+# Avoid stale summary/restart artifacts from previous runs in the same output directory.
+rm -f ${RESULT_PATH}/${FILENAME}.*
+rm -f ${RESULT_PATH}/${FILENAME}_RESTART_*.DATA
+rm -f ${RESULT_PATH}/${FILENAME}_RESTART_*.*
 cd ${RESULT_PATH}
 ${BINPATH}/${EXE_NAME} ${INPUT_DATA_PATH}/${FILENAME} ${TEST_ARGS} --output-dir=${RESULT_PATH}
 test $? -eq 0 || exit 1

@@ -1074,7 +1074,20 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
 
     {
         OPM_TIMEBLOCK(SolveCoupledSystem);
-        psolver_->apply(dx, rhs, iores); // NB: will modify 'rhs'
+        try {
+            psolver_->apply(dx, rhs, iores); // NB: will modify 'rhs'
+        } catch (const std::exception&) {
+            const bool allow_gmres_fallback = prm_.get<bool>(
+                "solver.linsolver.fallback_gmres_on_breakdown", true);
+            if (allow_gmres_fallback && solver_type == "bicgstab") {
+                psolver_ = setupLinearSolver("gmres", *S_linop_, precond, prm_, lintol, max_iter, verbosity);
+                rhs = rhs_org;
+                dx = 0;
+                psolver_->apply(dx, rhs, iores);
+            } else {
+                throw;
+            }
+        }
     }
     ++last_solve_stats_.linear_solves;
     last_solve_stats_.linear_iterations += iores.iterations;

@@ -1251,17 +1251,26 @@ double Fracture::applyCouplingUpdate(double current,
 void Fracture::setPerfProps(double perfpressure, double depth, double perfrate){
     const double damping_factor_perf = prm_.get<double>("solver.damping_factor_perf",2.0);
     const std::string coupling_mode = prm_.get<std::string>("solver.coupling_update_mode", "legacy");
+    // When true, apply damping even on the first call (pre-0e6bb48 behaviour).
+    const bool legacy_first_damp = prm_.get<bool>("solver.coupling_legacy_first_damp", false);
     if(well_indices_.size() >0){
         perf_pressure_ = perfpressure;
         perf_pressure_mix_.initialized = false;
         perf_pressure_mix_.has_previous_residual = false;
     }else{
-        perf_pressure_ = applyCouplingUpdate(perf_pressure_,
-                                             perfpressure,
-                                             damping_factor_perf,
-                                             coupling_mode,
-                                             "perf_pressure",
-                                             perf_pressure_mix_);
+        if (legacy_first_damp && !perf_pressure_mix_.initialized) {
+            // Emulate the pre-0e6bb48 behaviour: always damp, even on the first call.
+            perf_pressure_ = (perf_pressure_ * damping_factor_perf + perfpressure)
+                             / (1.0 + damping_factor_perf);
+            perf_pressure_mix_.initialized = true;
+        } else {
+            perf_pressure_ = applyCouplingUpdate(perf_pressure_,
+                                                 perfpressure,
+                                                 damping_factor_perf,
+                                                 coupling_mode,
+                                                 "perf_pressure",
+                                                 perf_pressure_mix_);
+        }
     }
     well_perf_rate_ = perfrate;
     perf_ref_depth_ = depth;
