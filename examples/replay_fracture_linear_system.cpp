@@ -40,7 +40,7 @@ void print_usage(const char* executable)
 {
     std::cerr << "Usage: " << executable << " <dump-prefix> [--coupled]"
               << " [--pressure=active|ad|original] [--solver-json=<path>]"
-              << " [--scaling=none|blockmax]" << std::endl;
+              << " [--scaling=none|blockmax] [--drop-coupling]" << std::endl;
 }
 
 FMatrix load_dense_matrix(const std::string& filename)
@@ -223,12 +223,18 @@ make_coupled_solver(const std::string& solver_type,
 
 int replay_coupled_system(const std::string& prefix,
                           const std::string& solver_json,
-                          const std::string& scaling_mode)
+                          const std::string& scaling_mode,
+                          const bool drop_coupling)
 {
     const FMatrix aperture = load_dense_matrix(prefix + "_A.txt");
     const SMatrix identity = load_sparse_matrix(prefix + "_I.mtx");
-    const SMatrix coupling = load_sparse_matrix(prefix + "_C_active.mtx");
+    SMatrix coupling = load_sparse_matrix(prefix + "_C_active.mtx");
     const SMatrix pressure = load_sparse_matrix(prefix + "_M_active.mtx");
+    // Mirror the production ladder's drop-C (decoupled / Picard) rescue rung: zero
+    // the flow->mech coupling block so the system becomes block-triangular.
+    if (drop_coupling) {
+        scale_matrix(coupling, 0.0);
+    }
     const Vector rhs_w = load_vector(prefix + "_rhs_w.mtx");
     const Vector rhs_p = load_vector(prefix + "_rhs_p.mtx");
 
@@ -345,6 +351,7 @@ int main(int argc, char** argv)
         std::string pressure_mode;
         std::string solver_json;
         std::string scaling_mode = "none";
+        bool drop_coupling = false;
 
         for (int arg = 2; arg < argc; ++arg) {
             const std::string option = argv[arg];
@@ -373,11 +380,16 @@ int main(int argc, char** argv)
                 continue;
             }
 
+            if (option == "--drop-coupling") {
+                drop_coupling = true;
+                continue;
+            }
+
             throw std::runtime_error("Unknown option: " + option);
         }
 
         if (coupled_mode) {
-            return replay_coupled_system(prefix, solver_json, scaling_mode);
+            return replay_coupled_system(prefix, solver_json, scaling_mode, drop_coupling);
         }
 
         return replay_pressure_system(prefix,

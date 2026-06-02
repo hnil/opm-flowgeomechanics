@@ -547,8 +547,11 @@ add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp
 						--threads-per-process=4)
 
 # Sequential-implicit fracture run with the recommended (physically-correct) settings:
-# gravity on, robust mech-last/decoupled linear solver, relaxed closed-cell guards
-# (data/fracture_simple_bhp_seq_final.json, see data/fracture_settings_REFERENCE.md).
+# gravity on, AD assembly (coupling dropped for robustness), robust mech-last/decoupled
+# linear solver, relaxed closed-cell guards (data/fracture_simple_bhp_seq_final.json,
+# see data/fracture_settings_REFERENCE.md). Uses myparamsfrac_seq.ini: adaptive
+# timestepping on and no fixed initial step, so the fracture solve is exercised under
+# varying/larger steps (harder than the legacy seq tests).
 add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp_recommended
                          FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ
                          SIMULATOR flow_energy_geomech
@@ -556,7 +559,7 @@ add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp_recommended
                          REL_TOL ${rel_tol}
                          DIR ${CMAKE_CURRENT_LIST_DIR}/data/
 						 PREFIX geomech_frac_seq_bhp_recommended
-						 TEST_ARGS --parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
+						 TEST_ARGS --parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac_seq.ini
 						--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_bhp_seq_final.json
 						--enable-write-all-solutions=true
 						--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json

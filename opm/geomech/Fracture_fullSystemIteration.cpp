@@ -60,6 +60,89 @@ using Htrans = std::tuple<size_t, size_t, double, double>;
 using LinearPrecondType = Opm::FractureMechanicsPreconditioner;
 using LinearSolverBase = Dune::InverseOperator<VectorHP, VectorHP>;
 
+// ----------------------------------------------------------------------------
+// Block scaling for the coupled fracture linear system.
+//
+// The mechanics block A (stiffness/traction, O(1e6-1e10)) and the flow block M
+// (transmissibility, O(1e-6)) differ by many orders of magnitude, which wrecks
+// the conditioning of the coupled Krylov solve. A symmetric diagonal scaling
+//   D = diag(s_m on mech rows, s_p on pressure rows),  S -> D S D,  b -> D b,
+// solving for y and recovering x = D y, normalises the two blocks. This mirrors
+// the validated --scaling=blockmax path in examples/replay_fracture_linear_system.cpp
+// (see tests/replay_sweep.sh). s_m = 1/sqrt(max|A|), s_p = 1/sqrt(max|M|).
+// ----------------------------------------------------------------------------
+struct BlockScaling
+{
+    double mechanics = 1.0;
+    double pressure = 1.0;
+    bool active() const { return mechanics != 1.0 || pressure != 1.0; }
+};
+
+double
+max_abs_entry(const FMatrix& m)
+{
+    double res = 0.0;
+    for (size_t i = 0; i != m.N(); ++i)
+        for (size_t j = 0; j != m.M(); ++j)
+            res = std::max(res, std::abs(m[i][j]));
+    return res;
+}
+
+double
+max_abs_entry(const SMatrix& m)
+{
+    double res = 0.0;
+    for (auto row = m.begin(); row != m.end(); ++row)
+        for (auto col = row->begin(); col != row->end(); ++col)
+            res = std::max(res, std::abs((*col)[0][0]));
+    return res;
+}
+
+void
+scale_sparse(SMatrix& m, const double factor)
+{
+    for (auto row = m.begin(); row != m.end(); ++row)
+        for (auto col = row->begin(); col != row->end(); ++col)
+            (*col)[0][0] *= factor;
+}
+
+void
+scale_dense(FMatrix& m, const double factor)
+{
+    for (size_t i = 0; i != m.N(); ++i)
+        for (size_t j = 0; j != m.M(); ++j)
+            m[i][j] *= factor;
+}
+
+// Compute s_m, s_p from the current diagonal blocks for the requested mode.
+// "none" (default) returns identity scaling.
+BlockScaling
+compute_block_scaling(const SystemMatrix& S, const std::string& mode)
+{
+    if (mode == "none")
+        return {};
+    if (mode != "blockmax")
+        OPM_THROW(std::runtime_error, "Unsupported fracture linsolver scaling mode: " + mode);
+
+    const double a_max = max_abs_entry(S[_0][_0]);
+    const double m_max = max_abs_entry(S[_1][_1]);
+    if (a_max <= 0.0 || m_max <= 0.0)
+        return {}; // degenerate block; fall back to no scaling rather than throw
+    return {1.0 / std::sqrt(a_max), 1.0 / std::sqrt(m_max)};
+}
+
+// Apply D S D to the system and D b to the rhs (in place).
+void
+apply_block_scaling(SystemMatrix& S, VectorHP& rhs, const BlockScaling& s)
+{
+    scale_dense(S[_0][_0], s.mechanics * s.mechanics);
+    scale_sparse(S[_0][_1], s.mechanics * s.pressure);
+    scale_sparse(S[_1][_0], s.mechanics * s.pressure);
+    scale_sparse(S[_1][_1], s.pressure * s.pressure);
+    for (auto& v : rhs[_0]) v[0] *= s.mechanics;
+    for (auto& v : rhs[_1]) v[0] *= s.pressure;
+}
+
 void
 validate_state_vector(const ResVector& values, const char* const label, const double max_abs_value)
 {
@@ -1071,6 +1154,16 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
                          tol_flow, nlin_verbosity))
         return true;
 
+    // Optional symmetric block scaling of the coupled system (opt-in; default
+    // "none" reproduces the unscaled behaviour). Computed from the current
+    // diagonal blocks and applied in place to S and rhs; the Newton update dx is
+    // scaled back after the linear solve. The convergence test above is done on
+    // the unscaled residual so tolerances keep their physical meaning.
+    const BlockScaling block_scaling =
+        compute_block_scaling(S, prm_.get<std::string>("solver.linsolver.scaling", "none"));
+    if (block_scaling.active()) {
+        apply_block_scaling(S, rhs, block_scaling);
+    }
 
     // solve system equations
     //const Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP> S_linop(S);
@@ -1125,25 +1218,84 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
                                     makePressureAssemblyInput());
     }
 
+    // Pristine copy of the (possibly scaled) rhs fed to the solver, so each retry
+    // restarts from the same system (apply() overwrites rhs with the residual).
+    const VectorHP rhs_solve_org = rhs;
+    const std::string failure_policy =
+        prm_.get<std::string>("solver.linsolver.failure_policy", "throw");
+
+    // Run a solver from a clean state and accumulate stats.
+    auto run_solver = [&](LinearSolverBase& solver) {
+        rhs = rhs_solve_org;
+        dx = 0;
+        solver.apply(dx, rhs, iores); // NB: will modify 'rhs'
+        ++last_solve_stats_.linear_solves;
+        last_solve_stats_.linear_iterations += iores.iterations;
+    };
+
     {
         OPM_TIMEBLOCK(SolveCoupledSystem);
         try {
-            psolver_->apply(dx, rhs, iores); // NB: will modify 'rhs'
+            run_solver(*psolver_);
         } catch (const std::exception&) {
             const bool allow_gmres_fallback = prm_.get<bool>(
                 "solver.linsolver.fallback_gmres_on_breakdown", true);
             if (allow_gmres_fallback && solver_type == "bicgstab") {
                 psolver_ = setupLinearSolver("gmres", *S_linop_, precond, prm_, lintol, max_iter, verbosity);
-                rhs = rhs_org;
-                dx = 0;
-                psolver_->apply(dx, rhs, iores);
+                run_solver(*psolver_);
             } else {
                 throw;
             }
         }
     }
-    ++last_solve_stats_.linear_solves;
-    last_solve_stats_.linear_iterations += iores.iterations;
+
+    // Opt-in robustness ladder (solver.linsolver.failure_policy = "ladder"):
+    // if the configured solve did not converge, try progressively more robust
+    // rescue strategies before giving up. Each rung is transient — the persistent
+    // solver/preconditioner are untouched, and S is rebuilt in place at the top of
+    // the next nonlinear iteration, so no cleanup is required. Rungs operate on the
+    // already-scaled S/rhs, so the dx unscaling below applies uniformly.
+    if (!iores.converged && failure_policy == "ladder") {
+        const auto fixed_stress_prm = [&]() {
+            Opm::PropertyTree p = lprm;
+            p.put("mode_policy", std::string("manual"));
+            p.put("mech_first", std::string("true"));
+            p.put("fixed_stress", std::string("true"));
+            return p;
+        };
+        // rung 1: flexible GMRES with the existing preconditioner.
+        try {
+            auto s = setupLinearSolver("fgmres", *S_linop_, precond, prm_, lintol, max_iter, verbosity);
+            run_solver(*s);
+        } catch (const std::exception&) { /* fall through to next rung */ }
+
+        // rung 2: fixed-stress (Schur) preconditioner + flexible GMRES.
+        if (!iores.converged) {
+            try {
+                auto fsprm = fixed_stress_prm();
+                Opm::FractureMechanicsPreconditioner fsprecond(S, fsprm);
+                auto s = setupLinearSolver("fgmres", *S_linop_, fsprecond, prm_, lintol, max_iter, verbosity);
+                run_solver(*s);
+            } catch (const std::exception&) {}
+        }
+
+        // rung 3: drop the flow->mech coupling block C (decoupled / Picard) and
+        // solve the block-triangular system with a fixed-stress preconditioner.
+        if (!iores.converged) {
+            try {
+                S[_1][_0] = 0; // overwritten again at the top of the next iteration
+                auto dcprm = fixed_stress_prm();
+                Opm::FractureMechanicsPreconditioner dcprecond(S, dcprm);
+                auto s = setupLinearSolver("fgmres", *S_linop_, dcprecond, prm_, lintol, max_iter, verbosity);
+                run_solver(*s);
+            } catch (const std::exception&) {}
+        }
+
+        if (iores.converged && nlin_verbosity > 0) {
+            std::cout << "Fracture coupled linear solve rescued by fallback ladder at nlin iter "
+                      << nlin_iteration << " (" << iores.iterations << " iters)" << std::endl;
+        }
+    }
 
     if (!iores.converged) {
         std::string dump_info_filename;
@@ -1173,6 +1325,13 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
                              : " Snapshot info: " + dump_info_filename));
     }
 
+    // Undo the block scaling: the solver returned y, the true Newton update is
+    // dx = D y. All subsequent step control (damping, clamps) acts on dx.
+    if (block_scaling.active()) {
+        for (auto& v : dx[_0]) v[0] *= block_scaling.mechanics;
+        for (auto& v : dx[_1]) v[0] *= block_scaling.pressure;
+    }
+
     if (nlin_verbosity > 2) {
         std::cout << "x:  " << x[_0].infinity_norm() << " " << x[_1].infinity_norm() << std::endl;
         std::cout << "dx: " << dx[_0].infinity_norm() << " " << dx[_1].infinity_norm() << std::endl;
@@ -1180,15 +1339,17 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
           " " << rhs[_1].infinity_norm()
                   << std::endl;
     }
-    if (nlin_verbosity > 2) {
+    if (nlin_verbosity > 2 && !block_scaling.active()) {
+      // Skipped when block scaling is active: S has been overwritten with D S D
+      // in place, so this unscaled residual check would be meaningless.
       auto x_new(dx);
       //x_new += dx;
       auto rhs2_tmp(rhs_org);
       S.mmv(x_new, rhs2_tmp);
-      std::cout << "Check res : rhs after linsolve:  " << rhs2_tmp[_0].infinity_norm() << 
+      std::cout << "Check res : rhs after linsolve:  " << rhs2_tmp[_0].infinity_norm() <<
         " " << rhs2_tmp[_1].infinity_norm() << std::endl;
 
-      
+
     }
     
     // the following is a heuristic way to limit stepsize to stay within convergence radius

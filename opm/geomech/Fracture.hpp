@@ -207,6 +207,14 @@ struct WellInfo
     int linear_iterations = 0;
     double solve_time_seconds = 0.0;
     bool converged = true;
+    // Contact (open/close) chatter: number of cells that flipped open<->closed
+    // state, summed over nonlinear iterations. High values indicate the contact
+    // set is oscillating and driving up the iteration count (Phase 2 signal).
+    int closed_cell_toggles = 0;
+    // Robustness signals (Phase 1): coupled linear solves that did not converge,
+    // and how many of those were recovered by the fallback ladder.
+    int linear_solve_failures = 0;
+    int ladder_rescues = 0;
 
     FractureSolveStats& operator+=(const FractureSolveStats& other)
     {
@@ -216,6 +224,9 @@ struct WellInfo
       linear_iterations += other.linear_iterations;
       solve_time_seconds += other.solve_time_seconds;
       converged = converged && other.converged;
+      closed_cell_toggles += other.closed_cell_toggles;
+      linear_solve_failures += other.linear_solve_failures;
+      ladder_rescues += other.ladder_rescues;
       return *this;
     }
   };
