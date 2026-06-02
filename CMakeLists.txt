@@ -547,23 +547,20 @@ add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp
 						--threads-per-process=4)
 
 # Sequential-implicit fracture run with the recommended (physically-correct) settings:
-# fully-coupled AD assembly, gravity on, coupling_auto preconditioner, relaxed closed-cell
-# guards (data/fracture_simple_bhp_seq_final.json, see data/fracture_settings_REFERENCE.md).
-# DISABLED until a reference is committed: regenerate it (preferably from a longer run) into
-# data/opm-simulation-references/REGTEST_geomech_frac_seq_bhp_recommended/flow_energy_geomech/
-# then uncomment.
-# add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp_recommended
-#                          FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ
-#                          SIMULATOR flow_energy_geomech
-#                          ABS_TOL ${abs_tol}
-#                          REL_TOL ${rel_tol}
-#                          DIR ${CMAKE_CURRENT_LIST_DIR}/data/
-# 						 PREFIX geomech_frac_seq_bhp_recommended
-# 						 TEST_ARGS --parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
-# 						--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_bhp_seq_final.json
-# 						--enable-write-all-solutions=true
-# 						--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
-# 						--threads-per-process=4)
+# gravity on, robust mech-last/decoupled linear solver, relaxed closed-cell guards
+# (data/fracture_simple_bhp_seq_final.json, see data/fracture_settings_REFERENCE.md).
+add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp_recommended
+                         FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ
+                         SIMULATOR flow_energy_geomech
+                         ABS_TOL ${abs_tol}
+                         REL_TOL ${rel_tol}
+                         DIR ${CMAKE_CURRENT_LIST_DIR}/data/
+						 PREFIX geomech_frac_seq_bhp_recommended
+						 TEST_ARGS --parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
+						--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_bhp_seq_final.json
+						--enable-write-all-solutions=true
+						--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
+						--threads-per-process=4)
 
 # Reference data not yet committed - disabled until reference is updated
 # add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp_default
