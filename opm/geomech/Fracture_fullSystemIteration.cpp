@@ -104,6 +104,26 @@ count_toggled_cells(const std::vector<int>& previous, const std::vector<int>& cu
     return count;
 }
 
+// Count only cells that re-open (closed -> open). Establishing contact
+// (open -> closed) must never be throttled: the contact set legitimately needs
+// to grow by hundreds of cells in a single iteration when a fracture starts
+// fully compressed, and throttling that growth freezes the closed set at empty
+// and prevents the mechanics residual from ever converging. Chattering, the
+// behaviour the toggle guard is meant to suppress, shows up as re-openings, so
+// the guard only counts those.
+size_t
+count_reopened_cells(const std::vector<int>& previous, const std::vector<int>& current)
+{
+    if (previous.size() != current.size()) {
+        return 0;
+    }
+    size_t count = 0;
+    for (size_t i = 0; i < current.size(); ++i) {
+        count += (previous[i] != 0 && current[i] == 0);
+    }
+    return count;
+}
+
 // ============================ Debugging functions ============================
 // ----------------------------------------------------------------------------
 // template<class MatrixType> void dump_matrix(const MatrixType& m, const char* const name)
@@ -699,8 +719,13 @@ Fracture::identify_closed(const FMatrix& A, const VectorHP& x, const ResVector& 
                 continue;
             }
             const bool close_candidate = tmp[i] >= close_force_tolerance && h[i] <= 0.0;
-            const bool reopen_candidate = tmp[i] <= -reopen_force_tolerance
-                          && h[i] >= reopen_width_tolerance;
+            // Re-opening is force-driven. A closed cell has its width pinned at 0,
+            // so a width gate (h[i] >= reopen_width_tolerance) with a positive
+            // tolerance can never be satisfied and would lock the cell closed
+            // forever, suppressing fracture growth. reopen_width_tolerance is kept
+            // for backward compatibility but no longer gates on the pinned width.
+            (void)reopen_width_tolerance;
+            const bool reopen_candidate = tmp[i] <= -reopen_force_tolerance;
             result.push_back(was_closed(i) ? !reopen_candidate : close_candidate);
         }
     } else if(closing_type == "open") {
@@ -722,8 +747,10 @@ Fracture::identify_closed(const FMatrix& A, const VectorHP& x, const ResVector& 
             }
             const double closure_balance = this->fractureForce(i) - pressure;
             const bool close_candidate = closure_balance < -close_force_tolerance;
-            const bool reopen_candidate = closure_balance > reopen_force_tolerance
-                                          && fracture_width_[i][0] >= reopen_width_tolerance;
+            // Force-driven reopen (see "org" branch): width is pinned at 0 for
+            // closed cells, so we do not gate reopening on it.
+            (void)reopen_width_tolerance;
+            const bool reopen_candidate = closure_balance > reopen_force_tolerance;
             result[i] = was_closed(i) ? !reopen_candidate : close_candidate;
         }
     } else {
@@ -866,7 +893,12 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     std::vector<int> closed_cells
         = identify_closed(fractureMatrix(), x, mech_rhs, numWellEquations());
     if (!closed_cells_.empty() && closed_cells_.size() == closed_cells.size()) {
-        const size_t toggled_cells = count_toggled_cells(closed_cells_, closed_cells);
+        // Anti-chatter guard. Only re-openings (closed -> open) are throttled;
+        // establishing contact (open -> closed) is always allowed so the contact
+        // set can grow as fast as the physics demands. Throttling growth here was
+        // observed to freeze the closed set at empty and prevent convergence on
+        // fully-compressed fractures (regression decks). See count_reopened_cells.
+        const size_t toggled_cells = count_reopened_cells(closed_cells_, closed_cells);
         const size_t max_toggle_count = static_cast<size_t>(std::max(
             0, prm_.get<int>("solver.max_closed_cell_toggle_count", 1000000000)));
         const double max_toggle_fraction = prm_.get<double>("solver.max_closed_cell_toggle_fraction", 1.0);
@@ -875,7 +907,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         if (toggled_cells > allowed_toggles) {
             if (nlin_verbosity > 0) {
                 std::cout << "Keeping previous closed-cell state after " << toggled_cells
-                          << " toggles exceeded guard limit " << allowed_toggles << std::endl;
+                          << " re-openings exceeded guard limit " << allowed_toggles << std::endl;
             }
             closed_cells = closed_cells_;
         }
