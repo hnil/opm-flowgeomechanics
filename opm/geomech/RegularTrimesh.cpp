@@ -1291,8 +1291,8 @@ RegularTrimesh::coarsen(bool strict) const
     for (const auto& e : cellinfo_) {
         const CellRef& c = e.first;
         if (!strict || !is_boundary_cell(c, *this))
-            if ((abs(c[0]) % 2 == 1 && abs(c[1]) % 2 == 1 && c[2] == 0)
-                || (abs(c[0]) % 2 == 0 && abs(c[1]) % 2 == 0 && c[2] == 1))
+            if ((std::abs(c[0]) % 2 == 1 && std::abs(c[1]) % 2 == 1 && c[2] == 0)
+                || (std::abs(c[0]) % 2 == 0 && std::abs(c[1]) % 2 == 0 && c[2] == 1))
                 new_cells[fine_to_coarse(c)] = e.second;
     }
 
@@ -1339,7 +1339,7 @@ RegularTrimesh::fine_to_coarse(const CellRef& cell, const int levels)
     int i = cell[0], j = cell[1], k = cell[2];
 
     for (int l = 0; l < levels; ++l) {
-        const int impairs = abs(i % 2) + abs(j % 2) + k;
+        const int impairs = std::abs(i % 2) + std::abs(j % 2) + k;
 
         (i < 0) && --i;
         (j < 0) && --j;
@@ -1362,7 +1362,7 @@ RegularTrimesh::coarse_to_fine(const NodeRef& node, const int levels)
 // ----------------------------------------------------------------------------
 {
     if (levels < 0)
-        return {node[0] / (1 << abs(levels)), node[1] / (1 << abs(levels))};
+        return {node[0] / (1 << std::abs(levels)), node[1] / (1 << std::abs(levels))};
     else
         return {node[0] * (1 << levels), node[1] * (1 << levels)};
     // return {2*node[0], 2*node[1]};

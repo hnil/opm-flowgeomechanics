@@ -137,9 +137,7 @@ assembleCouplingOriginal(const Opm::FracturePressureInput& input)
         const double dTdh1 = (r == 0.0) ? 0.0 : (d1q * r - q * d1r) / (r * r);
         const double dTdh2 = (r == 0.0) ? 0.0 : (d2q * r - q * d2r) / (r * r);
 
-        const double mob_i = input.density[i].value / input.viscosity[i].value;
-        const double mob_j = input.density[j].value / input.viscosity[j].value;
-        const double mobility = 0.5 * (mob_i + mob_j);
+        const double mobility = Opm::faceMobilityValue(input, i, j);
 
         matrix[i][i] += dTdh1 * (p1 - p2) * mobility;
         matrix[j][j] += dTdh2 * (p2 - p1) * mobility;
@@ -184,6 +182,8 @@ Opm::FracturePressureInput makeSimpleTestInput()
 
     // Pressures
     input.fracture_pressure = {1e6, 8e5, 1.2e6, 9e5};
+
+    input.face_mobility = {1e4, 1e4, 1e4, 1e4};
 
     // Density and viscosity per cell (with zero pressure derivatives for
     // backward-compatible tests; mobility = density/viscosity = 1000/0.001 = 1e6).
@@ -464,6 +464,7 @@ bool test_mobility_pressure_derivatives()
     // Density and viscosity with non-zero pressure derivatives
     input.density   = {{1000.0, 0.5}, {1010.0, 0.6}, {1020.0, 0.4}, {1030.0, 0.7}};
     input.viscosity = {{1e-3, -1e-7}, {1.1e-3, -1.2e-7}, {0.9e-3, -0.8e-7}, {1.2e-3, -1.1e-7}};
+    input.use_fluid_mobility_for_internal_faces = true;
 
     auto ad_result = Opm::assemblePressureAD(input);
     auto res_base = computeResidual(input);
@@ -496,6 +497,72 @@ bool test_mobility_pressure_derivatives()
             if (rel_err > 1e-4) {
                 std::cerr << "  FD mismatch at dR[" << i << "]/dp[" << k
                           << "]: AD=" << pmat_val << " FD=" << fd
+                          << " rel_err=" << rel_err << std::endl;
+                ok = false;
+            }
+        }
+    }
+
+    if (!ok) {
+        std::cerr << "  FAILED" << std::endl;
+        return false;
+    }
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
+bool test_rate_well_mobility_pressure_derivatives()
+{
+    std::cout << "Test 13: rate_well fluid mobility pressure derivatives ..."
+              << std::endl;
+
+    Opm::FracturePressureInput input;
+    input.num_cells = 2;
+    input.min_width = 1e-6;
+    input.fracture_width = {0.05, 0.05};
+    input.fracture_pressure = {2.0, 1.5, 2.2};
+    input.leakof = {0.0, 0.0};
+    input.control_type = "rate_well";
+    input.num_well_equations = 1;
+    input.total_wellindex = 11.0;
+    input.perfinj = {std::tuple<int,double>{0, 5.0}, std::tuple<int,double>{1, 7.0}};
+    input.use_fluid_mobility_for_well_connections = true;
+    input.density = {{1000.0, 0.5}, {1010.0, 0.6}, {1.0, 0.0}};
+    input.viscosity = {{1.0e-3, -1.0e-7}, {1.1e-3, -1.2e-7}, {1.0, 0.0}};
+
+    auto ad_result = Opm::assemblePressureAD(input);
+    auto res_base = computeResidual(input);
+
+    const double eps = 1e-7;
+    const size_t total = input.num_cells + input.num_well_equations;
+    bool ok = true;
+
+    for (size_t k = 0; k < total; ++k) {
+        auto input_pert = input;
+        input_pert.fracture_pressure[k] += eps;
+        if (k < input.num_cells) {
+            input_pert.density[k].value += input.density[k].dval_dp * eps;
+            input_pert.viscosity[k].value += input.viscosity[k].dval_dp * eps;
+        }
+
+        auto res_pert = computeResidual(input_pert);
+
+        for (size_t i = 0; i < total; ++i) {
+            const double fd = (res_pert[i][0] - res_base[i][0]) / eps;
+
+            double pmat_val = 0.0;
+            auto row = (*ad_result.pressure_matrix)[i];
+            auto col_it = row.find(k);
+            if (col_it != row.end())
+                pmat_val = (*col_it)[0][0];
+
+            const double abs_err = std::abs(fd - pmat_val);
+            const double scale = std::max(std::abs(fd), std::abs(pmat_val));
+            const double rel_err = scale > 1e-10 ? abs_err / scale : abs_err;
+            if (abs_err > 1e-6 && rel_err > 1e-5) {
+                std::cerr << "  FD mismatch at dR[" << i << "]/dp[" << k
+                          << "]: AD=" << pmat_val << " FD=" << fd
+                          << " abs_err=" << abs_err
                           << " rel_err=" << rel_err << std::endl;
                 ok = false;
             }
@@ -645,6 +712,7 @@ int main()
     if (!test_varying_fluid_properties())           ++failures;
     if (!test_standalone_pressure_and_coupling())   ++failures;
     if (!test_standalone_with_well_equations())     ++failures;
+    if (!test_rate_well_mobility_pressure_derivatives()) ++failures;
 
     std::cout << "\n=== "
               << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED")

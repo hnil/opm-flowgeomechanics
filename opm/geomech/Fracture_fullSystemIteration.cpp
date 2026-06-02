@@ -770,6 +770,10 @@ Fracture::makePressureAssemblyInput() const
 {
     const size_t nc = numFractureCells();
     const size_t nw = numWellEquations();
+    const bool have_water_phase_props = static_cast<bool>(fracture_water_property_evaluator_);
+    const bool use_fluid_system_water_properties =
+        have_water_phase_props
+        && prm_.get<bool>("solver.use_fluid_system_water_properties", false);
 
     FracturePressureInput input;
     input.num_cells = nc;
@@ -780,7 +784,17 @@ Fracture::makePressureAssemblyInput() const
     input.perfinj.assign(perfinj_.begin(), perfinj_.end());
     input.total_wellindex = total_wellindex_;
     input.mobility_water_perf = mobility_water_perf_;
+    input.face_mobility.resize(nc + nw, 0.0);
+    for (size_t i = 0; i < reservoir_mobility_.size() && i < nc; ++i)
+        input.face_mobility[i] = reservoir_mobility_[i];
     input.leakof = leakof_;
+    input.use_fluid_mobility_for_internal_faces =
+        use_fluid_system_water_properties
+        && prm_.get<bool>("solver.use_water_phase_mobility_for_fracture_flow", false);
+    input.use_fluid_mobility_for_well_connections =
+        use_fluid_system_water_properties
+        && prm_.get<bool>("solver.use_water_phase_mobility_for_well_fracture_flow",
+                          input.use_fluid_mobility_for_internal_faces);
 
     input.fracture_width.resize(nc + nw);
     input.fracture_pressure.resize(nc + nw);
@@ -796,8 +810,15 @@ Fracture::makePressureAssemblyInput() const
     }
 
     for (size_t i = 0; i < nc; ++i) {
-        input.density[i] = {reservoir_mobility_[i], 0.0};
-        input.viscosity[i] = {1.0, 0.0};
+        if (use_fluid_system_water_properties) {
+            const auto fluid_properties = fracture_water_property_evaluator_(i, fracture_pressure_[i][0]);
+            input.density[i] = fluid_properties.first;
+            input.viscosity[i] = fluid_properties.second;
+        }
+        else {
+            input.density[i] = {reservoir_density_[i], 0.0};
+            input.viscosity[i] = {1.0, 0.0};
+        }
     }
     for (size_t i = nc; i < nc + nw; ++i) {
         input.density[i] = {1.0, 0.0};

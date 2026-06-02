@@ -44,6 +44,7 @@
 #include <iostream>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <vector>
 #include <fstream>
 
@@ -482,6 +483,8 @@ private:
     std::vector<double> reservoir_mobility_;
     std::vector<double> reservoir_density_;
     std::vector<double> reservoir_cell_z_;
+    using WaterPropertyEvaluator = std::function<std::pair<CellFluidProperty, CellFluidProperty>(size_t, double)>;
+    WaterPropertyEvaluator fracture_water_property_evaluator_;
     //
     //std::vector<int> unique_reservoir_cells_;
     std::map<int,double> map_reservoir_mobility_;

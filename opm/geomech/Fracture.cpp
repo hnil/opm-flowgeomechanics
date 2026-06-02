@@ -930,6 +930,7 @@ Fracture::updateReservoirProperties()
     reservoir_pressure_.resize(nc, 100.0e5);
     reservoir_stress_.resize(nc);
     reservoir_cstress_.resize(nc, cstress);
+    fracture_water_property_evaluator_ = {};
 
     for (size_t i = 0; i != nc; ++i)
         reservoir_stress_[i] = Dune::FieldVector<double, 6> {0, 0, 0, 0, 0, 0};

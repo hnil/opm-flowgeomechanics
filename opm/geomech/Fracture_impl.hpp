@@ -2,12 +2,89 @@
 
 #include "RegularTrimesh.hpp"
 #include <opm/common/TimingMacros.hpp>
+#include <opm/material/densead/Evaluation.hpp>
 #include <opm/grid/UnstructuredGrid.h>
+#include <opm/material/fluidstates/BlackOilFluidState.hpp>
 #include <dune/common/fmatrix.hh> // Dune::FieldMatrix
 #include <dune/istl/bcrsmatrix.hh> // Dune::BCRSMatrix
 #include <dune/istl/bvector.hh> 
 namespace Opm
 {
+
+template <class State>
+struct BlackOilFluidStateConfig;
+
+template <class ScalarT,
+          class FluidSystemT,
+          bool enableTemperature,
+          bool enableEnergy,
+          bool enableDissolution,
+          bool enableVapwat,
+          bool enableBrine,
+          bool enableSaltPrecipitation,
+          bool enableDissolutionInWater,
+          unsigned numStoragePhases>
+struct BlackOilFluidStateConfig<BlackOilFluidState<ScalarT,
+                                                   FluidSystemT,
+                                                   enableTemperature,
+                                                   enableEnergy,
+                                                   enableDissolution,
+                                                   enableVapwat,
+                                                   enableBrine,
+                                                   enableSaltPrecipitation,
+                                                   enableDissolutionInWater,
+                                                   numStoragePhases>>
+{
+    static constexpr bool EnableTemperature = enableTemperature;
+    static constexpr bool EnableEnergy = enableEnergy;
+    static constexpr bool EnableDissolution = enableDissolution;
+    static constexpr bool EnableVapwat = enableVapwat;
+    static constexpr bool EnableBrine = enableBrine;
+    static constexpr bool EnableSaltPrecipitation = enableSaltPrecipitation;
+    static constexpr bool EnableDissolutionInWater = enableDissolutionInWater;
+};
+
+template <class TargetState, class SourceState, class ValueFactory>
+void copyBlackOilFluidState(TargetState& target, const SourceState& source, ValueFactory&& valueFactory)
+{
+    using TargetConfig = BlackOilFluidStateConfig<TargetState>;
+    using SourceConfig = BlackOilFluidStateConfig<SourceState>;
+
+    target.setPvtRegionIndex(source.pvtRegionIndex());
+
+    for (unsigned phaseIdx = 0; phaseIdx < TargetState::numPhases; ++phaseIdx) {
+        if (!TargetState::FluidSystem::phaseIsActive(phaseIdx))
+            continue;
+
+        target.setSaturation(phaseIdx, valueFactory(source.saturation(phaseIdx)));
+        target.setPressure(phaseIdx, valueFactory(source.pressure(phaseIdx)));
+        target.setDensity(phaseIdx, valueFactory(source.density(phaseIdx)));
+        target.setInvB(phaseIdx, valueFactory(source.invB(phaseIdx)));
+
+        if constexpr (TargetConfig::EnableEnergy && SourceConfig::EnableEnergy)
+            target.setEnthalpy(phaseIdx, valueFactory(source.enthalpy(phaseIdx)));
+    }
+
+    if constexpr (TargetConfig::EnableTemperature || TargetConfig::EnableEnergy)
+        target.setTemperature(valueFactory(source.temperature(/*phaseIdx=*/0)));
+
+    if constexpr (TargetConfig::EnableDissolution) {
+        target.setRs(valueFactory(source.Rs()));
+        target.setRv(valueFactory(source.Rv()));
+    }
+
+    if constexpr (TargetConfig::EnableVapwat)
+        target.setRvw(valueFactory(source.Rvw()));
+
+    if constexpr (TargetConfig::EnableDissolutionInWater)
+        target.setRsw(valueFactory(source.Rsw()));
+
+    if constexpr (TargetConfig::EnableBrine)
+        target.setSaltConcentration(valueFactory(source.saltConcentration()));
+
+    if constexpr (TargetConfig::EnableSaltPrecipitation)
+        target.setSaltSaturation(valueFactory(source.saltSaturation()));
+}
 
 inline double
 compute_target_expansion(const double K1_target,
@@ -88,9 +165,11 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         }
       
         using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
+        using ScalarFluidState = Opm::BlackOilFluidState<double, FluidSystem>;
         const auto& problem = simulator.problem();
         const auto& grid = simulator.vanguard().grid();
         GeometryHelper ghelper(grid);
+        const auto value_of = [](const auto& value) { return Opm::scalarValue(value); };
         // NB burde truleg interpolere
         // NB reservoir dist not calculated
         size_t ncf = reservoir_cells_.size();
@@ -108,6 +187,9 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
           double dist = prm_.get<double>("reservoir.dist");
           reservoir_dist_.resize(ncf, dist);
         }
+
+        std::vector<ScalarFluidState> fracture_scalar_fluid_states(ncf);
+        std::vector<bool> fracture_scalar_fluid_state_valid(ncf, false);
         {
         // well cell properties 
         const auto& intQuants = simulator.model().intensiveQuantities(wellinfo_.well_cell, /*timeIdx*/ 0);
@@ -165,13 +247,12 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 auto normal = this->cell_normals_[i];
                 const auto& intQuants = simulator.model().intensiveQuantities(cell, /*timeIdx*/ 0);
                 const auto& fs = intQuants.fluidState();
-                {
-                  auto val = fs.pressure(FluidSystem::waterPhaseIdx);
-                  reservoir_pressure_[i] = val.value();
-                }
+                                copyBlackOilFluidState(fracture_scalar_fluid_states[i], fs, value_of);
+                                fracture_scalar_fluid_state_valid[i] = true;
+                                reservoir_pressure_[i] = value_of(fs.pressure(FluidSystem::waterPhaseIdx));
                 enum { numPhases = getPropValue<TypeTag, Properties::NumPhases>() };
                 reservoir_mobility_[i] = 0.0;
-                reservoir_density_[i] = intQuants.fluidState().density(FluidSystem::waterPhaseIdx).value();
+                                reservoir_density_[i] = value_of(fs.density(FluidSystem::waterPhaseIdx));
                 for (unsigned phaseIdx = 0; phaseIdx < numPhases; ++phaseIdx) {
                   if (FluidSystem::phaseIsActive(phaseIdx)) {
                     // assume sum should only be water;
@@ -227,6 +308,43 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
             }
             // assume reservoir distance is calculated
         }
+
+        fracture_water_property_evaluator_ =
+            [fluid_states = std::move(fracture_scalar_fluid_states),
+             valid_states = std::move(fracture_scalar_fluid_state_valid),
+             fallback_density = reservoir_density_](const size_t cell_idx, const double pressure)
+                -> std::pair<CellFluidProperty, CellFluidProperty>
+        {
+            using PressureEval = Opm::DenseAd::Evaluation<double, 1>;
+            using AdFluidState = Opm::BlackOilFluidState<PressureEval, FluidSystem>;
+            const auto make_constant = [](const auto& value) {
+                return PressureEval::createConstant(Opm::scalarValue(value));
+            };
+
+            const auto fallback = [&, cell_idx]() {
+                const double density = cell_idx < fallback_density.size() ? fallback_density[cell_idx] : 1000.0;
+                return std::make_pair(CellFluidProperty{density, 0.0}, CellFluidProperty{1.0, 0.0});
+            };
+
+            if (cell_idx >= fluid_states.size() || !valid_states[cell_idx])
+                return fallback();
+
+            AdFluidState ad_state;
+            copyBlackOilFluidState(ad_state, fluid_states[cell_idx], make_constant);
+            ad_state.setPressure(FluidSystem::waterPhaseIdx,
+                                 PressureEval::createVariable(pressure, 0));
+
+            const auto make_property = [](const auto& property_eval) {
+                return CellFluidProperty{property_eval.value(), property_eval.derivative(0)};
+            };
+
+            const auto density = make_property(
+                FluidSystem::density(ad_state, FluidSystem::waterPhaseIdx, ad_state.pvtRegionIndex()));
+            const auto viscosity = make_property(
+                FluidSystem::viscosity(ad_state, FluidSystem::waterPhaseIdx, ad_state.pvtRegionIndex()));
+            return std::make_pair(density, viscosity);
+        };
+
         fracture_dgh_.resize(ncf);
         for (auto element : Dune::elements(grid_->leafGridView())) {
            // int i = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView,

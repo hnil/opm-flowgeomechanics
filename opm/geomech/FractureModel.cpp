@@ -110,6 +110,9 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.solver.smooth_boundary", false);
     fracture_param.put("fractureparam.solver.full_intersections", false);
     fracture_param.put("fractureparam.solver.divide_wellidx", false);
+    fracture_param.put("fractureparam.solver.use_fluid_system_water_properties", false);
+    fracture_param.put("fractureparam.solver.use_water_phase_mobility_for_fracture_flow", false);
+    fracture_param.put("fractureparam.solver.use_water_phase_mobility_for_well_fracture_flow", false);
     fracture_param.put("fractureparam.solver.no_leakof_outercells",false);
     fracture_param.put("fractureparam.solver.write_coupled_linear_system", false);
     fracture_param.put("fractureparam.solver.dump_linear_system_on_failure", true);

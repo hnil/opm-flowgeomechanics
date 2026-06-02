@@ -189,6 +189,7 @@ struct FracturePressureInput
     std::vector<Htrans> htrans;
     std::vector<double> fracture_width;
     std::vector<double> fracture_pressure;
+    std::vector<double> face_mobility;
     std::vector<CellFluidProperty> density;    // per-cell density with pressure derivative
     std::vector<CellFluidProperty> viscosity;  // per-cell viscosity with pressure derivative
     std::vector<double> leakof;
@@ -201,7 +202,149 @@ struct FracturePressureInput
     double total_wellindex = 0.0;
     double mobility_water_perf = 1.0;
     size_t num_well_equations = 0;
+    bool use_fluid_mobility_for_internal_faces = false;
+    bool use_fluid_mobility_for_well_connections = false;
 };
+
+inline double
+cellMobilityValue(const CellFluidProperty& density,
+                  const CellFluidProperty& viscosity)
+{
+    assert(viscosity.value != 0.0);
+    return density.value / viscosity.value;
+}
+
+inline double
+constantFaceMobilityValue(const FracturePressureInput& input,
+                          const size_t cell)
+{
+    if (cell < input.face_mobility.size())
+        return input.face_mobility[cell];
+    return cellMobilityValue(input.density[cell], input.viscosity[cell]);
+}
+
+template <int NumDerivs>
+LocalAD<NumDerivs>
+cellMobilityAD(const CellFluidProperty& density,
+               const CellFluidProperty& viscosity,
+               const int pressure_deriv_index)
+{
+    LocalAD<NumDerivs> rho(density.value);
+    rho.derivatives[pressure_deriv_index] = density.dval_dp;
+    LocalAD<NumDerivs> mu(viscosity.value);
+    mu.derivatives[pressure_deriv_index] = viscosity.dval_dp;
+    return rho / mu;
+}
+
+inline double
+faceMobilityValue(const FracturePressureInput& input,
+                  const size_t i,
+                  const size_t j)
+{
+    if (input.use_fluid_mobility_for_internal_faces) {
+        const double mob_i = cellMobilityValue(input.density[i], input.viscosity[i]);
+        const double mob_j = cellMobilityValue(input.density[j], input.viscosity[j]);
+        return 0.5 * (mob_i + mob_j);
+    }
+
+    const double mob_i = constantFaceMobilityValue(input, i);
+    const double mob_j = constantFaceMobilityValue(input, j);
+    return 0.5 * (mob_i + mob_j);
+}
+
+template <int NumDerivs>
+LocalAD<NumDerivs>
+faceMobilityAD(const FracturePressureInput& input,
+               const size_t i,
+               const size_t j,
+               const int deriv_i,
+               const int deriv_j)
+{
+    using AD = LocalAD<NumDerivs>;
+    if (!input.use_fluid_mobility_for_internal_faces)
+        return AD::constant(faceMobilityValue(input, i, j));
+
+    return AD::constant(0.5)
+        * (cellMobilityAD<NumDerivs>(input.density[i], input.viscosity[i], deriv_i)
+         + cellMobilityAD<NumDerivs>(input.density[j], input.viscosity[j], deriv_j));
+}
+
+inline double
+wellConnectionMobilityValue(const FracturePressureInput& input,
+                            const int cell)
+{
+    if (input.use_fluid_mobility_for_well_connections)
+        return cellMobilityValue(input.density[cell], input.viscosity[cell]);
+    return input.mobility_water_perf;
+}
+
+template <int NumDerivs>
+LocalAD<NumDerivs>
+wellConnectionMobilityAD(const FracturePressureInput& input,
+                        const int cell,
+                        const int pressure_deriv_index)
+{
+    using AD = LocalAD<NumDerivs>;
+    if (!input.use_fluid_mobility_for_well_connections)
+        return AD::constant(input.mobility_water_perf);
+    return cellMobilityAD<NumDerivs>(input.density[cell], input.viscosity[cell], pressure_deriv_index);
+}
+
+template <int NumDerivs>
+void
+assembleRateWellControlAD(const FracturePressureInput& input,
+                          BCRSMatrix1x1& pmat,
+                          BlockVector1& residual)
+{
+    using AD = LocalAD<NumDerivs>;
+    constexpr int CELL_P = 0;
+    constexpr int WELL_P = 1;
+
+    assert(input.num_well_equations == 1);
+    const size_t total_size = input.num_cells + input.num_well_equations;
+    const size_t weqix = total_size - 1;
+    const double WI_lambda = input.total_wellindex;
+
+    pmat[weqix][weqix] += WI_lambda;
+    residual[weqix] += WI_lambda * input.fracture_pressure[weqix];
+
+    for (const auto& pi : input.perfinj) {
+        const int cell = std::get<0>(pi);
+        AD cell_pressure = AD::variable(input.fracture_pressure[cell], CELL_P);
+        AD well_pressure = AD::variable(input.fracture_pressure[weqix], WELL_P);
+        AD mobility = wellConnectionMobilityAD<NumDerivs>(input, cell, CELL_P);
+        AD flux = AD::constant(std::get<1>(pi)) * mobility * (well_pressure - cell_pressure);
+
+        residual[weqix] += flux.value;
+        residual[cell] -= flux.value;
+
+        pmat[weqix][cell] += flux.derivatives[CELL_P];
+        pmat[weqix][weqix] += flux.derivatives[WELL_P];
+        pmat[cell][cell] -= flux.derivatives[CELL_P];
+        pmat[cell][weqix] -= flux.derivatives[WELL_P];
+    }
+}
+
+inline void
+assembleRateWellControlOriginal(const FracturePressureInput& input,
+                                BCRSMatrix1x1& matrix)
+{
+    assert(input.num_well_equations == 1);
+    const size_t total_size = input.num_cells + input.num_well_equations;
+    const size_t weqix = total_size - 1;
+    const double WI_lambda = input.total_wellindex;
+
+    matrix[weqix][weqix] += WI_lambda;
+
+    for (const auto& pi : input.perfinj) {
+        const int cell = std::get<0>(pi);
+        const double value = std::get<1>(pi) * wellConnectionMobilityValue(input, cell);
+        matrix[weqix][cell] -= value;
+        matrix[weqix][weqix] += value;
+        matrix[cell][weqix] -= value;
+        matrix[cell][cell] += value;
+    }
+}
 
 // Output from the AD-based assembly
 struct PressureAssemblyADResult
@@ -309,22 +452,7 @@ assemblePressureAD(const FracturePressureInput& input)
         AD4 inv_trans = AD4::constant(12.0) / (h1_cubed * AD4::constant(t1))
                   + AD4::constant(12.0) / (h2_cubed * AD4::constant(t2));
 
-        // Compute per-cell mobility = density / viscosity as AD quantities.
-        // Pressure derivatives of density and viscosity are mapped to the
-        // local derivative slots P_I (for cell i) and P_J (for cell j).
-        AD4 rho_i(input.density[i].value);
-        rho_i.derivatives[P_I] = input.density[i].dval_dp;
-        AD4 mu_i(input.viscosity[i].value);
-        mu_i.derivatives[P_I] = input.viscosity[i].dval_dp;
-        AD4 mob_i = rho_i / mu_i;
-
-        AD4 rho_j(input.density[j].value);
-        rho_j.derivatives[P_J] = input.density[j].dval_dp;
-        AD4 mu_j(input.viscosity[j].value);
-        mu_j.derivatives[P_J] = input.viscosity[j].dval_dp;
-        AD4 mob_j = rho_j / mu_j;
-
-        AD4 mobility = AD4::constant(0.5) * (mob_i + mob_j);
+        AD4 mobility = faceMobilityAD<4>(input, i, j, P_I, P_J);
         AD4 trans = mobility * (AD4::constant(1.0) / inv_trans);
 
         // flux from cell i to cell j
@@ -362,19 +490,7 @@ assemblePressureAD(const FracturePressureInput& input)
             result.residual[cell] += value * input.fracture_pressure[cell];
         }
     } else if (input.control_type == "rate_well") {
-        assert(input.num_well_equations == 1);
-        const double lambda = 1.0;
-        const double WI_lambda = input.total_wellindex * lambda;
-        pmat[total_size - 1][total_size - 1] = WI_lambda;
-
-        for (const auto& pi : input.perfinj) {
-            const int cell = std::get<0>(pi);
-            const double value = std::get<1>(pi) * input.mobility_water_perf;
-            pmat[total_size - 1][cell] = -value;
-            pmat[total_size - 1][total_size - 1] += value;
-            pmat[cell][total_size - 1] = -value;
-            pmat[cell][cell] += value;
-        }
+        assembleRateWellControlAD<2>(input, pmat, result.residual);
     }
 
     return result;
@@ -407,9 +523,7 @@ assemblePressureOriginal(const FracturePressureInput& input)
         const double h2 = std::max(input.fracture_width[j], input.min_width);
 
         double value = 12.0 / (h1 * h1 * h1 * t1) + 12.0 / (h2 * h2 * h2 * t2);
-        const double mob_i = input.density[i].value / input.viscosity[i].value;
-        const double mob_j = input.density[j].value / input.viscosity[j].value;
-        const double mobility = 0.5 * (mob_i + mob_j);
+        const double mobility = faceMobilityValue(input, i, j);
         value = 1.0 / value;
         value *= mobility;
 
@@ -432,19 +546,7 @@ assemblePressureOriginal(const FracturePressureInput& input)
             matrix[cell][cell] += value;
         }
     } else if (input.control_type == "rate_well") {
-        assert(input.num_well_equations == 1);
-        const double lambda = 1.0;
-        const double WI_lambda = input.total_wellindex * lambda;
-        matrix[total_size - 1][total_size - 1] = WI_lambda;
-
-        for (const auto& pi : input.perfinj) {
-            const int cell = std::get<0>(pi);
-            const double value = std::get<1>(pi) * input.mobility_water_perf;
-            matrix[total_size - 1][cell] = -value;
-            matrix[total_size - 1][total_size - 1] += value;
-            matrix[cell][total_size - 1] = -value;
-            matrix[cell][cell] += value;
-        }
+        assembleRateWellControlOriginal(input, matrix);
     }
 
     return mat;
