@@ -796,3 +796,16 @@ add_test(NAME Unit.FractureLinearReplay.N67.CoupledFixedStressFailure
 set_tests_properties(Unit.FractureLinearReplay.N67.CoupledFixedStressFailure
 	PROPERTIES WILL_FAIL TRUE
 )
+
+# Contact / fracture-opening report on a dumped nonlinear state. The nlin_5 state
+# is the pathological "opened too large" case: every cell is flagged open yet a
+# large fraction carry compressive force (want to close). The report classifies
+# the cells offline; this test pins the diagnostic and guards the report tool.
+add_test(NAME Unit.FractureContactReport.N5
+	COMMAND $<TARGET_FILE:replay_fracture_linear_system>
+	${CMAKE_CURRENT_LIST_DIR}/tests/fracture_contact_report_nlin_5/fracture_linear_system_nlin_5_linear_failure
+	--contact-report
+)
+set_tests_properties(Unit.FractureContactReport.N5
+	PROPERTIES PASS_REGULAR_EXPRESSION "open but force wants close .f>=close_tol.: 456"
+)

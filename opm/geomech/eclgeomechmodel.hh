@@ -207,6 +207,12 @@ namespace Opm{
                        << " (total " << total_stats.linear_solves << ")"
                        << ", linear_iterations=" << last_stats.linear_iterations
                        << " (total " << total_stats.linear_iterations << ")"
+                       << ", closed_cell_toggles=" << last_stats.closed_cell_toggles
+                       << " (total " << total_stats.closed_cell_toggles << ")"
+                       << ", linear_solve_failures=" << last_stats.linear_solve_failures
+                       << " (total " << total_stats.linear_solve_failures << ")"
+                       << ", ladder_rescues=" << last_stats.ladder_rescues
+                       << " (total " << total_stats.ladder_rescues << ")"
                        << ", solve_time_s=" << last_stats.solve_time_seconds
                        << " (total " << total_stats.solve_time_seconds << ")"
                        << ", converged=" << (last_stats.converged ? "true" : "false");

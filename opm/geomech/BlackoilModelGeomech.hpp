@@ -1,6 +1,7 @@
 #pragma once
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <opm/simulators/flow/BlackoilModel.hpp>
 namespace Opm
 {
@@ -88,6 +89,15 @@ namespace Opm
 
         mutable int topology_pending_counter_{0};
         mutable int topology_cooldown_counter_{0};
+        // Mech-skip (opt-in performance lever): composite coupling-change norm from
+        // the previous outer iteration's fracture solve. Mechanics depends on the
+        // fracture only indirectly via the change in well flow, so when this norm is
+        // small the mechanics solution is stable and the mech solve can be skipped.
+        // Defaults large so nothing is skipped until a positive threshold is set.
+        mutable double last_coupling_composite_norm_{std::numeric_limits<double>::max()};
+        // Diagnostics: mechanics solves actually performed vs skipped in the outer loop.
+        mutable int mech_solves_performed_{0};
+        mutable int mech_solves_skipped_{0};
 
         struct StorageCacheBackup
         {
@@ -335,6 +345,8 @@ namespace Opm
             if (iteration == 0) {
                 topology_pending_counter_ = 0;
                 topology_cooldown_counter_ = 0;
+                // First outer iteration of a step always solves mechanics.
+                last_coupling_composite_norm_ = std::numeric_limits<double>::max();
             }
             bool implicit_flow = prm.get<bool>("solver.implicit_flow");
             SimulatorReportSingle report;
@@ -364,11 +376,33 @@ namespace Opm
             //const PropertyTree& prm_frac = this->simulator_.problem().getFractureParam();
             
 
+            // Mech-skip lever (opt-in, default off): skip the mechanics solve when
+            // the previous outer iteration's fracture->well coupling change was below
+            // threshold, i.e. the well flow (the only path by which the fracture
+            // affects mechanics) is stable, so the mech solution would not move. The
+            // fracture then reuses the previous stress. Self-correcting: if a skip was
+            // wrong, the fracture changes the wells next iteration, the norm rises and
+            // skipping stops. NOTE: this is a fracture-coupling proxy; a purely
+            // thermal stress transient that does not move the wells is not detected,
+            // so keep the threshold conservative on strongly thermal cases.
+            const double mech_skip_threshold =
+                prm.get<double>("solver.mech_skip_coupling_threshold", 0.0);
+            const bool mech_skippable = (mech_skip_threshold > 0.0) && (iteration > 0)
+                && (last_coupling_composite_norm_ < mech_skip_threshold);
             if(do_mech || do_fracture){
-                std::stringstream os;
-                os << "Solve Geomechanics:";// << std::endl;
-                OpmLog::info(os.str());
-                this->simulator_.problem().geomechModel().solveGeomechanics();
+                if (mech_skippable) {
+                    ++mech_solves_skipped_;
+                    OpmLog::info("Skipping mechanics solve (prev coupling change "
+                                 + std::to_string(last_coupling_composite_norm_) + " < "
+                                 + std::to_string(mech_skip_threshold) + "); reusing stress. "
+                                 + "mech solves performed/skipped: "
+                                 + std::to_string(mech_solves_performed_) + "/"
+                                 + std::to_string(mech_solves_skipped_));
+                } else {
+                    OpmLog::info("Solve Geomechanics:");
+                    this->simulator_.problem().geomechModel().solveGeomechanics();
+                    ++mech_solves_performed_;
+                }
             }
             if(do_fracture && this->simulator_.problem().hasFractures()){
                 //std::cout << "Solve Fractures:" << std::endl;
@@ -393,6 +427,9 @@ namespace Opm
                 coupling_metrics.ctf_changed = comm.max(coupling_metrics_local.ctf_changed);
                 coupling_metrics.perf_pressure_changed = comm.max(coupling_metrics_local.perf_pressure_changed);
                 coupling_metrics.composite_norm = comm.max(coupling_metrics_local.composite_norm);
+                // Remember this iteration's fracture->well coupling change so the next
+                // iteration can decide whether the mechanics solve may be skipped.
+                last_coupling_composite_norm_ = coupling_metrics.composite_norm;
                 const bool fracture_converged_global = comm.min(fracture_converged);
 
                 bool addconnections = prm.get<bool>("fractureparam.addconnections");

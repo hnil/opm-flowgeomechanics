@@ -162,3 +162,18 @@ across outer iterations. Implemented in `Fracture::applyCouplingUpdate`.
 `mech_first`, `fixed_stress`, `mode_switch_coupling_threshold`, `diag_mech`, `diag_flow`,
 `mech_press_coupling`, `update_mech_on_reuse`, and a nested `flow_solver` (Dune FlexibleSolver) block.
 `coupling_auto` estimates a coupling indicator and switches to `fixed_stress` when it exceeds the threshold.
+
+## 11. New robustness / performance levers (all opt-in, defaults reproduce old behaviour)
+
+| key | location | default | meaning |
+|---|---|---|---|
+| `linsolver.scaling` | `fractureparam.solver.linsolver` | `none` | `blockmax`: symmetric block scaling `D S D` of the coupled system (s_m=1/√max\|A\|, s_p=1/√max\|M\|) before the Krylov solve. Strong, cheap conditioning win; dumps stay unscaled (physical). |
+| `linsolver.failure_policy` | `fractureparam.solver.linsolver` | `throw` | `ladder`: on linear non-convergence, try a rescue ladder (configured→fgmres→fixed-stress preconditioner→**drop-C / decoupled**) before giving up. The drop-C rung is essentially always solvable, so the run progresses instead of aborting. |
+| `conservative_propagation` | `fractureparam.solver` | `false` | Don't grow the fracture (trimesh `if_propagate_trimesh`) off a non-converged inner solve — K1 from an unconverged state is unreliable, and opening on it can irreversibly alter the result. |
+| `retract_established_compressed` | `fractureparam.solver` | `false` | In `removeNewZeroWithCells`, also retract **established** cells (not just newly-grown) that end zero-width/compressed, instead of only closing them. ⚠️ lets the fracture shrink → can oscillate against growth; experimental. |
+| `dump_case_min_nonlin_iter` | `fractureparam.solver` | `0` | If >0, dump a physical (unscaled) coupled-system snapshot when a solve reaches this nonlinear-iteration count — captures a *relevant* hard case for offline study (`replay_fracture_linear_system`, incl. `--contact-report`). |
+| `mech_skip_coupling_threshold` | **top-level `solver`** (NOT `fractureparam.solver` — read by the SeqMechFrac driver, like `max_mech_it`) | `0` | If >0, skip the outer mechanics solve when the previous outer iteration's fracture→well coupling `composite_norm` is below this, reusing the prior stress. Mechanics depends on the fracture only via well flow, so this is exact when the wells are stable. Self-correcting. **Caveat:** a purely thermal stress transient that doesn't move the wells is not detected — keep the threshold conservative on strongly thermal/rate-controlled decks. Validated on the BHP SEQ deck: skipped 9/14 mech solves, faster, bit-identical fracture area/volume. **Calibration:** `composite_norm` scale ~0..1e3. Use a CONSERVATIVE threshold (~1.0 = skip only near-zero coupling change): on model2 RATE that cut mech solves 184→76 (−59%) with the fracture solution preserved to ~1%. An AGGRESSIVE threshold (e.g. 1e30) diverges on rate-controlled decks (area +50%) — never use it there. MPI-consistent (decision uses the global comm.max'd norm). |
+
+Diagnostics added to the per-solve stats log (`eclgeomechmodel.hh`): `closed_cell_toggles`
+(contact chatter), `linear_solve_failures`, `ladder_rescues`. The contact/opening state of a
+dumped case can be inspected offline with `replay_fracture_linear_system <prefix> --contact-report`.

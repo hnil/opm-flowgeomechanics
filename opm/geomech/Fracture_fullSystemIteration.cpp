@@ -131,14 +131,25 @@ compute_block_scaling(const SystemMatrix& S, const std::string& mode)
     return {1.0 / std::sqrt(a_max), 1.0 / std::sqrt(m_max)};
 }
 
+// Scale the four blocks of S by D _ D (matrix only). fac=+1 applies the scaling,
+// fac=-1 (reciprocal) restores the original matrix.
+void
+scale_system_matrix(SystemMatrix& S, const BlockScaling& s, const int sign)
+{
+    const double mm = (sign > 0) ? s.mechanics * s.mechanics : 1.0 / (s.mechanics * s.mechanics);
+    const double mp = (sign > 0) ? s.mechanics * s.pressure : 1.0 / (s.mechanics * s.pressure);
+    const double pp = (sign > 0) ? s.pressure * s.pressure : 1.0 / (s.pressure * s.pressure);
+    scale_dense(S[_0][_0], mm);
+    scale_sparse(S[_0][_1], mp);
+    scale_sparse(S[_1][_0], mp);
+    scale_sparse(S[_1][_1], pp);
+}
+
 // Apply D S D to the system and D b to the rhs (in place).
 void
 apply_block_scaling(SystemMatrix& S, VectorHP& rhs, const BlockScaling& s)
 {
-    scale_dense(S[_0][_0], s.mechanics * s.mechanics);
-    scale_sparse(S[_0][_1], s.mechanics * s.pressure);
-    scale_sparse(S[_1][_0], s.mechanics * s.pressure);
-    scale_sparse(S[_1][_1], s.pressure * s.pressure);
+    scale_system_matrix(S, s, +1);
     for (auto& v : rhs[_0]) v[0] *= s.mechanics;
     for (auto& v : rhs[_1]) v[0] *= s.pressure;
 }
@@ -1008,6 +1019,12 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
       }
     }
     //closed_cells_changed = true; // @@@
+    // Contact-chatter metric: count cells that flipped state vs the previous
+    // nonlinear iteration (same grid only; size mismatch = grid change, skip).
+    if (closed_cells_.size() == closed_cells.size()) {
+        last_solve_stats_.closed_cell_toggles +=
+            static_cast<int>(count_toggled_cells(closed_cells_, closed_cells));
+    }
     closed_cells_ = closed_cells;
     // dump_vector(closed_cells, debug_filename("closed_cells_").c_str());
     // dump_vector(closed_cells, "closed_cells", true);
@@ -1207,7 +1224,16 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         psolver_ = setupLinearSolver(solver_type, *S_linop_, precond, prm_, lintol, max_iter, verbosity);
     }
 
-    if (prm_.get<bool>("solver.write_coupled_linear_system", false)) {
+    // Dump a snapshot of the (physical, unscaled) coupled system either on explicit
+    // request (write_coupled_linear_system) or when the solve is "struggling" — i.e.
+    // the nonlinear iteration count reached dump_case_min_nonlin_iter (>0). The
+    // latter captures a *relevant* hard case for later offline/standalone study
+    // (replay tool, --contact-report) without dumping every system.
+    const int dump_case_min_nlin = prm_.get<int>("solver.dump_case_min_nonlin_iter", 0);
+    const bool want_manual_dump = prm_.get<bool>("solver.write_coupled_linear_system", false)
+        || (dump_case_min_nlin > 0 && nlin_iteration >= dump_case_min_nlin);
+    if (want_manual_dump) {
+        if (block_scaling.active()) scale_system_matrix(S, block_scaling, -1);
         dump_linear_system_snapshot(linear_system_dump_stem(prm_, nlin_iteration, "manual"),
                                     S,
                                     rhs_org,
@@ -1216,6 +1242,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
                                     use_ad,
                                     prm_,
                                     makePressureAssemblyInput());
+        if (block_scaling.active()) scale_system_matrix(S, block_scaling, +1);
     }
 
     // Pristine copy of the (possibly scaled) rhs fed to the solver, so each retry
@@ -1247,6 +1274,10 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
                 throw;
             }
         }
+    }
+
+    if (!iores.converged) {
+        ++last_solve_stats_.linear_solve_failures;
     }
 
     // Opt-in robustness ladder (solver.linsolver.failure_policy = "ladder"):
@@ -1291,13 +1322,19 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
             } catch (const std::exception&) {}
         }
 
-        if (iores.converged && nlin_verbosity > 0) {
-            std::cout << "Fracture coupled linear solve rescued by fallback ladder at nlin iter "
-                      << nlin_iteration << " (" << iores.iterations << " iters)" << std::endl;
+        if (iores.converged) {
+            ++last_solve_stats_.ladder_rescues;
+            if (nlin_verbosity > 0) {
+                std::cout << "Fracture coupled linear solve rescued by fallback ladder at nlin iter "
+                          << nlin_iteration << " (" << iores.iterations << " iters)" << std::endl;
+            }
         }
     }
 
     if (!iores.converged) {
+        // Restore the physical (unscaled) system so the dumped failure case is
+        // directly replayable. The function throws right after, so no re-scale.
+        if (block_scaling.active()) scale_system_matrix(S, block_scaling, -1);
         std::string dump_info_filename;
         if (prm_.get<bool>("solver.dump_linear_system_on_failure", true)) {
             const auto dump_stem = linear_system_dump_stem(prm_, nlin_iteration, "linear_failure");

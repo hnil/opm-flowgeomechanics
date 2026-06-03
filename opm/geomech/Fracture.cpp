@@ -2081,6 +2081,16 @@ Fracture::removeNewZeroWithCells(RegularTrimesh& mesh,
                                  const RegularTrimesh& initial_mesh) const
 {
     const double force_limit = prm_.get<double>("solver.force_limit", 0.0);
+    // Opt-in (default off): also retract *established* cells (already active in the
+    // initial mesh) that ended up zero-width or compressed, not just newly-grown
+    // ones. Physically: a region that opened then, after later flow/mech solves,
+    // carries net compression should not remain part of the fracture — currently
+    // such a cell is only *closed* (contact, width pinned 0), a "half-open" state
+    // that is hard for the nonlinear solve to resolve. Retracting it removes that
+    // topology instead. WARNING: enabling this lets the fracture shrink, so it can
+    // oscillate against growth across outer iterations; keep it gated/conservative.
+    const bool retract_established =
+        prm_.get<bool>("solver.retract_established_compressed", false);
     bool any_removed = false;
     using GridView = typename Grid::LeafGridView;
     using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
@@ -2091,7 +2101,7 @@ Fracture::removeNewZeroWithCells(RegularTrimesh& mesh,
             auto cellrefs = grid_mesh_map_[index];
             for (const auto& cellref : cellrefs) {
                 if (cur_level == 0) {
-                    if (!initial_mesh.isActive(cellref)) {
+                    if (retract_established || !initial_mesh.isActive(cellref)) {
                         mesh.setInactive(cellref);
                         any_removed = true;
                     }
@@ -2109,7 +2119,7 @@ Fracture::removeNewZeroWithCells(RegularTrimesh& mesh,
                         }
                     }
                     //if (!any_active) {
-                    if (!all_active) {
+                    if (retract_established || !all_active) {
                         mesh.setInactive(cellref);
                         any_removed = true;
                     }

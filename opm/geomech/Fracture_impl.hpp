@@ -718,6 +718,18 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 }
             }
 
+            // Conservative propagation (opt-in, default off): do not let the
+            // fracture grow off a non-converged inner solve. The K1 scores come
+            // from the current width/pressure state; if that solve did not
+            // converge they are unreliable, and opening/propagating on them can
+            // irreversibly alter the solution (an opened cell changes the global
+            // mechanics). Suppress expansion this round and let growth happen on a
+            // later, converged step instead of relying on an expensive roll-back.
+            if (prm_.get<bool>("solver.conservative_propagation", false)
+                && iter >= max_iter) {
+                std::fill(result.begin(), result.end(), -1.0);
+            }
+
             return result;
         };
 
