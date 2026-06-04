@@ -447,7 +447,7 @@ namespace Opm
                     this->simulator_.problem().emptyFractureLogger();
                     auto& local_deferredLogger = FractureModel::fractureLogger;
                     //this->simulator_.problem().wellModel().calculateExplicitQuantities(local_deferredLogger); //calcualte new explicite quantities TOFIX hould us old values
-                    //this->simulator_.problem().wellModel().prepareTimeStep(local_deferredLogger);// hopefully set up all well realated stuff correctly
+                    this->simulator_.problem().wellModel().prepareTimeStep(local_deferredLogger);
 
                     [[maybe_unused]] auto tmp_report =
                         legacy_parent_setup_iteration

@@ -154,6 +154,46 @@ apply_block_scaling(SystemMatrix& S, VectorHP& rhs, const BlockScaling& s)
     for (auto& v : rhs[_1]) v[0] *= s.pressure;
 }
 
+// Direct dense solve of the coupled system S dx = rhs. The mechanics block A is a
+// dense BEM (displacement-discontinuity) influence matrix, so the coupled system
+// is well posed but extremely ill-conditioned (width O(1) vs pressure O(1e8-1e11)),
+// which defeats Krylov methods and their cheap preconditioners. For SMALL fractures
+// a direct dense LU of the assembled 2N x 2N system is robust and affordable; an
+// exact Schur-complement preconditioner would cost the same order (A^-1 is dense).
+// Cost ~O((2N)^3) time, O((2N)^2) memory — guard on N before calling.
+bool
+solve_coupled_direct(const SystemMatrix& S, const VectorHP& rhs, VectorHP& dx)
+{
+    const size_t n = S[_0][_0].N();
+    FMatrix K(2 * n, 2 * n, 0.0);
+    const auto& A = S[_0][_0];
+    for (size_t i = 0; i != n; ++i)
+        for (size_t j = 0; j != n; ++j)
+            K[i][j] = A[i][j];
+    auto fill = [&](const SMatrix& Sb, const size_t ro, const size_t co) {
+        for (auto r = Sb.begin(); r != Sb.end(); ++r)
+            for (auto c = r->begin(); c != r->end(); ++c)
+                K[ro + r.index()][co + c.index()] = (*c)[0][0];
+    };
+    fill(S[_0][_1], 0, n);
+    fill(S[_1][_0], n, 0);
+    fill(S[_1][_1], n, n);
+
+    ResVector b(2 * n), y(2 * n);
+    for (size_t i = 0; i != n; ++i) { b[i] = rhs[_0][i]; b[n + i] = rhs[_1][i]; }
+    y = 0;
+    try {
+        K.solve(y, b); // dense LU (factorises K in place)
+    } catch (const Dune::Exception&) {
+        return false; // singular
+    }
+    for (size_t i = 0; i != 2 * n; ++i)
+        if (!std::isfinite(y[i][0]))
+            return false;
+    for (size_t i = 0; i != n; ++i) { dx[_0][i] = y[i]; dx[_1][i] = y[n + i]; }
+    return true;
+}
+
 void
 validate_state_vector(const ResVector& values, const char* const label, const double max_abs_value)
 {
@@ -788,28 +828,70 @@ Fracture::identify_closed(const FMatrix& A, const VectorHP& x, const ResVector& 
     const double close_force_tolerance = prm_.get<double>("solver.close_force_tolerance", 0.0);
     const double reopen_force_tolerance = prm_.get<double>("solver.reopen_force_tolerance", close_force_tolerance);
     const double reopen_width_tolerance = prm_.get<double>("solver.reopen_width_tolerance", 0.0);
-    if (closed_cell_policy != "sticky" && closed_cell_policy != "legacy") {
+    if (closed_cell_policy != "sticky" && closed_cell_policy != "legacy"
+        && closed_cell_policy != "pdas" && closed_cell_policy != "fischer_burmeister"
+        && closed_cell_policy != "none") {
         OPM_THROW(std::runtime_error,
                   "Unknown closed cell policy: " + closed_cell_policy);
     }
+    // "none": never close any cell — keep the fracture open and allow negative
+    // aperture (no contact constraint). This makes the mechanics block linear, so
+    // the keep-C coupled Newton stays smooth and the open/close chatter cannot
+    // occur. Physical only where genuine contact is negligible; the flow already
+    // floors transmissibility at min_width, so w<0 is benign for the flow.
+    // Fischer-Burmeister handles contact through smooth mech-row weights in
+    // fullSystemIteration, not a binary active set. Both report no hard-closed
+    // cells here (the binary set is only used for tracking/metrics and the C-drop check).
+    if (closed_cell_policy == "fischer_burmeister" || closed_cell_policy == "none") {
+        return std::vector<int>(A.N(), 0);
+    }
     const bool legacy_closed_cells = (closed_cell_policy == "legacy");
+    // Primal-dual active set (semismooth Newton): the contact set is chosen by a
+    // single consistently-scaled criterion  active(closed) <=> tmp_i - c_i w_i > tol
+    // with c_i = |A_ii| (BEM self-stiffness, converts width to force units), instead
+    // of the separate force/width tests + sticky hysteresis. Folding the open/close
+    // decision into one smooth complementarity function is what stops the active-set
+    // chatter that prevents the keep-C true-Newton iteration from converging.
+    const bool pdas_closed_cells = (closed_cell_policy == "pdas");
     ResVector tmp(rhs);
     const auto I = makeIdentity(A.N(), nwells);
     const auto was_closed = [this](const size_t index) {
         return index < closed_cells_.size() && closed_cells_[index] != 0;
     };
 
+    // Opt-in (default off): when testing whether a CLOSED cell should reopen, use
+    // the pressure that would develop once it opens, not its pinned (closed)
+    // pressure. The static reopen test ignores that fluid flows into a cell as it
+    // opens and raises its pressure — so it underestimates the opening tendency and
+    // can lock cells closed (the "half-open fracture hard to open" pathology). We
+    // estimate the pressure flow could communicate as the max fracture pressure
+    // over currently-open cells.
+    const bool reopen_use_open_pressure = prm_.get<bool>("solver.reopen_use_open_pressure", false);
+
     // computing rhs - A x[0] - I x[1]
     std::vector<int> result;
     if(closing_type == "org"){
         const ResVector& h = x[_0];
         const ResVector& p = x[_1];
+        double p_open_estimate = 0.0;
+        if (reopen_use_open_pressure)
+            for (size_t i = 0; i != A.N(); ++i)
+                if (!was_closed(i))
+                    p_open_estimate = std::max(p_open_estimate, p[i][0]);
         // maybe use other pressure if closed
         A.mmv(h, tmp);
         I.mmv(p, tmp);
         for (size_t i = 0; i != A.N(); ++i) {
             if (legacy_closed_cells) {
                 result.push_back(tmp[i] >= 0.0 && h[i] <= 0.0);
+                continue;
+            }
+            if (pdas_closed_cells) {
+                // Semismooth-Newton / primal-dual active set: one criterion,
+                // stateless (no sticky hysteresis), consistently scaled by the
+                // mech self-stiffness c_i = |A_ii|.
+                const double c_i = std::abs(A[i][i]);
+                result.push_back((tmp[i] - c_i * h[i][0]) > close_force_tolerance);
                 continue;
             }
             const bool close_candidate = tmp[i] >= close_force_tolerance && h[i] <= 0.0;
@@ -819,7 +901,13 @@ Fracture::identify_closed(const FMatrix& A, const VectorHP& x, const ResVector& 
             // forever, suppressing fracture growth. reopen_width_tolerance is kept
             // for backward compatibility but no longer gates on the pinned width.
             (void)reopen_width_tolerance;
-            const bool reopen_candidate = tmp[i] <= -reopen_force_tolerance;
+            // tmp[i] = (rhs - A h - I p)[i]; replacing the cell pressure p[i] by the
+            // higher pressure-on-opening makes the reopen test easier (more tensile),
+            // since I is the identity on cell rows.
+            double reopen_force = tmp[i];
+            if (reopen_use_open_pressure && was_closed(i))
+                reopen_force = tmp[i] - (p_open_estimate - p[i][0]);
+            const bool reopen_candidate = reopen_force <= -reopen_force_tolerance;
             result.push_back(was_closed(i) ? !reopen_candidate : close_candidate);
         }
     } else if(closing_type == "open") {
@@ -983,9 +1071,21 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     ResVector mech_rhs(fracture_width_);
     normalFractureTraction(mech_rhs, false);
 
-    // make a version of the fracture matrix that has trivial equations for closed cells
-    std::vector<int> closed_cells
-        = identify_closed(fractureMatrix(), x, mech_rhs, numWellEquations());
+    // make a version of the fracture matrix that has trivial equations for closed cells.
+    // Diagnostic/stabilisation option (freeze_closed_after >= 0): after that nonlinear
+    // iteration, stop re-evaluating the contact set and reuse the previous one. This
+    // separates the two keep-C failure modes — active-set CHATTER (set changes each
+    // iter) vs. a bad Newton STEP for a fixed set. With the set frozen the mechanics
+    // is smooth, so (optionally with coupled_step_limit) Newton should converge if
+    // chatter was the only problem.
+    const int freeze_closed_after = prm_.get<int>("solver.freeze_closed_after", -1);
+    std::vector<int> closed_cells;
+    if (freeze_closed_after >= 0 && nlin_iteration > freeze_closed_after
+        && closed_cells_.size() == fracture_width_.size()) {
+        closed_cells = closed_cells_; // frozen set
+    } else {
+        closed_cells = identify_closed(fractureMatrix(), x, mech_rhs, numWellEquations());
+    }
     if (!closed_cells_.empty() && closed_cells_.size() == closed_cells.size()) {
         // Anti-chatter guard. Only re-openings (closed -> open) are throttled;
         // establishing contact (open -> closed) is always allowed so the contact
@@ -1031,17 +1131,56 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     // const auto A = modified_fracture_matrix(fractureMatrix(), closed_cells);
     //bool update_mech_matrix = nlin_iteration > 0 || closed_cells_changed;
     bool first_iteration = (nlin_iteration == 0);
-    if (first_iteration) {
-        A_.reset(new FMatrix(modified_fracture_matrix(fractureMatrix(), closed_cells)));
-    }else{
-        modified_fracture_matrix(*A_, fractureMatrix(), closed_cells);
+    // Fischer-Burmeister contact (opt-in closed_cell_policy=fischer_burmeister):
+    // replace the binary open/closed mech rows by a smooth complementarity row
+    //   phi_FB(c_i w_i, lambda_i) = 0,  lambda_i = tmp_i = (traction - A_orig w - I p)_i,
+    //   c_i = |A_orig_ii| (stiffness scaling so width ~ force).
+    // Jacobian row i: A_FB = da_i c_i e_i - db_i A_orig_i,  I_FB_ii = -db_i, with
+    // da = 1 - a/r, db = 1 - b/r, r = sqrt(a^2+b^2). This smoothly blends the open
+    // mech equation (b~0 => da~0, db~1 => normal row) and the closed pin
+    // (a~0 => da~1, db~0 => c_i w_i = 0), removing the active-set chatter. The mech
+    // residual is set to -phi_FB directly (see rhs override below), not via mmv.
+    const bool is_fb = (prm_.get<std::string>("solver.closed_cell_policy", "sticky")
+                        == "fischer_burmeister");
+    std::vector<double> fb_phi; // FB residual per cell; rhs[_0][i] = -fb_phi[i]
+    if (is_fb) {
+        const FMatrix& Aorig = fractureMatrix();
+        const size_t n = Aorig.N();
+        const ResVector& w = x[_0];
+        const ResVector& p = x[_1];
+        fb_phi.assign(n, 0.0);
+        if (first_iteration) A_.reset(new FMatrix(Aorig));
+        FMatrix& Afb = *A_;
+        if (first_iteration) I_.reset(new SMatrix(makeIdentity(n, numWellEquations())));
+        SMatrix& Ifb = *I_;
+        const double eps = 1e-30;
+        for (size_t i = 0; i < n; ++i) {
+            double tmp_i = mech_rhs[i];
+            for (size_t j = 0; j < n; ++j) tmp_i -= Aorig[i][j] * w[j][0];
+            tmp_i -= p[i][0]; // I is the identity on cell rows
+            const double c_i = std::max(std::abs(Aorig[i][i]), eps);
+            const double a = c_i * w[i][0];
+            const double b = tmp_i;
+            const double r = std::sqrt(a * a + b * b) + eps;
+            const double da = 1.0 - a / r;
+            const double db = 1.0 - b / r;
+            fb_phi[i] = a + b - std::sqrt(a * a + b * b);
+            for (size_t j = 0; j < n; ++j) Afb[i][j] = -db * Aorig[i][j];
+            Afb[i][i] += da * c_i;
+            Ifb[i][i] = -db;
+        }
+    } else {
+        if (first_iteration) {
+            A_.reset(new FMatrix(modified_fracture_matrix(fractureMatrix(), closed_cells)));
+        }else{
+            modified_fracture_matrix(*A_, fractureMatrix(), closed_cells);
+        }
+        // Closed cells are held fixed in the mechanics residual and Jacobian block.
+        for (size_t i = 0; i != closed_cells.size(); ++i)
+            if (closed_cells[i])
+                mech_rhs[i] = 0;
     }
     const auto& A = *A_;
-
-    // Closed cells are held fixed in the mechanics residual and Jacobian block.
-    for (size_t i = 0; i != closed_cells.size(); ++i)
-        if (closed_cells[i])
-            mech_rhs[i] = 0;
 
     if (use_ad) {
         // Use the standalone AD assembler for both pressure matrix and coupling matrix
@@ -1079,10 +1218,13 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     const auto& C = *coupling_matrix_;
     
     // const auto I = makeIdentity(A.N(), numWellEquations(), 1, closed_cells);
-    if (first_iteration) {
-        I_.reset(new SMatrix(makeIdentity(A.N(), numWellEquations(), 1, closed_cells)));
-    }else{
-        modifyIdentity(*I_, 1, closed_cells);
+    // (Fischer-Burmeister already built I_ with its smooth -db_i weights above.)
+    if (!is_fb) {
+        if (first_iteration) {
+            I_.reset(new SMatrix(makeIdentity(A.N(), numWellEquations(), 1, closed_cells)));
+        }else{
+            modifyIdentity(*I_, 1, closed_cells);
+        }
     }
     const auto& I = *I_;
 #if EXP_REF    
@@ -1149,9 +1291,15 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
        // S[_1][_0].mmv(x[_0], rhs[_1]);
         S[_1][_1].mmv(x[_1], rhs[_1]);
         S[_0][_0].mmv(x[_0], rhs[_0]);
-        S[_0][_1].mmv(x[_1], rhs[_0]);   
+        S[_0][_1].mmv(x[_1], rhs[_0]);
     //}
-   
+
+    // Fischer-Burmeister: the mechanics residual is the nonlinear complementarity
+    // function, not the linear mmv result, so overwrite the mech rows with -phi_FB.
+    if (is_fb)
+        for (size_t i = 0; i < fb_phi.size(); ++i)
+            rhs[_0][i] = -fb_phi[i];
+
     auto rhs_org(rhs);
 
     
@@ -1182,16 +1330,46 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         apply_block_scaling(S, rhs, block_scaling);
     }
 
+    const std::string solver_type = prm_.get<std::string>("solver.linsolver.solver");
+    Dune::InverseOperatorResult iores;
+
+    // Direct dense coupled solve (opt-in, solver.linsolver.solver = "direct"): for
+    // small fractures the dense BEM-coupled system is best solved directly — Krylov
+    // methods struggle with its O(1e11) conditioning and the only robust
+    // preconditioner (exact Schur) costs the same as a direct solve anyway. Guarded
+    // by direct_max_cells so large fractures fall back to the iterative path.
+    bool solved_direct = false;
+    if (solver_type == "direct") {
+        const int direct_max_cells = prm_.get<int>("solver.linsolver.direct_max_cells", 4000);
+        const size_t ncoupled = fracture_width_.size();
+        if (static_cast<int>(ncoupled) <= direct_max_cells) {
+            solved_direct = solve_coupled_direct(S, rhs, dx);
+            iores.converged = solved_direct;
+            iores.iterations = 1;
+            ++last_solve_stats_.linear_solves;
+            if (!solved_direct && nlin_verbosity > 0)
+                std::cout << "Direct coupled solve failed (singular); will report non-convergence"
+                          << std::endl;
+        } else if (nlin_verbosity > 0) {
+            std::cout << "Direct coupled solve skipped: " << ncoupled << " cells > direct_max_cells "
+                      << direct_max_cells << "; using iterative solver" << std::endl;
+        }
+    }
+
+    if (!solved_direct) {
     // solve system equations
     //const Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP> S_linop(S);
     if(first_iteration){
         S_linop_ = std::make_unique<Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP>>(S); // store for use in preconditioner
     }
     //TailoredPrecondDiag precond_old(S); // cannot be 'const' due to BiCGstabsolver interface
-    const std::string solver_type = prm_.get<std::string>("solver.linsolver.solver");
     Opm::PropertyTree lprm = prm_.get_child("solver.linsolver.preconditioner");
     //Opm::FractureMechanicsPreconditioner precond(S, lprm);
-    Dune::InverseOperatorResult iores;
+    // When solver=="direct" but we fell back here (too large / singular), pick a
+    // real Krylov type for the iterative path.
+    const std::string iter_solver_type = (solver_type == "direct")
+        ? prm_.get<std::string>("solver.linsolver.direct_fallback_solver", "fgmres")
+        : solver_type;
     bool new_precond = first_iteration || closed_cells_changed;
     if(new_precond ){
         frac_flow_precond_.reset(new Opm::FractureMechanicsPreconditioner(S, lprm));
@@ -1221,7 +1399,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     auto& precond = *frac_flow_precond_;
     //using LinearSolverBase = Dune::InverseOperator<VectorHP, VectorHP>;
     if (new_precond) {
-        psolver_ = setupLinearSolver(solver_type, *S_linop_, precond, prm_, lintol, max_iter, verbosity);
+        psolver_ = setupLinearSolver(iter_solver_type, *S_linop_, precond, prm_, lintol, max_iter, verbosity);
     }
 
     // Dump a snapshot of the (physical, unscaled) coupled system either on explicit
@@ -1267,7 +1445,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         } catch (const std::exception&) {
             const bool allow_gmres_fallback = prm_.get<bool>(
                 "solver.linsolver.fallback_gmres_on_breakdown", true);
-            if (allow_gmres_fallback && solver_type == "bicgstab") {
+            if (allow_gmres_fallback && iter_solver_type == "bicgstab") {
                 psolver_ = setupLinearSolver("gmres", *S_linop_, precond, prm_, lintol, max_iter, verbosity);
                 run_solver(*psolver_);
             } else {
@@ -1330,6 +1508,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
             }
         }
     }
+    } // end if(!solved_direct) — iterative coupled solve path
 
     if (!iores.converged) {
         // Restore the physical (unscaled) system so the dumped failure case is
@@ -1391,7 +1570,28 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     
     // the following is a heuristic way to limit stepsize to stay within convergence radius
     const double damping = prm_.get<double>("solver.damping");
-    const double step_fac = damping; // estimate_step_fac(x, dx) * damping;
+    double step_fac = damping; // estimate_step_fac(x, dx) * damping;
+    // Opt-in relative-step globalization (default 0 = off): cap the Newton step so
+    // the per-block relative change ||dx||_inf/||x||_inf does not exceed
+    // coupled_step_limit. The keep-C true-Newton step can have a huge erratic
+    // pressure update (O(1e11)) from the ~1e11-conditioned contact system; limiting
+    // the relative change keeps the iterate in the convergence radius (a cheap
+    // trust-region surrogate; cf. the disabled estimate_step_fac heuristic).
+    const double coupled_step_limit = prm_.get<double>("solver.coupled_step_limit", 0.0);
+    if (coupled_step_limit > 0.0) {
+        const double xw = x[_0].infinity_norm(), xp = x[_1].infinity_norm();
+        const double dw = dx[_0].infinity_norm(), dp = dx[_1].infinity_norm();
+        const double fw = (xw > 0.0) ? dw / xw : 0.0;
+        const double fp = (xp > 0.0) ? dp / xp : 0.0;
+        const double fmax = std::max(fw, fp);
+        if (fmax > coupled_step_limit) {
+            const double lim = std::max(coupled_step_limit / fmax, 1e-3);
+            step_fac *= lim;
+            if (nlin_verbosity > 1)
+                std::cout << "Coupled step limited: rel-change " << fmax << " > "
+                          << coupled_step_limit << ", scaling step by " << lim << std::endl;
+        }
+    }
     // std::cout << "fac: " << step_fac << std::endl;
     if (nlin_verbosity > 2) {
         std::cout << "fac: " << step_fac << std::endl;
@@ -1420,9 +1620,16 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     }
     // copying modified variables back to member variables
     fracture_width_ = x[_0];
-    for (size_t i = 0; i != fracture_width_.size(); ++i) {
-        fracture_width_[i][0] = std::max(0.0, fracture_width_[i][0]); // ensure non-negativity
-        // fracture_width_[i][0] = std::min(max_width, fracture_width_[i][0]); // ensure non-negativity
+    // The "none" contact policy keeps the fracture open and permits negative
+    // aperture, so it must NOT clamp width to >= 0 (that clamp is itself a contact
+    // nonlinearity that would reintroduce the open/close behaviour).
+    const bool allow_negative_width =
+        (prm_.get<std::string>("solver.closed_cell_policy", "sticky") == "none");
+    if (!allow_negative_width) {
+        for (size_t i = 0; i != fracture_width_.size(); ++i) {
+            fracture_width_[i][0] = std::max(0.0, fracture_width_[i][0]); // ensure non-negativity
+            // fracture_width_[i][0] = std::min(max_width, fracture_width_[i][0]);
+        }
     }
     fracture_pressure_ = x[_1];
     // if (nlin_verbosity > 2) {

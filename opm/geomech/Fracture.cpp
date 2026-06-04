@@ -1483,18 +1483,21 @@ Fracture::wellIndices_() const
         double perf_density = dens_cells[i];
         double dh_perf = gravity_ * perf_density * origo_[2];
         double WI = 0.0;
+        double ctf = 0.0;
         if(mob_cells[i] <= 0.0){
             std::cout << "Warning zero mobility for perf cell: " << res_cells[i] << std::endl;
             WI = 0.0;
         }else{
             WI = q_cells[i] / ((inj_press - dh_perf) - (p_cells[i] - dh_res));//NB d_perf def
+            ctf = WI/mob_cells[i]; // convert to ctf
         }
         if (WI < 0.0) {
           // keep but could maybe be removed
             std::cout << "Negative WI: " << WI << " for cell: " << res_cells[i] << std::endl;
             WI = 0.0;
+            ctf = 0.0;
         }
-        perf.ctf = WI/mob_cells[i]; // convert to ctf
+        perf.ctf = ctf;
         {
                 // NBsould probably be removed
             perf.depth = this->origo_[2];
