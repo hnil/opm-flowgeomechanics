@@ -26,6 +26,7 @@
 #include <opm/elasticity/materials.hh>
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <functional>
 #include <limits>
@@ -478,7 +479,6 @@ namespace Opm{
 
                 for (const auto& wellconn : wellcons) {
                     // simple calculated with upscaling
-
                     // map to cartesian
                     const auto cartesianIdx = simulator.vanguard()
                         .cartesianIndex(wellconn.cell);
@@ -513,6 +513,11 @@ namespace Opm{
 
                     // Making preliminary connection to be added in schedule
                     // with correct numbering
+                    // Dynamic fracturing completions enter the schedule as open
+                    // zero-CF well connections; the fracture WI/CTF is added later
+                    // through addFracturePerforations(). Even a zero-CF open
+                    // completion still changes the rebuilt well topology, perf
+                    // ordering, and first-perforation state initialization.
                     auto& connection = extra
                         .emplace_back(ijk[0], ijk[1], ijk[2], cartesianIdx,
                                       /*complnum*/ -1,
