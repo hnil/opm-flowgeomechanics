@@ -28,6 +28,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <fstream>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -44,6 +45,17 @@ namespace Opm::Parameters {
 }
 
 namespace Opm{
+    namespace Detail {
+        inline bool fractureParamFileExists(const std::string& filename)
+        {
+            std::ifstream stream(filename);
+            return stream.good();
+        }
+
+        bool isBuiltinFractureParamAlias(const std::string& filename);
+        Opm::PropertyTree builtinFractureParam(const std::string& filename);
+    } // namespace Detail
+
     template<typename TypeTag>
     class EclProblemGeoMech: public FlowProblemBlackoil<TypeTag>{
     public:
@@ -73,13 +85,21 @@ namespace Opm{
                 // fracture_param.put("fractureparams.numfractures",1);
                 fracture_param_ = fracture_param;
             } else {
+                std::string fractureParamSource = filename;
                 try {
-                    Opm::PropertyTree fracture_param(filename);
-                    // set seed values
-                    fracture_param_ = fracture_param;
+                    if (Detail::fractureParamFileExists(filename)) {
+                        Opm::PropertyTree fracture_param(filename);
+                        fracture_param_ = fracture_param;
+                    } else if (Detail::isBuiltinFractureParamAlias(filename)) {
+                        fractureParamSource = "built-in alias '" + filename + "'";
+                        fracture_param_ = Detail::builtinFractureParam(filename);
+                    } else {
+                        Opm::PropertyTree fracture_param(filename);
+                        fracture_param_ = fracture_param;
+                    }
                 } catch (...) {
                     std::stringstream ss;
-                    ss << "No fracture parameter file or error reading it: " << filename
+                    ss << "No fracture parameter file or error reading it: " << fractureParamSource
                        << " : Simulation stopped: correct file or use default";
                     // ss << e.what();
                     OpmLog::warning(ss.str());
@@ -102,7 +122,7 @@ namespace Opm{
             Parent::registerParameters();
             VtkGeoMechModule<TypeTag>::registerParameters();
             FlowLinearSolverParametersGeoMech::registerParameters<TypeTag>();
-            Parameters::Register<Parameters::FractureParamFile>("json file defining fracture setting");
+	    Parameters::Register<Parameters::FractureParamFile>("json file defining fracture setting or alias: standard, sequential_implicit");
 	    Opm::Parameters::SetDefault<Opm::Parameters::EnableOpmRstFile>(true);
 	    Opm::Parameters::SetDefault<Opm::Parameters::EnableVtkOutput>(true);
 	    Opm::Parameters::SetDefault<Opm::Parameters::ThreadsPerProcess>(1);

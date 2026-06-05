@@ -320,9 +320,13 @@ target_link_libraries(replay_fracture_linear_system
 
 ####################33
 function(add_mechtest_compareECLFiles)
-  set(oneValueArgs CASENAME FILENAME SIMULATOR ABS_TOL REL_TOL DIR DIR_PREFIX PREFIX RESTART_STEP RESTART_SCHED)
+	set(oneValueArgs CASENAME REFERENCE_CASENAME FILENAME SIMULATOR ABS_TOL REL_TOL DIR DIR_PREFIX PREFIX RESTART_STEP RESTART_SCHED)
   set(multiValueArgs TEST_ARGS)
   cmake_parse_arguments(PARAM "$" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
+
+	if(NOT PARAM_REFERENCE_CASENAME)
+	set(PARAM_REFERENCE_CASENAME ${PARAM_CASENAME})
+	endif()
   
   set(RESULT_PATH ${CMAKE_CURRENT_LIST_DIR}/result/${PARAM_CASENAME})
   set(TEST_ARGS ${PARAM_TEST_ARGS})
@@ -333,7 +337,7 @@ function(add_mechtest_compareECLFiles)
                   -a ${PARAM_ABS_TOL}
                   -t ${PARAM_REL_TOL}
                   -c ${COMPARE_ECL_COMMAND}
-				  -o ${PARAM_CASENAME})
+				  -o ${PARAM_REFERENCE_CASENAME})
  #                 -d ${RST_DECK_COMMAND})
  # if(PARAM_RESTART_STEP)
  #   list(APPEND DRIVER_ARGS -s ${PARAM_RESTART_STEP})
@@ -533,6 +537,16 @@ add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac
 						 PREFIX geomech_frac
 						 TEST_ARGS --fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_frac_postsolve_legacy_full.json)
 
+add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_standard
+						 REFERENCE_CASENAME REGTEST_geomech_frac
+						 FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC
+						 SIMULATOR flow_energy_geomech
+						 ABS_TOL ${abs_tol}
+						 REL_TOL ${rel_tol}
+						 DIR ${CMAKE_CURRENT_LIST_DIR}/data/
+						 PREFIX geomech_frac
+						 TEST_ARGS --fracture-param-file=standard)
+
 add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp
                          FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ
                          SIMULATOR flow_energy_geomech
@@ -564,6 +578,20 @@ add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp_recommended
 						--enable-write-all-solutions=true
 						--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
 						--threads-per-process=4)
+
+add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp_sequential_implicit
+                         REFERENCE_CASENAME REGTEST_geomech_frac_seq_bhp_recommended
+                         FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ
+                         SIMULATOR flow_energy_geomech
+                         ABS_TOL ${abs_tol}
+                         REL_TOL ${rel_tol}
+                         DIR ${CMAKE_CURRENT_LIST_DIR}/data/
+						 PREFIX geomech_frac_seq_bhp_recommended
+						 TEST_ARGS --parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac_seq.ini
+						 --fracture-param-file=sequential_implicit
+						 --enable-write-all-solutions=true
+						 --linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
+						 --threads-per-process=4)
 
 # Reference data not yet committed - disabled until reference is updated
 # add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp_default

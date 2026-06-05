@@ -24,6 +24,7 @@
 #                       the library needs it.
 
 list (APPEND MAIN_SOURCE_FILES
+	opm/geomech/BuiltinFractureParams.cpp
 	opm/geomech/coupledsolver.cpp
 	opm/geomech/CutDe.cpp
 	opm/geomech/CGAL_helper.cpp
