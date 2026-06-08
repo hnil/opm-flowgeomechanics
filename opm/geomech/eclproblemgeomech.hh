@@ -5,6 +5,8 @@
 
 #include <opm/common/utility/Serializer.hpp>
 
+#include <opm/input/eclipse/EclipseState/Phase.hpp>
+
 #include <opm/geomech/FlowGeomechLinearSolverParameters.hpp>
 #include <opm/geomech/boundaryutils.hh>
 #include <opm/geomech/eclgeomechmodel.hh>
@@ -68,12 +70,24 @@ namespace Opm{
         using GridView = GetPropType<TypeTag, Properties::GridView>;
         using Grid = GetPropType<TypeTag, Properties::Grid>;
         using Vanguard = GetPropType<TypeTag, Properties::Vanguard>;
-        enum { waterPhaseIdx = FluidSystem::waterPhaseIdx };
         enum { dim = GridView::dimension };
         enum { dimWorld = GridView::dimensionworld };
         using Toolbox = MathToolbox<Evaluation>;
         using SymTensor = Dune::FieldVector<double,6>;
         using GeomechModel = EclGeoMechModel<TypeTag>;
+
+        template <class FluidState>
+        static int referencePhaseIdx(const FluidState& fs)
+        {
+            if (fs.phaseIsActive(FluidSystem::waterPhaseIdx)) {
+                return FluidSystem::waterPhaseIdx;
+            }
+            if (fs.phaseIsActive(FluidSystem::oilPhaseIdx)) {
+                return FluidSystem::oilPhaseIdx;
+            }
+            return FluidSystem::gasPhaseIdx;
+        }
+
       //using CellSeedType = typename GridView::template Codim<0>::EntitySeed;
         EclProblemGeoMech(Simulator& simulator):
             FlowProblemBlackoil<TypeTag>(simulator),
@@ -112,6 +126,11 @@ namespace Opm{
             OpmLog::info(os.str());
 
             hasFractures_ = this->simulator().vanguard().eclState().runspec().frac();//fracture_param_.get<bool>("hasfractures");
+                        const bool waterActive = this->simulator().vanguard().eclState().runspec().phases().active(Opm::Phase::WATER);
+                        if (hasFractures_ && !waterActive) {
+                                OPM_THROW(std::runtime_error,
+                                                    "Fracture code requires an active WATER phase; decks with MECH+FRAC but without WATER are not supported");
+                        }
             //addPerfsToSchedule_ = fracture_param_.get<bool>("add_perfs_to_schedule");
             if(this->simulator().vanguard().eclState().runspec().mech()){
               this->model().addOutputModule(std::make_unique<VtkGeoMechModule<TypeTag>>(simulator));
@@ -305,9 +324,11 @@ namespace Opm{
             for(size_t dofIdx=0; dofIdx < numDof; ++dofIdx){
                 const auto& iq = this->model().intensiveQuantities(dofIdx,0);
                 const auto& fs = iq.fluidState();
-                initpressure_[dofIdx] = Toolbox::value(fs.pressure(waterPhaseIdx));
-                inittemperature_[dofIdx] = Toolbox::value(fs.temperature(waterPhaseIdx));
+                const int phaseIdx = referencePhaseIdx(fs);
+                initpressure_[dofIdx] = Toolbox::value(fs.pressure(phaseIdx));
+                inittemperature_[dofIdx] = Toolbox::value(fs.temperature(phaseIdx));
             }
+
             initstress_.resize(numDof);
 
             // for now make a copy

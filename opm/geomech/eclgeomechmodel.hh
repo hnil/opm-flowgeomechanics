@@ -33,9 +33,20 @@ namespace Opm{
         using Stencil = GetPropType<TypeTag, Properties::Stencil>;
         using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
         using ElementContext = GetPropType<TypeTag, Properties::ElementContext>;
-        enum { waterPhaseIdx = FluidSystem::waterPhaseIdx };
         using Toolbox = MathToolbox<Evaluation>;
         using SymTensor = Dune::FieldVector<double,6>;
+
+        template <class FluidState>
+        static int referencePhaseIdx(const FluidState& fs)
+        {
+            if (fs.phaseIsActive(FluidSystem::waterPhaseIdx)) {
+                return FluidSystem::waterPhaseIdx;
+            }
+            if (fs.phaseIsActive(FluidSystem::oilPhaseIdx)) {
+                return FluidSystem::oilPhaseIdx;
+            }
+            return FluidSystem::gasPhaseIdx;
+        }
     public:
         EclGeoMechModel(Simulator& simulator):
             //           Parent(simulator)
@@ -273,7 +284,8 @@ namespace Opm{
                 const auto& iq = simulator_.model().intensiveQuantities(dofIdx,0);
                 // pressure part
                 const auto& fs = iq.fluidState();
-                const auto& press = fs.pressure(waterPhaseIdx);
+                const int phaseIdx = referencePhaseIdx(fs);
+                const auto& press = fs.pressure(phaseIdx);
                 // const auto& biotcoef = problem.biotCoef(dofIdx); //NB not used
                 //thermal part
                 //Properties::EnableTemperature
@@ -297,7 +309,7 @@ namespace Opm{
 
                 if(thermal_expansion){
                     OPM_TIMEBLOCK(addTermalParametersToMech);
-                    const auto& temp = fs.temperature(waterPhaseIdx);//NB all phases have equal temperature
+                    const auto& temp = fs.temperature(phaseIdx);//NB all phases have equal temperature
                     const auto& thelcoef = problem.thelCoef(dofIdx);
                     // const auto& termExpr = problem.termExpr(dofIdx); //NB not used
 		    // tcoeff = (youngs*tempExp/(1-pratio))*fac;
@@ -657,7 +669,7 @@ namespace Opm{
 	   // double pcoeff = poelCoef*fac;
 	   const auto& iq = simulator_.model().intensiveQuantities(globalIdx,0);
 	   const auto& fs = iq.fluidState();
-	   const auto& press = Toolbox::value(fs.pressure(waterPhaseIdx));
+       const auto& press = Toolbox::value(fs.pressure(referencePhaseIdx(fs)));
 	   //
             Dune::FieldVector<double,6> fracStress = this->stress(globalIdx);
             // effStress += simulator_.problem().initStress(globalIdx);

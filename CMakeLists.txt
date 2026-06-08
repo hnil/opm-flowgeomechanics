@@ -210,6 +210,23 @@ if(USE_TRACY_PROFILER AND Tracy_FOUND)
 	)
 endif()
 
+add_executable(flow_oilgas_energy_geomech
+	examples/flow_oilgas_energy_geomech.cpp
+)
+target_link_libraries(flow_oilgas_energy_geomech
+	PUBLIC
+		opmflowgeomechanics
+	PRIVATE
+		moduleVersionGeoMech
+)
+
+if(USE_TRACY_PROFILER AND Tracy_FOUND)
+	target_link_libraries(flow_oilgas_energy_geomech
+		PRIVATE
+			Tracy::TracyClient
+	)
+endif()
+
 add_executable(padmodel
 	examples/padmodel.cpp
 )
@@ -512,6 +529,37 @@ add_test(NAME Run.SIMPLE_MECH.EnergyGeomech.Parallel
 set_tests_properties(Run.SIMPLE_MECH.EnergyGeomech.Parallel
 	PROPERTIES
 	PROCESSORS ${Test_NumProc}
+)
+
+add_test(NAME Run.SPE1_OILGAS_THERMAL_MECH.OilGasEnergyGeomech
+	COMMAND
+	$<SHELL_PATH:$<TARGET_FILE:flow_oilgas_energy_geomech>>
+	${CMAKE_CURRENT_LIST_DIR}/data/SPE1CASE2_OILGAS_THERMAL_MECH.DATA
+	--enable-esmry=false
+	--add-corners=true
+	--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
+	--output-dir=test_oilgas_energy_geomech
+)
+
+set_tests_properties(Run.SPE1_OILGAS_THERMAL_MECH.OilGasEnergyGeomech
+	PROPERTIES
+	PROCESSORS 1
+)
+
+add_test(NAME Run.SPE1_OILGAS_THERMAL_MECH_FRAC_FAIL.OilGasEnergyGeomech
+	COMMAND
+	$<SHELL_PATH:$<TARGET_FILE:flow_oilgas_energy_geomech>>
+	${CMAKE_CURRENT_LIST_DIR}/data/SPE1CASE2_OILGAS_THERMAL_MECH_FRAC_FAIL.DATA
+	--enable-esmry=false
+	--add-corners=true
+	--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
+	--output-dir=test_oilgas_energy_geomech_frac_fail
+)
+
+set_tests_properties(Run.SPE1_OILGAS_THERMAL_MECH_FRAC_FAIL.OilGasEnergyGeomech
+	PROPERTIES
+	PROCESSORS 1
+	WILL_FAIL TRUE
 )
 
 ## regressuin
