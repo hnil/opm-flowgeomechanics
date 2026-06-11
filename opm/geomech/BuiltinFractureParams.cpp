@@ -29,7 +29,10 @@ const char* standardFractureParamJson()
         },
         "reduce_boundary": "false",
         "vem_stability_choice": "3",
+        "mech_diagonal_scaling": "false",
+        "patch_recovery_stress": "false",
         "smooth_force": "false",
+        "smooth_force_length": "0",
         "addconnections": "true",
         "include_fracture_contributions": "false",
         "config": {
@@ -102,6 +105,7 @@ const char* standardFractureParamJson()
         "reservoir": {
             "calculate_dist": "true",
             "dist": "1",
+            "interpolate_stress": "false",
             "mobility": "0.0012999999999999999",
             "perm": "1e-13"
         },
@@ -283,6 +287,7 @@ const char* sequentialImplicitFractureParamJson()
         "reservoir": {
             "dist": "1",
             "calculate_dist": "true",
+            "interpolate_stress": "false",
             "mobility": "0.0013",
             "perm": "1e-13"
         },

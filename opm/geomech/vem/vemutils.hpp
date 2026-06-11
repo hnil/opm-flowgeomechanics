@@ -92,7 +92,22 @@ potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const p
                                  std::vector<std::tuple<int, int, double>>& div,
                                  bool get_matrix);
 
-Dune::BlockVector<Dune::FieldVector<double,1>> smoothCellVector(const Dune::CpGrid& grid,const Dune::BlockVector<Dune::FieldVector<double,1>>& cell_vector);                                
+Dune::BlockVector<Dune::FieldVector<double,1>> smoothCellVector(const Dune::CpGrid& grid,const Dune::BlockVector<Dune::FieldVector<double,1>>& cell_vector);
+
+/// Smooth a cell field over a *physical* length scale (meters), independent of the
+/// grid resolution: solves the Helmholtz filter equation
+///     (V + length^2 * L) u = V * u0,
+/// where L is the TPFA Laplacian (face area / center distance) with no-flux
+/// boundaries.  The kernel decays exponentially with decay length `length`, and the
+/// volume integral of the field is conserved.  This is the appropriate
+/// regularization for under-resolved fronts (e.g. cell-wise constant temperature
+/// or pressure jumps), where one-ring smoothing (`smoothCellVector`) has a
+/// grid-dependent smoothing radius.  In parallel the equation is solved with
+/// explicit sub-steps and per-step owner-to-all communication.
+Dune::BlockVector<Dune::FieldVector<double,1>>
+diffuseCellVector(const Dune::CpGrid& grid,
+                  const Dune::BlockVector<Dune::FieldVector<double,1>>& cell_vector,
+                  double length);
 
 /// Patch recovery: given per-cell scalar values, perform least-squares
 /// approximation to nodes and then interpolate back to cells.
@@ -100,6 +115,24 @@ Dune::BlockVector<Dune::FieldVector<double,1>> smoothCellVector(const Dune::CpGr
 Dune::BlockVector<Dune::FieldVector<double,1>>
 patchRecovery(const Dune::CpGrid& grid,
               const Dune::BlockVector<Dune::FieldVector<double,1>>& cell_values);
+
+/// As patchRecovery, but for 6-component fields (e.g. Voigt stress) and returning
+/// the recovered *nodal* values (indexed by grid vertex index) instead of cell
+/// averages.  All components share the same least-squares fit (the normal matrix
+/// is factorized once per node).  Linear fields are reproduced exactly at the
+/// nodes, also for high-aspect-ratio cells.  Use together with trilinear
+/// interpolation to evaluate a continuous stress field at arbitrary points
+/// (e.g. fracture cell centroids), avoiding the cell-to-cell jumps of the raw
+/// piecewise-constant stress.
+std::vector<Dune::FieldVector<double,6>>
+patchRecoveryNodal6(const Dune::CpGrid& grid,
+                    const Dune::BlockVector<Dune::FieldVector<double,6>>& cell_values);
+
+/// Cell-averaged version of patchRecoveryNodal6: smoothed cell stress obtained by
+/// averaging the recovered nodal values over each cell's corners.
+Dune::BlockVector<Dune::FieldVector<double,6>>
+patchRecoveryCells6(const Dune::CpGrid& grid,
+                    const Dune::BlockVector<Dune::FieldVector<double,6>>& cell_values);
 
 Dune::BlockVector<Dune::FieldVector<double,6>>  computeStressFem(const Dune::CpGrid& grid,
                                                                 const Dune::BlockVector<Dune::FieldVector<double,1>>& disp,

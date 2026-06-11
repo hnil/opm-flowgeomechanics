@@ -2,6 +2,7 @@
 
 #include "RegularTrimesh.hpp"
 #include <opm/common/TimingMacros.hpp>
+#include <opm/geomech/vem/vemutils.hpp>
 #include <opm/material/densead/Evaluation.hpp>
 #include <opm/grid/UnstructuredGrid.h>
 #include <opm/material/fluidstates/BlackOilFluidState.hpp>
@@ -204,6 +205,29 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         // get properties from rservoir
 
 
+        // optionally evaluate the reservoir stress at the fracture cell centroids by
+        // trilinear interpolation of patch-recovered nodal stress, instead of the
+        // piecewise-constant stress of the containing cell.  With large reservoir
+        // cells the latter gives large jumps in the traction along the fracture.
+        // ("NB burde truleg interpolere" -- now optional via reservoir.interpolate_stress)
+        const bool interpolate_stress = prm_.get<bool>("reservoir.interpolate_stress", false);
+        std::vector<Dune::FieldVector<double,6>> nodal_stress;
+        std::vector<Dune::FieldVector<double,3>> frac_centroids;
+        if (interpolate_stress) {
+            OPM_TIMEBLOCK(interpolateReservoirStress);
+            const auto& gv = grid.leafGridView();
+            Dune::BlockVector<Dune::FieldVector<double,6>> cell_stress(gv.size(0));
+            for (const auto& elem : elements(gv)) {
+                const int cidx = gv.indexSet().index(elem);
+                cell_stress[cidx] = problem.stress(cidx);
+            }
+            nodal_stress = vem::patchRecoveryNodal6(grid, cell_stress);
+            frac_centroids.resize(ncf);
+            ElementMapper fracElemMapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+            for (const auto& element : elements(grid_->leafGridView()))
+                frac_centroids[fracElemMapper.index(element)] = element.geometry().center();
+        }
+
         std::vector<int> unique_reservoir_cells_;//NB move to member?
         for(auto & cells : all_reservoir_cells_){
             for(auto & cell : cells){
@@ -262,6 +286,34 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 }
                 for (int dim = 0; dim < 3; ++dim) {
                   reservoir_stress_[i] = problem.stress(cell);
+                }
+                if (interpolate_stress) {
+                    // trilinear interpolation of the recovered nodal stress at the
+                    // fracture cell centroid, inside the containing reservoir cell
+                    const auto& cData = grid.currentData();
+                    const auto& relem = Dune::cpgrid::Entity<0>(*cData.back(), cell, true);
+                    auto loc = relem.geometry().local(frac_centroids[i]);
+                    bool loc_ok = true;
+                    for (int d = 0; d < 3; ++d) {
+                        // guard against failed Newton inversion on degenerate cells;
+                        // centroids slightly outside the cell are clamped
+                        if (!std::isfinite(loc[d]) || loc[d] < -0.5 || loc[d] > 1.5) {
+                            loc_ok = false;
+                            break;
+                        }
+                        loc[d] = std::min(1.0, std::max(0.0, loc[d]));
+                    }
+                    if (loc_ok && relem.geometry().corners() == 8) {
+                        const auto& gv = grid.leafGridView();
+                        Dune::FieldVector<double,6> interp(0.0);
+                        for (int k = 0; k < 8; ++k) {
+                            double w = 1.0;
+                            for (int d = 0; d < 3; ++d)
+                                w *= ((k >> d) & 1) ? loc[d] : 1.0 - loc[d];
+                            interp.axpy(w, nodal_stress[gv.indexSet().subIndex(relem, k, 3)]);
+                        }
+                        reservoir_stress_[i] = interp;
+                    } // else: keep the containing-cell value
                 }
                 const auto& perm =  problem.intrinsicPermeability(cell);
                 const auto& cstress =  problem.cStress(cell);

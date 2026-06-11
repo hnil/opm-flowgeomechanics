@@ -9,12 +9,22 @@ namespace vem
   enum StabilityChoice {
     SIMPLE = 1,     // the basic stability term described in (Gain et al., 2014)
     HARMONIC = 2,   // modified stability term more robust for high aspect ratios (Andersen et al., 2017)
-    D_RECIPE = 3,
+    D_RECIPE = 3,   // diagonal of consistency matrix, with isotropic floor tr(D)/9*cbrt(vol)
     ALLMAX = 4,
     ALLMIN = 5,
     EXPERIMENTAL = 6,
-    FEM = 7    // another modified stability based on the diagonal of the consistency matrix
+    FEM = 7,        // standard Q1 (bi-/trilinear) FEM on quad/hex cells; VEM with
+                    // ANISO_DIAG stabilization on cells where Q1 is not applicable
+    ANISO_DIAG = 8, // diagonal of consistency matrix with *anisotropic* floor based on
+                    // per-direction element length scales (robust for high aspect ratios)
+    ANISO_HARMONIC = 9, // purely geometric anisotropic diagonal: tr(D)/9 * vol / h_d^2
+                        // per coordinate direction d (anisotropic generalization of HARMONIC)
+    FEM_BBAR = 10   // as FEM, but Q1 with B-bar (mean dilatation) to reduce volumetric
+                    // locking; VEM with ANISO_DIAG fallback on non-hex cells
   };
+  constexpr int STABILITY_CHOICE_MAX = 10;
+  // true for choices that request Q1 FEM assembly on cells where it is applicable
+  inline bool is_fem_choice(StabilityChoice c) { return c == FEM || c == FEM_BBAR; }
   
 // ============================================================================
 // == Main functions for computing element stiffness matrices and assembling ==
@@ -309,6 +319,67 @@ calculate_stress_3D_local(const double* const points,
                           bool do_matrix,
                           bool do_stress
     );    
+// -----------------------------------------------------------------------------------------------
+// Computes the standard isoparametric Q1 (trilinear) FEM stiffness matrix for a single
+// hexahedral element, using 2x2x2 Gauss quadrature.  Optionally applies the B-bar
+// (mean dilatation) modification to alleviate volumetric locking.
+//
+// @param corners  Pointer to an array of 24 doubles: the x,y,z coordinates of the 8
+//                 element corners in Dune reference-hexahedron ordering, i.e. corner k
+//                 sits at reference position ((k&1), (k>>1)&1, (k>>2)&1).
+// @param young    Young's modulus.
+// @param poisson  Poisson's ratio.
+// @param bbar     If true, apply the B-bar (mean dilatation) modification.
+// @param target   Output: 24x24 stiffness matrix in row-major order; dof ordering is
+//                 (node-major) [u0x u0y u0z u1x ... u7z].
+void stiffness_matrix_fem_hex_3D(const double* const corners,
+                                 const double young,
+                                 const double poisson,
+                                 const bool bbar,
+                                 double* target);
+// -----------------------------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------------------------
+// As stiffness_matrix_fem_hex_3D, but for a bilinear quadrilateral in 2D (plane strain),
+// using 2x2 Gauss quadrature.  `corners` holds 8 doubles (4 corners in Dune reference-
+// square ordering); `target` receives an 8x8 row-major matrix.
+void stiffness_matrix_fem_quad_2D(const double* const corners,
+                                  const double young,
+                                  const double poisson,
+                                  const bool bbar,
+                                  double* target);
+// -----------------------------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------------------------
+// Given the (locally indexed) faces of a polyhedral cell, determine whether the cell is
+// a topological hexahedron (6 quadrilateral faces, 8 corners).  If so, fill `order` with
+// the local corner indices arranged in Dune reference-hexahedron ordering such that the
+// resulting trilinear map has positive Jacobian, and return true.  Otherwise return false.
+//
+// @param corners        Pointer to the (local) corner coordinates (3 doubles per corner).
+// @param num_corners    Number of (unique, locally indexed) corners of the cell.
+// @param faces          Locally-indexed face corner list (as in assemble_stiffness_matrix_3D).
+// @param num_face_edges Number of corners for each face.
+// @param num_faces      Number of faces.
+// @param order          Output: order[k] = local corner index of reference vertex k.
+bool hex_corner_ordering(const double* const corners,
+                         const int num_corners,
+                         const int* const faces,
+                         const int* const num_face_edges,
+                         const int num_faces,
+                         std::array<int, 8>& order);
+// -----------------------------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------------------------
+// Applies symmetric (Jacobi) diagonal scaling to a linear system given as a list of
+// matrix entries and a right-hand side: A -> S A S, b -> S b, with S = diag(1/sqrt(A_ii)).
+// The scale factors are returned in `scale`; the solution of the original system is
+// recovered from the scaled one as x_i = scale[i] * y_i.
+void diagonal_scale_system(std::vector<std::tuple<int, int, double>>& A_entries,
+                           std::vector<double>& b,
+                           std::vector<double>& scale);
+// -----------------------------------------------------------------------------------------------
+
 // ============================================================================
 // ============ Various utility functions for geometry computations ===========
 // ============================================================================

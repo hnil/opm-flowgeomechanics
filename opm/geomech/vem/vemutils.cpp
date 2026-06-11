@@ -1,13 +1,18 @@
 #include "config.h"
 #include "vemutils.hpp"
+#include <opm/common/TimingMacros.hpp>
 #include <opm/elasticity/elasticity.hpp>
 #include <opm/elasticity/materials.hh>
 #include <dune/geometry/quadraturerules.hh>
 #include <dune/istl/bcrsmatrix.hh>
+#include <dune/istl/operators.hh>
+#include <dune/istl/preconditioners.hh>
+#include <dune/istl/solvers.hh>
 #include <dune/grid/common/mcmgmapper.hh>
 
 #include <cmath>
 #include <deque>
+#include <limits>
 namespace vem
 {
 using PolyGrid = Dune::PolyhedralGrid<3, 3>;
@@ -319,7 +324,7 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
     // find if cells are of fem type
       const auto gv = grid.leafGridView();
       std::vector<bool> cell_fem_type(gv.size(0),false);
-      bool use_fem_type = StabilityChoice::FEM == stability_choice;
+      bool use_fem_type = is_fem_choice(stability_choice);
       if(use_fem_type){
         //const auto& idx  = grid.getCellIndexSet();
         //const auto& rIdx = grid.getCellRemoteIndices();
@@ -360,16 +365,17 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
         // computing local stiffness matrix, writing its entries into the global matrix
        
         auto loc_stability_choice =  stability_choice;
-        bool vem_type = StabilityChoice::FEM != stability_choice;
+        bool vem_type = !use_fem_type;
         if(!vem_type){
           // check if we can do vem on this cell
           //auto cartMapper = Dune::CartesianIndexMapper<Dune::CpGrid>(grid);
           // maybe move out the desition for parallel case
           bool is_femcell = cell_fem_type[c];//cellFemCell(grid,c, cartMapper);
           if(!is_femcell){
-            // if fem and not a "normal" cell switch to vem
+            // if fem and not a "normal" cell switch to vem with a stabilization
+            // that remains robust for high-aspect cells
             vem_type = true;
-            loc_stability_choice = StabilityChoice::D_RECIPE;
+            loc_stability_choice = StabilityChoice::ANISO_DIAG;
           }
         }
 
@@ -411,8 +417,15 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
             OPM_THROW(std::runtime_error,"Not valid C matrix"); 
         }
           Dune::GeometryType gt = elem.type();
+          const bool do_bbar = (stability_choice == StabilityChoice::FEM_BBAR);
           // get a quadrature rule of order two for the given geometry type
           const Dune::QuadratureRule<ctype,dim>& rule = Dune::QuadratureRules<ctype,dim>::rule(gt,2);
+          // first pass: compute B matrices and weights (and, for B-bar, the
+          // volume-averaged dilatational row)
+          std::vector<Dune::FieldMatrix<ctype,comp,dim*bfunc>> Bmats;
+          std::vector<ctype> qweights;
+          Dune::FieldVector<ctype,dim*bfunc> bbar_row(0.0);
+          ctype cell_volume = 0.0;
           for (typename Dune::QuadratureRule<ctype,dim>::const_iterator r = rule.begin();
                r != rule.end() ; ++r) {
             // compute the jacobian inverse transposed to transform the gradients
@@ -430,10 +443,32 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
 
             Dune::FieldMatrix<ctype,comp,dim*bfunc> lB;
             E.getBmatrix(lB,r->position(),jacInvTra);
-            
-            E.getStiffnessMatrix(Aq,lB,C,detJ*r->weight());
+            const ctype qw = detJ*r->weight();
+            Bmats.push_back(lB);
+            qweights.push_back(qw);
+            cell_volume += qw;
+            if (do_bbar) {
+              // dilatational column entry: dN_n/dx_d sits in normal-strain row d
+              for (int col = 0; col < dim*bfunc; ++col)
+                bbar_row[col] += lB[col%dim][col]*qw;
+            }
+          }
+          if (do_bbar)
+            bbar_row /= cell_volume;
+          // second pass: assemble, with the dilatational part of B replaced by its
+          // volume average when B-bar is requested (mean dilatation)
+          for (std::size_t qp = 0; qp < Bmats.size(); ++qp) {
+            Dune::FieldMatrix<ctype,comp,dim*bfunc> lB = Bmats[qp];
+            if (do_bbar) {
+              for (int col = 0; col < dim*bfunc; ++col) {
+                const ctype corr = (bbar_row[col] - Bmats[qp][col%dim][col])/dim;
+                for (int row = 0; row < dim; ++row)
+                  lB[row][col] += corr;
+              }
+            }
+            E.getStiffnessMatrix(Aq,lB,C,qweights[qp]);
             K += Aq;
-          }  
+          }
           //for (int li =0;li<esize/dim;++li) {//nomber for nodes of reference element
           for (int li =0;li<8;++li) {//nomber for nodes of reference element
             int node_index1 = gv.indexSet().subIndex(elem,li,dim);
@@ -669,6 +704,116 @@ Dune::BlockVector<Dune::FieldVector<double,1>> smoothCellVector(const Dune::CpGr
 }
 
 Dune::BlockVector<Dune::FieldVector<double,1>>
+diffuseCellVector(const Dune::CpGrid& grid,
+                  const Dune::BlockVector<Dune::FieldVector<double,1>>& cell_vector,
+                  const double length)
+{
+    OPM_TIMEBLOCK(diffuseCellVector);
+    using Vec = Dune::BlockVector<Dune::FieldVector<double,1>>;
+    using Mat = Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1>>;
+
+    if (!(length > 0.0))
+        return cell_vector;
+
+    const auto& gv = grid.leafGridView();
+    const int nc = gv.size(0);
+
+    // gather TPFA connectivity: cell volumes and face transmissibilities A_f/d_ij
+    std::vector<double> vol(nc, 0.0);
+    std::vector<std::vector<std::pair<int, double>>> nbs(nc);
+    for (const auto& elem : elements(gv)) {
+        const int i = gv.indexSet().index(elem);
+        vol[i] = elem.geometry().volume();
+        const auto ci = elem.geometry().center();
+        for (const auto& is : intersections(gv, elem)) {
+            if (is.boundary() || !is.neighbor())
+                continue; // no-flux boundary: conserves the volume integral
+            const auto outside = is.outside();
+            const int j = gv.indexSet().index(outside);
+            const auto cj = outside.geometry().center();
+            const double dist = (ci - cj).two_norm();
+            if (dist <= 0.0)
+                continue;
+            nbs[i].push_back({j, is.geometry().volume() / dist});
+        }
+    }
+
+    const double l2 = length * length;
+
+    if (grid.comm().size() == 1) {
+        // implicit Helmholtz filter: (V + l^2 L) u = V u0, solved with CG
+        Mat A;
+        A.setBuildMode(Mat::implicit);
+        A.setImplicitBuildModeParameters(7, 0.4);
+        A.setSize(nc, nc);
+        for (int i = 0; i < nc; ++i) {
+            A.entry(i, i) = 0.0;
+            for (const auto& [j, t] : nbs[i])
+                A.entry(i, j) = 0.0;
+        }
+        A.compress();
+        for (int i = 0; i < nc; ++i) {
+            double diag = vol[i];
+            for (const auto& [j, t] : nbs[i]) {
+                A[i][j] = -l2 * t;
+                diag += l2 * t;
+            }
+            A[i][i] = diag;
+        }
+        Vec b(nc), x(cell_vector);
+        for (int i = 0; i < nc; ++i)
+            b[i] = vol[i] * cell_vector[i][0];
+
+        Dune::MatrixAdapter<Mat, Vec, Vec> op(A);
+        Dune::SeqSSOR<Mat, Vec, Vec> prec(A, 1, 1.0);
+        // tight reduction: on high-aspect grids the system condition is
+        // ~ length^2*trans/volume, and a loose solve visibly breaks conservation
+        Dune::CGSolver<Vec> solver(op, prec, 1e-10, 200, 0);
+        Dune::InverseOperatorResult res;
+        solver.apply(x, b, res);
+        if (!res.converged)
+            std::cout << "Warning: diffuseCellVector CG did not fully converge" << std::endl;
+        return x;
+    }
+
+    // parallel: explicit diffusion sub-steps with per-step communication.  Each step
+    // only touches direct neighbors, so refreshing the overlap layer each step gives
+    // the same result as a serial computation.
+    double dt = std::numeric_limits<double>::max();
+    for (int i = 0; i < nc; ++i) {
+        double tsum = 0.0;
+        for (const auto& [j, t] : nbs[i])
+            tsum += t;
+        if (tsum > 0.0)
+            dt = std::min(dt, 0.5 * vol[i] / tsum);
+    }
+    dt = grid.comm().min(dt);
+    const double tau = 0.5 * l2; // Gaussian std ~ sqrt(2 tau) = length
+    const int max_steps = 1000;
+    int nsteps = std::max(1, int(std::ceil(tau / dt)));
+    if (nsteps > max_steps) {
+        std::cout << "Warning: diffuseCellVector capped at " << max_steps
+                  << " steps; effective smoothing length reduced to "
+                  << std::sqrt(2.0 * max_steps * dt) << " (requested " << length << ")"
+                  << std::endl;
+        nsteps = max_steps;
+    }
+    Vec u(cell_vector), unew(cell_vector);
+    for (int s = 0; s < nsteps; ++s) {
+        for (int i = 0; i < nc; ++i) {
+            double flux = 0.0;
+            for (const auto& [j, t] : nbs[i])
+                flux += t * (u[j][0] - u[i][0]);
+            unew[i] = u[i][0] + dt * flux / vol[i];
+        }
+        u = unew;
+        const auto& cellcomm = grid.cellCommunication();
+        cellcomm.copyOwnerToAll(u, u);
+    }
+    return u;
+}
+
+Dune::BlockVector<Dune::FieldVector<double,1>>
 patchRecovery(const Dune::CpGrid& grid,
               const Dune::BlockVector<Dune::FieldVector<double,1>>& cell_values)
 {
@@ -717,12 +862,25 @@ patchRecovery(const Dune::CpGrid& grid,
         if (patch.size() < 4)
             return false;
 
+        // normalize the coordinate offsets per direction: on high-aspect-ratio
+        // grids the raw normal equations have condition ~ (aspect ratio)^4, which
+        // destroys the fit; with per-direction scaling the conditioning is O(1).
+        // The fitted node value (the constant term) is invariant to this scaling.
+        std::array<double, 3> scale {0.0, 0.0, 0.0};
+        for (const int patch_cell_idx : patch)
+            for (int d = 0; d < 3; ++d)
+                scale[d] = std::max(scale[d],
+                                    std::abs(cell_centroids[patch_cell_idx][d] - node_coord[d]));
+        for (int d = 0; d < 3; ++d)
+            if (scale[d] == 0.0)
+                scale[d] = 1.0;
+
         double normal_matrix[4][4] = {};
         double rhs[4] = {};
         for (const int patch_cell_idx : patch) {
-            const double dx = cell_centroids[patch_cell_idx][0] - node_coord[0];
-            const double dy = cell_centroids[patch_cell_idx][1] - node_coord[1];
-            const double dz = cell_centroids[patch_cell_idx][2] - node_coord[2];
+            const double dx = (cell_centroids[patch_cell_idx][0] - node_coord[0]) / scale[0];
+            const double dy = (cell_centroids[patch_cell_idx][1] - node_coord[1]) / scale[1];
+            const double dz = (cell_centroids[patch_cell_idx][2] - node_coord[2]) / scale[2];
             const double row[4] = {1.0, dx, dy, dz};
             const double value = cell_values[patch_cell_idx][0];
             for (int p = 0; p < 4; ++p) {
@@ -836,6 +994,171 @@ patchRecovery(const Dune::CpGrid& grid,
         result[cellIdx][0] = sum / nc;
     }
 
+    return result;
+}
+
+std::vector<Dune::FieldVector<double,6>>
+patchRecoveryNodal6(const Dune::CpGrid& grid,
+                    const Dune::BlockVector<Dune::FieldVector<double,6>>& cell_values)
+{
+    OPM_TIMEBLOCK(patchRecoveryNodal6);
+    static constexpr int dim = 3;
+    static constexpr int ncomp = 6; // number of field components
+    const auto& gv = grid.leafGridView();
+    const int num_nodes = grid.size(dim);
+    const int num_cells = grid.size(0);
+
+    std::vector<std::vector<int>> node_cells(num_nodes);
+    std::vector<std::array<double, 3>> cell_centroids(num_cells);
+    std::vector<std::vector<int>> cell_neighbors(num_cells);
+    std::vector<std::array<double, 3>> node_coords(num_nodes);
+    for (const auto& elem : elements(gv)) {
+        const int cellIdx = gv.indexSet().index(elem);
+        const auto center = elem.geometry().center();
+        cell_centroids[cellIdx] = {center[0], center[1], center[2]};
+        for (int li = 0; li < elem.geometry().corners(); ++li) {
+            const int nodeIdx = gv.indexSet().subIndex(elem, li, dim);
+            node_cells[nodeIdx].push_back(cellIdx);
+            const auto pos = elem.geometry().corner(li);
+            node_coords[nodeIdx] = {pos[0], pos[1], pos[2]};
+        }
+        for (const auto& intersection : intersections(gv, elem))
+            if (!intersection.boundary())
+                cell_neighbors[cellIdx].push_back(gv.indexSet().index(intersection.outside()));
+    }
+
+    // least-squares fit of (1, dx, dy, dz) with ncomp right-hand sides sharing the
+    // factorization; offsets are normalized per direction for conditioning on
+    // high-aspect-ratio cells (the fitted node value is invariant to the scaling)
+    auto tryFitAtNode = [&](const std::vector<int>& patch,
+                            const std::array<double, 3>& node_coord,
+                            Dune::FieldVector<double, ncomp>& node_value) {
+        if (patch.size() < 4)
+            return false;
+
+        std::array<double, 3> scale {0.0, 0.0, 0.0};
+        for (const int pc : patch)
+            for (int d = 0; d < 3; ++d)
+                scale[d] = std::max(scale[d], std::abs(cell_centroids[pc][d] - node_coord[d]));
+        for (int d = 0; d < 3; ++d)
+            if (scale[d] == 0.0)
+                scale[d] = 1.0;
+
+        double augmented[4][4 + ncomp] = {};
+        for (const int pc : patch) {
+            const double row[4] = {1.0,
+                                   (cell_centroids[pc][0] - node_coord[0]) / scale[0],
+                                   (cell_centroids[pc][1] - node_coord[1]) / scale[1],
+                                   (cell_centroids[pc][2] - node_coord[2]) / scale[2]};
+            for (int p = 0; p < 4; ++p) {
+                for (int q = 0; q < 4; ++q)
+                    augmented[p][q] += row[p] * row[q];
+                for (int c = 0; c < ncomp; ++c)
+                    augmented[p][4 + c] += row[p] * cell_values[pc][c];
+            }
+        }
+        double max_entry = 0.0;
+        for (int p = 0; p < 4; ++p)
+            for (int q = 0; q < 4; ++q)
+                max_entry = std::max(max_entry, std::abs(augmented[p][q]));
+        if (max_entry == 0.0)
+            return false;
+
+        constexpr double pivot_tol = 1e-10;
+        for (int col = 0; col < 4; ++col) {
+            int pivot_row = col;
+            for (int row = col + 1; row < 4; ++row)
+                if (std::abs(augmented[row][col]) > std::abs(augmented[pivot_row][col]))
+                    pivot_row = row;
+            for (int k = 0; k < 4 + ncomp; ++k)
+                std::swap(augmented[col][k], augmented[pivot_row][k]);
+
+            if (std::abs(augmented[col][col]) < pivot_tol * max_entry)
+                return false;
+
+            for (int row = col + 1; row < 4; ++row) {
+                const double factor = augmented[row][col] / augmented[col][col];
+                for (int k = col; k < 4 + ncomp; ++k)
+                    augmented[row][k] -= factor * augmented[col][k];
+            }
+        }
+        // back-substitution; only the constant term (the value at the node) is needed
+        for (int c = 0; c < ncomp; ++c) {
+            double coeffs[4];
+            for (int row = 3; row >= 0; --row) {
+                coeffs[row] = augmented[row][4 + c];
+                for (int k = row + 1; k < 4; ++k)
+                    coeffs[row] -= augmented[row][k] * coeffs[k];
+                coeffs[row] /= augmented[row][row];
+            }
+            node_value[c] = coeffs[0];
+        }
+        return true;
+    };
+
+    std::vector<Dune::FieldVector<double, ncomp>> node_values(
+        num_nodes, Dune::FieldVector<double, ncomp>(0.0));
+    for (int node_idx = 0; node_idx < num_nodes; ++node_idx) {
+        const auto& seed_cells = node_cells[node_idx];
+        if (seed_cells.empty())
+            continue;
+
+        std::vector<int> patch;
+        patch.reserve(seed_cells.size() + 8);
+        std::vector<char> visited(num_cells, 0);
+        std::deque<int> queue;
+        for (const int cell_idx : seed_cells)
+            if (!visited[cell_idx]) {
+                visited[cell_idx] = 1;
+                patch.push_back(cell_idx);
+                queue.push_back(cell_idx);
+            }
+
+        Dune::FieldVector<double, ncomp> fitted(0.0);
+        while (true) {
+            if (tryFitAtNode(patch, node_coords[node_idx], fitted)) {
+                node_values[node_idx] = fitted;
+                break;
+            }
+            if (queue.empty()) {
+                // degenerate patch: fall back to the patch average
+                Dune::FieldVector<double, ncomp> sum(0.0);
+                for (const int cell_idx : patch)
+                    sum += cell_values[cell_idx];
+                sum /= double(patch.size());
+                node_values[node_idx] = sum;
+                break;
+            }
+            const int current = queue.front();
+            queue.pop_front();
+            for (const int neighbor : cell_neighbors[current])
+                if (!visited[neighbor]) {
+                    visited[neighbor] = 1;
+                    patch.push_back(neighbor);
+                    queue.push_back(neighbor);
+                }
+        }
+    }
+    return node_values;
+}
+
+Dune::BlockVector<Dune::FieldVector<double,6>>
+patchRecoveryCells6(const Dune::CpGrid& grid,
+                    const Dune::BlockVector<Dune::FieldVector<double,6>>& cell_values)
+{
+    static constexpr int dim = 3;
+    const auto node_values = patchRecoveryNodal6(grid, cell_values);
+    const auto& gv = grid.leafGridView();
+    Dune::BlockVector<Dune::FieldVector<double,6>> result(grid.size(0));
+    for (const auto& elem : elements(gv)) {
+        const int cellIdx = gv.indexSet().index(elem);
+        const int ncorners = elem.geometry().corners();
+        Dune::FieldVector<double,6> sum(0.0);
+        for (int li = 0; li < ncorners; ++li)
+            sum += node_values[gv.indexSet().subIndex(elem, li, dim)];
+        sum /= double(ncorners);
+        result[cellIdx] = sum;
+    }
     return result;
 }
 

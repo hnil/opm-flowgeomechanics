@@ -349,19 +349,46 @@ class VemElasticitySolver
                   bool vem_source,
                   bool vem_force,
                   bool stab_on_stress,
-                  bool vem_stress){
+                  bool vem_stress,
+                  bool diagonal_scaling = false){
      vem_source_ = vem_source;
      vem_force_ = vem_force;
      stab_on_stress_ = stab_on_stress;
-     vem_stress_ = vem_stress; 
+     vem_stress_ = vem_stress;
+     diagonal_scaling_ = diagonal_scaling;
       //vem::StabilityChoice stability_choice_ = vem::D_RECIPE;
       std::stringstream os;
-      os << "Setting stability choise to " << stability_choice_int;
+      os << "Setting stability choise to " << stability_choice_int
+         << (diagonal_scaling_ ? " with diagonal scaling" : "");
       OpmLog::info(os.str());
-      if(stability_choice_int< 1 || stability_choice_int>7){
+      if(stability_choice_int< 1 || stability_choice_int>vem::STABILITY_CHOICE_MAX){
           OPM_THROW(std::runtime_error,"This stability is not implmented");
       }
-      stability_choice_ = static_cast<vem::StabilityChoice>(stability_choice_int); 
+      stability_choice_ = static_cast<vem::StabilityChoice>(stability_choice_int);
+    }
+
+    // Symmetric Jacobi scaling of the assembled system: A -> S A S with
+    // S = diag(1/sqrt(A_ii)).  High-aspect-ratio cells produce widely varying
+    // diagonal magnitudes which hurt the conditioning seen by the iterative
+    // solver; the scaling equilibrates the diagonal.  The solution of the
+    // original system is recovered in solve() as x = S y.
+    void applyDiagonalScaling(){
+        auto& mat = this->getOperator();
+        const auto n = mat.N();
+        scale_.resize(n);
+        for (auto row = mat.begin(), rowEnd = mat.end(); row != rowEnd; ++row) {
+            const auto i = row.index();
+            double d = 0.0;
+            for (auto col = row->begin(), colEnd = row->end(); col != colEnd; ++col)
+                if (col.index() == i)
+                    d = (*col)[0][0];
+            scale_[i] = (d > 0.0) ? 1.0/std::sqrt(d) : 1.0;
+        }
+        for (auto row = mat.begin(), rowEnd = mat.end(); row != rowEnd; ++row) {
+            const auto i = row.index();
+            for (auto col = row->begin(), colEnd = row->end(); col != colEnd; ++col)
+                (*col) *= scale_[i][0]*scale_[col.index()][0];
+        }
     }
 private:
   void expandDisp(std::vector<double>& dispall,bool expand);
@@ -419,6 +446,8 @@ private:
     bool vem_force_ = true;
     bool stab_on_stress_ = false;
     bool vem_stress_ = false;
+    bool diagonal_scaling_ = false;
+    Dune::BlockVector<Dune::FieldVector<ctype,1>> scale_; // Jacobi scale factors (if diagonal_scaling_)
         int num_solves_ = 0;
         int last_linear_iterations_ = 0;
         int total_linear_iterations_ = 0;

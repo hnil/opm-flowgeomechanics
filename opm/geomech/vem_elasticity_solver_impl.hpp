@@ -258,10 +258,13 @@ namespace Elasticity {
 
 
         this->makeDuneSystemMatrix(A_entries);
+        if(diagonal_scaling_){
+            this->applyDiagonalScaling();
         }
-        // hack 
+        }
+        // hack
         if(divmat_.N() > 0){// not rebuilding divmat_, stressmat_,strainmat_ for now
-            return; 
+            return;
         }
         {
         OPM_TIMEBLOCK(setUpExtraStructuresForVEM);
@@ -502,6 +505,9 @@ IMPL_FUNC(void, assemble_fem(const Vector& /*pressure*/, bool do_matrix, bool do
         vem::set_boundary_conditions(A_entries, b, num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0]);
       }
       this->makeDuneSystemMatrix(A_entries);
+      if(diagonal_scaling_){
+          this->applyDiagonalScaling();
+      }
 }
 
 IMPL_FUNC(void, solve())
@@ -510,24 +516,45 @@ IMPL_FUNC(void, solve())
     Dune::InverseOperatorResult r;
     ++num_solves_;
     Vector& rhs = this->getLoadVector();
+    // when diagonal scaling is active the assembled operator is S A S; we solve
+    // (S A S) y = S b and recover x = S y.  sol_ always holds the unscaled solution.
+    Vector rhs_eff = rhs;
+    if (diagonal_scaling_) {
+        for (std::size_t i = 0; i < rhs_eff.size(); ++i)
+            rhs_eff[i] *= scale_[i][0];
+    }
     if(sol_.size() != rhs.size()){
         sol_.resize(rhs.size());
         sol_ = 0;
-        tsolver_->apply(sol_, rhs, r);
+        Vector y = sol_;
+        tsolver_->apply(y, rhs_eff, r);
+        sol_ = y;
+        if (diagonal_scaling_)
+            for (std::size_t i = 0; i < sol_.size(); ++i)
+                sol_[i] = scale_[i][0]*y[i][0];
     }else{
         const auto& mat= this->getOperator();
-        auto rhs_tmp = rhs;
-        mat.mmv(sol_,rhs_tmp);
-        auto dx = sol_;
-        dx=0;
-        tsolver_->apply(dx, rhs_tmp, r);
-        sol_ += dx;
+        // warm start from the previous (unscaled) solution
+        Vector y = sol_;
+        if (diagonal_scaling_)
+            for (std::size_t i = 0; i < y.size(); ++i)
+                y[i] = sol_[i][0]/scale_[i][0];
+        auto rhs_tmp = rhs_eff;
+        mat.mmv(y,rhs_tmp);
+        auto dy = y;
+        dy=0;
+        tsolver_->apply(dy, rhs_tmp, r);
+        y += dy;
+        sol_ = y;
+        if (diagonal_scaling_)
+            for (std::size_t i = 0; i < sol_.size(); ++i)
+                sol_[i] = scale_[i][0]*y[i][0];
     }
     last_linear_iterations_ = r.iterations;
     total_linear_iterations_ += r.iterations;
     last_linear_solve_converged_ = r.converged;
         // MAYBe do other initialization or shift solution.
-    
+
   } catch (Dune::ISTLError& e) {
     last_linear_solve_converged_ = false;
     std::cerr << "exception thrown " << e << std::endl;

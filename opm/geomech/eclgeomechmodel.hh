@@ -328,7 +328,16 @@ namespace Opm{
             }
             Opm::PropertyTree param = problem.getFractureParam();
             bool smooth = param.get<bool>("smooth_force",false);
-            if(smooth){
+            // smoothing length in meters: regularizes under-resolved (cell-wise sharp)
+            // temperature/pressure fronts over a fixed *physical* scale, so the
+            // resulting stress extrema are grid independent.  A natural choice is the
+            // physical front width, e.g. sqrt(thermal diffusivity * time) for a
+            // conductive thermal front.  Takes precedence over the legacy one-ring
+            // 'smooth_force' smoothing, whose radius is grid dependent.
+            double smooth_length = param.get<double>("smooth_force_length",0.0);
+            if(smooth_length > 0.0){
+              mechPotentialForce_ = vem::diffuseCellVector(simulator_.vanguard().grid(),mechPotentialForce_,smooth_length);
+            } else if(smooth){
               mechPotentialForce_ = vem::smoothCellVector(simulator_.vanguard().grid(),mechPotentialForce_);
             }
         }
@@ -342,10 +351,12 @@ namespace Opm{
                 bool vem_force = param.get<bool>("vem_force",true);
                 bool vem_stress = param.get<bool>("vem_stress",true);
                 bool stab_on_stress = param.get<bool>("stab_on_stress",false);
+                bool mech_diagonal_scaling = param.get<bool>("mech_diagonal_scaling",false);
                 elacticitysolver_.setOptions(stability_choice_int,
                                              vem_source, vem_force,
                                              stab_on_stress,
-                                             vem_stress);
+                                             vem_stress,
+                                             mech_diagonal_scaling);
                 OPM_TIMEBLOCK(SetupMechSolver);
                 bool do_matrix = true;//assemble matrix
                 bool do_vector = true;//assemble matrix
@@ -445,6 +456,22 @@ namespace Opm{
                 //stress_[cellindex] = linstress[cellindex];
                 strain_[cellindex] = linstrain[cellindex];
                 linstress_[cellindex] = linstress[cellindex];
+            }
+            // optional: replace the raw cell-wise stress by its patch recovery
+            // (least-squares nodal fit averaged back to cells).  Reduces the
+            // grid-dependent cell-to-cell jumps of the stress, in particular at
+            // under-resolved temperature/pressure fronts, and thereby the
+            // tractions sampled by the fracture model via problem.stress().
+            {
+                Opm::PropertyTree param = simulator_.problem().getFractureParam();
+                const bool recover = param.get<bool>("patch_recovery_stress",false);
+                if(recover){
+                    OPM_TIMEBLOCK(patchRecoveryStress);
+                    linstress_ = vem::patchRecoveryCells6(grid, linstress_);
+                }
+            }
+            for (const auto& cell: elements(gv)){
+                auto cellindex = simulator_.problem().elementMapper().index(cell);
                 /// NB need to be updated after linstress to be correct
                 // output stress is saved here in case init stress is changed before output
                 outputstress_[cellindex] = this->stress(cellindex);

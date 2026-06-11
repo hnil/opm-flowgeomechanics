@@ -541,10 +541,86 @@ compute_S_D_recipe(const std::vector<double>& EWcDWct, const int dofs, const dou
     return result;
 }
 
+// ----------------------------------------------------------------------------
+// Compute per-coordinate-direction length scales of an element from the second
+// moments of its corner point cloud.  For an axis-aligned box this returns the
+// edge lengths.  Used by the anisotropic stabilization variants, where a single
+// isotropic length scale (e.g. cbrt(volume)) under/over-stabilizes elements
+// with high aspect ratios.
+array<double, 3>
+compute_axis_lengths(const vector<double>& corners, const int num_corners, const int dim)
+// ----------------------------------------------------------------------------
+{
+    array<double, 3> centroid {0.0, 0.0, 0.0};
+    for (int i = 0; i != num_corners; ++i)
+        for (int d = 0; d != dim; ++d)
+            centroid[d] += corners[dim * i + d];
+    for (int d = 0; d != dim; ++d)
+        centroid[d] /= num_corners;
+
+    array<double, 3> h {0.0, 0.0, 0.0};
+    for (int i = 0; i != num_corners; ++i)
+        for (int d = 0; d != dim; ++d) {
+            const double dx = corners[dim * i + d] - centroid[d];
+            h[d] += dx * dx;
+        }
+    double hmax = 0.0;
+    for (int d = 0; d != dim; ++d) {
+        h[d] = 2.0 * sqrt(h[d] / num_corners); // box with edge L: 2*sqrt(L^2/4) = L
+        hmax = max(hmax, h[d]);
+    }
+    // guard against (near-)degenerate point clouds
+    for (int d = 0; d != dim; ++d)
+        h[d] = max(h[d], 1e-8 * hmax);
+    return h;
+}
+
+// ----------------------------------------------------------------------------
+// Anisotropic diagonal stabilization floor: for a dof associated with coordinate
+// direction d, the natural scale of the consistency-matrix diagonal is
+// tr(D)/9 * volume / h_d^2 (which reduces to tr(D)/9 * cbrt(volume) for a cube).
+// Using this direction-dependent floor avoids the locking that the isotropic
+// cbrt(volume)-based floor of D_RECIPE causes on high-aspect-ratio cells, where
+// the geometric mean length is far from the short edge.
+vector<double>
+compute_S_aniso(const std::vector<double>& EWcDWct,
+                const std::vector<double>& D,
+                const vector<double>& corners,
+                const int num_nodes,
+                const double volume,
+                const int dim,
+                const bool use_consistency_diag)
+// ----------------------------------------------------------------------------
+{
+    const int dofs = dim * num_nodes;
+    const auto h = compute_axis_lengths(corners, num_nodes, dim);
+    // tr(D) ~ 9E in 3D and ~4E in 2D (with the doubled shear entries of this D)
+    const double Escale = trace(D) / ((dim == 3) ? 9.0 : 4.0);
+
+    vector<double> result(dofs * dofs, 0.0);
+    for (int i = 0; i != dofs; ++i) {
+        const int d = i % dim;
+        const double floor_d = Escale * volume / (h[d] * h[d]);
+        const double diag = use_consistency_diag ? EWcDWct[i + dofs * i] : 0.0;
+        result[i + dofs * i] = max(diag, floor_d);
+    }
+    return result;
+}
+
 std::vector<double> getStabilityMatrix(vem::StabilityChoice stability_choice,const std::vector<double>&  EWcDWct,const std::vector<double>& Nc,const std::vector<double>& D,
+                                       const std::vector<double>& corners,
                                        int num_nodes,double volume,int  dim,double totdim){
-    std::vector<double> S;        
-    if(stability_choice == D_RECIPE){
+    std::vector<double> S;
+    // FEM choices reaching this point means the cell could not be treated with Q1
+    // elements; use the anisotropic diagonal stabilization for the VEM fallback.
+    if(is_fem_choice(stability_choice)){
+        stability_choice = ANISO_DIAG;
+    }
+    if(stability_choice == ANISO_DIAG){
+        S = compute_S_aniso(EWcDWct, D, corners, num_nodes, volume, dim, true);
+    } else if(stability_choice == ANISO_HARMONIC){
+        S = compute_S_aniso(EWcDWct, D, corners, num_nodes, volume, dim, false);
+    } else if(stability_choice == D_RECIPE){
         const auto SD= compute_S_D_recipe(EWcDWct, totdim, volume);
         S=SD;
         double val = trace(D)/9.0;
@@ -603,6 +679,7 @@ final_assembly(const vector<double>& Wc,
                const vector<double>& D,
                const vector<double>& Nc,
                const vector<double>& ImP,
+               const vector<double>& corners,
                const StabilityChoice stability_choice,
                const double volume,
                const double num_nodes,
@@ -618,7 +695,7 @@ final_assembly(const vector<double>& Wc,
     const auto DWct = matmul(&D[0], lsdim, lsdim, false, &Wc[0], totdim, lsdim, true);
     const auto EWcDWct = matmul(&Wc[0], totdim, lsdim, false, &DWct[0], lsdim, totdim, false, volume);
 
-    std::vector<double> S = getStabilityMatrix(stability_choice, EWcDWct, Nc, D, num_nodes, volume, dim, totdim);
+    std::vector<double> S = getStabilityMatrix(stability_choice, EWcDWct, Nc, D, corners, num_nodes, volume, dim, totdim);
     
     // const auto S = stability_choice == D_RECIPE
     //     ? compute_S_D_recipe(EWcDWct, totdim, volume)
@@ -1709,6 +1786,399 @@ potential_gradient_force_3D(const double* const points,
 }
 
 
+// ============================================================================
+// ================= Q1 FEM element routines and hex detection ================
+// ============================================================================
+
+namespace {
+
+// evaluate the gradients (w.r.t. reference coordinates) of the 8 trilinear shape
+// functions of the Dune reference hexahedron at reference point xi
+void
+hex_shape_gradients(const double* const xi, double grad[8][3])
+{
+    for (int k = 0; k != 8; ++k) {
+        const int c[3] = {k & 1, (k >> 1) & 1, (k >> 2) & 1};
+        for (int d = 0; d != 3; ++d) {
+            double g = (c[d] == 1) ? 1.0 : -1.0;
+            for (int e = 0; e != 3; ++e) {
+                if (e == d)
+                    continue;
+                g *= (c[e] == 1) ? xi[e] : 1.0 - xi[e];
+            }
+            grad[k][d] = g;
+        }
+    }
+}
+
+// compute physical shape function gradients g[8][3] and the Jacobian determinant of
+// the trilinear map at reference point xi; returns detJ (may be <= 0 for invalid cells)
+double
+hex_physical_gradients(const double* const corners, const double* const xi, double g[8][3])
+{
+    double gref[8][3];
+    hex_shape_gradients(xi, gref);
+
+    // J[i][j] = d x_i / d xi_j
+    double J[3][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
+    for (int k = 0; k != 8; ++k)
+        for (int i = 0; i != 3; ++i)
+            for (int j = 0; j != 3; ++j)
+                J[i][j] += corners[3 * k + i] * gref[k][j];
+
+    const double detJ = J[0][0] * (J[1][1] * J[2][2] - J[1][2] * J[2][1])
+        - J[0][1] * (J[1][0] * J[2][2] - J[1][2] * J[2][0])
+        + J[0][2] * (J[1][0] * J[2][1] - J[1][1] * J[2][0]);
+    if (detJ == 0.0)
+        return 0.0;
+
+    // inverse of J
+    double Jinv[3][3];
+    Jinv[0][0] = (J[1][1] * J[2][2] - J[1][2] * J[2][1]) / detJ;
+    Jinv[0][1] = (J[0][2] * J[2][1] - J[0][1] * J[2][2]) / detJ;
+    Jinv[0][2] = (J[0][1] * J[1][2] - J[0][2] * J[1][1]) / detJ;
+    Jinv[1][0] = (J[1][2] * J[2][0] - J[1][0] * J[2][2]) / detJ;
+    Jinv[1][1] = (J[0][0] * J[2][2] - J[0][2] * J[2][0]) / detJ;
+    Jinv[1][2] = (J[0][2] * J[1][0] - J[0][0] * J[1][2]) / detJ;
+    Jinv[2][0] = (J[1][0] * J[2][1] - J[1][1] * J[2][0]) / detJ;
+    Jinv[2][1] = (J[0][1] * J[2][0] - J[0][0] * J[2][1]) / detJ;
+    Jinv[2][2] = (J[0][0] * J[1][1] - J[0][1] * J[1][0]) / detJ;
+
+    // physical gradient: g = J^{-T} gref
+    for (int k = 0; k != 8; ++k)
+        for (int i = 0; i != 3; ++i)
+            g[k][i] = Jinv[0][i] * gref[k][0] + Jinv[1][i] * gref[k][1] + Jinv[2][i] * gref[k][2];
+
+    return detJ;
+}
+
+} // anonymous namespace
+
+// ----------------------------------------------------------------------------
+void
+stiffness_matrix_fem_hex_3D(const double* const corners,
+                            const double young,
+                            const double poisson,
+                            const bool bbar,
+                            double* target)
+// ----------------------------------------------------------------------------
+{
+    const double lambda = young * poisson / ((1 + poisson) * (1 - 2 * poisson));
+    const double mu = young / (2 * (1 + poisson));
+
+    // 2x2x2 Gauss rule on the unit cube
+    const double gp[2] = {0.5 - 0.5 / sqrt(3.0), 0.5 + 0.5 / sqrt(3.0)};
+    const double w = 1.0 / 8.0;
+
+    // first pass: physical gradients and integration weights at each Gauss point,
+    // and (for B-bar) the volume-averaged dilatational row
+    double g[8][8][3]; // [gauss point][node][direction]
+    double dV[8];
+    double bbar_row[24] = {0};
+    double volume = 0.0;
+    int q = 0;
+    for (int kz = 0; kz != 2; ++kz)
+        for (int ky = 0; ky != 2; ++ky)
+            for (int kx = 0; kx != 2; ++kx, ++q) {
+                const double xi[3] = {gp[kx], gp[ky], gp[kz]};
+                const double detJ = hex_physical_gradients(corners, xi, g[q]);
+                dV[q] = fabs(detJ) * w;
+                volume += dV[q];
+                if (bbar)
+                    for (int k = 0; k != 8; ++k)
+                        for (int d = 0; d != 3; ++d)
+                            bbar_row[3 * k + d] += g[q][k][d] * dV[q];
+            }
+    if (bbar)
+        for (int i = 0; i != 24; ++i)
+            bbar_row[i] /= volume;
+
+    // second pass: K = sum_q dV_q * B^T C B, with the dilatational part of B replaced
+    // by its volume average if B-bar is requested (mean dilatation, Hughes 1980)
+    fill(target, target + 24 * 24, 0.0);
+    for (q = 0; q != 8; ++q) {
+        // build B (6 x 24), Voigt order (xx, yy, zz, xy, yz, zx), engineering shear
+        double B[6][24] = {{0}};
+        for (int k = 0; k != 8; ++k) {
+            const double gx = g[q][k][0], gy = g[q][k][1], gz = g[q][k][2];
+            B[0][3 * k + 0] = gx;
+            B[1][3 * k + 1] = gy;
+            B[2][3 * k + 2] = gz;
+            B[3][3 * k + 0] = gy;
+            B[3][3 * k + 1] = gx;
+            B[4][3 * k + 1] = gz;
+            B[4][3 * k + 2] = gy;
+            B[5][3 * k + 0] = gz;
+            B[5][3 * k + 2] = gx;
+        }
+        if (bbar) {
+            // replace the dilatational part (1/3 of the column gradient in each normal
+            // strain row) by its volume average
+            for (int k = 0; k != 8; ++k)
+                for (int d = 0; d != 3; ++d) {
+                    const int col = 3 * k + d;
+                    const double corr = (bbar_row[col] - g[q][k][d]) / 3.0;
+                    for (int r = 0; r != 3; ++r)
+                        B[r][col] += corr;
+                }
+        }
+        // CB = C * B
+        double CB[6][24];
+        for (int j = 0; j != 24; ++j) {
+            const double tr = B[0][j] + B[1][j] + B[2][j];
+            CB[0][j] = lambda * tr + 2 * mu * B[0][j];
+            CB[1][j] = lambda * tr + 2 * mu * B[1][j];
+            CB[2][j] = lambda * tr + 2 * mu * B[2][j];
+            CB[3][j] = mu * B[3][j];
+            CB[4][j] = mu * B[4][j];
+            CB[5][j] = mu * B[5][j];
+        }
+        for (int i = 0; i != 24; ++i)
+            for (int j = 0; j != 24; ++j) {
+                double s = 0.0;
+                for (int r = 0; r != 6; ++r)
+                    s += B[r][i] * CB[r][j];
+                target[i * 24 + j] += s * dV[q];
+            }
+    }
+}
+
+// ----------------------------------------------------------------------------
+void
+stiffness_matrix_fem_quad_2D(const double* const corners,
+                             const double young,
+                             const double poisson,
+                             const bool bbar,
+                             double* target)
+// ----------------------------------------------------------------------------
+{
+    // plane strain
+    const double lambda = young * poisson / ((1 + poisson) * (1 - 2 * poisson));
+    const double mu = young / (2 * (1 + poisson));
+
+    const double gp[2] = {0.5 - 0.5 / sqrt(3.0), 0.5 + 0.5 / sqrt(3.0)};
+    const double w = 1.0 / 4.0;
+
+    double g[4][4][2]; // [gauss point][node][direction]
+    double dA[4];
+    double bbar_row[8] = {0};
+    double area = 0.0;
+    int q = 0;
+    for (int ky = 0; ky != 2; ++ky)
+        for (int kx = 0; kx != 2; ++kx, ++q) {
+            const double xi[2] = {gp[kx], gp[ky]};
+            // bilinear shape gradients on the Dune reference square
+            double gref[4][2];
+            for (int k = 0; k != 4; ++k) {
+                const int c[2] = {k & 1, (k >> 1) & 1};
+                gref[k][0] = (c[0] == 1 ? 1.0 : -1.0) * (c[1] == 1 ? xi[1] : 1.0 - xi[1]);
+                gref[k][1] = (c[1] == 1 ? 1.0 : -1.0) * (c[0] == 1 ? xi[0] : 1.0 - xi[0]);
+            }
+            double J[2][2] = {{0, 0}, {0, 0}};
+            for (int k = 0; k != 4; ++k)
+                for (int i = 0; i != 2; ++i)
+                    for (int j = 0; j != 2; ++j)
+                        J[i][j] += corners[2 * k + i] * gref[k][j];
+            const double detJ = J[0][0] * J[1][1] - J[0][1] * J[1][0];
+            const double Jinv[2][2]
+                = {{J[1][1] / detJ, -J[0][1] / detJ}, {-J[1][0] / detJ, J[0][0] / detJ}};
+            for (int k = 0; k != 4; ++k)
+                for (int i = 0; i != 2; ++i)
+                    g[q][k][i] = Jinv[0][i] * gref[k][0] + Jinv[1][i] * gref[k][1];
+            dA[q] = fabs(detJ) * w;
+            area += dA[q];
+            if (bbar)
+                for (int k = 0; k != 4; ++k)
+                    for (int d = 0; d != 2; ++d)
+                        bbar_row[2 * k + d] += g[q][k][d] * dA[q];
+        }
+    if (bbar)
+        for (int i = 0; i != 8; ++i)
+            bbar_row[i] /= area;
+
+    fill(target, target + 64, 0.0);
+    for (q = 0; q != 4; ++q) {
+        // B (3 x 8), Voigt order (xx, yy, xy), engineering shear
+        double B[3][8] = {{0}};
+        for (int k = 0; k != 4; ++k) {
+            const double gx = g[q][k][0], gy = g[q][k][1];
+            B[0][2 * k + 0] = gx;
+            B[1][2 * k + 1] = gy;
+            B[2][2 * k + 0] = gy;
+            B[2][2 * k + 1] = gx;
+        }
+        if (bbar) {
+            // in-plane mean dilatation: replace the dilatational part (1/2 of the
+            // column gradient in each normal strain row) by its area average
+            for (int k = 0; k != 4; ++k)
+                for (int d = 0; d != 2; ++d) {
+                    const int col = 2 * k + d;
+                    const double corr = (bbar_row[col] - g[q][k][d]) / 2.0;
+                    for (int r = 0; r != 2; ++r)
+                        B[r][col] += corr;
+                }
+        }
+        double CB[3][8];
+        for (int j = 0; j != 8; ++j) {
+            const double tr = B[0][j] + B[1][j];
+            CB[0][j] = lambda * tr + 2 * mu * B[0][j];
+            CB[1][j] = lambda * tr + 2 * mu * B[1][j];
+            CB[2][j] = mu * B[2][j];
+        }
+        for (int i = 0; i != 8; ++i)
+            for (int j = 0; j != 8; ++j) {
+                double s = 0.0;
+                for (int r = 0; r != 3; ++r)
+                    s += B[r][i] * CB[r][j];
+                target[i * 8 + j] += s * dA[q];
+            }
+    }
+}
+
+// ----------------------------------------------------------------------------
+bool
+hex_corner_ordering(const double* const corners,
+                    const int num_corners,
+                    const int* const faces,
+                    const int* const num_face_edges,
+                    const int num_faces,
+                    array<int, 8>& order)
+// ----------------------------------------------------------------------------
+{
+    if (num_corners != 8 || num_faces != 6)
+        return false;
+    for (int f = 0; f != 6; ++f)
+        if (num_face_edges[f] != 4)
+            return false;
+
+    // Collect all edges (as unordered pairs) from the face descriptions, counting
+    // how many faces each edge appears in.  For the cell to be a combinatorial
+    // hexahedron we require a closed quad surface: 12 distinct edges, each shared
+    // by exactly 2 faces, and every vertex of degree 3.  Together with the
+    // bottom/top structure established below, this pins down the combinatorial
+    // cube uniquely (the cube is the only 3-regular quadrangulation of the sphere
+    // with 6 faces); 8 corners + 6 quads + 12 unique edges alone do NOT exclude
+    // degenerate non-manifold face complexes that can arise from corrupt or
+    // collapsed corner-point cells.
+    map<pair<int, int>, int> edge_count;
+    for (int f = 0, pos = 0; f != 6; pos += num_face_edges[f++])
+        for (int i = 0; i != 4; ++i) {
+            const int u = faces[pos + i];
+            const int v = faces[pos + (i + 1) % 4];
+            if (u == v)
+                return false; // collapsed face edge
+            edge_count[{min(u, v), max(u, v)}] += 1;
+        }
+    if (int(edge_count.size()) != 12)
+        return false;
+    vector<int> degree(num_corners, 0);
+    set<pair<int, int>> edges;
+    for (const auto& [e, cnt] : edge_count) {
+        if (cnt != 2)
+            return false; // edge not shared by exactly two faces: not a closed surface
+        degree[e.first] += 1;
+        degree[e.second] += 1;
+        edges.insert(e);
+    }
+    for (int v = 0; v != num_corners; ++v)
+        if (degree[v] != 3)
+            return false;
+
+    // use the first face as 'bottom'; find for each of its corners the unique
+    // neighbor outside the bottom face (the corresponding 'top' corner)
+    const int b[4] = {faces[0], faces[1], faces[2], faces[3]};
+    const set<int> bottom(b, b + 4);
+    int top[4];
+    for (int i = 0; i != 4; ++i) {
+        int found = -1;
+        for (const auto& e : edges) {
+            const int other = (e.first == b[i]) ? e.second : (e.second == b[i]) ? e.first : -1;
+            if (other >= 0 && bottom.count(other) == 0) {
+                if (found >= 0)
+                    return false; // more than one neighbor above: not a hex
+                found = other;
+            }
+        }
+        if (found < 0)
+            return false;
+        top[i] = found;
+    }
+    // the four top corners must be distinct and complete the set of 8
+    if (set<int>(top, top + 4).size() != 4)
+        return false;
+
+    // Dune reference hex: bottom quad visited cyclically as vertices 0,1,3,2
+    order[0] = b[0];
+    order[1] = b[1];
+    order[3] = b[2];
+    order[2] = b[3];
+    order[4] = top[0];
+    order[5] = top[1];
+    order[7] = top[2];
+    order[6] = top[3];
+
+    // check the Jacobian sign at the element center; if negative the bottom face was
+    // oriented the other way -- mirror the ordering in the x reference direction
+    array<double, 24> hc;
+    for (int k = 0; k != 8; ++k)
+        for (int d = 0; d != 3; ++d)
+            hc[3 * k + d] = corners[3 * order[k] + d];
+    double g[8][3];
+    const double center[3] = {0.5, 0.5, 0.5};
+    double detJ = hex_physical_gradients(&hc[0], center, g);
+    if (detJ < 0) {
+        swap(order[0], order[1]);
+        swap(order[2], order[3]);
+        swap(order[4], order[5]);
+        swap(order[6], order[7]);
+        for (int k = 0; k != 8; ++k)
+            for (int d = 0; d != 3; ++d)
+                hc[3 * k + d] = corners[3 * order[k] + d];
+    }
+
+    // finally, require a positive Jacobian at all quadrature points *and* at the
+    // corners -- badly warped or degenerate cells should be treated with VEM
+    // instead.  (Positivity at finitely many points does not strictly guarantee
+    // global injectivity of the trilinear map, but Gauss points + corners is the
+    // standard practical criterion and covers what the quadrature actually sees.)
+    const double gpt[2] = {0.5 - 0.5 / sqrt(3.0), 0.5 + 0.5 / sqrt(3.0)};
+    for (int kz = 0; kz != 2; ++kz)
+        for (int ky = 0; ky != 2; ++ky)
+            for (int kx = 0; kx != 2; ++kx) {
+                const double xi[3] = {gpt[kx], gpt[ky], gpt[kz]};
+                if (hex_physical_gradients(&hc[0], xi, g) <= 0)
+                    return false;
+                const double xc[3] = {double(kx), double(ky), double(kz)};
+                if (hex_physical_gradients(&hc[0], xc, g) <= 0)
+                    return false;
+            }
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+void
+diagonal_scale_system(vector<tuple<int, int, double>>& A_entries,
+                      vector<double>& b,
+                      vector<double>& scale)
+// ----------------------------------------------------------------------------
+{
+    const int n = int(b.size());
+    vector<double> diag(n, 0.0);
+    for (const auto& e : A_entries)
+        if (get<0>(e) == get<1>(e))
+            diag[get<0>(e)] += get<2>(e);
+
+    scale.assign(n, 1.0);
+    for (int i = 0; i != n; ++i)
+        if (diag[i] > 0)
+            scale[i] = 1.0 / sqrt(diag[i]);
+
+    for (auto& e : A_entries)
+        get<2>(e) *= scale[get<0>(e)] * scale[get<1>(e)];
+    for (int i = 0; i != n; ++i)
+        b[i] *= scale[i];
+}
+
 // ----------------------------------------------------------------------------
 int
 assemble_mech_system_2D(const double* const points,
@@ -1969,6 +2439,29 @@ assemble_stiffness_matrix_2D(const double* const points,
 
     const double area = element_volume_2D(&corners[0], num_corners);
 
+    // Q1 FEM requested: applicable whenever the cell is a quadrilateral.  The corners
+    // arrive in (counter)clockwise perimeter order; the Dune reference square visits
+    // them in the order 0,1,3,2, so corner 2 and 3 must be swapped.
+    if (is_fem_choice(stability_choice) && num_corners == 4) {
+        array<double, 8> qc;
+        const int perm[4] = {0, 1, 3, 2};
+        for (int k = 0; k != 4; ++k) {
+            qc[2 * k] = corners[2 * perm[k]];
+            qc[2 * k + 1] = corners[2 * perm[k] + 1];
+        }
+        target.resize(64);
+        vector<double> Kfem(64);
+        stiffness_matrix_fem_quad_2D(&qc[0], young, poisson, stability_choice == FEM_BBAR, &Kfem[0]);
+        // permute back to perimeter corner ordering
+        for (int a = 0; a != 8; ++a)
+            for (int b = 0; b != 8; ++b) {
+                const int i = 2 * perm[a / 2] + a % 2;
+                const int j = 2 * perm[b / 2] + b % 2;
+                target[i * 8 + j] = Kfem[a * 8 + b];
+            }
+        return;
+    }
+
     // compute all intermediary matrices
     const auto q = compute_q_2D(&corners[0], num_corners);
     const auto Nr = compute_Nr_2D(&corners[0], num_corners);
@@ -1981,7 +2474,7 @@ assemble_stiffness_matrix_2D(const double* const points,
 
     // do the final assembly of matrices, and write result to target
     target.resize(pow(2 * num_corners, 2));
-    final_assembly(Wc, D, Nc, ImP, stability_choice, area, num_corners, 2, &target[0]);
+    final_assembly(Wc, D, Nc, ImP, corners, stability_choice, area, num_corners, 2, &target[0]);
 }
 
 // ----------------------------------------------------------------------------
@@ -2026,6 +2519,33 @@ assemble_stiffness_matrix_3D(const double* const points,
                           star_point,
                           volume);
 
+    // Q1 FEM requested: applicable whenever the cell is a topological hexahedron.
+    // Non-hex cells fall through to VEM (with ANISO_DIAG stabilization, see
+    // getStabilityMatrix).
+    if (is_fem_choice(stability_choice)) {
+        array<int, 8> order;
+        if (hex_corner_ordering(
+                &corners_loc[0], num_corners, &faces_loc[0], num_face_edges, num_faces, order)) {
+            array<double, 24> hc;
+            for (int k = 0; k != 8; ++k)
+                for (int d = 0; d != 3; ++d)
+                    hc[3 * k + d] = corners_loc[3 * order[k] + d];
+            vector<double> Kfem(24 * 24);
+            stiffness_matrix_fem_hex_3D(
+                &hc[0], young, poisson, stability_choice == FEM_BBAR, &Kfem[0]);
+            // scatter from reference-hex dof ordering back to local corner ordering
+            target.assign(pow(3 * num_corners, 2), 0.0);
+            const int n = 3 * num_corners;
+            for (int a = 0; a != 24; ++a)
+                for (int b = 0; b != 24; ++b) {
+                    const int i = 3 * order[a / 3] + a % 3;
+                    const int j = 3 * order[b / 3] + b % 3;
+                    target[i * n + j] = Kfem[a * 24 + b];
+                }
+            return;
+        }
+    }
+
     // // compute all intermediary matrices
     const auto q = compute_q_3D(&corners_loc[0],
                                 int(corners_loc.size() / 3),
@@ -2044,7 +2564,7 @@ assemble_stiffness_matrix_3D(const double* const points,
 
     // // do the final assembly of matrices, and write result to target
     target.resize(pow(3 * num_corners, 2));
-    final_assembly(Wc, D, Nc, ImP, stability_choice, volume, num_corners, 3, &target[0]);
+    final_assembly(Wc, D, Nc, ImP, corners_loc, stability_choice, volume, num_corners, 3, &target[0]);
 }
 
 void

@@ -279,6 +279,17 @@ target_link_libraries(paramtest
 		opmflowgeomechanics
 )
 
+add_executable(test_aspect_ratio
+	examples/test_aspect_ratio.cpp
+)
+target_link_libraries(test_aspect_ratio
+	PUBLIC
+		opmflowgeomechanics
+)
+add_test(NAME Test.AspectRatio
+	COMMAND test_aspect_ratio
+)
+
 add_executable(test_trimesh
 	examples/test_trimesh.cpp
 )
