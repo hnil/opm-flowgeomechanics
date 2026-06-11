@@ -51,15 +51,26 @@ overstiff response).
 
 New `StabilityChoice` values in `vem.hpp`:
 
-- **`ANISO_DIAG` (8)** — recommended default for general (polyhedral) grids.
-  D_RECIPE's consistency diagonal, but with an *anisotropic* floor
-  `tr(D)/9 * |E| / h_d^2` per coordinate direction `d`, where `h_d` are
-  per-direction length scales from the second moments of the element's corner
-  cloud (`compute_axis_lengths`; equals the edge lengths for a box).  Reduces to
-  D_RECIPE behavior on isotropic cells; tracks the aspect ratio automatically.
-- **`ANISO_HARMONIC` (9)** — purely geometric anisotropic diagonal
-  `tr(D)/9 * |E| / h_d^2` (no consistency diagonal); the anisotropic
-  generalization of HARMONIC.
+- **`ANISO_DIAG` (8)** — D_RECIPE's consistency diagonal, but with an *anisotropic*
+  floor `tr(D)/9 * |E| / h_k^2`, where `h_k` are the *principal* length scales of
+  the element's corner cloud — eigenvalues of its full second-moment (inertia)
+  tensor (`compute_aniso_floor_tensor`), not per-coordinate moments, so sheared
+  and dipping cells get correct lengths in any orientation (equals the edge
+  lengths for a box).  Reduces to D_RECIPE behavior on isotropic cells; tracks
+  the aspect ratio automatically.  The floor is frame-aware, but the consistency
+  diagonal it maxes against lives in the coordinate frame, so the variant is not
+  fully frame invariant (rotated-cantilever ratio 0.021 -> 0.0024 under a 30/20
+  degree rotation at aspect 25 — see the "frame invariance" test section).
+- **`ANISO_HARMONIC` (9)** — purely geometric: the anisotropic floor *tensor*
+  `tr(D)/9 * |E| * sum_k v_k v_k^T / h_k^2` (principal axes `v_k`, principal
+  lengths `h_k`) applied as a per-node block (no consistency diagonal); the
+  anisotropic generalization of HARMONIC.  By construction exactly **frame
+  invariant**: the rotated-cantilever test changes the deflection ratio by
+  < 4e-8 (solver roundoff), whereas legacy HARMONIC changes by a factor ~70
+  (0.00095 -> 0.068) under the same 30/20 degree rotation — `sum(1/diag(N^T N))`
+  is severely frame dependent.  On non-axis-aligned grids, this is the variant
+  to use.  A ready-made (non-default) configuration with the recommended options
+  is provided in `data/fracture_simple_bhp_seq_aniso.json`.
 - **`FEM` (7, now actually implemented end-to-end)** — standard Q1 elements on every
   cell where they are valid (topological hexahedra with positive Jacobian at all
   quadrature points, in 2D quadrilaterals); VEM with ANISO_DIAG stabilization on

@@ -390,13 +390,27 @@ single_element_spectrum(const vem::StabilityChoice sc, const double aspect)
 }
 
 // ----------------------------------------------------------------------------
-// cantilever bending: returns delta_numeric / delta_timoshenko
+// cantilever bending: returns delta_numeric / delta_timoshenko.  If a rotation
+// matrix is given (row-major 3x3), the whole problem (grid, traction, deflection
+// direction) is rigidly rotated; the result should be unchanged for any frame-
+// invariant discretization.
 double
-cantilever_ratio(const vem::StabilityChoice sc, const double length, const double nu)
+cantilever_ratio(const vem::StabilityChoice sc,
+                 const double length,
+                 const double nu,
+                 const std::array<double, 9>* rot = nullptr)
 {
     const int nx = 10, ny = 2, nz = 2;
     const double W = 1.0, H = 1.0;
-    const HexGrid g(nx, ny, nz, length / nx, W / ny, H / nz);
+    HexGrid g(nx, ny, nz, length / nx, W / ny, H / nz);
+    if (rot) {
+        const auto& R = *rot;
+        for (std::size_t p = 0; p < g.points.size(); p += 3) {
+            const double x = g.points[p], y = g.points[p + 1], z = g.points[p + 2];
+            for (int d = 0; d < 3; ++d)
+                g.points[p + d] = R[3 * d] * x + R[3 * d + 1] * y + R[3 * d + 2] * z;
+        }
+    }
     const double E = 1e9;
     std::vector<double> young(g.num_cells(), E), poisson(g.num_cells(), nu);
     std::vector<double> body(3 * g.num_cells(), 0.0);
@@ -415,15 +429,24 @@ cantilever_ratio(const vem::StabilityChoice sc, const double length, const doubl
     // end shear traction on the x+ faces of the last column of cells
     const double P = 1e3; // total force
     const double tz = -P / (W * H);
+    double tvec[3] = {0.0, 0.0, tz};
+    double ez[3] = {0.0, 0.0, 1.0};
+    if (rot) {
+        const auto& R = *rot;
+        for (int d = 0; d < 3; ++d) {
+            tvec[d] = R[3 * d + 2] * tz;
+            ez[d] = R[3 * d + 2];
+        }
+    }
     std::vector<int> neumann_faces;
     std::vector<double> neumann_forces;
     for (int k = 0; k < nz; ++k)
         for (int j = 0; j < ny; ++j) {
             const int cell = (nx - 1) + nx * (j + ny * k);
             neumann_faces.push_back(6 * cell + 1); // x+ face
-            neumann_forces.push_back(0.0);
-            neumann_forces.push_back(0.0);
-            neumann_forces.push_back(tz);
+            neumann_forces.push_back(tvec[0]);
+            neumann_forces.push_back(tvec[1]);
+            neumann_forces.push_back(tvec[2]);
         }
 
     std::vector<std::tuple<int, int, double>> A_entries;
@@ -449,12 +472,13 @@ cantilever_ratio(const vem::StabilityChoice sc, const double length, const doubl
     const auto x = dense_solve(vem::sparse2full(A_entries, n_unknown, n_unknown), b);
     const auto full = expand_solution(x, fixed_ixs, fixed_vals, 3 * g.num_nodes());
 
-    // average z-deflection of the tip face nodes
+    // average deflection (along the rotated z direction) of the tip face nodes
     double tip = 0.0;
     int count = 0;
     for (int k = 0; k <= g.nz; ++k)
         for (int j = 0; j <= g.ny; ++j) {
-            tip += full[3 * g.node(nx, j, k) + 2];
+            for (int d = 0; d < 3; ++d)
+                tip += ez[d] * full[3 * g.node(nx, j, k) + d];
             ++count;
         }
     tip /= count;
@@ -551,6 +575,34 @@ main()
             }
         }
         std::printf("\n");
+    }
+
+    std::printf("\n=== frame invariance: rotated cantilever (aspect 25, nu=0.25) ===\n");
+    std::printf("(grid + load rigidly rotated by Ry(30)*Rz(20); difference in deflection ratio)\n");
+    {
+        // R = Ry(30 deg) * Rz(20 deg), row-major
+        const double a = 30.0 * M_PI / 180.0, b = 20.0 * M_PI / 180.0;
+        const double ca = std::cos(a), sa = std::sin(a), cb = std::cos(b), sb = std::sin(b);
+        const std::array<double, 9> R = {ca * cb, -ca * sb, sa,
+                                         sb,      cb,       0.0,
+                                         -sa * cb, sa * sb, ca};
+        const double L = 125.0;
+        for (const auto& [sc, name] : variants) {
+            const double r0 = cantilever_ratio(sc, L, 0.25);
+            const double r1 = cantilever_ratio(sc, L, 0.25, &R);
+            const double diff = std::fabs(r1 - r0);
+            std::printf("%-12s  %.6f -> %.6f   |diff| = %.2e", name.c_str(), r0, r1, diff);
+            // hard requirement for the frame-invariant-by-construction variants;
+            // the tolerance is limited by the conditioning of the solved system
+            // (~1e-7 at this aspect ratio), not by the element formulation
+            const bool must_be_invariant
+                = (sc == vem::ANISO_HARMONIC || sc == vem::FEM || sc == vem::FEM_BBAR);
+            if (must_be_invariant && diff > 1e-6) {
+                ++failures;
+                std::printf("  (FAIL)");
+            }
+            std::printf("\n");
+        }
     }
 
     std::printf("\n=== volumetric locking: cantilever at nu=0.4999, ratio to Timoshenko ===\n");

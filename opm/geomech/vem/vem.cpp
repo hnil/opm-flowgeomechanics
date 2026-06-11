@@ -542,13 +542,72 @@ compute_S_D_recipe(const std::vector<double>& EWcDWct, const int dofs, const dou
 }
 
 // ----------------------------------------------------------------------------
-// Compute per-coordinate-direction length scales of an element from the second
-// moments of its corner point cloud.  For an axis-aligned box this returns the
-// edge lengths.  Used by the anisotropic stabilization variants, where a single
-// isotropic length scale (e.g. cbrt(volume)) under/over-stabilizes elements
-// with high aspect ratios.
-array<double, 3>
-compute_axis_lengths(const vector<double>& corners, const int num_corners, const int dim)
+// Eigendecomposition of a small (dim <= 3) symmetric matrix by cyclic Jacobi
+// rotations.  On return, `A` holds the eigenvalues on its diagonal and the
+// columns of `V` are the corresponding eigenvectors.
+void
+small_sym_eig(const int dim, double A[3][3], double V[3][3])
+// ----------------------------------------------------------------------------
+{
+    for (int i = 0; i != 3; ++i)
+        for (int j = 0; j != 3; ++j)
+            V[i][j] = (i == j) ? 1.0 : 0.0;
+
+    for (int sweep = 0; sweep != 50; ++sweep) {
+        double off = 0.0, diag = 0.0;
+        for (int p = 0; p != dim; ++p) {
+            diag += A[p][p] * A[p][p];
+            for (int q = p + 1; q != dim; ++q)
+                off += A[p][q] * A[p][q];
+        }
+        if (off <= 1e-30 * (diag + 1e-300))
+            break;
+        for (int p = 0; p != dim; ++p)
+            for (int q = p + 1; q != dim; ++q) {
+                if (A[p][q] == 0.0)
+                    continue;
+                const double theta = (A[q][q] - A[p][p]) / (2 * A[p][q]);
+                const double t = (theta >= 0 ? 1.0 : -1.0)
+                    / (fabs(theta) + sqrt(theta * theta + 1));
+                const double c = 1.0 / sqrt(t * t + 1);
+                const double s = t * c;
+                for (int k = 0; k != dim; ++k) {
+                    const double akp = A[k][p], akq = A[k][q];
+                    A[k][p] = c * akp - s * akq;
+                    A[k][q] = s * akp + c * akq;
+                }
+                for (int k = 0; k != dim; ++k) {
+                    const double apk = A[p][k], aqk = A[q][k];
+                    A[p][k] = c * apk - s * aqk;
+                    A[q][k] = s * apk + c * aqk;
+                }
+                for (int k = 0; k != dim; ++k) {
+                    const double vkp = V[k][p], vkq = V[k][q];
+                    V[k][p] = c * vkp - s * vkq;
+                    V[k][q] = s * vkp + c * vkq;
+                }
+            }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Anisotropic stabilization floor *tensor* of an element, computed in the
+// principal frame of its corner point cloud (so it does not assume the cell to
+// be aligned with the coordinate axes):
+//
+//   F = Escale * volume * sum_k  v_k v_k^T / h_k^2,
+//
+// where v_k are the principal axes (eigenvectors of the corner second-moment
+// tensor) and h_k = 2*sqrt(lambda_k) the corresponding principal lengths (equal
+// to the edge lengths for a box, in any orientation).  For an axis-aligned cell
+// this reduces to diag(Escale * volume / h_d^2), i.e. the natural per-direction
+// scale of the consistency-matrix diagonal (tr(D)/9 * cbrt(volume) for a cube).
+array<double, 9>
+compute_aniso_floor_tensor(const vector<double>& corners,
+                           const int num_corners,
+                           const int dim,
+                           const double Escale,
+                           const double volume)
 // ----------------------------------------------------------------------------
 {
     array<double, 3> centroid {0.0, 0.0, 0.0};
@@ -558,30 +617,45 @@ compute_axis_lengths(const vector<double>& corners, const int num_corners, const
     for (int d = 0; d != dim; ++d)
         centroid[d] /= num_corners;
 
-    array<double, 3> h {0.0, 0.0, 0.0};
+    double M[3][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
     for (int i = 0; i != num_corners; ++i)
-        for (int d = 0; d != dim; ++d) {
-            const double dx = corners[dim * i + d] - centroid[d];
-            h[d] += dx * dx;
-        }
-    double hmax = 0.0;
-    for (int d = 0; d != dim; ++d) {
-        h[d] = 2.0 * sqrt(h[d] / num_corners); // box with edge L: 2*sqrt(L^2/4) = L
-        hmax = max(hmax, h[d]);
+        for (int d1 = 0; d1 != dim; ++d1)
+            for (int d2 = 0; d2 != dim; ++d2)
+                M[d1][d2] += (corners[dim * i + d1] - centroid[d1])
+                    * (corners[dim * i + d2] - centroid[d2]) / num_corners;
+
+    double V[3][3];
+    small_sym_eig(dim, M, V);
+
+    // principal lengths, guarded against (near-)degenerate point clouds
+    double h[3], hmax = 0.0;
+    for (int k = 0; k != dim; ++k) {
+        h[k] = 2.0 * sqrt(max(M[k][k], 0.0)); // box with edge L: 2*sqrt(L^2/4) = L
+        hmax = max(hmax, h[k]);
     }
-    // guard against (near-)degenerate point clouds
-    for (int d = 0; d != dim; ++d)
-        h[d] = max(h[d], 1e-8 * hmax);
-    return h;
+    for (int k = 0; k != dim; ++k)
+        h[k] = max(h[k], 1e-8 * hmax);
+
+    array<double, 9> F {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    for (int k = 0; k != dim; ++k) {
+        const double w = Escale * volume / (h[k] * h[k]);
+        for (int d1 = 0; d1 != dim; ++d1)
+            for (int d2 = 0; d2 != dim; ++d2)
+                F[3 * d1 + d2] += w * V[d1][k] * V[d2][k];
+    }
+    return F;
 }
 
 // ----------------------------------------------------------------------------
-// Anisotropic diagonal stabilization floor: for a dof associated with coordinate
-// direction d, the natural scale of the consistency-matrix diagonal is
-// tr(D)/9 * volume / h_d^2 (which reduces to tr(D)/9 * cbrt(volume) for a cube).
-// Using this direction-dependent floor avoids the locking that the isotropic
-// cbrt(volume)-based floor of D_RECIPE causes on high-aspect-ratio cells, where
-// the geometric mean length is far from the short edge.
+// Anisotropic stabilization: the floor tensor F above replaces the isotropic
+// cbrt(volume)-based floor of D_RECIPE, which over-stabilizes the soft direction
+// of high-aspect-ratio cells.  Two variants:
+//  - use_consistency_diag (ANISO_DIAG): diagonal S, each dof floored by the
+//    corresponding diagonal entry of F (frame-aware floor; the consistency
+//    diagonal itself is naturally expressed in the coordinate frame);
+//  - otherwise (ANISO_HARMONIC): block-diagonal S with the full tensor F as the
+//    per-node block, which makes the stabilization frame *invariant* (the
+//    element stiffness transforms exactly under rigid rotations of the cell).
 vector<double>
 compute_S_aniso(const std::vector<double>& EWcDWct,
                 const std::vector<double>& D,
@@ -593,16 +667,21 @@ compute_S_aniso(const std::vector<double>& EWcDWct,
 // ----------------------------------------------------------------------------
 {
     const int dofs = dim * num_nodes;
-    const auto h = compute_axis_lengths(corners, num_nodes, dim);
     // tr(D) ~ 9E in 3D and ~4E in 2D (with the doubled shear entries of this D)
     const double Escale = trace(D) / ((dim == 3) ? 9.0 : 4.0);
+    const auto F = compute_aniso_floor_tensor(corners, num_nodes, dim, Escale, volume);
 
     vector<double> result(dofs * dofs, 0.0);
-    for (int i = 0; i != dofs; ++i) {
-        const int d = i % dim;
-        const double floor_d = Escale * volume / (h[d] * h[d]);
-        const double diag = use_consistency_diag ? EWcDWct[i + dofs * i] : 0.0;
-        result[i + dofs * i] = max(diag, floor_d);
+    if (use_consistency_diag) {
+        for (int i = 0; i != dofs; ++i) {
+            const int d = i % dim;
+            result[i + dofs * i] = max(EWcDWct[i + dofs * i], F[3 * d + d]);
+        }
+    } else {
+        for (int node = 0; node != num_nodes; ++node)
+            for (int d1 = 0; d1 != dim; ++d1)
+                for (int d2 = 0; d2 != dim; ++d2)
+                    result[(node * dim + d1) * dofs + node * dim + d2] = F[3 * d1 + d2];
     }
     return result;
 }
