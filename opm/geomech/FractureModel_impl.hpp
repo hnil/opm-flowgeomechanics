@@ -109,7 +109,10 @@ namespace Opm {
                     // check if well is open
                     if(wellstate.status == ::Opm::WellStatus::OPEN) {
                       const auto& wells = wellmodel.localNonshutWells();
-                      const auto& well = wells[*well_index];
+                      //const auto& well = wells[*well_index]; // some wells may be closed, potentially giving a segfault or wrong well here.
+                      const auto it = std::find_if(wells.begin(), wells.end(), [&](const auto& w){ return w->name() == wells_[i].name(); });
+                      if(it == wells.end()) continue; // skip if not found (should not happen)
+                      const auto& well = *it;
                       assert(well->name() == wells_[i].name());
                       
                       //for (const auto& perf : wellstate.perf_data) {
