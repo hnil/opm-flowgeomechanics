@@ -687,7 +687,9 @@ Dune::BlockVector<Dune::FieldVector<double,1>> smoothCellVector(const Dune::CpGr
     double sum = 0.0;
     int count = 0;
     for (const auto& intersection : intersections(gv, elem)) {
-       if (intersection.boundary()) {
+       // neighbor() is false both on the domain boundary and on the processor
+       // border (rim of the overlap layer), where outside() must not be called
+       if (!intersection.neighbor()) {
          continue;
         }
         auto neigh = intersection.outside();
@@ -698,7 +700,12 @@ Dune::BlockVector<Dune::FieldVector<double,1>> smoothCellVector(const Dune::CpGr
     // include self
     //sum += cell_vector[cellIdx][0];
     //count += 1;
-    smoothed_cell_vector[cellIdx][0] = value + sum / double(count);
+    smoothed_cell_vector[cellIdx][0] = (count > 0) ? value + sum / double(count) : value;
+  }
+  if (grid.comm().size() > 1) {
+    // cells at the partition rim were smoothed with a truncated stencil;
+    // overwrite the overlap layer with the owner values
+    grid.cellCommunication().copyOwnerToAll(smoothed_cell_vector, smoothed_cell_vector);
   }
   return smoothed_cell_vector;
 }
@@ -842,7 +849,8 @@ patchRecovery(const Dune::CpGrid& grid,
     for (const auto& elem : elements(gv)) {
         const int cellIdx = gv.indexSet().index(elem);
         for (const auto& intersection : intersections(gv, elem)) {
-            if (!intersection.boundary())
+            // neighbor() excludes both domain boundary and processor border
+            if (intersection.neighbor())
                 cell_neighbors[cellIdx].push_back(gv.indexSet().index(intersection.outside()));
         }
     }
@@ -1023,7 +1031,8 @@ patchRecoveryNodal6(const Dune::CpGrid& grid,
             node_coords[nodeIdx] = {pos[0], pos[1], pos[2]};
         }
         for (const auto& intersection : intersections(gv, elem))
-            if (!intersection.boundary())
+            // neighbor() excludes both domain boundary and processor border
+            if (intersection.neighbor())
                 cell_neighbors[cellIdx].push_back(gv.indexSet().index(intersection.outside()));
     }
 
