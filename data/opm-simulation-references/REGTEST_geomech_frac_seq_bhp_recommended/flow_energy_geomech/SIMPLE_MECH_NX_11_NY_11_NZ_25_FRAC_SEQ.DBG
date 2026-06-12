@@ -10,22 +10,22 @@
 Flow is a simulator for fully implicit three-phase black-oil flow, and is part of OPM.
 For more information visit: https://opm-project.org 
 
-Flow Version     =  2026.04-pre (9616263*)
+Flow Version     =  2026.04-pre (0f66ddb*)
 Machine name     =  Halvors-MBP.sintef.no (Number of logical cores: 14, Memory size: 24576.00 MB) 
 Operating system =  Darwin arm64 (Kernel: 25.5.0, Darwin Kernel Version 25.5.0: Mon Apr 27 20:41:15 PDT 2026; root:xnu-12377.121.6~2/RELEASE_ARM64_T6041 )
-Build time       =  2026-06-11 at 12:12:54 hrs
-User             =  root
-Simulation started on 12-06-2026 at 11:32:41 hrs
+Build time       =  2026-06-02 at 13:32:56 hrs
+User             =  hnil
+Simulation started on 02-06-2026 at 13:50:00 hrs
 Using 1 MPI processes with 1 OMP threads on each 
 Parameters used by Flow:
 # [known parameters which were specified at run-time]
-EclDeckFileName="/Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ" # default: ""
-ParameterFile="/Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/myparamsfrac_seq.ini" # default: ""
-FractureParamFile="/Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/fracture_simple_bhp_seq_final.json" # default: "notafile"
+ParameterFile="myparamsfrac_seq.ini" # default: ""
+EclDeckFileName="SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA" # default: ""
+FractureParamFile="fracture_simple_bhp_seq_final.json" # default: "notafile"
+OutputDir="gen_ref_recommended" # default: ""
 EnableWriteAllSolutions="true" # default: "0"
-LinearSolverMech="/Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/amgmechsolverhypre_geosxcpu_new_nv.json" # default: "ilu0"
+LinearSolverMech="amgmechsolverhypre_geosxcpu_new_nv.json" # default: "ilu0"
 ThreadsPerProcess="4" # default: "1"
-OutputDir="/Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/result/REGTEST_geomech_frac_seq_bhp_recommended" # default: ""
 LinearSolver="cpr_trueimpesanalytic" # default: "cprw"
 EdgeConformal="true" # default: "0"
 AddCorners="true" # default: "0"
@@ -34,7 +34,7 @@ AllowSplittingInactiveWells="false" # default: "1"
 PartitionMethod="zoltanwell" # default: "zoltanwell"
 EdgeWeightsMethod="uniform" # default: "transmissibility"
 EnableVtkOutput="false" # default: "1"
-NewtonMaxIterations="15" # default: "20"
+NewtonMaxIterations="100" # default: "20"
 TimeStepControl="general3rdorder" # default: "pid+newtoniteration"
 EnableAdaptiveTimeStepping="true" # default: "1"
 # [parameters which were specified at compile-time]
@@ -290,129 +290,129 @@ ZoltanImbalanceTol="1.1"
 ZoltanParams="graph"
 ZoltanPhgEdgeSizeThreshold="0.35"
 
-Reading deck file '/Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.data'
-    0 Reading RUNSPEC  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 2
-    1 Reading DIMENS   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 3
-    2 Reading OIL      in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 6
-    3 Reading WATER    in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 7
-    4 Reading GAS      in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 8
-    5 Reading DISGAS   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 9
-    6 Reading METRIC   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 10
-    7 Reading TEMP     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 12
-    8 Reading MECH     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 13
-    9 Reading FRAC     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 14
-   10 Reading START    in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 15
-   11 Reading GRIDOPTS in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 17
-   12 Reading EQLDIMS  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 19
-   13 Reading REGDIMS  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 21
-   14 Reading TABDIMS  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 23
-   15 Reading WELLDIMS in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 25
-   16 Reading VFPPDIMS in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 27
-   17 Reading UNIFIN   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 29
-   18 Reading UNIFOUT  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 30
-   19 Reading GRID     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 31
-   20 Reading NEWTRAN  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 32
-   21 Reading GRIDFILE in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 33
-   22 Reading GRIDUNIT in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 35
-   23 Reading INIT     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 37
-   24 Reading TOPS     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 41
-   25 Reading DXV      in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 43
-   26 Reading DYV      in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 45
-   27 Reading DZV      in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 47
-   28 Reading EQUALS   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 58
-   29 Reading EQUALS   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 63
-   30 Reading COPY     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 72
-   31 Reading MULTIPLY in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 76
-   32 Reading EQUALS   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 81
-   33 Reading BCCON    in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 92
-   34 Reading RPTGRID  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 101
-   35 Reading EDIT     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 103
-   36 Reading PROPS    in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 104
-   37 Reading NOECHO   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 105
-   38 Reading SPECROCK in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 107
-   39 Reading SPECHEAT in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 111
-   40 Reading DENSITY  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 115
-   41 Reading PVTW     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 118
-   42 Reading PVTO     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 121
-   43 Reading PVDG     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 138
-   44 Reading ROCK     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 141
-   45 Reading SWOF     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 144
-   46 Reading SGOF     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 146
-   47 Reading REGIONS  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 148
-   48 Reading EQUALS   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 149
-   49 Reading SOLUTION in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 154
-   50 Reading RPTRST   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 155
-   51 Reading EQUIL    in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 157
-   52 Reading PBVD     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 160
-   53 Reading RTEMPVD  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 165
-   54 Reading STREQUIL in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 170
-   55 Reading SUMMARY  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 177
-   56 Reading ALL      in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 178
-   57 Reading PERFORMA in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 179
-   58 Reading WFCFFVIR in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 180
-   59 Reading WFCFFVIR in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 183
-   60 Reading WFCWFVIR in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 187
-   61 Reading WFCFVIR  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 190
-   62 Reading CFCFFVIR in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 193
-   63 Reading CFCWFVIR in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 198
-   64 Reading CFCFVIR  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 202
-   65 Reading WFCFFVIT in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 207
-   66 Reading WFCWFVIR in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 210
-   67 Reading WFCWFVIT in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 212
-   68 Reading WFCFVIR  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 215
-   69 Reading WFCFVIT  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 218
-   70 Reading WWIRFRAC in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 221
-   71 Reading CWIR     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 223
-   72 Reading CWIRFRAC in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 226
-   73 Reading CFCFFRAC in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 230
-   74 Reading CFCFRATE in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 233
-   75 Reading CPI      in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 237
-   76 Reading CINJFVR  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 240
-   77 Reading CINJFVT  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 243
-   78 Reading CFCSKIN  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 246
-   79 Reading CFCWIDTH in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 249
-   80 Reading CFCPERM  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 252
-   81 Reading CFCPORO  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 255
-   82 Reading CFCRAD   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 258
-   83 Reading CFCAOF   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 261
-   84 Reading CFRINJPR in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 265
-   85 Reading CFRINJBH in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 269
-   86 Reading CFRINJRA in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 273
-   87 Reading CWIR     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 277
-   88 Reading CTFAC    in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 280
-   89 Reading CPR      in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 284
-   90 Reading CFRAREA  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 288
-   91 Reading CFRFLUX  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 291
-   92 Reading CFRHEIGH in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 294
-   93 Reading CFRLENGT in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 297
-   94 Reading CFRFVOLU in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 301
-   95 Reading CFRWI    in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 304
-   96 Reading CFRAVGW  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 307
-   97 Reading CFRAVGFW in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 310
-   98 Reading CPI      in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 314
-   99 Reading CINJFVR  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 317
-  100 Reading CINJFVT  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 320
-  101 Reading BPR      in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 324
-  102 Reading BTEMP    in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 327
-  103 Reading BSTRSSXX in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 330
-  104 Reading SCHEDULE in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 336
-  105 Reading TUNING   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 337
-  106 Reading NUPCOL   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 341
-  107 Reading BCPROP   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 344
-  108 Reading GRUPTREE in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 352
-  109 Reading WELSPECS in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 364
-  110 Reading COMPDAT  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 368
-  111 Reading WCONINJE in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 393
-  112 Reading WSEED    in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 398
-  113 Reading WTEMP    in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 410
-  114 Reading TSTEP    in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 413
+Reading deck file 'SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA'
+    0 Reading RUNSPEC  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 2
+    1 Reading DIMENS   in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 3
+    2 Reading OIL      in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 6
+    3 Reading WATER    in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 7
+    4 Reading GAS      in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 8
+    5 Reading DISGAS   in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 9
+    6 Reading METRIC   in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 10
+    7 Reading TEMP     in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 12
+    8 Reading MECH     in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 13
+    9 Reading FRAC     in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 14
+   10 Reading START    in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 15
+   11 Reading GRIDOPTS in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 17
+   12 Reading EQLDIMS  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 19
+   13 Reading REGDIMS  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 21
+   14 Reading TABDIMS  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 23
+   15 Reading WELLDIMS in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 25
+   16 Reading VFPPDIMS in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 27
+   17 Reading UNIFIN   in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 29
+   18 Reading UNIFOUT  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 30
+   19 Reading GRID     in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 31
+   20 Reading NEWTRAN  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 32
+   21 Reading GRIDFILE in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 33
+   22 Reading GRIDUNIT in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 35
+   23 Reading INIT     in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 37
+   24 Reading TOPS     in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 41
+   25 Reading DXV      in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 43
+   26 Reading DYV      in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 45
+   27 Reading DZV      in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 47
+   28 Reading EQUALS   in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 58
+   29 Reading EQUALS   in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 63
+   30 Reading COPY     in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 72
+   31 Reading MULTIPLY in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 76
+   32 Reading EQUALS   in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 81
+   33 Reading BCCON    in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 92
+   34 Reading RPTGRID  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 101
+   35 Reading EDIT     in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 103
+   36 Reading PROPS    in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 104
+   37 Reading NOECHO   in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 105
+   38 Reading SPECROCK in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 107
+   39 Reading SPECHEAT in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 111
+   40 Reading DENSITY  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 115
+   41 Reading PVTW     in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 118
+   42 Reading PVTO     in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 121
+   43 Reading PVDG     in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 138
+   44 Reading ROCK     in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 141
+   45 Reading SWOF     in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 144
+   46 Reading SGOF     in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 146
+   47 Reading REGIONS  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 148
+   48 Reading EQUALS   in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 149
+   49 Reading SOLUTION in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 154
+   50 Reading RPTRST   in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 155
+   51 Reading EQUIL    in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 157
+   52 Reading PBVD     in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 160
+   53 Reading RTEMPVD  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 165
+   54 Reading STREQUIL in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 170
+   55 Reading SUMMARY  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 177
+   56 Reading ALL      in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 178
+   57 Reading PERFORMA in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 179
+   58 Reading WFCFFVIR in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 180
+   59 Reading WFCFFVIR in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 183
+   60 Reading WFCWFVIR in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 187
+   61 Reading WFCFVIR  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 190
+   62 Reading CFCFFVIR in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 193
+   63 Reading CFCWFVIR in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 198
+   64 Reading CFCFVIR  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 202
+   65 Reading WFCFFVIT in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 207
+   66 Reading WFCWFVIR in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 210
+   67 Reading WFCWFVIT in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 212
+   68 Reading WFCFVIR  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 215
+   69 Reading WFCFVIT  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 218
+   70 Reading WWIRFRAC in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 221
+   71 Reading CWIR     in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 223
+   72 Reading CWIRFRAC in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 226
+   73 Reading CFCFFRAC in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 230
+   74 Reading CFCFRATE in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 233
+   75 Reading CPI      in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 237
+   76 Reading CINJFVR  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 240
+   77 Reading CINJFVT  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 243
+   78 Reading CFCSKIN  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 246
+   79 Reading CFCWIDTH in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 249
+   80 Reading CFCPERM  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 252
+   81 Reading CFCPORO  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 255
+   82 Reading CFCRAD   in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 258
+   83 Reading CFCAOF   in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 261
+   84 Reading CFRINJPR in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 265
+   85 Reading CFRINJBH in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 269
+   86 Reading CFRINJRA in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 273
+   87 Reading CWIR     in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 277
+   88 Reading CTFAC    in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 280
+   89 Reading CPR      in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 284
+   90 Reading CFRAREA  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 288
+   91 Reading CFRFLUX  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 291
+   92 Reading CFRHEIGH in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 294
+   93 Reading CFRLENGT in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 297
+   94 Reading CFRFVOLU in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 301
+   95 Reading CFRWI    in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 304
+   96 Reading CFRAVGW  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 307
+   97 Reading CFRAVGFW in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 310
+   98 Reading CPI      in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 314
+   99 Reading CINJFVR  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 317
+  100 Reading CINJFVT  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 320
+  101 Reading BPR      in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 324
+  102 Reading BTEMP    in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 327
+  103 Reading BSTRSSXX in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 330
+  104 Reading SCHEDULE in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 336
+  105 Reading TUNING   in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 337
+  106 Reading NUPCOL   in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 341
+  107 Reading BCPROP   in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 344
+  108 Reading GRUPTREE in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 352
+  109 Reading WELSPECS in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 364
+  110 Reading COMPDAT  in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 368
+  111 Reading WCONINJE in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 393
+  112 Reading WSEED    in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 398
+  113 Reading WTEMP    in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 410
+  114 Reading TSTEP    in SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 413
 Unsupported keywords or keyword items:
 
   RPTGRID: keyword not supported
-  In file: /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA, line 101
+  In file: SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA, line 101
 
   NOECHO: keyword not supported
-  In file: /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA, line 105
+  In file: SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA, line 105
 
 Simulation will solve for mechanical quantities
 
@@ -424,7 +424,7 @@ Creating grid from keywords DX, DY, DZ and TOPS
 4 fluid phases are active
 
 Processing dynamic information from
-/Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 336
+SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 336
 Initializing report step 0/3 at 2020-01-01 0 DAYS line 336
 Processing keyword TUNING at line 337
 Processing keyword NUPCOL at line 341
@@ -506,17 +506,17 @@ Property tree for linear solvers:
 }
 
 Unhandled summary keyword ALL/FAQR
-In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 178
+In SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 178
 Unhandled summary keyword ALL/FAQRG
-In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 178
+In SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 178
 Unhandled summary keyword ALL/FAQT
-In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 178
+In SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 178
 Unhandled summary keyword ALL/FAQTG
-In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 178
+In SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 178
 Unhandled summary keyword ALL/FWGR
-In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 178
+In SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 178
 Unhandled summary keyword ALL/GWGR
-In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 178
+In SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 178
 {
     "__doc": "opm-flowgeomechanics fracture parameter file. method=SeqMechFrac (sequential-implicit). Grouped + annotated; see fracture_settings_REFERENCE.md",
     "hasfractures": "true",
@@ -607,8 +607,8 @@ In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_N
             "close_force_tolerance": "0.0",
             "reopen_force_tolerance": "0.0",
             "reopen_width_tolerance": "0.0",
-            "max_closed_cell_toggle_count": "32",
-            "max_closed_cell_toggle_fraction": "0.1",
+            "max_closed_cell_toggle_count": "1000000000",
+            "max_closed_cell_toggle_fraction": "1.0",
             "__4_fracture_flow_mech_coupling": "--- coupling block C inside the fracture system ---",
             "drop_fluid_mech_linearization": "true",
             "drop_tol_h": "100.0",
@@ -763,17 +763,18 @@ Property tree for mech linear solver:
     }
 }
 
-Mechanical solve stats: solves=1, linear_iterations=22 (total 22), solve_time_s=0.149807 (total 0.149807), converged=true
+Mechanical solve stats: solves=1, linear_iterations=22 (total 22), solve_time_s=0.145837 (total 0.145837), converged=true
 Solve Fractures:
 
 Writing fracture data to VTK files at time: 0grid_size342
 
-Fracture solve stats: fractures_solved=1 (total 1), nonlinear_iterations=2 (total 2), linear_solves=1 (total 1), linear_iterations=0 (total 0), closed_cell_toggles=690 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.152315 (total 0.152315), converged=true
+Fracture solve stats: fractures_solved=1 (total 1), nonlinear_iterations=2 (total 2), linear_solves=1 (total 1), linear_iterations=0 (total 0), solve_time_s=0.144482 (total 0.144482), converged=true
    Well B-3H converged in 1 inner iterations (0 control/status switches).
    Well B-3H converged in 1 inner iterations (0 control/status switches).
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
    0  0.000e+00  1.230e-05  0.000e+00  5.432e-08  0.000e+00  2.195e-04  0.000e+00  6.165e-03
    Well B-3H converged in 1 inner iterations (0 control/status switches).
@@ -782,25 +783,24 @@ Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 4
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=2, linear_iterations=27 (total 49), solve_time_s=0.185617 (total 0.335424), converged=true
+Mechanical solve stats: solves=2, linear_iterations=27 (total 49), solve_time_s=0.178683 (total 0.32452), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 2), nonlinear_iterations=2 (total 4), linear_solves=1 (total 2), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.151793 (total 0.304108), converged=true
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Fracture solve stats: fractures_solved=1 (total 2), nonlinear_iterations=2 (total 4), linear_solves=1 (total 2), linear_iterations=0 (total 0), solve_time_s=0.144432 (total 0.288914), converged=true
    Well B-3H converged in 1 inner iterations (0 control/status switches).
    Well B-3H converged in 1 inner iterations (0 control/status switches).
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
    0  0.000e+00  1.230e-05  0.000e+00  5.432e-08  0.000e+00  2.195e-04  0.000e+00  6.165e-03
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=3, linear_iterations=27 (total 76), solve_time_s=0.187816 (total 0.523239), converged=true
+Mechanical solve stats: solves=3, linear_iterations=27 (total 76), solve_time_s=0.179254 (total 0.503774), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 3), nonlinear_iterations=1 (total 5), linear_solves=0 (total 2), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.132297 (total 0.436405), converged=true
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Fracture solve stats: fractures_solved=1 (total 3), nonlinear_iterations=1 (total 5), linear_solves=0 (total 2), linear_iterations=0 (total 0), solve_time_s=0.123315 (total 0.412229), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
@@ -830,10 +830,10 @@ Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 2
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=4, linear_iterations=20 (total 96), solve_time_s=0.138918 (total 0.662157), converged=true
+Mechanical solve stats: solves=4, linear_iterations=20 (total 96), solve_time_s=0.134734 (total 0.638508), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 4), nonlinear_iterations=2 (total 7), linear_solves=1 (total 3), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.152147 (total 0.588552), converged=true
+Fracture solve stats: fractures_solved=1 (total 4), nonlinear_iterations=2 (total 7), linear_solves=1 (total 3), linear_iterations=0 (total 0), solve_time_s=0.145199 (total 0.557428), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
@@ -842,9 +842,9 @@ Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=5, linear_iterations=27 (total 123), solve_time_s=0.185134 (total 0.847291), converged=true
+Mechanical solve stats: solves=5, linear_iterations=27 (total 123), solve_time_s=0.17921 (total 0.817718), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 5), nonlinear_iterations=2 (total 9), linear_solves=1 (total 4), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.153665 (total 0.742216), converged=true
+Fracture solve stats: fractures_solved=1 (total 5), nonlinear_iterations=2 (total 9), linear_solves=1 (total 4), linear_iterations=0 (total 0), solve_time_s=0.145019 (total 0.702447), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
@@ -872,10 +872,10 @@ Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 2
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=6, linear_iterations=17 (total 140), solve_time_s=0.118105 (total 0.965396), converged=true
+Mechanical solve stats: solves=6, linear_iterations=17 (total 140), solve_time_s=0.11588 (total 0.933597), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 6), nonlinear_iterations=2 (total 11), linear_solves=1 (total 5), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.151683 (total 0.893899), converged=true
+Fracture solve stats: fractures_solved=1 (total 6), nonlinear_iterations=2 (total 11), linear_solves=1 (total 5), linear_iterations=0 (total 0), solve_time_s=0.146176 (total 0.848623), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
@@ -884,9 +884,9 @@ Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=7, linear_iterations=27 (total 167), solve_time_s=0.184995 (total 1.15039), converged=true
+Mechanical solve stats: solves=7, linear_iterations=27 (total 167), solve_time_s=0.179473 (total 1.11307), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 7), nonlinear_iterations=2 (total 13), linear_solves=1 (total 6), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.152612 (total 1.04651), converged=true
+Fracture solve stats: fractures_solved=1 (total 7), nonlinear_iterations=2 (total 13), linear_solves=1 (total 6), linear_iterations=0 (total 0), solve_time_s=0.143875 (total 0.992499), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
@@ -904,7 +904,7 @@ sub steps end time = 5 (days)
 Suggested next step size = 6 (days)
 
 Restart file written for report step 1/3, date = 06-Jan-2020 00:00:00
-Time step took 2.945410 seconds; total solver time 2.945410 seconds.
+Time step took 2.757826 seconds; total solver time 2.757826 seconds.
 
 
 
@@ -935,10 +935,10 @@ Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 3
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=8, linear_iterations=18 (total 185), solve_time_s=0.126329 (total 1.27672), converged=true
+Mechanical solve stats: solves=8, linear_iterations=18 (total 185), solve_time_s=0.121744 (total 1.23481), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 8), nonlinear_iterations=2 (total 15), linear_solves=1 (total 7), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.153672 (total 1.20018), converged=true
+Fracture solve stats: fractures_solved=1 (total 8), nonlinear_iterations=2 (total 15), linear_solves=1 (total 7), linear_iterations=0 (total 0), solve_time_s=0.145117 (total 1.13762), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
@@ -947,9 +947,9 @@ Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=9, linear_iterations=27 (total 212), solve_time_s=0.185371 (total 1.46209), converged=true
+Mechanical solve stats: solves=9, linear_iterations=27 (total 212), solve_time_s=0.181454 (total 1.41627), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 9), nonlinear_iterations=2 (total 17), linear_solves=1 (total 8), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.153655 (total 1.35384), converged=true
+Fracture solve stats: fractures_solved=1 (total 9), nonlinear_iterations=2 (total 17), linear_solves=1 (total 8), linear_iterations=0 (total 0), solve_time_s=0.145641 (total 1.28326), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
@@ -965,7 +965,7 @@ sub steps end time = 10 (days)
 Suggested next step size = 15 (days)
 
 Restart file written for report step 2/3, date = 11-Jan-2020 00:00:00
-Time step took 0.663354 seconds; total solver time 3.608764 seconds.
+Time step took 0.637174 seconds; total solver time 3.394999 seconds.
 
 
 
@@ -993,37 +993,159 @@ Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 2
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=10, linear_iterations=18 (total 230), solve_time_s=0.12628 (total 1.58837), converged=true
+Mechanical solve stats: solves=10, linear_iterations=18 (total 230), solve_time_s=0.120984 (total 1.53725), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 10), nonlinear_iterations=2 (total 19), linear_solves=1 (total 9), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.152499 (total 1.50634), converged=true
+Fracture solve stats: fractures_solved=1 (total 10), nonlinear_iterations=17 (total 34), linear_solves=14 (total 22), linear_iterations=6 (total 6), solve_time_s=0.673356 (total 1.95661), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  1.839e-08  0.000e+00  1.754e-05  0.000e+00  2.008e-07  0.000e+00  1.704e-02
+   0  0.000e+00  1.840e-08  0.000e+00  1.754e-05  0.000e+00  2.008e-07  0.000e+00  1.704e-02
+   3  0.000e+00  1.505e-09  0.000e+00  6.560e-09  0.000e+00  1.981e-07  0.000e+00  5.525e-06
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 3
+Flow solve report converged: 1
+Solve Geomechanics:
+Update Forces for Geomechanics
+Mechanical solve stats: solves=11, linear_iterations=27 (total 257), solve_time_s=0.18237 (total 1.71962), converged=true
+Solve Fractures:
+
+Fracture solve stats: fractures_solved=1 (total 11), nonlinear_iterations=22 (total 56), linear_solves=18 (total 40), linear_iterations=8 (total 14), solve_time_s=0.119393 (total 2.076), converged=true
+---------- Starting propagation at level: 1 --------
+Adding connections to schedule
+
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
+   0  0.000e+00  1.840e-08  0.000e+00  1.754e-05  0.000e+00  2.008e-07  0.000e+00  1.704e-02
+   4  0.000e+00  1.508e-09  0.000e+00  6.560e-09  0.000e+00  2.038e-07  0.000e+00  5.525e-06
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 4
+Flow solve report converged: 1
+Solve Geomechanics:
+Update Forces for Geomechanics
+Mechanical solve stats: solves=12, linear_iterations=28 (total 285), solve_time_s=0.187469 (total 1.90709), converged=true
+Solve Fractures:
+
+Fracture solve stats: fractures_solved=1 (total 12), nonlinear_iterations=12 (total 68), linear_solves=9 (total 49), linear_iterations=7 (total 21), solve_time_s=0.123549 (total 2.19955), converged=true
+---------- Starting propagation at level: 0 --------
+Adding connections to schedule
+
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
+   0  0.000e+00  1.840e-08  0.000e+00  1.754e-05  0.000e+00  2.008e-07  0.000e+00  1.704e-02
+   5  0.000e+00  1.511e-09  0.000e+00  6.559e-09  0.000e+00  2.087e-07  0.000e+00  5.525e-06
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 5
+Flow solve report converged: 1
+Solve Geomechanics:
+Update Forces for Geomechanics
+Mechanical solve stats: solves=13, linear_iterations=24 (total 309), solve_time_s=0.159603 (total 2.0667), converged=true
+Solve Fractures:
+
+Fracture solve stats: fractures_solved=1 (total 13), nonlinear_iterations=12 (total 80), linear_solves=9 (total 58), linear_iterations=7 (total 28), solve_time_s=0.17376 (total 2.37331), converged=true
+---------- Starting propagation at level: 0 --------
+Adding connections to schedule
+
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
+   0  0.000e+00  1.840e-08  0.000e+00  1.754e-05  0.000e+00  2.008e-07  0.000e+00  1.704e-02
+   6  0.000e+00  1.515e-09  0.000e+00  6.558e-09  0.000e+00  2.160e-07  0.000e+00  5.525e-06
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 6
+Flow solve report converged: 1
+Solve Geomechanics:
+Update Forces for Geomechanics
+Mechanical solve stats: solves=14, linear_iterations=22 (total 331), solve_time_s=0.151596 (total 2.21829), converged=true
+Solve Fractures:
+
+Fracture solve stats: fractures_solved=1 (total 14), nonlinear_iterations=12 (total 92), linear_solves=9 (total 67), linear_iterations=7 (total 35), solve_time_s=0.249036 (total 2.62235), converged=true
+---------- Starting propagation at level: 0 --------
+Adding connections to schedule
+
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
+   0  0.000e+00  1.840e-08  0.000e+00  1.754e-05  0.000e+00  2.008e-07  0.000e+00  1.704e-02
+   7  0.000e+00  1.519e-09  0.000e+00  6.557e-09  0.000e+00  2.231e-07  0.000e+00  5.525e-06
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 7
+Flow solve report converged: 1
+Solve Geomechanics:
+Update Forces for Geomechanics
+Mechanical solve stats: solves=15, linear_iterations=22 (total 353), solve_time_s=0.156903 (total 2.37519), converged=true
+Solve Fractures:
+
+Fracture solve stats: fractures_solved=1 (total 15), nonlinear_iterations=16 (total 108), linear_solves=12 (total 79), linear_iterations=9 (total 44), solve_time_s=0.465306 (total 3.08766), converged=true
+---------- Starting propagation at level: 0 --------
+Adding connections to schedule
+
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
+   0  0.000e+00  1.840e-08  0.000e+00  1.754e-05  0.000e+00  2.008e-07  0.000e+00  1.704e-02
+   8  0.000e+00  1.524e-09  0.000e+00  6.556e-09  0.000e+00  2.337e-07  0.000e+00  5.525e-06
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 8
+Flow solve report converged: 1
+Solve Geomechanics:
+Update Forces for Geomechanics
+Mechanical solve stats: solves=16, linear_iterations=22 (total 375), solve_time_s=0.146487 (total 2.52168), converged=true
+Solve Fractures:
+
+Fracture solve stats: fractures_solved=1 (total 16), nonlinear_iterations=37 (total 145), linear_solves=29 (total 108), linear_iterations=17 (total 61), solve_time_s=1.58716 (total 4.67481), converged=true
+---------- Starting propagation at level: 0 --------
+Adding connections to schedule
+
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
+   0  0.000e+00  1.840e-08  0.000e+00  1.754e-05  0.000e+00  2.008e-07  0.000e+00  1.704e-02
+   9  0.000e+00  1.532e-09  0.000e+00  6.554e-09  0.000e+00  2.483e-07  0.000e+00  5.525e-06
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 9
+Flow solve report converged: 1
+Solve Geomechanics:
+Update Forces for Geomechanics
+Mechanical solve stats: solves=17, linear_iterations=22 (total 397), solve_time_s=0.150577 (total 2.67226), converged=true
+Solve Fractures:
+
+Fracture solve stats: fractures_solved=1 (total 17), nonlinear_iterations=23 (total 168), linear_solves=19 (total 127), linear_iterations=10 (total 71), solve_time_s=0.920556 (total 5.59537), converged=true
+---------- Starting propagation at level: 1 --------
+Adding connections to schedule
+
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
+   0  0.000e+00  1.840e-08  0.000e+00  1.754e-05  0.000e+00  2.008e-07  0.000e+00  1.704e-02
+  10  0.000e+00  1.532e-09  0.000e+00  6.554e-09  0.000e+00  2.486e-07  0.000e+00  5.525e-06
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 10
+Flow solve report converged: 1
+Solve Geomechanics:
+Update Forces for Geomechanics
+Mechanical solve stats: solves=18, linear_iterations=21 (total 418), solve_time_s=0.142089 (total 2.81435), converged=true
+Solve Fractures:
+
+Fracture solve stats: fractures_solved=1 (total 18), nonlinear_iterations=22 (total 190), linear_solves=18 (total 145), linear_iterations=10 (total 81), solve_time_s=0.921358 (total 6.51672), converged=true
+---------- Starting propagation at level: 1 --------
+Adding connections to schedule
+
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
+   0  0.000e+00  1.840e-08  0.000e+00  1.754e-05  0.000e+00  2.008e-07  0.000e+00  1.704e-02
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=11, linear_iterations=27 (total 257), solve_time_s=0.185794 (total 1.77417), converged=true
+Mechanical solve stats: solves=19, linear_iterations=22 (total 440), solve_time_s=0.149907 (total 2.96425), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 11), nonlinear_iterations=1 (total 20), linear_solves=0 (total 9), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.130151 (total 1.63649), converged=true
----------- Starting propagation at level: 0 --------
+Fracture solve stats: fractures_solved=1 (total 19), nonlinear_iterations=22 (total 212), linear_solves=18 (total 163), linear_iterations=10 (total 91), solve_time_s=0.926485 (total 7.44321), converged=true
+---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
-Writing fracture data to VTK files at time: 864000grid_size690
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Writing fracture data to VTK files at time: 864000grid_size846
 
 Overall linear iterations used: 0
 Suggested next time step size (from controller): 10390.738709062249 days
 Most recent relative change: 2.6546942083652847e-11
- Newton its= 2, linearizations= 3 (0.0sec), linear its=  0 (0.0sec)
+ Newton its= 2, linearizations=11 (0.0sec), linear its=  0 (0.0sec)
 Sub steps started at time = 10 (days)
  step[ 0 ] = 5 (days)
 sub steps end time = 15 (days)
 Suggested next step size = 15 (days)
 
 Restart file written for report step 3/3, date = 16-Jan-2020 00:00:00
-Time step took 0.631623 seconds; total solver time 4.240387 seconds.
+Time step took 7.854633 seconds; total solver time 11.249633 seconds.
 
 
 
@@ -1034,34 +1156,34 @@ Threads per MPI process:         1
 Setup time:                      0.02 s
   Deck input:                    0.01 s
 Number of timesteps:             5
-Simulation time:                 4.24 s
-  Assembly time:                 0.06 s (Wasted: 0.0 s; 0.0%)
+Simulation time:                11.25 s
+  Assembly time:                 0.08 s (Wasted: 0.0 s; 0.0%)
     Well assembly:               0.00 s (Wasted: 0.0 s; 0.0%)
   Linear solve time:             0.03 s (Wasted: 0.0 s; 0.0%)
     Linear setup:                0.02 s (Wasted: 0.0 s; 0.0%)
   Props/update time:             0.02 s (Wasted: 0.0 s; 0.0%)
-  Pre/post step:                 1.68 s (Wasted: 0.0 s; 0.0%)
+  Pre/post step:                 2.38 s (Wasted: 0.0 s; 0.0%)
   Output write time:             0.01 s
-Overall Linearizations:         18      (Wasted:     0; 0.0%)
+Overall Linearizations:         26      (Wasted:     0; 0.0%)
 Overall Newton Iterations:      12      (Wasted:     0; 0.0%)
 Overall Linear Iterations:       2      (Wasted:     0; 0.0%)
 
-  Mechanical solve time:       1.77 s
-Overall Mechanical Solves:       11
-Overall Mech Lin Iters:         257
-  Fracture solve time:         1.64 s
-Overall Fracture Solves:         11
-Overall Fracture Nl Iters:       20
-Overall Fracture Lin Solves:      9
-Overall Fracture Lin Iters:       0
+  Mechanical solve time:       2.96 s
+Overall Mechanical Solves:       19
+Overall Mech Lin Iters:         440
+  Fracture solve time:         7.44 s
+Overall Fracture Solves:         19
+Overall Fracture Nl Iters:      212
+Overall Fracture Lin Solves:    163
+Overall Fracture Lin Iters:      91
 
 
 
 Error summary:
 Warnings          7
-Info              280
+Info              352
 Errors            0
 Bugs              0
-Debug             75
+Debug             109
 Problems          0
 
