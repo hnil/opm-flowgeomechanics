@@ -449,7 +449,18 @@ namespace Opm
                 const bool do_update_connections = may_update_connections
                     && this->shouldUpdateConnections(coupling_metrics, legacy_coupling_change_logic, prm);
 
+                // Opt-in cheap update path: when only the CTF *values* changed (no new
+                // or removed connections), write them in place on the existing well
+                // perforations (addFracturePerforations overwrites well_index_fracture_)
+                // and skip the schedule rebuild + well-model re-init + prepareTimeStep
+                // + parent setup iteration. Structure changes always take the full path.
+                const bool value_only_wi_update =
+                    prm.get<bool>("fractureparam.solver.value_only_wi_update", false);
                 if(do_update_connections){
+                    if (value_only_wi_update && !coupling_metrics.structure_changed) {
+                        OpmLog::info("Updating fracture CTFs in place (value_only_wi_update, no structure change)");
+                        this->simulator_.problem().addConnectionsToWell();
+                    } else {
                     std::cout << "Add connections in iterations" << std::endl;
                     this->simulator_.problem().addConnectionsToSchedual();// add new connections in the schedual
                     this->simulator_.problem().wellModel().beginTimeStep(); // reinitialize well structure
@@ -464,6 +475,7 @@ namespace Opm
                             ? this->runParentFirstIterationLegacy(timer, nonlinear_solver)
                             : this->runParentFirstIterationPreservingState(timer, nonlinear_solver);
                     std::cout << "End connections in iterations" << std::endl;
+                    }
                 }
                 else if (may_update_connections && !legacy_coupling_change_logic) {
                     std::stringstream hos;
