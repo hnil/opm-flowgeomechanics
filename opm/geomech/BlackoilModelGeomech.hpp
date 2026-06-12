@@ -427,6 +427,16 @@ namespace Opm
                 coupling_metrics.ctf_changed = comm.max(coupling_metrics_local.ctf_changed);
                 coupling_metrics.perf_pressure_changed = comm.max(coupling_metrics_local.perf_pressure_changed);
                 coupling_metrics.composite_norm = comm.max(coupling_metrics_local.composite_norm);
+                // Opt-in outer-residual convergence (coupling_convergence_mode=residual):
+                // declare outer convergence from a dimensionless residual instead of the
+                // threshold booleans. Needs the rel-change extrema globally consistent.
+                const std::string coupling_convergence_mode = prm.get<std::string>(
+                    "fractureparam.solver.coupling_convergence_mode", "threshold");
+                const bool residual_mode = (coupling_convergence_mode == "residual");
+                if (residual_mode) {
+                    coupling_metrics.max_ctf_change_rel = comm.max(coupling_metrics_local.max_ctf_change_rel);
+                    coupling_metrics.max_perf_change_rel = comm.max(coupling_metrics_local.max_perf_change_rel);
+                }
                 // Remember this iteration's fracture->well coupling change so the next
                 // iteration can decide whether the mechanics solve may be skipped.
                 last_coupling_composite_norm_ = coupling_metrics.composite_norm;
@@ -466,6 +476,29 @@ namespace Opm
                 else if (addconnections && require_converged_fracture_for_wi_update && !fracture_converged) {
                     OpmLog::info("Skipping fracture-driven connection update because fracture solve did not converge");
                 }
+                if (residual_mode) {
+                    // Outer convergence from a physical residual: the largest relative
+                    // change of any fracture CTF or perforation pressure produced by
+                    // this iteration's fracture solve. Structure changes and a
+                    // non-converged inner solve always keep the loop active.
+                    const double coupling_tolerance =
+                        prm.get<double>("fractureparam.solver.coupling_tolerance", 1e-3);
+                    const double outer_residual = std::max(coupling_metrics.max_ctf_change_rel,
+                                                           coupling_metrics.max_perf_change_rel);
+                    const bool outer_converged = fracture_converged_global
+                        && !coupling_metrics.structure_changed
+                        && outer_residual <= coupling_tolerance;
+                    std::stringstream ros;
+                    ros << "Outer coupling residual: " << outer_residual
+                        << " (tol " << coupling_tolerance << ")"
+                        << ", structure_changed=" << (coupling_metrics.structure_changed ? "true" : "false")
+                        << ", fracture_converged=" << (fracture_converged_global ? "true" : "false")
+                        << ", outer_converged=" << (outer_converged ? "true" : "false");
+                    OpmLog::info(ros.str());
+                    if (!outer_converged) {
+                        report.converged = false;
+                    }
+                } else {
                 const bool fracture_changed = coupling_metrics.changed();
                 std::cout << "Fracture changed: " << fracture_changed << std::endl;
                 // TODO check convergence properly
@@ -475,6 +508,7 @@ namespace Opm
                     }
                     report.converged = false;
                  }
+                }
                 // if(implicit_flow){
                 //     // may do some extra things and + updating explicite quantities
                 //     auto tmp_report = Parent::nonlinearIteration(0, timer, nonlinear_solver);

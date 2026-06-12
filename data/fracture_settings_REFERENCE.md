@@ -139,6 +139,8 @@ across outer iterations. Implemented in `Fracture::applyCouplingUpdate`.
 | `coupling_legacy_first_damp` | false | emulate pre-`0e6bb48` behaviour (damp even on the first call) |
 | `legacy_coupling_change_logic` | false | revert to old "always update connections" behaviour (bypasses hysteresis + convergence gate) |
 | `legacy_parent_setup_iteration` | false | **physically incorrect** legacy reset of the parent first-iteration after a connection update; `false` preserves reservoir state (`runParentFirstIterationPreservingState`) |
+| `coupling_convergence_mode` | `threshold` | how the OUTER SeqMechFrac loop declares fracture-coupling convergence: `threshold` (legacy booleans from the change thresholds above) · `residual` (opt-in: converged iff inner fracture solve converged AND no structure change AND max relative change of any CTF / perf pressure ≤ `coupling_tolerance`; logged each outer iteration) |
+| `coupling_tolerance` | 1e-3 | dimensionless outer residual tolerance used by `coupling_convergence_mode=residual` |
 
 ### Practical guidance for the WI stabilization
 - Default (`legacy`, `damping_factor_perf=2`) is the proven, stable baseline.
