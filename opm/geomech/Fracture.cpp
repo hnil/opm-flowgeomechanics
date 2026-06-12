@@ -1131,7 +1131,10 @@ Fracture::leakOfRate() const
 std::vector<RuntimePerforation>
 Fracture::wellIndices() const{
    std::vector<RuntimePerforation> wellindices;
-   if(well_indices_.size() == 2){
+   const std::string wi_accel = prm_.get<std::string>("solver.wi_vector_acceleration", "none");
+   if (wi_accel != "none" && !well_indices_accel_.empty()) {
+         wellindices = well_indices_accel_;
+   } else if(well_indices_.size() == 2){
          wellindices = wellIndicesAvrg(well_indices_);
    }
    for(size_t i=0; i < wellindices.size(); ++i){
@@ -1248,6 +1251,142 @@ double Fracture::applyCouplingUpdate(double current,
     state.previous_residual = target - current;
     state.has_previous_residual = true;
     return current;
+}
+
+std::vector<RuntimePerforation>
+Fracture::applyVectorCouplingUpdate(const std::vector<RuntimePerforation>& target)
+{
+    // Vector Aitken / depth-1 Anderson acceleration of the per-cell CTF fixed
+    // point g(x) (opt-in via solver.wi_vector_acceleration). The legacy path
+    // (wellIndicesAvrg) is the damped Picard x_k = (g_k + d*x_{k-1})/(1+d);
+    // here the relaxation/mixing coefficient is computed from the residual
+    // history of the whole CTF vector instead of being fixed. Safeguards: CTFs
+    // are kept non-negative, and an accelerated step is only accepted when it
+    // does not increase the residual (coupling_acceptance_factor), otherwise
+    // the legacy damped update is used.
+    const std::string mode = prm_.get<std::string>("solver.wi_vector_acceleration", "none");
+    const double relax_min = prm_.get<double>("solver.coupling_relax_min", 0.05);
+    const double relax_max = prm_.get<double>("solver.coupling_relax_max", 1.25);
+    const double damping_factor = prm_.get<double>("solver.damping_factor_wi", 2.0);
+    const double alpha_min = prm_.get<double>("solver.coupling_anderson_alpha_min", -1.0);
+    const double alpha_max = prm_.get<double>("solver.coupling_anderson_alpha_max", 2.0);
+    const double acceptance = prm_.get<double>("solver.coupling_acceptance_factor", 1.0);
+    const bool fallback_legacy = prm_.get<bool>("solver.coupling_fallback_legacy", true);
+    const int verbosity = prm_.get<int>("solver.verbosity", 0);
+
+    auto clamp = [](const double v, const double lo, const double hi)
+    { return std::max(lo, std::min(v, hi)); };
+
+    std::map<int, double> tgt;
+    for (const auto& p : target) {
+        tgt[p.cell] = p.ctf;
+    }
+
+    auto& st = wi_vec_mix_;
+    std::vector<RuntimePerforation> out = target;
+
+    if (!st.initialized) {
+        // first solve: take the target directly (matches the scalar channels)
+        st.initialized = true;
+        st.omega = clamp(1.0 / (1.0 + std::max(0.0, damping_factor)), relax_min, relax_max);
+        st.prev_mixed = tgt;
+        st.prev_target = tgt;
+        st.prev_residual.clear();
+        st.has_prev_residual = false;
+        return out;
+    }
+
+    // residual r_k = g_k - x_{k-1} on cells with history; brand-new cells (the
+    // fracture grew) have no history and take the target directly below.
+    std::map<int, double> resid;
+    double r_norm2 = 0.0, dr_norm2 = 0.0, r_dot_dr = 0.0, rprev_dot_dr = 0.0;
+    for (const auto& [cell, g] : tgt) {
+        const auto it = st.prev_mixed.find(cell);
+        if (it == st.prev_mixed.end()) {
+            continue;
+        }
+        const double r = g - it->second;
+        resid[cell] = r;
+        r_norm2 += r * r;
+        if (st.has_prev_residual) {
+            const auto rp = st.prev_residual.find(cell);
+            if (rp != st.prev_residual.end()) {
+                const double dr = r - rp->second;
+                dr_norm2 += dr * dr;
+                r_dot_dr += r * dr;
+                rprev_dot_dr += rp->second * dr;
+            }
+        }
+    }
+
+    std::map<int, double> mixed;
+    bool accelerated = false;
+    std::string detail;
+    if (st.has_prev_residual && dr_norm2 > 1e-28) {
+        if (mode == "anderson") {
+            const double alpha = clamp(-r_dot_dr / dr_norm2, alpha_min, alpha_max);
+            for (const auto& [cell, g] : tgt) {
+                const auto gp = st.prev_target.find(cell);
+                const double gprev = (gp != st.prev_target.end()) ? gp->second : g;
+                mixed[cell] = std::max(0.0, alpha * gprev + (1.0 - alpha) * g);
+            }
+            accelerated = true;
+            detail = "alpha=" + std::to_string(alpha);
+        } else { // aitken
+            const double omega = clamp(-st.omega * rprev_dot_dr / dr_norm2, relax_min, relax_max);
+            for (const auto& [cell, g] : tgt) {
+                const auto xp = st.prev_mixed.find(cell);
+                mixed[cell] = (xp != st.prev_mixed.end())
+                    ? std::max(0.0, xp->second + omega * resid[cell])
+                    : g;
+            }
+            st.omega = omega;
+            accelerated = true;
+            detail = "omega=" + std::to_string(omega);
+        }
+        if (acceptance > 0.0 && fallback_legacy) {
+            double cand2 = 0.0;
+            for (const auto& [cell, r] : resid) {
+                const double c = tgt[cell] - mixed[cell];
+                cand2 += c * c;
+            }
+            if (cand2 > acceptance * acceptance * r_norm2) {
+                accelerated = false;
+                detail += " rejected";
+            }
+        }
+    }
+    if (!accelerated) {
+        // legacy damped Picard (same weights as wellIndicesAvrg)
+        for (const auto& [cell, g] : tgt) {
+            const auto xp = st.prev_mixed.find(cell);
+            const double xprev = (xp != st.prev_mixed.end()) ? xp->second : g;
+            mixed[cell] = (g + damping_factor * xprev) / (1.0 + damping_factor);
+        }
+    }
+
+    for (auto& p : out) {
+        const auto mx = mixed.find(p.cell);
+        if (mx != mixed.end()) {
+            p.ctf = mx->second;
+        }
+    }
+
+    if (verbosity > 1) {
+        std::stringstream os;
+        os << "CTF vector coupling update: mode=" << mode
+           << ", cells=" << tgt.size()
+           << ", |r|=" << std::sqrt(r_norm2)
+           << ", accelerated=" << (accelerated ? "true" : "false")
+           << (detail.empty() ? "" : (", " + detail));
+        OpmLog::info(os.str());
+    }
+
+    st.prev_residual = std::move(resid);
+    st.has_prev_residual = true;
+    st.prev_target = std::move(tgt);
+    st.prev_mixed = std::move(mixed);
+    return out;
 }
 
 void Fracture::setPerfProps(double perfpressure, double depth, double perfrate){
@@ -1830,11 +1969,19 @@ void Fracture::resetFracture()
     coupling_matrix_ = nullptr;
     fracture_matrix_ = nullptr;
     rhs_pressure_.resize(0);
+    // drop CTF-acceleration history; it belongs to the rolled-back solves
+    wi_vec_mix_.has_prev_residual = false;
+    wi_vec_mix_.prev_residual.clear();
     // Note: reservoir_cells_, all_reservoir_cells_, reservoir_properties_, etc.
     // are recalculated by FractureModel::resetFractures after this call returns.
 }
 void Fracture::moveForwardInTime()
 {
+    // CTF-vector acceleration: the secant information is only meaningful within
+    // one timestep's outer iterations — the target jumps physically across the
+    // step boundary. Keep prev_mixed (damping continuity) but drop the history.
+    wi_vec_mix_.has_prev_residual = false;
+    wi_vec_mix_.prev_residual.clear();
     // copy current state to "previous" state
     //grid_prev_ = grid_ ? std::make_unique<Grid>(*grid_) : nullptr;
     //grid_stretcher_prev_ = grid_strecher_ ? std::make_unique<Opm::RegularGridStretcher>(*grid_strecher_) : nullptr;

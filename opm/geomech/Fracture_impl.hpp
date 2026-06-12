@@ -980,6 +980,11 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             well_indices_[1] = well_indices_old;
             well_indices_[0] = well_indices_new;
         }
+        // Opt-in vector acceleration of the CTF coupling fixed point; the mixed
+        // vector is what wellIndices() then hands to the well model.
+        if (prm_.get<std::string>("solver.wi_vector_acceleration", "none") != "none") {
+            well_indices_accel_ = applyVectorCouplingUpdate(well_indices_new);
+        }
         last_solve_stats_.solve_time_seconds = solve_timer.stop();
         // summary of solve
         summary_of_solve();

@@ -42,6 +42,7 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <map>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -331,6 +332,22 @@ private:
                 const std::string& channel,
                 CouplingMixState& state);
 
+   // Vector fixed-point state for the per-cell CTF coupling (opt-in
+   // solver.wi_vector_acceleration). Keyed by reservoir cell index so it is
+   // stable across fracture-grid changes; new cells take the target directly.
+   struct VectorMixState
+   {
+     bool initialized{false};
+     bool has_prev_residual{false};
+     double omega{1.0};
+     std::map<int, double> prev_mixed;    // accepted CTF of the previous solve
+     std::map<int, double> prev_target;   // raw CTF target of the previous solve
+     std::map<int, double> prev_residual; // target - prev_mixed of the previous solve
+   };
+
+   std::vector<RuntimePerforation>
+   applyVectorCouplingUpdate(const std::vector<RuntimePerforation>& target);
+
    double reservoirTraction(int i) const;
    double fractureForce(int i) const;
    double leakofDp(int i) const;
@@ -592,6 +609,9 @@ private:
     CouplingMixState perf_pressure_mix_{};
     CouplingMixState well_rate_mix_{};
     CouplingMixState total_wellindex_mix_{};
+    VectorMixState wi_vec_mix_{};
+    // mixed CTF vector returned by wellIndices() when wi_vector_acceleration is on
+    std::vector<RuntimePerforation> well_indices_accel_;
     double density_{1000.0};// default to water
     double density_perf_{1000.0};
     double mobility_water_perf_{1000.0};

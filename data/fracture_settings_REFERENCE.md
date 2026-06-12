@@ -151,6 +151,14 @@ across outer iterations. Implemented in `Fracture::applyCouplingUpdate`.
   fixed point, and falls back to the damped update when it would overshoot.
 - `enable_wi_coupling_update=true` additionally relaxes the well-index itself — use if the CTF (not just
   perf pressure) oscillates between outer iterations.
+- `wi_vector_acceleration`: use **`anderson`**; do **not** use `aitken`. Validated on
+  vegard model2_refpad (native JSON, 64-cell CTF coupling, 334 days): anderson cut the inner
+  fracture NL iterations 19228 → 6813 (−65%) and the inner non-convergence warnings 208 → **0**
+  at equal solve time, with physics within a few % of the (partially unconverged) baseline and
+  conduction ~94%. Aitken's single relaxation factor over the sign-mixed CTF vector *destabilizes*
+  the same case (53099 NL iters, 774 non-convergence warnings). On decks whose CTF fixed point is
+  already trivial (e.g. model2 rate_short, SIMPLE SEQ: residual ~1e-15) the acceleration correctly
+  stays dormant and results are bit-identical.
 
 ## 9. `fractureparam.solver` — diagnostics  *(group `__7`)*
 
