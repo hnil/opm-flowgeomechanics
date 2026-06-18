@@ -617,7 +617,10 @@ private:
     double mobility_water_perf_{1000.0};
 
     // handling preconditioner
-    std::vector<int> closed_cells_; // indices of cells that are closed (i.e. 
+    std::vector<int> closed_cells_; // indices of cells that are closed (i.e.
+    // per-cell contact state changes within the current solve, used by the
+    // opt-in anti-chatter guard (solver.toggle_guard_mode = "chatter")
+    std::vector<int> cell_flip_counts_;
     //using AbstractPreconditioner = Dune::PreconditionerWithUpdate<VectorHP, VectorHP>;
     using AbstractPreconditioner = FractureMechanicsPreconditioner;//<VectorHP, VectorHP>;
     std::unique_ptr<AbstractPreconditioner> frac_flow_precond_; // have zero width) in the current iteration, used for modifying the system matrix and convergence criterion

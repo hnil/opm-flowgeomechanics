@@ -1086,12 +1086,49 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     } else {
         closed_cells = identify_closed(fractureMatrix(), x, mech_rhs, numWellEquations());
     }
-    if (!closed_cells_.empty() && closed_cells_.size() == closed_cells.size()) {
+    const std::string toggle_guard_mode = prm_.get<std::string>("solver.toggle_guard_mode", "count");
+    if (toggle_guard_mode == "chatter") {
+        // Per-cell anti-chatter guard. Chatter is the *same* cell flipping its
+        // contact state repeatedly within one solve; en-masse first-time
+        // re-opening (fracture establishment under rising pressure) is
+        // legitimate physics. Instead of throttling the global re-opening count
+        // (which wholesale-rejects an opening fracture: observed ~100x area
+        // suppression on the refine decks), count state changes per cell within
+        // the current solve and pin only cells that exceeded chatter_flip_limit
+        // changes — first openings/closings always pass, chattering cells get
+        // frozen at their current state for the rest of the solve.
+        if (nlin_iteration == 0 || cell_flip_counts_.size() != closed_cells.size()) {
+            cell_flip_counts_.assign(closed_cells.size(), 0);
+        }
+        if (closed_cells_.size() == closed_cells.size()) {
+            const int flip_limit = prm_.get<int>("solver.chatter_flip_limit", 3);
+            size_t pinned = 0;
+            for (size_t i = 0; i < closed_cells.size(); ++i) {
+                if (closed_cells[i] != closed_cells_[i]) {
+                    if (cell_flip_counts_[i] >= flip_limit) {
+                        closed_cells[i] = closed_cells_[i]; // pin chattering cell
+                        ++pinned;
+                    } else {
+                        ++cell_flip_counts_[i];
+                    }
+                }
+            }
+            if (pinned > 0 && nlin_verbosity > 0) {
+                std::cout << "Chatter guard pinned " << pinned
+                          << " cells that changed contact state more than "
+                          << prm_.get<int>("solver.chatter_flip_limit", 3)
+                          << " times this solve" << std::endl;
+            }
+        }
+    } else if (!closed_cells_.empty() && closed_cells_.size() == closed_cells.size()) {
         // Anti-chatter guard. Only re-openings (closed -> open) are throttled;
         // establishing contact (open -> closed) is always allowed so the contact
         // set can grow as fast as the physics demands. Throttling growth here was
         // observed to freeze the closed set at empty and prevent convergence on
         // fully-compressed fractures (regression decks). See count_reopened_cells.
+        // CAUTION: a finite count limit also wholesale-rejects legitimate en-masse
+        // re-opening (fracture establishment under rising pressure) — prefer
+        // toggle_guard_mode=chatter for that regime.
         const size_t toggled_cells = count_reopened_cells(closed_cells_, closed_cells);
         const size_t max_toggle_count = static_cast<size_t>(std::max(
             0, prm_.get<int>("solver.max_closed_cell_toggle_count", 1000000000)));

@@ -520,6 +520,41 @@ Fracture::stressIntensityK1() const
     size_t nc = numFractureCells();
     std::vector<double> stressIntensityK1(nc, std::nan("0"));
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+
+    // Opt-in displacement-correlation K1 extraction: instead of evaluating the
+    // asymptotic opening w(s) = C*sqrt(s) from the single boundary cell (legacy
+    // "aperture_cell", mesh sensitive), fit C by least squares over the cells in
+    // a corridor of physical length L behind the front edge and convert with the
+    // same calibrated constant (fractureK1(1,C) == C * mu*sqrt(pi)/(2(1-nu)*1.834)).
+    // With one point the fit reduces exactly to the legacy formula.
+    const std::string k1_mode = prm_.get<std::string>("solver.k1_extraction", "aperture_cell");
+    const bool correlate = (k1_mode == "displacement_correlation");
+    if (k1_mode != "aperture_cell" && !correlate) {
+        OPM_THROW(std::runtime_error, "Unknown solver.k1_extraction: " + k1_mode);
+    }
+    const double corr_length = prm_.get<double>("solver.k1_correlation_length", 0.0);
+    const double corr_cells = prm_.get<double>("solver.k1_correlation_cells", 3.0);
+
+    // cell adjacency, centers and areas (only needed for the correlation mode)
+    std::vector<std::vector<int>> nbs;
+    std::vector<Dune::FieldVector<double, 3>> centers;
+    std::vector<double> areas;
+    if (correlate) {
+        nbs.resize(nc);
+        centers.resize(nc);
+        areas.resize(nc);
+        for (const auto& elem : elements(grid_->leafGridView())) {
+            const int ci = mapper.index(elem);
+            centers[ci] = elem.geometry().center();
+            areas[ci] = elem.geometry().volume();
+            for (auto& is : Dune::intersections(grid_->leafGridView(), elem)) {
+                if (is.neighbor()) {
+                    nbs[ci].push_back(mapper.index(is.outside()));
+                }
+            }
+        }
+    }
+
     for (const auto& elem : elements(grid_->leafGridView())) {
         // bool isboundary = false;
         for (auto& is : Dune::intersections(grid_->leafGridView(), elem)) {
@@ -529,8 +564,56 @@ Fracture::stressIntensityK1() const
                 auto elCenter = elem.geometry().center();
                 auto vecC = isCenter - elCenter;
                 auto distC = vecC.two_norm();
-                double K1 = ddm::fractureK1(distC, fracture_width_[nIdx], E_, nu_);
-                stressIntensityK1[nIdx] = K1;
+                if (!correlate) {
+                    double K1 = ddm::fractureK1(distC, fracture_width_[nIdx], E_, nu_);
+                    stressIntensityK1[nIdx] = K1;
+                    continue;
+                }
+
+                // inward normal of the front edge and corridor dimensions
+                auto inward = elCenter - isCenter;
+                inward /= inward.two_norm();
+                const double hloc = std::sqrt(areas[nIdx]);
+                const double L = (corr_length > 0.0) ? corr_length : corr_cells * hloc;
+                const double half_width = 0.9 * hloc;
+
+                // BFS over neighbors collecting cells inside the corridor
+                std::vector<int> stack {nIdx};
+                std::vector<char> seen(nc, 0);
+                seen[nIdx] = 1;
+                double sum_ws = 0.0; // sum w_i*sqrt(s_i)
+                double sum_s = 0.0; // sum s_i
+                int npts = 0;
+                while (!stack.empty()) {
+                    const int c = stack.back();
+                    stack.pop_back();
+                    auto d = centers[c] - isCenter;
+                    const double s = d.dot(inward);
+                    auto lat = d;
+                    lat.axpy(-s, inward);
+                    if (s > 1e-3 * hloc && s <= L && lat.two_norm() <= half_width) {
+                        sum_ws += fracture_width_[c][0] * std::sqrt(s);
+                        sum_s += s;
+                        ++npts;
+                    }
+                    // expand while still within reach of the corridor
+                    if (s <= L) {
+                        for (const int nb : nbs[c]) {
+                            if (!seen[nb]) {
+                                seen[nb] = 1;
+                                stack.push_back(nb);
+                            }
+                        }
+                    }
+                }
+
+                if (npts >= 2 && sum_s > 0.0) {
+                    const double C = sum_ws / sum_s; // LSQ fit of w = C*sqrt(s)
+                    stressIntensityK1[nIdx] = ddm::fractureK1(1.0, C, E_, nu_);
+                } else {
+                    // not enough points (tiny fracture): legacy single-cell value
+                    stressIntensityK1[nIdx] = ddm::fractureK1(distC, fracture_width_[nIdx], E_, nu_);
+                }
             }
         }
     }
