@@ -346,6 +346,39 @@ target_link_libraries(replay_fracture_linear_system
 		opmflowgeomechanics
 )
 
+add_executable(test_partition_of_unity
+	examples/test_partition_of_unity.cpp
+)
+target_link_libraries(test_partition_of_unity
+	PUBLIC
+		opmflowgeomechanics
+)
+
+# Verify that the node (vertex) degrees of freedom form a partition of unity
+# after load balancing a deck. The number of MPI processes is the input: one
+# ctest per process count in PartitionOfUnity_NumProcs.
+set(PartitionOfUnity_NumProcs 1 2 4)
+foreach(np ${PartitionOfUnity_NumProcs})
+	if (NOT MPIEXEC_MAX_NUMPROCS LESS np)
+		add_test(NAME Unit.PartitionOfUnity.Nodes.np-${np}
+			COMMAND
+			${MPIEXEC_EXECUTABLE}
+			${MPIEXEC_NUMPROC_FLAG} ${np}
+			${MPIEXEC_PREFLAGS}
+			$<SHELL_PATH:$<TARGET_FILE:test_partition_of_unity>>
+			${MPIEXEC_POSTFLAGS}
+			gridfilename=${CMAKE_CURRENT_LIST_DIR}/data/MECHTEST/BLACKOILTHERMAL_BC.DATA
+			--add-corners=true
+			--edge-conformal=true
+			--edge-weights=uniform
+		)
+		set_tests_properties(Unit.PartitionOfUnity.Nodes.np-${np}
+			PROPERTIES
+			PROCESSORS ${np}
+		)
+	endif()
+endforeach()
+
 ####################33
 function(add_mechtest_compareECLFiles)
 	set(oneValueArgs CASENAME REFERENCE_CASENAME FILENAME SIMULATOR ABS_TOL REL_TOL DIR DIR_PREFIX PREFIX RESTART_STEP RESTART_SCHED)

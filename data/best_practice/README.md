@@ -163,3 +163,95 @@ python3 data/test_oss/refine/frac_area.py /tmp/run_seq_bhp/*nr-*.vtu
   (isothermal, BHP 420 > closure; ~56 s; ~98 % conduction).
 - **Temperature-driven:** `data/test_oss/refine/CASE_REFINE_nx_21_ny_21_nz_25.DATA`
   (cold 15 °C injection into 90 °C reservoir, BHP below closure → thermal-stress opening).
+
+---
+
+## How these were verified (reproducible)
+
+Both decks live in `data/test_oss/refine/` and use that directory's
+`myparamsfrac_seq.ini` (adaptive time-stepping on). The fracture config used for
+verification is the general default, `seq_implicit_bhp.json` (identical to the parent
+`fracture_simple_bhp_seq_final.json`). Run **from `data/test_oss/refine/`**:
+
+```bash
+ROOT=/Users/hnil/Documents/OPM/opm_geomech
+BIN=$ROOT/builds/release/opm-flowgeomechanics/bin/flow_energy_geomech
+BP=$ROOT/opm-flowgeomechanics/data/best_practice
+MECH=$ROOT/opm-flowgeomechanics/data/amgmechsolverhypre_geosxcpu_new_nv.json
+cd $ROOT/data/test_oss/refine
+
+# (A) PRESSURE-driven case
+$BIN --parameter-file=myparamsfrac_seq.ini CASE_PRESS_FRAC_nx_21_ny_21_nz_25.DATA \
+     --fracture-param-file=$BP/seq_implicit_bhp.json \
+     --linear-solver-mech=$MECH \
+     --enable-write-all-solutions=true --threads-per-process=2 \
+     --output-dir=/tmp/press_frac
+
+# (B) TEMPERATURE-driven case (same command, other deck)
+$BIN --parameter-file=myparamsfrac_seq.ini CASE_REFINE_nx_21_ny_21_nz_25.DATA \
+     --fracture-param-file=$BP/seq_implicit_bhp.json \
+     --linear-solver-mech=$MECH \
+     --enable-write-all-solutions=true --threads-per-process=2 \
+     --output-dir=/tmp/temp_frac
+```
+
+`--enable-write-all-solutions=true` is **required** for the geometry check — it writes the
+per-step fracture `*.vtu` that `frac_area.py` reads.
+
+Then three checks per run (the same ones the harness automates):
+
+```bash
+SUM=$ROOT/builds/release/opm-common/bin/summary
+
+# 1) fracture growth: total_area (grid extent) must NOT stay at the ~299 m^2 seed
+python3 frac_area.py /tmp/press_frac/*nr-*.vtu | tail -1
+#   -> total_area=567559 m^2  open_area=0.0 m^2  volume=0.0
+#   NB: on the PRESSURE case the final snapshot reports open_area~0 even though
+#   97.8% of injection routes through the fracture -- the "all cells closed but
+#   conducting" contact state (open/close vs conduction inconsistency). So judge
+#   GROWTH by total_area, and CONDUCTION by WWIRFRAC (check 2), not by open_area.
+#   On the TEMPERATURE case open_area is large (~2.68e4 m^2).
+
+# 2) conduction  frac% = WWIRFRAC/WWIR  (must stay high on a fracture-dominated case)
+P=$(ls /tmp/press_frac/*.SMSPEC); P=${P%.SMSPEC}
+for v in WBHP:B-3H WWIR:B-3H WWIRFRAC:B-3H; do
+  echo "$v = $($SUM $P $v 2>/dev/null | awk 'NF' | tail -1)"
+done
+#   WBHP=420 (BHP-limited), WWIR=11483, WWIRFRAC=11233  -> frac% = 97.8 %
+
+# 3) no non-convergence
+grep -c "did not converge" /tmp/press_frac/../press_frac.log   # or the tee'd run log; expect 0
+```
+
+What "verified" means for these cases, and the **option each check exercises**:
+
+| check | tool | option it pins down |
+|---|---|---|
+| completes, 0 timestep cuts / `did not converge` | run log `grep` | the inner solver block (Picard, sticky, mech-last) is stable |
+| fracture **grows** (`total_area` ≫ seed ~299 m²) | `frac_area.py` last VTU | the toggle guard does **not** suppress opening (the whole reason `seq_implicit_bhp.json` keeps the *unlimited* guard, not 32/0.1) |
+| **conduction** `WWIRFRAC/WWIR` high | `summary` CLI | `addconnections=true` + control type actually route flow through the fracture |
+| pass/fail vs known-good | `compare_runs.py --bands` | the whole config, scored against `acceptance_bands.json` |
+
+**Measured baselines** with `seq_implicit_bhp.json` (= what the bands encode):
+- pressure case: area ≈ 5.68e5 m², frac% ≈ 97.8 %, 0 non-convergence, ~56 s.
+- temperature case (CASE_REFINE L21): area ≈ 2.93e4 m², open ≈ 2.68e4 m², frac% ≈ 99.8 %, 0 non-convergence.
+
+**Option sensitivity worth knowing (pressure case):** the drive is the injector BHP limit
+relative to the closure stress (~334 bar + poroelastic back-stress). It is a sharp
+threshold on this uniform-stress deck — `BHP 380` produces *no* opening (area stays at the
+299 m² seed), `BHP 420` opens the whole domain. So when adapting this case, the BHP limit
+(in `WCONINJE`) is the knob that turns fracturing on/off, not the fracture JSON. The
+temperature case instead keeps `WCONINJE` BHP *below* closure and drives opening purely by
+the injected/reservoir temperature contrast (`WTEMP` 15 °C vs 90 °C) — so there the
+`WTEMP` value is the drive.
+
+Single-config pass/fail against the recorded baselines:
+
+```bash
+# point compare_runs.py at a directory of <case>/output/*.SMSPEC runs, e.g. a sweep dir,
+# or use frac_area.py + summary directly as above for one-off runs.
+python3 $ROOT/data/mac_tests_result/analysis/compare_runs.py <run-dir> \
+        --bands $ROOT/data/mac_tests_result/analysis/acceptance_bands.json
+# FAILS if any case aborts, frac% drops below its floor, or (refine/pressure cases)
+# fracture area collapses -- i.e. it catches a config that gained stability by not fracturing.
+```
