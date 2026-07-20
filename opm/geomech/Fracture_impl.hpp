@@ -155,6 +155,91 @@ make_vector(const Vec& data, size_t sz = 0)
     return res;
 }
 
+inline WellInfo&
+Fracture::wellInfo()
+{
+    return wellinfo_;
+}
+
+inline void
+Fracture::setActive(bool active)
+{
+    active_ = active;
+}
+
+inline bool
+Fracture::isActive() const
+{
+    return active_;
+}
+
+inline const FractureSolveStats&
+Fracture::lastSolveStats() const
+{
+    return last_solve_stats_;
+}
+
+inline double
+Fracture::maxFlowTimeStep() const
+{
+    return max_flow_time_step_;
+}
+
+inline int
+Fracture::numWellEquations() const
+{
+    return prm_.get_child("control").get<std::string>("type") == "rate_well" ? 1 : 0;
+}
+
+inline Fracture::DynamicMatrix&
+Fracture::fractureMatrix() const
+{
+    if (fracture_matrix_ == nullptr)
+        assembleFractureMatrix();
+    return *fracture_matrix_;
+}
+
+template <class TypeTag, class Simulator>
+void Fracture::initReservoirProperties(const Simulator& simulator)
+{
+    const auto& problem = simulator.problem();
+    size_t ncf = reservoir_cells_.size();
+    reservoir_perm_.resize(ncf);
+    reservoir_cstress_.resize(ncf);
+    reservoir_density_.resize(ncf);
+    double dist = prm_.get<double>("reservoir.dist");
+    reservoir_dist_.resize(ncf, dist);
+    double numax = -1e99;
+    double Emax = -1e99;
+    assert(ncf > 0);
+    for (size_t i = 0; i < ncf; ++i) {
+        int cell = reservoir_cells_[i];
+        if (cell < 0) {
+            reservoir_perm_[i] = 0.0;
+            reservoir_cstress_[i] = 1e20;
+            reservoir_density_[i] = 1000.0;
+            reservoir_dist_[i] = dist;
+            continue;
+        }
+        auto normal = this->cell_normals_[i];
+        {
+            auto permmat = problem.intrinsicPermeability(cell);
+            auto cstress = problem.cStress(cell);
+            auto np = normal;
+            permmat.mv(normal, np);
+            double value = np.dot(normal);
+            reservoir_perm_[i] = value;
+            reservoir_cstress_[i] = cstress;
+        }
+        Emax = std::max(Emax, problem.yModule(cell));
+        numax = std::max(numax, problem.pRatio(cell));
+    }
+    E_ = Emax;
+    nu_ = numax;
+    assert(E_ > 0);
+    assert(nu_ > 0 && nu_ < 1);
+}
+
 template <class TypeTag, class Simulator>
 void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_constant_vals,bool /*update_filtercake*/)
     {

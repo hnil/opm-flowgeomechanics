@@ -293,7 +293,7 @@ public:
     void setFractureGrid(std::unique_ptr<Fracture::Grid> gptr = nullptr); // a hack to allow use of another grid
     std::vector<RuntimePerforation> wellIndices() const;
     std::vector<RuntimePerforation> wellIndicesAvrg(const std::vector<std::vector<RuntimePerforation>>& well_indices) const;
-    WellInfo& wellInfo(){return wellinfo_;}
+    WellInfo& wellInfo();
     const WellInfo& wellInfo() const { return wellinfo_; }
     std::vector<double> leakOfRate() const;
     double injectionPressure() const;
@@ -306,11 +306,11 @@ public:
 
     template <typename Scalar>
     void assignGeomechWellState(PerfData<Scalar>& perfData) const;
-    void setActive(bool active) { active_ = active; }
-    bool isActive() const { return active_; }
-    const FractureSolveStats& lastSolveStats() const { return last_solve_stats_; }
+    void setActive(bool active);
+    bool isActive() const;
+    const FractureSolveStats& lastSolveStats() const;
     std::array<double,2> hightAndWidth() const;
-    double maxFlowTimeStep() const{return max_flow_time_step_;}
+    double maxFlowTimeStep() const;
     double filterCakeVolume() const;
     void resetFracture();
     void moveForwardInTime();
@@ -383,50 +383,7 @@ private:
                                      const ResVector& rhs,
                                      const int nwells);
     template <class TypeTag, class Simulator>
-    void initReservoirProperties(const Simulator& simulator)
-    {
-        //using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
-        const auto& problem = simulator.problem();
-        // NB burde truleg interpolere
-        // NB reservoir dist not calculated
-        size_t ncf = reservoir_cells_.size();
-        reservoir_perm_.resize(ncf);
-        reservoir_cstress_.resize(ncf);
-        reservoir_density_.resize(ncf);
-        // should be calcualted
-        double dist = prm_.get<double>("reservoir.dist");
-        reservoir_dist_.resize(ncf, dist);
-        double numax = -1e99;
-        double Emax = -1e99;
-        assert(ncf>0);
-        for (size_t i = 0; i < ncf; ++i) {
-            int cell = reservoir_cells_[i];
-            if(cell < 0){
-                // probably outside reservoir set all to zero
-                reservoir_perm_[i] = 0.0;
-                reservoir_cstress_[i] = 1e20;
-                reservoir_density_[i] = 1000.0; // water density
-                reservoir_dist_[i] = dist;
-                continue;
-            }
-            auto normal = this->cell_normals_[i];
-            {
-                auto permmat = problem.intrinsicPermeability(cell);
-                auto cstress = problem.cStress(cell);
-                auto np = normal;
-                permmat.mv(normal, np);
-                double value = np.dot(normal);
-                reservoir_perm_[i] = value;
-                reservoir_cstress_[i] = cstress;
-            }
-            Emax = std::max(Emax,problem.yModule(cell));
-            numax = std::max(numax,problem.pRatio(cell));
-        }
-        E_ = Emax;
-        nu_ = numax;
-        assert(E_ > 0);
-        assert(nu_>0 && nu_ < 1);
-    }
+    void initReservoirProperties(const Simulator& simulator);
 
     void resetWriters();
     Dune::BlockVector<Dune::FieldVector<double, 3>> all_slips() const;
@@ -493,9 +450,7 @@ private:
 
     void assembleFractureMatrix() const;
     std::vector<double> stressIntensityK1() const;
-    int numWellEquations() const {
-      return prm_.get_child("control").get<std::string>("type") == "rate_well" ? 1 : 0;
-    }
+    int numWellEquations() const;
   
     //double well_pressure_;// for now using prm object for definition
     std::vector<CellRef> well_source_cellref_; // references to well cells in the fully resolved TriMesh
@@ -564,11 +519,7 @@ private:
     mutable std::unique_ptr<DynamicMatrix> fracture_matrix_; 
 
     // function ensuring that the fracture matrix exists, and returning a reference to it
-    DynamicMatrix& fractureMatrix() const {
-        if (fracture_matrix_ == nullptr)
-            assembleFractureMatrix();
-        return *fracture_matrix_;
-    }
+    DynamicMatrix& fractureMatrix() const;
   
     double E_;
     double nu_;
