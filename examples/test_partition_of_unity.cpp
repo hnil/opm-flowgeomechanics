@@ -71,6 +71,10 @@ struct Params
     //!        zoltanGoG, the well-aware method the simulator uses by default).
     Dune::PartitionMethod partition_method {Dune::PartitionMethod::zoltan};
     int overlap_layers {1};
+    //! \brief Pass &eclState to processEclipseFormat so PORV/MINPV/pinch cell
+    //!        removal is applied, exactly like the simulator's vanguard. Set
+    //!        false to keep every input cell (no removal).
+    bool use_eclstate {true};
     bool verbose {false};
 };
 
@@ -162,6 +166,8 @@ parseCommandLine(int argc, char** argv)
             p.partition_method = parsePartitionMethod(value);
         } else if (key == "overlap-layers" || key == "overlap_layers") {
             p.overlap_layers = std::stoi(value);
+        } else if (key == "use-eclstate" || key == "use_eclstate") {
+            p.use_eclstate = parseBool(value);
         } else if (key == "verbose") {
             p.verbose = parseBool(value);
         }
@@ -229,7 +235,9 @@ main(int argc, char** argv)
                       << "  edge-conformal : " << std::boolalpha << p.edge_conformal << '\n'
                       << "  edge-weights   : " << edgeWeightName(p.edge_weights) << '\n'
                       << "  partition      : " << partitionMethodName(p.partition_method) << '\n'
-                      << "  overlap-layers : " << p.overlap_layers << std::endl;
+                      << "  overlap-layers : " << p.overlap_layers << '\n'
+                      << "  use-eclstate   : " << std::boolalpha << p.use_eclstate
+                      << " (PORV/MINPV/pinch cell removal)" << std::endl;
         }
 
         // --- build the grid from the deck (honouring --edge-conformal) ---------
@@ -248,7 +256,7 @@ main(int argc, char** argv)
         // and yields a different active-cell set / node topology.
         Dune::CpGrid grid;
         grid.processEclipseFormat(&eclState.getInputGrid(),
-                                  /*eclipseState*/ &eclState,
+                                  /*eclipseState*/ p.use_eclstate ? &eclState : nullptr,
                                   /*periodic*/ false,
                                   /*clip_z*/ false,
                                   /*pinchActive*/ false,
