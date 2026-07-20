@@ -56,14 +56,7 @@ public:
     /// vectors in addition to all current well objects.
     void addFractures(const ScheduleState& sched);
 
-   void updateFractureReservoirCells(const Dune::CpGrid& cpgrid)
-    {
-        for (auto& well_fracture : well_fractures_) {
-          for (auto& fracture : well_fracture) {
-            fracture.updateReservoirCells(cell_search_tree_,cpgrid, cell_seeds_);
-          }
-        }
-    }
+     void updateFractureReservoirCells(const Dune::CpGrid& cpgrid);
   
   //void updateFractureReservoirCells(const Dune::CpGrid& cpgrid);
   
@@ -88,129 +81,30 @@ public:
     void writemulti(double time) const;
 
     template<class wseed_collection>
-    void updateActive(const wseed_collection& current_wseed){
-        for (auto& well_fracture : well_fractures_) {
-            for (auto& fracture : well_fracture) {
-                fracture.setActive(false);
-            }
-        }
-        if(current_wseed().empty()){
-            return;
-        }
-        for (auto& well_fracture : well_fractures_) {
-            for (auto& fracture : well_fracture) {
-                auto wellInfo = fracture.wellInfo();
-                if(current_wseed.has(wellInfo.name)){
-                    const auto& well_wseed = current_wseed(wellInfo.name);
-                    for(const auto& seedcell : well_wseed.seedCells()){
-                        if(seedcell == wellInfo.global_index){
-                            fracture.setActive(true);
-                            std::cout << "Activating fracture " << fracture.name() << std::endl;    
-                        }
-                    }
-                }
-            }
-        }
-    }    
+    void updateActive(const wseed_collection& current_wseed);
 
     template <class TypeTag, class Simulator>
-    void solve(const Simulator& simulator)
-    {
-        last_solve_stats_ = {};
-        for (size_t i = 0; i < wells_.size(); ++i) {
-            std::vector<Fracture>& fractures = well_fractures_[i];
-            for (size_t j = 0; j < fractures.size(); ++j) {
-                if (fractures[j].isActive()) {
-                    std::cout << "Solving fracture " << fractures[j].name() << std::endl;
-                    fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator);
-                    last_solve_stats_ += fractures[j].lastSolveStats();
-                    // post solve update
-                    
-                }
-            }
-        }
-        total_solve_stats_ += last_solve_stats_;
-    }
+    void solve(const Simulator& simulator);
 
     template <class TypeTag, class Simulator>
-    void updateFilterCakeProperties(const Simulator& simulator){
-         for (size_t i = 0; i < wells_.size(); ++i) {
-            std::vector<Fracture>& fractures = well_fractures_[i];
-            for (size_t j = 0; j < fractures.size(); ++j) {
-                fractures[j].updateFilterCakePropertiesPost<TypeTag, Simulator>(simulator);
-            }
-        }
-    }
+    void updateFilterCakeProperties(const Simulator& simulator);
 
     template <class TypeTag, class Simulator>
-    double maxFlowTimeStep(const Simulator& simulator) const
-    {
-      double dt_min = std::numeric_limits<double>::max();
-        for (size_t i = 0; i < wells_.size(); ++i) {
-            const std::vector<Fracture>& fractures = well_fractures_[i];
-            for (size_t j = 0; j < fractures.size(); ++j) {
-                if (fractures[j].isActive()) {
-                    double dt_max = fractures[j].maxFlowTimeStep();
-                    if (dt_max > 0) {
-                        dt_min = std::min(dt_max, dt_min);
-                    }
-                }
-            }
-        }
-        dt_min = simulator.vanguard().grid().comm().min(dt_min);
-        return dt_min;  
-    }
+    double maxFlowTimeStep(const Simulator& simulator) const;
 
         void updateReservoirProperties(); // for testing without simulator
         void initFractureStates();
 
         template <class TypeTag, class Simulator>
-        void initReservoirProperties(const Simulator& simulator)
-        {
-            for (size_t i = 0; i < wells_.size(); ++i) {
-                for (auto& fracture : well_fractures_[i]) {
-                    fracture.updateReservoirProperties<TypeTag, Simulator>(simulator, true);
-                }
-            }
-        }
+        void initReservoirProperties(const Simulator& simulator);
         template <class TypeTag, class Simulator>
-        void updateReservoirAndWellProperties(const Simulator& simulator)
-        {
-            this->updateReservoirProperties<TypeTag, Simulator>(simulator);
-            this->updateWellProperties<TypeTag, Simulator>(simulator);
-        }
+        void updateReservoirAndWellProperties(const Simulator& simulator);
         template <class TypeTag, class Simulator>
-        void resetFractures(const Simulator& simulator)
-        {
-            for (size_t i = 0; i < wells_.size(); ++i) {
-                for (auto& fracture : well_fractures_[i]) {
-                    fracture.resetFracture();
-                }
-            }
-            // Recompute reservoir-cell mapping (grid was restored so nodes moved)
-            const auto& cpgrid = simulator.vanguard().grid();
-            updateFractureReservoirCells(cpgrid);
-            // Recompute all reservoir properties (init_constant_vals=true so that
-            // E_, nu_, permeability, cstress etc. are refreshed for the new cells)
-            this->initReservoirProperties<TypeTag, Simulator>(simulator);
-            this->updateReservoirProperties<TypeTag, Simulator>(simulator);
-            this->updateWellProperties<TypeTag, Simulator>(simulator);
-        }
-        void moveForwardInTime(){
-            for (size_t i = 0; i < wells_.size(); ++i) {
-                for (auto& fracture : well_fractures_[i]) {
-                    fracture.moveForwardInTime();
-                }
-            }
-        }
+        void resetFractures(const Simulator& simulator);
+        void moveForwardInTime();
 
         template <class TypeTag, class Simulator>
-        void updateReservoirWellProperties(const Simulator& simulator)
-        {
-            for (auto& well : wells_) {
-                well.updateReservoirProperties<TypeTag, Simulator>(simulator);
-            }
-        }
+        void updateReservoirWellProperties(const Simulator& simulator);
 
 
         std::vector<RuntimePerforation> getExtraWellIndices(const std::string& wellname) const;
@@ -218,33 +112,20 @@ public:
         template <typename Scalar, typename IndexTraits>
         void assignGeomechWellState(WellState<Scalar, IndexTraits> & wellState) const;
 
-        bool addPertsToSchedule()
-        {
-            return prm_.get<bool>("addperfs_to_schedule");
-        }
+        bool addPertsToSchedule();
         // probably this should be collected in one loop since all do full loop over fracture ++ well
         Dune::FieldVector<double, 6> stress(Dune::FieldVector<double, 3> obs) const;
         Dune::FieldVector<double, 6> strain(Dune::FieldVector<double, 3> obs) const;
         Dune::FieldVector<double, 3> disp(Dune::FieldVector<double, 3> obs) const;
-        Opm::PropertyTree& getParam()
-        {
-            return prm_;
-        }
-        const FractureSolveStats& lastSolveStats() const { return last_solve_stats_; }
-        const FractureSolveStats& totalSolveStats() const { return total_solve_stats_; }
+        Opm::PropertyTree& getParam();
+        const FractureSolveStats& lastSolveStats() const;
+        const FractureSolveStats& totalSolveStats() const;
         static Opm::DeferredLogger fractureLogger;
 
     private:
         bool vtkwritewells_ = false; // write wells to VTK files
         template <class TypeTag, class Simulator>
-        void updateReservoirProperties(const Simulator& simulator)
-        {
-            for (size_t i = 0; i < wells_.size(); ++i) {
-                for (auto& fracture : well_fractures_[i]) {
-                    fracture.updateReservoirProperties<TypeTag, Simulator>(simulator);
-                }
-            }
-        }
+        void updateReservoirProperties(const Simulator& simulator);
 
         template <class TypeTag, class Simulator>
         void updateWellProperties(const Simulator& simulator); // update all well related properties

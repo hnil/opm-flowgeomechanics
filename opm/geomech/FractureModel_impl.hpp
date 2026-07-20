@@ -2,7 +2,19 @@
 
 #include <opm/simulators/linalg/PropertyTree.hpp>
 
+#include <limits>
+
 namespace Opm {
+    inline void
+    FractureModel::updateFractureReservoirCells(const Dune::CpGrid& cpgrid)
+    {
+        for (auto& well_fracture : well_fractures_) {
+            for (auto& fracture : well_fracture) {
+                fracture.updateReservoirCells(cell_search_tree_, cpgrid, cell_seeds_);
+            }
+        }
+    }
+
     template<class Grid>
     FractureModel::FractureModel(const Grid&              grid,
                                  const std::vector<Well>& wells,
@@ -65,6 +77,173 @@ namespace Opm {
         }
 
         external::buildBoundingBoxTree(cell_search_tree_, cell_seeds_, grid);
+    }
+
+    template<class wseed_collection>
+    void
+    FractureModel::updateActive(const wseed_collection& current_wseed)
+    {
+        for (auto& well_fracture : well_fractures_) {
+            for (auto& fracture : well_fracture) {
+                fracture.setActive(false);
+            }
+        }
+        if (current_wseed().empty()) {
+            return;
+        }
+        for (auto& well_fracture : well_fractures_) {
+            for (auto& fracture : well_fracture) {
+                auto wellInfo = fracture.wellInfo();
+                if (current_wseed.has(wellInfo.name)) {
+                    const auto& well_wseed = current_wseed(wellInfo.name);
+                    for (const auto& seedcell : well_wseed.seedCells()) {
+                        if (seedcell == wellInfo.global_index) {
+                            fracture.setActive(true);
+                            std::cout << "Activating fracture " << fracture.name() << std::endl;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    template <class TypeTag, class Simulator>
+    void
+    FractureModel::solve(const Simulator& simulator)
+    {
+        last_solve_stats_ = {};
+        for (size_t i = 0; i < wells_.size(); ++i) {
+            std::vector<Fracture>& fractures = well_fractures_[i];
+            for (size_t j = 0; j < fractures.size(); ++j) {
+                if (fractures[j].isActive()) {
+                    std::cout << "Solving fracture " << fractures[j].name() << std::endl;
+                    fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator);
+                    last_solve_stats_ += fractures[j].lastSolveStats();
+                }
+            }
+        }
+        total_solve_stats_ += last_solve_stats_;
+    }
+
+    template <class TypeTag, class Simulator>
+    void
+    FractureModel::updateFilterCakeProperties(const Simulator& simulator)
+    {
+        for (size_t i = 0; i < wells_.size(); ++i) {
+            std::vector<Fracture>& fractures = well_fractures_[i];
+            for (size_t j = 0; j < fractures.size(); ++j) {
+                fractures[j].updateFilterCakePropertiesPost<TypeTag, Simulator>(simulator);
+            }
+        }
+    }
+
+    template <class TypeTag, class Simulator>
+    double
+    FractureModel::maxFlowTimeStep(const Simulator& simulator) const
+    {
+        double dt_min = std::numeric_limits<double>::max();
+        for (size_t i = 0; i < wells_.size(); ++i) {
+            const std::vector<Fracture>& fractures = well_fractures_[i];
+            for (size_t j = 0; j < fractures.size(); ++j) {
+                if (fractures[j].isActive()) {
+                    double dt_max = fractures[j].maxFlowTimeStep();
+                    if (dt_max > 0) {
+                        dt_min = std::min(dt_max, dt_min);
+                    }
+                }
+            }
+        }
+        dt_min = simulator.vanguard().grid().comm().min(dt_min);
+        return dt_min;
+    }
+
+    template <class TypeTag, class Simulator>
+    void
+    FractureModel::initReservoirProperties(const Simulator& simulator)
+    {
+        for (size_t i = 0; i < wells_.size(); ++i) {
+            for (auto& fracture : well_fractures_[i]) {
+                fracture.updateReservoirProperties<TypeTag, Simulator>(simulator, true);
+            }
+        }
+    }
+
+    template <class TypeTag, class Simulator>
+    void
+    FractureModel::updateReservoirAndWellProperties(const Simulator& simulator)
+    {
+        this->updateReservoirProperties<TypeTag, Simulator>(simulator);
+        this->updateWellProperties<TypeTag, Simulator>(simulator);
+    }
+
+    template <class TypeTag, class Simulator>
+    void
+    FractureModel::resetFractures(const Simulator& simulator)
+    {
+        for (size_t i = 0; i < wells_.size(); ++i) {
+            for (auto& fracture : well_fractures_[i]) {
+                fracture.resetFracture();
+            }
+        }
+        const auto& cpgrid = simulator.vanguard().grid();
+        updateFractureReservoirCells(cpgrid);
+        this->initReservoirProperties<TypeTag, Simulator>(simulator);
+        this->updateReservoirProperties<TypeTag, Simulator>(simulator);
+        this->updateWellProperties<TypeTag, Simulator>(simulator);
+    }
+
+    inline void
+    FractureModel::moveForwardInTime()
+    {
+        for (size_t i = 0; i < wells_.size(); ++i) {
+            for (auto& fracture : well_fractures_[i]) {
+                fracture.moveForwardInTime();
+            }
+        }
+    }
+
+    template <class TypeTag, class Simulator>
+    void
+    FractureModel::updateReservoirWellProperties(const Simulator& simulator)
+    {
+        for (auto& well : wells_) {
+            well.updateReservoirProperties<TypeTag, Simulator>(simulator);
+        }
+    }
+
+    inline bool
+    FractureModel::addPertsToSchedule()
+    {
+        return prm_.get<bool>("addperfs_to_schedule");
+    }
+
+    inline Opm::PropertyTree&
+    FractureModel::getParam()
+    {
+        return prm_;
+    }
+
+    inline const FractureSolveStats&
+    FractureModel::lastSolveStats() const
+    {
+        return last_solve_stats_;
+    }
+
+    inline const FractureSolveStats&
+    FractureModel::totalSolveStats() const
+    {
+        return total_solve_stats_;
+    }
+
+    template <class TypeTag, class Simulator>
+    void
+    FractureModel::updateReservoirProperties(const Simulator& simulator)
+    {
+        for (size_t i = 0; i < wells_.size(); ++i) {
+            for (auto& fracture : well_fractures_[i]) {
+                fracture.updateReservoirProperties<TypeTag, Simulator>(simulator);
+            }
+        }
     }
 
   template<class WellState>
