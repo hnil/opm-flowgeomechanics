@@ -13,6 +13,7 @@
 #include <config.h>
 
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <iostream>
 #include <vector>
@@ -20,6 +21,7 @@
 #include "reference_test_data.hpp"
 
 #include <opm/geomech/FracturePressureAssemblerAD.hpp>
+#include <opm/material/densead/Evaluation.hpp>
 
 namespace
 {
@@ -577,6 +579,134 @@ bool test_rate_well_mobility_pressure_derivatives()
     return true;
 }
 
+bool test_localad_vs_densead_static()
+{
+    std::cout << "Test 14: LocalAD vs DenseAd::Evaluation<double,4> on local face stencil ..."
+              << std::endl;
+
+    using Local = Opm::LocalAD<4>;
+    using Dense = Opm::DenseAd::Evaluation<double, 4>;
+
+    constexpr int P_I = 0;
+    constexpr int P_J = 1;
+    constexpr int W_I = 2;
+    constexpr int W_J = 3;
+
+    const double p_i = 2.2e6;
+    const double p_j = 2.0e6;
+    const double w_i = 1.4e-3;
+    const double w_j = 1.1e-3;
+    const double t1 = 1.8;
+    const double t2 = 2.1;
+    const double min_w = 1e-4;
+    const double mob = 8.0e3;
+
+    auto admax_local = [](const Local& a, const double thr) {
+        if (a.value >= thr)
+            return a;
+        return Local::constant(thr);
+    };
+
+    auto admax_dense = [](const Dense& a, const double thr) {
+        if (a.value() >= thr)
+            return a;
+        return Dense::createConstant(thr);
+    };
+
+    const auto eval_local = [&]() {
+        const Local pi = Local::variable(p_i, P_I);
+        const Local pj = Local::variable(p_j, P_J);
+        const Local wi = Local::variable(w_i, W_I);
+        const Local wj = Local::variable(w_j, W_J);
+
+        const Local h1 = admax_local(wi, min_w);
+        const Local h2 = admax_local(wj, min_w);
+        const Local h1c = h1 * h1 * h1;
+        const Local h2c = h2 * h2 * h2;
+        const Local invT = Local::constant(12.0) / (h1c * Local::constant(t1))
+                         + Local::constant(12.0) / (h2c * Local::constant(t2));
+        const Local T = Local::constant(mob) * (Local::constant(1.0) / invT);
+        return T * (pi - pj);
+    };
+
+    const auto eval_dense = [&]() {
+        const Dense pi = Dense::createVariable(p_i, P_I);
+        const Dense pj = Dense::createVariable(p_j, P_J);
+        const Dense wi = Dense::createVariable(w_i, W_I);
+        const Dense wj = Dense::createVariable(w_j, W_J);
+
+        const Dense h1 = admax_dense(wi, min_w);
+        const Dense h2 = admax_dense(wj, min_w);
+        const Dense h1c = h1 * h1 * h1;
+        const Dense h2c = h2 * h2 * h2;
+        const Dense invT = Dense::createConstant(12.0) / (h1c * Dense::createConstant(t1))
+                         + Dense::createConstant(12.0) / (h2c * Dense::createConstant(t2));
+        const Dense T = Dense::createConstant(mob) * (Dense::createConstant(1.0) / invT);
+        return T * (pi - pj);
+    };
+
+    const Local fl = eval_local();
+    const Dense fd = eval_dense();
+
+    bool ok = true;
+    const double val_diff = std::abs(fl.value - fd.value());
+    if (val_diff > 1e-12) {
+        std::cerr << "  Value mismatch: LocalAD=" << fl.value
+                  << " DenseAd=" << fd.value()
+                  << " diff=" << val_diff << std::endl;
+        ok = false;
+    }
+
+    for (int d = 0; d < 4; ++d) {
+        const double diff = std::abs(fl.derivatives[d] - fd.derivative(d));
+        if (diff > 1e-12) {
+            std::cerr << "  Derivative mismatch d=" << d
+                      << " LocalAD=" << fl.derivatives[d]
+                      << " DenseAd=" << fd.derivative(d)
+                      << " diff=" << diff << std::endl;
+            ok = false;
+        }
+    }
+
+    // Micro benchmark with enough work to produce stable timings.
+    // This is informational only and not pass/fail critical.
+    constexpr int warmup_loops = 200000;
+    constexpr int loops = 5000000;
+    volatile double sink = 0.0;
+
+    for (int i = 0; i < warmup_loops; ++i) {
+        sink += eval_local().value;
+        sink += eval_dense().value();
+    }
+
+    const auto t0 = std::chrono::steady_clock::now();
+    for (int i = 0; i < loops; ++i)
+        sink += eval_local().value;
+    const auto t1_local = std::chrono::steady_clock::now();
+
+    for (int i = 0; i < loops; ++i)
+        sink += eval_dense().value();
+    const auto t2_dense = std::chrono::steady_clock::now();
+
+    const auto dt_local_us = std::chrono::duration_cast<std::chrono::microseconds>(t1_local - t0).count();
+    const auto dt_dense_us = std::chrono::duration_cast<std::chrono::microseconds>(t2_dense - t1_local).count();
+    const double local_ns_per_eval = 1000.0 * static_cast<double>(dt_local_us) / static_cast<double>(loops);
+    const double dense_ns_per_eval = 1000.0 * static_cast<double>(dt_dense_us) / static_cast<double>(loops);
+
+    std::cout << "  Timing (" << loops << " evals): LocalAD=" << dt_local_us
+              << " us (" << local_ns_per_eval << " ns/eval), DenseAd="
+              << dt_dense_us << " us (" << dense_ns_per_eval << " ns/eval)"
+              << std::endl;
+    (void)sink;
+
+    if (!ok) {
+        std::cerr << "  FAILED" << std::endl;
+        return false;
+    }
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
 bool test_varying_fluid_properties()
 {
     std::cout << "Test 10: Non-uniform density/viscosity across cells ..."
@@ -713,6 +843,7 @@ int main()
     if (!test_standalone_pressure_and_coupling())   ++failures;
     if (!test_standalone_with_well_equations())     ++failures;
     if (!test_rate_well_mobility_pressure_derivatives()) ++failures;
+    if (!test_localad_vs_densead_static())          ++failures;
 
     std::cout << "\n=== "
               << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED")
