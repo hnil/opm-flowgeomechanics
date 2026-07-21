@@ -1,5 +1,5 @@
-#ifndef OPM_ECLPROBLEM_GEOMECH_HH
-#define OPM_ECLPROBLEM_GEOMECH_HH
+#ifndef OPM_FLOW_PROBLEM_GEOMECH_HPP
+#define OPM_FLOW_PROBLEM_GEOMECH_HPP
 
 #include <opm/common/ErrorMacros.hpp>
 
@@ -59,7 +59,7 @@ namespace Opm{
     } // namespace Detail
 
     template<typename TypeTag>
-    class EclProblemGeoMech: public FlowProblemBlackoil<TypeTag>{
+    class FlowProblemGeoMech: public FlowProblemBlackoil<TypeTag>{
     public:
         using Parent = FlowProblemBlackoil<TypeTag>;
         using Simulator = GetPropType<TypeTag, Properties::Simulator>;
@@ -89,7 +89,7 @@ namespace Opm{
         }
 
       //using CellSeedType = typename GridView::template Codim<0>::EntitySeed;
-        EclProblemGeoMech(Simulator& simulator):
+        FlowProblemGeoMech(Simulator& simulator):
             FlowProblemBlackoil<TypeTag>(simulator),
             geomechModel_(simulator)
         {

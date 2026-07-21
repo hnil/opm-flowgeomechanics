@@ -31,7 +31,7 @@
 #include "MechTypeTag.hpp"
 #include <opm/geomech/BlackoilGeomechWellModel.hpp>
 #include <opm/geomech/GeoMechModel.hpp>
-#include <opm/geomech/eclproblemgeomech.hh>
+#include <opm/geomech/FlowProblemGeoMech.hpp>
 #include <opm/models/discretization/common/baseauxiliarymodule.hh>
 #include <opm/simulators/wells/BlackoilWellModel.hpp>
 // adding linearshe sould be chaning the update_ function in the same class with condition that the error

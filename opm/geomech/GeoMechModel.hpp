@@ -556,7 +556,7 @@ namespace Opm{
             //serializer(wellTracerRate_);
          }
 
-        // used in eclproblemgeomech
+        // used in FlowProblemGeoMech
         void init(bool /*restart*/){
             if(simulator_.gridView().comm().rank() == 0){
                 OpmLog::info("Geomech init\n");

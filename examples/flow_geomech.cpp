@@ -29,7 +29,7 @@
 #include <opm/models/discretization/common/tpfalinearizer.hh>
 // #include <opm/flowexperimental/blackoilintensivequantitiessimple.hh>
 #include <opm/geomech/GeoMechModel.hpp>
-#include <opm/geomech/eclproblemgeomech.hh>
+#include <opm/geomech/FlowProblemGeoMech.hpp>
 #include <opm/models/discretization/common/baseauxiliarymodule.hh>
 #include <opm/simulators/wells/BlackoilWellModel.hpp>
 

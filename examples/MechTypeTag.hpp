@@ -7,7 +7,7 @@
 #include <opm/models/discretization/common/baseauxiliarymodule.hh>
 #include <opm/simulators/wells/BlackoilWellModel.hpp>
 #include <opm/geomech/GeoMechModel.hpp>
-#include <opm/geomech/eclproblemgeomech.hh>
+#include <opm/geomech/FlowProblemGeoMech.hpp>
 #include <opm/geomech/BlackoilGeomechWellModel.hpp>
 #include <opm/geomech/BlackoilModelGeomech.hpp>
 namespace Opm
@@ -24,7 +24,7 @@ namespace Opm
         // Set the problem class
         template <class TypeTag>
         struct Problem<TypeTag, TTag::EclFlowProblemMech> {
-            using type = EclProblemGeoMech<TypeTag>;
+            using type = FlowProblemGeoMech<TypeTag>;
         };
 
         template <class TypeTag>

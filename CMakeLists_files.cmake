@@ -61,7 +61,7 @@ list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/DuneCommunicationHelpers.hpp
 	opm/geomech/dune_utilities.hpp
 	opm/geomech/GeoMechModel.hpp
-	opm/geomech/eclproblemgeomech.hh
+	opm/geomech/FlowProblemGeoMech.hpp
 	opm/geomech/elasticity_solver.hpp
 	opm/geomech/elasticity_solver_impl.hpp
 	opm/geomech/FlowGeomechLinearSolverParameters.hpp

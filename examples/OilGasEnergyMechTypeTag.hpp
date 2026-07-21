@@ -1,7 +1,7 @@
 #include <opm/simulators/flow/FlowProblemBlackoil.hpp>
 
 #include <opm/geomech/GeoMechModel.hpp>
-#include <opm/geomech/eclproblemgeomech.hh>
+#include <opm/geomech/FlowProblemGeoMech.hpp>
 #include <opm/geomech/BlackoilGeomechWellModel.hpp>
 #include <opm/geomech/BlackoilModelGeomech.hpp>
 
@@ -24,7 +24,7 @@ struct EclFlowProblemOilGasEnergyMech {
 
 template <class TypeTag>
 struct Problem<TypeTag, TTag::EclFlowProblemOilGasEnergyMech> {
-    using type = EclProblemGeoMech<TypeTag>;
+    using type = FlowProblemGeoMech<TypeTag>;
 };
 
 template <class TypeTag>
