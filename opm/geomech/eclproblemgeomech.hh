@@ -10,7 +10,7 @@
 #include <opm/geomech/FlowGeomechLinearSolverParameters.hpp>
 #include <opm/geomech/boundaryutils.hh>
 #include <opm/geomech/eclgeomechmodel.hh>
-#include <opm/geomech/vtkgeomechmodule.hh>
+#include <opm/geomech/VtkGeoMechModule.hpp>
 
 #include <opm/material/densead/Evaluation.hpp>
 #include <opm/material/densead/Math.hpp>

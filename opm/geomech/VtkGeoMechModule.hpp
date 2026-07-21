@@ -24,8 +24,8 @@
  * \file
  * \copydoc Opm::VtkEclTracerModule
  */
-#ifndef VTK_GEOMECH_MODULE_HH
-#define VTK_GEOMECH_MODULE_HH
+#ifndef OPM_VTK_GEOMECH_MODULE_HPP
+#define OPM_VTK_GEOMECH_MODULE_HPP
 
 
 #include <opm/models/io/vtkmultiwriter.hh>

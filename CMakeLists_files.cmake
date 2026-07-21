@@ -81,5 +81,5 @@ list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/vem/topology.hpp
 	opm/geomech/vem/vem.hpp
 	opm/geomech/vem/vemutils.hpp
-	opm/geomech/vtkgeomechmodule.hh
+	opm/geomech/VtkGeoMechModule.hpp
 )
