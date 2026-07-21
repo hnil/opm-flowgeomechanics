@@ -606,6 +606,26 @@ namespace Opm{
         {
             return mechPotentialPressForce_[globalDofIdx];
         }
+
+        // Output forms of the potential forces: the stored quantities carry
+        // the poroelastic amplification fac = (1-nu)/(1-2nu) used by the
+        // equations (pcoeff = poelCoef*fac, tcoeff = thelCoef*fac); for
+        // output/comparison the displacement potential without that factor
+        // is the more natural quantity.  Keeping this as separate accessors
+        // leaves the equations and the primary accessors untouched.
+        double mechPotentialPressForceOutput(unsigned globalDofIdx) const
+        {
+            const double pratio = simulator_.problem().pRatio(globalDofIdx);
+            const double fac = (1 - pratio) / (1 - 2 * pratio);
+            return mechPotentialPressForce_[globalDofIdx] / fac;
+        }
+
+        double mechPotentialTempForceOutput(unsigned globalDofIdx) const
+        {
+            const double pratio = simulator_.problem().pRatio(globalDofIdx);
+            const double fac = (1 - pratio) / (1 - 2 * pratio);
+            return mechPotentialTempForce_[globalDofIdx] / fac;
+        }
         const Dune::FieldVector<double,3> disp(size_t globalIdx,bool with_fracture = false) const{
             auto disp =  celldisplacement_[globalIdx];
             if(include_fracture_contributions_ && with_fracture){
