@@ -51,7 +51,7 @@ list (APPEND PROGRAM_SOURCE_FILES
 
 list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/BlackoilGeoMechWellModel.hpp
-	opm/geomech/BlackoilModelGeomech.hpp
+	opm/geomech/NonlinearSystemBlackOilReservoirGeoMech.hpp
 	opm/geomech/BoundaryUtils.hpp
 	opm/geomech/ConvexBoundary.hpp
 	opm/geomech/CoupledSolver.hpp

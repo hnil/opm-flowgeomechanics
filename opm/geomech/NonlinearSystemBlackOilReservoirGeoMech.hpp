@@ -2,14 +2,14 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
-#include <opm/simulators/flow/BlackoilModel.hpp>
+#include <opm/simulators/flow/NonlinearSystemBlackOilReservoir.hpp>
 namespace Opm
 {
     template<class TypeTag>
-    class BlackoilModelGeomech : public BlackoilModel<TypeTag>
+    class NonlinearSystemBlackOilReservoirGeoMech : public NonlinearSystemBlackOilReservoir<TypeTag>
     {
         public:
-        using Parent = BlackoilModel<TypeTag>;
+        using Parent = NonlinearSystemBlackOilReservoir<TypeTag>;
         using Simulator = typename Parent::Simulator;
         using Scalar = typename Parent::Scalar;
         using ModelParameters = typename Parent::ModelParameters;
@@ -17,7 +17,7 @@ namespace Opm
         using SolutionVector = GetPropType<TypeTag, Properties::SolutionVector>;
         //using Scalar = GetPropType<TypeTag, Properties::Scalar>;
         //using ModelParameters = BlackoilModelParameters<Scalar>;
-        BlackoilModelGeomech(Simulator& simulator,
+        NonlinearSystemBlackOilReservoirGeoMech(Simulator& simulator,
                   const ModelParameters& param,
                   BlackoilWellModel<TypeTag>& well_model,
                   const bool terminal_output):
@@ -160,6 +160,26 @@ namespace Opm
             flow_model.invalidateAndUpdateIntensiveQuantities(0);
         }
 
+        // Run one parent nonlinear iteration as a pure setup pass after the well
+        // structure changed mid-step.  The pre-rebase code called
+        // Parent::nonlinearIteration(0, ...): the parent saw iteration 0 and
+        // redid its once-per-step initialization, and the outer iteration count
+        // was unaffected.  With the iteration state moved into the problem's
+        // NewtonIterationContext, reproduce that by resetting the context for
+        // the parent call and restoring it afterwards.
+        template <class NonlinearSolverType>
+        SimulatorReportSingle runParentSetupIteration(
+            const SimulatorTimerInterface& timer,
+            NonlinearSolverType& nonlinear_solver)
+        {
+            auto& problem = this->simulator_.problem();
+            const auto saved_context = problem.iterationContext();
+            problem.mutableIterationContext().resetForNewTimestep();
+            auto report = Parent::nonlinearIteration(timer, nonlinear_solver);
+            problem.mutableIterationContext() = saved_context;
+            return report;
+        }
+
         template <class NonlinearSolverType>
         SimulatorReportSingle runParentFirstIterationPreservingState(
             const SimulatorTimerInterface& timer,
@@ -169,11 +189,7 @@ namespace Opm
             // this is a hack to call all setup need for the system without changing states which matter for the calculations
             const auto storage_cache_backup = this->backupStorageCache();
             const auto solution_backup = this->backupSolution0();
-            // keep state0 = state1 while settin up the system again
-            auto& flow_model = this->simulator_.model();
-            //flow_model.solution(0) = flow_model.solution(1); // well solve but will make excplict quantities change
-            //flow_model.invalidateAndUpdateIntensiveQuantities(0);
-            auto report = Parent::nonlinearIteration(0, timer, nonlinear_solver);
+            auto report = this->runParentSetupIteration(timer, nonlinear_solver);
             this->restoreSolution0(solution_backup);
             this->restoreStorageCache(storage_cache_backup);
             std::cout << "Finished parent first iteration" << std::endl;
@@ -186,7 +202,7 @@ namespace Opm
             NonlinearSolverType& nonlinear_solver)
         {
             std::cout << "Running parent first iteration in legacy mode (no state restore)" << std::endl;
-            auto report = Parent::nonlinearIteration(0, timer, nonlinear_solver);
+            auto report = this->runParentSetupIteration(timer, nonlinear_solver);
             std::cout << "Finished parent first iteration" << std::endl;
             return report;
         }
@@ -315,33 +331,33 @@ namespace Opm
 
 
         template <class NonlinearSolverType>
-        SimulatorReportSingle nonlinearIteration(const int iteration,
-                                                   const SimulatorTimerInterface& timer,
-                                                  NonlinearSolverType& nonlinear_solver){
+        SimulatorReportSingle nonlinearIteration(const SimulatorTimerInterface& timer,
+                                                 NonlinearSolverType& nonlinear_solver){
                 SimulatorReportSingle report;
                 const PropertyTree& prm = this->simulator_.problem().getGeoMechParam();
                 std::string method = prm.get<std::string>("solver.method");
                 if (method == "PostSolve") {
-                    report = Parent::nonlinearIteration(iteration, timer, nonlinear_solver);
+                    report = Parent::nonlinearIteration(timer, nonlinear_solver);
                 } else if (method == "SeqMechFrac") {
-                    report = this->nonlinearIterationSeqMechFrac(iteration, timer, nonlinear_solver);
+                    report = this->nonlinearIterationSeqMechFrac(timer, nonlinear_solver);
                 } else if (method == "SeqMech") {
-                    report = this->nonlinearIterationSeqMech(iteration, timer, nonlinear_solver);
+                    report = this->nonlinearIterationSeqMech(timer, nonlinear_solver);
                 } else if (method == "FullyImplicitMech") {
                     assert(false);
                 } else {
                     assert(false);
-                    std::cout << "Geomech nonlinearIterationNewton with mechanical solve:" << iteration;// << std::endl;
-                    Parent::nonlinearIterationNewton(iteration, timer, nonlinear_solver);
+                    Parent::nonlinearIterationNewton(timer, nonlinear_solver);
                 }
                 return report;       
         }
 
         template <class NonlinearSolverType>
-        SimulatorReportSingle nonlinearIterationSeqMechFrac(const int iteration,
-                                            const SimulatorTimerInterface& timer,
+        SimulatorReportSingle nonlinearIterationSeqMechFrac(const SimulatorTimerInterface& timer,
                                             NonlinearSolverType& nonlinear_solver){
             const PropertyTree& prm = this->simulator_.problem().getGeoMechParam();
+            // The parent iteration advances the problem's iteration context, so
+            // capture the current outer iteration number up front.
+            const int iteration = this->simulator_.problem().iterationContext().iteration();
             if (iteration == 0) {
                 topology_pending_counter_ = 0;
                 topology_cooldown_counter_ = 0;
@@ -354,7 +370,7 @@ namespace Opm
                 std::stringstream os;
                 os << "Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: " << iteration << std::endl;
                 //std::cout << "Nonlinear itration Flow Solve:" << std::endl;
-                report = Parent::nonlinearIteration(iteration, timer, nonlinear_solver);
+                report = Parent::nonlinearIteration(timer, nonlinear_solver);
                 os << "Flow solve report converged: " << report.converged;// << std::endl;         
                 OpmLog::info(os.str());
             }
@@ -623,16 +639,16 @@ namespace Opm
 
 
         template <class NonlinearSolverType>
-        SimulatorReportSingle nonlinearIterationSeqMech(const int iteration,
-                                             const SimulatorTimerInterface& timer,
+        SimulatorReportSingle nonlinearIterationSeqMech(const SimulatorTimerInterface& timer,
                                             NonlinearSolverType& nonlinear_solver){
             const PropertyTree& prm = this->simulator_.problem().getGeoMechParam();
+            const int iteration = this->simulator_.problem().iterationContext().iteration();
             bool implicit_flow = prm.get<bool>("solver.implicit_flow");
             SimulatorReportSingle report;
             if(implicit_flow){
                 assert(false);
             }else{
-                report = Parent::nonlinearIteration(iteration, timer, nonlinear_solver);
+                report = Parent::nonlinearIteration(timer, nonlinear_solver);
             }
             //const PropertyTree& prm_frac = this->simulator_.problem().getFractureParam();
             int mech_max_it = prm.get<int>("solver.max_mech_it");

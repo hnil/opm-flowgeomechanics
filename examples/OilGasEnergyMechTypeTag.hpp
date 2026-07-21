@@ -3,7 +3,7 @@
 #include <opm/geomech/GeoMechModel.hpp>
 #include <opm/geomech/FlowProblemGeoMech.hpp>
 #include <opm/geomech/BlackoilGeoMechWellModel.hpp>
-#include <opm/geomech/BlackoilModelGeomech.hpp>
+#include <opm/geomech/NonlinearSystemBlackOilReservoirGeoMech.hpp>
 
 #include <opm/material/thermal/EnergyModuleType.hpp>
 
@@ -29,7 +29,7 @@ struct Problem<TypeTag, TTag::FlowProblemOilGasEnergyMech> {
 
 template <class TypeTag>
 struct NonlinearSystem<TypeTag, TTag::FlowProblemOilGasEnergyMech> {
-    using type = BlackoilModelGeomech<TypeTag>;
+    using type = NonlinearSystemBlackOilReservoirGeoMech<TypeTag>;
 };
 
 template <class TypeTag>

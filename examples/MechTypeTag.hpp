@@ -9,7 +9,7 @@
 #include <opm/geomech/GeoMechModel.hpp>
 #include <opm/geomech/FlowProblemGeoMech.hpp>
 #include <opm/geomech/BlackoilGeoMechWellModel.hpp>
-#include <opm/geomech/BlackoilModelGeomech.hpp>
+#include <opm/geomech/NonlinearSystemBlackOilReservoirGeoMech.hpp>
 namespace Opm
 {
     namespace Properties
@@ -29,7 +29,7 @@ namespace Opm
 
         template <class TypeTag>
         struct NonlinearSystem<TypeTag, TTag::FlowProblemMech> {
-              using type = BlackoilModelGeomech<TypeTag>;
+              using type = NonlinearSystemBlackOilReservoirGeoMech<TypeTag>;
         };
 
 

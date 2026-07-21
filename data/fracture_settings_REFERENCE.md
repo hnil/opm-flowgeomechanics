@@ -35,7 +35,7 @@ configs) is **dead**. It now lives under `fractureparam.solver` in the final con
 
 ---
 
-## 1. Top-level `solver` (outer SeqMechFrac driver — `BlackoilModelGeomech.hpp`)
+## 1. Top-level `solver` (outer SeqMechFrac driver — `NonlinearSystemBlackOilReservoirGeoMech.hpp`)
 
 | key | default | meaning |
 |---|---|---|
