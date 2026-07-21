@@ -15,38 +15,25 @@ set (opm-flowgeomechanics_CONFIG_VAR
   HAVE_DUNE_PDELAB
   )
 
-# dependencies
-set (opm-flowgeomechanics_DEPS
-  # Compile with C99 support if available
-  "C99"
-  # Various runtime library enhancements
-  "Boost 1.44.0
-    COMPONENTS date_time unit_test_framework REQUIRED"
-  # DUNE prerequisites
-  "dune-common REQUIRED"
-  "dune-istl REQUIRED"
-  "dune-foamgrid REQUIRED"
-  # matrix library
-  "BLAS REQUIRED"
-  "LAPACK REQUIRED"
-  "CGAL REQUIRED"
-  "GMP REQUIRED"    
-  # Look for MPI support
-  "MPI"
-  # PETSc numerical backend
-  "PETSc"
-  # Tim Davis' SuiteSparse archive
-  "SuiteSparse COMPONENTS umfpack"
-  # SuperLU direct solver
-  "SuperLU"
-  # OPM dependency
-  "opm-common REQUIRED"
-  "opm-grid REQUIRED"
-  "opm-simulators REQUIRED"
-  "opm-upscaling REQUIRED"
-  "Damaris 1.7"
-  "HDF5"
-  "Tracy"
-  )
+# dependencies; transitive requirements of the upstream OPM modules are
+# resolved by their package configuration files.
+find_package(Boost COMPONENTS date_time unit_test_framework REQUIRED)
+find_package(dune-common REQUIRED)
+find_package(dune-istl REQUIRED)
+find_package(dune-foamgrid REQUIRED)
+find_package(BLAS REQUIRED)
+find_package(LAPACK REQUIRED)
+find_package(CGAL REQUIRED)
+find_package(GMP REQUIRED)
+find_package(SuiteSparse COMPONENTS UMFPACK)
+find_package(opm-grid REQUIRED)
+find_package(opm-upscaling REQUIRED)
+find_package(opm-simulators REQUIRED)
 
-find_package_deps(opm-flowgeomechanics)
+find_package(MPI)
+find_package(HDF5)
+find_package(fmt)
+find_package(PETSc)
+find_package(SuperLU)
+find_package(dune-alugrid)
+find_package(dune-polygongrid)

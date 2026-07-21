@@ -45,13 +45,21 @@ done
 shift $(($OPTIND-1))
 TEST_ARGS="$@"
 
+# opm_add_test passes the full path of the simulator with -e; run it
+# directly and keep only the basename for the reference-data lookup.
+case "${EXE_NAME}" in
+  /*) SIM_BINARY=${EXE_NAME}
+      EXE_NAME=$(basename ${EXE_NAME}) ;;
+  *)  SIM_BINARY=${BINPATH}/${EXE_NAME} ;;
+esac
+
 mkdir -p ${RESULT_PATH}
 # Avoid stale summary/restart artifacts from previous runs in the same output directory.
 rm -f ${RESULT_PATH}/${FILENAME}.*
 rm -f ${RESULT_PATH}/${FILENAME}_RESTART_*.DATA
 rm -f ${RESULT_PATH}/${FILENAME}_RESTART_*.*
 cd ${RESULT_PATH}
-${BINPATH}/${EXE_NAME} ${INPUT_DATA_PATH}/${FILENAME} ${TEST_ARGS} --output-dir=${RESULT_PATH}
+${SIM_BINARY} ${INPUT_DATA_PATH}/${FILENAME} ${TEST_ARGS} --output-dir=${RESULT_PATH}
 test $? -eq 0 || exit 1
 cd ..
 

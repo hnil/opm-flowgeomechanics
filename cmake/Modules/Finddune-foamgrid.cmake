@@ -1,49 +1,21 @@
-# - Find DUNE Fem library
+# - Find DUNE foamgrid library
 #
-# Defines the following variables:
-#   dune-alugrid_INCLUDE_DIRS    Directory of header files
-#   dune-alugrid_LIBRARIES       Directory of shared object files
-#   dune-alugrid_DEFINITIONS     Defines that must be set to compile
-#   dune-alugrid_CONFIG_VARS     List of defines that should be in config.h
-#   HAVE_DUNE_FEM            Binary value to use in config.h
+# Sets HAVE_DUNE_FOAMGRID and makes the version number available in
+# config.h.  Follows the pattern of the Finddune-* modules shipped with
+# opm-common.
+if(dune-foamgrid_FOUND)
+  return()
+endif()
 
-# Copyright (C) 2015 IRIS AS
-# This code is licensed under The GNU General Public License v3.0
+if(dune-foamgrid_FIND_REQUIRED)
+  find_package(dune-foamgrid CONFIG REQUIRED)
+else()
+  find_package(dune-foamgrid CONFIG)
+endif()
 
-include (OpmPackage)
-find_opm_package (
-  # module name
-  "dune-foamgrid"
-
-  # dependencies
-  # TODO: we should probe for all the HAVE_* values listed below;
-  # however, we don't actually use them in our implementation, so
-  # we just include them to forward here in case anyone else does
-  "dune-common REQUIRED;
-   dune-geometry REQUIRED;
-   dune-grid REQUIRED;
-  "
-  # header to search for
-  "dune/foamgrid/foamgrid.hh"
-
-  # library to search for
-  ""
-
-  # defines to be added to compilations
-  ""
-
-  # test program
-"#include <dune/foamgrid/foamgrid.hh>
-int main (void) {
-   return 0;
-}
-"
-  # config variables
-  "HAVE_DUNE_FOAMGRID;
-  ")
-
-#debug_find_vars ("dune-grid")
-
-# make version number available in config.h
-include (UseDuneVer)
-find_dune_version ("dune" "foamgrid")
+if(dune-foamgrid_FOUND)
+  target_compile_definitions(dunefoamgrid INTERFACE HAVE_DUNE_FOAMGRID=1)
+  # make version number available in config.h
+  include (UseDuneVer)
+  find_dune_version ("dune" "foamgrid")
+endif()

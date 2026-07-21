@@ -53,10 +53,14 @@ if(opm-common_DIR AND NOT IS_DIRECTORY ${opm-common_DIR})
 	message(WARNING "Value ${opm-common_DIR} passed to variable"
 		" opm-common_DIR is not a directory")
 endif()
-#find_package(CGAL REQUIRED)
-#find_package(METIS REQUIRED)	
+list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/Modules)
+
 find_package(opm-common REQUIRED)
 
+# project information is in dune.module. Read this file and set
+# variables.  we cannot generate dune.module since it is read by
+# dunecontrol before the build starts, so it makes sense to keep the
+# data there then.
 include(OpmInit)
 OpmSetPolicies()
 
@@ -78,33 +82,11 @@ elseif(USE_HYPRE)
   set(HYPRE_FOUND OFF)
 endif()
 
-# not the same location as most of the other projects? this hook
-# overrides
-macro (dir_hook)
-endmacro (dir_hook)
-
-# project information is in dune.module. Read this file and set
-# variables.  we cannot generate dune.module since it is read by
-# dunecontrol before the build starts, so it makes sense to keep the
-# data there then.
-list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/Modules)
-include (OpmInit)
-
 # Look for the opm-tests repository; if found the variable
 # HAVE_OPM_TESTS will be set to true.
 include(Findopm-tests)
 
-# list of prerequisites for this particular project; this is in a
-# separate file (in cmake/Modules sub-directory) because it is shared
-# with the find module
-include ("${project}-prereqs")
-
-# read the list of components from this file (in the project
-# directory); it should set various lists with the names of the files
-# to include
-include (CMakeLists_files.cmake)
-
-macro (config_hook)
+macro (opm-flowgeomechanics_config_hook)
 	opm_need_version_of ("dune-common")
 	opm_need_version_of ("dune-istl")
 	if(dune-fem_FOUND)
@@ -115,17 +97,27 @@ macro (config_hook)
 	if(USE_TRACY_PROFILER AND Tracy_FOUND)
 		set(USE_TRACY 1)
 	endif()
+endmacro (opm-flowgeomechanics_config_hook)
 
-	include(UseDamaris)
-endmacro (config_hook)
+# link the module library against its prerequisites; this hook runs
+# right after OpmLibMain has created the opmflowgeomechanics target
+macro (opm-flowgeomechanics_prereqs_hook)
+	target_link_libraries(opmflowgeomechanics
+		PUBLIC
+			opmupscaling
+			opmsimulators
+			CGAL::CGAL GMP::gmp GMP::gmpxx
+	)
 
-macro (prereqs_hook)
-endmacro (prereqs_hook)
+	if(HAVE_HYPRE)
+		target_link_libraries(opmflowgeomechanics
+			PUBLIC
+				HYPRE::HYPRE
+		)
+	endif()
+endmacro (opm-flowgeomechanics_prereqs_hook)
 
-macro (fortran_hook)
-endmacro (fortran_hook)
-
-macro (files_hook)
+macro (opm-flowgeomechanics_files_hook)
 	if(MPI_FOUND AND HDF5_FOUND AND NOT HDF5_IS_PARALLEL)
 		message(WARNING "When building parallel OPM flow we need a "
 			"parallel version of hdf5, but found only a serial one. "
@@ -136,30 +128,12 @@ macro (files_hook)
 		set(HDF5_FOUND OFF)
 		unset(HAVE_HDF5)
 	endif()
-	include (CMakeLists_files.cmake)
-endmacro (files_hook)
-
-macro (tests_hook)
-endmacro (tests_hook)
+endmacro (opm-flowgeomechanics_files_hook)
 
 # all setup common to the OPM library modules is done here
 include (OpmLibMain)
 
 include(OpmBashCompletion)
-
-target_link_libraries(opmflowgeomechanics
-	PUBLIC
-		opmupscaling
-		opmsimulators
-	  CGAL::CGAL GMP::gmp GMP::gmpxx  
-)
-
-if(HAVE_HYPRE)
-	target_link_libraries(opmflowgeomechanics
-		PUBLIC
-			HYPRE::HYPRE 
-	)
-endif()
 
 add_library(moduleVersionGeoMech OBJECT opm/simulators/utils/moduleVersion.cpp)
 set_property(TARGET moduleVersionGeoMech PROPERTY POSITION_INDEPENDENT_CODE ON)
@@ -406,8 +380,8 @@ function(add_mechtest_compareECLFiles)
  # if(PARAM_RESTART_SCHED STREQUAL "false" OR PARAM_RESTART_SCHED STREQUAL "true")
  #   list(APPEND DRIVER_ARGS -h ${PARAM_RESTART_SCHED})
  # endif()
-  opm_add_test(${PARAM_CASENAME}_${PARAM_SIMULATOR}+${PARAM_FILENAME} NO_COMPILE
-               EXE_NAME ${PARAM_SIMULATOR}
+  opm_add_test(${PARAM_CASENAME}_${PARAM_SIMULATOR}+${PARAM_FILENAME}
+               EXE_TARGET ${PARAM_SIMULATOR}
                DRIVER_ARGS ${DRIVER_ARGS}
                TEST_ARGS ${TEST_ARGS})
   set_tests_properties(${PARAM_CASENAME}_${PARAM_SIMULATOR}+${PARAM_FILENAME} 	PROPERTIES
