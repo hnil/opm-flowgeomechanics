@@ -2,6 +2,7 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <opm/simulators/flow/NewtonIterationContext.hpp>
 #include <opm/simulators/flow/NonlinearSystemBlackOilReservoir.hpp>
 namespace Opm
 {
@@ -19,7 +20,7 @@ namespace Opm
         //using ModelParameters = BlackoilModelParameters<Scalar>;
         NonlinearSystemBlackOilReservoirGeoMech(Simulator& simulator,
                   const ModelParameters& param,
-                  BlackoilWellModel<TypeTag>& well_model,
+                  GetPropType<TypeTag, Properties::WellModel>& well_model,
                   const bool terminal_output):
                     Parent(simulator, param, well_model, terminal_output)
                   {
@@ -172,12 +173,8 @@ namespace Opm
             const SimulatorTimerInterface& timer,
             NonlinearSolverType& nonlinear_solver)
         {
-            auto& problem = this->simulator_.problem();
-            const auto saved_context = problem.iterationContext();
-            problem.mutableIterationContext().resetForNewTimestep();
-            auto report = Parent::nonlinearIteration(timer, nonlinear_solver);
-            problem.mutableIterationContext() = saved_context;
-            return report;
+            const SetupIterationContextGuard guard{this->simulator_.problem()};
+            return Parent::nonlinearIteration(timer, nonlinear_solver);
         }
 
         template <class NonlinearSolverType>

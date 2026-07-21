@@ -65,7 +65,7 @@ using VectorHP = Dune::MultiTypeBlockVector<Vector, Vector>;
 
   using FMatrix = Dune::DynamicMatrix<double>; // full matrix
 
-using SystemMatrix = Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<FMatrix, SMatrix>,
+using FractureSystemMatrix = Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<FMatrix, SMatrix>,
                                                 Dune::MultiTypeBlockVector<SMatrix, SMatrix>>;
 using Dune::Indices::_0;
 using Dune::Indices::_1;
@@ -98,7 +98,7 @@ public:
   // prm expects the fracture linsolver preconditioner subtree. The relevant
   // switches are diag_mech, diag_flow, mech_first, fixed_stress,
   // mech_press_coupling, and flow_solver.*.
-  FractureMechanicsPreconditioner(const SystemMatrix& S, Opm::PropertyTree prm);
+  FractureMechanicsPreconditioner(const FractureSystemMatrix& S, Opm::PropertyTree prm);
   virtual void apply(VectorHP& v, const VectorHP& d);
     virtual void post(VectorHP& /*v*/) { };
     virtual void pre(VectorHP& /*x*/, VectorHP& /*b*/) { };
@@ -109,7 +109,7 @@ public:
     // Refresh the internal factors after the outer nonlinear step assembles a
     // new coupled system. new_lu_mech controls whether the dense mechanics LU is
     // rebuilt or only the flow-side data is refreshed.
-    void update(const Opm::SystemMatrix& S,bool new_lu_mech);
+    void update(const Opm::FractureSystemMatrix& S,bool new_lu_mech);
     // void update(){
     //     // default to recomputing the preconditioner, but in some cases (e.g. when only a few cells are closed) we can just update the existing preconditioner
     //     assert(false);
@@ -129,9 +129,9 @@ void applymech_last(Opm::VectorHP& v, const Opm::VectorHP& d);
 void applymech_first(Opm::VectorHP& v, const Opm::VectorHP& d);
 // Mechanics-first application with a fixed-stress Schur approximation on flow.
 void applyfixed_stress(Opm::VectorHP& v, const Opm::VectorHP& d);
-  ApplyMode selectMode(const SystemMatrix& S);
-  double estimateCouplingIndicator(const SystemMatrix& S) const;
-  void rebuildFlowSolver(const Opm::SystemMatrix& S);
+  ApplyMode selectMode(const FractureSystemMatrix& S);
+  double estimateCouplingIndicator(const FractureSystemMatrix& S) const;
+  void rebuildFlowSolver(const Opm::FractureSystemMatrix& S);
   static const char* modeName(ApplyMode mode);
 template <typename Mat>
 Vector diagvec(const Mat& M)
@@ -150,11 +150,11 @@ Vector diagvec(const Mat& M)
    } 
   // Assemble the fixed-stress flow operator M - C * diag(A)^{-1} * I using the
   // sparsity of M augmented with active C entries.
-  void updateFixedStressFlowMatrix(const Opm::SystemMatrix& S);
+  void updateFixedStressFlowMatrix(const Opm::FractureSystemMatrix& S);
   void solveMechanics(Vector& x, const Vector& rhs) const;
   void solveFlow(Vector& x, const Vector& rhs);
   void backSolve(Vector& x,const Vector& rhs_in) const;
-    const SystemMatrix& A_;
+    const FractureSystemMatrix& A_;
     mutable FMatrix luM_;
     mutable Vector A_diag_;
     mutable Vector M_diag_;

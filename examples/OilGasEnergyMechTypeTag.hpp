@@ -1,5 +1,7 @@
 #include <opm/simulators/flow/FlowProblemBlackoil.hpp>
 
+#include <opm/models/blackoil/blackoilconvectivemixingmodule.hh>
+#include <opm/models/blackoil/blackoilenergymodules.hh>
 #include <opm/geomech/GeoMechModel.hpp>
 #include <opm/geomech/FlowProblemGeoMech.hpp>
 #include <opm/geomech/BlackoilGeoMechWellModel.hpp>

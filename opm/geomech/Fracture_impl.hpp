@@ -24,6 +24,7 @@ template <class ScalarT,
           bool enableBrine,
           bool enableSaltPrecipitation,
           bool enableDissolutionInWater,
+          bool enableSolvent,
           unsigned numStoragePhases>
 struct BlackOilFluidStateConfig<BlackOilFluidState<ScalarT,
                                                    FluidSystemT,
@@ -34,6 +35,7 @@ struct BlackOilFluidStateConfig<BlackOilFluidState<ScalarT,
                                                    enableBrine,
                                                    enableSaltPrecipitation,
                                                    enableDissolutionInWater,
+                                                   enableSolvent,
                                                    numStoragePhases>>
 {
     static constexpr bool EnableTemperature = enableTemperature;
@@ -43,6 +45,7 @@ struct BlackOilFluidStateConfig<BlackOilFluidState<ScalarT,
     static constexpr bool EnableBrine = enableBrine;
     static constexpr bool EnableSaltPrecipitation = enableSaltPrecipitation;
     static constexpr bool EnableDissolutionInWater = enableDissolutionInWater;
+    static constexpr bool EnableSolvent = enableSolvent;
 };
 
 template <class TargetState, class SourceState, class ValueFactory>

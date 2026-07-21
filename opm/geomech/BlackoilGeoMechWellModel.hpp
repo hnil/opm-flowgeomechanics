@@ -1,4 +1,5 @@
 #pragma once
+#include <opm/simulators/flow/NewtonIterationContext.hpp>
 #include <opm/simulators/wells/BlackoilWellModel.hpp>
 namespace Opm
 {
@@ -8,8 +9,9 @@ class BlackoilGeoMechWellModel : public BlackoilWellModel<TypeTag>
     using Parent = BlackoilWellModel<TypeTag>;
     using Simulator = typename Parent::Simulator;
 public:
-    BlackoilGeoMechWellModel(Simulator& simulator):
-    Parent(simulator)
+    BlackoilGeoMechWellModel(Simulator& simulator,
+                             const NewtonIterationContext& iter_ctx):
+    Parent(simulator, iter_ctx)
     {
 
     };

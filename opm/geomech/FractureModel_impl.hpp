@@ -1,5 +1,7 @@
 #pragma once
 
+#include <opm/material/common/MathToolbox.hpp>
+
 #include <opm/simulators/linalg/PropertyTree.hpp>
 
 #include <limits>
@@ -301,12 +303,15 @@ namespace Opm {
                             const auto& intQuants = simulator.model()
                                 .intensiveQuantities(cell_idx, /*timeIdx=*/0);
                             using Scalar = double;
-                            const auto trans_mult = simulator.problem().template wellTransMultiplier<Scalar>(intQuants,cell_idx);
-                            const auto effective_well_indexs = well->wellIndex(perf_index, 
-                                                                              intQuants, 
-                                                                              trans_mult, 
-                                                                              wellstate_nupcol, 
-                                                                              /*with_fracture*/ false);
+                            auto obtain = [](const auto& value) { return getValue(value); };
+                            const auto trans_mult = simulator.problem().template wellTransMultiplier<Scalar>(intQuants, cell_idx, obtain);
+                            // Matrix (non-fracture) connection factor; the
+                            // upstream getTw() would add the registered
+                            // fracture contribution, which must be excluded
+                            // when computing the reference well indices for
+                            // the fracture solve.
+                            const auto effective_well_index_perf =
+                                well->wellIndex()[perf_index] * trans_mult;
 
                                                  
                             //const auto mobibility = well->getMobility(simulator, perf_index, mob);
@@ -320,7 +325,7 @@ namespace Opm {
                                             lambda += val.value();
                                     }
                             }   
-                            const auto effective_well_index   =  effective_well_indexs[FluidSystem::waterPhaseIdx]*lambda;
+                            const auto effective_well_index   =  effective_well_index_perf*lambda;
                             double density = intQuants.fluidState().density(FluidSystem::waterPhaseIdx).value();
                             total_wellindex += effective_well_index;
                             double dzwell = (well->perfDepth()[perf_index]- well->refDepth());  

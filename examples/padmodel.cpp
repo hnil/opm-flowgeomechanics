@@ -1184,7 +1184,7 @@ int main(int argc, char** argv)
         const auto deck = manipulate_deck(argv[arg_offset], param_file_arg, os);
 
         if (copy_binary) {
-            if (const auto init_config = Opm::InitConfig { deck, Opm::Runspec {deck}.phases() };
+            if (const auto init_config = Opm::InitConfig { deck, Opm::Runspec {deck}.phases(), /*compositional*/ false };
                 init_config.restartRequested())
             {
                 const auto io_config = Opm::IOConfig { deck };

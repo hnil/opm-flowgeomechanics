@@ -21,7 +21,7 @@ FractureMechanicsPreconditioner::modeName(ApplyMode mode)
 }
 
 double
-FractureMechanicsPreconditioner::estimateCouplingIndicator(const SystemMatrix& S) const
+FractureMechanicsPreconditioner::estimateCouplingIndicator(const FractureSystemMatrix& S) const
 {
     const auto& C = S[_1][_0];
     const auto& I = S[_0][_1];
@@ -54,7 +54,7 @@ FractureMechanicsPreconditioner::estimateCouplingIndicator(const SystemMatrix& S
 }
 
 FractureMechanicsPreconditioner::ApplyMode
-FractureMechanicsPreconditioner::selectMode(const SystemMatrix& S)
+FractureMechanicsPreconditioner::selectMode(const FractureSystemMatrix& S)
 {
     if (mode_policy_ == "manual") {
         return fixed_stress_ ? ApplyMode::FixedStress
@@ -71,7 +71,7 @@ FractureMechanicsPreconditioner::selectMode(const SystemMatrix& S)
 }
 
 void
-FractureMechanicsPreconditioner::rebuildFlowSolver(const Opm::SystemMatrix& S)
+FractureMechanicsPreconditioner::rebuildFlowSolver(const Opm::FractureSystemMatrix& S)
 {
     const int verbosity = prm_.get<int>("verbosity", 0);
 
@@ -104,7 +104,7 @@ FractureMechanicsPreconditioner::rebuildFlowSolver(const Opm::SystemMatrix& S)
     }
 }
 
-FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::SystemMatrix& S,
+FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::FractureSystemMatrix& S,
                                                                  Opm::PropertyTree prm)
     : A_(S)
     , A_diag_(diagvec(S[_0][_0]))
@@ -135,7 +135,7 @@ FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::Syst
     }
     rebuildFlowSolver(S);
 }
-void FractureMechanicsPreconditioner::update(const Opm::SystemMatrix& S,bool new_lu_mech){
+void FractureMechanicsPreconditioner::update(const Opm::FractureSystemMatrix& S,bool new_lu_mech){
 
     setDiagvec(A_diag_, S[_0][_0]);
 
@@ -199,7 +199,7 @@ FractureMechanicsPreconditioner::apply(Opm::VectorHP& v, const Opm::VectorHP& d)
 }
 
 void
-FractureMechanicsPreconditioner::updateFixedStressFlowMatrix(const Opm::SystemMatrix& S)
+FractureMechanicsPreconditioner::updateFixedStressFlowMatrix(const Opm::FractureSystemMatrix& S)
 {
     const auto& C = S[_1][_0];
     const auto& I = S[_0][_1];
@@ -299,7 +299,7 @@ FractureMechanicsPreconditioner::solveFlow(Opm::Vector& x, const Opm::Vector& rh
 void
 FractureMechanicsPreconditioner::applymech_first(Opm::VectorHP& v, const Opm::VectorHP& d)
 {
-    // SystemMatrix S {{A, I}, // mechanics system (since A is negative, we leave I positive here)
+    // FractureSystemMatrix S {{A, I}, // mechanics system (since A is negative, we leave I positive here)
     //               {C, M}}; // flow system
     OPM_TIMEFUNCTION_LOCAL();
     solveMechanics(v[_0], d[_0]);
@@ -326,7 +326,7 @@ FractureMechanicsPreconditioner::applyfixed_stress(Opm::VectorHP& v, const Opm::
 void
 FractureMechanicsPreconditioner::applymech_last(Opm::VectorHP& v, const Opm::VectorHP& d)
 {
-    // SystemMatrix S {{A, I}, // mechanics system (since A is negative, we leave I positive here)
+    // FractureSystemMatrix S {{A, I}, // mechanics system (since A is negative, we leave I positive here)
     //               {C, M}}; // flow system
     OPM_TIMEFUNCTION_LOCAL();
     solveFlow(v[_1], d[_1]);

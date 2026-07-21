@@ -23,7 +23,7 @@ namespace
 using Opm::FMatrix;
 using Opm::FractureMechanicsPreconditioner;
 using Opm::SMatrix;
-using Opm::SystemMatrix;
+using SystemMatrix = Opm::FractureSystemMatrix;
 using Opm::Vector;
 using Opm::VectorHP;
 using CoupledOperator = Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP>;

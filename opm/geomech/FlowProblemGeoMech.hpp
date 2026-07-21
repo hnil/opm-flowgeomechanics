@@ -580,6 +580,7 @@ namespace Opm{
 
                         connection.updateSegment(wellconn.segment,
                                                  wellconn.depth,
+                                                 connection.thermalLength(),
                                                  compseg_insert_index,
                                                  wellconn.perf_range);
                     }
@@ -661,6 +662,13 @@ namespace Opm{
 
         GeoMechModel<TypeTag>& geoMechModel()
         { return geoMechModel_; }
+
+        //! Mechanical pore-volume change used by the TPSA coupling in the
+        //! intensive quantities.  Only evaluated at runtime for the TPSA
+        //! mechanics solver; this problem couples through the elasticity/
+        //! fracture model instead, so no porosity feedback is reported.
+        Scalar rockMechPoroChange(unsigned /*elementIdx*/, unsigned /*timeIdx*/) const
+        { return 0.0; }
 
         double initPressure(unsigned dofIdx) const{
             return initpressure_[dofIdx];

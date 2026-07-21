@@ -542,21 +542,22 @@ namespace Opm {
                     }
                   }
                   if(correct_cell == true){
-                   auto& cv =  grid.current_view_data_;
-                   auto& pi = cv->partition_type_indicator_;
-                   std::cout << "Rank " << world_comm.rank() << " Cell global " << cgid  << " local " << cind << " parition " << Dune::PartitionType(pi->cell_indicator_[cind]) << std::endl; 
+                   // Cell/face/node dump using only the public grid interface;
+                   // the internal partition-type indicators of faces and points
+                   // are not accessible from here.
+                   std::cout << "Rank " << world_comm.rank() << " Cell global " << cgid  << " local " << cind << " partition " << cell.partitionType() << std::endl;
                    for(int lface=0; lface < faces.size(); ++lface){
                     int face = faces[lface].index();
                     int nv = grid.numFaceVertices(face);
-                    std::cout << "Face " << face << " " << pi->getFacePartitionType(face) << ":" ;
+                    std::cout << "Face " << face << ":" ;
                     for(int lnode=0; lnode < nv; ++lnode){
                       auto node = grid.faceVertex(face, lnode);
                       auto gnode = local_global[node];
                       //assert(index == node );
-                      std::cout << "{" << gnode << "," << node <<"," << Dune::PartitionType(pi->point_indicator_[node]) << "}";
+                      std::cout << "{" << gnode << "," << node << "}";
                     }
                     std::cout << std::endl;
-                  } 
+                  }
                   }
 
                 }
