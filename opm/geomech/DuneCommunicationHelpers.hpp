@@ -13,7 +13,7 @@
 #include <unistd.h>
 #include <unistd.h>
 
-#include "dune_utilities.hpp"
+#include "DuneUtilities.hpp"
 namespace Opm {
   void cellCellCommunication(const Dune::CpGrid& grid, Dune::MPIHelper& mpihelper){
     Dune::Communication<MPI_Comm> world_comm = Dune::MPIHelper::getCommunication();

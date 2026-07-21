@@ -4,8 +4,8 @@
 #include <dune/grid/common/mcmgmapper.hh> // for element mapper
 #include <limits>
 #include <opm/geomech/GridStretcher.hpp>
-#include <opm/geomech/convex_boundary.hpp>
-#include <opm/geomech/param_interior.hpp>
+#include <opm/geomech/ConvexBoundary.hpp>
+#include <opm/geomech/ParamInterior.hpp>
 
 #include <dune/grid/io/file/vtk.hh>
 #include <dune/grid/io/file/vtk/vtkwriter.hh>

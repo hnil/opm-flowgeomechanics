@@ -9,8 +9,8 @@
 //! \brief Elasticity upscale class
 //!
 //==============================================================================
-#ifndef ELASTICITY_SOLVER_HPP_
-#define ELASTICITY_SOLVER_HPP_
+#ifndef OPM_ELASTICITY_SOLVER_HPP
+#define OPM_ELASTICITY_SOLVER_HPP
 
 
 #include <opm/common/utility/platform_dependent/disable_warnings.h>
@@ -332,6 +332,6 @@ class ElasticitySolver
 
 }} // namespace Opm, Elasticity
 
-#include "elasticity_solver_impl.hpp"
+#include "ElasticitySolver_impl.hpp"
 
 #endif

@@ -1,7 +1,7 @@
 #include <config.h>
 
 #include "opm/geomech/GridStretcher.hpp"
-#include "opm/geomech/param_interior.hpp"
+#include "opm/geomech/ParamInterior.hpp"
 
 #include <dune/common/hybridutilities.hh>
 #include <dune/foamgrid/foamgrid.hh>

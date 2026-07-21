@@ -47,14 +47,14 @@
 #include <opm/grid/utility/StopWatch.hpp>
 
 #include <opm/elasticity/matrixops.hpp>
-#include <opm/geomech/elasticity_solver.hpp>
-#include <opm/geomech/vem_elasticity_solver.hpp>
+#include <opm/geomech/ElasticitySolver.hpp>
+#include <opm/geomech/VemElasticitySolver.hpp>
 #include <opm/simulators/linalg/PropertyTree.hpp>
 
 #include "vectorfunctions.hh"
 #include <cstring>
 #include <iostream>
-#include <opm/geomech/boundaryutils.hh>
+#include <opm/geomech/BoundaryUtils.hpp>
 #include <unistd.h>
 using namespace Opm::Elasticity;
 

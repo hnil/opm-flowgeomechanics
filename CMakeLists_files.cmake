@@ -25,9 +25,9 @@
 
 list (APPEND MAIN_SOURCE_FILES
 	opm/geomech/BuiltinFractureParams.cpp
-	opm/geomech/coupledsolver.cpp
+	opm/geomech/CoupledSolver.cpp
 	opm/geomech/CutDe.cpp
-	opm/geomech/CGAL_helper.cpp
+	opm/geomech/CgalHelper.cpp
 	opm/geomech/DiscreteDisplacement.cpp
 	opm/geomech/FlexibleSolverMech.cpp
 	opm/geomech/Fracture_fullSystemIteration.cpp
@@ -37,7 +37,7 @@ list (APPEND MAIN_SOURCE_FILES
 	opm/geomech/FractureWell.cpp
 	opm/geomech/GeometryHelpers.cpp
 	opm/geomech/GridStretcher.cpp
-	opm/geomech/param_interior.cpp
+	opm/geomech/ParamInterior.cpp
 	opm/geomech/RegularTrimesh.cpp
 	opm/geomech/vem/vem.cpp
 	opm/geomech/vem/vemutils.cpp
@@ -52,18 +52,18 @@ list (APPEND PROGRAM_SOURCE_FILES
 list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/BlackoilGeomechWellModel.hpp
 	opm/geomech/BlackoilModelGeomech.hpp
-	opm/geomech/boundaryutils.hh
-	opm/geomech/convex_boundary.hpp
-	opm/geomech/coupledsolver.hpp
+	opm/geomech/BoundaryUtils.hpp
+	opm/geomech/ConvexBoundary.hpp
+	opm/geomech/CoupledSolver.hpp
 	opm/geomech/CutDe.hpp
-	opm/geomech/CGAL_helper.hpp
+	opm/geomech/CgalHelper.hpp
 	opm/geomech/DiscreteDisplacement.hpp
 	opm/geomech/DuneCommunicationHelpers.hpp
-	opm/geomech/dune_utilities.hpp
+	opm/geomech/DuneUtilities.hpp
 	opm/geomech/GeoMechModel.hpp
 	opm/geomech/FlowProblemGeoMech.hpp
-	opm/geomech/elasticity_solver.hpp
-	opm/geomech/elasticity_solver_impl.hpp
+	opm/geomech/ElasticitySolver.hpp
+	opm/geomech/ElasticitySolver_impl.hpp
 	opm/geomech/FlowGeomechLinearSolverParameters.hpp
 	opm/geomech/FracturePressureAssemblerAD.hpp
 	opm/geomech/Fracture.hpp
@@ -74,10 +74,10 @@ list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/GeometryHelpers.hpp
 	opm/geomech/GridStretcher.hpp
 	opm/geomech/Math.hpp
-	opm/geomech/param_interior.hpp
+	opm/geomech/ParamInterior.hpp
 	opm/geomech/RegularTrimesh.hpp
-	opm/geomech/vem_elasticity_solver.hpp
-	opm/geomech/vem_elasticity_solver_impl.hpp
+	opm/geomech/VemElasticitySolver.hpp
+	opm/geomech/VemElasticitySolver_impl.hpp
 	opm/geomech/vem/topology.hpp
 	opm/geomech/vem/vem.hpp
 	opm/geomech/vem/vemutils.hpp

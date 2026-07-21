@@ -21,7 +21,7 @@ All aspect-ratio trouble lives in the stabilization matrix `S`
 kernel a stiffness comparable to the genuine deformation modes.
 
 The FEM path (Q1, trilinear hexahedra, full 2x2x2 Gauss integration; see
-`vemutils.cpp` and `elasticity_solver_impl.hpp`/opm-upscaling) is a correct standard
+`vemutils.cpp` and `ElasticitySolver_impl.hpp`/opm-upscaling) is a correct standard
 implementation — its aspect-ratio problems are inherent to the element, not bugs.
 
 ## Why each variant degrades for high aspect ratios

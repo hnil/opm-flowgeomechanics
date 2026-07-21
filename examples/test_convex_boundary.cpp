@@ -1,4 +1,4 @@
-#include "convex_boundary.hpp"
+#include "ConvexBoundary.hpp"
 #include <iostream>
 #include <iterator>
 #include <random>

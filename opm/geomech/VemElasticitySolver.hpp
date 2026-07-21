@@ -9,8 +9,8 @@
 //! \brief Elasticity upscale class
 //!
 //==============================================================================
-#ifndef VEM_ELASTICITY_SOLVER_HPP_
-#define VEM_ELASTICITY_SOLVER_HPP_
+#ifndef OPM_VEM_ELASTICITY_SOLVER_HPP
+#define OPM_VEM_ELASTICITY_SOLVER_HPP
 
 
 #include <opm/common/utility/platform_dependent/disable_warnings.h>
@@ -459,6 +459,6 @@ private:
 }
 } // namespace Opm, Elasticity
 
-#include "vem_elasticity_solver_impl.hpp"
+#include "VemElasticitySolver_impl.hpp"
 
 #endif

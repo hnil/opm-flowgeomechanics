@@ -1,5 +1,5 @@
 #include "GeometryHelpers.hpp"
-#include <opm/geomech/CGAL_helper.hpp>
+#include <opm/geomech/CgalHelper.hpp>
 #include "config.h"
 namespace external
 {

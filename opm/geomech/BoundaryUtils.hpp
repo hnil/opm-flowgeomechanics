@@ -20,8 +20,8 @@
   module for the precise wording of the license and the list of
   copyright holders.
 */
-#ifndef BOUNDARYUTILS_HH
-#define BOUNDARYUTILS_HH
+#ifndef OPM_BOUNDARY_UTILS_HPP
+#define OPM_BOUNDARY_UTILS_HPP
 #include <cstring>
 #include <iostream>
 #include <opm/input/eclipse/EclipseState/Grid/FaceDir.hpp>

@@ -10,7 +10,7 @@
 #include <dune/common/dynmatrix.hh>
 #include <dune/common/dynvector.hh>
 
-#include "param_interior.hpp"
+#include "ParamInterior.hpp"
 
 using namespace Opm;
 

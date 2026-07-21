@@ -9,7 +9,7 @@
 #ifdef HAVE_ALUGRID
 #include <dune/alugrid/grid.hh>
 #endif
-#include <opm/geomech/boundaryutils.hh>
+#include <opm/geomech/BoundaryUtils.hpp>
 #include <opm/geomech/vem/vem.hpp>
 namespace vem
 {

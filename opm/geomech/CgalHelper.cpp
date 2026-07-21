@@ -1,4 +1,4 @@
-#include "CGAL_helper.hpp"
+#include "CgalHelper.hpp"
 #include <variant>
 #include <optional>
 // namespace Opm{

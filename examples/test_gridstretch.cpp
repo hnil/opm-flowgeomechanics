@@ -7,7 +7,7 @@
 #include <dune/grid/io/file/vtk/vtkwriter.hh>
 
 #include "opm/geomech/GridStretcher.hpp"
-#include "opm/geomech/param_interior.hpp"
+#include "opm/geomech/ParamInterior.hpp"
 
 #include <dune/common/hybridutilities.hh>
 #include <dune/foamgrid/foamgrid.hh>

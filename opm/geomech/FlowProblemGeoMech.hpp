@@ -8,7 +8,7 @@
 #include <opm/input/eclipse/EclipseState/Phase.hpp>
 
 #include <opm/geomech/FlowGeomechLinearSolverParameters.hpp>
-#include <opm/geomech/boundaryutils.hh>
+#include <opm/geomech/BoundaryUtils.hpp>
 #include <opm/geomech/GeoMechModel.hpp>
 #include <opm/geomech/VtkGeoMechModule.hpp>
 

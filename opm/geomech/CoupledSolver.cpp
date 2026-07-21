@@ -2,7 +2,7 @@
 #include <functional>
 #include <iostream>
 
-#include "coupledsolver.hpp"
+#include "CoupledSolver.hpp"
 #include <opm/common/ErrorMacros.hpp>
 #include <opm/geomech/DiagonalScalar.hpp>
 

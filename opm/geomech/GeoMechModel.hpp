@@ -3,8 +3,8 @@
 #include <opm/models/discretization/common/baseauxiliarymodule.hh>
 #include <opm/material/densead/Evaluation.hpp>
 #include <opm/material/densead/Math.hpp>
-#include <opm/geomech/elasticity_solver.hpp>
-#include <opm/geomech/vem_elasticity_solver.hpp>
+#include <opm/geomech/ElasticitySolver.hpp>
+#include <opm/geomech/VemElasticitySolver.hpp>
 
 #include <opm/geomech/FlowGeomechLinearSolverParameters.hpp>
 #include <opm/geomech/FractureModel.hpp>

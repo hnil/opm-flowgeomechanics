@@ -57,8 +57,8 @@
 
 #include <dune/grid/utility/globalindexset.hh>
 #include <opm/elasticity/matrixops.hpp>
-#include <opm/geomech/elasticity_solver.hpp>
-#include <opm/geomech/vem_elasticity_solver.hpp>
+#include <opm/geomech/ElasticitySolver.hpp>
+#include <opm/geomech/VemElasticitySolver.hpp>
 #include <opm/simulators/linalg/PropertyTree.hpp>
 
 #include "vectorfunctions.hh"
@@ -67,8 +67,8 @@
 #include <unistd.h>
 
 #include <opm/geomech/DuneCommunicationHelpers.hpp>
-#include <opm/geomech/boundaryutils.hh>
-#include <opm/geomech/dune_utilities.hpp>
+#include <opm/geomech/BoundaryUtils.hpp>
+#include <opm/geomech/DuneUtilities.hpp>
 
 using namespace Opm::Elasticity;
 
