@@ -3,12 +3,12 @@
 namespace Opm
 {
 template <typename TypeTag>
-class BlackoilGeomechWellModel : public BlackoilWellModel<TypeTag>
+class BlackoilGeoMechWellModel : public BlackoilWellModel<TypeTag>
 {
     using Parent = BlackoilWellModel<TypeTag>;
     using Simulator = typename Parent::Simulator;
 public:
-    BlackoilGeomechWellModel(Simulator& simulator):
+    BlackoilGeoMechWellModel(Simulator& simulator):
     Parent(simulator)
     {
 
@@ -30,11 +30,11 @@ public:
         // NB everything is not explicit and ministeps are not considered
         if (reportStepIdx > 0) {
             const auto& problem = this->simulator_.problem();
-            const auto& geomechmodel = problem.geomechModel();
-            if (problem.hasFractures() && geomechmodel.fractureModelActive()) {
+            const auto& geoMechModel = problem.geoMechModel();
+            if (problem.hasFractures() && geoMechModel.fractureModelActive()) {
                 for (auto& wellPtr : this->well_container_) {
                     auto wellName = wellPtr->name();
-                    const auto& fracturemodel = geomechmodel.fractureModel();
+                    const auto& fracturemodel = geoMechModel.fractureModel();
                     auto wellIndices = fracturemodel.getExtraWellIndices(wellName);
                     wellPtr->addFracturePerforations(wellIndices);
                 }

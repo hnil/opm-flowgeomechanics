@@ -319,7 +319,7 @@ namespace Opm
                                                    const SimulatorTimerInterface& timer,
                                                   NonlinearSolverType& nonlinear_solver){
                 SimulatorReportSingle report;
-                const PropertyTree& prm = this->simulator_.problem().getGeomechParam();
+                const PropertyTree& prm = this->simulator_.problem().getGeoMechParam();
                 std::string method = prm.get<std::string>("solver.method");
                 if (method == "PostSolve") {
                     report = Parent::nonlinearIteration(iteration, timer, nonlinear_solver);
@@ -341,7 +341,7 @@ namespace Opm
         SimulatorReportSingle nonlinearIterationSeqMechFrac(const int iteration,
                                             const SimulatorTimerInterface& timer,
                                             NonlinearSolverType& nonlinear_solver){
-            const PropertyTree& prm = this->simulator_.problem().getGeomechParam();
+            const PropertyTree& prm = this->simulator_.problem().getGeoMechParam();
             if (iteration == 0) {
                 topology_pending_counter_ = 0;
                 topology_cooldown_counter_ = 0;
@@ -400,7 +400,7 @@ namespace Opm
                                  + std::to_string(mech_solves_skipped_));
                 } else {
                     OpmLog::info("Solve Geomechanics:");
-                    this->simulator_.problem().geomechModel().solveGeomechanics();
+                    this->simulator_.problem().geoMechModel().solveGeomechanics();
                     ++mech_solves_performed_;
                 }
             }
@@ -415,8 +415,8 @@ namespace Opm
                 const bool legacy_parent_setup_iteration =
                     prm.get<bool>("fractureparam.solver.legacy_parent_setup_iteration", false);
                 const auto allwellIndices = this->simulator_.problem().getAllExtraWellIndices();
-                this->simulator_.problem().geomechModel().solveFractures();
-                const bool fracture_converged = this->simulator_.problem().geomechModel().fractureModel().lastSolveStats().converged;
+                this->simulator_.problem().geoMechModel().solveFractures();
+                const bool fracture_converged = this->simulator_.problem().geoMechModel().fractureModel().lastSolveStats().converged;
                 const bool require_converged_fracture_for_wi_update =
                     prm.get<bool>("fractureparam.require_converged_fracture_for_wi_update", true);
 
@@ -626,7 +626,7 @@ namespace Opm
         SimulatorReportSingle nonlinearIterationSeqMech(const int iteration,
                                              const SimulatorTimerInterface& timer,
                                             NonlinearSolverType& nonlinear_solver){
-            const PropertyTree& prm = this->simulator_.problem().getGeomechParam();
+            const PropertyTree& prm = this->simulator_.problem().getGeoMechParam();
             bool implicit_flow = prm.get<bool>("solver.implicit_flow");
             SimulatorReportSingle report;
             if(implicit_flow){
@@ -637,8 +637,8 @@ namespace Opm
             //const PropertyTree& prm_frac = this->simulator_.problem().getFractureParam();
             int mech_max_it = prm.get<int>("solver.max_mech_it");
             if(iteration < mech_max_it){
-                //simulator_.problem().geomechModel().solveFracture();
-                this->simulator_.problem().geomechModel().solveGeomechanics();
+                //simulator_.problem().geoMechModel().solveFracture();
+                this->simulator_.problem().geoMechModel().solveGeomechanics();
                 std::cout << "Geomech nonlinearIteration with mechanical solve:";// << iteration << std::endl;
                 // TODO check convergence properly
                 report.converged = false;

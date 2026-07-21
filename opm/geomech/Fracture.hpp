@@ -305,7 +305,7 @@ public:
     Dune::FieldVector<double, 3> disp(Dune::FieldVector<double, 3> obs) const;
 
     template <typename Scalar>
-    void assignGeomechWellState(PerfData<Scalar>& perfData) const;
+    void assignGeoMechWellState(PerfData<Scalar>& perfData) const;
     void setActive(bool active);
     bool isActive() const;
     const FractureSolveStats& lastSolveStats() const;

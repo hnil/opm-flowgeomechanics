@@ -26,7 +26,7 @@ Growth fidelity (your top priority) comes from (1)+(2); robustness on long runs 
 
 
 Two property trees are parsed from the same file:
-- `getGeomechParam()` = the **whole** file → the outer SeqMechFrac driver reads `solver.*` here.
+- `getGeoMechParam()` = the **whole** file → the outer SeqMechFrac driver reads `solver.*` here.
 - `getFractureParam()` = the **`fractureparam`** subtree → the `Fracture` object reads `solver.*` (i.e. `fractureparam.solver.*`).
 
 ⚠️ Consequence: the CTF / perf-pressure change thresholds are read from **`fractureparam.solver.*`**, *not*

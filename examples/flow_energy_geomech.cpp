@@ -29,7 +29,7 @@
 #include <opm/models/discretization/common/tpfalinearizer.hh>
 // #include <opm/flowexperimental/blackoilintensivequantitiessimple.hh>
 #include "MechTypeTag.hpp"
-#include <opm/geomech/BlackoilGeomechWellModel.hpp>
+#include <opm/geomech/BlackoilGeoMechWellModel.hpp>
 #include <opm/geomech/GeoMechModel.hpp>
 #include <opm/geomech/FlowProblemGeoMech.hpp>
 #include <opm/models/discretization/common/baseauxiliarymodule.hh>
@@ -52,7 +52,7 @@ namespace Properties
 
     // template <class TypeTag>
     // struct WellModel<TypeTag, TTag::FlowProblemMechTemp> {
-    //      using type = BlackoilGeomechWellModel<TypeTag>;
+    //      using type = BlackoilGeoMechWellModel<TypeTag>;
     // };
 } // namespace Properties
 } // namespace Opm

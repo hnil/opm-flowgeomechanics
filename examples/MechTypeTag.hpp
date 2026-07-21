@@ -8,7 +8,7 @@
 #include <opm/simulators/wells/BlackoilWellModel.hpp>
 #include <opm/geomech/GeoMechModel.hpp>
 #include <opm/geomech/FlowProblemGeoMech.hpp>
-#include <opm/geomech/BlackoilGeomechWellModel.hpp>
+#include <opm/geomech/BlackoilGeoMechWellModel.hpp>
 #include <opm/geomech/BlackoilModelGeomech.hpp>
 namespace Opm
 {
@@ -35,7 +35,7 @@ namespace Opm
 
         // template <class TypeTag>
         // struct WellModel<TypeTag, TTag::FlowProblemMech> {
-        //     using type = BlackoilGeomechWellModel<TypeTag>;
+        //     using type = BlackoilGeoMechWellModel<TypeTag>;
         // };
 
         // template<class TypeTag>
@@ -107,7 +107,7 @@ namespace Opm
 
         template <class TypeTag>
         struct WellModel<TypeTag, TTag::FlowProblemMech> {
-            using type = BlackoilGeomechWellModel<TypeTag>;
+            using type = BlackoilGeoMechWellModel<TypeTag>;
           //using type = BlackoilWellModel<TypeTag>;
         };
 

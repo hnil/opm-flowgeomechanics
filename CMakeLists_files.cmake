@@ -50,7 +50,7 @@ list (APPEND PROGRAM_SOURCE_FILES
 )
 
 list (APPEND PUBLIC_HEADER_FILES
-	opm/geomech/BlackoilGeomechWellModel.hpp
+	opm/geomech/BlackoilGeoMechWellModel.hpp
 	opm/geomech/BlackoilModelGeomech.hpp
 	opm/geomech/BoundaryUtils.hpp
 	opm/geomech/ConvexBoundary.hpp
@@ -64,7 +64,7 @@ list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/FlowProblemGeoMech.hpp
 	opm/geomech/ElasticitySolver.hpp
 	opm/geomech/ElasticitySolver_impl.hpp
-	opm/geomech/FlowGeomechLinearSolverParameters.hpp
+	opm/geomech/FlowGeoMechLinearSolverParameters.hpp
 	opm/geomech/FracturePressureAssemblerAD.hpp
 	opm/geomech/Fracture.hpp
 	opm/geomech/Fracture_impl.hpp

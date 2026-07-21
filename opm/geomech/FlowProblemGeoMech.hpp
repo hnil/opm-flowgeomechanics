@@ -7,7 +7,7 @@
 
 #include <opm/input/eclipse/EclipseState/Phase.hpp>
 
-#include <opm/geomech/FlowGeomechLinearSolverParameters.hpp>
+#include <opm/geomech/FlowGeoMechLinearSolverParameters.hpp>
 #include <opm/geomech/BoundaryUtils.hpp>
 #include <opm/geomech/GeoMechModel.hpp>
 #include <opm/geomech/VtkGeoMechModule.hpp>
@@ -74,7 +74,6 @@ namespace Opm{
         enum { dimWorld = GridView::dimensionworld };
         using Toolbox = MathToolbox<Evaluation>;
         using SymTensor = Dune::FieldVector<double,6>;
-        using GeomechModel = GeoMechModel<TypeTag>;
 
         template <class FluidState>
         static int referencePhaseIdx(const FluidState& fs)
@@ -91,7 +90,7 @@ namespace Opm{
       //using CellSeedType = typename GridView::template Codim<0>::EntitySeed;
         FlowProblemGeoMech(Simulator& simulator):
             FlowProblemBlackoil<TypeTag>(simulator),
-            geomechModel_(simulator)
+            geoMechModel_(simulator)
         {
             std::string filename = Parameters::Get<Parameters::FractureParamFile>();
             if (filename == "notafile") {
@@ -156,7 +155,7 @@ namespace Opm{
             const auto& eclState = simulator.vanguard().eclState();
             if(eclState.runspec().mech()){
                 const auto& initconfig = eclState.getInitConfig();
-                geomechModel_.init(initconfig.restartRequested());
+                geoMechModel_.init(initconfig.restartRequested());
                 const auto& fp = eclState.fieldProps();
                 std::vector<std::string> needkeys = {"YMODULE","PRATIO"};
                 for(size_t i=0; i < needkeys.size(); ++i){
@@ -301,7 +300,7 @@ namespace Opm{
                         recnum +=1;
                     }
                     // NB setting initial stress
-                    //this->geomechModel_.setStress(initstress_);
+                    //this->geoMechModel_.setStress(initstress_);
                 }else{
 //                    OPM_THROW(std::runtime_error, "Missing stress initialization keywords");
                     //std::cout << "No stress equilibration specified .. try to equilibrate" << std::endl;    
@@ -333,9 +332,9 @@ namespace Opm{
 
             // for now make a copy
             if (simulator.vanguard().eclState().runspec().mech()) {
-                // this->geomechModel_.setMaterial(elasticparams_);
-                this->geomechModel_.setMaterial(ymodule_, pratio_);
-                this->geomechModel_.updatePotentialForces();//Neede only of output
+                // this->geoMechModel_.setMaterial(elasticparams_);
+                this->geoMechModel_.setMaterial(ymodule_, pratio_);
+                this->geoMechModel_.updatePotentialForces();//Neede only of output
                 const auto& eclState = simulator.vanguard().eclState();
                 const auto& initconfig = eclState.getInitConfig();
                 if (!initconfig.hasStressEquil()) {
@@ -345,17 +344,17 @@ namespace Opm{
                     //FractureModel::fractureLogger.info(os.str());
                     OpmLog::info(os.str());
                     initstress_.resize(numDof);
-                    geomechModel_.solveGeomechanics(/*use_body_force*/ true, /*relative_solve*/ false);
+                    geoMechModel_.solveGeomechanics(/*use_body_force*/ true, /*relative_solve*/ false);
                     //auto pure_stress = 
                     for (size_t i = 0; i < initstress_.size(); ++i) {
-                        initstress_[i] = geomechModel_.stress(i);
+                        initstress_[i] = geoMechModel_.stress(i);
                     }
                     // stress in output on first step maybe wrong i.e. 2*stress;
-                    this->geomechModel_.setFirstSolveTrue();// to do full rebuild next time step
+                    this->geoMechModel_.setFirstSolveTrue();// to do full rebuild next time step
                 }else{
                     // used set this for initial output of stress all other initial values is zero
                     // which is always calculated relative to initial configuration
-                    this->geomechModel_.setOutputPutStress(initstress_);
+                    this->geoMechModel_.setOutputPutStress(initstress_);
                 }
             }
         }
@@ -386,7 +385,7 @@ namespace Opm{
                         OPM_THROW(std::runtime_error,"CSTRESS not set but fractures exists");
                     }
                 }
-                geomechModel_.beginTimeStep();
+                geoMechModel_.beginTimeStep();
                 if(this->hasFractures()){
                     this->wellModel().beginTimeStep();// just to be sure well conteiner is reinitialized
                     this->addConnectionsToWell(); // modify wells WI wiht fracture well 
@@ -404,8 +403,8 @@ namespace Opm{
             //Parent::FlowProblemType::endTimeStep();
             OPM_BEGIN_PARALLEL_TRY_CATCH();
             if(this->simulator().vanguard().eclState().runspec().mech()){
-                geomechModel_.endTimeStep();
-                if(this->hasFractures() && this->geomechModel().fractureModelActive()){
+                geoMechModel_.endTimeStep();
+                if(this->hasFractures() && this->geoMechModel().fractureModelActive()){
                     // method for handling extra connections from fractures
                     // it is options for not including them in fractures i.e. addconnections
                     //if(addPerfsToSchedule_){
@@ -418,8 +417,8 @@ namespace Opm{
                     //    this->addConnectionsToWell();
                     //}
                 
-                    this->geomechModel_.fractureModel().
-                        assignGeomechWellState(this->wellModel_.wellState());
+                    this->geoMechModel_.fractureModel().
+                        assignGeoMechWellState(this->wellModel_.wellState());
                 }
             }
             OPM_END_PARALLEL_TRY_CATCH("End time step geomech failed: ", this->simulator().vanguard().grid().comm());
@@ -428,17 +427,17 @@ namespace Opm{
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 if(this->hasFractures() ){
                     // need to be here ?? to have updated values
-                    this->geomechModel_.updateFilterCakePropertiesOnFractures();
+                    this->geoMechModel_.updateFilterCakePropertiesOnFractures();
                 }
             }
             //
             // if(first_fracture_solve_){
             //     first_fracture_solve_ = false;
-            //     geomechModel_.writeFractureSolutionFirst();
+            //     geoMechModel_.writeFractureSolutionFirst();
             // }
             if(Parameters::Get<Parameters::EnableWriteAllSolutions>()){
               //OPM_BEGIN_PARALLEL_TRY_CATCH();
-                geomechModel_.writeFractureSolution();
+                geoMechModel_.writeFractureSolution();
                 //  OPM_END_PARALLEL_TRY_CATCH("Writing fracture solution failed: ", this->simulator().vanguard().grid().comm());
             }
             //
@@ -448,9 +447,9 @@ namespace Opm{
 
       double maxNextTimeStepSize() const override{
         double dt_max = Parent::maxNextTimeStepSize();
-        if(geomechModel_.fractureModelActive()){
+        if(geoMechModel_.fractureModelActive()){
             const auto& simulator = this->simulator();
-            double dt_max_frac = geomechModel_.fractureModel().template maxFlowTimeStep<TypeTag,Simulator>(simulator);
+            double dt_max_frac = geoMechModel_.fractureModel().template maxFlowTimeStep<TypeTag,Simulator>(simulator);
             dt_max = std::min(dt_max,dt_max_frac);
         }
         return dt_max;
@@ -462,7 +461,7 @@ namespace Opm{
             auto& wellcontainer = this->wellModel().localNonshutWells();
             for (auto& wellPtr : wellcontainer) {
                 auto wellName = wellPtr->name();
-                const auto& wellcons = geomechModel_.getExtraWellIndices(wellName);
+                const auto& wellcons = geoMechModel_.getExtraWellIndices(wellName);
                 all_indices.push_back(wellcons);
             }
             return all_indices;
@@ -472,7 +471,7 @@ namespace Opm{
             auto& wellcontainer = this->wellModel().localNonshutWells();
             for (auto& wellPtr : wellcontainer) {
                 auto wellName = wellPtr->name();
-                const auto& wellcons = geomechModel_.getExtraWellIndices(wellName);
+                const auto& wellcons = geoMechModel_.getExtraWellIndices(wellName);
 
                 wellPtr->addFracturePerforations(wellcons);
             }
@@ -506,7 +505,7 @@ namespace Opm{
             int new_conns = 0;
             int old_conns = 0;
             for (const auto& wellName : schedule.wellNames(reportStep)) {
-                const auto wellcons = geomechModel_.getExtraWellIndices(wellName);
+                const auto wellcons = geoMechModel_.getExtraWellIndices(wellName);
 
                 if (wellcons.empty()) {
                     // No extra connections for this well.
@@ -653,15 +652,15 @@ namespace Opm{
         void endEpisode() override{
             Parent::endEpisode();
             if(!Parameters::Get<Parameters::EnableWriteAllSolutions>()){
-                geomechModel_.writeFractureSolution();
+                geoMechModel_.writeFractureSolution();
             }
         }
 
         const GeoMechModel<TypeTag>& geoMechModel() const
-        { return geomechModel_; }
+        { return geoMechModel_; }
 
         GeoMechModel<TypeTag>& geoMechModel()
-        { return geomechModel_; }
+        { return geoMechModel_; }
 
         double initPressure(unsigned dofIdx) const{
             return initpressure_[dofIdx];
@@ -702,7 +701,7 @@ namespace Opm{
         }
 
         Dune::FieldVector<double,6> stress(size_t globalIdx) const{
-            return geomechModel_.stress(globalIdx);
+            return geoMechModel_.stress(globalIdx);
         }
         // double getFieldProps(const std::string& field, unsigned globalIdx) const{
         //     const auto& eclState = this->simulator().vanguard().eclState();
@@ -712,9 +711,7 @@ namespace Opm{
         // }
         bool hasFractures() const{ return hasFractures_;}
         Opm::PropertyTree getFractureParam() const{return fracture_param_.get_child("fractureparam");};
-        Opm::PropertyTree getGeomechParam() const{return fracture_param_;};
-        GeomechModel& geomechModel() {return geomechModel_;}
-        const GeomechModel& geomechModel()const {return geomechModel_;}
+        Opm::PropertyTree getGeoMechParam() const{return fracture_param_;};
         // used for fracture model
         double yModule(size_t idx) const {return ymodule_[idx];}
         double pRatio(size_t idx) const {return pratio_[idx];}
@@ -724,12 +721,12 @@ namespace Opm{
       //const std::vector< CellSeedType >& elementEntitySeed(){return entity_seed_;}
         void updateFailed(){
             Parent::updateFailed();
-            geomechModel_.resetFractureModel();
+            geoMechModel_.resetFractureModel();
         }
 
         void advanceTimeLevel(){
             Parent::advanceTimeLevel();
-            //this->simulator_.problem().geomechModel().advanceTimeLevel();// this is done in begin timestep
+            //this->simulator_.problem().geoMechModel().advanceTimeLevel();// this is done in begin timestep
             //wellModel_.serialize(res);
             //aquiferModel_.serialize(res);
         }
@@ -918,7 +915,7 @@ namespace Opm{
             return true;
         }
 
-        GeomechModel geomechModel_;
+        GeoMechModel<TypeTag> geoMechModel_;
 
         std::vector<double> ymodule_;
         std::vector<double> pratio_;

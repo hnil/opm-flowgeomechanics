@@ -2,7 +2,7 @@
 
 #include <opm/geomech/GeoMechModel.hpp>
 #include <opm/geomech/FlowProblemGeoMech.hpp>
-#include <opm/geomech/BlackoilGeomechWellModel.hpp>
+#include <opm/geomech/BlackoilGeoMechWellModel.hpp>
 #include <opm/geomech/BlackoilModelGeomech.hpp>
 
 #include <opm/material/thermal/EnergyModuleType.hpp>
@@ -89,7 +89,7 @@ struct EnableDispersion<TypeTag, TTag::FlowProblemOilGasEnergyMech> {
 
 template <class TypeTag>
 struct WellModel<TypeTag, TTag::FlowProblemOilGasEnergyMech> {
-    using type = BlackoilGeomechWellModel<TypeTag>;
+    using type = BlackoilGeoMechWellModel<TypeTag>;
 };
 
 template <class TypeTag>

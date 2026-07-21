@@ -110,7 +110,7 @@ public:
         std::vector<RuntimePerforation> getExtraWellIndices(const std::string& wellname) const;
 
         template <typename Scalar, typename IndexTraits>
-        void assignGeomechWellState(WellState<Scalar, IndexTraits> & wellState) const;
+        void assignGeoMechWellState(WellState<Scalar, IndexTraits> & wellState) const;
 
         bool addPertsToSchedule();
         // probably this should be collected in one loop since all do full loop over fracture ++ well

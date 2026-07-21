@@ -178,4 +178,4 @@ Vector diagvec(const Mat& M)
   double last_coupling_indicator_{0.0};
 };
 
-} // namespace Opm::Geomech
+} // namespace Opm

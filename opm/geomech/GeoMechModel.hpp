@@ -6,7 +6,7 @@
 #include <opm/geomech/ElasticitySolver.hpp>
 #include <opm/geomech/VemElasticitySolver.hpp>
 
-#include <opm/geomech/FlowGeomechLinearSolverParameters.hpp>
+#include <opm/geomech/FlowGeoMechLinearSolverParameters.hpp>
 #include <opm/geomech/FractureModel.hpp>
 #include <opm/simulators/linalg/WriteSystemMatrixHelper.hpp>
 
@@ -101,9 +101,9 @@ namespace Opm{
             if(simulator_.gridView().comm().rank() == 0){
                 OpmLog::info("Geomech model endstimeStep\n");
             }
-            this->solveGeomechAndFracture();
+            this->solveGeoMechAndFracture();
         }
-        void solveGeomechAndFracture(){
+        void solveGeoMechAndFracture(){
             //Parent::endIteration();
             const auto& problem = simulator_.problem();
             this->solveGeomechanics();

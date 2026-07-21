@@ -384,7 +384,7 @@ FractureModel::getExtraWellIndices(const std::string& wellname) const
 
 template <typename Scalar,typename IndexTraits>
 void
-FractureModel::assignGeomechWellState(WellState<Scalar,IndexTraits>& wellState) const
+FractureModel::assignGeoMechWellState(WellState<Scalar,IndexTraits>& wellState) const
 {
     const auto nWells = this->wells_.size();
     for (auto i = 0 * nWells; i < nWells; ++i) {
@@ -414,7 +414,7 @@ FractureModel::assignGeomechWellState(WellState<Scalar,IndexTraits>& wellState) 
 
             // Possibly just "fracture.wellInfo().perf" instead.
             //const auto perfIx = std::distance(perfData.cell_index.begin(), perfPos);
-            fracture.assignGeomechWellState(perfData);//.connFracStatistics[perfIx]);
+            fracture.assignGeoMechWellState(perfData);//.connFracStatistics[perfIx]);
         }
     }
 }
@@ -594,6 +594,6 @@ Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched)
 // Explicit specialisations.  No other code below separator.
 // ===========================================================================
 
-template void Opm::FractureModel::assignGeomechWellState(WellState<float,Fracture::IndexTraits>&) const;
-template void Opm::FractureModel::assignGeomechWellState(WellState<double,Fracture::IndexTraits>&) const;
+template void Opm::FractureModel::assignGeoMechWellState(WellState<float,Fracture::IndexTraits>&) const;
+template void Opm::FractureModel::assignGeoMechWellState(WellState<double,Fracture::IndexTraits>&) const;
 Opm::DeferredLogger Opm::FractureModel::fractureLogger = Opm::DeferredLogger();

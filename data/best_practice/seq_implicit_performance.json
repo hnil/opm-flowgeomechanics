@@ -4,7 +4,7 @@
  "add_perfs_to_schedule": "true",
  "verbosity": 0,
  "solver": {
-  "__doc": "Top-level SeqMechFrac driver options (read from getGeomechParam().solver). See fracture_settings_REFERENCE.md",
+  "__doc": "Top-level SeqMechFrac driver options (read from getGeoMechParam().solver). See fracture_settings_REFERENCE.md",
   "method": "SeqMechFrac",
   "implicit_flow": "true",
   "max_mech_it": "90",

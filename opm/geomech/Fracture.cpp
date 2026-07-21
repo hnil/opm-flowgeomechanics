@@ -1752,7 +1752,7 @@ Fracture::wellIndices_() const
 
 template <typename Scalar>
 void
-Fracture::assignGeomechWellState(PerfData<Scalar>& perfData) const
+Fracture::assignGeoMechWellState(PerfData<Scalar>& perfData) const
 {
     auto perfPos = std::find(
     perfData.cell_index.begin(), perfData.cell_index.end(), this->wellInfo().well_cell);
@@ -2461,7 +2461,7 @@ Fracture::printMechMatrix() const // debug purposes
 // external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
 //                                              const Dune::PolyhedralGrid<3,3,double>& grid3D);
 
-template void Fracture::assignGeomechWellState(PerfData<float>& perfData) const;
-template void Fracture::assignGeomechWellState(PerfData<double>& perfData) const;
+template void Fracture::assignGeoMechWellState(PerfData<float>& perfData) const;
+template void Fracture::assignGeoMechWellState(PerfData<double>& perfData) const;
 
 } // namespace Opm
