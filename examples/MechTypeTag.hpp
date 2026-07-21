@@ -6,7 +6,7 @@
 //#include <opm/flowexperimental/blackoilintensivequantitiessimple.hh>
 #include <opm/models/discretization/common/baseauxiliarymodule.hh>
 #include <opm/simulators/wells/BlackoilWellModel.hpp>
-#include <opm/geomech/eclgeomechmodel.hh>
+#include <opm/geomech/GeoMechModel.hpp>
 #include <opm/geomech/eclproblemgeomech.hh>
 #include <opm/geomech/BlackoilGeomechWellModel.hpp>
 #include <opm/geomech/BlackoilModelGeomech.hpp>

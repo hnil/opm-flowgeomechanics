@@ -9,7 +9,7 @@
 
 #include <opm/geomech/FlowGeomechLinearSolverParameters.hpp>
 #include <opm/geomech/boundaryutils.hh>
-#include <opm/geomech/eclgeomechmodel.hh>
+#include <opm/geomech/GeoMechModel.hpp>
 #include <opm/geomech/VtkGeoMechModule.hpp>
 
 #include <opm/material/densead/Evaluation.hpp>
@@ -74,7 +74,7 @@ namespace Opm{
         enum { dimWorld = GridView::dimensionworld };
         using Toolbox = MathToolbox<Evaluation>;
         using SymTensor = Dune::FieldVector<double,6>;
-        using GeomechModel = EclGeoMechModel<TypeTag>;
+        using GeomechModel = GeoMechModel<TypeTag>;
 
         template <class FluidState>
         static int referencePhaseIdx(const FluidState& fs)
@@ -657,10 +657,10 @@ namespace Opm{
             }
         }
 
-        const EclGeoMechModel<TypeTag>& geoMechModel() const
+        const GeoMechModel<TypeTag>& geoMechModel() const
         { return geomechModel_; }
 
-        EclGeoMechModel<TypeTag>& geoMechModel()
+        GeoMechModel<TypeTag>& geoMechModel()
         { return geomechModel_; }
 
         double initPressure(unsigned dofIdx) const{

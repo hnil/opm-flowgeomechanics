@@ -1,5 +1,5 @@
-#ifndef OPM_ECLPROBLEM_GEOMECH_MODEL_HH
-#define OPM_ECLPROBLEM_GEOMECH_MODEL_HH
+#ifndef OPM_GEOMECH_MODEL_HPP
+#define OPM_GEOMECH_MODEL_HPP
 #include <opm/models/discretization/common/baseauxiliarymodule.hh>
 #include <opm/material/densead/Evaluation.hpp>
 #include <opm/material/densead/Math.hpp>
@@ -19,7 +19,7 @@
 
 namespace Opm{
     template<typename TypeTag>
-    class EclGeoMechModel : public BaseAuxiliaryModule<TypeTag>
+    class GeoMechModel : public BaseAuxiliaryModule<TypeTag>
     {
         using Parent = BaseAuxiliaryModule<TypeTag>;
         using Simulator = GetPropType<TypeTag, Properties::Simulator>;
@@ -48,7 +48,7 @@ namespace Opm{
             return FluidSystem::gasPhaseIdx;
         }
     public:
-        EclGeoMechModel(Simulator& simulator):
+        GeoMechModel(Simulator& simulator):
             //           Parent(simulator)
             first_solve_(true),
             write_system_(false),

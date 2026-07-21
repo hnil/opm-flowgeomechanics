@@ -1,6 +1,6 @@
 #include <opm/simulators/flow/FlowProblemBlackoil.hpp>
 
-#include <opm/geomech/eclgeomechmodel.hh>
+#include <opm/geomech/GeoMechModel.hpp>
 #include <opm/geomech/eclproblemgeomech.hh>
 #include <opm/geomech/BlackoilGeomechWellModel.hpp>
 #include <opm/geomech/BlackoilModelGeomech.hpp>

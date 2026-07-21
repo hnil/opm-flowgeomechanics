@@ -60,7 +60,7 @@ list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/DiscreteDisplacement.hpp
 	opm/geomech/DuneCommunicationHelpers.hpp
 	opm/geomech/dune_utilities.hpp
-	opm/geomech/eclgeomechmodel.hh
+	opm/geomech/GeoMechModel.hpp
 	opm/geomech/eclproblemgeomech.hh
 	opm/geomech/elasticity_solver.hpp
 	opm/geomech/elasticity_solver_impl.hpp
