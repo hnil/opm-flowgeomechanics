@@ -16,38 +16,38 @@ namespace Opm {
 namespace Properties {
 namespace TTag {
 
-struct EclFlowProblemOilGasEnergyMech {
+struct FlowProblemOilGasEnergyMech {
     using InheritsFrom = std::tuple<FlowProblem>;
 };
 
 } // namespace TTag
 
 template <class TypeTag>
-struct Problem<TypeTag, TTag::EclFlowProblemOilGasEnergyMech> {
+struct Problem<TypeTag, TTag::FlowProblemOilGasEnergyMech> {
     using type = FlowProblemGeoMech<TypeTag>;
 };
 
 template <class TypeTag>
-struct NonlinearSystem<TypeTag, TTag::EclFlowProblemOilGasEnergyMech> {
+struct NonlinearSystem<TypeTag, TTag::FlowProblemOilGasEnergyMech> {
     using type = BlackoilModelGeomech<TypeTag>;
 };
 
 template <class TypeTag>
-struct EnableMech<TypeTag, TTag::EclFlowProblemOilGasEnergyMech> {
+struct EnableMech<TypeTag, TTag::FlowProblemOilGasEnergyMech> {
     static constexpr bool value = true;
 };
 
 template <class TypeTag>
-struct EnableEnergy<TypeTag, TTag::EclFlowProblemOilGasEnergyMech> {
+struct EnableEnergy<TypeTag, TTag::FlowProblemOilGasEnergyMech> {
     static constexpr bool value = true;
 };
 
 template<class TypeTag>
-struct EnergyModuleType<TypeTag, TTag::EclFlowProblemOilGasEnergyMech>
+struct EnergyModuleType<TypeTag, TTag::FlowProblemOilGasEnergyMech>
 { static constexpr EnergyModules value = EnergyModules::FullyImplicitThermal; };
 
 template<class TypeTag>
-struct Indices<TypeTag, TTag::EclFlowProblemOilGasEnergyMech>
+struct Indices<TypeTag, TTag::FlowProblemOilGasEnergyMech>
 {
 private:
     using BaseTypeTag = TTag::FlowProblem;
@@ -68,32 +68,32 @@ public:
 };
 
 template<class TypeTag>
-struct Linearizer<TypeTag, TTag::EclFlowProblemOilGasEnergyMech> {
+struct Linearizer<TypeTag, TTag::FlowProblemOilGasEnergyMech> {
     using type = TpfaLinearizer<TypeTag>;
 };
 
 template<class TypeTag>
-struct LocalResidual<TypeTag, TTag::EclFlowProblemOilGasEnergyMech> {
+struct LocalResidual<TypeTag, TTag::FlowProblemOilGasEnergyMech> {
     using type = BlackOilLocalResidualTPFA<TypeTag>;
 };
 
 template <class TypeTag>
-struct EnableDiffusion<TypeTag, TTag::EclFlowProblemOilGasEnergyMech> {
+struct EnableDiffusion<TypeTag, TTag::FlowProblemOilGasEnergyMech> {
     static constexpr bool value = false;
 };
 
 template <class TypeTag>
-struct EnableDispersion<TypeTag, TTag::EclFlowProblemOilGasEnergyMech> {
+struct EnableDispersion<TypeTag, TTag::FlowProblemOilGasEnergyMech> {
     static constexpr bool value = false;
 };
 
 template <class TypeTag>
-struct WellModel<TypeTag, TTag::EclFlowProblemOilGasEnergyMech> {
+struct WellModel<TypeTag, TTag::FlowProblemOilGasEnergyMech> {
     using type = BlackoilGeomechWellModel<TypeTag>;
 };
 
 template <class TypeTag>
-struct Simulator<TypeTag, TTag::EclFlowProblemOilGasEnergyMech> {
+struct Simulator<TypeTag, TTag::FlowProblemOilGasEnergyMech> {
     using type = Opm::Simulator<TypeTag>;
 };
 

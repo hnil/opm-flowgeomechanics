@@ -29,7 +29,7 @@ int
 main(int argc, char** argv)
 {
     OPM_TIMEBLOCK(fullSimulation);
-    using TypeTag = Opm::Properties::TTag::EclFlowProblemOilGasEnergyMech;
+    using TypeTag = Opm::Properties::TTag::FlowProblemOilGasEnergyMech;
     auto mainObject = Opm::Main(argc, argv);
     return mainObject.runStatic<TypeTag>();
 }

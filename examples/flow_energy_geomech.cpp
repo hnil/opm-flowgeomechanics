@@ -44,14 +44,14 @@ namespace Properties
 {
     namespace TTag
     {
-        struct EclFlowProblemMechTemp
+        struct FlowProblemMechTemp
         {
-            using InheritsFrom = std::tuple<EclFlowProblemMech>;
+            using InheritsFrom = std::tuple<FlowProblemMech>;
         };
     } // namespace TTag
 
     // template <class TypeTag>
-    // struct WellModel<TypeTag, TTag::EclFlowProblemMechTemp> {
+    // struct WellModel<TypeTag, TTag::FlowProblemMechTemp> {
     //      using type = BlackoilGeomechWellModel<TypeTag>;
     // };
 } // namespace Properties
@@ -62,7 +62,7 @@ main(int argc, char** argv)
 {
 
     OPM_TIMEBLOCK(fullSimulation);
-    using TypeTag = Opm::Properties::TTag::EclFlowProblemMechTemp;
+    using TypeTag = Opm::Properties::TTag::FlowProblemMechTemp;
     auto mainObject = Opm::Main(argc, argv);
     return mainObject.runStatic<TypeTag>();
     // return Opm::start<TypeTag>(argc, argv);

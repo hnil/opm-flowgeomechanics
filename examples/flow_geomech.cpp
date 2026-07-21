@@ -54,18 +54,18 @@ namespace Properties
 {
     namespace TTag
     {
-        struct EclFlowProblemMechNoTemp
+        struct FlowProblemMechNoTemp
         {
-            using InheritsFrom = std::tuple<EclFlowProblemMech>;
+            using InheritsFrom = std::tuple<FlowProblemMech>;
         };
     } // namespace TTag
     template <class TypeTag>
-    struct EnableEnergy<TypeTag, TTag::EclFlowProblemMechNoTemp>
+    struct EnableEnergy<TypeTag, TTag::FlowProblemMechNoTemp>
     {
         static constexpr bool value = false;
     };
     template<class TypeTag>
-        struct EnergyModuleType<TypeTag, TTag::EclFlowProblemMechNoTemp>
+        struct EnergyModuleType<TypeTag, TTag::FlowProblemMechNoTemp>
         { static constexpr EnergyModules value = EnergyModules::NoTemperature; };
 
 } // namespace Properties
@@ -81,7 +81,7 @@ main(int argc, char** argv)
     // Opm::Parameters::SetDefault<Opm::Parameters::EnableAsyncVtkOutput>(false);
     // Opm::Parameters::SetDefault<Opm::Parameters::EnableAsyncEclOutput>(false);
     OPM_TIMEBLOCK(fullSimulation);
-    using TypeTag = Opm::Properties::TTag::EclFlowProblemMechNoTemp;
+    using TypeTag = Opm::Properties::TTag::FlowProblemMechNoTemp;
     auto mainObject = Opm::Main(argc, argv);
     return mainObject.runStatic<TypeTag>();
     // return Opm::start<TypeTag>(argc, argv);

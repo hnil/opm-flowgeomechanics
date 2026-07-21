@@ -56,28 +56,28 @@ namespace Properties
 {
     namespace TTag
     {
-        struct EclFlowProblemMechPoly
+        struct FlowProblemMechPoly
         {
-            using InheritsFrom = std::tuple<EclFlowProblemMech>;
+            using InheritsFrom = std::tuple<FlowProblemMech>;
         };
     } // namespace TTag
 
 
     // set grid to polygrid
     template <class TypeTag>
-    struct Grid<TypeTag, TTag::EclFlowProblemMechPoly>
+    struct Grid<TypeTag, TTag::FlowProblemMechPoly>
     {
         using type = Dune::PolyhedralGrid<3, 3>;
     };
     template <class TypeTag>
-    struct EquilGrid<TypeTag, TTag::EclFlowProblemMechPoly>
+    struct EquilGrid<TypeTag, TTag::FlowProblemMechPoly>
     {
         // using type = Dune::CpGrid;
         using type = GetPropType<TypeTag, Properties::Grid>;
     };
 
     template <class TypeTag>
-    struct Vanguard<TypeTag, TTag::EclFlowProblemMechPoly>
+    struct Vanguard<TypeTag, TTag::FlowProblemMechPoly>
     {
         using type = Opm::PolyhedralGridVanguard<TypeTag>;
     };
@@ -96,7 +96,7 @@ main(int argc, char** argv)
 {
 
     OPM_TIMEBLOCK(fullSimulation);
-    using TypeTag = Opm::Properties::TTag::EclFlowProblemMechPoly;
+    using TypeTag = Opm::Properties::TTag::FlowProblemMechPoly;
     auto mainObject = Opm::Main(argc, argv);
     return mainObject.runStatic<TypeTag>();
     // return Opm::start<TypeTag>(argc, argv);
