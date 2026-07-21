@@ -23,6 +23,14 @@ public:
         }
         OPM_THROW(std::runtime_error, "Not implemented");
     };
+    // Fracture-created connections are added to the schedule at runtime and
+    // may not (yet) exist on every rank that hosts part of the well; log and
+    // continue instead of aborting the run.
+    bool continueOnMissingWellConnections() const override
+    {
+        return true;
+    }
+
     void createWellContainer(const int reportStepIdx)
     {
         Parent::createWellContainer(reportStepIdx);
