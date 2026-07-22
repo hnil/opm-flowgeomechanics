@@ -479,9 +479,14 @@ namespace Opm
                     this->simulator_.problem().wellModel().beginTimeStep(); // reinitialize well structure
                     this->simulator_.problem().addConnectionsToWell(); // set the new well indices
                     this->simulator_.problem().emptyFractureLogger();
-                    auto& local_deferredLogger = FractureModel::fractureLogger;
-                    //this->simulator_.problem().wellModel().calculateExplicitQuantities(local_deferredLogger); //calcualte new explicite quantities TOFIX hould us old values
-                    this->simulator_.problem().wellModel().prepareTimeStep(local_deferredLogger);
+                    {
+                        // prepareTimeStep logs through the group-state
+                        // helper's deferred logger, which the caller must
+                        // establish (same pattern as assemble()).
+                        auto& group_state_helper = this->simulator_.problem().wellModel().groupStateHelper();
+                        auto logger_guard = group_state_helper.pushLogger();
+                        this->simulator_.problem().wellModel().prepareTimeStep(group_state_helper.deferredLogger());
+                    }
 
                     [[maybe_unused]] auto tmp_report =
                         legacy_parent_setup_iteration

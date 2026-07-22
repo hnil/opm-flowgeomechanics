@@ -640,10 +640,16 @@ namespace Opm{
             sim_update.well_structure_changed = true;
 
             bool commit_wellstate = false;
-            this->actionHandler_.applySimulatorUpdate(reportStep,
-                                                      sim_update,
-                                                      /* updateTrans = */ [](const bool) {},
-                                                      commit_wellstate);
+            {
+                // The well/group updates triggered by the simulator update
+                // log through the group-state helper's deferred logger,
+                // which must be established by the caller.
+                auto logger_guard = this->wellModel().groupStateHelper().pushLogger();
+                this->actionHandler_.applySimulatorUpdate(reportStep,
+                                                          sim_update,
+                                                          /* updateTrans = */ [](const bool) {},
+                                                          commit_wellstate);
+            }
             if (commit_wellstate) {
                 this->wellModel().commitWGState();
             }
