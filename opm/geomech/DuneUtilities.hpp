@@ -22,18 +22,15 @@ public:
     return codim == codim_;
   }
 
-#if DUNE_VERSION_LT(DUNE_GRID, 2, 8)
-  bool fixedsize(int /* dim */, int /* codim */) const
-  {
-    return true;
-  }
-#else
-
+  // NOTE: this must be spelled fixedSize (Dune >= 2.8).  The old
+  // DUNE_VERSION_LT guard silently selected the lowercase spelling when
+  // the version macros were not in scope, which made the CRTP dispatch in
+  // CommDataHandleIF::fixedSize call itself -- undefined behaviour that
+  // broke codim-3 communication.
   bool fixedSize(int /* dim */, int /* codim */) const
   {
     return true;
   }
-#endif
   template<class EntityType>
   std::size_t size(const EntityType /* entity */) const
   {
@@ -85,18 +82,15 @@ public:
     return codim == codim_;
   }
 
-#if DUNE_VERSION_LT(DUNE_GRID, 2, 8)
-  bool fixedsize(int /* dim */, int /* codim */) const
-  {
-    return true;
-  }
-#else
-
+  // NOTE: this must be spelled fixedSize (Dune >= 2.8).  The old
+  // DUNE_VERSION_LT guard silently selected the lowercase spelling when
+  // the version macros were not in scope, which made the CRTP dispatch in
+  // CommDataHandleIF::fixedSize call itself -- undefined behaviour that
+  // broke codim-3 communication.
   bool fixedSize(int /* dim */, int /* codim */) const
   {
     return true;
   }
-#endif
   template<class EntityType>
   std::size_t size(const EntityType /* entity */) const
   {
