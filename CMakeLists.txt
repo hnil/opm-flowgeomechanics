@@ -615,6 +615,18 @@ set_tests_properties(Run.SPE1_OILGAS_THERMAL_MECH_FRAC_FAIL.OilGasEnergyGeomech
 	WILL_FAIL TRUE
 )
 
+# CARFIN LGR + mechanics smoke test (geomech_lgr branch): VEM on the refined
+# leaf, well completed inside the LGR via WELSPECL/COMPDATL.  Run-only for
+# now; --parsing-strictness=low is required while CARFIN/COMPDATL are on
+# flow's unsupported-keyword list.
+add_test(NAME Run.SIMPLE_MECH_LGR.EnergyGeomech
+	COMMAND
+	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
+	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_LGR.DATA
+	--parsing-strictness=low
+	--output-dir=test_simple_mech_lgr
+)
+
 ## regressuin
 opm_set_test_driver(${PROJECT_SOURCE_DIR}/tests/run-mechRegressionTest.sh "")
 
