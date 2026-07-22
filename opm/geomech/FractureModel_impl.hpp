@@ -20,7 +20,8 @@ namespace Opm {
     template<class Grid>
     FractureModel::FractureModel(const Grid&              grid,
                                  const std::vector<Well>& wells,
-                                 const PropertyTree&      param)
+                                 const PropertyTree&      param,
+                                 const ConnCellResolver&  connCellResolver)
         : prm_(param)
     {
         //using CartesianIndexMapper = Dune::CartesianIndexMapper<Grid>;
@@ -39,8 +40,15 @@ namespace Opm {
 
                 // should be done property with welltraj
                 for (const auto& connection : well.getConnections()) {
-                    const int cell_index = geomhelp
-                        .compressedIndex(connection.global_index());
+                    const int cell_index = connCellResolver
+                        ? connCellResolver(well, connection)
+                        : geomhelp.compressedIndex(connection.global_index());
+
+                    if (cell_index < 0) {
+                        // Not an interior cell on this rank (parallel), or
+                        // unresolvable connection: skip.
+                        continue;
+                    }
 
                     vertices.push_back(geomhelp.centroid(cell_index));
 

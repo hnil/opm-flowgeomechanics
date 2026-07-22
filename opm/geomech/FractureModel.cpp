@@ -10,6 +10,7 @@
 #include <opm/simulators/wells/SingleWellState.hpp>
 #include <opm/simulators/wells/WellState.hpp>
 
+#include <opm/input/eclipse/EclipseState/Grid/EclipseGrid.hpp>
 #include <opm/input/eclipse/Schedule/ScheduleState.hpp>
 #include <opm/input/eclipse/Schedule/Well/Connection.hpp>
 #include <opm/input/eclipse/Schedule/Well/WellConnections.hpp>
@@ -201,7 +202,8 @@ FractureModel::addWell(const std::string& name,
 }
 
 void
-FractureModel::addFractures(const ScheduleState& sched)
+FractureModel::addFractures(const ScheduleState& sched,
+                            const EclipseGrid* eclGrid)
 {
     const auto fracture_type = this->prm_.get<std::string>("config.type", "well_seed");
 
@@ -217,7 +219,7 @@ FractureModel::addFractures(const ScheduleState& sched)
     //     well_fractures_[i].push_back(std::move(fracture));
     //}
     else if (fracture_type == "well_seed") {
-        this->addFracturesWellSeed(sched);
+        this->addFracturesWellSeed(sched, eclGrid);
     } else {
         OPM_THROW(std::runtime_error, "Fracture type '" + fracture_type + "' is not supported");
     }
@@ -499,14 +501,39 @@ namespace
 std::unordered_map<int, std::size_t>
 localSeedCells(const Opm::FractureWell& fracWell,
                const Opm::WellConnections& conns,
-               const Opm::WellFractureSeeds& seeds)
+               const Opm::WellFractureSeeds& seeds,
+               const Opm::EclipseGrid* eclGrid)
 {
     auto localSeedIxMap = std::unordered_map<int, std::size_t> {};
 
-    auto connIx = [&fracWell, &conns](const std::size_t seedCellGlobal) {
+    auto connIx = [&fracWell, &conns, eclGrid](const std::size_t seedCellGlobal) {
         auto connPos = std::find_if(conns.begin(), conns.end(), [seedCellGlobal](const auto& conn) {
             return conn.global_index() == seedCellGlobal;
         });
+
+        if (connPos == conns.end() && (eclGrid != nullptr)) {
+            // WSEED gives a level-zero (global-grid) cell, but connections
+            // completed inside an LGR (COMPDATL) carry LGR-local global
+            // indices, so the exact match above cannot fire.  Match such
+            // connections through their father (parent coarse) cell instead.
+            // Several sub-connections may share the parent; for now seed only
+            // ONE fracture per WSEED record: the middle of the matching
+            // connections (in connection order).
+            auto matches = std::vector<Opm::WellConnections::const_iterator> {};
+            for (auto it = conns.begin(); it != conns.end(); ++it) {
+                if (it->get_lgr_level() <= 0) {
+                    continue;
+                }
+                const auto& tag = eclGrid->get_lgr_labels_by_number(it->get_lgr_level());
+                const auto father = eclGrid->getLGR_global_father(it->global_index(), tag);
+                if (father >= 0 && static_cast<std::size_t>(father) == seedCellGlobal) {
+                    matches.push_back(it);
+                }
+            }
+            if (!matches.empty()) {
+                connPos = matches[matches.size() / 2];
+            }
+        }
 
         if (connPos == conns.end()) {
             return -1;
@@ -527,7 +554,8 @@ localSeedCells(const Opm::FractureWell& fracWell,
 } // namespace
 
 void
-Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched)
+Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched,
+                                         const EclipseGrid* eclGrid)
 {
     if (sched.wseed().empty()) {
         return;
@@ -544,7 +572,8 @@ Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched)
 
         const auto& wseed = sched.wseed(fracWell.name());
         const auto localSeeds
-            = localSeedCells(fracWell, sched.wells(fracWell.name()).getConnections(), wseed);
+            = localSeedCells(fracWell, sched.wells(fracWell.name()).getConnections(), wseed,
+                             eclGrid);
 
         const auto emap = ElementMapper {fracWell.grid().leafGridView(), Dune::mcmgElementLayout()};
 
@@ -574,8 +603,12 @@ Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched)
             prm_.put("config.min_width", frac_size[2]);
 
             assert(normal.two_norm() > 0.0);
-            const auto& conn = sched.wells(fracWell.name()).getConnections();
-            int globalIndex = conn[elemIdx].global_index();
+            // Store the WSEED cell's level-zero global index (for non-LGR
+            // wells this equals the connection's own global index, which is
+            // how the seed matched); updateActive() compares against the
+            // WSEED cells, so this keeps activation working for connections
+            // completed inside an LGR too.
+            int globalIndex = static_cast<int>(wseed.seedCells()[seedPos->second]);
             this->well_fractures_[wellIx].emplace_back().init(
                 fracWell.name(),
                 /* connection index */ elemIdx,

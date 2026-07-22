@@ -14,6 +14,8 @@
 #include <opm/input/eclipse/Schedule/Well/WellConnections.hpp>
 
 #include <opm/simulators/linalg/PropertyTree.hpp>
+
+#include <functional>
 #include <opm/simulators/utils/DeferredLogger.hpp>
 
 #include <algorithm>
@@ -28,6 +30,7 @@ namespace Opm {
     class RuntimePerforation;
 
     class ScheduleState;
+class EclipseGrid;
 
   template <typename Scalar,typename IndexTraits>
     class WellState;
@@ -41,10 +44,19 @@ public:
     using Point3D = Dune::FieldVector<double,3>;
     using Segment = std::array<unsigned int,2>;
     using EntitySeed = Dune::CpGrid::Codim<0>::Entity::EntitySeed;
+
+    //! Optional resolver mapping a well connection to its compressed leaf
+    //! cell.  Needed for connections completed inside an LGR (COMPDATL),
+    //! whose global_index() is LGR-local and must not be interpreted as a
+    //! level-zero Cartesian index; may return -1 for non-interior cells
+    //! (skipped).  When empty, the level-zero Cartesian mapping is used.
+    using ConnCellResolver = std::function<int(const Well&, const Connection&)>;
+
     template<class Grid>
     FractureModel(const Grid& grid,
                   const std::vector<Well>& wells,
-                  const PropertyTree&);
+                  const PropertyTree&,
+                  const ConnCellResolver& connCellResolver = {});
 
     /// Initialise fracture objects.
     ///
@@ -54,7 +66,8 @@ public:
     /// \param[in] sched Dynamic objects in current run, especially
     /// including well fracturing seed points and fracturing plane normal
     /// vectors in addition to all current well objects.
-    void addFractures(const ScheduleState& sched);
+    void addFractures(const ScheduleState& sched,
+                      const EclipseGrid* eclGrid = nullptr);
 
      void updateFractureReservoirCells(const Dune::CpGrid& cpgrid);
   
@@ -146,7 +159,8 @@ public:
         /// \param[in] sched Dynamic objects in current run, especially
         /// including well fracturing seed points and fracturing plane normal
         /// vectors in addition to all current well objects.
-        void addFracturesWellSeed(const ScheduleState& sched);
+        void addFracturesWellSeed(const ScheduleState& sched,
+                                  const EclipseGrid* eclGrid = nullptr);
 
     };
 }
