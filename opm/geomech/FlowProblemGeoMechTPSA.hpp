@@ -52,19 +52,19 @@ namespace Opm{
         { return fracHost_; }
 
         //! Total in-situ stress at a cell, as consumed by the fracture
-        //! model; mirrors the VEM GeoMechModel::stress convention.
+        //! model.
+        //!
+        //! Unlike the VEM GeoMechModel::stress, no potential (Biot/thermal)
+        //! diagonal is added here: the TPSA solid pressure is a total-pressure
+        //! variable (p_s = lambda*div(u) - biot*dp - tcoeff*dT), so the
+        //! reconstructed stress delta is already the TOTAL stress change.
+        //! Adding the potential force again would double-count the coupling.
         SymTensor stress(size_t globalIdx) const
         {
             // outputstress carries the initial-stress offset once
             // applyInitialOutputStress has run (STRESSEQUIL path), so this
-            // is initstress + TPSA delta.
-            SymTensor total = this->geoMechModel().outputstress(globalIdx);
-            const double pot = this->mechPotentialPressForce(globalIdx)
-                             + this->mechPotentialTempForce(globalIdx);
-            for (int i = 0; i < 3; ++i) {
-                total[i] += pot;
-            }
-            return total;
+            // is initstress + TPSA total-stress delta.
+            return this->geoMechModel().outputstress(globalIdx);
         }
 
         // ///
