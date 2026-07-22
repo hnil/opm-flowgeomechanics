@@ -27,8 +27,17 @@
 #include <opm/material/densead/Evaluation.hpp>
 #include <opm/material/densead/Math.hpp>
 
+#include <opm/common/utility/Serializer.hpp>
+
+#include <opm/grid/common/CommunicationUtils.hpp>
+
+#include <opm/geomech/FractureModel.hpp>
+
 #include <opm/simulators/flow/FlowProblemParameters.hpp>
 #include <opm/simulators/linalg/PropertyTree.hpp>
+#include <opm/simulators/utils/MPIPacker.hpp>
+#include <opm/simulators/utils/ParallelCommunication.hpp>
+#include <opm/simulators/wells/RuntimePerforation.hpp>
 
 #include <dune/common/fvector.hh>
 #include <dune/istl/bvector.hh>
@@ -66,10 +75,17 @@ namespace Opm{
     // Defined in FractureModel.cpp
     PropertyTree makeDefaultFractureParam(bool rate_control);
 
-    template<typename TypeTag, class Base>
+    template<typename TypeTag, class Base, class Derived>
     class FlowProblemMech: public Base {
     public:
         using MechBase = Base;
+
+        Derived& derived()
+        { return static_cast<Derived&>(*this); }
+
+        const Derived& derived() const
+        { return static_cast<const Derived&>(*this); }
+
         using Simulator = GetPropType<TypeTag, Properties::Simulator>;
         using Scalar = GetPropType<TypeTag, Properties::Scalar>;
         using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
@@ -319,6 +335,234 @@ namespace Opm{
         {}
 
         // ///
+        // Fracture connection plumbing (shared between mechanics backends;
+        // reaches the backend through derived().fractureHost())
+        // ///
+      double maxNextTimeStepSize() const override{
+        double dt_max = Base::maxNextTimeStepSize();
+        if(this->derived().fractureHost().fractureModelActive()){
+            const auto& simulator = this->simulator();
+            double dt_max_frac = this->derived().fractureHost().fractureModel().template maxFlowTimeStep<TypeTag,Simulator>(simulator);
+            dt_max = std::min(dt_max,dt_max_frac);
+        }
+        return dt_max;
+      }
+
+        std::vector<std::vector<RuntimePerforation> >getAllExtraWellIndices()
+        {
+            std::vector<std::vector<RuntimePerforation> > all_indices;
+            auto& wellcontainer = this->wellModel().localNonshutWells();
+            for (auto& wellPtr : wellcontainer) {
+                auto wellName = wellPtr->name();
+                const auto& wellcons = this->derived().fractureHost().getExtraWellIndices(wellName);
+                all_indices.push_back(wellcons);
+            }
+            return all_indices;
+        }
+      
+        void addConnectionsToWell(){
+            auto& wellcontainer = this->wellModel().localNonshutWells();
+            for (auto& wellPtr : wellcontainer) {
+                auto wellName = wellPtr->name();
+                const auto& wellcons = this->derived().fractureHost().getExtraWellIndices(wellName);
+
+                wellPtr->addFracturePerforations(wellcons);
+            }
+        }
+
+        void addConnectionsToSchedual()
+        {
+            const auto& prm = this->getFractureParam();
+            int verbosity = prm.get("fractureparam.verbosity", 1);
+            if(verbosity >0){
+                std::stringstream os;
+                os << "Adding connections to schedule" << std::endl;
+                FractureModel::fractureLogger.info(os.str());
+            }
+            //return;
+        // add extra connections to schedule and use the action framework to handle it
+            //const auto& problem = simulator_.problem();
+            auto& simulator = this->simulator();
+            auto& schedule = simulator.vanguard().schedule();
+            const int reportStep = this->episodeIndex();
+
+            // const auto sim_time = simulator_.time() + simulator_.timeStepSize();
+            //  const auto now = TimeStampUTC {schedule_.getStartTime()} + std::chrono::duration<double>(sim_time);
+            // const auto ts = formatActionDate(now, reportStep);
+
+            std::map<std::string, std::vector<Connection>> extra_perfs;
+
+            //auto mapper = simulator.vanguard().cartesianMapper();
+            //auto& wellcontainer = this->wellModel().localNonshutWells();
+            //for (auto& wellPtr : wellcontainer) {
+            int new_conns = 0;
+            int old_conns = 0;
+            for (const auto& wellName : schedule.wellNames(reportStep)) {
+                const auto wellcons = this->derived().fractureHost().getExtraWellIndices(wellName);
+
+                if (wellcons.empty()) {
+                    // No extra connections for this well.
+                    continue;
+                }
+
+                const auto& origConns = this->schedule_[reportStep]
+                    .wells(wellName).getConnections();
+
+                auto extra = std::vector<Connection>{};
+
+                for (const auto& wellconn : wellcons) {
+                    // simple calculated with upscaling
+                    // map to cartesian
+                    const auto cartesianIdx = simulator.vanguard()
+                        .cartesianIndex(wellconn.cell);
+
+                    if (origConns.hasGlobalIndex(cartesianIdx)) {
+                        
+                        if (verbosity > 2) {
+                            std::stringstream os;
+                            os << "Connection already exists for cell: "
+                               << wellconn.cell; // << std::endl;
+                            FractureModel::fractureLogger.info(os.str());
+                        }
+                        old_conns += 1;
+                        continue;
+                    }
+
+                    // get ijk
+                    std::array<int, 3> ijk{};
+                    simulator.vanguard().cartesianCoordinate(wellconn.cell, ijk);
+                    new_conns += 1;
+                    if(verbosity > 1) {
+                        std::stringstream os;
+
+                        os << "New connection for cell: "
+                           << wellconn.cell << " ("
+                           << (ijk[0] + 1)  << ", "
+                           << (ijk[1] + 1)  << ", "
+                           << (ijk[2] + 1)  << ')';
+
+                        FractureModel::fractureLogger.info(os.str());
+                    }
+
+                    // Making preliminary connection to be added in schedule
+                    // with correct numbering
+                    // Dynamic fracturing completions enter the schedule as open
+                    // zero-CF well connections; the fracture WI/CTF is added later
+                    // through addFracturePerforations(). Even a zero-CF open
+                    // completion still changes the rebuilt well topology, perf
+                    // ordering, and first-perforation state initialization.
+                    auto& connection = extra
+                        .emplace_back(ijk[0], ijk[1], ijk[2], cartesianIdx,
+                                      /*complnum*/ -1,
+                                      Connection::State::OPEN,
+                                      Connection::Direction::Z,
+                                      Connection::CTFKind::DynamicFracturing,
+                                      /* satTableId */ -1,
+                                      wellconn.depth,
+                                      Connection::CTFProperties{},
+                                      /* sort_value */ -1,
+                                      /* defaut sattable */ true);
+
+                    //only add zero value 
+                    // connection need to be modified later.
+                    connection.setCF(wellconn.ctf * 0.0);
+
+                    if (wellconn.perf_range.has_value()) {
+                        const auto compseg_insert_index =
+                            std::numeric_limits<std::size_t>::max();
+
+                        connection.updateSegment(wellconn.segment,
+                                                 wellconn.depth,
+                                                 connection.thermalLength(),
+                                                 compseg_insert_index,
+                                                 wellconn.perf_range);
+                    }
+                }
+
+                if (! extra.empty()) {
+                    const auto* pl = (extra.size() != 1) ? "s" : "";
+
+                    std::stringstream os;
+                    os << "Adding " << extra.size()
+                       << " extra connection" << pl << " for well: "
+                       << wellName;
+                    FractureModel::fractureLogger.info(os.str());
+
+                    extra_perfs.insert_or_assign(wellName, std::move(extra));
+                }
+            }
+
+            if (this->gridView().comm().sum(static_cast<int>(extra_perfs.size())) == 0) {
+                return;
+            }
+            else {
+                // add to schedule
+                // structure will be changed erase matrix, maybe only rebuilding of linear solver is neede
+                //std::cout << "Rebuilding linear solver for extra connections" << std::endl;
+                this->simulator().model().linearizer().eraseMatrix();
+                this->simulator().model().newtonMethod().linearSolver().eraseMatrix();
+                //if (this->gridView().comm().rank() == 0) {
+                if(verbosity > 0) {
+                    std::stringstream os;
+                    os << "Adding extra connections to schedule for report step: "
+                   << reportStep << " old connections: " << old_conns << " new connections: " << new_conns;
+                    FractureModel::fractureLogger.info(os.str());
+                }
+                //}
+            }
+
+            auto sim_update = schedule.modifyCompletions(reportStep, extra_perfs);
+
+            {
+                // Some, or all, of the 'extra_perfs' are entirely new
+                // connections created by the fracturing process.  Inform the
+                // summary vector calculation engine of these new connections so
+                // that they may be included in the summary output if needed.
+
+                const auto root = 0;
+                const auto newConns = CollectDynamicConns {
+                    Mpi::Packer { this->gridView().comm() }
+                }(this->gridView().comm(), root, sim_update.new_frac_wconns);
+
+                if (this->gridView().comm().rank() == root) {
+                    this->eclWriter_->recordNewDynamicWellConns(newConns);
+                }
+            }
+
+            // alwas rebuild wells
+            sim_update.well_structure_changed = true;
+
+            bool commit_wellstate = false;
+            {
+                // The well/group updates triggered by the simulator update
+                // log through the group-state helper's deferred logger,
+                // which must be established by the caller.
+                auto logger_guard = this->wellModel().groupStateHelper().pushLogger();
+                this->actionHandler_.applySimulatorUpdate(reportStep,
+                                                          sim_update,
+                                                          /* updateTrans = */ [](const bool) {},
+                                                          commit_wellstate);
+            }
+            if (commit_wellstate) {
+                this->wellModel().commitWGState();
+            }
+        }
+
+
+        void endEpisode() override{
+            Base::endEpisode();
+            if(!Parameters::Get<Parameters::EnableWriteAllSolutions>()){
+                this->derived().fractureHost().writeFractureSolution();
+            }
+        }
+
+        void updateFailed(){
+            Base::updateFailed();
+            this->derived().fractureHost().resetFractureModel();
+        }
+
+
+        // ///
         // Accessors
         // ///
         double initPressure(unsigned dofIdx) const{
@@ -359,6 +603,68 @@ namespace Opm{
         double cStress(size_t idx) const {return cstress_[idx];}
 
     protected:
+        class CollectDynamicConns : private Serializer<Mpi::Packer>
+        {
+        public:
+            using DynamicConns =
+                std::vector<std::pair<std::string, std::vector<std::size_t>>>;
+
+            explicit CollectDynamicConns(const Mpi::Packer& pack)
+                : Serializer<Mpi::Packer> { pack }
+            {}
+
+            DynamicConns
+            operator()(const Parallel::Communication comm,
+                       const int                     root,
+                       const DynamicConns&           newConns)
+            {
+                if (comm.size() == 1) {
+                    return newConns;
+                }
+
+                this->pack(newConns);
+
+                std::tie(this->rankBuffers_, this->rankStart_) =
+                    gatherv(this->m_buffer, comm, root);
+
+                if (comm.rank() != root) {
+                    // Non-root processes don't need any new connection objects.
+                    return {};
+                }
+
+                auto allNewConns = DynamicConns{};
+                for (auto rank = 0*comm.size(); rank < comm.size(); ++rank) {
+                    auto rankNewConns = this->deserialise(rank);
+
+                    allNewConns.insert(allNewConns.end(),
+                                       std::make_move_iterator(rankNewConns.begin()),
+                                       std::make_move_iterator(rankNewConns.end()));
+                }
+
+                return allNewConns;
+            }
+
+        private:
+            std::vector<char> rankBuffers_{};
+            std::vector<int> rankStart_{};
+
+            DynamicConns deserialise(const std::size_t rank)
+            {
+                auto newConns = DynamicConns{};
+
+                auto begin = this->rankBuffers_.begin() + this->rankStart_[rank + 0];
+                auto end   = this->rankBuffers_.begin() + this->rankStart_[rank + 1];
+
+                this->m_buffer.assign(begin, end);
+                this->m_packSize = std::distance(begin, end);
+
+                this->unpack(newConns);
+
+                return newConns;
+            }
+        };
+
+
         std::vector<double> ymodule_;
         std::vector<double> pratio_;
         std::vector<double> biotcoef_;
