@@ -106,10 +106,24 @@ namespace Opm{
                     //
                     
 
+                    // LGR-aware connection-to-cell resolution: COMPDATL
+                    // connections carry LGR-local global indices which must
+                    // be mapped through the vanguard's LGR machinery, not the
+                    // level-zero Cartesian mapper.
+                    const auto& eclGrid = simulator_.vanguard().eclState().getInputGrid();
+                    FractureModel::ConnCellResolver connCellResolver =
+                        [this, &eclGrid](const Opm::Well&, const Opm::Connection& conn) -> int {
+                            if (conn.get_lgr_level() > 0) {
+                                const auto& tag = eclGrid.get_lgr_labels_by_number(conn.get_lgr_level());
+                                return simulator_.vanguard().compressedIndexForInteriorLGR(tag, conn);
+                            }
+                            return simulator_.vanguard().compressedIndexForInterior(conn.global_index());
+                        };
                     try{
                         fracturemodel_ = std::make_unique<FractureModel>(grid,
                                                                      wells,
-                                                                     param
+                                                                     param,
+                                                                     connCellResolver
                         );
                     }catch (...){
                        fracturemodel_ = nullptr;
@@ -120,7 +134,9 @@ namespace Opm{
                     fracturemodel_->updateReservoirWellProperties<TypeTag,Simulator>(simulator_);
                     // add fractures along the wells
                     //fracturemodel_->addFractures(schedule[reportStepIdx]);
-                    fracturemodel_->addFractures(schedule[end_step]);
+                    fracturemodel_->addFractures(
+                        schedule[end_step],
+                        &simulator_.vanguard().eclState().getInputGrid());
 
                     fracturemodel_->updateFractureReservoirCells(grid);
                     fracturemodel_->initReservoirProperties<TypeTag,Simulator>(simulator_);
