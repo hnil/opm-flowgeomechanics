@@ -64,6 +64,24 @@ find_package(opm-common REQUIRED)
 include(OpmInit)
 OpmSetPolicies()
 
+# The OPM modules keep asserts enabled also in release builds:
+# use_additional_optimization() in opm-common adds -UNDEBUG to every
+# target unless WITH_NDEBUG is set.  Classes such as EnsureFinalized
+# (the base of all material-law parameter classes) have members that
+# exist only when NDEBUG is undefined, so compiling this module with
+# NDEBUG while linking OPM libraries built without it changes class
+# layouts and corrupts memory at runtime.  Apply the same flag to all
+# targets in this module.
+include(UseOptimization)
+if(NOT WITH_NDEBUG)
+  add_compile_options($<$<CONFIG:Release,RelWithDebInfo>:-UNDEBUG>)
+endif()
+
+# Executables go to bin/ like in the other OPM modules (opm_add_executable
+# sets this per target; this module creates its targets directly).  The
+# regression-test driver locates the simulators there.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
+
 if(USE_MPI)
 	set(HDF5_PREFER_PARALLEL TRUE)
 endif()
@@ -371,7 +389,7 @@ function(add_mechtest_compareECLFiles)
                   -f ${PARAM_FILENAME}
                   -a ${PARAM_ABS_TOL}
                   -t ${PARAM_REL_TOL}
-                  -c ${COMPARE_ECL_COMMAND}
+                  -c $<TARGET_FILE:compareECL>
 				  -o ${PARAM_REFERENCE_CASENAME})
  #                 -d ${RST_DECK_COMMAND})
  # if(PARAM_RESTART_STEP)
