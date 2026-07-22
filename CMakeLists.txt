@@ -648,6 +648,19 @@ add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_standard
 						 PREFIX geomech_frac
 						 TEST_ARGS --fracture-param-file=standard)
 
+# Formation damage (WINJDAM/WINJFCNC) + fracture: verifies the filter-cake
+# transmissibility damage on the original perforation, the matrix/fracture
+# filtrate split (CFCFRATE), and that dynamically added fracture
+# perforations are handled with an active cake model.
+add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_damage
+                         FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_DAMAGE
+                         SIMULATOR flow_energy_geomech
+                         ABS_TOL ${abs_tol}
+                         REL_TOL ${rel_tol}
+                         DIR ${CMAKE_CURRENT_LIST_DIR}/data/
+						 PREFIX geomech_frac_damage
+						 TEST_ARGS --fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_frac_postsolve_legacy_full.json)
+
 add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp
                          FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ
                          SIMULATOR flow_energy_geomech
