@@ -169,10 +169,13 @@ namespace Opm{
                     OPM_THROW(std::runtime_error, ss.str());
                 }
                 }
-                ymodule_ = fp.get_double("YMODULE");
-                pratio_ = fp.get_double("PRATIO");
+                // Field properties are stored on the level-zero grid; map them onto
+                // the (possibly LGR-refined) leaf so all per-cell mech arrays are
+                // indexed by leaf cell indices.  Identity on unrefined grids.
+                ymodule_ = this->lookUpData_.assignFieldPropsDoubleOnLeaf(fp, "YMODULE");
+                pratio_ = this->lookUpData_.assignFieldPropsDoubleOnLeaf(fp, "PRATIO");
                 if(fp.has_double("BIOTCOEF")){
-                    biotcoef_ = fp.get_double("BIOTCOEF");
+                    biotcoef_ = this->lookUpData_.assignFieldPropsDoubleOnLeaf(fp, "BIOTCOEF");
                     poelcoef_.resize(ymodule_.size());
                     for(std::size_t i=0; i < ymodule_.size(); ++i){
                         poelcoef_[i] = (1-2*pratio_[i])/(1-pratio_[i])*biotcoef_[i];
@@ -181,7 +184,7 @@ namespace Opm{
                     if(!fp.has_double("POELCOEF")){
                         OPM_THROW(std::runtime_error,"Missing keyword BIOTCOEF or POELCOEF");
                     }
-                    poelcoef_ = fp.get_double("POELCOEF");
+                    poelcoef_ = this->lookUpData_.assignFieldPropsDoubleOnLeaf(fp, "POELCOEF");
                     biotcoef_.resize(ymodule_.size());
                     for(std::size_t i=0; i < ymodule_.size(); ++i){
                         biotcoef_[i] = poelcoef_[i]*(1-pratio_[i])/(1-2*pratio_[i]);
@@ -192,7 +195,7 @@ namespace Opm{
                 bool thermal_expansion = getPropValue<TypeTag, Properties::EnableEnergy>();
                 if(thermal_expansion){
                     if(fp.has_double("THELCOEF")){
-                        thelcoef_ = fp.get_double("THELCOEF");
+                        thelcoef_ = this->lookUpData_.assignFieldPropsDoubleOnLeaf(fp, "THELCOEF");
                         thermexr_.resize(ymodule_.size());
                         for(std::size_t i=0; i < ymodule_.size(); ++i){
                             thermexr_[i] = thelcoef_[i]*(1-pratio_[i])/ymodule_[i];
@@ -201,7 +204,7 @@ namespace Opm{
                         if(!fp.has_double("THERMEXR")){
                             OPM_THROW(std::runtime_error,"Missing keyword THELCOEF or THERMEXR");
                         }
-                        thermexr_ = fp.get_double("THERMEXR");
+                        thermexr_ = this->lookUpData_.assignFieldPropsDoubleOnLeaf(fp, "THERMEXR");
                         thelcoef_.resize(ymodule_.size());
                         for(std::size_t i=0; i < ymodule_.size(); ++i){
                             thelcoef_[i] = thermexr_[i]*ymodule_[i]/(1-pratio_[i]);
@@ -217,7 +220,7 @@ namespace Opm{
                     }
                 }
                 if(fp.has_double("CSTRESS")){
-                    cstress_ = fp.get_double("CSTRESS");
+                    cstress_ = this->lookUpData_.assignFieldPropsDoubleOnLeaf(fp, "CSTRESS");
                 }
 
                 const auto& initconfig = eclState.getInitConfig();
@@ -231,7 +234,8 @@ namespace Opm{
                         cartesianToCompressedElemIdx[cartesianIndexMapper.cartesianIndex(elemIdx)] = elemIdx;
                     }
                     const auto& stressequil = initconfig.getStressEquil();
-                    const auto& equilRegionData = fp.get_int("STRESSEQUILNUM");
+                    const auto equilRegionData = this->lookUpData_.template assignFieldPropsIntOnLeaf<int>(
+                        fp, "STRESSEQUILNUM", /*needsTranslation*/ false);
                     //make lambda functions for each regaion
                     std::vector<std::function<std::array<double,6>()>> functors;
                     int recnum=1;
