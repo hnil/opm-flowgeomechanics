@@ -8,6 +8,7 @@
 #include <opm/input/eclipse/EclipseState/Phase.hpp>
 
 #include <opm/geomech/FlowGeoMechLinearSolverParameters.hpp>
+#include <opm/geomech/FlowProblemMech.hpp>
 #include <opm/geomech/BoundaryUtils.hpp>
 #include <opm/geomech/GeoMechModel.hpp>
 #include <opm/geomech/VtkGeoMechModule.hpp>
@@ -40,27 +41,12 @@
 #include <tuple>
 #include <vector>
 
-namespace Opm::Parameters {
-    struct FractureParamFile {
-        inline static std::string value{"notafile"};
-    };
-}
-
 namespace Opm{
-    namespace Detail {
-        inline bool fractureParamFileExists(const std::string& filename)
-        {
-            std::ifstream stream(filename);
-            return stream.good();
-        }
-
-        bool isBuiltinFractureParamAlias(const std::string& filename);
-        Opm::PropertyTree builtinFractureParam(const std::string& filename);
-    } // namespace Detail
 
     template<typename TypeTag>
-    class FlowProblemGeoMech: public FlowProblemBlackoil<TypeTag>{
+    class FlowProblemGeoMech: public FlowProblemMech<TypeTag, FlowProblemBlackoil<TypeTag>>{
     public:
+        using MechParent = FlowProblemMech<TypeTag, FlowProblemBlackoil<TypeTag>>;
         using Parent = FlowProblemBlackoil<TypeTag>;
         using Simulator = GetPropType<TypeTag, Properties::Simulator>;
         using TimeStepper = AdaptiveTimeStepping<TypeTag>;
@@ -75,72 +61,20 @@ namespace Opm{
         using Toolbox = MathToolbox<Evaluation>;
         using SymTensor = Dune::FieldVector<double,6>;
 
-        template <class FluidState>
-        static int referencePhaseIdx(const FluidState& fs)
-        {
-            if (fs.phaseIsActive(FluidSystem::waterPhaseIdx)) {
-                return FluidSystem::waterPhaseIdx;
-            }
-            if (fs.phaseIsActive(FluidSystem::oilPhaseIdx)) {
-                return FluidSystem::oilPhaseIdx;
-            }
-            return FluidSystem::gasPhaseIdx;
-        }
-
       //using CellSeedType = typename GridView::template Codim<0>::EntitySeed;
         FlowProblemGeoMech(Simulator& simulator):
-            FlowProblemBlackoil<TypeTag>(simulator),
+            MechParent(simulator),
             geoMechModel_(simulator)
         {
-            std::string filename = Parameters::Get<Parameters::FractureParamFile>();
-            if (filename == "notafile") {
-                Opm::PropertyTree fracture_param = makeDefaultFractureParam();
-                // fracture_param.put("fractureparams.numfractures",1);
-                fracture_param_ = fracture_param;
-            } else {
-                std::string fractureParamSource = filename;
-                try {
-                    if (Detail::fractureParamFileExists(filename)) {
-                        Opm::PropertyTree fracture_param(filename);
-                        fracture_param_ = fracture_param;
-                    } else if (Detail::isBuiltinFractureParamAlias(filename)) {
-                        fractureParamSource = "built-in alias '" + filename + "'";
-                        fracture_param_ = Detail::builtinFractureParam(filename);
-                    } else {
-                        Opm::PropertyTree fracture_param(filename);
-                        fracture_param_ = fracture_param;
-                    }
-                } catch (...) {
-                    std::stringstream ss;
-                    ss << "No fracture parameter file or error reading it: " << fractureParamSource
-                       << " : Simulation stopped: correct file or use default";
-                    // ss << e.what();
-                    OpmLog::warning(ss.str());
-                    // stop simulation
-                    OPM_THROW(std::runtime_error, ss.str());
-                }
-            }
-            std::stringstream os;
-            fracture_param_.write_json(os, true);
-            OpmLog::info(os.str());
-
-            hasFractures_ = this->simulator().vanguard().eclState().runspec().frac();//fracture_param_.get<bool>("hasfractures");
-                        const bool waterActive = this->simulator().vanguard().eclState().runspec().phases().active(Opm::Phase::WATER);
-                        if (hasFractures_ && !waterActive) {
-                                OPM_THROW(std::runtime_error,
-                                                    "Fracture code requires an active WATER phase; decks with MECH+FRAC but without WATER are not supported");
-                        }
-            //addPerfsToSchedule_ = fracture_param_.get<bool>("add_perfs_to_schedule");
             if(this->simulator().vanguard().eclState().runspec().mech()){
               this->model().addOutputModule(std::make_unique<VtkGeoMechModule<TypeTag>>(simulator));
             }
         }
 
         static void registerParameters(){
-            Parent::registerParameters();
+            MechParent::registerParameters();
             VtkGeoMechModule<TypeTag>::registerParameters();
             FlowLinearSolverParametersGeoMech::registerParameters<TypeTag>();
-	    Parameters::Register<Parameters::FractureParamFile>("json file defining fracture setting or alias: standard, sequential_implicit");
 	    Opm::Parameters::SetDefault<Opm::Parameters::EnableOpmRstFile>(true);
 	    Opm::Parameters::SetDefault<Opm::Parameters::EnableVtkOutput>(true);
 	    Opm::Parameters::SetDefault<Opm::Parameters::ThreadsPerProcess>(1);
@@ -150,214 +84,57 @@ namespace Opm{
 
         void finishInit(){
             OPM_TIMEBLOCK(finishInit);
-            Parent::finishInit();
+            MechParent::finishInit();
             const auto& simulator = this->simulator();
             const auto& eclState = simulator.vanguard().eclState();
             if(eclState.runspec().mech()){
                 const auto& initconfig = eclState.getInitConfig();
                 geoMechModel_.init(initconfig.restartRequested());
-                const auto& fp = eclState.fieldProps();
-                std::vector<std::string> needkeys = {"YMODULE","PRATIO"};
-                for(size_t i=0; i < needkeys.size(); ++i){
-                    bool ok = fp.has_double(needkeys[i]);
-                std::stringstream ss;
-                if(!ok){
-                    ss << "Missing keyword " << needkeys[i];
-                    OPM_THROW(std::runtime_error, ss.str());
-                }
-                }
-                ymodule_ = fp.get_double("YMODULE");
-                pratio_ = fp.get_double("PRATIO");
-                if(fp.has_double("BIOTCOEF")){
-                    biotcoef_ = fp.get_double("BIOTCOEF");
-                    poelcoef_.resize(ymodule_.size());
-                    for(int i=0; i < ymodule_.size(); ++i){
-                        poelcoef_[i] = (1-2*pratio_[i])/(1-pratio_[i])*biotcoef_[i];
-                    }
-                }else{
-                    if(!fp.has_double("POELCOEF")){
-                        OPM_THROW(std::runtime_error,"Missing keyword BIOTCOEF or POELCOEF");
-                    }
-                    poelcoef_ = fp.get_double("POELCOEF");
-                    biotcoef_.resize(ymodule_.size());
-                    for(int i=0; i < ymodule_.size(); ++i){
-                        biotcoef_[i] = poelcoef_[i]*(1-pratio_[i])/(1-2*pratio_[i]); 
-                    }
-                }
-            
-                // thermal related
-                bool thermal_expansion = getPropValue<TypeTag, Properties::EnableEnergy>();
-                if(thermal_expansion){
-                    if(fp.has_double("THELCOEF")){
-                        thelcoef_ = fp.get_double("THELCOEF");
-                        thermexr_.resize(ymodule_.size());
-                        for(int i=0; i < ymodule_.size(); ++i){
-                            thermexr_[i] = thelcoef_[i]*(1-pratio_[i])/ymodule_[i];
-                        }
-                    }else{
-                        if(!fp.has_double("THERMEXR")){
-                            OPM_THROW(std::runtime_error,"Missing keyword THELCOEF or THERMEXR");
-                        }
-                        thermexr_ = fp.get_double("THERMEXR");
-                        thelcoef_.resize(ymodule_.size());
-                        for(int i=0; i < ymodule_.size(); ++i){
-                            thelcoef_[i] = thermexr_[i]*ymodule_[i]/(1-pratio_[i]);
-                        }
-                    }
-                }
-                for(size_t i=0; i < ymodule_.size(); ++i){
+                for(size_t i=0; i < this->ymodule_.size(); ++i){
                     using IsoMat = Opm::Elasticity::Isotropic;
-                    if(pratio_[i]>0.5 || pratio_[i] < 0.0){
-                        OPM_THROW(std::runtime_error,"Pratio not valid");
-                    }
-                    if(biotcoef_[i]>1.0 || biotcoef_[i] < 0.0){
-                        OPM_THROW(std::runtime_error,"BIOTCOEF not valid");
-                    }
-                    elasticparams_.push_back(std::make_shared<IsoMat>(i,ymodule_[i],pratio_[i]));
-                }
-                if(fp.has_double("CSTRESS")){
-                    cstress_ = fp.get_double("CSTRESS");
+                    elasticparams_.push_back(std::make_shared<IsoMat>(i,this->ymodule_[i],this->pratio_[i]));
                 }
                 // read mechanical boundary conditions
-                //const auto& simulator = this->simulator();
                 const auto& vanguard = simulator.vanguard();
                 const auto& bcconfigs = vanguard.eclState().getSimulationConfig().bcconfig();
                 const auto& bcprops = this->simulator().vanguard().schedule()[this->episodeIndex()].bcprop;
-                //using CartesianIndexMapper = Dune::CartesianIndexMapper<Grid>;
                 const auto& gv = this->gridView();
-                //const auto& grid = simulator.grid();
                 const auto& cartesianIndexMapper = vanguard.cartesianIndexMapper();
-                //CartesianIndexMapper cartesianIndexMapper(grid);
                 Opm::Elasticity::nodesAtBoundary(bc_nodes_,
                                                  bcconfigs,
                                                  bcprops,
                                                  gv,
                                                  cartesianIndexMapper);
-                
+
                 bool is_ok = checkBcConfig(bc_nodes_);
                 if(!is_ok){
                   // this need to be fixed for parallel runs
-                  //OPM_THROW(std::runtime_error,"Error in boundary condition specification not proper for mechanical problem"  );
-                  //std::stringstream os;
                   std::cout << "Error in boundary condition specification not proper for mechanical problem" << std::endl;
-                    //OpmLog::info(os.str());
-                }                                 
-
-
-                //using Opm::ParserKeywords::;
-                if( initconfig.hasStressEquil()) {
-                    size_t numCartDof = cartesianIndexMapper.cartesianSize();
-                    unsigned numElems = gv.size(/*codim=*/0);
-                    std::vector<int> cartesianToCompressedElemIdx(numCartDof, -1);
-                    for (unsigned elemIdx = 0; elemIdx < numElems; ++elemIdx){
-                        cartesianToCompressedElemIdx[cartesianIndexMapper.cartesianIndex(elemIdx)] = elemIdx;
-                    }
-                    const auto& stressequil = initconfig.getStressEquil();
-                    const auto& equilRegionData = fp.get_int("STRESSEQUILNUM");
-                    //make lambda functions for each regaion
-                    std::vector<std::function<std::array<double,6>()>> functors;
-                    int recnum=1;
-                    initstress_.resize(gv.size(0));
-                    for (const auto& record : stressequil) {
-                        const auto datum_depth = record.datumDepth();
-                        const auto STRESSXX= record.stressXX();
-                        const auto STRESSXXGRAD = record.stressXX_grad();
-                        const auto STRESSYY= record.stressYY();
-                        const auto STRESSYYGRAD = record.stressYY_grad();
-                        const auto STRESSZZ= record.stressZZ();
-                        const auto STRESSZZGRAD = record.stressZZ_grad();
-                        const auto STRESSXY= record.stressXY();
-                        const auto STRESSXZ= record.stressXZ();
-                        const auto STRESSYZ= record.stressYZ();
-
-                        const auto stressXYGRAD = record.stressXY_grad();
-                        const auto stressXZGRAD = record.stressXZ_grad();
-                        const auto stressYZGRAD = record.stressYZ_grad();
-                        for(const auto& cell : elements(gv)){
-                            const auto& center = cell.geometry().center();
-                            const auto& cellIdx = gv.indexSet().index(cell);
-                            assert(cellIdx < equilRegionData.size());
-                            const auto& region = equilRegionData[cellIdx];//cartesianIndexMapper.cartesianIndex(cellIdx)];
-                            assert(region <= stressequil.size());
-                            if(region == recnum){
-                                Dune::FieldVector<double, 6> initstress;
-                                initstress[0] = STRESSXX +  STRESSXXGRAD*(center[2] - datum_depth);
-                                initstress[1] = STRESSYY +  STRESSYYGRAD*(center[2] - datum_depth);
-                                initstress[2] = STRESSZZ +  STRESSZZGRAD*(center[2] - datum_depth);
-                                initstress[3] = STRESSYZ +  stressYZGRAD*(center[2] - datum_depth);
-                                initstress[4] = STRESSXZ +  stressXZGRAD*(center[2] - datum_depth);
-                                initstress[5] = STRESSXY +  stressXYGRAD*(center[2] - datum_depth);
-                                // NB share stress not set to zero
-                                // we operate with stress = C \grad d + \grad d^T in the matematics
-                                initstress_[cellIdx] = initstress;
-                                // functors.push_back([&]{
-
-                                //     return center;
-                                // }
-                                //     );
-                            }
-                        }
-                        recnum +=1;
-                    }
-                    // NB setting initial stress
-                    //this->geoMechModel_.setStress(initstress_);
-                }else{
-//                    OPM_THROW(std::runtime_error, "Missing stress initialization keywords");
-                    //std::cout << "No stress equilibration specified .. try to equilibrate" << std::endl;    
-                }
-                // entity_seed_.resize(gv.size(0));
-                // for(const auto& elem : elements(gv)){
-                //   const auto& cellIdx = gv.indexSet().index(elem);
-                //   entity_seed_[cellIdx] = elem.seed();
-                // }
-            }
-        }
-        void initialSolutionApplied() override{
-            OPM_TIMEBLOCK(initialSolutionApplied);
-            Parent::initialSolutionApplied();
-            const auto& simulator = this->simulator();
-            size_t numDof = simulator.model().numGridDof();
-            initpressure_.resize(numDof);
-            inittemperature_.resize(numDof);
-
-            for(size_t dofIdx=0; dofIdx < numDof; ++dofIdx){
-                const auto& iq = this->model().intensiveQuantities(dofIdx,0);
-                const auto& fs = iq.fluidState();
-                const int phaseIdx = referencePhaseIdx(fs);
-                initpressure_[dofIdx] = Toolbox::value(fs.pressure(phaseIdx));
-                inittemperature_[dofIdx] = Toolbox::value(fs.temperature(phaseIdx));
-            }
-
-            initstress_.resize(numDof);
-
-            // for now make a copy
-            if (simulator.vanguard().eclState().runspec().mech()) {
-                // this->geoMechModel_.setMaterial(elasticparams_);
-                this->geoMechModel_.setMaterial(ymodule_, pratio_);
-                this->geoMechModel_.updatePotentialForces();//Neede only of output
-                const auto& eclState = simulator.vanguard().eclState();
-                const auto& initconfig = eclState.getInitConfig();
-                if (!initconfig.hasStressEquil()) {
-                    this->model().invalidateAndUpdateIntensiveQuantities(0);
-                    std::stringstream os;
-                    os << "No stress equilibration specified .. try to equilibrate";// << std::endl;
-                    //FractureModel::fractureLogger.info(os.str());
-                    OpmLog::info(os.str());
-                    initstress_.resize(numDof);
-                    geoMechModel_.solveGeomechanics(/*use_body_force*/ true, /*relative_solve*/ false);
-                    //auto pure_stress = 
-                    for (size_t i = 0; i < initstress_.size(); ++i) {
-                        initstress_[i] = geoMechModel_.stress(i);
-                    }
-                    // stress in output on first step maybe wrong i.e. 2*stress;
-                    this->geoMechModel_.setFirstSolveTrue();// to do full rebuild next time step
-                }else{
-                    // used set this for initial output of stress all other initial values is zero
-                    // which is always calculated relative to initial configuration
-                    this->geoMechModel_.setOutputPutStress(initstress_);
                 }
             }
         }
+
+        // ///
+        // Backend hooks for the shared initial-stress handling
+        // ///
+        void prepareMechForInit() override{
+            this->geoMechModel_.setMaterial(this->ymodule_, this->pratio_);
+            this->geoMechModel_.updatePotentialForces();//Neede only of output
+        }
+
+        void initializeStressFromMechSolve() override{
+            geoMechModel_.solveGeomechanics(/*use_body_force*/ true, /*relative_solve*/ false);
+            for (size_t i = 0; i < this->initstress_.size(); ++i) {
+                this->initstress_[i] = geoMechModel_.stress(i);
+            }
+            // stress in output on first step maybe wrong i.e. 2*stress;
+            this->geoMechModel_.setFirstSolveTrue();// to do full rebuild next time step
+        }
+
+        void applyInitialOutputStress() override{
+            this->geoMechModel_.setOutputPutStress(this->initstress_);
+        }
+
         void timeIntegration()
         {
             if (this->gridView().comm().rank() == 0){
@@ -381,7 +158,7 @@ namespace Opm{
             OPM_BEGIN_PARALLEL_TRY_CATCH();
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 if(this->hasFractures()){
-                  if(!(int(cstress_.size()) == int(this->gridView().size(0)))){
+                  if(!(int(this->cstress_.size()) == int(this->gridView().size(0)))){
                         OPM_THROW(std::runtime_error,"CSTRESS not set but fractures exists");
                     }
                 }
@@ -676,40 +453,6 @@ namespace Opm{
         Scalar rockMechPoroChange(unsigned /*elementIdx*/, unsigned /*timeIdx*/) const
         { return 0.0; }
 
-        double initPressure(unsigned dofIdx) const{
-            return initpressure_[dofIdx];
-        }
-
-        double initTemperature(unsigned dofIdx) const{
-            return inittemperature_[dofIdx];
-        }
-
-        double initStress(unsigned dofIdx,int comp) const{
-            return initstress_[dofIdx][comp];
-        }
-
-        const SymTensor& initStress(unsigned dofIdx) const{
-            return initstress_[dofIdx];
-        }
-
-        double biotCoef(unsigned globalIdx) const{
-            return biotcoef_[globalIdx];
-        }
-        double thelCoef(unsigned globalIdx) const{
-            return thelcoef_[globalIdx];
-        }
-        double thermExr(unsigned globalIdx) const{
-            return thermexr_[globalIdx];
-        }
-        double poelCoef(unsigned globalIdx) const{
-            return poelcoef_[globalIdx];
-        }
-
-        // double pRatio(unsigned globalIdx) const{
-        //     return pratio_[globalIdx];
-        // }
-
-
         const std::vector<std::tuple<size_t,MechBCValue>>& bcNodes() const{
             return bc_nodes_;
         }
@@ -723,14 +466,6 @@ namespace Opm{
         //     const auto& myvec = fp.get_double(field);
         //     return myvec[globalIdx];
         // }
-        bool hasFractures() const{ return hasFractures_;}
-        Opm::PropertyTree getFractureParam() const{return fracture_param_.get_child("fractureparam");};
-        Opm::PropertyTree getGeoMechParam() const{return fracture_param_;};
-        // used for fracture model
-        double yModule(size_t idx) const {return ymodule_[idx];}
-        double pRatio(size_t idx) const {return pratio_[idx];}
-        double cStress(size_t idx) const {return cstress_[idx];}
-        
       //const std::vector< GridView::Codim<0>::EntitySeed >& elementEntitySeed(){return entitity_seed_;}
       //const std::vector< CellSeedType >& elementEntitySeed(){return entity_seed_;}
         void updateFailed(){
@@ -931,26 +666,9 @@ namespace Opm{
 
         GeoMechModel<TypeTag> geoMechModel_;
 
-        std::vector<double> ymodule_;
-        std::vector<double> pratio_;
-        std::vector<double> biotcoef_;
-        std::vector<double> poelcoef_;
-        std::vector<double> thermexr_;
-        std::vector<double> thelcoef_;
-        std::vector<double> cstress_;
-        
-        std::vector<double> initpressure_;
-        std::vector<double> inittemperature_;
         std::vector<std::tuple<size_t,MechBCValue>> bc_nodes_;
-        Dune::BlockVector< SymTensor > initstress_;
         //std::vector<Opm::Elasticity::Material> elasticparams_;
         std::vector<std::shared_ptr<Opm::Elasticity::Material>> elasticparams_;
-
-        // for fracture calculation
-        bool hasFractures_;
-        //bool addPerfsToSchedule_;
-        Opm::PropertyTree fracture_param_;
-        bool first_fracture_solve_ {true};
       //std::vector< CellSeedType > entity_seed_;
         //private:
         //std::unique_ptr<TimeStepper> adaptiveTimeStepping_;
