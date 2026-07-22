@@ -195,6 +195,23 @@ target_link_libraries(flow_energy_geomech
 		moduleVersionGeoMech
 )
 
+add_executable(flow_energy_geomech_tpsa
+	examples/flow_energy_geomech_tpsa.cpp
+)
+target_link_libraries(flow_energy_geomech_tpsa
+	PUBLIC
+		opmflowgeomechanics 
+	PRIVATE
+		moduleVersionGeoMech
+)
+
+if(USE_TRACY_PROFILER AND Tracy_FOUND)
+	target_link_libraries(flow_energy_geomech_tpsa
+		PRIVATE
+			Tracy::TracyClient
+	)
+endif()
+
 if(USE_TRACY_PROFILER AND Tracy_FOUND)
 	target_link_libraries(flow_energy_geomech
 		PRIVATE

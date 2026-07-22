@@ -334,6 +334,13 @@ namespace Opm{
         virtual void applyInitialOutputStress()
         {}
 
+        void emptyFractureLogger(){
+            const auto& comm = this->simulator().vanguard().grid().comm();
+            Opm::DeferredLogger global_logger = gatherDeferredLogger(FractureModel::fractureLogger, comm);
+            FractureModel::fractureLogger.clearMessages();
+            global_logger.logMessages();
+        }
+
         // ///
         // Fracture connection plumbing (shared between mechanics backends;
         // reaches the backend through derived().fractureHost())

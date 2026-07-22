@@ -352,8 +352,8 @@ namespace Opm
             const bool legacy_parent_setup_iteration =
                 prm.get<bool>("fractureparam.solver.legacy_parent_setup_iteration", false);
             const auto allwellIndices = derived().simulator_.problem().getAllExtraWellIndices();
-            derived().simulator_.problem().geoMechModel().solveFractures();
-            const bool fracture_converged = derived().simulator_.problem().geoMechModel().fractureModel().lastSolveStats().converged;
+            derived().simulator_.problem().fractureHost().solveFractures();
+            const bool fracture_converged = derived().simulator_.problem().fractureHost().fractureModel().lastSolveStats().converged;
             const bool require_converged_fracture_for_wi_update =
                 prm.get<bool>("fractureparam.require_converged_fracture_for_wi_update", true);
 

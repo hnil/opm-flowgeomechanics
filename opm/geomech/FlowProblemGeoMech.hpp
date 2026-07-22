@@ -147,12 +147,6 @@ namespace Opm{
             }
             Parent::timeIntegration();
         }
-        void emptyFractureLogger(){
-            const auto& comm = this->simulator().vanguard().grid().comm();
-            Opm::DeferredLogger global_logger = gatherDeferredLogger(FractureModel::fractureLogger, comm);
-            FractureModel::fractureLogger.clearMessages();
-            global_logger.logMessages();
-        }
         void beginTimeStep() override{
             if (this->gridView().comm().rank() == 0){
                 std::cout << "----------------------Start beginTimeStep-------------------\n"
