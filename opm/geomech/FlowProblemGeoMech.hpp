@@ -75,6 +75,10 @@ namespace Opm{
             MechParent::registerParameters();
             VtkGeoMechModule<TypeTag>::registerParameters();
             FlowLinearSolverParametersGeoMech::registerParameters<TypeTag>();
+	    Parameters::Register<Parameters::MechPorosityCoupling>
+	        ("Feed the geomechanical pore-volume change back into the flow "
+	         "equations");
+	    Opm::Parameters::SetDefault<Opm::Parameters::MechPorosityCoupling>(false);
 	    Opm::Parameters::SetDefault<Opm::Parameters::EnableOpmRstFile>(true);
 	    Opm::Parameters::SetDefault<Opm::Parameters::EnableVtkOutput>(true);
 	    Opm::Parameters::SetDefault<Opm::Parameters::ThreadsPerProcess>(1);
@@ -236,12 +240,19 @@ namespace Opm{
         GeoMechModel<TypeTag>& geoMechModel()
         { return geoMechModel_; }
 
-        //! Mechanical pore-volume change used by the TPSA coupling in the
-        //! intensive quantities.  Only evaluated at runtime for the TPSA
-        //! mechanics solver; this problem couples through the elasticity/
-        //! fracture model instead, so no porosity feedback is reported.
-        Scalar rockMechPoroChange(unsigned /*elementIdx*/, unsigned /*timeIdx*/) const
-        { return 0.0; }
+        //! Mechanical pore-volume change fed back into the flow equations.
+        //! Off by default for the VEM backend (historic behaviour); when the
+        //! common MechPorosityCoupling parameter is enabled the feedback is
+        //! biot * tr(eps) from the last mechanics solve, mirroring the TPSA
+        //! backend's native coupling.
+        Scalar rockMechPoroChange(unsigned elementIdx, unsigned /*timeIdx*/) const
+        {
+            if (!Parameters::Get<Parameters::MechPorosityCoupling>()) {
+                return 0.0;
+            }
+            const auto& eps = geoMechModel_.strain(elementIdx);
+            return this->biotCoef(elementIdx) * (eps[0] + eps[1] + eps[2]);
+        }
 
         const std::vector<std::tuple<size_t,MechBCValue>>& bcNodes() const{
             return bc_nodes_;
