@@ -47,11 +47,14 @@
 #include <cstddef>
 #include <fstream>
 #include <functional>
+#include <algorithm>
 #include <limits>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <tuple>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace Opm::Parameters {
@@ -403,6 +406,43 @@ namespace Opm{
 
             std::map<std::string, std::vector<Connection>> extra_perfs;
 
+            // Fracture cells inside an LGR must enter the schedule as
+            // COMPDATL-style connections (LGR-local i,j,k + LGR-local global
+            // index + lgr grid number), consistent with the well's original
+            // COMPDATL completions; a level-zero connection addressing a
+            // refined-away parent cell cannot be resolved by the well model
+            // or the WBP machinery.  Build (once per call) the inverse
+            // mapping leaf-cell -> (lgr level, lgr-local cartesian).
+            std::unordered_map<std::size_t, std::pair<int, std::size_t>> leafToLgr;
+            std::vector<int> levelToLgrNumber; // level -> deck lgr grid number
+            {
+                const auto& cpgrid = simulator.vanguard().grid();
+                if (cpgrid.maxLevel() > 0) {
+                    const auto mappers = cpgrid.mapLocalCartesianIndexSetsToLeafIndexSet();
+                    for (int lvl = 1; lvl < static_cast<int>(mappers.size()); ++lvl) {
+                        for (const auto& [lgrCart, leafIdx] : mappers[lvl]) {
+                            leafToLgr.insert_or_assign(leafIdx, std::make_pair(lvl, lgrCart));
+                        }
+                    }
+                    // level -> lgr grid number via the level's name and the
+                    // EclipseGrid label ordering (deck order).
+                    const auto& eclGrid = simulator.vanguard().eclState().getInputGrid();
+                    const auto& nameToLevel = cpgrid.getLgrNameToLevel();
+                    levelToLgrNumber.assign(mappers.size(), 0);
+                    for (const auto& [name, lvl] : nameToLevel) {
+                        if (lvl <= 0 || lvl >= static_cast<int>(levelToLgrNumber.size())) {
+                            continue;
+                        }
+                        for (std::size_t num = 1; num <= nameToLevel.size(); ++num) {
+                            if (eclGrid.get_lgr_labels_by_number(num) == name) {
+                                levelToLgrNumber[lvl] = static_cast<int>(num);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
             //auto mapper = simulator.vanguard().cartesianMapper();
             //auto& wellcontainer = this->wellModel().localNonshutWells();
             //for (auto& wellPtr : wellcontainer) {
@@ -423,12 +463,41 @@ namespace Opm{
 
                 for (const auto& wellconn : wellcons) {
                     // simple calculated with upscaling
-                    // map to cartesian
-                    const auto cartesianIdx = simulator.vanguard()
-                        .cartesianIndex(wellconn.cell);
+                    // map to cartesian (level-zero), or LGR-local for cells
+                    // inside a refined region
+                    std::size_t cartesianIdx{};
+                    std::array<int, 3> ijk{};
+                    int lgrNumber = 0;
 
-                    if (origConns.hasGlobalIndex(cartesianIdx)) {
-                        
+                    const auto lgrIt = leafToLgr.find(wellconn.cell);
+                    if (lgrIt == leafToLgr.end()) {
+                        cartesianIdx = simulator.vanguard()
+                            .cartesianIndex(wellconn.cell);
+                        simulator.vanguard().cartesianCoordinate(wellconn.cell, ijk);
+                    } else {
+                        const int lvl = lgrIt->second.first;
+                        const auto lgrCart = lgrIt->second.second;
+                        const auto& lgrDim = simulator.vanguard().grid()
+                            .currentData()[lvl]->logicalCartesianSize();
+                        cartesianIdx = lgrCart;
+                        ijk[0] = static_cast<int>(lgrCart % lgrDim[0]);
+                        ijk[1] = static_cast<int>((lgrCart / lgrDim[0]) % lgrDim[1]);
+                        ijk[2] = static_cast<int>(lgrCart / (static_cast<std::size_t>(lgrDim[0]) * lgrDim[1]));
+                        lgrNumber = levelToLgrNumber[lvl];
+                    }
+
+                    // Duplicate check: same global index AND same grid (the
+                    // numeric index alone is ambiguous between the level-zero
+                    // grid and an LGR's local numbering).
+                    const auto already = std::any_of(
+                        origConns.begin(), origConns.end(),
+                        [cartesianIdx, lgrNumber](const auto& c)
+                        {
+                            return (c.global_index() == cartesianIdx)
+                                && (c.get_lgr_level() == lgrNumber);
+                        });
+
+                    if (already) {
                         if (verbosity > 2) {
                             std::stringstream os;
                             os << "Connection already exists for cell: "
@@ -438,10 +507,6 @@ namespace Opm{
                         old_conns += 1;
                         continue;
                     }
-
-                    // get ijk
-                    std::array<int, 3> ijk{};
-                    simulator.vanguard().cartesianCoordinate(wellconn.cell, ijk);
                     new_conns += 1;
                     if(verbosity > 1) {
                         std::stringstream os;
@@ -472,7 +537,8 @@ namespace Opm{
                                       wellconn.depth,
                                       Connection::CTFProperties{},
                                       /* sort_value */ -1,
-                                      /* defaut sattable */ true);
+                                      /* defaut sattable */ true,
+                                      /* lgr grid number */ lgrNumber);
 
                     //only add zero value 
                     // connection need to be modified later.
