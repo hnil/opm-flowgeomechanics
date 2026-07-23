@@ -1626,6 +1626,12 @@ Fracture::wellIndices_() const
     std::vector<double> z_cells(res_cells.size(), 0.0);
     std::vector<double> traction(res_cells.size(), 0.0);
     std::vector<double> area(res_cells.size(), 0.0);
+    // M1 (opt-in): aggregated exchange conductivity per reservoir cell,
+    // sum of leakof_/mobility over the mapped fracture cells.  leakof_ =
+    // mob*perm*area/dist >= 0, so this CTF is positive by construction --
+    // no sign flips and no blow-up when the reservoir pressure approaches
+    // the injection pressure (see SEQ_COUPLING_REVIEW / H1).
+    std::vector<double> trans_cells(res_cells.size(), 0.0);
     std::vector<double> leakofrate = this->leakOfRate();
     double q_prev = 0;
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
@@ -1656,6 +1662,11 @@ Fracture::wellIndices_() const
             double loc_area = area_frac*element.geometry().volume();
             area[ind_wellIdx] += loc_area;
             q_cells[ind_wellIdx] += area_frac*q;
+            if (eIdx < static_cast<int>(leakof_.size())
+                && reservoir_mobility_[eIdx] > 0.0) {
+                trans_cells[ind_wellIdx] += area_frac * leakof_[eIdx]
+                    / reservoir_mobility_[eIdx];
+            }
             if(reservoir_cells_[eIdx] == res_cell){
                 traction[ind_wellIdx] += ddm::tractionSymTensor(reservoir_stress_[eIdx], cell_normals_[eIdx])*loc_area; //normalFractureTraction(elIx);
                 // assume all of this is the same so no need for interpolation
@@ -1686,6 +1697,25 @@ Fracture::wellIndices_() const
     std::vector<RuntimePerforation> wellIndices(res_cells.size());
     double inj_press = injectionPressure();
     bool cells_outside = false;
+    // M1 mode switch (default "legacy" = the original back-calculation,
+    // byte-identical when the option is unset).  "conductivity" uses the
+    // aggregated leakof-based CTF plus an optional single global flux
+    // normalization so the total injected rate at the current operating
+    // point is preserved exactly.
+    const std::string wi_upscaling = prm_.get<std::string>("solver.wi_upscaling", "legacy");
+    if (wi_upscaling != "legacy" && wi_upscaling != "conductivity") {
+        OPM_THROW(std::runtime_error, "Unknown solver.wi_upscaling: " + wi_upscaling);
+    }
+    const bool conductivity_wi = (wi_upscaling == "conductivity");
+    const bool wi_flux_norm = prm_.get<bool>("solver.wi_flux_normalization", true);
+    // Floor on the well-to-reservoir pressure difference used in the flux
+    // normalization denominator: protects against a vanishing denominator
+    // near equilibration (units: Pa).
+    const double wi_dp_floor = prm_.get<double>("solver.wi_pressure_floor", 1.0e4);
+    const double wi_alpha_max = prm_.get<double>("solver.wi_normalization_max", 2.0);
+    double sum_q = 0.0;
+    double sum_ctf_dp = 0.0;
+    int legacy_negative_count = 0;
     for (size_t i = 0; i < res_cells.size(); ++i) {
         auto& perf = wellIndices[i];
         perf.cell = res_cells[i];
@@ -1706,6 +1736,21 @@ Fracture::wellIndices_() const
         double dh_perf = gravity_ * perf_density * origo_[2];
         double WI = 0.0;
         double ctf = 0.0;
+        if (conductivity_wi) {
+            // M1: sign-consistent aggregated conductivity; never negative,
+            // never divided by a vanishing pressure difference.
+            ctf = trans_cells[i];
+            WI = ctf * std::max(mob_cells[i], 0.0);
+            // Diagnostics + normalization bookkeeping against the legacy
+            // operating point.
+            const double dp_well = (inj_press - dh_perf) - (p_cells[i] - dh_res);
+            if (q_cells[i] < 0.0 || (dp_well <= 0.0 && q_cells[i] > 0.0)) {
+                ++legacy_negative_count; // legacy would have zeroed this perf
+            }
+            sum_q += q_cells[i];
+            sum_ctf_dp += ctf * std::max(mob_cells[i], 0.0)
+                * std::max(dp_well, wi_dp_floor);
+        } else {
         if(mob_cells[i] <= 0.0){
             std::cout << "Warning zero mobility for perf cell: " << res_cells[i] << std::endl;
             WI = 0.0;
@@ -1718,6 +1763,7 @@ Fracture::wellIndices_() const
             std::cout << "Negative WI: " << WI << " for cell: " << res_cells[i] << std::endl;
             WI = 0.0;
             ctf = 0.0;
+        }
         }
         perf.ctf = ctf;
         {
@@ -1737,6 +1783,33 @@ Fracture::wellIndices_() const
             perf.ref_ctf = perf.ctf; 
         }
     }
+    if (conductivity_wi) {
+        // Single global flux normalization: preserve the total exchange rate
+        // at the current operating point.  The fracture's internal pressure
+        // drop then shows up as the smooth factor alpha instead of as
+        // per-cell sign flips.  Safeguarded: alpha stays 1 unless both sums
+        // are meaningfully positive, and is clamped from above.
+        double alpha = 1.0;
+        if (wi_flux_norm && sum_q > 0.0 && sum_ctf_dp > 0.0) {
+            alpha = std::min(sum_q / sum_ctf_dp, wi_alpha_max);
+        }
+        if (prm_.get<int>("solver.verbosity", 0) > 0) {
+            std::stringstream os;
+            os << "WI upscaling (conductivity): alpha=" << alpha
+               << ", sum_q=" << sum_q
+               << ", legacy_negative_perfs=" << legacy_negative_count
+               << "/" << res_cells.size();
+            OpmLog::info(os.str());
+        }
+        if (alpha != 1.0) {
+            for (auto& perf : wellIndices) {
+                if (perf.cell < 0) { continue; }
+                perf.ctf *= alpha;
+                perf.ref_ctf = perf.ctf;
+            }
+        }
+    }
+
     // remove connections to outside of reservoir
     if(cells_outside){
         std::cout << "Cells of fracture outside removed from perforation index" << std::endl;
