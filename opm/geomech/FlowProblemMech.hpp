@@ -159,6 +159,19 @@ namespace Opm{
             const auto& simulator = this->simulator();
             const auto& eclState = simulator.vanguard().eclState();
             if(eclState.runspec().mech()){
+                // Guard: the mechanics stack is not aware of artificial (flow-only)
+                // cells.  Numerical-aquifer cells would enter the VEM/TPSA stiffness
+                // assembly, the potential-force loads and the BCCON node fixing as if
+                // they were rock, silently corrupting the mech solution.  Refuse to
+                // run until an explicit mechanics-domain mask exists — see
+                // FRACTURE_FLOW_GRID_ASSESSMENT.md section 5.
+                if (eclState.aquifer().hasNumericalAquifer()) {
+                    OPM_THROW(std::runtime_error,
+                              "Numerical aquifers (AQUNUM) are not supported together "
+                              "with mechanics (MECH): aquifer cells would corrupt the "
+                              "mechanical assembly. Remove the numerical aquifer or "
+                              "disable mechanics.");
+                }
                 const auto& fp = eclState.fieldProps();
                 std::vector<std::string> needkeys = {"YMODULE","PRATIO"};
                 for(size_t i=0; i < needkeys.size(); ++i){
