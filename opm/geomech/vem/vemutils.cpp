@@ -155,14 +155,30 @@ getGridVectors(const Dune::CpGrid& grid,
     }
     // const auto& faces = grid.getFaceToPoint();
     // const auto& facePos = grid.getFacePos();
+    std::size_t skipped_degenerate_faces = 0;
     for (const auto& cell : elements(gv)) {
         int cellIdx = gv.indexSet().index(cell);
         int nf = grid.numCellFaces(cellIdx);
         // assert(nf==6);
-        num_cell_faces.push_back(nf);
+        // Count only geometric faces: NNC connections (explicit NNC/EDITNNC,
+        // numerical-aquifer AQUCON) appear in the raw CpGrid cell-face
+        // topology as degenerate faces with fewer than 3 vertices.  They are
+        // flow connections, not geometry, and must not enter the VEM
+        // polyhedron (they break the star-point construction).
+        int nf_geom = 0;
+        for (int f = 0; f < nf; ++f) {
+            if (grid.numFaceVertices(grid.cellFace(cellIdx, f)) >= 3) {
+                ++nf_geom;
+            }
+        }
+        num_cell_faces.push_back(nf_geom);
         for (int f = 0; f < nf; ++f) {
             auto face = grid.cellFace(cellIdx, f);
             auto faceSize = grid.numFaceVertices(face);
+            if (faceSize < 3) {
+                ++skipped_degenerate_faces;
+                continue;
+            }
             num_face_corners.push_back(faceSize);
             // assert(faceSize == 4);
             // auto numface_cells = grid.numCellFaces();
@@ -191,6 +207,10 @@ getGridVectors(const Dune::CpGrid& grid,
                 }
             }
         }
+    }
+    if (skipped_degenerate_faces > 0) {
+        std::cout << "VEM topology: skipped " << skipped_degenerate_faces
+                  << " non-geometric (NNC) cell-face entries" << std::endl;
     }
 
 
