@@ -627,6 +627,30 @@ add_test(NAME Run.SIMPLE_MECH_LGR.EnergyGeomech
 	--output-dir=test_simple_mech_lgr
 )
 
+# Same CARFIN case with a WELTRAJ/COMPTRAJ trajectory well instead of
+# WELSPECL/COMPDATL: the trajectory is re-intersected against the refined
+# leaf after grid build, so the well must end up completed in the LGRW cells.
+add_test(NAME Run.SIMPLE_MECH_LGR_TRAJ.EnergyGeomech
+	COMMAND
+	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
+	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_LGR_TRAJ.DATA
+	--parsing-strictness=low
+	--output-dir=test_simple_mech_lgr_traj
+)
+
+# Fracture on the refined leaf: WSEED addresses the parent cell (6,6,16);
+# father matching seeds one fracture at the LGR-completed connection, and
+# fracture-added connections re-enter the schedule as COMPDATL-style
+# (LGR-local) entries.  Run-only.
+add_test(NAME Run.SIMPLE_MECH_FRAC_LGR.EnergyGeomech
+	COMMAND
+	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
+	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_LGR.DATA
+	--parsing-strictness=low
+	--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_frac_postsolve_legacy_full.json
+	--output-dir=test_simple_mech_frac_lgr
+)
+
 ## regressuin
 opm_set_test_driver(${PROJECT_SOURCE_DIR}/tests/run-mechRegressionTest.sh "")
 
