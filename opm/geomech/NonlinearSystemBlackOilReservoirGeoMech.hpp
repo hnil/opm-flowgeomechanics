@@ -79,6 +79,7 @@ namespace Opm
                 this->topology_cooldown_counter_ = 0;
                 // First outer iteration of a step always solves mechanics.
                 this->last_coupling_composite_norm_ = std::numeric_limits<double>::max();
+                this->mech_solves_this_step_ = 0;
             }
             bool implicit_flow = prm.get<bool>("solver.implicit_flow");
             SimulatorReportSingle report;
@@ -116,21 +117,41 @@ namespace Opm
             // so keep the threshold conservative on strongly thermal cases.
             const double mech_skip_threshold =
                 prm.get<double>("solver.mech_skip_coupling_threshold", 0.0);
-            const bool mech_skippable = (mech_skip_threshold > 0.0) && (iteration > 0)
-                && (this->last_coupling_composite_norm_ < mech_skip_threshold);
+            // Opt-in per-step cap (default 0 = unlimited = legacy behavior): once this
+            // many mechanics solves have been performed within the current timestep,
+            // further outer iterations reuse the stress and only re-solve the
+            // fracture. The next timestep always starts with a fresh mech solve, so
+            // the stress lags at most one step.
+            const int max_mech_solves_per_step =
+                prm.get<int>("solver.max_mech_solves_per_step", 0);
+            const bool mech_cap_reached = (max_mech_solves_per_step > 0)
+                && (this->mech_solves_this_step_ >= max_mech_solves_per_step);
+            const bool mech_skippable = ((mech_skip_threshold > 0.0) && (iteration > 0)
+                && (this->last_coupling_composite_norm_ < mech_skip_threshold))
+                || mech_cap_reached;
             if(do_mech || do_fracture){
                 if (mech_skippable) {
                     ++this->mech_solves_skipped_;
-                    OpmLog::info("Skipping mechanics solve (prev coupling change "
-                                 + std::to_string(this->last_coupling_composite_norm_) + " < "
-                                 + std::to_string(mech_skip_threshold) + "); reusing stress. "
-                                 + "mech solves performed/skipped: "
-                                 + std::to_string(this->mech_solves_performed_) + "/"
-                                 + std::to_string(this->mech_solves_skipped_));
+                    if (mech_cap_reached) {
+                        OpmLog::info("Skipping mechanics solve (per-step cap "
+                                     + std::to_string(max_mech_solves_per_step)
+                                     + " reached); reusing stress. "
+                                     + "mech solves performed/skipped: "
+                                     + std::to_string(this->mech_solves_performed_) + "/"
+                                     + std::to_string(this->mech_solves_skipped_));
+                    } else {
+                        OpmLog::info("Skipping mechanics solve (prev coupling change "
+                                     + std::to_string(this->last_coupling_composite_norm_) + " < "
+                                     + std::to_string(mech_skip_threshold) + "); reusing stress. "
+                                     + "mech solves performed/skipped: "
+                                     + std::to_string(this->mech_solves_performed_) + "/"
+                                     + std::to_string(this->mech_solves_skipped_));
+                    }
                 } else {
                     OpmLog::info("Solve Geomechanics:");
                     this->simulator_.problem().geoMechModel().solveGeomechanics();
                     ++this->mech_solves_performed_;
+                    ++this->mech_solves_this_step_;
                 }
             }
             if(do_fracture && this->simulator_.problem().hasFractures()){

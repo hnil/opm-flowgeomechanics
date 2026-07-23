@@ -104,6 +104,10 @@ namespace Opm
         // Diagnostics: mechanics solves actually performed vs skipped in the outer loop.
         mutable int mech_solves_performed_{0};
         mutable int mech_solves_skipped_{0};
+        // Mechanics solves performed within the current timestep; used by the
+        // opt-in per-step cap (solver.max_mech_solves_per_step). Reset at the
+        // first outer iteration of each step.
+        mutable int mech_solves_this_step_{0};
 
         struct StorageCacheBackup
         {
