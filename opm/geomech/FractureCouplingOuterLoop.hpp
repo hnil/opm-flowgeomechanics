@@ -195,7 +195,15 @@ namespace Opm
             // this is a hack to call all setup need for the system without changing states which matter for the calculations
             const auto storage_cache_backup = this->backupStorageCache();
             const auto solution_backup = this->backupSolution0();
+            // The setup iteration also solves the wells, mutating the well/group
+            // state.  solution(0) + storage cache alone do not cover that: for a
+            // MultisegmentWell the segment state is left inconsistent with the
+            // restored solution and the reported rate collapses to zero while the
+            // perforations keep injecting.  Snapshot and restore the WGState too so
+            // the setup iteration is genuinely state-neutral.
+            auto wgstate_backup = derived().simulator_.problem().wellModel().snapshotWGState();
             auto report = this->runParentSetupIteration(timer, nonlinear_solver);
+            derived().simulator_.problem().wellModel().restoreWGState(std::move(wgstate_backup));
             this->restoreSolution0(solution_backup);
             this->restoreStorageCache(storage_cache_backup);
             std::cout << "Finished parent first iteration" << std::endl;
