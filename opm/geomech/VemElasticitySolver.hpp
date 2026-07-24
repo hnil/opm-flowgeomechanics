@@ -264,6 +264,47 @@ class VemElasticitySolver
         }
     }
 
+    // Size DUNE implicit-build parameters (avg entries per row, compression
+    // buffer fraction) from the actual assembled entries instead of a fixed
+    // guess.  On a uniform grid every node couples to ~27 nodes (81 dof-rows),
+    // but a coarse cell at a CARFIN refinement interface becomes a polyhedron
+    // whose nodes couple to every subdivided-face node, so those rows are far
+    // heavier and a fixed estimate overflows compress() (ImplicitMode
+    // CompressionBufferExhausted).  avg is the true average; the buffer is
+    // sized to hold the summed per-row excess over avg (the heavy interface
+    // rows) with a safety factor, so it is correct for any refinement ratio
+    // while staying near memory-optimal on unrefined grids.
+    static std::pair<typename Matrix::size_type, double>
+    implicitBuildParams(const std::vector<std::tuple<int, int, double>>& A_entries)
+    {
+        int nrows = 0;
+        for (const auto& e : A_entries) {
+            nrows = std::max(nrows, std::get<0>(e));
+        }
+        nrows += 1;
+        std::vector<std::vector<int>> cols(nrows);
+        for (const auto& e : A_entries) {
+            cols[std::get<0>(e)].push_back(std::get<1>(e));
+        }
+        std::size_t totalUnique = 0;
+        for (auto& c : cols) {
+            std::sort(c.begin(), c.end());
+            c.erase(std::unique(c.begin(), c.end()), c.end());
+            totalUnique += c.size();
+        }
+        const auto avg = static_cast<typename Matrix::size_type>(
+            (totalUnique + nrows - 1) / std::max(1, nrows)) + 1;
+        std::size_t excess = 0;
+        for (const auto& c : cols) {
+            if (c.size() > avg) {
+                excess += c.size() - avg;
+            }
+        }
+        const double denom = static_cast<double>(std::max<std::size_t>(1, avg * nrows));
+        const double overflow = 0.1 + 2.0 * static_cast<double>(excess) / denom;
+        return { avg, overflow };
+    }
+
     static void makeDuneMatrixCompressed(const std::vector<std::tuple<int, int, double>>& A_entries, Matrix& mat){
         OPM_TIMEBLOCK(makeDuneMatrixCompressed);
         {
@@ -333,7 +374,8 @@ class VemElasticitySolver
         Matrix& MAT = this->getOperator();
         MAT = 0;
         MAT.setBuildMode(Matrix::implicit);
-        MAT.setImplicitBuildModeParameters(81, 0.4);
+        const auto [avg, overflow] = implicitBuildParams(A_entries);
+        MAT.setImplicitBuildModeParameters(avg, overflow);
         MAT.setSize(nrows, ncols);
         makeDuneMatrixCompressed(A_entries, MAT);
     }

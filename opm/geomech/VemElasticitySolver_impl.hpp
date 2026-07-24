@@ -322,8 +322,12 @@ namespace Elasticity {
         }
         // finaly make dune matrix
         divmat_.setBuildMode(Matrix::implicit);
-        // map from dof=3*nodes at a cell (ca 3*3*3) to cell
-        divmat_.setImplicitBuildModeParameters (3*8, 0.4);
+        // map from dof=3*nodes at a cell (ca 3*3*3) to cell; sized from the
+        // actual entries so CARFIN interface rows do not overflow compress().
+        {
+            const auto [avg, overflow] = implicitBuildParams(divmatdof);
+            divmat_.setImplicitBuildModeParameters(avg, overflow);
+        }
         if(reduce_boundary){
             divmat_.setSize(idx_free_.size(), num_cells_);
         }else{
@@ -352,7 +356,10 @@ namespace Elasticity {
                                stab_on_stress_
         );
         stressmat_.setBuildMode(Matrix::implicit);
-        stressmat_.setImplicitBuildModeParameters (3*3*3, 0.4);
+        {
+            const auto [avg, overflow] = implicitBuildParams(stressmat);
+            stressmat_.setImplicitBuildModeParameters(avg, overflow);
+        }
         stressmat_.setSize(num_cells_*6, dispall.size());
         makeDuneMatrixCompressed(stressmat, stressmat_);
         }
@@ -374,7 +381,10 @@ namespace Elasticity {
                                stab_on_stress_
         );
         strainmat_.setBuildMode(Matrix::implicit);
-        strainmat_.setImplicitBuildModeParameters (3*3*3, 0.4);
+        {
+            const auto [avg, overflow] = implicitBuildParams(strainmat);
+            strainmat_.setImplicitBuildModeParameters(avg, overflow);
+        }
         strainmat_.setSize(num_cells_*6, dispall.size());
         makeDuneMatrixCompressed(strainmat, strainmat_);
         }
