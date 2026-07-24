@@ -424,6 +424,13 @@ namespace Opm
                     derived().simulator_.problem().wellModel().prepareTimeStep(group_state_helper.deferredLogger());
                 }
 
+                // The parent setup iteration is REQUIRED when the well structure
+                // actually changed (new fracture connections): skipping it kills
+                // the well/fracture on fine grids (verified 2026-07-24 on
+                // CASE_REFINE_nx_21..._THERMAL_MSW).  It is redundant only for
+                // value-only CTF changes, which take the value_only path above.
+                // Keep it; runParentFirstIterationPreservingState is now
+                // state-neutral for the wells (WGState snapshot/restore).
                 [[maybe_unused]] auto tmp_report =
                     legacy_parent_setup_iteration
                         ? this->runParentFirstIterationLegacy(timer, nonlinear_solver)
