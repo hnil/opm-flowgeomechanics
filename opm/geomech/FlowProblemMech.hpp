@@ -161,6 +161,29 @@ namespace Opm{
             const auto& simulator = this->simulator();
             const auto& eclState = simulator.vanguard().eclState();
             if(eclState.runspec().mech()){
+                // The mechanical grid must be physical: a non-neighbour
+                // connection (NNC/EDITNNC) has no geometric face (CpGrid tags it
+                // face_tag::NNC_FACE, indexInInside() == -1) and is therefore
+                // silently dropped by the VEM assembly -- the mechanics would
+                // ignore a connection the deck intends, with no signal.  Refuse
+                // it rather than solve on a non-physical grid.  The numerical
+                // aquifer (AQUNUM/AQUCON) is the one handled exception: those
+                // NNCs sit on flow-only cells that are masked out of the
+                // mechanics (below), so a deck with a numerical aquifer is
+                // allowed (its AQUCON connections are merged into the input NNC
+                // set, which is why the guard is skipped when an aquifer is
+                // present).  Limitation: a deck with BOTH a numerical aquifer
+                // and independent NNC/EDITNNC would not be caught here -- those
+                // extra NNCs are still skipped by the VEM face filter, but are
+                // not surfaced.
+                if (eclState.hasInputNNC() && !eclState.aquifer().hasNumericalAquifer()) {
+                    OPM_THROW(std::runtime_error,
+                              "Explicit NNCs (NNC/EDITNNC) are not supported together "
+                              "with mechanics (MECH): a non-neighbour connection has no "
+                              "geometric face and is silently ignored by the VEM "
+                              "mechanics assembly, so the mechanical grid would not be "
+                              "physical. Remove the NNCs or disable mechanics.");
+                }
                 // Mechanics-domain mask for artificial (flow-only) cells --
                 // FRACTURE_FLOW_GRID_ASSESSMENT.md section 5.  v1 semantics
                 // (deliberately conservative): masked cells STAY in the elastic
