@@ -125,7 +125,11 @@ namespace Opm
             }
 
             backup.enabled = true;
-            const unsigned num_dof = flow_model.numGridDof();
+            // Over every degree of freedom, not just the grid ones: restoring invalidates
+            // the whole cache before putting the saved entries back, so anything left out
+            // here is not preserved but destroyed.  That matters as soon as the fracture
+            // itself has degrees of freedom in this system.
+            const unsigned num_dof = flow_model.numTotalDof();
             backup.values.assign(num_time_indices, std::vector<EqVector>(num_dof, EqVector(0.0)));
             backup.valid.assign(num_time_indices, std::vector<unsigned char>(num_dof, 0));
 
