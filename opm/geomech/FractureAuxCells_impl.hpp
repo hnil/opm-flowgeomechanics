@@ -1,0 +1,148 @@
+/*
+  Copyright (C) 2026 SINTEF Digital
+
+  This file is part of the Open Porous Media project (OPM).
+
+  OPM is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  OPM is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with OPM.  If not, see <http://www.gnu.org/licenses/>.
+*/
+#ifndef OPM_FRACTURE_AUX_CELLS_IMPL_HPP
+#define OPM_FRACTURE_AUX_CELLS_IMPL_HPP
+
+#include <opm/geomech/FractureModel.hpp>
+
+namespace Opm {
+
+template <class TypeTag>
+bool
+FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
+{
+    const auto previousConnections = this->connections_.size();
+    const auto previousActive = this->numActive();
+
+    this->connections_.clear();
+    this->slotOf_.clear();
+
+    const auto numGridDof = this->simulator_.model().numGridDof();
+    unsigned nextSlot = 0;
+
+    // A slot is claimed once and never moves, so that a cell keeps its unknown from one
+    // report step to the next.  Walking the fractures in the order the model holds them
+    // is what makes that stable.
+    std::size_t fractureIdx = 0;
+    for (const auto& wellFractures : fractures.wellFractures()) {
+        for (const auto& fracture : wellFractures) {
+            const auto numCells = fracture.numCells();
+
+            const auto& reservoirCells = fracture.reservoirCells();
+            const auto& leakOf = fracture.leakOf();
+            const auto& mobility = fracture.reservoirMobility();
+            const auto& width = fracture.fractureWidth();
+            const auto areas = fracture.cellAreas();
+            const auto depths = fracture.cellDepths();
+
+            if (nextSlot + numCells > this->capacity_) {
+                OPM_THROW(std::runtime_error,
+                          fmt::format("The fracture cells need more degrees of freedom than "
+                                      "were reserved for them: {} in use, {} more wanted, {} "
+                                      "reserved. Raise "
+                                      "fractureparam.solver.embedded_capacity.",
+                                      nextSlot, numCells, this->capacity_));
+            }
+
+            const auto firstSlot = nextSlot;
+            for (std::size_t cell = 0; cell < numCells; ++cell) {
+                const auto slot = firstSlot + cell;
+                this->slotOf_.emplace_back(fractureIdx, cell);
+
+                // The aperture is the volume; below the floor a cell is treated as having
+                // the floor's aperture, exactly as the fracture's own pressure solve does,
+                // so that a closed cell still has a well-defined -- if tiny -- volume.
+                const auto aperture = std::max(static_cast<Scalar>(width[cell][0]), this->minWidth_);
+
+                this->bulkVolume_[slot] = static_cast<Scalar>(areas[cell]) * aperture;
+                this->depth_[slot] = static_cast<Scalar>(depths[cell]);
+
+                const auto reservoirCell = reservoirCells[cell];
+                if (reservoirCell < 0) {
+                    // Outside this rank's grid, or not mapped: the cell exists as an
+                    // unknown but exchanges nothing.
+                    this->active_[slot] = false;
+                    continue;
+                }
+
+                this->partner_[slot] = static_cast<unsigned>(reservoirCell);
+                this->active_[slot] = true;
+
+                // leakOf() carries the reservoir mobility, which the reservoir's own
+                // local residual applies again from the upwind cell.  Divide it back out
+                // so the connection is a transmissibility and nothing else.
+                const auto mob = mobility[cell];
+                const auto trans = (mob > 0.0)
+                    ? static_cast<Scalar>(leakOf[cell] / mob)
+                    : Scalar{0};
+
+                this->connections_.push_back({static_cast<unsigned>(this->localToGlobalDof(slot)),
+                                              static_cast<unsigned>(reservoirCell),
+                                              trans, 0.0, 0.0});
+            }
+
+            // Fracture cell to fracture cell: the cubic law over the two half
+            // transmissibilities, the same combination the fracture's own pressure solve
+            // forms (FracturePressureAssemblerAD).
+            for (const auto& [i, j, t1, t2] : fracture.halfTrans()) {
+                const auto slotI = firstSlot + i;
+                const auto slotJ = firstSlot + j;
+
+                const auto h1 = std::max(static_cast<Scalar>(width[i][0]), this->minWidth_);
+                const auto h2 = std::max(static_cast<Scalar>(width[j][0]), this->minWidth_);
+
+                const auto invTrans = 12.0 / (h1 * h1 * h1 * t1)
+                                    + 12.0 / (h2 * h2 * h2 * t2);
+
+                this->connections_.push_back({static_cast<unsigned>(this->localToGlobalDof(slotI)),
+                                              static_cast<unsigned>(this->localToGlobalDof(slotJ)),
+                                              static_cast<Scalar>(1.0 / invTrans), 0.0, 0.0});
+            }
+
+            nextSlot = firstSlot + numCells;
+            ++fractureIdx;
+        }
+    }
+
+    // A cell that has just been handed out has been holding a placeholder state; give it
+    // the state of the rock it cuts through, at its own depth.
+    auto& solution = this->simulator_.model().solution(/*timeIdx=*/0);
+    for (unsigned slot = 0; slot < nextSlot; ++slot) {
+        if (this->active_[slot]) {
+            this->assignStateFromPartner(solution, slot);
+        }
+    }
+
+    static_cast<void>(numGridDof);
+
+    const auto active = this->numActive();
+    if (this->simulator_.gridView().comm().rank() == 0) {
+        OpmLog::info(fmt::format("Embedded fracture flow: {} of {} reserved cells in use, "
+                                 "{} connections",
+                                 active, this->capacity_, this->connections_.size()));
+    }
+
+    // Only a changed connection list needs the sparsity pattern rebuilt; apertures moving
+    // is a change of values.
+    return (this->connections_.size() != previousConnections) || (active != previousActive);
+}
+
+} // namespace Opm
+
+#endif // OPM_FRACTURE_AUX_CELLS_IMPL_HPP

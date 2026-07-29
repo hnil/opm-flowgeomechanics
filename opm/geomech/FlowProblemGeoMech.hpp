@@ -9,6 +9,7 @@
 
 #include <opm/geomech/FlowGeoMechLinearSolverParameters.hpp>
 #include <opm/geomech/FlowProblemMech.hpp>
+#include <opm/geomech/FractureAuxCells.hpp>
 #include <opm/geomech/BoundaryUtils.hpp>
 #include <opm/geomech/GeoMechModel.hpp>
 #include <opm/geomech/VtkGeoMechModule.hpp>
@@ -70,6 +71,71 @@ namespace Opm{
               this->model().addOutputModule(std::make_unique<VtkGeoMechModule<TypeTag>>(simulator));
             }
         }
+
+    private:
+        //! Owned by the base problem; this is the typed handle onto it.
+        FractureAuxCells<TypeTag>* fractureAuxCells_ = nullptr;
+
+    public:
+
+        /*!
+         * \brief Claim degrees of freedom for the fracture cells, if they are to have any.
+         *
+         * The model calls this before it sizes anything, which is the only moment at
+         * which degrees of freedom can still be added -- and long before any fracture
+         * exists, since the fracture model is built at the first report step that seeds
+         * one.  So a fixed number is reserved here and handed out as cells appear.
+         */
+        void registerAuxiliaryCellModules()
+        {
+            MechParent::registerAuxiliaryCellModules();
+
+            if (!this->hasFractures()) {
+                return;
+            }
+
+            const Opm::PropertyTree prm = this->getFractureParam();
+            if (prm.get<std::string>("solver.fracture_flow_mode", std::string {"wi_upscaling"})
+                != "embedded")
+            {
+                return;
+            }
+
+            const auto capacity = prm.get<int>("solver.embedded_capacity", 5000);
+            const auto minWidth = prm.get<double>("config.min_width", 1e-3);
+
+            fractureAuxCells_ = &this->registerAuxCellModule_
+                (std::make_unique<FractureAuxCells<TypeTag>>(this->simulator(),
+                                                             static_cast<unsigned>(capacity),
+                                                             static_cast<Scalar>(minWidth)));
+
+            if (this->simulator().gridView().comm().rank() == 0) {
+                OpmLog::info(fmt::format("Embedded fracture flow: {} degrees of freedom "
+                                         "reserved for fracture cells", capacity));
+            }
+        }
+
+        /*!
+         * \brief Hand the fracture's cells their degrees of freedom.
+         *
+         * Called once the fracture model has been built or has moved, so that what the
+         * reservoir sees matches what the fracture is.
+         */
+        void bindFractureAuxCells()
+        {
+            if ((fractureAuxCells_ == nullptr) || !this->geoMechModel().fractureModelActive()) {
+                return;
+            }
+
+            const bool topologyChanged =
+                fractureAuxCells_->bind(this->geoMechModel().fractureModel());
+
+            this->refreshAuxCellModules_(topologyChanged);
+        }
+
+        //! Whether the fracture flows through degrees of freedom of its own.
+        bool fractureFlowIsEmbedded() const
+        { return fractureAuxCells_ != nullptr; }
 
         static void registerParameters(){
             MechParent::registerParameters();
@@ -162,6 +228,14 @@ namespace Opm{
                 }
                 geoMechModel_.beginTimeStep();
                 if(this->hasFractures()){
+                    if (this->fractureFlowIsEmbedded()) {
+                        // The fracture is part of the flow problem in its own right, so
+                        // the reservoir has to be told what it now looks like.  The wells
+                        // keep their matrix connections: retiring the upscaled well index
+                        // is the next step, not this one.
+                        this->bindFractureAuxCells();
+                    }
+
                     this->wellModel().beginTimeStep();// just to be sure well conteiner is reinitialized
                     this->addConnectionsToWell(); // modify wells WI wiht fracture well 
                 }

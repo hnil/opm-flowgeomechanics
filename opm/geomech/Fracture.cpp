@@ -2063,6 +2063,32 @@ Fracture::updateLeakoff()
         }
     }
 }
+std::vector<double>
+Fracture::cellAreas() const
+{
+    std::vector<double> areas(numFractureCells(), 0.0);
+
+    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+    for (const auto& element : Dune::elements(grid_->leafGridView())) {
+        areas[mapper.index(element)] = element.geometry().volume();
+    }
+
+    return areas;
+}
+
+std::vector<double>
+Fracture::cellDepths() const
+{
+    std::vector<double> depths(numFractureCells(), 0.0);
+
+    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+    for (const auto& element : Dune::elements(grid_->leafGridView())) {
+        depths[mapper.index(element)] = element.geometry().center()[2];
+    }
+
+    return depths;
+}
+
 double
 Fracture::filterCakeVolume() const
 {

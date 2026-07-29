@@ -122,6 +122,10 @@ public:
         const FractureSolveStats& totalSolveStats() const;
         static Opm::DeferredLogger fractureLogger;
 
+        //! The fractures of each well, in well order.
+        const std::vector<std::vector<Fracture>>& wellFractures() const
+        { return well_fractures_; }
+
     private:
         bool vtkwritewells_ = false; // write wells to VTK files
         template <class TypeTag, class Simulator>

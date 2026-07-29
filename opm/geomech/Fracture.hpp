@@ -296,6 +296,37 @@ public:
     WellInfo& wellInfo();
     const WellInfo& wellInfo() const { return wellinfo_; }
     std::vector<double> leakOfRate() const;
+
+    // ---- Access for the embedded (auxiliary-cell) fracture flow representation ----
+    //
+    // The upscaled well-index formulation consumes these quantities internally; the
+    // embedded one hands them to the reservoir discretization instead, which needs to
+    // read them from outside.
+
+    //! Number of cells in the fracture grid.
+    std::size_t numCells() const { return numFractureCells(); }
+
+    //! Reservoir cell each fracture cell leaks into, by fracture cell index.
+    const std::vector<int>& reservoirCells() const { return reservoir_cells_; }
+
+    //! Leak-off coefficient per fracture cell.  Includes the reservoir mobility.
+    const std::vector<double>& leakOf() const { return leakof_; }
+
+    //! Reservoir mobility used to form leakOf(), so that it can be divided back out.
+    const std::vector<double>& reservoirMobility() const { return reservoir_mobility_; }
+
+    //! Half transmissibilities (i, j, t_i, t_j) between neighbouring fracture cells.
+    const std::vector<Htrans>& halfTrans() const { return htrans_; }
+
+    //! Aperture per fracture cell.
+    const Dune::BlockVector<Dune::FieldVector<double, 1>>& fractureWidth() const
+    { return fracture_width_; }
+
+    //! Area of each fracture cell.
+    std::vector<double> cellAreas() const;
+
+    //! Depth of each fracture cell's centre, positive downwards.
+    std::vector<double> cellDepths() const;
     double injectionPressure() const;
     double injectionBhp() const;// {return injectionPressure() - dp_perf_;};
     void setPerfProps(double perfpressure,double perf_depth, double perfrate);//{perf_pressure_ = perfpressure;}
