@@ -1220,10 +1220,6 @@ Fracture::wellIndices() const{
    } else if(well_indices_.size() == 2){
          wellindices = wellIndicesAvrg(well_indices_);
    }
-   for(size_t i=0; i < wellindices.size(); ++i){
-     wellindices[i].ref_ctf = wellindices[i].ctf;
-     wellindices[i].ref_pressure = wellindices[i].pressure;
-   }
    return wellindices;
 }
 
@@ -1568,7 +1564,6 @@ Fracture::wellIndicesAvrg(const std::vector<std::vector<RuntimePerforation>>& we
       int ind = cell_pind[wind.cell];
       wellindices[ind] = wind;
       wellindices[ind].ctf = 0.0;
-      wellindices[ind].ref_ctf = 0.0;
       //wellindices[ind].pressure = 0.0;
     }
   }
@@ -1694,9 +1689,7 @@ Fracture::wellIndices_() const
             cells_outside = true;
             perf.depth = this->origo_[2];
             perf.ctf = 0;
-            perf.ref_ctf = 0;
             perf.pressure = inj_press;
-            perf.ref_pressure = inj_press-10e5;// dummy 
             perf.segment = this->wellinfo_.segment;
             perf.perf_range = this->wellinfo_.perf_range;
             continue;
@@ -1726,15 +1719,6 @@ Fracture::wellIndices_() const
             perf.segment = this->wellinfo_.segment;
             perf.perf_range = this->wellinfo_.perf_range;
             perf.pressure = inj_press;
-            double tmp_press =  traction[i]/area[i];
-            //if(tmp_press < inj_press){
-            //    perf.ref_pressure = tmp_press;        
-            //    perf.ref_ctf = 0.0; // should be the closed value
-            //}else{
-            //perf.ref_pressure = tmp_press;//inj_press- 10e5; // dummy value
-            //perf.ref_ctf = 0.0;//perf.ctf; 
-            perf.ref_pressure = inj_press- 10e5; // dummy value
-            perf.ref_ctf = perf.ctf; 
         }
     }
     // remove connections to outside of reservoir
