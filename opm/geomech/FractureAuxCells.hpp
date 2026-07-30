@@ -23,11 +23,14 @@
 #include <opm/common/OpmLog/OpmLog.hpp>
 
 #include <opm/simulators/flow/FlowAuxCellModule.hpp>
+#include <opm/simulators/wells/RuntimePerforation.hpp>
 
 #include <fmt/format.h>
 
 #include <algorithm>
 #include <cstddef>
+#include <map>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -177,6 +180,17 @@ public:
      */
     bool bind(const FractureModel& fractures);
 
+    /*!
+     * \brief The well's perforations of this fracture's cells.
+     *
+     * Each is a degree of freedom of the flow problem and a well index, so the well model
+     * treats it exactly as it treats a perforation of a grid cell -- it reads intensive
+     * quantities by index, which an auxiliary cell answers as well as any other.  What it
+     * cannot do is arrive at one through a cartesian index, which is why these are handed
+     * over directly instead of going through the schedule.
+     */
+    std::vector<RuntimePerforation> wellPerforations(const std::string& wellName) const;
+
     //! Cells handed out so far, for the high-water mark in the log.
     unsigned numActive() const
     { return static_cast<unsigned>(std::count(this->active_.begin(), this->active_.end(), true)); }
@@ -227,6 +241,9 @@ private:
 
     //! (fracture index within the model, cell index within that fracture) -> local slot.
     std::vector<std::pair<std::size_t, std::size_t>> slotOf_{};
+
+    //! Well name -> the perforations of that well's fractures, in degrees of freedom.
+    std::map<std::string, std::vector<RuntimePerforation>> wellPerforations_{};
 };
 
 } // namespace Opm

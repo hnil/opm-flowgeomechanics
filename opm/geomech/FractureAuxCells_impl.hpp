@@ -32,6 +32,7 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
 
     this->connections_.clear();
     this->slotOf_.clear();
+    this->wellPerforations_.clear();
 
     const auto numGridDof = this->simulator_.model().numGridDof();
     unsigned nextSlot = 0;
@@ -115,6 +116,20 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
                                               static_cast<Scalar>(1.0 / invTrans), 0.0, 0.0});
             }
 
+            // Where the well meets the fracture.  perfinj_ is (fracture cell, well index)
+            // and is what the fracture's own pressure solve uses to drive itself; the same
+            // pair becomes a perforation of the degree of freedom that cell now owns.
+            auto& perfs = this->wellPerforations_[fracture.wellInfo().name];
+            for (const auto& [cell, wellIndex] : fracture.wellPerforations()) {
+                const auto slot = firstSlot + static_cast<std::size_t>(cell);
+
+                RuntimePerforation perf;
+                perf.cell = static_cast<int>(this->localToGlobalDof(slot));
+                perf.ctf = wellIndex;
+                perf.depth = this->depth_[slot];
+                perfs.push_back(perf);
+            }
+
             nextSlot = firstSlot + numCells;
             ++fractureIdx;
         }
@@ -141,6 +156,17 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
     // Only a changed connection list needs the sparsity pattern rebuilt; apertures moving
     // is a change of values.
     return (this->connections_.size() != previousConnections) || (active != previousActive);
+}
+
+template <class TypeTag>
+std::vector<RuntimePerforation>
+FractureAuxCells<TypeTag>::wellPerforations(const std::string& wellName) const
+{
+    auto pos = this->wellPerforations_.find(wellName);
+
+    return (pos == this->wellPerforations_.end())
+        ? std::vector<RuntimePerforation> {}
+        : pos->second;
 }
 
 } // namespace Opm

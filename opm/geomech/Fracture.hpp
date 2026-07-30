@@ -315,6 +315,11 @@ public:
     //! Reservoir mobility used to form leakOf(), so that it can be divided back out.
     const std::vector<double>& reservoirMobility() const { return reservoir_mobility_; }
 
+    //! Well-to-fracture connections: (fracture cell, well index).  The well injects
+    //! into these cells directly, which in the embedded representation is a perforation
+    //! of the fracture's own degrees of freedom rather than of the reservoir.
+    const std::vector<std::tuple<int, double>>& wellPerforations() const { return perfinj_; }
+
     //! Half transmissibilities (i, j, t_i, t_j) between neighbouring fracture cells.
     const std::vector<Htrans>& halfTrans() const { return htrans_; }
 

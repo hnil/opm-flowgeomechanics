@@ -137,6 +137,29 @@ namespace Opm{
         bool fractureFlowIsEmbedded() const
         { return fractureAuxCells_ != nullptr; }
 
+        /*!
+         * \brief Perforate the fracture's own cells from the well.
+         *
+         * The upscaled representation gives the well an extra index on each reservoir
+         * cell the fracture reaches, which is how the fluid got from the well into the
+         * formation without the fracture being part of the flow problem.  Here it is, so
+         * the well connects to the fracture and the fracture connects to the formation --
+         * each conductance appearing once, and none of them an upscaled q/dp.
+         */
+        void addFracturePerforationsToWells()
+        {
+            if (fractureAuxCells_ == nullptr) {
+                return;
+            }
+
+            for (auto& wellPtr : this->wellModel().localNonshutWells()) {
+                const auto perfs = fractureAuxCells_->wellPerforations(wellPtr->name());
+                if (!perfs.empty()) {
+                    wellPtr->addFracturePerforations(perfs);
+                }
+            }
+        }
+
         static void registerParameters(){
             MechParent::registerParameters();
             VtkGeoMechModule<TypeTag>::registerParameters();
@@ -230,14 +253,20 @@ namespace Opm{
                 if(this->hasFractures()){
                     if (this->fractureFlowIsEmbedded()) {
                         // The fracture is part of the flow problem in its own right, so
-                        // the reservoir has to be told what it now looks like.  The wells
-                        // keep their matrix connections: retiring the upscaled well index
-                        // is the next step, not this one.
+                        // the reservoir has to be told what it now looks like.
                         this->bindFractureAuxCells();
-                    }
+                        this->wellModel().beginTimeStep();
 
-                    this->wellModel().beginTimeStep();// just to be sure well conteiner is reinitialized
-                    this->addConnectionsToWell(); // modify wells WI wiht fracture well 
+                        // The well perforates the fracture, not the reservoir cells the
+                        // fracture leaks into.  Adding the upscaled index as well would
+                        // count the fracture's conductance twice: once folded into a well
+                        // index and once as the connections just bound.
+                        this->addFracturePerforationsToWells();
+                    }
+                    else {
+                        this->wellModel().beginTimeStep();// just to be sure well conteiner is reinitialized
+                        this->addConnectionsToWell(); // modify wells WI wiht fracture well 
+                    }
                 }
                 
             }
