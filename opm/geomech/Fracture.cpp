@@ -416,7 +416,7 @@ std::string
 Fracture::name() const
 {
     std::string name
-        = "Fracure_on_" + wellinfo_.name + "_perf_" + std::to_string(wellinfo_.perf) + "_nr";
+        = "Fracture_on_" + wellinfo_.name + "_perf_" + std::to_string(wellinfo_.perf) + "_nr";
     return name;
 }
 
