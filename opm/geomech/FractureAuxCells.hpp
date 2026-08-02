@@ -193,6 +193,17 @@ public:
     bool bind(const FractureModel& fractures);
 
     /*!
+     * \brief Whether the fractures still have the shape of the current binding.
+     *
+     * True when every fracture has the cell count its slots were handed out for.  Used
+     * to hold the topology fixed inside a time step: a fracture solve that grew or
+     * reset its grid mid-step changes the shape of the flow system, and re-describing
+     * that to a Newton iteration already under way gives it a moving target.  Such
+     * changes wait for the step boundary.
+     */
+    bool layoutMatches(const FractureModel& fractures) const;
+
+    /*!
      * \brief The well's perforations of this fracture's cells.
      *
      * Each is a degree of freedom of the flow problem and a well index, so the well model

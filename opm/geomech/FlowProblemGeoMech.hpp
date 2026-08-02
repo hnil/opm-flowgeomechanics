@@ -134,9 +134,20 @@ namespace Opm{
          * Called once the fracture model has been built or has moved, so that what the
          * reservoir sees matches what the fracture is.
          */
-        void bindFractureAuxCells()
+        void bindFractureAuxCells(const bool allowTopologyChange = true)
         {
             if ((fractureAuxCells_ == nullptr) || !this->geoMechModel().fractureModelActive()) {
+                return;
+            }
+
+            // Inside a time step the topology stays what it was: a fracture solve that
+            // grew or reset its grid changes the shape of the flow system, and a Newton
+            // iteration already under way cannot converge on a moving target.  Value
+            // changes -- apertures, transmissibilities -- pass through; shape changes
+            // wait for the step boundary, which is the sequentially implicit contract.
+            if (!allowTopologyChange
+                && !fractureAuxCells_->layoutMatches(this->geoMechModel().fractureModel()))
+            {
                 return;
             }
 

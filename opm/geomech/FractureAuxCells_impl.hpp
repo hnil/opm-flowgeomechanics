@@ -30,9 +30,48 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
     const auto previousConnections = this->connections_.size();
     const auto previousActive = this->numActive();
 
+    // The fracture's per-cell arrays are rebuilt at different points of its own solve,
+    // and part way through a propagation they need not agree with each other.  Binding
+    // against such a state attaches connections to the wrong degrees of freedom -- the
+    // half-transmissibility list of an older, smaller grid indexed into the new one --
+    // which is far worse than being one solve behind.  Keep the previous description
+    // and say so.
+    for (const auto& wellFractures : fractures.wellFractures()) {
+        for (const auto& fracture : wellFractures) {
+            const auto n = fracture.numCells();
+
+            std::string bad;
+            if (fracture.reservoirCells().size() != n) { bad = "reservoir cells"; }
+            else if (fracture.leakOf().size() != n) { bad = "leak-off"; }
+            else if (fracture.reservoirMobility().size() != n) { bad = "mobility"; }
+            else if (static_cast<std::size_t>(fracture.fractureWidth().size()) != n) { bad = "width"; }
+            else {
+                for (const auto& [i, j, t1, t2] : fracture.halfTrans()) {
+                    static_cast<void>(t1);
+                    static_cast<void>(t2);
+                    if (i >= n || j >= n) { bad = "half-transmissibility indices"; break; }
+                }
+            }
+
+            if (!bad.empty()) {
+                OpmLog::info(fmt::format("Embedded fracture flow: fracture state "
+                                         "inconsistent ({} vs {} cells); keeping the "
+                                         "previous binding", bad, n));
+                return false;
+            }
+        }
+    }
+
     this->connections_.clear();
     this->slotOf_.clear();
     this->wellPerforations_.clear();
+
+    // Every slot starts this round dormant.  A fracture's grid can come back smaller
+    // than it was -- the propagation rebuilds it -- and a slot the previous round
+    // activated would otherwise keep its flag and its volume with no connections left,
+    // an impossible cell that the convergence data and the volume refresh still count.
+    std::fill(this->active_.begin(), this->active_.end(), false);
+    std::fill(this->bulkVolume_.begin(), this->bulkVolume_.end(), 0.0);
 
     const auto numGridDof = this->simulator_.model().numGridDof();
     unsigned nextSlot = 0;
@@ -156,6 +195,32 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
     // Only a changed connection list needs the sparsity pattern rebuilt; apertures moving
     // is a change of values.
     return (this->connections_.size() != previousConnections) || (active != previousActive);
+}
+
+template <class TypeTag>
+bool
+FractureAuxCells<TypeTag>::layoutMatches(const FractureModel& fractures) const
+{
+    // Cell counts per fracture, in binding order, reconstructed from the slot registry.
+    std::vector<std::size_t> bound;
+    for (const auto& [fractureIdx, cell] : this->slotOf_) {
+        if (fractureIdx >= bound.size()) {
+            bound.resize(fractureIdx + 1, 0);
+        }
+        bound[fractureIdx] = std::max(bound[fractureIdx], cell + 1);
+    }
+
+    std::size_t fractureIdx = 0;
+    for (const auto& wellFractures : fractures.wellFractures()) {
+        for (const auto& fracture : wellFractures) {
+            if (fractureIdx >= bound.size() || fracture.numCells() != bound[fractureIdx]) {
+                return false;
+            }
+            ++fractureIdx;
+        }
+    }
+
+    return fractureIdx == bound.size();
 }
 
 template <class TypeTag>

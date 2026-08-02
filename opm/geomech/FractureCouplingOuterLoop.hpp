@@ -415,7 +415,7 @@ namespace Opm
                 // the reservoir and refresh the well's perforations of them.  No schedule
                 // rebuild and no upscaled well index -- re-adding those here is how the
                 // wells would silently fall back to the representation being replaced.
-                derived().simulator_.problem().bindFractureAuxCells();
+                derived().simulator_.problem().bindFractureAuxCells(/*allowTopologyChange=*/false);
                 derived().simulator_.problem().addFracturePerforationsToWells();
             }
             else if(do_update_connections){
