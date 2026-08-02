@@ -119,6 +119,17 @@ public:
     bool isActive(unsigned localIdx) const override
     { return this->active_.at(localIdx); }
 
+    /*!
+     * \brief Fracture cells stay out of the CNV measure.
+     *
+     * Their pore volume is an aperture times an area -- minute against any flow worth
+     * simulating -- so the volume-scaled residual dwarfs every tolerance while the mass
+     * it stands for is negligible.  The material balance still covers them, weighed by
+     * that same small mass.
+     */
+    bool participatesInCnv() const override
+    { return false; }
+
     void connections(std::vector<Connection>& conns) const override
     { conns.insert(conns.end(), this->connections_.begin(), this->connections_.end()); }
 
@@ -169,6 +180,7 @@ public:
                 (*block)[eq][eq] = 1.0;
             }
         }
+
     }
 
     /*!

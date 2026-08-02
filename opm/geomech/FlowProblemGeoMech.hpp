@@ -102,7 +102,20 @@ namespace Opm{
             }
 
             const auto capacity = prm.get<int>("solver.embedded_capacity", 5000);
-            const auto minWidth = prm.get<double>("config.min_width", 1e-3);
+
+            // The floor under the aperture used for the cells' volume and cubic-law
+            // transmissibility.  Deliberately NOT config.min_width: the fracture's own
+            // solver may run with that at zero, handling closure through the contact
+            // machinery instead -- but a flow cell with zero volume has no storage and,
+            // when it holds no oil and sees no pressure difference, an identically zero
+            // oil row.  The floor keeps every open cell a well-posed, if small, volume.
+            //
+            // The default matches the fracture solver's own historical min_width.  Going
+            // much below it runs into the absolute singularity threshold of the block
+            // inverter (|det| < 1e-40, matrixblock.hh): a fracture row's entries scale
+            // with aperture^3 through the cubic law, and at 1e-4 the determinant of a
+            // perfectly well-conditioned block falls under the cutoff.
+            const auto minWidth = prm.get<double>("solver.embedded_min_aperture", 1e-3);
 
             fractureAuxCells_ = &this->registerAuxCellModule_
                 (std::make_unique<FractureAuxCells<TypeTag>>(this->simulator(),
@@ -286,7 +299,12 @@ namespace Opm{
                     // method for handling extra connections from fractures
                     // it is options for not including them in fractures i.e. addconnections
                     //if(addPerfsToSchedule_){
-                        this->addConnectionsToSchedual();
+                        if (!this->fractureFlowIsEmbedded()) {
+                            // In the embedded representation the schedule owns no fracture
+                            // completions: the well perforates the fracture's degrees of
+                            // freedom directly, refreshed each time the fracture is bound.
+                            this->addConnectionsToSchedual();
+                        }
                         this->gridView().comm().barrier();
                     //}else{
                     // not not working ... more work...

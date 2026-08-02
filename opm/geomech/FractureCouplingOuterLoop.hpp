@@ -409,7 +409,16 @@ namespace Opm
             // + parent setup iteration. Structure changes always take the full path.
             const bool value_only_wi_update =
                 prm.get<bool>("fractureparam.solver.value_only_wi_update", false);
-            if(do_update_connections){
+            if (derived().simulator_.problem().fractureFlowIsEmbedded()) {
+                // The fracture flows through degrees of freedom of its own, so a fracture
+                // solve changed apertures and possibly opened cells: re-describe them to
+                // the reservoir and refresh the well's perforations of them.  No schedule
+                // rebuild and no upscaled well index -- re-adding those here is how the
+                // wells would silently fall back to the representation being replaced.
+                derived().simulator_.problem().bindFractureAuxCells();
+                derived().simulator_.problem().addFracturePerforationsToWells();
+            }
+            else if(do_update_connections){
                 if (value_only_wi_update && !coupling_metrics.structure_changed) {
                     OpmLog::info("Updating fracture CTFs in place (value_only_wi_update, no structure change)");
                     derived().simulator_.problem().addConnectionsToWell();
