@@ -77,6 +77,7 @@ namespace Opm{
         //! Owned by the base problem; this is the typed handle onto it.
         FractureAuxCells<TypeTag>* fractureAuxCells_ = nullptr;
         double embeddedCouplingChange_ = 0.0;
+        bool embeddedStatic_ = false;
 
     public:
 
@@ -119,6 +120,14 @@ namespace Opm{
             const auto perfWidth = prm.get<double>("solver.embedded_perf_width", 5e-3);
             const auto perfRw = prm.get<double>("solver.embedded_perf_rw", 0.1);
 
+            // The static gate: bind the fracture into the flow problem once, when it
+            // first appears, and hold that description for the rest of the run.  The
+            // fracture model itself keeps solving -- its state is simply no longer
+            // re-read -- so the flow sees a fixed, fully formed fracture.  This is the
+            // validation configuration: growth feedback cannot confound a comparison of
+            // the conductances themselves.
+            embeddedStatic_ = prm.get<bool>("solver.embedded_static", false);
+
             // The floor under the aperture used for the cells' volume and cubic-law
             // transmissibility.  Deliberately NOT config.min_width: the fracture's own
             // solver may run with that at zero, handling closure through the contact
@@ -156,6 +165,13 @@ namespace Opm{
         void bindFractureAuxCells(const bool allowTopologyChange = true)
         {
             if ((fractureAuxCells_ == nullptr) || !this->geoMechModel().fractureModelActive()) {
+                return;
+            }
+
+            // In the static configuration the first successful bind is also the last:
+            // the flow keeps the fracture exactly as it first appeared.
+            if (embeddedStatic_ && (fractureAuxCells_->numActive() > 0)) {
+                embeddedCouplingChange_ = 0.0;
                 return;
             }
 
