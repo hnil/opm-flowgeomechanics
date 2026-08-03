@@ -21,6 +21,8 @@
 
 #include <opm/geomech/FractureModel.hpp>
 
+#include <cmath>
+
 namespace Opm {
 
 template <class TypeTag>
@@ -156,15 +158,32 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
 
             // Where the well meets the fracture.  perfinj_ is (fracture cell, well index)
             // and is what the fracture's own pressure solve uses to drive itself; the same
-            // pair becomes a perforation of the degree of freedom that cell now owns.
+            // cells become perforations of the degrees of freedom they now own.  The well
+            // index either carries over as-is -- the current modelling, a constant factor
+            // on the cells around the wellbore -- or is estimated as radial flow through
+            // the fracture's aperture, with a fixed prescribed width for now.
             auto& perfs = this->wellPerforations_[fracture.wellInfo().name];
             for (const auto& [cell, wellIndex] : fracture.wellPerforations()) {
                 const auto slot = firstSlot + static_cast<std::size_t>(cell);
 
                 RuntimePerforation perf;
                 perf.cell = static_cast<int>(this->localToGlobalDof(slot));
-                perf.ctf = wellIndex;
                 perf.depth = this->depth_[slot];
+
+                if (this->perfWiMode_ == PerfWiMode::Estimate) {
+                    // Radial flow in the fracture plane towards the wellbore:
+                    // WI = 2 pi k_f w / ln(r_e/r_w), with the cubic-law
+                    // permeability k_f = w^2/12 and r_e from the cell's area.
+                    const auto w = this->perfWidth_;
+                    const auto re = std::sqrt(static_cast<Scalar>(areas[cell]) / M_PI);
+                    const auto lnTerm = std::log(std::max(re / this->perfRw_, Scalar{1.1}));
+
+                    perf.ctf = 2.0 * M_PI * (w * w * w / 12.0) / lnTerm;
+                }
+                else {
+                    perf.ctf = wellIndex;
+                }
+
                 perfs.push_back(perf);
             }
 

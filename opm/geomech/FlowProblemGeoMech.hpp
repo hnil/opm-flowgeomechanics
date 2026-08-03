@@ -10,6 +10,7 @@
 #include <opm/geomech/FlowGeoMechLinearSolverParameters.hpp>
 #include <opm/geomech/FlowProblemMech.hpp>
 #include <opm/geomech/FractureAuxCells.hpp>
+#include <opm/simulators/wells/PerforationData.hpp>
 #include <opm/geomech/BoundaryUtils.hpp>
 #include <opm/geomech/GeoMechModel.hpp>
 #include <opm/geomech/VtkGeoMechModule.hpp>
@@ -104,6 +105,20 @@ namespace Opm{
 
             const auto capacity = prm.get<int>("solver.embedded_capacity", 5000);
 
+            // How the well's perforations of the fracture cells get their well index.
+            // "fracture" carries over the factor the fracture's own pressure solve uses
+            // -- the current modelling, a constant factor on the cells around the
+            // wellbore -- and stays the default so the old behaviour is preserved.
+            // "estimate" forms a radial-flow index through a fixed prescribed aperture;
+            // making that width follow the solved aperture is the later, dynamic step.
+            const auto perfWiModeName =
+                prm.get<std::string>("solver.embedded_perf_wi_mode", std::string {"fracture"});
+            const auto perfWiMode = (perfWiModeName == "estimate")
+                ? FractureAuxCells<TypeTag>::PerfWiMode::Estimate
+                : FractureAuxCells<TypeTag>::PerfWiMode::Fracture;
+            const auto perfWidth = prm.get<double>("solver.embedded_perf_width", 5e-3);
+            const auto perfRw = prm.get<double>("solver.embedded_perf_rw", 0.1);
+
             // The floor under the aperture used for the cells' volume and cubic-law
             // transmissibility.  Deliberately NOT config.min_width: the fracture's own
             // solver may run with that at zero, handling closure through the contact
@@ -121,7 +136,10 @@ namespace Opm{
             fractureAuxCells_ = &this->registerAuxCellModule_
                 (std::make_unique<FractureAuxCells<TypeTag>>(this->simulator(),
                                                              static_cast<unsigned>(capacity),
-                                                             static_cast<Scalar>(minWidth)));
+                                                             static_cast<Scalar>(minWidth),
+                                                             perfWiMode,
+                                                             static_cast<Scalar>(perfWidth),
+                                                             static_cast<Scalar>(perfRw)));
 
             if (this->simulator().gridView().comm().rank() == 0) {
                 OpmLog::info(fmt::format("Embedded fracture flow: {} degrees of freedom "
@@ -200,11 +218,24 @@ namespace Opm{
                 return;
             }
 
-            for (auto& wellPtr : this->wellModel().localNonshutWells()) {
-                const auto perfs = fractureAuxCells_->wellPerforations(wellPtr->name());
-                if (!perfs.empty()) {
-                    wellPtr->addFracturePerforations(perfs);
+            // Registered as real perforations, sized into the wells' state and
+            // equations by the well model's own dynamic-structure rebuild -- the same
+            // path an ACTIONX-driven COMPDAT takes.  Registering identical lists is a
+            // no-op, so calling this every step costs nothing when nothing moved.
+            using PerfData = PerforationData<Scalar>;
+
+            for (const auto& wname : this->wellModel().schedule().wellNames(this->episodeIndex())) {
+                const auto runtime = fractureAuxCells_->wellPerforations(wname);
+
+                std::vector<PerfData> perfs;
+                perfs.reserve(runtime.size());
+                for (const auto& rp : runtime) {
+                    auto& pd = perfs.emplace_back();
+                    pd.cell_index = rp.cell;
+                    pd.connection_transmissibility_factor = static_cast<Scalar>(rp.ctf);
                 }
+
+                this->wellModel().setAuxiliaryPerforations(wname, std::move(perfs));
             }
         }
 
@@ -303,13 +334,13 @@ namespace Opm{
                         // The fracture is part of the flow problem in its own right, so
                         // the reservoir has to be told what it now looks like.
                         this->bindFractureAuxCells();
-                        this->wellModel().beginTimeStep();
 
                         // The well perforates the fracture, not the reservoir cells the
-                        // fracture leaks into.  Adding the upscaled index as well would
-                        // count the fracture's conductance twice: once folded into a well
-                        // index and once as the connections just bound.
+                        // fracture leaks into.  Registered before the well model starts
+                        // the step, so its dynamic-structure rebuild sizes the wells,
+                        // their state and their equations around the new perforations.
                         this->addFracturePerforationsToWells();
+                        this->wellModel().beginTimeStep();
                     }
                     else {
                         this->wellModel().beginTimeStep();// just to be sure well conteiner is reinitialized

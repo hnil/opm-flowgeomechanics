@@ -416,7 +416,11 @@ namespace Opm
                 // rebuild and no upscaled well index -- re-adding those here is how the
                 // wells would silently fall back to the representation being replaced.
                 derived().simulator_.problem().bindFractureAuxCells(/*allowTopologyChange=*/false);
-                derived().simulator_.problem().addFracturePerforationsToWells();
+                // The well's perforations of the fracture keep the indices they were
+                // given at the step boundary: within the step both the topology and the
+                // perforation factors are held fixed -- the sequentially implicit lag --
+                // and re-registering here would demand a well-structure rebuild the
+                // step is not going to perform.
 
                 // The coupling residual is the change in what the flow was just fed --
                 // total conductance and pore volume of the binding -- not the well-index

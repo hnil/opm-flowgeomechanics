@@ -75,12 +75,29 @@ class FractureAuxCells : public FlowAuxCellModule<TypeTag>
 public:
     using Connection = typename ParentType::Connection;
 
+    //! How the well index of a well-to-fracture-cell perforation is formed.
+    enum class PerfWiMode {
+        //! The factor the fracture's own pressure solve uses (perfinj_): the
+        //! current modelling -- a constant factor on the cells around the
+        //! wellbore.
+        Fracture,
+        //! A radial-flow estimate through the fracture's aperture,
+        //! 2 pi (w^3/12) / ln(r_e/r_w), with a fixed prescribed width.
+        Estimate,
+    };
+
     FractureAuxCells(Simulator& simulator,
                      const unsigned capacity,
-                     const Scalar minWidth)
+                     const Scalar minWidth,
+                     const PerfWiMode perfWiMode,
+                     const Scalar perfWidth,
+                     const Scalar perfRw)
         : simulator_(simulator)
         , capacity_(capacity)
         , minWidth_(minWidth)
+        , perfWiMode_(perfWiMode)
+        , perfWidth_(perfWidth)
+        , perfRw_(perfRw)
         , active_(capacity, false)
         , bulkVolume_(capacity, 0.0)
         , depth_(capacity, 0.0)
@@ -264,6 +281,9 @@ private:
 
     unsigned capacity_{};
     Scalar minWidth_{};
+    PerfWiMode perfWiMode_{PerfWiMode::Fracture};
+    Scalar perfWidth_{};
+    Scalar perfRw_{};
 
     std::vector<bool> active_{};
 
