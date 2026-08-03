@@ -1981,6 +1981,28 @@ Fracture::initFracturePressureFromReservoir()
 
 
 
+bool
+Fracture::ensureLeakoffCurrent()
+{
+    const std::size_t nc = numFractureCells();
+    if (leakof_.size() == nc) {
+        return true;
+    }
+
+    const bool inputsCurrent = (reservoir_mobility_.size() == nc)
+        && (reservoir_perm_.size() == nc)
+        && (reservoir_dist_.size() == nc)
+        && (!has_filtercake_ || (filtercake_thikness_.size() == nc));
+
+    if (!inputsCurrent) {
+        return false;
+    }
+
+    updateLeakoff();
+
+    return leakof_.size() == nc;
+}
+
 void
 Fracture::updateLeakoff()
 {
@@ -2063,6 +2085,41 @@ Fracture::updateLeakoff()
         }
     }
 }
+std::vector<Fracture::Htrans>
+Fracture::currentHalfTrans() const
+{
+    std::vector<Htrans> htrans;
+
+    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+    for (const auto& element : Dune::elements(grid_->leafGridView())) {
+        const int eIdx = mapper.index(element);
+        const auto geom = element.geometry();
+        for (const auto& is : Dune::intersections(grid_->leafGridView(), element)) {
+            if (is.boundary()) {
+                continue;
+            }
+
+            const int nIdx = mapper.index(is.outside());
+            if (eIdx >= nIdx) {
+                continue; // each interior face once
+            }
+
+            const auto eCenter = geom.center();
+            const auto nCenter = is.outside().geometry().center();
+            const auto isCenter = is.geometry().center();
+            const auto d_inside = eCenter - isCenter;
+            const auto d_outside = nCenter - isCenter;
+            const double area = is.geometry().volume();
+
+            htrans.emplace_back(nIdx, eIdx,
+                                area / d_inside.two_norm(),
+                                area / d_outside.two_norm());
+        }
+    }
+
+    return htrans;
+}
+
 std::vector<double>
 Fracture::cellAreas() const
 {

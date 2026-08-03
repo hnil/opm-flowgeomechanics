@@ -75,6 +75,7 @@ namespace Opm{
     private:
         //! Owned by the base problem; this is the typed handle onto it.
         FractureAuxCells<TypeTag>* fractureAuxCells_ = nullptr;
+        double embeddedCouplingChange_ = 0.0;
 
     public:
 
@@ -140,6 +141,14 @@ namespace Opm{
                 return;
             }
 
+            // A propagation attempt the fracture rolled back leaves its leak-off sized
+            // for the grid that was tried; recompute it so real growth is not mistaken
+            // for an inconsistent state and silently refused, step boundary after step
+            // boundary.
+            if (allowTopologyChange) {
+                this->geoMechModel().fractureModel().ensureFlowDescriptionCurrent();
+            }
+
             // Inside a time step the topology stays what it was: a fracture solve that
             // grew or reset its grid changes the shape of the flow system, and a Newton
             // iteration already under way cannot converge on a moving target.  Value
@@ -148,6 +157,9 @@ namespace Opm{
             if (!allowTopologyChange
                 && !fractureAuxCells_->layoutMatches(this->geoMechModel().fractureModel()))
             {
+                // The fracture wants a different shape; that waits for the step
+                // boundary, and what the flow sees is unchanged.
+                embeddedCouplingChange_ = 0.0;
                 return;
             }
 
@@ -155,7 +167,19 @@ namespace Opm{
                 fractureAuxCells_->bind(this->geoMechModel().fractureModel());
 
             this->refreshAuxCellModules_(topologyChanged);
+            embeddedCouplingChange_ = fractureAuxCells_->lastBindChange();
         }
+
+        /*!
+         * \brief The coupling residual of the embedded representation.
+         *
+         * The relative change, over the last rebind, of what the flow is actually fed:
+         * total fracture-to-reservoir conductance and total fracture pore volume.  The
+         * outer loop watches this in embedded mode instead of the well-index change
+         * list, which is computed but never applied there.
+         */
+        double embeddedCouplingChange() const
+        { return embeddedCouplingChange_; }
 
         //! Whether the fracture flows through degrees of freedom of its own.
         bool fractureFlowIsEmbedded() const

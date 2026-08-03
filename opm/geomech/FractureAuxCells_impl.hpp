@@ -45,13 +45,6 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
             else if (fracture.leakOf().size() != n) { bad = "leak-off"; }
             else if (fracture.reservoirMobility().size() != n) { bad = "mobility"; }
             else if (static_cast<std::size_t>(fracture.fractureWidth().size()) != n) { bad = "width"; }
-            else {
-                for (const auto& [i, j, t1, t2] : fracture.halfTrans()) {
-                    static_cast<void>(t1);
-                    static_cast<void>(t2);
-                    if (i >= n || j >= n) { bad = "half-transmissibility indices"; break; }
-                }
-            }
 
             if (!bad.empty()) {
                 OpmLog::info(fmt::format("Embedded fracture flow: fracture state "
@@ -139,8 +132,14 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
 
             // Fracture cell to fracture cell: the cubic law over the two half
             // transmissibilities, the same combination the fracture's own pressure solve
-            // forms (FracturePressureAssemblerAD).
-            for (const auto& [i, j, t1, t2] : fracture.halfTrans()) {
+            // forms (FracturePressureAssemblerAD).  Computed fresh from the grid rather
+            // than read from the fracture's cache: the cache is rebuilt at particular
+            // points of the pressure solve and can lag a re-gridding with indices that
+            // are still in range -- a wrong topology no size check catches, and a cell
+            // it leaves disconnected has no storage and no path to the reservoir, which
+            // is a singular row the moment the ILU eliminates around it.
+            const auto freshHalfTrans = fracture.currentHalfTrans();
+            for (const auto& [i, j, t1, t2] : freshHalfTrans) {
                 const auto slotI = firstSlot + i;
                 const auto slotJ = firstSlot + j;
 
@@ -184,6 +183,35 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
     }
 
     static_cast<void>(numGridDof);
+
+    // Aggregate measures of what this binding feeds the flow, for the outer loop's
+    // coupling residual.
+    {
+        Scalar totalTrans = 0.0;
+        const auto gridDofLimit = this->simulator_.model().numGridDof();
+        for (const auto& conn : this->connections_) {
+            if (conn.dof1 < gridDofLimit || conn.dof2 < gridDofLimit) {
+                totalTrans += conn.trans;
+            }
+        }
+
+        Scalar totalPv = 0.0;
+        for (unsigned slot = 0; slot < this->capacity_; ++slot) {
+            totalPv += this->bulkVolume_[slot];
+        }
+
+        const auto rel = [](const Scalar now, const Scalar before) {
+            if (before <= 0.0) {
+                return (now > 0.0) ? Scalar{1} : Scalar{0};
+            }
+            return std::abs(now - before) / before;
+        };
+
+        this->lastBindChange_ = std::max(rel(totalTrans, this->lastTotalTrans_),
+                                         rel(totalPv, this->lastTotalPv_));
+        this->lastTotalTrans_ = totalTrans;
+        this->lastTotalPv_ = totalPv;
+    }
 
     const auto active = this->numActive();
     if (this->simulator_.gridView().comm().rank() == 0) {

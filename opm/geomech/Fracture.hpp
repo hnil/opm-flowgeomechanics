@@ -306,6 +306,17 @@ public:
     //! Number of cells in the fracture grid.
     std::size_t numCells() const { return numFractureCells(); }
 
+    /*!
+     * \brief Recompute the leak-off coefficients if they lag the grid.
+     *
+     * The propagation may rebuild the grid after the last leak-off update -- an attempt
+     * that was rolled back leaves leakof_ sized for the grid that was tried -- and the
+     * embedded flow representation reads it per current cell.  Returns whether leak-off
+     * now matches the grid; false when the reservoir property arrays lag it as well, in
+     * which case nothing sensible can be computed and the caller keeps what it has.
+     */
+    bool ensureLeakoffCurrent();
+
     //! Reservoir cell each fracture cell leaks into, by fracture cell index.
     const std::vector<int>& reservoirCells() const { return reservoir_cells_; }
 
@@ -322,6 +333,16 @@ public:
 
     //! Half transmissibilities (i, j, t_i, t_j) between neighbouring fracture cells.
     const std::vector<Htrans>& halfTrans() const { return htrans_; }
+
+    /*!
+     * \brief Half transmissibilities computed fresh from the current grid.
+     *
+     * The cached htrans_ is rebuilt at particular points of the pressure solve and can
+     * lag a re-gridding with indices that are still in range -- a wrong answer that no
+     * size check catches.  A consumer describing the fracture to another system reads
+     * this instead: pure geometry of the grid as it stands, nothing cached.
+     */
+    std::vector<Htrans> currentHalfTrans() const;
 
     //! Aperture per fracture cell.
     const Dune::BlockVector<Dune::FieldVector<double, 1>>& fractureWidth() const

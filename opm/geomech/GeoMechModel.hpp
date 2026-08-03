@@ -129,6 +129,8 @@ namespace Opm{
 
        const FractureModel& fractureModel() const{ return fracHost_.fractureModel(); }
 
+       FractureModel& fractureModel() { return fracHost_.fractureModel(); }
+
        void resetFractureModel(){ fracHost_.resetFractureModel(); }
 
         void updatePotentialForces(bool relative_solve = true){

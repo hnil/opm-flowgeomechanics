@@ -126,6 +126,24 @@ public:
         const std::vector<std::vector<Fracture>>& wellFractures() const
         { return well_fractures_; }
 
+        /*!
+         * \brief Bring every fracture's leak-off in step with its grid.
+         *
+         * Called before the embedded flow representation reads the fractures, so that a
+         * propagation attempt rolled back after the last leak-off update does not leave
+         * a stale array behind.  Returns whether every fracture is now consistent.
+         */
+        bool ensureFlowDescriptionCurrent()
+        {
+            bool ok = true;
+            for (auto& well_fracture : well_fractures_) {
+                for (auto& fracture : well_fracture) {
+                    ok = fracture.ensureLeakoffCurrent() && ok;
+                }
+            }
+            return ok;
+        }
+
     private:
         bool vtkwritewells_ = false; // write wells to VTK files
         template <class TypeTag, class Simulator>

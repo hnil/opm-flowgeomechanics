@@ -417,6 +417,28 @@ namespace Opm
                 // wells would silently fall back to the representation being replaced.
                 derived().simulator_.problem().bindFractureAuxCells(/*allowTopologyChange=*/false);
                 derived().simulator_.problem().addFracturePerforationsToWells();
+
+                // The coupling residual is the change in what the flow was just fed --
+                // total conductance and pore volume of the binding -- not the well-index
+                // change list, which is computed above but never applied here.  Contact
+                // chatter moves individual cells' indices every iteration; the
+                // aggregates cancel it the way the upscaled index summed over it.
+                const double coupling_tolerance =
+                    prm.get<double>("fractureparam.solver.coupling_tolerance", 1e-3);
+                const double embedded_change =
+                    derived().simulator_.problem().embeddedCouplingChange();
+                if (!fracture_converged_global || embedded_change > coupling_tolerance) {
+                    if (!fracture_converged_global) {
+                        OpmLog::info("Keeping outer loop active: fracture solve did not converge");
+                    } else {
+                        OpmLog::info("Keeping outer loop active: embedded coupling change "
+                                     + std::to_string(embedded_change) + " > "
+                                     + std::to_string(coupling_tolerance));
+                    }
+                    report.converged = false;
+                }
+                comm.barrier();
+                return;
             }
             else if(do_update_connections){
                 if (value_only_wi_update && !coupling_metrics.structure_changed) {

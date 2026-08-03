@@ -204,6 +204,19 @@ public:
     bool layoutMatches(const FractureModel& fractures) const;
 
     /*!
+     * \brief Relative change of the binding between the last two binds.
+     *
+     * The maximum of the relative changes of total reservoir-connection
+     * transmissibility and total pore volume -- aggregates, so that contact chatter of
+     * individual cells cancels the way it does in the upscaled well index.  This is the
+     * coupling residual the outer loop watches in embedded mode: it measures what the
+     * flow is actually fed, where the well-index change list measures a quantity that
+     * is never applied.
+     */
+    Scalar lastBindChange() const
+    { return this->lastBindChange_; }
+
+    /*!
      * \brief The well's perforations of this fracture's cells.
      *
      * Each is a degree of freedom of the flow problem and a well index, so the well model
@@ -253,6 +266,10 @@ private:
     Scalar minWidth_{};
 
     std::vector<bool> active_{};
+
+    Scalar lastTotalTrans_ = -1.0;
+    Scalar lastTotalPv_ = -1.0;
+    Scalar lastBindChange_ = 0.0;
     std::vector<Scalar> bulkVolume_{};
     std::vector<Scalar> depth_{};
     //! Reservoir cell each fracture cell leaks into; also where its initial state

@@ -226,6 +226,10 @@ namespace Opm{
         }
       }
 
+      FractureModel& fractureModel() {
+            assert(fracturemodel_);
+            return *fracturemodel_;
+      }
       const FractureModel& fractureModel() const{
             if(!fracturemodel_){
                 std::cout << "Fracture model not initialized, returning nullptr" << std::endl;
