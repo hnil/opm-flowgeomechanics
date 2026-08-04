@@ -10,12 +10,12 @@
 Flow is a simulator for fully implicit three-phase black-oil flow, and is part of OPM.
 For more information visit: https://opm-project.org 
 
-Flow Version     =  2026.04-pre (d6c9a5e*)
-Machine name     =  Halvors-MacBook-Pro.local (Number of logical cores: 14, Memory size: 24576.00 MB) 
-Operating system =  Darwin arm64 (Kernel: 25.5.0, Darwin Kernel Version 25.5.0: Mon Apr 27 20:41:15 PDT 2026; root:xnu-12377.121.6~2/RELEASE_ARM64_T6041 )
-Build time       =  2026-07-20 at 14:06:28 hrs
+Flow Version     =  2026.04-pre (4fc5c69*)
+Machine name     =  Halvors-MBP.sintef.no (Number of logical cores: 14, Memory size: 24576.00 MB) 
+Operating system =  Darwin arm64 (Kernel: 25.5.0, Darwin Kernel Version 25.5.0: Tue Jun  9 22:28:34 PDT 2026; root:xnu-12377.121.10~1/RELEASE_ARM64_T6041 )
+Build time       =  2026-08-04 at 09:36:11 hrs
 User             =  root
-Simulation started on 21-07-2026 at 12:08:39 hrs
+Simulation started on 04-08-2026 at 09:37:22 hrs
 Using 1 MPI processes with 1 OMP threads on each 
 Parameters used by Flow:
 # [known parameters which were specified at run-time]
@@ -31,6 +31,7 @@ AllowSplittingInactiveWells="1"
 AlternativeWellRateInit="1"
 CheckGroupConstraintsInnerWellIterations="1"
 CheckSatfuncConsistency="1"
+ConserveInnerEnergyThermal="0"
 ContinueOnConvergenceError="0"
 ConvergenceMonitoring="0"
 ConvergenceMonitoringCutOff="6"
@@ -52,9 +53,10 @@ EnableAdaptiveTimeStepping="1"
 EnableAsyncEclOutput="0"
 EnableAsyncVtkOutput="0"
 EnableDriftCompensation="0"
+EnableDriftCompensationTemp="1"
 EnableDryRun="auto"
 EnableEclOutput="1"
-EnableEsmry="0"
+EnableEsmry="1"
 EnableGravity="1"
 EnableGridAdaptation="0"
 EnableIntensiveQuantityCache="1"
@@ -76,7 +78,8 @@ ForceDisableResvFluidInPlaceOutput="0"
 FullTimeStepInitially="0"
 GpuAwareMpi="0"
 GpuDeviceId="0"
-HyNeConfigFile="hybridNewtonConfig.json"
+GroupControlFractionTolerance="0.0001"
+HybridNewtonConfigFile="hybridNewtonConfig.json"
 IgnoreKeywords=""
 IluFillinLevel="0"
 IluRedblack="0"
@@ -116,7 +119,7 @@ MatrixAddWellContributions="0"
 MaxInnerIterMsWells="100"
 MaxInnerIterWells="50"
 MaxLocalSolveIterations="20"
-MaxNewtonIterationsWithInnerWellIterations="8"
+MaxNewtonIterationsWithInnerWellIterations="99"
 MaxPressureChangeMsWells="1e+06"
 MaxResidualAllowed="1e+07"
 MaxSinglePrecisionDays="20"
@@ -129,6 +132,7 @@ MaxWelleqIter="30"
 MaximumNumberOfGroupSwitches="3"
 MaximumNumberOfWellSwitches="3"
 MaximumWaterSaturation="1"
+MechPorosityCoupling="0"
 MetisParams="default"
 MiluVariant="ilu"
 MinStrictCnvIter="-1"
@@ -136,10 +140,10 @@ MinStrictMbIter="-1"
 MinTimeStepBasedOnNewtonIterations="0"
 MinTimeStepBeforeShuttingProblematicWellsInDays="0.01"
 MinTimeStepSize="0"
-NetworkMaxOuterIterations="10"
+NetworkMaxOuterIterations="3"
 NetworkMaxPressureUpdateInBars="5"
 NetworkMaxStrictOuterIterations="10"
-NetworkMaxSubIterations="20"
+NetworkMaxSubIterations="100"
 NetworkPressureUpdateDampingFactor="0.1"
 NewtonMaxError="1e+100"
 NewtonMaxIterations="20"
@@ -160,6 +164,7 @@ NumLocalDomains="0"
 NumOverlap="1"
 NumPressurePointsEquil="2000"
 NumSatfuncConsistencySamplePoints="5"
+NumericalAquiferMode="grid"
 NupcolGroupRateTolerance="0.001"
 OpenclIluParallel="1"
 OpenclPlatformId="0"
@@ -178,17 +183,20 @@ PressureScale="1"
 PriVarOscilationThreshold="1e-05"
 PrintParameters="2"
 ProjectSaturations="0"
+RcNetworkLooseCoupling="0"
 RegularizationFactorWells="100"
 RelaxedLinearSolverReduction="0.01"
 RelaxedMaxPvFraction="0.03"
 RelaxedPressureTolMsw="10000"
 RelaxedWellFlowTol="0.001"
+RescoupSyncAtReportSteps="0"
 RestartTime="-1e+35"
 RestartWritingInterval="16777215"
 SaveFile=""
 SaveStep=""
 ScaleLinearSystem="0"
 SchedRestart="0"
+SeparateSparseSourceTerms="0"
 SerialPartitioning="0"
 ShutUnsolvableWells="1"
 Slave="0"
@@ -223,29 +231,49 @@ TimeStepControlTolerance="0.1"
 TimeStepControlToleranceTestVersion="standard"
 TimeStepVerbosity="1"
 ToleranceCnv="0.01"
-ToleranceCnvEnergy="0.01"
-ToleranceCnvEnergyRelaxed="1"
+ToleranceCnvEnergy="0.4182"
+ToleranceCnvEnergyRelaxed="41.82"
 ToleranceCnvRelaxed="1"
-ToleranceEnergyBalance="1e-07"
-ToleranceEnergyBalanceRelaxed="1e-06"
+ToleranceEnergyBalance="4.182e-06"
+ToleranceEnergyBalanceRelaxed="4.182e-05"
+ToleranceMaxDp="0"
+ToleranceMaxDrs="0"
+ToleranceMaxDrv="0"
+ToleranceMaxDs="0"
 ToleranceMb="1e-07"
 ToleranceMbRelaxed="1e-06"
 TolerancePressureMsWells="1000"
 ToleranceWellControl="1e-07"
 ToleranceWells="0.0001"
+TpsaIluFillinLevel="0"
+TpsaIluRelaxation="0.9"
+TpsaLinearSolver="ilu0"
+TpsaLinearSolverIgnoreConvergenceFailure="0"
+TpsaLinearSolverMaxIter="200"
+TpsaLinearSolverPrintJsonDefinition="0"
+TpsaLinearSolverReduction="0.001"
+TpsaLinearSolverRestart="40"
+TpsaLinearSolverVerbosity="0"
+TpsaNewtonMaxError="1e+100"
+TpsaNewtonMaxIterations="20"
+TpsaNewtonMinIterations="1"
+TpsaNewtonTargetIterations="10"
+TpsaNewtonTolerance="0.001"
+TpsaNewtonVerbosity="1"
+TpsaRelaxedLinearSolverReduction="0.001"
+TpsaUseGmres="0"
+TruncateTimeStepToFloat="0"
 UpdateEquationsScaling="0"
 UseAverageDensityMsWells="0"
 UseGmres="0"
-UseHyNe="0"
+UseHybridNewton="0"
 UseImplicitIpr="1"
 UseMultisegmentWell="1"
 UseUpdateStabilization="1"
 VerifyGpuAwareMpi="0"
 VtkWriteAverageMolarMasses="0"
 VtkWriteDensities="1"
-VtkWriteDiffusionCoefficients="0"
 VtkWriteDofIndex="0"
-VtkWriteEffectiveDiffusionCoefficients="0"
 VtkWriteExtrusionFactor="0"
 VtkWriteFilterVelocities="0"
 VtkWriteFluidEnthalpies="1"
@@ -277,7 +305,6 @@ VtkWriteSaturatedOilGasDissolutionFactor="0"
 VtkWriteSaturationRatios="0"
 VtkWriteSaturations="1"
 VtkWriteTemperature="1"
-VtkWriteTortuosities="0"
 VtkWriteTotalMassFractions="0"
 VtkWriteTotalMoleFractions="0"
 VtkWriteTotalThermalConductivity="1"
@@ -298,7 +325,7 @@ Reading deck file '/Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/da
     4 Reading GAS      in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 8
     5 Reading DISGAS   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 9
     6 Reading METRIC   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 10
-    7 Reading TEMP     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 12
+    7 Reading THERMAL  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 11
     8 Reading MECH     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 13
     9 Reading FRAC     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 14
    10 Reading START    in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 15
@@ -419,8 +446,6 @@ Simulation will solve for mechanical quantities
 
 Simulation will solve with fractures in wells
 
-TEMP is used to start a thermal simulation. Conservation equation for internal energy is used instead of enthalpy (i.e., no work terms are included).
-
 Creating grid from keywords DX, DY, DZ and TOPS
 4 fluid phases are active
 
@@ -429,7 +454,6 @@ Processing dynamic information from
 Initializing report step 0/4 at 2020-01-01 0 DAYS line 336
 Processing keyword TUNING at line 337
 Processing keyword NUPCOL at line 341
-Minimum NUPCOL value is 6 - see keyword MINNPCOL to adjust the minimum value
 Processing keyword BCPROP at line 344
 Processing keyword GRUPTREE at line 352
 Processing keyword WELSPECS at line 364
@@ -453,13 +477,9 @@ Simulation will solve for mechanical quantities
 
 Simulation will solve with fractures in wells
 
-TEMP is used to start a thermal simulation. Conservation equation for internal energy is used instead of enthalpy (i.e., no work terms are included).
-
 Simulation will solve for mechanical quantities
 
 Simulation will solve with fractures in wells
-
-TEMP is used to start a thermal simulation. Conservation equation for internal energy is used instead of enthalpy (i.e., no work terms are included).
 
 Processing grid
 Total number of active cells: 3025 / total pore volume: 340910966 RM3
@@ -511,6 +531,7 @@ Property tree for linear solvers:
     }
 }
 
+ESMRY is incompatible with MECH/FRAC. Request for ESMRY output ignored.
 Unhandled summary keyword ALL/FAQR
 In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 178
 Unhandled summary keyword ALL/FAQRG
@@ -518,10 +539,6 @@ In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_N
 Unhandled summary keyword ALL/FAQT
 In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 178
 Unhandled summary keyword ALL/FAQTG
-In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 178
-Unhandled summary keyword ALL/FWGR
-In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 178
-Unhandled summary keyword ALL/GWGR
 In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 178
 {
     "hasfractures": "true",
@@ -668,12 +685,13 @@ Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  5.867e-05  0.000e+00  2.061e-05  0.000e+00  1.090e-01  0.000e+00  2.505e-02
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  5.867e-05  0.000e+00  5.739e-04  0.000e+00  1.090e-01  0.000e+00  1.067e+00   Strict  Relaxed
 Linear system blocksize: 4 size:    3025 block nonzeroes:     19833
-   1  0.000e+00  1.711e-03  0.000e+00  1.943e-06  0.000e+00  1.401e-02  0.000e+00  3.253e-04
-   2  0.000e+00  2.755e-07  0.000e+00  1.872e-06  0.000e+00  1.980e-06  0.000e+00  2.491e-05
-   3  0.000e+00  6.956e-10  0.000e+00  2.965e-10  0.000e+00  2.818e-07  0.000e+00  8.162e-08
+   1  0.000e+00  1.711e-03  0.000e+00  2.102e-02  0.000e+00  1.401e-02  0.000e+00  1.721e-01   Strict   Strict
+   2  0.000e+00  2.195e-06  0.000e+00  2.899e-05  0.000e+00  2.542e-05  0.000e+00  3.120e-04   Strict   Strict
+   3  0.000e+00  9.327e-09  0.000e+00  1.331e-07  0.000e+00  1.483e-07  0.000e+00  2.725e-06   Strict   Strict
+Overall linear iterations used: 2
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
@@ -691,18 +709,16 @@ Property tree for mech linear solver:
     }
 }
 
-Mechanical solve stats: solves=1, linear_iterations=45 (total 45), solve_time_s=0.0681532 (total 0.0681532), converged=true
+Mechanical solve stats: solves=1, linear_iterations=49 (total 49), solve_time_s=0.0707912 (total 0.0707912), converged=true
 
 Writing fracture data to VTK files at time: 0grid_size156
 
-Fracture solve stats: fractures_solved=1 (total 1), nonlinear_iterations=2 (total 2), linear_solves=1 (total 1), linear_iterations=0 (total 0), closed_cell_toggles=180 (total 180), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.00790792 (total 0.00790792), converged=true
+Fracture solve stats: fractures_solved=1 (total 1), nonlinear_iterations=2 (total 2), linear_solves=1 (total 1), linear_iterations=0 (total 0), closed_cell_toggles=180 (total 180), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.00695933 (total 0.00695933), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Keyword 'BSTRSSXX' is unhandled for output to summary file.
-Overall linear iterations used: 2
-Suggested next time step size (from PID controller): 14.16384095736432 days
+Suggested next time step size (from PID controller): 14.162700674069182 days
 Suggested next time step size (from iteration target): 3 days
  Newton its= 3, linearizations= 4 (0.0sec), linear its=  2 (0.0sec)
 
@@ -710,44 +726,43 @@ Starting time step 1, stepsize 2 days, at day 1/5, date = 02-Jan-2020
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  2.461e-05  0.000e+00  1.086e-07  0.000e+00  4.389e-04  0.000e+00  1.233e-02
-   1  0.000e+00  4.197e-07  0.000e+00  1.038e-06  0.000e+00  6.676e-06  0.000e+00  2.351e-03
-   2  0.000e+00  2.908e-08  0.000e+00  8.153e-09  0.000e+00  8.729e-07  0.000e+00  3.085e-07
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  2.459e-05  0.000e+00  9.043e-06  0.000e+00  4.389e-04  0.000e+00  5.156e-01   Strict  Relaxed
+   1  0.000e+00  4.197e-07  0.000e+00  4.334e-05  0.000e+00  6.672e-06  0.000e+00  9.833e-02   Strict  Relaxed
+   2  0.000e+00  2.911e-08  0.000e+00  3.455e-07  0.000e+00  8.726e-07  0.000e+00  1.292e-05   Strict   Strict
+Overall linear iterations used: 0
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=2, linear_iterations=38 (total 83), solve_time_s=0.0592533 (total 0.127407), converged=true
+Mechanical solve stats: solves=2, linear_iterations=38 (total 87), solve_time_s=0.0570015 (total 0.127793), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 2), nonlinear_iterations=2 (total 4), linear_solves=1 (total 2), linear_iterations=0 (total 0), closed_cell_toggles=360 (total 540), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.00806858 (total 0.0159765), converged=true
+Fracture solve stats: fractures_solved=1 (total 2), nonlinear_iterations=2 (total 4), linear_solves=1 (total 2), linear_iterations=0 (total 0), closed_cell_toggles=360 (total 540), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.007157 (total 0.0141163), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Keyword 'BSTRSSXX' is unhandled for output to summary file.
-Overall linear iterations used: 0
-Suggested next time step size (from PID controller): 20.98581653470797 days
+Suggested next time step size (from PID controller): 20.994456975338643 days
 Suggested next time step size (from iteration target): 6.800000000000002 days
  Newton its= 2, linearizations= 3 (0.0sec), linear its=  0 (0.0sec)
 
 Starting time step 2, stepsize 2 days, at day 3/5, date = 04-Jan-2020
 Geomech begin time step
 
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  2.771e-06  0.000e+00  6.216e-06  0.000e+00  1.482e-05  0.000e+00  1.138e-02
-   1  0.000e+00  7.656e-08  0.000e+00  6.088e-07  0.000e+00  2.063e-06  0.000e+00  1.280e-03
-   2  0.000e+00  7.058e-09  0.000e+00  1.893e-09  0.000e+00  2.599e-07  0.000e+00  1.604e-07
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  2.769e-06  0.000e+00  2.590e-04  0.000e+00  1.479e-05  0.000e+00  4.760e-01   Strict  Relaxed
+   1  0.000e+00  7.657e-08  0.000e+00  2.545e-05  0.000e+00  2.062e-06  0.000e+00  5.353e-02   Strict  Relaxed
+   2  0.000e+00  7.061e-09  0.000e+00  8.015e-08  0.000e+00  2.598e-07  0.000e+00  6.721e-06   Strict   Strict
+Overall linear iterations used: 0
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=3, linear_iterations=51 (total 134), solve_time_s=0.0778192 (total 0.205226), converged=true
+Mechanical solve stats: solves=3, linear_iterations=51 (total 138), solve_time_s=0.0747209 (total 0.202514), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 3), nonlinear_iterations=2 (total 6), linear_solves=1 (total 3), linear_iterations=0 (total 0), closed_cell_toggles=360 (total 900), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.00788521 (total 0.0238617), converged=true
+Fracture solve stats: fractures_solved=1 (total 3), nonlinear_iterations=2 (total 6), linear_solves=1 (total 3), linear_iterations=0 (total 0), closed_cell_toggles=360 (total 900), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.00717492 (total 0.0212912), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
-Overall linear iterations used: 0
-Suggested next time step size (from PID controller): 37.211565474425086 days
+Suggested next time step size (from PID controller): 37.221276081873185 days
 Suggested next time step size (from iteration target): 6.800000000000002 days
  Newton its= 2, linearizations= 3 (0.0sec), linear its=  0 (0.0sec)
 Sub steps started at time = 0 (days)
@@ -760,7 +775,7 @@ Suggested next step size = 6 (days)
 Restart file written for report step 1/4, date = 06-Jan-2020 00:00:00
 Writing fracture data to VTK files at time: 259200grid_size180
 
-Time step took 0.962521 seconds; total solver time 0.962521 seconds.
+Time step took 0.899918 seconds; total solver time 0.899918 seconds.
 
 
 
@@ -776,22 +791,22 @@ Report step  1/4 at day 5/100.5, date = 06-Jan-2020
 Starting time step 0, stepsize 5 days, at day 5/10, date = 06-Jan-2020
 Geomech begin time step
 
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  1.278e-06  0.000e+00  1.718e-05  0.000e+00  1.085e-05  0.000e+00  2.601e-02
-   1  0.000e+00  7.848e-08  0.000e+00  6.358e-06  0.000e+00  1.863e-06  0.000e+00  1.460e-02
-   2  0.000e+00  1.117e-08  0.000e+00  1.399e-06  0.000e+00  3.007e-07  0.000e+00  3.194e-03
-   3  0.000e+00  1.758e-09  0.000e+00  1.800e-09  0.000e+00  4.770e-08  0.000e+00  1.832e-06
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  1.277e-06  0.000e+00  7.168e-04  0.000e+00  1.084e-05  0.000e+00  1.088e+00   Strict  Relaxed
+   1  0.000e+00  7.846e-08  0.000e+00  2.659e-04  0.000e+00  1.863e-06  0.000e+00  6.107e-01   Strict  Relaxed
+   2  0.000e+00  1.117e-08  0.000e+00  5.849e-05  0.000e+00  3.006e-07  0.000e+00  1.336e-01   Strict  Relaxed
+   3  0.000e+00  1.758e-09  0.000e+00  7.503e-08  0.000e+00  4.768e-08  0.000e+00  7.661e-05   Strict   Strict
+Overall linear iterations used: 0
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=4, linear_iterations=45 (total 179), solve_time_s=0.0695713 (total 0.274797), converged=true
+Mechanical solve stats: solves=4, linear_iterations=47 (total 185), solve_time_s=0.0696279 (total 0.272141), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 4), nonlinear_iterations=11 (total 17), linear_solves=10 (total 13), linear_iterations=3 (total 3), closed_cell_toggles=516 (total 1416), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.013138 (total 0.0369997), converged=true
+Fracture solve stats: fractures_solved=1 (total 4), nonlinear_iterations=11 (total 17), linear_solves=10 (total 13), linear_iterations=3 (total 3), closed_cell_toggles=516 (total 1416), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.0111446 (total 0.0324359), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
-Overall linear iterations used: 0
-Suggested next time step size (from PID controller): 134.03813172326215 days
+Suggested next time step size (from PID controller): 134.07528268795423 days
 Suggested next time step size (from iteration target): 15 days
  Newton its= 3, linearizations= 4 (0.0sec), linear its=  0 (0.0sec)
 Sub steps started at time = 5 (days)
@@ -802,7 +817,7 @@ Suggested next step size = 15 (days)
 Restart file written for report step 2/4, date = 11-Jan-2020 00:00:00
 Writing fracture data to VTK files at time: 432000grid_size180
 
-Time step took 0.154873 seconds; total solver time 1.117394 seconds.
+Time step took 0.146427 seconds; total solver time 1.046344 seconds.
 
 
 
@@ -819,22 +834,22 @@ Starting time step 0, stepsize 5 days, at day 10/15, date = 11-Jan-2020
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  1.446e-07  0.000e+00  1.751e-05  0.000e+00  1.388e-06  0.000e+00  2.106e-02
-   1  0.000e+00  9.460e-09  0.000e+00  4.216e-06  0.000e+00  2.329e-07  0.000e+00  9.647e-03
-   2  0.000e+00  1.363e-09  0.000e+00  6.594e-09  0.000e+00  3.726e-08  0.000e+00  5.526e-06
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  1.445e-07  0.000e+00  7.307e-04  0.000e+00  1.388e-06  0.000e+00  8.805e-01   Strict  Relaxed
+   1  0.000e+00  9.458e-09  0.000e+00  1.763e-04  0.000e+00  2.328e-07  0.000e+00  4.034e-01   Strict  Relaxed
+   2  0.000e+00  1.363e-09  0.000e+00  2.756e-07  0.000e+00  3.724e-08  0.000e+00  2.311e-04   Strict   Strict
+Overall linear iterations used: 0
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=5, linear_iterations=47 (total 226), solve_time_s=0.0712843 (total 0.346081), converged=true
+Mechanical solve stats: solves=5, linear_iterations=46 (total 231), solve_time_s=0.068207 (total 0.340348), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 5), nonlinear_iterations=38 (total 55), linear_solves=30 (total 43), linear_iterations=22 (total 25), closed_cell_toggles=0 (total 1416), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.287515 (total 0.324515), converged=true
+Fracture solve stats: fractures_solved=1 (total 5), nonlinear_iterations=38 (total 55), linear_solves=30 (total 43), linear_iterations=22 (total 25), closed_cell_toggles=0 (total 1416), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.255173 (total 0.287609), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Overall linear iterations used: 0
-Suggested next time step size (from PID controller): 331.59788843086517 days
+Suggested next time step size (from PID controller): 331.6914529422523 days
 Suggested next time step size (from iteration target): 17.000000000000004 days
  Newton its= 2, linearizations= 3 (0.0sec), linear its=  0 (0.0sec)
 Sub steps started at time = 10 (days)
@@ -845,7 +860,7 @@ Suggested next step size = 15 (days)
 Restart file written for report step 3/4, date = 16-Jan-2020 00:00:00
 Writing fracture data to VTK files at time: 864000grid_size546
 
-Time step took 0.425711 seconds; total solver time 1.543105 seconds.
+Time step took 0.381832 seconds; total solver time 1.428176 seconds.
 
 
 
@@ -862,16 +877,17 @@ Starting time step 0, stepsize 0.1 days, at day 15/100.5, date = 16-Jan-2020
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  3.674e-10  0.000e+00  3.508e-07  0.000e+00  4.015e-09  0.000e+00  3.409e-04
-   1  0.000e+00  2.941e-12  0.000e+00  9.804e-13  0.000e+00  3.745e-11  0.000e+00  1.080e-10
-   2  0.000e+00  5.798e-15  0.000e+00  2.229e-15  0.000e+00  1.414e-13  0.000e+00  4.352e-13
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  3.671e-10  0.000e+00  1.464e-05  0.000e+00  4.014e-09  0.000e+00  1.426e-02   Strict  Relaxed
+   1  0.000e+00  2.936e-12  0.000e+00  4.146e-11  0.000e+00  3.744e-11  0.000e+00  4.519e-09   Strict   Strict
+   2  0.000e+00  5.993e-15  0.000e+00  9.772e-14  0.000e+00  1.439e-13  0.000e+00  1.850e-11   Strict   Strict
+Overall linear iterations used: 1
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=6, linear_iterations=46 (total 272), solve_time_s=0.0699393 (total 0.416021), converged=true
+Mechanical solve stats: solves=6, linear_iterations=45 (total 276), solve_time_s=0.0656391 (total 0.405988), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 6), nonlinear_iterations=80 (total 135), linear_solves=68 (total 111), linear_iterations=32 (total 57), closed_cell_toggles=358 (total 1774), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.384883 (total 0.709398), converged=true
+Fracture solve stats: fractures_solved=1 (total 6), nonlinear_iterations=80 (total 135), linear_solves=68 (total 111), linear_iterations=32 (total 57), closed_cell_toggles=358 (total 1774), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.338875 (total 0.626484), converged=true
 | 
 | Processing dynamic information from
 | /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 336
@@ -884,9 +900,7 @@ Adding connections to schedule
 Adding 2 extra connections for well: B-3H
 Adding extra connections to schedule for report step: 3 old connections: 1 new connections: 2
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Keyword 'BSTRSSXX' is unhandled for output to summary file.
-Overall linear iterations used: 1
-Suggested next time step size (from PID controller): 33.92708195965475 days
+Suggested next time step size (from PID controller): 33.93640447680525 days
 Suggested next time step size (from iteration target): 0.34 days
  Newton its= 2, linearizations= 3 (0.0sec), linear its=  1 (0.0sec)
 
@@ -894,24 +908,23 @@ Starting time step 1, stepsize 0.1 days, at day 15.1/100.5, date = 16-Jan-2020
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  3.340e-10  0.000e+00  3.508e-07  0.000e+00  2.883e-05  0.000e+00  3.459e-04
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  3.337e-10  0.000e+00  1.464e-05  0.000e+00  2.883e-05  0.000e+00  1.447e-02   Strict  Relaxed
 Linear system blocksize: 4 size:    3025 block nonzeroes:     19833
-   1  0.000e+00  3.173e-12  0.000e+00  1.112e-12  0.000e+00  8.368e-09  0.000e+00  2.455e-09
-   2  0.000e+00  1.093e-14  0.000e+00  1.659e-14  0.000e+00  4.023e-11  0.000e+00  1.433e-11
+   1  0.000e+00  3.170e-12  0.000e+00  2.155e-11  0.000e+00  8.366e-09  0.000e+00  1.454e-07   Strict   Strict
+   2  0.000e+00  1.358e-14  0.000e+00  4.988e-13  0.000e+00  3.930e-11  0.000e+00  9.592e-10   Strict   Strict
+Overall linear iterations used: 1
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=7, linear_iterations=45 (total 317), solve_time_s=0.0691444 (total 0.485165), converged=true
+Mechanical solve stats: solves=7, linear_iterations=44 (total 320), solve_time_s=0.0637618 (total 0.469749), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 7), nonlinear_iterations=93 (total 228), linear_solves=77 (total 188), linear_iterations=18 (total 75), closed_cell_toggles=496 (total 2270), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.261178 (total 0.970576), converged=true
+Fracture solve stats: fractures_solved=1 (total 7), nonlinear_iterations=93 (total 228), linear_solves=77 (total 188), linear_iterations=18 (total 75), closed_cell_toggles=496 (total 2270), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.229996 (total 0.85648), converged=true
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Keyword 'BSTRSSXX' is unhandled for output to summary file.
-Overall linear iterations used: 1
-Suggested next time step size (from PID controller): 7.3447479241200755 days
+Suggested next time step size (from PID controller): 7.343913501492878 days
 Suggested next time step size (from iteration target): 0.34 days
  Newton its= 2, linearizations= 3 (0.0sec), linear its=  1 (0.0sec)
 
@@ -919,23 +932,22 @@ Starting time step 2, stepsize 0.1 days, at day 15.2/100.5, date = 16-Jan-2020
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  3.001e-10  0.000e+00  3.509e-07  0.000e+00  4.156e-05  0.000e+00  3.464e-04
-   1  0.000e+00  4.886e-12  0.000e+00  2.331e-12  0.000e+00  1.642e-08  0.000e+00  3.331e-09
-   2  0.000e+00  1.688e-14  0.000e+00  2.996e-14  0.000e+00  8.484e-11  0.000e+00  1.783e-11
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  2.999e-10  0.000e+00  1.465e-05  0.000e+00  4.156e-05  0.000e+00  1.449e-02   Strict  Relaxed
+   1  0.000e+00  4.883e-12  0.000e+00  6.204e-11  0.000e+00  1.642e-08  0.000e+00  1.412e-07   Strict   Strict
+   2  0.000e+00  1.470e-14  0.000e+00  9.232e-13  0.000e+00  8.681e-11  0.000e+00  6.177e-10   Strict   Strict
+Overall linear iterations used: 1
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=8, linear_iterations=46 (total 363), solve_time_s=0.0716603 (total 0.556825), converged=true
+Mechanical solve stats: solves=8, linear_iterations=45 (total 365), solve_time_s=0.0653953 (total 0.535145), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 8), nonlinear_iterations=83 (total 311), linear_solves=69 (total 257), linear_iterations=6 (total 81), closed_cell_toggles=584 (total 2854), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.36932 (total 1.3399), converged=true
+Fracture solve stats: fractures_solved=1 (total 8), nonlinear_iterations=83 (total 311), linear_solves=69 (total 257), linear_iterations=8 (total 83), closed_cell_toggles=584 (total 2854), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.329989 (total 1.18647), converged=true
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Keyword 'BSTRSSXX' is unhandled for output to summary file.
-Overall linear iterations used: 1
-Suggested next time step size (from PID controller): 9.043921717335955 days
+Suggested next time step size (from PID controller): 9.044006907819757 days
 Suggested next time step size (from iteration target): 0.34 days
  Newton its= 2, linearizations= 3 (0.0sec), linear its=  1 (0.0sec)
 
@@ -943,23 +955,22 @@ Starting time step 3, stepsize 0.3 days, at day 15.3/100.5, date = 16-Jan-2020
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  8.097e-10  0.000e+00  1.053e-06  0.000e+00  4.699e-05  0.000e+00  1.013e-03
-   1  0.000e+00  2.893e-11  0.000e+00  9.480e-12  0.000e+00  3.162e-08  0.000e+00  9.157e-09
-   2  0.000e+00  9.277e-15  0.000e+00  2.180e-15  0.000e+00  7.596e-12  0.000e+00  1.708e-11
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  8.090e-10  0.000e+00  4.394e-05  0.000e+00  4.699e-05  0.000e+00  4.236e-02   Strict  Relaxed
+   1  0.000e+00  2.891e-11  0.000e+00  4.320e-10  0.000e+00  3.162e-08  0.000e+00  4.270e-07   Strict   Strict
+   2  0.000e+00  9.391e-15  0.000e+00  9.695e-14  0.000e+00  7.299e-12  0.000e+00  7.172e-10   Strict   Strict
+Overall linear iterations used: 1
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=9, linear_iterations=48 (total 411), solve_time_s=0.0728325 (total 0.629658), converged=true
+Mechanical solve stats: solves=9, linear_iterations=46 (total 411), solve_time_s=0.066642 (total 0.601787), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 9), nonlinear_iterations=35 (total 346), linear_solves=29 (total 286), linear_iterations=10 (total 91), closed_cell_toggles=272 (total 3126), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.326084 (total 1.66598), converged=true
+Fracture solve stats: fractures_solved=1 (total 9), nonlinear_iterations=35 (total 346), linear_solves=29 (total 286), linear_iterations=10 (total 93), closed_cell_toggles=272 (total 3126), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.291486 (total 1.47796), converged=true
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Keyword 'BSTRSSXX' is unhandled for output to summary file.
-Overall linear iterations used: 1
-Suggested next time step size (from PID controller): 37.897999155589524 days
+Suggested next time step size (from PID controller): 37.900715210368936 days
 Suggested next time step size (from iteration target): 1.0200000000000002 days
  Newton its= 2, linearizations= 3 (0.0sec), linear its=  1 (0.0sec)
 
@@ -967,23 +978,22 @@ Starting time step 4, stepsize 0.9 days, at day 15.6/100.5, date = 16-Jan-2020
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  1.773e-09  0.000e+00  3.158e-06  0.000e+00  6.289e-05  0.000e+00  2.974e-03
-   1  0.000e+00  8.983e-12  0.000e+00  9.509e-11  0.000e+00  4.747e-08  0.000e+00  7.423e-08
-   2  0.000e+00  9.037e-15  0.000e+00  1.410e-14  0.000e+00  1.552e-11  0.000e+00  3.491e-11
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  1.771e-09  0.000e+00  1.318e-04  0.000e+00  6.289e-05  0.000e+00  1.244e-01   Strict  Relaxed
+   1  0.000e+00  8.941e-12  0.000e+00  4.016e-09  0.000e+00  4.747e-08  0.000e+00  3.108e-06   Strict   Strict
+   2  0.000e+00  8.917e-15  0.000e+00  5.632e-13  0.000e+00  1.544e-11  0.000e+00  1.483e-09   Strict   Strict
+Overall linear iterations used: 1
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=10, linear_iterations=46 (total 457), solve_time_s=0.0700297 (total 0.699688), converged=true
+Mechanical solve stats: solves=10, linear_iterations=48 (total 459), solve_time_s=0.0694509 (total 0.671238), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 10), nonlinear_iterations=35 (total 381), linear_solves=29 (total 315), linear_iterations=9 (total 100), closed_cell_toggles=272 (total 3398), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.328051 (total 1.99403), converged=true
+Fracture solve stats: fractures_solved=1 (total 10), nonlinear_iterations=35 (total 381), linear_solves=29 (total 315), linear_iterations=9 (total 102), closed_cell_toggles=272 (total 3398), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.295569 (total 1.77352), converged=true
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Keyword 'BSTRSSXX' is unhandled for output to summary file.
-Overall linear iterations used: 1
-Suggested next time step size (from PID controller): 121.02697116825624 days
+Suggested next time step size (from PID controller): 121.05541525210295 days
 Suggested next time step size (from iteration target): 3.06 days
  Newton its= 2, linearizations= 3 (0.0sec), linear its=  1 (0.0sec)
 
@@ -991,23 +1001,22 @@ Starting time step 5, stepsize 2.7 days, at day 16.5/100.5, date = 17-Jan-2020
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  2.370e-09  0.000e+00  9.475e-06  0.000e+00  1.058e-04  0.000e+00  8.540e-03
-   1  0.000e+00  8.163e-11  0.000e+00  2.263e-09  0.000e+00  7.160e-08  0.000e+00  1.610e-06
-   2  0.000e+00  1.786e-12  0.000e+00  8.546e-13  0.000e+00  2.132e-10  0.000e+00  2.094e-10
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  2.369e-09  0.000e+00  3.955e-04  0.000e+00  1.058e-04  0.000e+00  3.572e-01   Strict  Relaxed
+   1  0.000e+00  8.162e-11  0.000e+00  9.469e-08  0.000e+00  7.160e-08  0.000e+00  6.732e-05   Strict   Strict
+   2  0.000e+00  1.786e-12  0.000e+00  3.629e-11  0.000e+00  2.130e-10  0.000e+00  8.956e-09   Strict   Strict
+Overall linear iterations used: 1
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=11, linear_iterations=45 (total 502), solve_time_s=0.0687875 (total 0.768475), converged=true
+Mechanical solve stats: solves=11, linear_iterations=44 (total 503), solve_time_s=0.0646503 (total 0.735888), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 11), nonlinear_iterations=52 (total 433), linear_solves=46 (total 361), linear_iterations=18 (total 118), closed_cell_toggles=374 (total 3772), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.414538 (total 2.40857), converged=true
+Fracture solve stats: fractures_solved=1 (total 11), nonlinear_iterations=51 (total 432), linear_solves=45 (total 360), linear_iterations=17 (total 119), closed_cell_toggles=374 (total 3772), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.367915 (total 2.14144), converged=true
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Keyword 'BSTRSSXX' is unhandled for output to summary file.
-Overall linear iterations used: 1
-Suggested next time step size (from PID controller): 449.8978256117958 days
+Suggested next time step size (from PID controller): 449.9909951834733 days
 Suggested next time step size (from iteration target): 9.180000000000001 days
  Newton its= 2, linearizations= 3 (0.0sec), linear its=  1 (0.0sec)
 
@@ -1015,23 +1024,22 @@ Starting time step 6, stepsize 8.1 days, at day 19.2/100.5, date = 20-Jan-2020
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  1.476e-09  0.000e+00  2.843e-05  0.000e+00  9.832e-04  0.000e+00  2.291e-02
-   1  0.000e+00  2.856e-10  0.000e+00  4.134e-06  0.000e+00  1.039e-06  0.000e+00  9.935e-03
-   2  0.000e+00  1.307e-10  0.000e+00  1.625e-08  0.000e+00  8.506e-08  0.000e+00  1.266e-05
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  1.475e-09  0.000e+00  1.187e-03  0.000e+00  9.828e-04  0.000e+00  9.582e-01   Strict  Relaxed
+   1  0.000e+00  2.855e-10  0.000e+00  1.726e-04  0.000e+00  1.039e-06  0.000e+00  4.155e-01   Strict  Relaxed
+   2  0.000e+00  1.307e-10  0.000e+00  6.794e-07  0.000e+00  8.502e-08  0.000e+00  5.295e-04   Strict   Strict
+Overall linear iterations used: 0
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=12, linear_iterations=46 (total 548), solve_time_s=0.0709587 (total 0.839434), converged=true
+Mechanical solve stats: solves=12, linear_iterations=47 (total 550), solve_time_s=0.0679587 (total 0.803847), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 12), nonlinear_iterations=57 (total 490), linear_solves=51 (total 412), linear_iterations=11 (total 129), closed_cell_toggles=98 (total 3870), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.362783 (total 2.77135), converged=true
+Fracture solve stats: fractures_solved=1 (total 12), nonlinear_iterations=58 (total 490), linear_solves=52 (total 412), linear_iterations=13 (total 132), closed_cell_toggles=98 (total 3870), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.331988 (total 2.47343), converged=true
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Keyword 'BSTRSSXX' is unhandled for output to summary file.
-Overall linear iterations used: 0
-Suggested next time step size (from PID controller): 957.3622530877602 days
+Suggested next time step size (from PID controller): 957.4746329076729 days
 Suggested next time step size (from iteration target): 27.540000000000006 days
  Newton its= 2, linearizations= 3 (0.0sec), linear its=  0 (0.0sec)
 
@@ -1039,24 +1047,23 @@ Starting time step 7, stepsize 24.3 days, at day 27.3/100.5, date = 28-Jan-2020
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  7.318e-10  0.000e+00  8.528e-05  0.000e+00  4.154e-03  0.000e+00  5.030e-02
-   1  0.000e+00  9.489e-11  0.000e+00  2.640e-05  0.000e+00  1.041e-07  0.000e+00  2.959e-02
-   2  0.000e+00  8.852e-12  0.000e+00  1.142e-05  0.000e+00  3.357e-09  0.000e+00  9.962e-03
-   3  0.000e+00  5.000e-13  0.000e+00  6.830e-11  0.000e+00  1.310e-10  0.000e+00  2.769e-08
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  7.314e-10  0.000e+00  3.560e-03  0.000e+00  4.155e-03  0.000e+00  2.104e+00   Strict  Relaxed
+   1  0.000e+00  9.485e-11  0.000e+00  1.102e-03  0.000e+00  1.041e-07  0.000e+00  1.237e+00   Strict  Relaxed
+   2  0.000e+00  8.848e-12  0.000e+00  4.770e-04  0.000e+00  3.356e-09  0.000e+00  4.148e-01   Strict  Relaxed
+   3  0.000e+00  4.998e-13  0.000e+00  2.854e-09  0.000e+00  1.310e-10  0.000e+00  1.158e-06   Strict   Strict
+Overall linear iterations used: 3
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=13, linear_iterations=48 (total 596), solve_time_s=0.0736677 (total 0.913101), converged=true
+Mechanical solve stats: solves=13, linear_iterations=47 (total 597), solve_time_s=0.0695451 (total 0.873392), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 13), nonlinear_iterations=65 (total 555), linear_solves=59 (total 471), linear_iterations=0 (total 129), closed_cell_toggles=48 (total 3918), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.356391 (total 3.12774), converged=true
+Fracture solve stats: fractures_solved=1 (total 13), nonlinear_iterations=65 (total 555), linear_solves=59 (total 471), linear_iterations=0 (total 132), closed_cell_toggles=48 (total 3918), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.320083 (total 2.79351), converged=true
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Keyword 'BSTRSSXX' is unhandled for output to summary file.
-Overall linear iterations used: 3
-Suggested next time step size (from PID controller): 3100.575224931351 days
+Suggested next time step size (from PID controller): 3100.312677874476 days
 Suggested next time step size (from iteration target): 72.9 days
  Newton its= 3, linearizations= 4 (0.0sec), linear its=  3 (0.0sec)
 
@@ -1064,19 +1071,20 @@ Starting time step 8, stepsize 48.9 days, at day 51.6/100.5, date = 21-Feb-2020
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  1.140e-10  0.000e+00  1.716e-04  0.000e+00  5.262e-03  0.000e+00  5.368e-02
-   1  0.000e+00  1.650e-10  0.000e+00  6.457e-05  0.000e+00  1.413e-07  0.000e+00  4.478e-02
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  1.140e-10  0.000e+00  7.163e-03  0.000e+00  5.262e-03  0.000e+00  2.242e+00   Strict  Relaxed
+   1  0.000e+00  1.649e-10  0.000e+00  2.696e-03  0.000e+00  1.412e-07  0.000e+00  1.870e+00   Strict  Relaxed
 Linear system blocksize: 4 size:    3025 block nonzeroes:     19833
-   2  0.000e+00  1.351e-11  0.000e+00  2.325e-05  0.000e+00  4.666e-09  0.000e+00  3.208e-02
-   3  0.000e+00  7.509e-13  0.000e+00  9.232e-06  0.000e+00  1.840e-10  0.000e+00  1.550e-02
-   4  0.000e+00  3.716e-14  0.000e+00  2.768e-10  0.000e+00  7.582e-12  0.000e+00  1.371e-07
+   2  0.000e+00  1.351e-11  0.000e+00  9.704e-04  0.000e+00  4.665e-09  0.000e+00  1.339e+00   Strict  Relaxed
+   3  0.000e+00  7.506e-13  0.000e+00  3.853e-04  0.000e+00  1.839e-10  0.000e+00  6.455e-01   Strict  Relaxed
+   4  0.000e+00  3.722e-14  0.000e+00  1.153e-08  0.000e+00  7.626e-12  0.000e+00  5.710e-06   Strict   Strict
+Overall linear iterations used: 4
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=14, linear_iterations=47 (total 643), solve_time_s=0.0716158 (total 0.984717), converged=true
+Mechanical solve stats: solves=14, linear_iterations=47 (total 644), solve_time_s=0.0687873 (total 0.942179), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 14), nonlinear_iterations=112 (total 667), linear_solves=105 (total 576), linear_iterations=0 (total 129), closed_cell_toggles=78 (total 3996), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.247445 (total 3.37519), converged=true
+Fracture solve stats: fractures_solved=1 (total 14), nonlinear_iterations=112 (total 667), linear_solves=105 (total 576), linear_iterations=0 (total 132), closed_cell_toggles=78 (total 3996), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.223013 (total 3.01652), converged=true
 | 
 | Processing dynamic information from
 | /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 336
@@ -1089,8 +1097,7 @@ Adding connections to schedule
 Adding 4 extra connections for well: B-3H
 Adding extra connections to schedule for report step: 3 old connections: 3 new connections: 4
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Overall linear iterations used: 4
-Suggested next time step size (from PID controller): 7916.571700471472 days
+Suggested next time step size (from PID controller): 7916.569236902618 days
 Suggested next time step size (from iteration target): 127.14 days
  Newton its= 4, linearizations= 5 (0.0sec), linear its=  4 (0.0sec)
 Sub steps started at time = 15 (days)
@@ -1109,7 +1116,7 @@ Suggested next step size = 127.14 (days)
 Restart file written for report step 4/4, date = 10-Apr-2020 12:00:00
 Writing fracture data to VTK files at time: 4.45824e+06grid_size448
 
-Time step took 3.971368 seconds; total solver time 5.514473 seconds.
+Time step took 3.563398 seconds; total solver time 4.991573 seconds.
 
 
 
@@ -1117,34 +1124,25 @@ Time step took 3.971368 seconds; total solver time 5.514473 seconds.
 
 Number of MPI processes:         1
 Threads per MPI process:         1
-Setup time:                      0.03 s
+Setup time:                      0.02 s
   Deck input:                    0.01 s
 Number of timesteps:            14
-Simulation time:                 5.51 s
-  Assembly time:                 0.15 s (Wasted: 0.0 s; 0.0%)
+Simulation time:                 4.99 s
+  Assembly time:                 0.08 s (Wasted: 0.0 s; 0.0%)
     Well assembly:               0.00 s (Wasted: 0.0 s; 0.0%)
-  Linear solve time:             0.11 s (Wasted: 0.0 s; 0.0%)
+  Linear solve time:             0.10 s (Wasted: 0.0 s; 0.0%)
     Linear setup:                0.08 s (Wasted: 0.0 s; 0.0%)
-  Props/update time:             0.07 s (Wasted: 0.0 s; 0.0%)
-  Pre/post step:                 5.01 s (Wasted: 0.0 s; 0.0%)
+  Props/update time:             0.06 s (Wasted: 0.0 s; 0.0%)
+  Pre/post step:                 4.58 s (Wasted: 0.0 s; 0.0%)
   Output write time:             0.20 s
 Overall Linearizations:         47      (Wasted:     0; 0.0%)
 Overall Newton Iterations:      33      (Wasted:     0; 0.0%)
 Overall Linear Iterations:      15      (Wasted:     0; 0.0%)
 
-  Mechanical solve time:       0.98 s
-Overall Mechanical Solves:       14
-Overall Mech Lin Iters:         643
-  Fracture solve time:         3.38 s
-Overall Fracture Solves:         14
-Overall Fracture Nl Iters:      667
-Overall Fracture Lin Solves:    576
-Overall Fracture Lin Iters:     129
-
 
 
 Error summary:
-Warnings          17
+Warnings          6
 Info              311
 Errors            0
 Bugs              0

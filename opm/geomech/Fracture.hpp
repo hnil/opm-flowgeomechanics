@@ -326,6 +326,12 @@ public:
     //! Reservoir mobility used to form leakOf(), so that it can be divided back out.
     const std::vector<double>& reservoirMobility() const { return reservoir_mobility_; }
 
+    //! Pressure per fracture cell as the fracture's own solver last left it.  In the
+    //! embedded representation the same quantity is also a degree of freedom of the
+    //! flow problem, and the two must agree; this is what makes that checkable.
+    const Dune::BlockVector<Dune::FieldVector<double, 1>>& fracturePressure() const
+    { return fracture_pressure_; }
+
     //! Well-to-fracture connections: (fracture cell, well index).  The well injects
     //! into these cells directly, which in the embedded representation is a perforation
     //! of the fracture's own degrees of freedom rather than of the reservoir.

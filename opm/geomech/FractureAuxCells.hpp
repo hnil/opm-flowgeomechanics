@@ -239,6 +239,17 @@ public:
     void leakoffReport(const FractureModel& fractures) const;
 
     /*!
+     * \brief Log what the well does at the fracture's degrees of freedom.
+     *
+     * Per well: how many of the registered fracture perforations the well actually
+     * carries, their transmissibility factors, the bottom-hole and perforation
+     * pressures, and the share of the well's water that goes through them.  It reads
+     * the well state alone, so it says whether the fracture is connected regardless of
+     * whether the binding still describes the fracture's current shape.
+     */
+    void perforationReport() const;
+
+    /*!
      * \brief Relative change of the binding between the last two binds.
      *
      * The maximum of the relative changes of total reservoir-connection

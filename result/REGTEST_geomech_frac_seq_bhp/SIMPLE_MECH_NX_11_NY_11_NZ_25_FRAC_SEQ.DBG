@@ -10,12 +10,12 @@
 Flow is a simulator for fully implicit three-phase black-oil flow, and is part of OPM.
 For more information visit: https://opm-project.org 
 
-Flow Version     =  2026.04-pre (d6c9a5e*)
-Machine name     =  Halvors-MacBook-Pro.local (Number of logical cores: 14, Memory size: 24576.00 MB) 
-Operating system =  Darwin arm64 (Kernel: 25.5.0, Darwin Kernel Version 25.5.0: Mon Apr 27 20:41:15 PDT 2026; root:xnu-12377.121.6~2/RELEASE_ARM64_T6041 )
-Build time       =  2026-07-20 at 14:06:28 hrs
+Flow Version     =  2026.04-pre (4fc5c69*)
+Machine name     =  Halvors-MBP.sintef.no (Number of logical cores: 14, Memory size: 24576.00 MB) 
+Operating system =  Darwin arm64 (Kernel: 25.5.0, Darwin Kernel Version 25.5.0: Tue Jun  9 22:28:34 PDT 2026; root:xnu-12377.121.10~1/RELEASE_ARM64_T6041 )
+Build time       =  2026-08-04 at 09:36:11 hrs
 User             =  root
-Simulation started on 21-07-2026 at 12:08:05 hrs
+Simulation started on 04-08-2026 at 09:37:34 hrs
 Using 1 MPI processes with 1 OMP threads on each 
 Parameters used by Flow:
 # [known parameters which were specified at run-time]
@@ -45,6 +45,7 @@ AllowDistributedWells="0"
 AlternativeWellRateInit="1"
 CheckGroupConstraintsInnerWellIterations="1"
 CheckSatfuncConsistency="1"
+ConserveInnerEnergyThermal="0"
 ContinueOnConvergenceError="0"
 ConvergenceMonitoring="0"
 ConvergenceMonitoringCutOff="6"
@@ -63,9 +64,10 @@ EclOutputInterval="-1"
 EnableAsyncEclOutput="0"
 EnableAsyncVtkOutput="0"
 EnableDriftCompensation="0"
+EnableDriftCompensationTemp="1"
 EnableDryRun="auto"
 EnableEclOutput="1"
-EnableEsmry="0"
+EnableEsmry="1"
 EnableGravity="1"
 EnableGridAdaptation="0"
 EnableIntensiveQuantityCache="1"
@@ -85,7 +87,8 @@ ForceDisableResvFluidInPlaceOutput="0"
 FullTimeStepInitially="0"
 GpuAwareMpi="0"
 GpuDeviceId="0"
-HyNeConfigFile="hybridNewtonConfig.json"
+GroupControlFractionTolerance="0.0001"
+HybridNewtonConfigFile="hybridNewtonConfig.json"
 IgnoreKeywords=""
 IluFillinLevel="0"
 IluRedblack="0"
@@ -122,7 +125,7 @@ MatrixAddWellContributions="0"
 MaxInnerIterMsWells="100"
 MaxInnerIterWells="50"
 MaxLocalSolveIterations="20"
-MaxNewtonIterationsWithInnerWellIterations="8"
+MaxNewtonIterationsWithInnerWellIterations="99"
 MaxPressureChangeMsWells="1e+06"
 MaxResidualAllowed="1e+07"
 MaxSinglePrecisionDays="20"
@@ -135,6 +138,7 @@ MaxWelleqIter="30"
 MaximumNumberOfGroupSwitches="3"
 MaximumNumberOfWellSwitches="3"
 MaximumWaterSaturation="1"
+MechPorosityCoupling="0"
 MetisParams="default"
 MiluVariant="ilu"
 MinStrictCnvIter="-1"
@@ -142,10 +146,10 @@ MinStrictMbIter="-1"
 MinTimeStepBasedOnNewtonIterations="0"
 MinTimeStepBeforeShuttingProblematicWellsInDays="0.01"
 MinTimeStepSize="0"
-NetworkMaxOuterIterations="10"
+NetworkMaxOuterIterations="3"
 NetworkMaxPressureUpdateInBars="5"
 NetworkMaxStrictOuterIterations="10"
-NetworkMaxSubIterations="20"
+NetworkMaxSubIterations="100"
 NetworkPressureUpdateDampingFactor="0.1"
 NewtonMaxError="1e+100"
 NewtonMaxRelax="0.5"
@@ -165,6 +169,7 @@ NumLocalDomains="0"
 NumOverlap="1"
 NumPressurePointsEquil="2000"
 NumSatfuncConsistencySamplePoints="5"
+NumericalAquiferMode="grid"
 NupcolGroupRateTolerance="0.001"
 OpenclIluParallel="1"
 OpenclPlatformId="0"
@@ -181,16 +186,19 @@ PressureScale="1"
 PriVarOscilationThreshold="1e-05"
 PrintParameters="2"
 ProjectSaturations="0"
+RcNetworkLooseCoupling="0"
 RegularizationFactorWells="100"
 RelaxedLinearSolverReduction="0.01"
 RelaxedPressureTolMsw="10000"
 RelaxedWellFlowTol="0.001"
+RescoupSyncAtReportSteps="0"
 RestartTime="-1e+35"
 RestartWritingInterval="16777215"
 SaveFile=""
 SaveStep=""
 ScaleLinearSystem="0"
 SchedRestart="0"
+SeparateSparseSourceTerms="0"
 SerialPartitioning="0"
 ShutUnsolvableWells="1"
 Slave="0"
@@ -223,29 +231,49 @@ TimeStepControlTolerance="0.1"
 TimeStepControlToleranceTestVersion="standard"
 TimeStepVerbosity="1"
 ToleranceCnv="0.01"
-ToleranceCnvEnergy="0.01"
-ToleranceCnvEnergyRelaxed="1"
+ToleranceCnvEnergy="0.4182"
+ToleranceCnvEnergyRelaxed="41.82"
 ToleranceCnvRelaxed="1"
-ToleranceEnergyBalance="1e-07"
-ToleranceEnergyBalanceRelaxed="1e-06"
+ToleranceEnergyBalance="4.182e-06"
+ToleranceEnergyBalanceRelaxed="4.182e-05"
+ToleranceMaxDp="0"
+ToleranceMaxDrs="0"
+ToleranceMaxDrv="0"
+ToleranceMaxDs="0"
 ToleranceMb="1e-07"
 ToleranceMbRelaxed="1e-06"
 TolerancePressureMsWells="1000"
 ToleranceWellControl="1e-07"
 ToleranceWells="0.0001"
+TpsaIluFillinLevel="0"
+TpsaIluRelaxation="0.9"
+TpsaLinearSolver="ilu0"
+TpsaLinearSolverIgnoreConvergenceFailure="0"
+TpsaLinearSolverMaxIter="200"
+TpsaLinearSolverPrintJsonDefinition="0"
+TpsaLinearSolverReduction="0.001"
+TpsaLinearSolverRestart="40"
+TpsaLinearSolverVerbosity="0"
+TpsaNewtonMaxError="1e+100"
+TpsaNewtonMaxIterations="20"
+TpsaNewtonMinIterations="1"
+TpsaNewtonTargetIterations="10"
+TpsaNewtonTolerance="0.001"
+TpsaNewtonVerbosity="1"
+TpsaRelaxedLinearSolverReduction="0.001"
+TpsaUseGmres="0"
+TruncateTimeStepToFloat="0"
 UpdateEquationsScaling="0"
 UseAverageDensityMsWells="0"
 UseGmres="0"
-UseHyNe="0"
+UseHybridNewton="0"
 UseImplicitIpr="1"
 UseMultisegmentWell="1"
 UseUpdateStabilization="1"
 VerifyGpuAwareMpi="0"
 VtkWriteAverageMolarMasses="0"
 VtkWriteDensities="1"
-VtkWriteDiffusionCoefficients="0"
 VtkWriteDofIndex="0"
-VtkWriteEffectiveDiffusionCoefficients="0"
 VtkWriteExtrusionFactor="0"
 VtkWriteFilterVelocities="0"
 VtkWriteFluidEnthalpies="1"
@@ -277,7 +305,6 @@ VtkWriteSaturatedOilGasDissolutionFactor="0"
 VtkWriteSaturationRatios="0"
 VtkWriteSaturations="1"
 VtkWriteTemperature="1"
-VtkWriteTortuosities="0"
 VtkWriteTotalMassFractions="0"
 VtkWriteTotalMoleFractions="0"
 VtkWriteTotalThermalConductivity="1"
@@ -298,7 +325,7 @@ Reading deck file '/Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/da
     4 Reading GAS      in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 8
     5 Reading DISGAS   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 9
     6 Reading METRIC   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 10
-    7 Reading TEMP     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 12
+    7 Reading THERMAL  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 11
     8 Reading MECH     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 13
     9 Reading FRAC     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 14
    10 Reading START    in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 15
@@ -418,8 +445,6 @@ Simulation will solve for mechanical quantities
 
 Simulation will solve with fractures in wells
 
-TEMP is used to start a thermal simulation. Conservation equation for internal energy is used instead of enthalpy (i.e., no work terms are included).
-
 Creating grid from keywords DX, DY, DZ and TOPS
 4 fluid phases are active
 
@@ -428,7 +453,6 @@ Processing dynamic information from
 Initializing report step 0/3 at 2020-01-01 0 DAYS line 336
 Processing keyword TUNING at line 337
 Processing keyword NUPCOL at line 341
-Minimum NUPCOL value is 6 - see keyword MINNPCOL to adjust the minimum value
 Processing keyword BCPROP at line 344
 Processing keyword GRUPTREE at line 352
 Processing keyword WELSPECS at line 364
@@ -449,13 +473,9 @@ Simulation will solve for mechanical quantities
 
 Simulation will solve with fractures in wells
 
-TEMP is used to start a thermal simulation. Conservation equation for internal energy is used instead of enthalpy (i.e., no work terms are included).
-
 Simulation will solve for mechanical quantities
 
 Simulation will solve with fractures in wells
-
-TEMP is used to start a thermal simulation. Conservation equation for internal energy is used instead of enthalpy (i.e., no work terms are included).
 
 Processing grid
 Total number of active cells: 3025 / total pore volume: 340910966 RM3
@@ -505,6 +525,7 @@ Property tree for linear solvers:
     }
 }
 
+ESMRY is incompatible with MECH/FRAC. Request for ESMRY output ignored.
 Unhandled summary keyword ALL/FAQR
 In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 178
 Unhandled summary keyword ALL/FAQRG
@@ -512,10 +533,6 @@ In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_N
 Unhandled summary keyword ALL/FAQT
 In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 178
 Unhandled summary keyword ALL/FAQTG
-In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 178
-Unhandled summary keyword ALL/FWGR
-In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 178
-Unhandled summary keyword ALL/GWGR
 In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 178
 {
     "hasfractures": "true",
@@ -682,21 +699,21 @@ Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  2.933e-04  0.000e+00  1.030e-04  0.000e+00  5.451e-01  0.000e+00  1.253e-01
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  2.933e-04  0.000e+00  2.870e-03  0.000e+00  5.451e-01  0.000e+00  5.333e+00   Strict   Strict
 Linear system blocksize: 4 size:    3025 block nonzeroes:     19833
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 0
 Flow solve report converged: 0
-   1  0.000e+00  4.165e-02  0.000e+00  9.658e-03  0.000e+00  3.413e-01  0.000e+00  8.825e-02
+   1  0.000e+00  4.164e-02  0.000e+00  5.123e-01  0.000e+00  3.413e-01  0.000e+00  4.194e+00   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 1
 Flow solve report converged: 0
-   2  0.000e+00  8.861e-05  0.000e+00  1.182e-04  0.000e+00  7.236e-03  0.000e+00  1.183e-02
+   2  0.000e+00  9.150e-05  0.000e+00  1.514e-03  0.000e+00  7.235e-03  0.000e+00  4.959e-01   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 2
 Flow solve report converged: 0
-   3  0.000e+00  1.387e-07  0.000e+00  8.882e-08  0.000e+00  3.035e-05  0.000e+00  2.613e-05
+   3  0.000e+00  1.172e-07  0.000e+00  9.391e-07  0.000e+00  2.850e-05  0.000e+00  1.441e-03   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 3
 Flow solve report converged: 0
-   4  0.000e+00  2.326e-10  0.000e+00  5.717e-11  0.000e+00  2.641e-08  0.000e+00  4.126e-09
+   4  0.000e+00  2.414e-10  0.000e+00  2.990e-09  0.000e+00  2.949e-08  0.000e+00  5.820e-07   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 4
 Flow solve report converged: 1
 Solve Geomechanics:
@@ -730,51 +747,51 @@ Property tree for mech linear solver:
     }
 }
 
-Mechanical solve stats: solves=1, linear_iterations=22 (total 22), solve_time_s=0.156053 (total 0.156053), converged=true
+Mechanical solve stats: solves=1, linear_iterations=14 (total 14), solve_time_s=0.0604613 (total 0.0604613), converged=true
 Solve Fractures:
 
 Writing fracture data to VTK files at time: 0grid_size342
 
-Fracture solve stats: fractures_solved=1 (total 1), nonlinear_iterations=2 (total 2), linear_solves=1 (total 1), linear_iterations=0 (total 0), closed_cell_toggles=690 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.156846 (total 0.156846), converged=true
+Fracture solve stats: fractures_solved=1 (total 1), nonlinear_iterations=2 (total 2), linear_solves=1 (total 1), linear_iterations=0 (total 0), closed_cell_toggles=690 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.149903 (total 0.149903), converged=true
 Fracture coupling change: structure_changed=true, ctf_changed=false, perf_changed=false, max_ctf_change_abs=0, max_ctf_change_rel=0, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=1, abs_threshold=1e-15
    Well B-3H converged in 1 inner iterations (0 control/status switches).
    Well B-3H converged in 1 inner iterations (0 control/status switches).
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  1.479e-05  0.000e+00  1.326e-05  0.000e+00  2.236e-04  0.000e+00  2.633e-02
-   5  0.000e+00  5.885e-07  0.000e+00  6.379e-06  0.000e+00  2.775e-05  0.000e+00  1.498e-02
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  1.479e-05  0.000e+00  5.508e-04  0.000e+00  2.236e-04  0.000e+00  1.101e+00   Strict   Strict
+   5  0.000e+00  5.885e-07  0.000e+00  2.667e-04  0.000e+00  2.775e-05  0.000e+00  6.263e-01   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 5
 Flow solve report converged: 0
-   6  0.000e+00  5.606e-08  0.000e+00  1.552e-06  0.000e+00  1.168e-06  0.000e+00  3.575e-03
+   6  0.000e+00  5.606e-08  0.000e+00  6.491e-05  0.000e+00  1.168e-06  0.000e+00  1.495e-01   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 6
 Flow solve report converged: 0
-   7  0.000e+00  7.539e-09  0.000e+00  4.007e-10  0.000e+00  1.878e-07  0.000e+00  2.053e-06
+   7  0.000e+00  7.539e-09  0.000e+00  1.565e-08  0.000e+00  1.878e-07  0.000e+00  8.586e-05   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 7
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=2, linear_iterations=16 (total 38), solve_time_s=0.114527 (total 0.27058), converged=true
+Mechanical solve stats: solves=2, linear_iterations=14 (total 28), solve_time_s=0.0610438 (total 0.121505), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 2), nonlinear_iterations=2 (total 4), linear_solves=1 (total 2), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.156464 (total 0.31331), converged=true
-Fracture coupling change: structure_changed=false, ctf_changed=false, perf_changed=false, max_ctf_change_abs=6.0209e-23, max_ctf_change_rel=6.0209e-23, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=6.0209e-08, abs_threshold=1e-15
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Fracture solve stats: fractures_solved=1 (total 2), nonlinear_iterations=2 (total 4), linear_solves=1 (total 2), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.149909 (total 0.299812), converged=true
+Fracture coupling change: structure_changed=false, ctf_changed=false, perf_changed=false, max_ctf_change_abs=6.01584e-23, max_ctf_change_rel=6.01584e-23, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=6.01584e-08, abs_threshold=1e-15
    Well B-3H converged in 1 inner iterations (0 control/status switches).
    Well B-3H converged in 1 inner iterations (0 control/status switches).
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  8.424e-07  0.000e+00  1.730e-05  0.000e+00  5.364e-06  0.000e+00  2.136e-02
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  8.424e-07  0.000e+00  7.221e-04  0.000e+00  5.364e-06  0.000e+00  8.935e-01   Strict   Strict
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=3, linear_iterations=18 (total 56), solve_time_s=0.126998 (total 0.397578), converged=true
+Mechanical solve stats: solves=3, linear_iterations=12 (total 40), solve_time_s=0.0524865 (total 0.173992), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 3), nonlinear_iterations=2 (total 6), linear_solves=1 (total 3), linear_iterations=0 (total 0), closed_cell_toggles=6 (total 696), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.158779 (total 0.472089), converged=true
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Fracture solve stats: fractures_solved=1 (total 3), nonlinear_iterations=2 (total 6), linear_solves=1 (total 3), linear_iterations=0 (total 0), closed_cell_toggles=6 (total 696), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.149048 (total 0.44886), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
@@ -783,7 +800,7 @@ Writing fracture data to VTK files at time: 0grid_size690
 
  Newton its= 6, linearizations= 8 (0.0sec), linear its=  3 (0.0sec)
 Restart file written for report step 1/3, date = 06-Jan-2020 00:00:00
-Time step took 1.572492 seconds; total solver time 1.572492 seconds.
+Time step took 1.294649 seconds; total solver time 1.294649 seconds.
 
 
 
@@ -797,75 +814,76 @@ Time step took 1.572492 seconds; total solver time 1.572492 seconds.
 Report step  1/3 at day 5/15, date = 06-Jan-2020
 Geomech begin time step
 
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  1.185e-07  0.000e+00  1.751e-05  0.000e+00  1.527e-06  0.000e+00  1.919e-02
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  1.185e-07  0.000e+00  7.310e-04  0.000e+00  1.527e-06  0.000e+00  8.026e-01   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 0
 Flow solve report converged: 0
-   1  0.000e+00  1.071e-08  0.000e+00  3.402e-06  0.000e+00  2.542e-07  0.000e+00  7.782e-03
+   1  0.000e+00  1.071e-08  0.000e+00  1.423e-04  0.000e+00  2.542e-07  0.000e+00  3.254e-01   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 1
 Flow solve report converged: 0
-   2  0.000e+00  1.510e-09  0.000e+00  5.199e-09  0.000e+00  4.062e-08  0.000e+00  4.458e-06
+   2  0.000e+00  1.510e-09  0.000e+00  2.172e-07  0.000e+00  4.062e-08  0.000e+00  1.864e-04   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 2
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=4, linear_iterations=18 (total 74), solve_time_s=0.130213 (total 0.527791), converged=true
+Mechanical solve stats: solves=4, linear_iterations=13 (total 53), solve_time_s=0.0568557 (total 0.230847), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 4), nonlinear_iterations=22 (total 28), linear_solves=17 (total 20), linear_iterations=10 (total 10), closed_cell_toggles=684 (total 1380), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=1.41903 (total 1.89112), converged=true
+Fracture solve stats: fractures_solved=1 (total 4), nonlinear_iterations=22 (total 28), linear_solves=17 (total 20), linear_iterations=10 (total 10), closed_cell_toggles=684 (total 1380), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=1.33733 (total 1.78619), converged=true
 Fracture coupling change: structure_changed=false, ctf_changed=true, perf_changed=false, max_ctf_change_abs=2.32855e-12, max_ctf_change_rel=2.32855e-12, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=2328.55, abs_threshold=1e-15
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  1.881e-08  0.000e+00  1.754e-05  0.000e+00  2.181e-07  0.000e+00  1.553e-02
-   3  0.000e+00  1.536e-09  0.000e+00  1.810e-06  0.000e+00  3.602e-08  0.000e+00  4.125e-03
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  1.881e-08  0.000e+00  7.322e-04  0.000e+00  2.181e-07  0.000e+00  6.496e-01   Strict   Strict
+   3  0.000e+00  1.536e-09  0.000e+00  7.568e-05  0.000e+00  3.602e-08  0.000e+00  1.725e-01   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 3
 Flow solve report converged: 0
-   4  0.000e+00  2.130e-10  0.000e+00  2.926e-09  0.000e+00  5.724e-09  0.000e+00  2.362e-06
+   4  0.000e+00  2.130e-10  0.000e+00  1.223e-07  0.000e+00  5.724e-09  0.000e+00  9.879e-05   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 4
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=5, linear_iterations=18 (total 92), solve_time_s=0.13173 (total 0.659521), converged=true
+Mechanical solve stats: solves=5, linear_iterations=12 (total 65), solve_time_s=0.052787 (total 0.283634), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 5), nonlinear_iterations=15 (total 43), linear_solves=11 (total 31), linear_iterations=7 (total 17), closed_cell_toggles=0 (total 1380), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.201946 (total 2.09307), converged=true
+Fracture solve stats: fractures_solved=1 (total 5), nonlinear_iterations=15 (total 43), linear_solves=11 (total 31), linear_iterations=7 (total 17), closed_cell_toggles=0 (total 1380), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.194223 (total 1.98041), converged=true
 Fracture coupling change: structure_changed=false, ctf_changed=true, perf_changed=false, max_ctf_change_abs=1.37089e-12, max_ctf_change_rel=1.37089e-12, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=1370.89, abs_threshold=1e-15
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  2.680e-09  0.000e+00  1.755e-05  0.000e+00  3.104e-08  0.000e+00  1.257e-02
-   5  0.000e+00  2.174e-10  0.000e+00  5.187e-07  0.000e+00  5.097e-09  0.000e+00  1.166e-03
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  2.680e-09  0.000e+00  7.324e-04  0.000e+00  3.104e-08  0.000e+00  5.259e-01   Strict   Strict
+   5  0.000e+00  2.174e-10  0.000e+00  2.169e-05  0.000e+00  5.097e-09  0.000e+00  4.875e-02   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 5
 Flow solve report converged: 0
-   6  0.000e+00  3.002e-11  0.000e+00  8.333e-10  0.000e+00  8.072e-10  0.000e+00  6.674e-07
+   6  0.000e+00  3.002e-11  0.000e+00  3.485e-08  0.000e+00  8.072e-10  0.000e+00  2.791e-05   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 6
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=6, linear_iterations=18 (total 110), solve_time_s=0.128391 (total 0.787912), converged=true
+Mechanical solve stats: solves=6, linear_iterations=12 (total 77), solve_time_s=0.0525951 (total 0.336229), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 6), nonlinear_iterations=19 (total 62), linear_solves=14 (total 45), linear_iterations=8 (total 25), closed_cell_toggles=0 (total 1380), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.562342 (total 2.65541), converged=true
+Fracture solve stats: fractures_solved=1 (total 6), nonlinear_iterations=19 (total 62), linear_solves=14 (total 45), linear_iterations=7 (total 24), closed_cell_toggles=0 (total 1380), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.530517 (total 2.51093), converged=true
 Fracture coupling change: structure_changed=false, ctf_changed=true, perf_changed=false, max_ctf_change_abs=2.48244e-12, max_ctf_change_rel=2.48244e-12, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=2482.44, abs_threshold=1e-15
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  3.711e-10  0.000e+00  1.755e-05  0.000e+00  1.571e-08  0.000e+00  1.018e-02
-   7  0.000e+00  3.080e-11  0.000e+00  9.169e-09  0.000e+00  7.200e-10  0.000e+00  5.822e-06
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  3.711e-10  0.000e+00  7.324e-04  0.000e+00  1.571e-08  0.000e+00  4.257e-01   Strict   Strict
+   7  0.000e+00  3.080e-11  0.000e+00  3.834e-07  0.000e+00  7.200e-10  0.000e+00  2.435e-04   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 7
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=7, linear_iterations=18 (total 128), solve_time_s=0.131186 (total 0.919098), converged=true
+Mechanical solve stats: solves=7, linear_iterations=13 (total 90), solve_time_s=0.0577298 (total 0.393959), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 7), nonlinear_iterations=31 (total 93), linear_solves=23 (total 68), linear_iterations=8 (total 33), closed_cell_toggles=0 (total 1380), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=2.35243 (total 5.00783), converged=true
+Fracture solve stats: fractures_solved=1 (total 7), nonlinear_iterations=31 (total 93), linear_solves=23 (total 68), linear_iterations=8 (total 32), closed_cell_toggles=0 (total 1380), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=2.20627 (total 4.7172), converged=true
 Fracture coupling change: structure_changed=true, ctf_changed=true, perf_changed=false, max_ctf_change_abs=6.33936e-12, max_ctf_change_rel=6.33936e-12, max_perf_change_abs=991630, max_perf_change_rel=0.0375859, composite_norm=6339.36, abs_threshold=1e-15
 | 
 | Processing dynamic information from
@@ -876,24 +894,24 @@ Fracture coupling change: structure_changed=true, ctf_changed=true, perf_changed
 | Initializing report step 3/3 at 2020-01-11 (5 DAYS) line 413
 | Complete report step 3 (5 DAYS) at 2020-01-16 (10 DAYS)
 | 
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
 Adding 1 extra connection for well: B-3H
 Adding extra connections to schedule for report step: 1 old connections: 1 new connections: 1
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  6.446e-08  0.000e+00  1.756e-05  0.000e+00  2.010e-03  0.000e+00  8.701e-03
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  6.446e-08  0.000e+00  7.331e-04  0.000e+00  2.010e-03  0.000e+00  3.642e-01   Strict   Strict
 Linear system blocksize: 4 size:    3025 block nonzeroes:     19833
-   8  0.000e+00  5.629e-08  0.000e+00  5.438e-09  0.000e+00  1.400e-05  0.000e+00  2.293e-05
+   8  0.000e+00  5.629e-08  0.000e+00  2.257e-07  0.000e+00  1.400e-05  0.000e+00  9.777e-04   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 8
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=8, linear_iterations=18 (total 146), solve_time_s=0.132156 (total 1.05125), converged=true
+Mechanical solve stats: solves=8, linear_iterations=13 (total 103), solve_time_s=0.0586663 (total 0.452626), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 8), nonlinear_iterations=39 (total 132), linear_solves=32 (total 100), linear_iterations=0 (total 33), closed_cell_toggles=142 (total 1522), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.4635 (total 5.47133), converged=true
+Fracture solve stats: fractures_solved=1 (total 8), nonlinear_iterations=39 (total 132), linear_solves=32 (total 100), linear_iterations=0 (total 32), closed_cell_toggles=142 (total 1522), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.438092 (total 5.15529), converged=true
 Fracture coupling change: structure_changed=true, ctf_changed=true, perf_changed=false, max_ctf_change_abs=5.48972e-12, max_ctf_change_rel=5.48972e-12, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=5489.72, abs_threshold=1e-15
 | 
 | Processing dynamic information from
@@ -904,153 +922,153 @@ Fracture coupling change: structure_changed=true, ctf_changed=true, perf_changed
 | Initializing report step 3/3 at 2020-01-11 (5 DAYS) line 413
 | Complete report step 3 (5 DAYS) at 2020-01-16 (10 DAYS)
 | 
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
 Adding 1 extra connection for well: B-3H
 Adding extra connections to schedule for report step: 1 old connections: 2 new connections: 1
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  5.415e-08  0.000e+00  1.756e-05  0.000e+00  5.725e-03  0.000e+00  7.962e-03
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  5.415e-08  0.000e+00  7.331e-04  0.000e+00  5.725e-03  0.000e+00  3.340e-01   Strict   Strict
 Linear system blocksize: 4 size:    3025 block nonzeroes:     19833
-   9  0.000e+00  1.968e-07  0.000e+00  4.866e-08  0.000e+00  5.346e-05  0.000e+00  1.100e-05
+   9  0.000e+00  1.968e-07  0.000e+00  2.067e-06  0.000e+00  5.343e-05  0.000e+00  4.585e-04   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 9
 Flow solve report converged: 0
-  10  0.000e+00  1.016e-10  0.000e+00  2.522e-11  0.000e+00  2.300e-08  0.000e+00  2.093e-08
+  10  0.000e+00  1.008e-10  0.000e+00  1.365e-09  0.000e+00  2.280e-08  0.000e+00  8.955e-07   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 10
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=9, linear_iterations=18 (total 164), solve_time_s=0.130565 (total 1.18182), converged=true
+Mechanical solve stats: solves=9, linear_iterations=13 (total 116), solve_time_s=0.056812 (total 0.509438), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 9), nonlinear_iterations=35 (total 167), linear_solves=26 (total 126), linear_iterations=0 (total 33), closed_cell_toggles=0 (total 1522), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=1.12178 (total 6.59312), converged=true
+Fracture solve stats: fractures_solved=1 (total 9), nonlinear_iterations=35 (total 167), linear_solves=26 (total 126), linear_iterations=0 (total 32), closed_cell_toggles=0 (total 1522), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=1.05535 (total 6.21064), converged=true
 Fracture coupling change: structure_changed=false, ctf_changed=true, perf_changed=false, max_ctf_change_abs=7.79778e-12, max_ctf_change_rel=7.79778e-12, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=7797.78, abs_threshold=1e-15
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  2.121e-09  0.000e+00  1.755e-05  0.000e+00  2.229e-03  0.000e+00  5.849e-03
-  11  0.000e+00  8.766e-08  0.000e+00  2.343e-08  0.000e+00  2.810e-05  0.000e+00  4.695e-06
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  2.120e-09  0.000e+00  7.325e-04  0.000e+00  2.229e-03  0.000e+00  2.450e-01   Strict   Strict
+  11  0.000e+00  8.766e-08  0.000e+00  9.928e-07  0.000e+00  2.809e-05  0.000e+00  1.974e-04   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 11
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=10, linear_iterations=18 (total 182), solve_time_s=0.132191 (total 1.31401), converged=true
+Mechanical solve stats: solves=10, linear_iterations=13 (total 129), solve_time_s=0.0575002 (total 0.566938), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 10), nonlinear_iterations=47 (total 214), linear_solves=35 (total 161), linear_iterations=1 (total 34), closed_cell_toggles=0 (total 1522), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=3.05657 (total 9.64969), converged=true
+Fracture solve stats: fractures_solved=1 (total 10), nonlinear_iterations=47 (total 214), linear_solves=35 (total 161), linear_iterations=1 (total 33), closed_cell_toggles=0 (total 1522), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=2.87529 (total 9.08592), converged=true
 Fracture coupling change: structure_changed=false, ctf_changed=true, perf_changed=false, max_ctf_change_abs=1.06065e-11, max_ctf_change_rel=1.06065e-11, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=10606.5, abs_threshold=1e-15
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  8.440e-08  0.000e+00  1.757e-05  0.000e+00  2.391e-03  0.000e+00  5.531e-03
-  12  0.000e+00  1.183e-07  0.000e+00  2.764e-08  0.000e+00  4.403e-05  0.000e+00  4.513e-06
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  8.440e-08  0.000e+00  7.335e-04  0.000e+00  2.391e-03  0.000e+00  2.312e-01   Strict   Strict
+  12  0.000e+00  1.183e-07  0.000e+00  1.172e-06  0.000e+00  4.402e-05  0.000e+00  1.901e-04   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 12
 Flow solve report converged: 0
-  13  0.000e+00  6.441e-12  0.000e+00  1.989e-12  0.000e+00  1.317e-09  0.000e+00  2.609e-08
+  13  0.000e+00  6.518e-12  0.000e+00  1.152e-10  0.000e+00  1.317e-09  0.000e+00  1.020e-06   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 13
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=11, linear_iterations=18 (total 200), solve_time_s=0.129283 (total 1.44329), converged=true
+Mechanical solve stats: solves=11, linear_iterations=14 (total 143), solve_time_s=0.060436 (total 0.627374), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 11), nonlinear_iterations=58 (total 272), linear_solves=50 (total 211), linear_iterations=0 (total 34), closed_cell_toggles=296 (total 1818), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.450684 (total 10.1004), converged=true
+Fracture solve stats: fractures_solved=1 (total 11), nonlinear_iterations=58 (total 272), linear_solves=50 (total 211), linear_iterations=0 (total 33), closed_cell_toggles=296 (total 1818), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.419489 (total 9.50541), converged=true
 Fracture coupling change: structure_changed=false, ctf_changed=true, perf_changed=false, max_ctf_change_abs=1.16547e-11, max_ctf_change_rel=1.16547e-11, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=11654.7, abs_threshold=1e-15
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  3.150e-09  0.000e+00  1.755e-05  0.000e+00  8.171e-03  0.000e+00  5.881e-03
-  14  0.000e+00  3.386e-07  0.000e+00  6.457e-08  0.000e+00  1.428e-04  0.000e+00  9.935e-06
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  3.150e-09  0.000e+00  7.325e-04  0.000e+00  8.171e-03  0.000e+00  2.462e-01   Strict   Strict
+  14  0.000e+00  3.386e-07  0.000e+00  2.745e-06  0.000e+00  1.427e-04  0.000e+00  4.206e-04   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 14
 Flow solve report converged: 0
-  15  0.000e+00  1.367e-10  0.000e+00  2.850e-11  0.000e+00  4.516e-08  0.000e+00  1.776e-07
+  15  0.000e+00  1.368e-10  0.000e+00  5.997e-10  0.000e+00  4.519e-08  0.000e+00  7.580e-06   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 15
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=12, linear_iterations=18 (total 218), solve_time_s=0.131178 (total 1.57447), converged=true
+Mechanical solve stats: solves=12, linear_iterations=14 (total 157), solve_time_s=0.0628828 (total 0.690257), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 12), nonlinear_iterations=43 (total 315), linear_solves=34 (total 245), linear_iterations=0 (total 34), closed_cell_toggles=0 (total 1818), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.75891 (total 10.8593), converged=true
+Fracture solve stats: fractures_solved=1 (total 12), nonlinear_iterations=43 (total 315), linear_solves=34 (total 245), linear_iterations=0 (total 33), closed_cell_toggles=0 (total 1818), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.71218 (total 10.2176), converged=true
 Fracture coupling change: structure_changed=false, ctf_changed=true, perf_changed=false, max_ctf_change_abs=1.46724e-11, max_ctf_change_rel=1.46724e-11, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=14672.4, abs_threshold=1e-15
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  1.856e-10  0.000e+00  1.755e-05  0.000e+00  5.808e-03  0.000e+00  4.759e-03
-  16  0.000e+00  3.488e-07  0.000e+00  6.250e-08  0.000e+00  1.690e-04  0.000e+00  8.527e-06
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  1.855e-10  0.000e+00  7.325e-04  0.000e+00  5.808e-03  0.000e+00  1.984e-01   Strict   Strict
+  16  0.000e+00  3.488e-07  0.000e+00  2.655e-06  0.000e+00  1.689e-04  0.000e+00  3.603e-04   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 16
 Flow solve report converged: 0
-  17  0.000e+00  3.280e-11  0.000e+00  8.018e-12  0.000e+00  8.180e-09  0.000e+00  2.573e-07
+  17  0.000e+00  3.288e-11  0.000e+00  3.131e-10  0.000e+00  8.216e-09  0.000e+00  9.964e-06   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 17
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=13, linear_iterations=18 (total 236), solve_time_s=0.132667 (total 1.70714), converged=true
+Mechanical solve stats: solves=13, linear_iterations=14 (total 171), solve_time_s=0.0612027 (total 0.751459), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 13), nonlinear_iterations=48 (total 363), linear_solves=37 (total 282), linear_iterations=3 (total 37), closed_cell_toggles=0 (total 1818), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=1.46122 (total 12.3205), converged=true
+Fracture solve stats: fractures_solved=1 (total 13), nonlinear_iterations=48 (total 363), linear_solves=37 (total 282), linear_iterations=3 (total 36), closed_cell_toggles=0 (total 1818), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=1.36234 (total 11.5799), converged=true
 Fracture coupling change: structure_changed=false, ctf_changed=true, perf_changed=false, max_ctf_change_abs=1.20876e-11, max_ctf_change_rel=1.20876e-11, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=12087.6, abs_threshold=1e-15
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  1.289e-10  0.000e+00  1.755e-05  0.000e+00  2.804e-04  0.000e+00  5.284e-03
-  18  0.000e+00  1.109e-09  0.000e+00  3.391e-09  0.000e+00  6.727e-07  0.000e+00  1.239e-06
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  1.290e-10  0.000e+00  7.325e-04  0.000e+00  2.804e-04  0.000e+00  2.208e-01   Strict   Strict
+  18  0.000e+00  1.109e-09  0.000e+00  1.420e-07  0.000e+00  6.726e-07  0.000e+00  5.179e-05   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 18
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=14, linear_iterations=18 (total 254), solve_time_s=0.140922 (total 1.84806), converged=true
+Mechanical solve stats: solves=14, linear_iterations=14 (total 185), solve_time_s=0.0608857 (total 0.812345), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 14), nonlinear_iterations=10 (total 373), linear_solves=7 (total 289), linear_iterations=2 (total 39), closed_cell_toggles=0 (total 1818), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.388608 (total 12.7091), converged=true
+Fracture solve stats: fractures_solved=1 (total 14), nonlinear_iterations=10 (total 373), linear_solves=7 (total 289), linear_iterations=2 (total 38), closed_cell_toggles=0 (total 1818), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.36217 (total 11.9421), converged=true
 Fracture coupling change: structure_changed=false, ctf_changed=true, perf_changed=false, max_ctf_change_abs=1.03086e-13, max_ctf_change_rel=1.03086e-13, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=103.086, abs_threshold=1e-15
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  1.074e-09  0.000e+00  1.755e-05  0.000e+00  6.581e-04  0.000e+00  5.217e-03
-  19  0.000e+00  4.225e-08  0.000e+00  3.723e-09  0.000e+00  2.318e-05  0.000e+00  1.604e-06
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  1.074e-09  0.000e+00  7.325e-04  0.000e+00  6.581e-04  0.000e+00  2.181e-01   Strict   Strict
+  19  0.000e+00  4.225e-08  0.000e+00  1.604e-07  0.000e+00  2.318e-05  0.000e+00  6.780e-05   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 19
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=15, linear_iterations=18 (total 272), solve_time_s=0.13753 (total 1.98559), converged=true
+Mechanical solve stats: solves=15, linear_iterations=14 (total 199), solve_time_s=0.0612605 (total 0.873605), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 15), nonlinear_iterations=10 (total 383), linear_solves=7 (total 296), linear_iterations=2 (total 41), closed_cell_toggles=2 (total 1820), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.408106 (total 13.1172), converged=true
-Fracture coupling change: structure_changed=false, ctf_changed=false, perf_changed=false, max_ctf_change_abs=1.07637e-16, max_ctf_change_rel=1.07637e-16, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=0.107637, abs_threshold=1e-15
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Fracture solve stats: fractures_solved=1 (total 15), nonlinear_iterations=10 (total 383), linear_solves=7 (total 296), linear_iterations=2 (total 40), closed_cell_toggles=2 (total 1820), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.375719 (total 12.3178), converged=true
+Fracture coupling change: structure_changed=false, ctf_changed=false, perf_changed=false, max_ctf_change_abs=1.07809e-16, max_ctf_change_rel=1.07809e-16, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=0.107809, abs_threshold=1e-15
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  4.060e-08  0.000e+00  1.754e-05  0.000e+00  2.304e-05  0.000e+00  4.769e-03
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  4.060e-08  0.000e+00  7.320e-04  0.000e+00  2.304e-05  0.000e+00  1.993e-01   Strict   Strict
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=16, linear_iterations=18 (total 290), solve_time_s=0.133009 (total 2.1186), converged=true
+Mechanical solve stats: solves=16, linear_iterations=14 (total 213), solve_time_s=0.0625231 (total 0.936129), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 16), nonlinear_iterations=35 (total 418), linear_solves=29 (total 325), linear_iterations=13 (total 54), closed_cell_toggles=6 (total 1826), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=1.25996 (total 14.3772), converged=true
+Fracture solve stats: fractures_solved=1 (total 16), nonlinear_iterations=35 (total 418), linear_solves=29 (total 325), linear_iterations=13 (total 53), closed_cell_toggles=6 (total 1826), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=1.15858 (total 13.4764), converged=true
 | 
 | Processing dynamic information from
 | /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA line 336
@@ -1060,7 +1078,6 @@ Fracture solve stats: fractures_solved=1 (total 16), nonlinear_iterations=35 (to
 | Initializing report step 3/3 at 2020-01-11 (5 DAYS) line 413
 | Complete report step 3 (5 DAYS) at 2020-01-16 (10 DAYS)
 | 
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
@@ -1069,9 +1086,9 @@ Adding extra connections to schedule for report step: 1 old connections: 3 new c
    Well B-3H converged in 1 inner iterations (0 control/status switches).
 Writing fracture data to VTK files at time: 432000grid_size814
 
- Newton its= 8, linearizations=20 (0.1sec), linear its=  4 (0.0sec)
+ Newton its= 8, linearizations=20 (0.0sec), linear its=  4 (0.0sec)
 Restart file written for report step 2/3, date = 11-Jan-2020 00:00:00
-Time step took 15.852372 seconds; total solver time 17.424864 seconds.
+Time step took 13.963916 seconds; total solver time 15.258565 seconds.
 
 
 
@@ -1086,23 +1103,23 @@ Report step  2/3 at day 10/15, date = 11-Jan-2020
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  9.041e-09  0.000e+00  1.754e-05  0.000e+00  1.864e-01  0.000e+00  4.408e-02
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  9.042e-09  0.000e+00  7.327e-04  0.000e+00  1.864e-01  0.000e+00  1.876e+00   Strict   Strict
 Linear system blocksize: 4 size:    3025 block nonzeroes:     19833
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 0
 Flow solve report converged: 0
-   1  0.000e+00  2.550e-07  0.000e+00  6.015e-08  0.000e+00  7.142e-05  0.000e+00  4.543e-03
+   1  0.000e+00  2.550e-07  0.000e+00  2.563e-06  0.000e+00  7.109e-05  0.000e+00  1.934e-01   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 1
 Flow solve report converged: 0
-   2  0.000e+00  4.113e-08  0.000e+00  8.148e-09  0.000e+00  1.629e-05  0.000e+00  1.836e-06
+   2  0.000e+00  4.112e-08  0.000e+00  3.464e-07  0.000e+00  1.628e-05  0.000e+00  7.811e-05   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 2
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=17, linear_iterations=18 (total 308), solve_time_s=0.140703 (total 2.2593), converged=true
+Mechanical solve stats: solves=17, linear_iterations=14 (total 227), solve_time_s=0.0616225 (total 0.997751), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 17), nonlinear_iterations=40 (total 458), linear_solves=35 (total 360), linear_iterations=0 (total 54), closed_cell_toggles=24 (total 1850), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.227619 (total 14.6048), converged=true
+Fracture solve stats: fractures_solved=1 (total 17), nonlinear_iterations=40 (total 458), linear_solves=35 (total 360), linear_iterations=0 (total 53), closed_cell_toggles=24 (total 1850), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.211753 (total 13.6882), converged=true
 Fracture coupling change: structure_changed=true, ctf_changed=true, perf_changed=false, max_ctf_change_abs=7.18832e-11, max_ctf_change_rel=7.18832e-11, max_perf_change_abs=3.36423e+06, max_perf_change_rel=0.127515, composite_norm=71883.2, abs_threshold=1e-15
 | 
 | Processing dynamic information from
@@ -1116,21 +1133,22 @@ Adding connections to schedule
 Adding 1 extra connection for well: B-3H
 Adding extra connections to schedule for report step: 2 old connections: 5 new connections: 1
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  4.186e-08  0.000e+00  1.756e-05  0.000e+00  7.266e-02  0.000e+00  1.743e-02
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  4.185e-08  0.000e+00  7.334e-04  0.000e+00  7.266e-02  0.000e+00  7.417e-01   Strict   Strict
 Linear system blocksize: 4 size:    3025 block nonzeroes:     19833
-   3  0.000e+00  1.472e-07  0.000e+00  3.320e-08  0.000e+00  5.478e-05  0.000e+00  2.217e-03
+   3  0.000e+00  1.471e-07  0.000e+00  1.404e-06  0.000e+00  5.452e-05  0.000e+00  9.436e-02   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 3
 Flow solve report converged: 0
-   4  0.000e+00  3.277e-08  0.000e+00  6.587e-09  0.000e+00  1.158e-05  0.000e+00  1.091e-06
+   4  0.000e+00  3.274e-08  0.000e+00  2.796e-07  0.000e+00  1.157e-05  0.000e+00  4.641e-05   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 4
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=18, linear_iterations=18 (total 326), solve_time_s=0.135485 (total 2.39479), converged=true
+Mechanical solve stats: solves=18, linear_iterations=13 (total 240), solve_time_s=0.0561417 (total 1.05389), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 18), nonlinear_iterations=25 (total 483), linear_solves=19 (total 379), linear_iterations=0 (total 54), closed_cell_toggles=0 (total 1850), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.41789 (total 15.0227), converged=true
+Fracture solve stats: fractures_solved=1 (total 18), nonlinear_iterations=25 (total 483), linear_solves=19 (total 379), linear_iterations=0 (total 53), closed_cell_toggles=0 (total 1850), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.388028 (total 14.0762), converged=true
 Fracture coupling change: structure_changed=true, ctf_changed=true, perf_changed=false, max_ctf_change_abs=1.58814e-12, max_ctf_change_rel=1.58814e-12, max_perf_change_abs=2.45735e+06, max_perf_change_rel=0.098339, composite_norm=1588.14, abs_threshold=1e-15
 | 
 | Processing dynamic information from
@@ -1138,117 +1156,116 @@ Fracture coupling change: structure_changed=true, ctf_changed=true, perf_changed
 | Initializing report step 3/3 at 2020-01-01 15 DAYS line 336
 | Complete report step 3 (5 DAYS) at 2020-01-16 (10 DAYS)
 | 
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
 Adding 3 extra connections for well: B-3H
 Adding extra connections to schedule for report step: 2 old connections: 6 new connections: 3
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  3.136e-08  0.000e+00  1.756e-05  0.000e+00  1.879e-01  0.000e+00  3.998e-02
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  3.133e-08  0.000e+00  7.331e-04  0.000e+00  1.879e-01  0.000e+00  1.705e+00   Strict   Strict
 Linear system blocksize: 4 size:    3025 block nonzeroes:     19833
-   5  0.000e+00  7.087e-07  0.000e+00  1.420e-07  0.000e+00  1.698e-04  0.000e+00  7.426e-03
+   5  0.000e+00  7.088e-07  0.000e+00  6.064e-06  0.000e+00  1.697e-04  0.000e+00  3.163e-01   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 5
 Flow solve report converged: 0
-   6  0.000e+00  1.903e-07  0.000e+00  3.352e-08  0.000e+00  5.088e-05  0.000e+00  1.863e-06
+   6  0.000e+00  1.903e-07  0.000e+00  1.423e-06  0.000e+00  5.088e-05  0.000e+00  7.911e-05   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 6
 Flow solve report converged: 0
-   7  0.000e+00  1.003e-10  0.000e+00  1.629e-11  0.000e+00  3.407e-08  0.000e+00  8.444e-07
+   7  0.000e+00  1.004e-10  0.000e+00  1.009e-09  0.000e+00  3.411e-08  0.000e+00  3.574e-05   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 7
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=19, linear_iterations=18 (total 344), solve_time_s=0.135774 (total 2.53056), converged=true
+Mechanical solve stats: solves=19, linear_iterations=13 (total 253), solve_time_s=0.0574132 (total 1.11131), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 19), nonlinear_iterations=9 (total 492), linear_solves=6 (total 385), linear_iterations=2 (total 56), closed_cell_toggles=0 (total 1850), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.261706 (total 15.2844), converged=true
+Fracture solve stats: fractures_solved=1 (total 19), nonlinear_iterations=9 (total 492), linear_solves=6 (total 385), linear_iterations=2 (total 55), closed_cell_toggles=0 (total 1850), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.238289 (total 14.3145), converged=true
 Fracture coupling change: structure_changed=false, ctf_changed=true, perf_changed=false, max_ctf_change_abs=3.3728e-12, max_ctf_change_rel=3.3728e-12, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=3372.8, abs_threshold=1e-15
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  1.055e-08  0.000e+00  1.754e-05  0.000e+00  6.730e-03  0.000e+00  5.836e-03
-   8  0.000e+00  6.508e-08  0.000e+00  1.063e-08  0.000e+00  1.941e-05  0.000e+00  2.044e-04
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  1.055e-08  0.000e+00  7.327e-04  0.000e+00  6.730e-03  0.000e+00  2.453e-01   Strict   Strict
+   8  0.000e+00  6.508e-08  0.000e+00  4.498e-07  0.000e+00  1.942e-05  0.000e+00  8.707e-03   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 8
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=20, linear_iterations=18 (total 362), solve_time_s=0.136654 (total 2.66721), converged=true
+Mechanical solve stats: solves=20, linear_iterations=13 (total 266), solve_time_s=0.0583143 (total 1.16962), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 20), nonlinear_iterations=18 (total 510), linear_solves=15 (total 400), linear_iterations=9 (total 65), closed_cell_toggles=8 (total 1858), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.29103 (total 15.5754), converged=true
-Fracture coupling change: structure_changed=false, ctf_changed=true, perf_changed=false, max_ctf_change_abs=1.37108e-12, max_ctf_change_rel=1.37108e-12, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=1371.08, abs_threshold=1e-15
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Fracture solve stats: fractures_solved=1 (total 20), nonlinear_iterations=19 (total 511), linear_solves=16 (total 401), linear_iterations=10 (total 65), closed_cell_toggles=8 (total 1858), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.264338 (total 14.5788), converged=true
+Fracture coupling change: structure_changed=false, ctf_changed=true, perf_changed=false, max_ctf_change_abs=1.37093e-12, max_ctf_change_rel=1.37093e-12, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=1370.93, abs_threshold=1e-15
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  6.107e-08  0.000e+00  1.756e-05  0.000e+00  4.165e-03  0.000e+00  4.165e-03
-   9  0.000e+00  3.775e-07  0.000e+00  4.601e-08  0.000e+00  1.167e-04  0.000e+00  7.847e-05
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  6.107e-08  0.000e+00  7.336e-04  0.000e+00  4.165e-03  0.000e+00  1.744e-01   Strict   Strict
+   9  0.000e+00  3.775e-07  0.000e+00  1.955e-06  0.000e+00  1.166e-04  0.000e+00  3.338e-03   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 9
 Flow solve report converged: 0
-  10  0.000e+00  5.993e-09  0.000e+00  1.036e-09  0.000e+00  1.604e-06  0.000e+00  2.160e-06
+  10  0.000e+00  5.982e-09  0.000e+00  4.455e-08  0.000e+00  1.601e-06  0.000e+00  9.138e-05   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 10
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=21, linear_iterations=18 (total 380), solve_time_s=0.134821 (total 2.80204), converged=true
+Mechanical solve stats: solves=21, linear_iterations=13 (total 279), solve_time_s=0.0573433 (total 1.22696), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 21), nonlinear_iterations=11 (total 521), linear_solves=8 (total 408), linear_iterations=3 (total 68), closed_cell_toggles=0 (total 1858), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.262671 (total 15.8381), converged=true
-Fracture coupling change: structure_changed=false, ctf_changed=true, perf_changed=false, max_ctf_change_abs=4.45319e-14, max_ctf_change_rel=4.45319e-14, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=44.5319, abs_threshold=1e-15
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Fracture solve stats: fractures_solved=1 (total 21), nonlinear_iterations=13 (total 524), linear_solves=10 (total 411), linear_iterations=3 (total 68), closed_cell_toggles=2 (total 1860), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.246746 (total 14.8256), converged=true
+Fracture coupling change: structure_changed=false, ctf_changed=true, perf_changed=false, max_ctf_change_abs=4.45493e-14, max_ctf_change_rel=4.45493e-14, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=44.5493, abs_threshold=1e-15
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  7.510e-09  0.000e+00  1.755e-05  0.000e+00  1.168e-04  0.000e+00  3.577e-03
-  11  0.000e+00  1.101e-08  0.000e+00  3.035e-09  0.000e+00  3.341e-06  0.000e+00  1.332e-06
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  7.500e-09  0.000e+00  7.329e-04  0.000e+00  1.170e-04  0.000e+00  1.496e-01   Strict   Strict
+  11  0.000e+00  1.104e-08  0.000e+00  1.281e-07  0.000e+00  3.352e-06  0.000e+00  5.697e-05   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 11
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=22, linear_iterations=18 (total 398), solve_time_s=0.134389 (total 2.93642), converged=true
+Mechanical solve stats: solves=22, linear_iterations=13 (total 292), solve_time_s=0.0570503 (total 1.28401), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 22), nonlinear_iterations=11 (total 532), linear_solves=8 (total 416), linear_iterations=1 (total 69), closed_cell_toggles=2 (total 1860), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.267815 (total 16.1059), converged=true
-Fracture coupling change: structure_changed=false, ctf_changed=true, perf_changed=false, max_ctf_change_abs=2.12167e-15, max_ctf_change_rel=2.12167e-15, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=2.12167, abs_threshold=1e-15
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Fracture solve stats: fractures_solved=1 (total 22), nonlinear_iterations=11 (total 535), linear_solves=8 (total 419), linear_iterations=2 (total 70), closed_cell_toggles=0 (total 1860), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.240321 (total 15.0659), converged=true
+Fracture coupling change: structure_changed=false, ctf_changed=true, perf_changed=false, max_ctf_change_abs=2.12514e-15, max_ctf_change_rel=2.12514e-15, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=2.12514, abs_threshold=1e-15
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  1.081e-08  0.000e+00  1.755e-05  0.000e+00  6.429e-06  0.000e+00  3.279e-03
-  12  0.000e+00  4.004e-09  0.000e+00  2.083e-09  0.000e+00  1.131e-06  0.000e+00  7.533e-07
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  1.085e-08  0.000e+00  7.330e-04  0.000e+00  6.451e-06  0.000e+00  1.370e-01   Strict   Strict
+  12  0.000e+00  4.017e-09  0.000e+00  8.760e-08  0.000e+00  1.135e-06  0.000e+00  3.158e-05   Strict   Strict
 Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 12
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=23, linear_iterations=18 (total 416), solve_time_s=0.134862 (total 3.07129), converged=true
+Mechanical solve stats: solves=23, linear_iterations=13 (total 305), solve_time_s=0.0574845 (total 1.3415), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 23), nonlinear_iterations=11 (total 543), linear_solves=8 (total 424), linear_iterations=2 (total 71), closed_cell_toggles=0 (total 1860), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.264722 (total 16.3706), converged=true
-Fracture coupling change: structure_changed=false, ctf_changed=false, perf_changed=false, max_ctf_change_abs=2.03752e-16, max_ctf_change_rel=2.03752e-16, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=0.203752, abs_threshold=1e-15
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Fracture solve stats: fractures_solved=1 (total 23), nonlinear_iterations=11 (total 546), linear_solves=8 (total 427), linear_iterations=2 (total 72), closed_cell_toggles=0 (total 1860), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.239385 (total 15.3053), converged=true
+Fracture coupling change: structure_changed=false, ctf_changed=false, perf_changed=false, max_ctf_change_abs=2.04197e-16, max_ctf_change_rel=2.04197e-16, max_perf_change_abs=0, max_perf_change_rel=0, composite_norm=0.204197, abs_threshold=1e-15
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E) 
-   0  0.000e+00  4.258e-09  0.000e+00  1.755e-05  0.000e+00  1.411e-06  0.000e+00  3.243e-03
+   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
+   0  0.000e+00  4.272e-09  0.000e+00  7.329e-04  0.000e+00  1.417e-06  0.000e+00  1.355e-01   Strict   Strict
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=24, linear_iterations=18 (total 434), solve_time_s=0.137844 (total 3.20913), converged=true
+Mechanical solve stats: solves=24, linear_iterations=13 (total 318), solve_time_s=0.0566763 (total 1.39817), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 24), nonlinear_iterations=10 (total 553), linear_solves=7 (total 431), linear_iterations=0 (total 71), closed_cell_toggles=0 (total 1860), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.265856 (total 16.6365), converged=true
-   Well B-3H converged in 1 inner iterations (0 control/status switches).
+Fracture solve stats: fractures_solved=1 (total 24), nonlinear_iterations=10 (total 556), linear_solves=7 (total 434), linear_iterations=0 (total 72), closed_cell_toggles=0 (total 1860), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.2393 (total 15.5446), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
@@ -1257,7 +1274,7 @@ Writing fracture data to VTK files at time: 864000grid_size400
 
  Newton its= 6, linearizations=13 (0.0sec), linear its=  3 (0.0sec)
 Restart file written for report step 3/3, date = 16-Jan-2020 00:00:00
-Time step took 3.503868 seconds; total solver time 20.928732 seconds.
+Time step took 2.645936 seconds; total solver time 17.904500 seconds.
 
 
 
@@ -1265,34 +1282,25 @@ Time step took 3.503868 seconds; total solver time 20.928732 seconds.
 
 Number of MPI processes:         1
 Threads per MPI process:         1
-Setup time:                      0.03 s
+Setup time:                      0.02 s
   Deck input:                    0.01 s
 Number of timesteps:             3
-Simulation time:                20.93 s
-  Assembly time:                 0.13 s (Wasted: 0.0 s; 0.0%)
+Simulation time:                17.90 s
+  Assembly time:                 0.07 s (Wasted: 0.0 s; 0.0%)
     Well assembly:               0.00 s (Wasted: 0.0 s; 0.0%)
   Linear solve time:             0.06 s (Wasted: 0.0 s; 0.0%)
     Linear setup:                0.04 s (Wasted: 0.0 s; 0.0%)
   Props/update time:             0.04 s (Wasted: 0.0 s; 0.0%)
-  Pre/post step:                 2.10 s (Wasted: 0.0 s; 0.0%)
+  Pre/post step:                 0.00 s (Wasted: 0.0 s; 0.0%)
   Output write time:             0.01 s
 Overall Linearizations:         41      (Wasted:     0; 0.0%)
 Overall Newton Iterations:      20      (Wasted:     0; 0.0%)
 Overall Linear Iterations:      10      (Wasted:     0; 0.0%)
 
-  Mechanical solve time:       3.21 s
-Overall Mechanical Solves:       24
-Overall Mech Lin Iters:         434
-  Fracture solve time:        16.64 s
-Overall Fracture Solves:         24
-Overall Fracture Nl Iters:      553
-Overall Fracture Lin Solves:    431
-Overall Fracture Lin Iters:      71
-
 
 
 Error summary:
-Warnings          7
+Warnings          6
 Info              427
 Errors            0
 Bugs              0

@@ -21,7 +21,9 @@
 
 #include <opm/geomech/FractureModel.hpp>
 
+#include <algorithm>
 #include <cmath>
+#include <set>
 
 namespace Opm {
 
@@ -60,6 +62,10 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
     this->connections_.clear();
     this->slotOf_.clear();
     this->wellPerforations_.clear();
+
+    // Which slots already held a cell.  A slot that did keeps the state it has solved
+    // its way to; only a slot that has just been handed out needs one made up for it.
+    const auto wasActive = this->active_;
 
     // Every slot starts this round dormant.  A fracture's grid can come back smaller
     // than it was -- the propagation rebuilds it -- and a slot the previous round
@@ -193,10 +199,14 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
     }
 
     // A cell that has just been handed out has been holding a placeholder state; give it
-    // the state of the rock it cuts through, at its own depth.
+    // the state of the rock it cuts through, at its own depth.  A slot that was already
+    // carrying a cell keeps what it has: the binding is rebuilt at every step boundary,
+    // and re-initialising the whole fracture there would overwrite the pressure it has
+    // just solved for with the reservoir's, every step, so the fracture could never hold
+    // a pressure of its own at all.
     auto& solution = this->simulator_.model().solution(/*timeIdx=*/0);
     for (unsigned slot = 0; slot < nextSlot; ++slot) {
-        if (this->active_[slot]) {
+        if (this->active_[slot] && !wasActive[slot]) {
             this->assignStateFromPartner(solution, slot);
         }
     }
@@ -278,6 +288,12 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
         return;
     }
     else {
+        // What the well actually does at the fracture's own degrees of freedom.  This
+        // reads only the well state, so it is reported whether or not the binding still
+        // describes the fracture -- it is the answer to "is the fracture connected at
+        // all", which must not depend on the fracture having stood still.
+        this->perforationReport();
+
         if (!this->layoutMatches(fractures)) {
             OpmLog::info("LEAKOFF-CHECK skipped: binding layout differs from fracture state");
             return;
@@ -297,6 +313,12 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
         Scalar pMin = 1e30, pMax = -1e30, pPerfSum = 0.0;
         unsigned n = 0, nPerf = 0;
 
+        // The same cell's pressure as the fracture's own solver holds it.  The two
+        // representations solve for the same unknown; a difference here is the
+        // coupling failing, not a difference of conductance.
+        Scalar pOwnSum = 0.0, dpOwnMax = 0.0, pOwnAtMax = 0.0, pEmbAtMax = 0.0;
+        std::size_t cellAtMax = 0;
+
         // Slots the well perforates, by global degree of freedom.
         std::vector<unsigned> perfDofs;
         for (const auto& [wname, perfs] : this->wellPerforations_) {
@@ -313,6 +335,7 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
                 const auto& leakOf = fracture.leakOf();
                 const auto internalRate = fracture.leakOfRate();
                 const auto areas = fracture.cellAreas();
+                const auto& pOwn = fracture.fracturePressure();
 
                 for (std::size_t cell = 0; cell < numCells; ++cell) {
                     const auto slot = firstSlot + cell;
@@ -336,6 +359,17 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
                     if (std::find(perfDofs.begin(), perfDofs.end(), g) != perfDofs.end()) {
                         pPerfSum += pF;
                         ++nPerf;
+                    }
+
+                    if (cell < pOwn.size()) {
+                        const auto pO = static_cast<Scalar>(pOwn[cell][0]);
+                        pOwnSum += pO;
+                        if (std::abs(pO - pF) > dpOwnMax) {
+                            dpOwnMax = std::abs(pO - pF);
+                            pOwnAtMax = pO;
+                            pEmbAtMax = pF;
+                            cellAtMax = cell;
+                        }
                     }
 
                     for (const auto& nbInfo : neighborInfo[g]) {
@@ -404,6 +438,85 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
             (n > 0) ? dpotSum / n / 1e5 : Scalar{0},
             pMin / 1e5, pMax / 1e5, nPerf,
             (nPerf > 0) ? pPerfSum / nPerf / 1e5 : Scalar{0}));
+
+        OpmLog::info(fmt::format(
+            "LEAKOFF-CHECK pressure vs fracture solver: mean own {:.6g} bar  "
+            "mean embedded {:.6g} bar  max |diff| {:.6g} bar at cell {} "
+            "(own {:.6g}, embedded {:.6g})",
+            (n > 0) ? pOwnSum / n / 1e5 : Scalar{0},
+            (n > 0) ? pFracSum / n / 1e5 : Scalar{0},
+            dpOwnMax / 1e5, cellAtMax, pOwnAtMax / 1e5, pEmbAtMax / 1e5));
+    }
+}
+
+template <class TypeTag>
+void
+FractureAuxCells<TypeTag>::perforationReport() const
+{
+    if (this->wellPerforations_.empty()) {
+        OpmLog::info("PERF-CHECK no fracture perforations registered");
+        return;
+    }
+
+    const auto& model = this->simulator_.model();
+    const auto& wellModel = this->simulator_.problem().wellModel();
+    const auto& wellState = wellModel.wellState();
+    const auto waterPos = FluidSystem::waterPhaseIdx;
+    const auto waterActive = FluidSystem::canonicalToActivePhaseIdx(waterPos);
+    const auto numPhases = wellState.numPhases();
+    const Scalar day = 86400.0;
+
+    for (const auto& [wname, perfs] : this->wellPerforations_) {
+        if (perfs.empty() || !wellState.has(wname)) {
+            continue;
+        }
+
+        const auto& ws = wellState[wname];
+        const auto& pd = ws.perf_data;
+
+        // The perforations of the fracture are the tail of the well's list, but match
+        // on the degree of freedom rather than assuming that: the whole point is to
+        // find out whether they are in the list at all.
+        std::set<std::size_t> auxDofs;
+        for (const auto& p : perfs) {
+            auxDofs.insert(static_cast<std::size_t>(p.cell));
+        }
+
+        Scalar qAux = 0.0, ctfAux = 0.0, pPerfSum = 0.0;
+        Scalar qTotal = 0.0;
+        std::size_t nFound = 0;
+
+        for (std::size_t perf = 0; perf < pd.size(); ++perf) {
+            const auto rate = (waterActive < numPhases)
+                ? pd.phase_rates[perf * numPhases + waterActive] : Scalar{0};
+            qTotal += rate;
+
+            if (auxDofs.count(pd.cell_index[perf]) == 0) {
+                continue;
+            }
+
+            ++nFound;
+            qAux += rate;
+            ctfAux += pd.connection_transmissibility_factor[perf];
+            pPerfSum += pd.pressure[perf];
+        }
+
+        // What the flow problem holds at those degrees of freedom, for the drawdown.
+        Scalar pCellSum = 0.0;
+        for (const auto& p : perfs) {
+            const auto& iq = model.intensiveQuantities(static_cast<unsigned>(p.cell), 0);
+            pCellSum += getValue(iq.fluidState().pressure(waterPos));
+        }
+
+        OpmLog::info(fmt::format(
+            "PERF-CHECK {}: registered {}  found in well {} of {} perforations  "
+            "bhp {:.6g} bar  mean perf pressure {:.6g} bar  mean cell pressure {:.6g} bar  "
+            "sum CTF {:.6g}  water rate through fracture {:.6g} of {:.6g} sm3/day",
+            wname, perfs.size(), nFound, pd.size(),
+            ws.bhp / 1e5,
+            (nFound > 0) ? pPerfSum / nFound / 1e5 : Scalar{0},
+            pCellSum / perfs.size() / 1e5,
+            ctfAux, qAux * day, qTotal * day));
     }
 }
 

@@ -359,6 +359,14 @@ namespace Opm{
                         // their state and their equations around the new perforations.
                         this->addFracturePerforationsToWells();
                         this->wellModel().beginTimeStep();
+
+                        // After the well model has rebuilt around them: what the wells
+                        // now carry at the fracture's degrees of freedom.  Reported here
+                        // as well as at the end of the step so that a step which never
+                        // converges still says whether the fracture was connected.
+                        if (embeddedLeakoffReport_) {
+                            fractureAuxCells_->perforationReport();
+                        }
                     }
                     else {
                         this->wellModel().beginTimeStep();// just to be sure well conteiner is reinitialized
