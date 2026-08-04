@@ -154,7 +154,11 @@
             },
             "fracture_flow_mode": "embedded",
             "embedded_capacity": 5000,
-            "embedded_leakoff_report": true
+            "embedded_static": true,
+            "embedded_leakoff_report": true,
+            "embedded_perf_wi_mode": "estimate",
+            "embedded_perf_width": 0.005,
+            "embedded_perf_rw": 0.1
         },
         "reservoir": {
             "dist": "1",

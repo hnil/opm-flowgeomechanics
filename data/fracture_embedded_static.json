@@ -154,7 +154,8 @@
             },
             "fracture_flow_mode": "embedded",
             "embedded_capacity": 5000,
-            "embedded_static": true
+            "embedded_static": true,
+            "embedded_leakoff_report": true
         },
         "reservoir": {
             "dist": "1",

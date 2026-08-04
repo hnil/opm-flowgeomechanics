@@ -24,6 +24,7 @@
 
 #include <opm/simulators/flow/FlowAuxCellModule.hpp>
 #include <opm/simulators/wells/RuntimePerforation.hpp>
+#include <opm/models/nonlinear/newtonmethodproperties.hh>
 
 #include <fmt/format.h>
 
@@ -69,6 +70,10 @@ class FractureAuxCells : public FlowAuxCellModule<TypeTag>
     using GlobalEqVector = GetPropType<TypeTag, Properties::GlobalEqVector>;
     using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
     using GridView = GetPropType<TypeTag, Properties::GridView>;
+    using LocalResidual = GetPropType<TypeTag, Properties::LocalResidual>;
+    using Linearizer = GetPropType<TypeTag, Properties::Linearizer>;
+    using RateVector = GetPropType<TypeTag, Properties::RateVector>;
+    using Indices = GetPropType<TypeTag, Properties::Indices>;
 
     enum { dimWorld = GridView::dimensionworld };
 
@@ -219,6 +224,19 @@ public:
      * changes wait for the step boundary.
      */
     bool layoutMatches(const FractureModel& fractures) const;
+
+    /*!
+     * \brief Log the leak-off cross-check between the two representations.
+     *
+     * For the same fracture, per cell: the conductance the reservoir actually
+     * applies (bound transmissibility times the upwind water mobility) against the
+     * fracture solver's own leakof_ (transmissibility times the reservoir total
+     * mobility), and the two flux opinions -- the reservoir's, evaluated with the
+     * same local residual that assembled it, and the fracture's internal
+     * leakOfRate().  The aggregate ratio is the calibration number: it says whose
+     * conductance the pressure difference between the modes belongs to.
+     */
+    void leakoffReport(const FractureModel& fractures) const;
 
     /*!
      * \brief Relative change of the binding between the last two binds.

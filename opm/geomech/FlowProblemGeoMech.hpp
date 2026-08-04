@@ -78,6 +78,7 @@ namespace Opm{
         FractureAuxCells<TypeTag>* fractureAuxCells_ = nullptr;
         double embeddedCouplingChange_ = 0.0;
         bool embeddedStatic_ = false;
+        bool embeddedLeakoffReport_ = false;
 
     public:
 
@@ -127,6 +128,7 @@ namespace Opm{
             // validation configuration: growth feedback cannot confound a comparison of
             // the conductances themselves.
             embeddedStatic_ = prm.get<bool>("solver.embedded_static", false);
+            embeddedLeakoffReport_ = prm.get<bool>("solver.embedded_leakoff_report", false);
 
             // The floor under the aperture used for the cells' volume and cubic-law
             // transmissibility.  Deliberately NOT config.min_width: the fracture's own
@@ -369,6 +371,14 @@ namespace Opm{
             this->emptyFractureLogger();
         }
         void endTimeStep() override{
+            // The state the step just converged on is still bound; compare the two
+            // representations' view of the leak-off before anything moves.
+            if (embeddedLeakoffReport_ && (fractureAuxCells_ != nullptr)
+                && this->geoMechModel().fractureModelActive())
+            {
+                fractureAuxCells_->leakoffReport(this->geoMechModel().fractureModel());
+            }
+
             if (this->gridView().comm().rank() == 0){
                 std::cout << "----------------------Start endTimeStep-------------------\n"
                 << std::flush;

@@ -271,6 +271,143 @@ FractureAuxCells<TypeTag>::layoutMatches(const FractureModel& fractures) const
 }
 
 template <class TypeTag>
+void
+FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
+{
+    if constexpr (!Linearizer::assemblesAuxiliaryDofEquations) {
+        return;
+    }
+    else {
+        if (!this->layoutMatches(fractures)) {
+            OpmLog::info("LEAKOFF-CHECK skipped: binding layout differs from fracture state");
+            return;
+        }
+
+        const auto& model = this->simulator_.model();
+        const auto& problem = this->simulator_.problem();
+        const auto& neighborInfo = model.linearizer().getNeighborInfo();
+        const auto waterPos = FluidSystem::waterPhaseIdx;
+
+        Scalar qEmb = 0.0;      // reservoir's water rate over the aux connections [sm3/s]
+        Scalar qFrac = 0.0;     // fracture solver's own leak-off opinion [m3/s]
+        Scalar condEmb = 0.0;   // sum of trans * upwind water mobility
+        Scalar condFrac = 0.0;  // sum of the fracture's leakof_ (trans * total mobility)
+        Scalar pFracSum = 0.0, pResSum = 0.0;
+        Scalar dFracSum = 0.0, dResSum = 0.0, dZgSum = 0.0, dpotSum = 0.0;
+        Scalar pMin = 1e30, pMax = -1e30, pPerfSum = 0.0;
+        unsigned n = 0, nPerf = 0;
+
+        // Slots the well perforates, by global degree of freedom.
+        std::vector<unsigned> perfDofs;
+        for (const auto& [wname, perfs] : this->wellPerforations_) {
+            static_cast<void>(wname);
+            for (const auto& p : perfs) {
+                perfDofs.push_back(static_cast<unsigned>(p.cell));
+            }
+        }
+
+        std::size_t firstSlot = 0;
+        for (const auto& wellFractures : fractures.wellFractures()) {
+            for (const auto& fracture : wellFractures) {
+                const auto numCells = fracture.numCells();
+                const auto& leakOf = fracture.leakOf();
+                const auto internalRate = fracture.leakOfRate();
+                const auto areas = fracture.cellAreas();
+
+                for (std::size_t cell = 0; cell < numCells; ++cell) {
+                    const auto slot = firstSlot + cell;
+                    if (!this->active_[slot]) {
+                        continue;
+                    }
+
+                    const auto g = static_cast<unsigned>(this->localToGlobalDof(slot));
+                    const auto partner = this->partner_[slot];
+                    const auto& iqF = model.intensiveQuantities(g, 0);
+                    const auto& iqR = model.intensiveQuantities(partner, 0);
+
+                    pFracSum += getValue(iqF.fluidState().pressure(waterPos));
+                    pResSum += getValue(iqR.fluidState().pressure(waterPos));
+                    dFracSum += problem.dofCenterDepth(g);
+                    dResSum += problem.dofCenterDepth(partner);
+
+                    const auto pF = getValue(iqF.fluidState().pressure(waterPos));
+                    pMin = std::min(pMin, pF);
+                    pMax = std::max(pMax, pF);
+                    if (std::find(perfDofs.begin(), perfDofs.end(), g) != perfDofs.end()) {
+                        pPerfSum += pF;
+                        ++nPerf;
+                    }
+
+                    for (const auto& nbInfo : neighborInfo[g]) {
+                        if (nbInfo.neighbor != partner) {
+                            continue;
+                        }
+
+                        condEmb += nbInfo.res_nbinfo.trans
+                            * getValue(iqF.mobility(waterPos));
+                        dZgSum += nbInfo.res_nbinfo.dZg;
+                        dpotSum += getValue(iqF.fluidState().pressure(waterPos))
+                                 - getValue(iqR.fluidState().pressure(waterPos))
+                                 - nbInfo.res_nbinfo.dZg
+                                   * getValue(iqF.fluidState().density(waterPos));
+
+                        RateVector flux(0.0);
+                        RateVector darcy(0.0);
+                        LocalResidual::computeFlux(flux, darcy, g, partner,
+                                                   iqF, iqR, nbInfo.res_nbinfo,
+                                                   problem.moduleParams());
+
+                        const auto& fsys = iqF.fluidState().fluidSystem();
+                        const auto waterEqIdx = Indices::conti0EqIdx
+                            + fsys.canonicalToActiveCompIdx(
+                                  fsys.solventComponentIndex(waterPos));
+
+                        Scalar rate = getValue(flux[waterEqIdx])
+                            * nbInfo.res_nbinfo.faceArea;
+                        if constexpr (!getPropValue<TypeTag,
+                                      Properties::BlackoilConserveSurfaceVolume>()) {
+                            rate /= fsys.referenceDensity(waterPos,
+                                                          problem.pvtRegionIndex(g));
+                        }
+                        qEmb += rate;
+                        break;
+                    }
+
+                    if (cell < leakOf.size()) {
+                        condFrac += static_cast<Scalar>(leakOf[cell]);
+                    }
+                    if (cell < internalRate.size()) {
+                        qFrac += static_cast<Scalar>(internalRate[cell] * areas[cell]);
+                    }
+                    ++n;
+                }
+
+                firstSlot += numCells;
+            }
+        }
+
+        const Scalar day = 86400.0;
+        OpmLog::info(fmt::format(
+            "LEAKOFF-CHECK cells {}  qEmb {:.6g} sm3/day  qFracInternal {:.6g} m3/day  "
+            "condEmb {:.6g}  condFrac(leakof) {:.6g}  cond ratio emb/frac {:.4g}  "
+            "mean pFrac {:.6g} bar  mean pRes {:.6g} bar  "
+            "mean depthFrac {:.6g} m  mean depthRes {:.6g} m  "
+            "mean dZg {:.6g}  mean dpot {:.6g} bar  "
+            "pFrac min {:.6g} max {:.6g} bar  wellPerfs {} meanPatPerf {:.6g} bar",
+            n, qEmb * day, qFrac * day, condEmb, condFrac,
+            (condFrac > 0.0) ? condEmb / condFrac : Scalar{0},
+            (n > 0) ? pFracSum / n / 1e5 : Scalar{0},
+            (n > 0) ? pResSum / n / 1e5 : Scalar{0},
+            (n > 0) ? dFracSum / n : Scalar{0},
+            (n > 0) ? dResSum / n : Scalar{0},
+            (n > 0) ? dZgSum / n : Scalar{0},
+            (n > 0) ? dpotSum / n / 1e5 : Scalar{0},
+            pMin / 1e5, pMax / 1e5, nPerf,
+            (nPerf > 0) ? pPerfSum / nPerf / 1e5 : Scalar{0}));
+    }
+}
+
+template <class TypeTag>
 std::vector<RuntimePerforation>
 FractureAuxCells<TypeTag>::wellPerforations(const std::string& wellName) const
 {
