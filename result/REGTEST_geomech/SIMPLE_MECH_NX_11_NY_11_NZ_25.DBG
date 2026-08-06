@@ -10,12 +10,12 @@
 Flow is a simulator for fully implicit three-phase black-oil flow, and is part of OPM.
 For more information visit: https://opm-project.org 
 
-Flow Version     =  2026.04-pre (4fc5c69*)
-Machine name     =  Halvors-MBP.sintef.no (Number of logical cores: 14, Memory size: 24576.00 MB) 
+Flow Version     =  2026.04-pre (27983cb*)
+Machine name     =  Halvors-MacBook-Pro.local (Number of logical cores: 14, Memory size: 24576.00 MB) 
 Operating system =  Darwin arm64 (Kernel: 25.5.0, Darwin Kernel Version 25.5.0: Tue Jun  9 22:28:34 PDT 2026; root:xnu-12377.121.10~1/RELEASE_ARM64_T6041 )
-Build time       =  2026-08-04 at 09:36:11 hrs
+Build time       =  2026-08-06 at 16:01:41 hrs
 User             =  root
-Simulation started on 04-08-2026 at 09:37:15 hrs
+Simulation started on 06-08-2026 at 16:03:12 hrs
 Using 1 MPI processes with 1 OMP threads on each 
 Parameters used by Flow:
 # [known parameters which were specified at run-time]
@@ -711,7 +711,7 @@ Property tree for mech linear solver:
     }
 }
 
-Mechanical solve stats: solves=1, linear_iterations=49 (total 49), solve_time_s=0.0693933 (total 0.0693933), converged=true
+Mechanical solve stats: solves=1, linear_iterations=49 (total 49), solve_time_s=0.0753016 (total 0.0753016), converged=true
    Well B-3H converged in 1 inner iterations (0 control/status switches).
 Suggested next time step size (from PID controller): 14.162700674069182 days
 Suggested next time step size (from iteration target): 3 days
@@ -728,7 +728,7 @@ Overall linear iterations used: 0
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=2, linear_iterations=38 (total 87), solve_time_s=0.0559318 (total 0.125325), converged=true
+Mechanical solve stats: solves=2, linear_iterations=38 (total 87), solve_time_s=0.0598241 (total 0.135126), converged=true
    Well B-3H converged in 1 inner iterations (0 control/status switches).
 Suggested next time step size (from PID controller): 20.994457365149525 days
 Suggested next time step size (from iteration target): 6.800000000000002 days
@@ -745,7 +745,7 @@ Overall linear iterations used: 0
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=3, linear_iterations=51 (total 138), solve_time_s=0.0731773 (total 0.198502), converged=true
+Mechanical solve stats: solves=3, linear_iterations=51 (total 138), solve_time_s=0.0780899 (total 0.213216), converged=true
 Suggested next time step size (from PID controller): 37.2212737218292 days
 Suggested next time step size (from iteration target): 6.800000000000002 days
  Newton its= 2, linearizations= 3 (0.0sec), linear its=  0 (0.0sec)
@@ -757,7 +757,7 @@ sub steps end time = 5 (days)
 Suggested next step size = 6 (days)
 
 Restart file written for report step 1/4, date = 06-Jan-2020 00:00:00
-Time step took 0.854769 seconds; total solver time 0.854769 seconds.
+Time step took 0.917950 seconds; total solver time 0.917950 seconds.
 
 
 
@@ -782,7 +782,7 @@ Overall linear iterations used: 0
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=4, linear_iterations=45 (total 183), solve_time_s=0.0647019 (total 0.263204), converged=true
+Mechanical solve stats: solves=4, linear_iterations=45 (total 183), solve_time_s=0.069553 (total 0.282769), converged=true
 Suggested next time step size (from PID controller): 134.07527671123572 days
 Suggested next time step size (from iteration target): 15 days
  Newton its= 3, linearizations= 4 (0.0sec), linear its=  0 (0.0sec)
@@ -792,7 +792,7 @@ sub steps end time = 10 (days)
 Suggested next step size = 15 (days)
 
 Restart file written for report step 2/4, date = 11-Jan-2020 00:00:00
-Time step took 0.126922 seconds; total solver time 0.981691 seconds.
+Time step took 0.136424 seconds; total solver time 1.054373 seconds.
 
 
 
@@ -816,7 +816,7 @@ Overall linear iterations used: 0
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=5, linear_iterations=46 (total 229), solve_time_s=0.0674152 (total 0.33062), converged=true
+Mechanical solve stats: solves=5, linear_iterations=46 (total 229), solve_time_s=0.0713149 (total 0.354083), converged=true
 Suggested next time step size (from PID controller): 331.69143970164686 days
 Suggested next time step size (from iteration target): 17.000000000000004 days
  Newton its= 2, linearizations= 3 (0.0sec), linear its=  0 (0.0sec)
@@ -826,7 +826,7 @@ sub steps end time = 15 (days)
 Suggested next step size = 15 (days)
 
 Restart file written for report step 3/4, date = 16-Jan-2020 00:00:00
-Time step took 0.123679 seconds; total solver time 1.105370 seconds.
+Time step took 0.132591 seconds; total solver time 1.186964 seconds.
 
 
 
@@ -852,7 +852,7 @@ Overall linear iterations used: 0
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=6, linear_iterations=44 (total 273), solve_time_s=0.064306 (total 0.394926), converged=true
+Mechanical solve stats: solves=6, linear_iterations=44 (total 273), solve_time_s=0.0683378 (total 0.422421), converged=true
 Suggested next time step size (from PID controller): 1787.8112677904026 days
 Suggested next time step size (from iteration target): 39 days
  Newton its= 4, linearizations= 5 (0.0sec), linear its=  0 (0.0sec)
@@ -871,7 +871,7 @@ Overall linear iterations used: 5
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=7, linear_iterations=46 (total 319), solve_time_s=0.0674079 (total 0.462333), converged=true
+Mechanical solve stats: solves=7, linear_iterations=46 (total 319), solve_time_s=0.0715915 (total 0.494013), converged=true
 Suggested next time step size (from PID controller): 16946.85514156507 days
 Suggested next time step size (from iteration target): 85.80000000000001 days
  Newton its= 5, linearizations= 6 (0.0sec), linear its=  5 (0.0sec)
@@ -888,7 +888,7 @@ Overall linear iterations used: 1
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=8, linear_iterations=46 (total 365), solve_time_s=0.0668521 (total 0.529186), converged=true
+Mechanical solve stats: solves=8, linear_iterations=46 (total 365), solve_time_s=0.0719294 (total 0.565942), converged=true
 Suggested next time step size (from PID controller): 65459.81881378007 days
 Suggested next time step size (from iteration target): 94.5 days
  Newton its= 3, linearizations= 4 (0.0sec), linear its=  1 (0.0sec)
@@ -900,7 +900,7 @@ sub steps end time = 100.5 (days)
 Suggested next step size = 94.5 (days)
 
 Restart file written for report step 4/4, date = 10-Apr-2020 12:00:00
-Time step took 0.322656 seconds; total solver time 1.428026 seconds.
+Time step took 0.349644 seconds; total solver time 1.536608 seconds.
 
 
 
@@ -908,17 +908,17 @@ Time step took 0.322656 seconds; total solver time 1.428026 seconds.
 
 Number of MPI processes:         1
 Threads per MPI process:         1
-Setup time:                      0.02 s
+Setup time:                      0.03 s
   Deck input:                    0.01 s
 Number of timesteps:             8
-Simulation time:                 1.43 s
-  Assembly time:                 0.05 s (Wasted: 0.0 s; 0.0%)
+Simulation time:                 1.54 s
+  Assembly time:                 0.06 s (Wasted: 0.0 s; 0.0%)
     Well assembly:               0.00 s (Wasted: 0.0 s; 0.0%)
   Linear solve time:             0.07 s (Wasted: 0.0 s; 0.0%)
-    Linear setup:                0.05 s (Wasted: 0.0 s; 0.0%)
-  Props/update time:             0.04 s (Wasted: 0.0 s; 0.0%)
-  Pre/post step:                 1.11 s (Wasted: 0.0 s; 0.0%)
-  Output write time:             0.19 s
+    Linear setup:                0.06 s (Wasted: 0.0 s; 0.0%)
+  Props/update time:             0.05 s (Wasted: 0.0 s; 0.0%)
+  Pre/post step:                 1.19 s (Wasted: 0.0 s; 0.0%)
+  Output write time:             0.21 s
 Overall Linearizations:         32      (Wasted:     0; 0.0%)
 Overall Newton Iterations:      24      (Wasted:     0; 0.0%)
 Overall Linear Iterations:       8      (Wasted:     0; 0.0%)

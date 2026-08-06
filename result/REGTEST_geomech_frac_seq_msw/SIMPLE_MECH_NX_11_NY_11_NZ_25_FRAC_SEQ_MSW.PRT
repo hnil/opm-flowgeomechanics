@@ -10,12 +10,12 @@
 Flow is a simulator for fully implicit three-phase black-oil flow, and is part of OPM.
 For more information visit: https://opm-project.org 
 
-Flow Version     =  2026.04-pre (4fc5c69*)
-Machine name     =  Halvors-MBP.sintef.no (Number of logical cores: 14, Memory size: 24576.00 MB) 
+Flow Version     =  2026.04-pre (27983cb*)
+Machine name     =  Halvors-MacBook-Pro.local (Number of logical cores: 14, Memory size: 24576.00 MB) 
 Operating system =  Darwin arm64 (Kernel: 25.5.0, Darwin Kernel Version 25.5.0: Tue Jun  9 22:28:34 PDT 2026; root:xnu-12377.121.10~1/RELEASE_ARM64_T6041 )
-Build time       =  2026-08-04 at 09:36:11 hrs
+Build time       =  2026-08-06 at 16:01:41 hrs
 User             =  root
-Simulation started on 04-08-2026 at 09:38:31 hrs
+Simulation started on 06-08-2026 at 16:04:35 hrs
 Using 1 MPI processes with 1 OMP threads on each 
 Parameters used by Flow:
 # [known parameters which were specified at run-time]
@@ -773,12 +773,12 @@ Property tree for mech linear solver:
     }
 }
 
-Mechanical solve stats: solves=1, linear_iterations=13 (total 13), solve_time_s=0.0581569 (total 0.0581569), converged=true
+Mechanical solve stats: solves=1, linear_iterations=13 (total 13), solve_time_s=0.0647758 (total 0.0647758), converged=true
 Solve Fractures:
 
 Writing fracture data to VTK files at time: 0grid_size342
 
-Fracture solve stats: fractures_solved=1 (total 1), nonlinear_iterations=2 (total 2), linear_solves=1 (total 1), linear_iterations=0 (total 0), closed_cell_toggles=690 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.152425 (total 0.152425), converged=true
+Fracture solve stats: fractures_solved=1 (total 1), nonlinear_iterations=2 (total 2), linear_solves=1 (total 1), linear_iterations=0 (total 0), closed_cell_toggles=690 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.167076 (total 0.167076), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
@@ -786,19 +786,19 @@ Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 4
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=2, linear_iterations=18 (total 31), solve_time_s=0.0791535 (total 0.13731), converged=true
+Mechanical solve stats: solves=2, linear_iterations=18 (total 31), solve_time_s=0.0870881 (total 0.151864), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 2), nonlinear_iterations=2 (total 4), linear_solves=1 (total 2), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.15597 (total 0.308394), converged=true
+Fracture solve stats: fractures_solved=1 (total 2), nonlinear_iterations=2 (total 4), linear_solves=1 (total 2), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.167342 (total 0.334418), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=3, linear_iterations=18 (total 49), solve_time_s=0.0792117 (total 0.216522), converged=true
+Mechanical solve stats: solves=3, linear_iterations=18 (total 49), solve_time_s=0.0878549 (total 0.239719), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 3), nonlinear_iterations=2 (total 6), linear_solves=1 (total 3), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.151999 (total 0.460394), converged=true
+Fracture solve stats: fractures_solved=1 (total 3), nonlinear_iterations=2 (total 6), linear_solves=1 (total 3), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.166403 (total 0.500821), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
@@ -818,19 +818,19 @@ Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 2
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=4, linear_iterations=15 (total 64), solve_time_s=0.0663365 (total 0.282859), converged=true
+Mechanical solve stats: solves=4, linear_iterations=15 (total 64), solve_time_s=0.0737555 (total 0.313474), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 4), nonlinear_iterations=2 (total 8), linear_solves=1 (total 4), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.153815 (total 0.614208), converged=true
+Fracture solve stats: fractures_solved=1 (total 4), nonlinear_iterations=2 (total 8), linear_solves=1 (total 4), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.166607 (total 0.667428), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=5, linear_iterations=18 (total 82), solve_time_s=0.0809469 (total 0.363806), converged=true
+Mechanical solve stats: solves=5, linear_iterations=18 (total 82), solve_time_s=0.0880327 (total 0.401507), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 5), nonlinear_iterations=2 (total 10), linear_solves=1 (total 5), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.151658 (total 0.765866), converged=true
+Fracture solve stats: fractures_solved=1 (total 5), nonlinear_iterations=2 (total 10), linear_solves=1 (total 5), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.16697 (total 0.834398), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
@@ -850,19 +850,19 @@ Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 2
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=6, linear_iterations=14 (total 96), solve_time_s=0.0624406 (total 0.426246), converged=true
+Mechanical solve stats: solves=6, linear_iterations=14 (total 96), solve_time_s=0.0687733 (total 0.47028), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 6), nonlinear_iterations=2 (total 12), linear_solves=1 (total 6), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.153007 (total 0.918873), converged=true
+Fracture solve stats: fractures_solved=1 (total 6), nonlinear_iterations=2 (total 12), linear_solves=1 (total 6), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.165821 (total 1.00022), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=7, linear_iterations=18 (total 114), solve_time_s=0.0792588 (total 0.505505), converged=true
+Mechanical solve stats: solves=7, linear_iterations=18 (total 114), solve_time_s=0.0880393 (total 0.55832), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 7), nonlinear_iterations=2 (total 14), linear_solves=1 (total 7), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.152856 (total 1.07173), converged=true
+Fracture solve stats: fractures_solved=1 (total 7), nonlinear_iterations=2 (total 14), linear_solves=1 (total 7), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.166326 (total 1.16654), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
@@ -887,19 +887,19 @@ Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 3
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=8, linear_iterations=14 (total 128), solve_time_s=0.0616722 (total 0.567177), converged=true
+Mechanical solve stats: solves=8, linear_iterations=14 (total 128), solve_time_s=0.0682826 (total 0.626602), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 8), nonlinear_iterations=2 (total 16), linear_solves=1 (total 8), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.153387 (total 1.22512), converged=true
+Fracture solve stats: fractures_solved=1 (total 8), nonlinear_iterations=2 (total 16), linear_solves=1 (total 8), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.166536 (total 1.33308), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=9, linear_iterations=18 (total 146), solve_time_s=0.0796869 (total 0.646864), converged=true
+Mechanical solve stats: solves=9, linear_iterations=18 (total 146), solve_time_s=0.088121 (total 0.714723), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 9), nonlinear_iterations=2 (total 18), linear_solves=1 (total 9), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.153245 (total 1.37836), converged=true
+Fracture solve stats: fractures_solved=1 (total 9), nonlinear_iterations=2 (total 18), linear_solves=1 (total 9), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.167177 (total 1.50026), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
@@ -922,10 +922,10 @@ Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 2
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=10, linear_iterations=13 (total 159), solve_time_s=0.058398 (total 0.705262), converged=true
+Mechanical solve stats: solves=10, linear_iterations=13 (total 159), solve_time_s=0.0646272 (total 0.77935), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 10), nonlinear_iterations=22 (total 40), linear_solves=18 (total 27), linear_iterations=9 (total 9), closed_cell_toggles=690 (total 1380), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.914064 (total 2.29243), converged=true
+Fracture solve stats: fractures_solved=1 (total 10), nonlinear_iterations=22 (total 40), linear_solves=18 (total 27), linear_iterations=9 (total 9), closed_cell_toggles=690 (total 1380), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=1.00048 (total 2.50073), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
@@ -933,10 +933,10 @@ Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 3
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=11, linear_iterations=18 (total 177), solve_time_s=0.0800242 (total 0.785286), converged=true
+Mechanical solve stats: solves=11, linear_iterations=18 (total 177), solve_time_s=0.0879368 (total 0.867287), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 11), nonlinear_iterations=15 (total 55), linear_solves=12 (total 39), linear_iterations=7 (total 16), closed_cell_toggles=588 (total 1968), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.612205 (total 2.90463), converged=true
+Fracture solve stats: fractures_solved=1 (total 11), nonlinear_iterations=15 (total 55), linear_solves=12 (total 39), linear_iterations=7 (total 16), closed_cell_toggles=588 (total 1968), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.662579 (total 3.16331), converged=true
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
@@ -944,19 +944,19 @@ Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 4
 Flow solve report converged: 1
 Solve Geomechanics:
 Update Forces for Geomechanics
-Mechanical solve stats: solves=12, linear_iterations=18 (total 195), solve_time_s=0.0793205 (total 0.864607), converged=true
+Mechanical solve stats: solves=12, linear_iterations=18 (total 195), solve_time_s=0.0878532 (total 0.95514), converged=true
 Solve Fractures:
 
-Fracture solve stats: fractures_solved=1 (total 12), nonlinear_iterations=11 (total 66), linear_solves=9 (total 48), linear_iterations=5 (total 21), closed_cell_toggles=612 (total 2580), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.372471 (total 3.2771), converged=true
+Fracture solve stats: fractures_solved=1 (total 12), nonlinear_iterations=11 (total 66), linear_solves=9 (total 48), linear_iterations=5 (total 21), closed_cell_toggles=612 (total 2580), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.40195 (total 3.56526), converged=true
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=13, linear_iterations=16 (total 211), solve_time_s=0.0711036 (total 0.93571), converged=true
+Mechanical solve stats: solves=13, linear_iterations=16 (total 211), solve_time_s=0.0780725 (total 1.03321), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 13), nonlinear_iterations=16 (total 82), linear_solves=13 (total 61), linear_iterations=6 (total 27), closed_cell_toggles=348 (total 2928), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.0914105 (total 3.36851), converged=true
+Fracture solve stats: fractures_solved=1 (total 13), nonlinear_iterations=16 (total 82), linear_solves=13 (total 61), linear_iterations=6 (total 27), closed_cell_toggles=348 (total 2928), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.100815 (total 3.66608), converged=true
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
@@ -974,14 +974,14 @@ Threads per MPI process:         1
 Setup time:                      0.03 s
   Deck input:                    0.01 s
 Number of timesteps:             5
-Simulation time:                 5.13 s
-  Assembly time:                 0.03 s (Wasted: 0.0 s; 0.0%)
+Simulation time:                 5.60 s
+  Assembly time:                 0.04 s (Wasted: 0.0 s; 0.0%)
     Well assembly:               0.00 s (Wasted: 0.0 s; 0.0%)
   Linear solve time:             0.03 s (Wasted: 0.0 s; 0.0%)
-    Linear setup:                0.02 s (Wasted: 0.0 s; 0.0%)
-  Props/update time:             0.02 s (Wasted: 0.0 s; 0.0%)
-  Pre/post step:                 1.12 s (Wasted: 0.0 s; 0.0%)
-  Output write time:             0.01 s
+    Linear setup:                0.03 s (Wasted: 0.0 s; 0.0%)
+  Props/update time:             0.03 s (Wasted: 0.0 s; 0.0%)
+  Pre/post step:                 1.23 s (Wasted: 0.0 s; 0.0%)
+  Output write time:             0.02 s
 Overall Linearizations:         20      (Wasted:     0; 0.0%)
 Overall Newton Iterations:      12      (Wasted:     0; 0.0%)
 Overall Linear Iterations:       2      (Wasted:     0; 0.0%)

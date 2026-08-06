@@ -332,6 +332,11 @@ public:
     const Dune::BlockVector<Dune::FieldVector<double, 1>>& fracturePressure() const
     { return fracture_pressure_; }
 
+    //! The width floor this fracture's own cubic-law assembly applies
+    //! (config.min_width).  The embedded representation must apply the same floor to
+    //! the same law, or the two solve differently conductive fractures.
+    double cubicLawMinWidth() const { return min_width_; }
+
     //! Well-to-fracture connections: (fracture cell, well index).  The well injects
     //! into these cells directly, which in the embedded representation is a perforation
     //! of the fracture's own degrees of freedom rather than of the reservoir.

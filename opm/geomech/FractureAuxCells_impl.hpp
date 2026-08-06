@@ -147,12 +147,24 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
             // it leaves disconnected has no storage and no path to the reservoir, which
             // is a singular row the moment the ILU eliminates around it.
             const auto freshHalfTrans = fracture.currentHalfTrans();
+
+            // The floor under the width in the cubic law is the fracture's own
+            // (config.min_width), NOT the volume floor above.  The volume floor exists
+            // so that a nearly closed cell still has storage -- a well-posedness matter
+            // -- but the transmissibility goes with the aperture *cubed*, and flooring
+            // it at the (much larger) volume floor short-circuits the fracture: every
+            // cell is lifted to the well's pressure, the internal pressure gradient the
+            // fracture's own solve computes disappears, and the leak-off is driven far
+            // too hard.  The two representations must apply the same law to the same
+            // apertures.
+            const auto cubicFloor = static_cast<Scalar>(fracture.cubicLawMinWidth());
+
             for (const auto& [i, j, t1, t2] : freshHalfTrans) {
                 const auto slotI = firstSlot + i;
                 const auto slotJ = firstSlot + j;
 
-                const auto h1 = std::max(static_cast<Scalar>(width[i][0]), this->minWidth_);
-                const auto h2 = std::max(static_cast<Scalar>(width[j][0]), this->minWidth_);
+                const auto h1 = std::max(static_cast<Scalar>(width[i][0]), cubicFloor);
+                const auto h2 = std::max(static_cast<Scalar>(width[j][0]), cubicFloor);
 
                 const auto invTrans = 12.0 / (h1 * h1 * h1 * t1)
                                     + 12.0 / (h2 * h2 * h2 * t2);
@@ -336,6 +348,29 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
                 const auto internalRate = fracture.leakOfRate();
                 const auto areas = fracture.cellAreas();
                 const auto& pOwn = fracture.fracturePressure();
+                const auto& widths = fracture.fractureWidth();
+
+                // Aperture statistics: what the cubic law actually works with, and how
+                // many cells sit below the volume floor -- each of those is a cell whose
+                // conductivity a floor at that level would inflate by (floor/width)^3.
+                Scalar wMin = 1e30, wMax = 0.0, wSum = 0.0;
+                unsigned nBelowVolumeFloor = 0;
+                for (std::size_t cell = 0; cell < numCells && cell < widths.size(); ++cell) {
+                    const auto w = static_cast<Scalar>(widths[cell][0]);
+                    wMin = std::min(wMin, w);
+                    wMax = std::max(wMax, w);
+                    wSum += w;
+                    if (w < this->minWidth_) {
+                        ++nBelowVolumeFloor;
+                    }
+                }
+                OpmLog::info(fmt::format(
+                    "LEAKOFF-CHECK apertures: min {:.3g} mean {:.3g} max {:.3g} m  "
+                    "cubic-law floor {:.3g} m  volume floor {:.3g} m  "
+                    "cells below volume floor {} of {}",
+                    wMin, (numCells > 0) ? wSum / numCells : Scalar{0}, wMax,
+                    fracture.cubicLawMinWidth(), this->minWidth_,
+                    nBelowVolumeFloor, numCells));
 
                 for (std::size_t cell = 0; cell < numCells; ++cell) {
                     const auto slot = firstSlot + cell;
