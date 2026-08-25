@@ -759,8 +759,6 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
     } else if (method == "if_propagate_trimesh") {
         // ----------------------------------------------------------------------------
         std::cout << "Solve Fracture Pressure using Iterative Fracture with Trimesh Propagation" << std::endl;
-        score_calls_this_round_ = 0;
-        contact_stable_this_round_ = true;
         // Volume-paced propagation (opt-in): see VOLUME_PACED_PROPAGATION.md.
         // V0 = fracture volume at the step checkpoint; V_avail = fluid the well
         // can deliver into new fracture volume during this step (eq. 1).
@@ -906,16 +904,6 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             // Contact-set stability vs the previous coupling round (evaluated on
             // the first solve of this round, i.e. before any expansion this
             // round; a grid-size mismatch means the mesh moved: treat as unstable).
-            if (!score_calls_this_round_++) {
-                contact_stable_this_round_ = contact_round_valid_
-                    && closed_cells_round_prev_.size() == closed_cells_.size()
-                    && closed_cells_round_prev_ == closed_cells_;
-                if (prm_.get<bool>("solver.propagate_on_stable_contact", false)
-                    && nlin_verbosity > 0) {
-                    std::cout << "Contact set " << (contact_stable_this_round_ ? "stable" : "CHANGED")
-                              << " vs previous coupling round" << std::endl;
-                }
-            }
             if (vol_pacing) {
                 // eq. (1)-(2): V(k)-V0 vs (q_perf - Q_leak(k))*dt*f_vol
                 const FractureProperties fp = calculateFractureProperties();
@@ -998,17 +986,6 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 std::fill(result.begin(), result.end(), -1.0);
             }
 
-            // Propagate only on a stable contact set (opt-in): during
-            // establishment the coupling alternates between a snapped-open and a
-            // snapped-shut state; K1 evaluated on the open transient propagates
-            // every other round and the shut round never retracts, so growth
-            // ratchets on states that are never a converged solution. Growth is
-            // withheld until the open/closed set matches the previous coupling
-            // round of this timestep (same grid only).
-            if (prm_.get<bool>("solver.propagate_on_stable_contact", false)
-                && !contact_stable_this_round_) {
-                std::fill(result.begin(), result.end(), -1.0);
-            }
 
             // Fixed-topology mode: freeze the mesh at the seed (Reveal comparison).
             if (prm_.get<bool>("solver.disable_propagation", false)) {
@@ -1093,9 +1070,6 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 width_round_prev_ = fracture_width_;
                 width_round_valid_ = true;
             }
-            // remember this round's final contact set for next round's stability test
-            closed_cells_round_prev_ = closed_cells_;
-            contact_round_valid_ = true;
 
             // ----------------------------------------------------------------------------
         }

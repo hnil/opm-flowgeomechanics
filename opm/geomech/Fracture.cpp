@@ -1178,28 +1178,10 @@ Fracture::addSource()
         const double density = reservoir_density_[cell];
         //const double lambda = reservoir_mobility_[cell]; // @@ only correct if mobility is constant!
         const double lambda = 1.0;
-        if (false) {
-            rhs_pressure_[rhs_pressure_.size() - 1] = well_rate + WI * lambda * pres; // well source term
-        } else {
-            double wi_dzfac = wi_respress_; 
-            wi_dzfac -= wi_dz_*density*gravity_; // sum wi dz
-            //wi_dzfac += wi_respress_; // sum wi res_press
-            wi_dzfac += (WI* (perf_ref_depth_- well_ref_depth_))*gravity_*density; // counvert to perf_ref_depth from bhp ref_depth for primary
-                                            // variable reservoir_pressure_[nc] i.e. perf pressure
-            rhs_pressure_[rhs_pressure_.size() - 1] = well_rate + lambda * wi_dzfac;
-        }
-        if (false){
-            for (const auto& perfinj : perfinj_) {
-                int cell = std::get<0>(perfinj);
-                double value = std::get<1>(perfinj)*mobility_water_perf_;
-                assert(origo_[2] == perf_ref_depth_);
-                double dh_perf = perf_ref_depth_ * gravity_ * reservoir_density_[cell];
-                double dh_cell = fracture_dgh_[cell];
-                ;
-                double dh = dh_perf - dh_cell;
-                rhs_pressure_[cell] += value * (-dh);
-            }
-        }
+        double wi_dzfac = wi_respress_;
+        wi_dzfac -= wi_dz_*density*gravity_; // sum wi dz
+        wi_dzfac += (WI* (perf_ref_depth_- well_ref_depth_))*gravity_*density; // convert from bhp ref depth to perf ref depth
+        rhs_pressure_[rhs_pressure_.size() - 1] = well_rate + lambda * wi_dzfac;
     } else {
         OPM_THROW(std::runtime_error, "Unknowns control");
     }
@@ -2268,7 +2250,6 @@ void Fracture::resetFracture()
     wi_vec_mix_.has_prev_residual = false;
     wi_vec_mix_.prev_residual.clear();
     width_round_valid_ = false; // relaxation history belongs to the rolled-back solves too
-    contact_round_valid_ = false;
     // Note: reservoir_cells_, all_reservoir_cells_, reservoir_properties_, etc.
     // are recalculated by FractureModel::resetFractures after this call returns.
 }
@@ -2280,7 +2261,6 @@ void Fracture::moveForwardInTime(double dt_last)
     wi_vec_mix_.has_prev_residual = false;
     wi_vec_mix_.prev_residual.clear();
     width_round_valid_ = false; // state relaxation history is per-timestep too
-    contact_round_valid_ = false;
     // checkpoint values for the per-step growth guard / onset dt-hold
     if (active_) {
         const auto fp = calculateFractureProperties();

@@ -240,19 +240,6 @@ namespace Opm
                                  + (round_report.converged ? ": coupling settled"
                                                            : ": still growing"));
                 }
-                // Opt-in fallback: accept the step with the coupling unconverged
-                // (the fracture state is lagged for this step, PostSolve-style)
-                // instead of letting the outer Newton chop dt — which cannot help
-                // when the blocker is contact cycling, not the flow.
-                if (!report.converged && max_growth_it > 0
-                    && this->growth_rounds_this_step_ >= max_growth_it
-                    && prm.get<bool>("solver.accept_unconverged_growth", false)) {
-                    OpmLog::warning("ACCEPTING timestep with UNCONVERGED fracture coupling "
-                                    "after " + std::to_string(this->growth_rounds_this_step_)
-                                    + " growth sub-iterations; fracture/well coupling is "
-                                    "lagged this step (accept_unconverged_growth)");
-                    report.converged = true;
-                }
                 // Per-step growth guard (opt-in): a fracture that grew more than
                 // allowed within this step propagated on a pressure the flow had
                 // not yet responded to. Raised here, inside the retry scope, so

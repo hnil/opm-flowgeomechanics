@@ -396,22 +396,6 @@ namespace Opm{
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 geoMechModel_.endTimeStep();
                 if(this->hasFractures() && this->geoMechModel().fractureModelActive()){
-                    // Opt-in per-step growth guard: a fracture that grew more than
-                    // allowed in one step propagated on a pressure that would have
-                    // fallen had the flow seen the new volume. Reject the step; the
-                    // timestepper chops dt and retries from the fracture checkpoint.
-                    // MPI: any rank's violation fails the step on all ranks.
-                    const std::string violation =
-                        this->geoMechModel().fractureModel().growthGuardViolation();
-                    const int any_violation =
-                        this->gridView().comm().max(violation.empty() ? 0 : 1);
-                    if (any_violation) {
-                        // endTimeStep runs after the step is accepted, so it can
-                        // only warn here (PostSolve); the seq-implicit outer loop
-                        // raises the same guard inside the retry scope.
-                        OpmLog::warning("Fracture growth guard (post-acceptance, not retried): "
-                                        + (violation.empty() ? std::string("violation on another rank") : violation));
-                    }
                     // method for handling extra connections from fractures
                     // it is options for not including them in fractures i.e. addconnections
                     //if(addPerfsToSchedule_){
