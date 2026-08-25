@@ -10,12 +10,12 @@
 Flow is a simulator for fully implicit three-phase black-oil flow, and is part of OPM.
 For more information visit: https://opm-project.org 
 
-Flow Version     =  2026.04-pre (d6c9a5e*)
+Flow Version     =  2026.04-pre (27983cb*)
 Machine name     =  Halvors-MacBook-Pro.local (Number of logical cores: 14, Memory size: 24576.00 MB) 
-Operating system =  Darwin arm64 (Kernel: 25.5.0, Darwin Kernel Version 25.5.0: Mon Apr 27 20:41:15 PDT 2026; root:xnu-12377.121.6~2/RELEASE_ARM64_T6041 )
-Build time       =  2026-07-20 at 14:06:28 hrs
+Operating system =  Darwin arm64 (Kernel: 25.5.0, Darwin Kernel Version 25.5.0: Tue Jun  9 22:28:34 PDT 2026; root:xnu-12377.121.10~1/RELEASE_ARM64_T6041 )
+Build time       =  2026-08-06 at 16:01:41 hrs
 User             =  root
-Simulation started on 21-07-2026 at 12:09:08 hrs
+Simulation started on 06-08-2026 at 16:03:12 hrs
 Using 1 MPI processes with 1 OMP threads on each 
 Parameters used by Flow:
 # [known parameters which were specified at run-time]
@@ -30,6 +30,7 @@ AllowSplittingInactiveWells="1"
 AlternativeWellRateInit="1"
 CheckGroupConstraintsInnerWellIterations="1"
 CheckSatfuncConsistency="1"
+ConserveInnerEnergyThermal="0"
 ContinueOnConvergenceError="0"
 ConvergenceMonitoring="0"
 ConvergenceMonitoringCutOff="6"
@@ -51,9 +52,10 @@ EnableAdaptiveTimeStepping="1"
 EnableAsyncEclOutput="0"
 EnableAsyncVtkOutput="0"
 EnableDriftCompensation="0"
+EnableDriftCompensationTemp="1"
 EnableDryRun="auto"
 EnableEclOutput="1"
-EnableEsmry="0"
+EnableEsmry="1"
 EnableGravity="1"
 EnableGridAdaptation="0"
 EnableIntensiveQuantityCache="1"
@@ -76,7 +78,8 @@ FractureParamFile="notafile"
 FullTimeStepInitially="0"
 GpuAwareMpi="0"
 GpuDeviceId="0"
-HyNeConfigFile="hybridNewtonConfig.json"
+GroupControlFractionTolerance="0.0001"
+HybridNewtonConfigFile="hybridNewtonConfig.json"
 IgnoreKeywords=""
 IluFillinLevel="0"
 IluRedblack="0"
@@ -116,7 +119,7 @@ MatrixAddWellContributions="0"
 MaxInnerIterMsWells="100"
 MaxInnerIterWells="50"
 MaxLocalSolveIterations="20"
-MaxNewtonIterationsWithInnerWellIterations="8"
+MaxNewtonIterationsWithInnerWellIterations="99"
 MaxPressureChangeMsWells="1e+06"
 MaxResidualAllowed="1e+07"
 MaxSinglePrecisionDays="20"
@@ -129,6 +132,7 @@ MaxWelleqIter="30"
 MaximumNumberOfGroupSwitches="3"
 MaximumNumberOfWellSwitches="3"
 MaximumWaterSaturation="1"
+MechPorosityCoupling="0"
 MetisParams="default"
 MiluVariant="ilu"
 MinStrictCnvIter="-1"
@@ -136,10 +140,10 @@ MinStrictMbIter="-1"
 MinTimeStepBasedOnNewtonIterations="0"
 MinTimeStepBeforeShuttingProblematicWellsInDays="0.01"
 MinTimeStepSize="0"
-NetworkMaxOuterIterations="10"
+NetworkMaxOuterIterations="3"
 NetworkMaxPressureUpdateInBars="5"
 NetworkMaxStrictOuterIterations="10"
-NetworkMaxSubIterations="20"
+NetworkMaxSubIterations="100"
 NetworkPressureUpdateDampingFactor="0.1"
 NewtonMaxError="1e+100"
 NewtonMaxIterations="20"
@@ -160,6 +164,7 @@ NumLocalDomains="0"
 NumOverlap="1"
 NumPressurePointsEquil="2000"
 NumSatfuncConsistencySamplePoints="5"
+NumericalAquiferMode="grid"
 NupcolGroupRateTolerance="0.001"
 OpenclIluParallel="1"
 OpenclPlatformId="0"
@@ -178,17 +183,20 @@ PressureScale="1"
 PriVarOscilationThreshold="1e-05"
 PrintParameters="2"
 ProjectSaturations="0"
+RcNetworkLooseCoupling="0"
 RegularizationFactorWells="100"
 RelaxedLinearSolverReduction="0.01"
 RelaxedMaxPvFraction="0.03"
 RelaxedPressureTolMsw="10000"
 RelaxedWellFlowTol="0.001"
+RescoupSyncAtReportSteps="0"
 RestartTime="-1e+35"
 RestartWritingInterval="16777215"
 SaveFile=""
 SaveStep=""
 ScaleLinearSystem="0"
 SchedRestart="0"
+SeparateSparseSourceTerms="0"
 SerialPartitioning="0"
 ShutUnsolvableWells="1"
 Slave="0"
@@ -223,29 +231,49 @@ TimeStepControlTolerance="0.1"
 TimeStepControlToleranceTestVersion="standard"
 TimeStepVerbosity="1"
 ToleranceCnv="0.01"
-ToleranceCnvEnergy="0.01"
-ToleranceCnvEnergyRelaxed="1"
+ToleranceCnvEnergy="0.4182"
+ToleranceCnvEnergyRelaxed="41.82"
 ToleranceCnvRelaxed="1"
-ToleranceEnergyBalance="1e-07"
-ToleranceEnergyBalanceRelaxed="1e-06"
+ToleranceEnergyBalance="4.182e-06"
+ToleranceEnergyBalanceRelaxed="4.182e-05"
+ToleranceMaxDp="0"
+ToleranceMaxDrs="0"
+ToleranceMaxDrv="0"
+ToleranceMaxDs="0"
 ToleranceMb="1e-07"
 ToleranceMbRelaxed="1e-06"
 TolerancePressureMsWells="1000"
 ToleranceWellControl="1e-07"
 ToleranceWells="0.0001"
+TpsaIluFillinLevel="0"
+TpsaIluRelaxation="0.9"
+TpsaLinearSolver="ilu0"
+TpsaLinearSolverIgnoreConvergenceFailure="0"
+TpsaLinearSolverMaxIter="200"
+TpsaLinearSolverPrintJsonDefinition="0"
+TpsaLinearSolverReduction="0.001"
+TpsaLinearSolverRestart="40"
+TpsaLinearSolverVerbosity="0"
+TpsaNewtonMaxError="1e+100"
+TpsaNewtonMaxIterations="20"
+TpsaNewtonMinIterations="1"
+TpsaNewtonTargetIterations="10"
+TpsaNewtonTolerance="0.001"
+TpsaNewtonVerbosity="1"
+TpsaRelaxedLinearSolverReduction="0.001"
+TpsaUseGmres="0"
+TruncateTimeStepToFloat="0"
 UpdateEquationsScaling="0"
 UseAverageDensityMsWells="0"
 UseGmres="0"
-UseHyNe="0"
+UseHybridNewton="0"
 UseImplicitIpr="1"
 UseMultisegmentWell="1"
 UseUpdateStabilization="1"
 VerifyGpuAwareMpi="0"
 VtkWriteAverageMolarMasses="0"
 VtkWriteDensities="1"
-VtkWriteDiffusionCoefficients="0"
 VtkWriteDofIndex="0"
-VtkWriteEffectiveDiffusionCoefficients="0"
 VtkWriteExtrusionFactor="0"
 VtkWriteFilterVelocities="0"
 VtkWriteFluidEnthalpies="1"
@@ -277,7 +305,6 @@ VtkWriteSaturatedOilGasDissolutionFactor="0"
 VtkWriteSaturationRatios="0"
 VtkWriteSaturations="1"
 VtkWriteTemperature="1"
-VtkWriteTortuosities="0"
 VtkWriteTotalMassFractions="0"
 VtkWriteTotalMoleFractions="0"
 VtkWriteTotalThermalConductivity="1"
@@ -298,7 +325,7 @@ Reading deck file '/Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/da
     4 Reading GAS      in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 8
     5 Reading DISGAS   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 9
     6 Reading METRIC   in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 10
-    7 Reading TEMP     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 12
+    7 Reading THERMAL  in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 11
     8 Reading MECH     in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 13
     9 Reading START    in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 15
    10 Reading GRIDOPTS in /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 17
@@ -417,8 +444,6 @@ Warning: Unsupported keywords or keyword items:
 
 Simulation will solve for mechanical quantities
 
-TEMP is used to start a thermal simulation. Conservation equation for internal energy is used instead of enthalpy (i.e., no work terms are included).
-
 Creating grid from keywords DX, DY, DZ and TOPS
 4 fluid phases are active
 
@@ -427,7 +452,6 @@ Processing dynamic information from
 Initializing report step 0/4 at 2020-01-01 0 DAYS line 336
 Processing keyword TUNING at line 337
 Processing keyword NUPCOL at line 341
-Minimum NUPCOL value is 6 - see keyword MINNPCOL to adjust the minimum value
 Processing keyword BCPROP at line 344
 Processing keyword GRUPTREE at line 352
 Processing keyword WELSPECS at line 364
@@ -449,11 +473,7 @@ Complete report step 4 (85.5 DAYS) at 2020-04-10 (15 DAYS)
 
 Simulation will solve for mechanical quantities
 
-TEMP is used to start a thermal simulation. Conservation equation for internal energy is used instead of enthalpy (i.e., no work terms are included).
-
 Simulation will solve for mechanical quantities
-
-TEMP is used to start a thermal simulation. Conservation equation for internal energy is used instead of enthalpy (i.e., no work terms are included).
 
 Processing grid
 Total number of active cells: 3025 / total pore volume: 340910966 RM3
@@ -516,12 +536,6 @@ Warning: Unhandled summary keyword ALL/FAQT
 In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 178
 
 Warning: Unhandled summary keyword ALL/FAQTG
-In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 178
-
-Warning: Unhandled summary keyword ALL/FWGR
-In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 178
-
-Warning: Unhandled summary keyword ALL/GWGR
 In /Users/hnil/Documents/OPM/opm_geomech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 178
 {
     "hasfractures": "true",
@@ -685,9 +699,7 @@ Property tree for mech linear solver:
     }
 }
 
-Mechanical solve stats: solves=1, linear_iterations=45 (total 45), solve_time_s=0.0680404 (total 0.0680404), converged=true
-
-Warning: Keyword 'BSTRSSXX' is unhandled for output to summary file.
+Mechanical solve stats: solves=1, linear_iterations=49 (total 49), solve_time_s=0.0753016 (total 0.0753016), converged=true
  Newton its= 3, linearizations= 4 (0.0sec), linear its=  2 (0.0sec)
 
 Starting time step 1, stepsize 2 days, at day 1/5, date = 02-Jan-2020
@@ -696,9 +708,7 @@ Geomech begin time step
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=2, linear_iterations=38 (total 83), solve_time_s=0.0591755 (total 0.127216), converged=true
-
-Warning: Keyword 'BSTRSSXX' is unhandled for output to summary file.
+Mechanical solve stats: solves=2, linear_iterations=38 (total 87), solve_time_s=0.0598241 (total 0.135126), converged=true
  Newton its= 2, linearizations= 3 (0.0sec), linear its=  0 (0.0sec)
 
 Starting time step 2, stepsize 2 days, at day 3/5, date = 04-Jan-2020
@@ -707,7 +717,7 @@ Geomech begin time step
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=3, linear_iterations=51 (total 134), solve_time_s=0.077892 (total 0.205108), converged=true
+Mechanical solve stats: solves=3, linear_iterations=51 (total 138), solve_time_s=0.0780899 (total 0.213216), converged=true
  Newton its= 2, linearizations= 3 (0.0sec), linear its=  0 (0.0sec)
 Restart file written for report step 1/4, date = 06-Jan-2020 00:00:00
 
@@ -720,7 +730,7 @@ Geomech begin time step
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=4, linear_iterations=45 (total 179), solve_time_s=0.0707353 (total 0.275843), converged=true
+Mechanical solve stats: solves=4, linear_iterations=45 (total 183), solve_time_s=0.069553 (total 0.282769), converged=true
  Newton its= 3, linearizations= 4 (0.0sec), linear its=  0 (0.0sec)
 Restart file written for report step 2/4, date = 11-Jan-2020 00:00:00
 
@@ -733,7 +743,7 @@ Geomech begin time step
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=5, linear_iterations=46 (total 225), solve_time_s=0.0707195 (total 0.346563), converged=true
+Mechanical solve stats: solves=5, linear_iterations=46 (total 229), solve_time_s=0.0713149 (total 0.354083), converged=true
  Newton its= 2, linearizations= 3 (0.0sec), linear its=  0 (0.0sec)
 Restart file written for report step 3/4, date = 16-Jan-2020 00:00:00
 
@@ -746,9 +756,7 @@ Geomech begin time step
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=6, linear_iterations=49 (total 274), solve_time_s=0.0743658 (total 0.420928), converged=true
-
-Warning: Keyword 'BSTRSSXX' is unhandled for output to summary file.
+Mechanical solve stats: solves=6, linear_iterations=44 (total 273), solve_time_s=0.0683378 (total 0.422421), converged=true
  Newton its= 4, linearizations= 5 (0.0sec), linear its=  0 (0.0sec)
 
 Starting time step 1, stepsize 39 days, at day 30/100.5, date = 31-Jan-2020
@@ -757,9 +765,7 @@ Geomech begin time step
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=7, linear_iterations=46 (total 320), solve_time_s=0.0707923 (total 0.491721), converged=true
-
-Warning: Keyword 'BSTRSSXX' is unhandled for output to summary file.
+Mechanical solve stats: solves=7, linear_iterations=46 (total 319), solve_time_s=0.0715915 (total 0.494013), converged=true
  Newton its= 5, linearizations= 6 (0.0sec), linear its=  5 (0.0sec)
 
 Starting time step 2, stepsize 31.5 days, at day 69/100.5, date = 10-Mar-2020
@@ -768,7 +774,7 @@ Geomech begin time step
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=8, linear_iterations=46 (total 366), solve_time_s=0.0704954 (total 0.562216), converged=true
+Mechanical solve stats: solves=8, linear_iterations=46 (total 365), solve_time_s=0.0719294 (total 0.565942), converged=true
  Newton its= 3, linearizations= 4 (0.0sec), linear its=  1 (0.0sec)
 Restart file written for report step 4/4, date = 10-Apr-2020 12:00:00
 
@@ -781,26 +787,22 @@ Threads per MPI process:         1
 Setup time:                      0.03 s
   Deck input:                    0.01 s
 Number of timesteps:             8
-Simulation time:                 1.57 s
-  Assembly time:                 0.10 s (Wasted: 0.0 s; 0.0%)
+Simulation time:                 1.54 s
+  Assembly time:                 0.06 s (Wasted: 0.0 s; 0.0%)
     Well assembly:               0.00 s (Wasted: 0.0 s; 0.0%)
   Linear solve time:             0.07 s (Wasted: 0.0 s; 0.0%)
     Linear setup:                0.06 s (Wasted: 0.0 s; 0.0%)
   Props/update time:             0.05 s (Wasted: 0.0 s; 0.0%)
-  Pre/post step:                 1.18 s (Wasted: 0.0 s; 0.0%)
-  Output write time:             0.20 s
+  Pre/post step:                 1.19 s (Wasted: 0.0 s; 0.0%)
+  Output write time:             0.21 s
 Overall Linearizations:         32      (Wasted:     0; 0.0%)
 Overall Newton Iterations:      24      (Wasted:     0; 0.0%)
 Overall Linear Iterations:       8      (Wasted:     0; 0.0%)
 
-  Mechanical solve time:       0.56 s
-Overall Mechanical Solves:        8
-Overall Mech Lin Iters:         366
-
 
 
 Error summary:
-Warnings          11
+Warnings          5
 Info              209
 Errors            0
 Bugs              0

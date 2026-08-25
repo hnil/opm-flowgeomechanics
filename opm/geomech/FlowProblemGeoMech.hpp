@@ -9,6 +9,8 @@
 
 #include <opm/geomech/FlowGeoMechLinearSolverParameters.hpp>
 #include <opm/geomech/FlowProblemMech.hpp>
+#include <opm/geomech/FractureAuxCells.hpp>
+#include <opm/simulators/wells/PerforationData.hpp>
 #include <opm/geomech/BoundaryUtils.hpp>
 #include <opm/geomech/GeoMechModel.hpp>
 #include <opm/geomech/VtkGeoMechModule.hpp>
@@ -68,6 +70,190 @@ namespace Opm{
         {
             if(this->simulator().vanguard().eclState().runspec().mech()){
               this->model().addOutputModule(std::make_unique<VtkGeoMechModule<TypeTag>>(simulator));
+            }
+        }
+
+    private:
+        //! Owned by the base problem; this is the typed handle onto it.
+        FractureAuxCells<TypeTag>* fractureAuxCells_ = nullptr;
+        double embeddedCouplingChange_ = 0.0;
+        bool embeddedStatic_ = false;
+        bool embeddedLeakoffReport_ = false;
+
+    public:
+
+        /*!
+         * \brief Claim degrees of freedom for the fracture cells, if they are to have any.
+         *
+         * The model calls this before it sizes anything, which is the only moment at
+         * which degrees of freedom can still be added -- and long before any fracture
+         * exists, since the fracture model is built at the first report step that seeds
+         * one.  So a fixed number is reserved here and handed out as cells appear.
+         */
+        void registerAuxiliaryCellModules()
+        {
+            MechParent::registerAuxiliaryCellModules();
+
+            if (!this->hasFractures()) {
+                return;
+            }
+
+            const Opm::PropertyTree prm = this->getFractureParam();
+            if (prm.get<std::string>("solver.fracture_flow_mode", std::string {"wi_upscaling"})
+                != "embedded")
+            {
+                return;
+            }
+
+            const auto capacity = prm.get<int>("solver.embedded_capacity", 5000);
+
+            // How the well's perforations of the fracture cells get their well index.
+            // "fracture" carries over the factor the fracture's own pressure solve uses
+            // -- the current modelling, a constant factor on the cells around the
+            // wellbore -- and stays the default so the old behaviour is preserved.
+            // "estimate" forms a radial-flow index through a fixed prescribed aperture;
+            // making that width follow the solved aperture is the later, dynamic step.
+            const auto perfWiModeName =
+                prm.get<std::string>("solver.embedded_perf_wi_mode", std::string {"fracture"});
+            const auto perfWiMode = (perfWiModeName == "estimate")
+                ? FractureAuxCells<TypeTag>::PerfWiMode::Estimate
+                : FractureAuxCells<TypeTag>::PerfWiMode::Fracture;
+            const auto perfWidth = prm.get<double>("solver.embedded_perf_width", 5e-3);
+            const auto perfRw = prm.get<double>("solver.embedded_perf_rw", 0.1);
+
+            // The static gate: bind the fracture into the flow problem once, when it
+            // first appears, and hold that description for the rest of the run.  The
+            // fracture model itself keeps solving -- its state is simply no longer
+            // re-read -- so the flow sees a fixed, fully formed fracture.  This is the
+            // validation configuration: growth feedback cannot confound a comparison of
+            // the conductances themselves.
+            embeddedStatic_ = prm.get<bool>("solver.embedded_static", false);
+            embeddedLeakoffReport_ = prm.get<bool>("solver.embedded_leakoff_report", false);
+
+            // The floor under the aperture used for the cells' volume and cubic-law
+            // transmissibility.  Deliberately NOT config.min_width: the fracture's own
+            // solver may run with that at zero, handling closure through the contact
+            // machinery instead -- but a flow cell with zero volume has no storage and,
+            // when it holds no oil and sees no pressure difference, an identically zero
+            // oil row.  The floor keeps every open cell a well-posed, if small, volume.
+            //
+            // The default matches the fracture solver's own historical min_width.  Going
+            // much below it runs into the absolute singularity threshold of the block
+            // inverter (|det| < 1e-40, matrixblock.hh): a fracture row's entries scale
+            // with aperture^3 through the cubic law, and at 1e-4 the determinant of a
+            // perfectly well-conditioned block falls under the cutoff.
+            const auto minWidth = prm.get<double>("solver.embedded_min_aperture", 1e-3);
+
+            fractureAuxCells_ = &this->registerAuxCellModule_
+                (std::make_unique<FractureAuxCells<TypeTag>>(this->simulator(),
+                                                             static_cast<unsigned>(capacity),
+                                                             static_cast<Scalar>(minWidth),
+                                                             perfWiMode,
+                                                             static_cast<Scalar>(perfWidth),
+                                                             static_cast<Scalar>(perfRw)));
+
+            if (this->simulator().gridView().comm().rank() == 0) {
+                OpmLog::info(fmt::format("Embedded fracture flow: {} degrees of freedom "
+                                         "reserved for fracture cells", capacity));
+            }
+        }
+
+        /*!
+         * \brief Hand the fracture's cells their degrees of freedom.
+         *
+         * Called once the fracture model has been built or has moved, so that what the
+         * reservoir sees matches what the fracture is.
+         */
+        void bindFractureAuxCells(const bool allowTopologyChange = true)
+        {
+            if ((fractureAuxCells_ == nullptr) || !this->geoMechModel().fractureModelActive()) {
+                return;
+            }
+
+            // In the static configuration the first successful bind is also the last:
+            // the flow keeps the fracture exactly as it first appeared.
+            if (embeddedStatic_ && (fractureAuxCells_->numActive() > 0)) {
+                embeddedCouplingChange_ = 0.0;
+                return;
+            }
+
+            // A propagation attempt the fracture rolled back leaves its leak-off sized
+            // for the grid that was tried; recompute it so real growth is not mistaken
+            // for an inconsistent state and silently refused, step boundary after step
+            // boundary.
+            if (allowTopologyChange) {
+                this->geoMechModel().fractureModel().ensureFlowDescriptionCurrent();
+            }
+
+            // Inside a time step the topology stays what it was: a fracture solve that
+            // grew or reset its grid changes the shape of the flow system, and a Newton
+            // iteration already under way cannot converge on a moving target.  Value
+            // changes -- apertures, transmissibilities -- pass through; shape changes
+            // wait for the step boundary, which is the sequentially implicit contract.
+            if (!allowTopologyChange
+                && !fractureAuxCells_->layoutMatches(this->geoMechModel().fractureModel()))
+            {
+                // The fracture wants a different shape; that waits for the step
+                // boundary, and what the flow sees is unchanged.
+                embeddedCouplingChange_ = 0.0;
+                return;
+            }
+
+            const bool topologyChanged =
+                fractureAuxCells_->bind(this->geoMechModel().fractureModel());
+
+            this->refreshAuxCellModules_(topologyChanged);
+            embeddedCouplingChange_ = fractureAuxCells_->lastBindChange();
+        }
+
+        /*!
+         * \brief The coupling residual of the embedded representation.
+         *
+         * The relative change, over the last rebind, of what the flow is actually fed:
+         * total fracture-to-reservoir conductance and total fracture pore volume.  The
+         * outer loop watches this in embedded mode instead of the well-index change
+         * list, which is computed but never applied there.
+         */
+        double embeddedCouplingChange() const
+        { return embeddedCouplingChange_; }
+
+        //! Whether the fracture flows through degrees of freedom of its own.
+        bool fractureFlowIsEmbedded() const
+        { return fractureAuxCells_ != nullptr; }
+
+        /*!
+         * \brief Perforate the fracture's own cells from the well.
+         *
+         * The upscaled representation gives the well an extra index on each reservoir
+         * cell the fracture reaches, which is how the fluid got from the well into the
+         * formation without the fracture being part of the flow problem.  Here it is, so
+         * the well connects to the fracture and the fracture connects to the formation --
+         * each conductance appearing once, and none of them an upscaled q/dp.
+         */
+        void addFracturePerforationsToWells()
+        {
+            if (fractureAuxCells_ == nullptr) {
+                return;
+            }
+
+            // Registered as real perforations, sized into the wells' state and
+            // equations by the well model's own dynamic-structure rebuild -- the same
+            // path an ACTIONX-driven COMPDAT takes.  Registering identical lists is a
+            // no-op, so calling this every step costs nothing when nothing moved.
+            using PerfData = PerforationData<Scalar>;
+
+            for (const auto& wname : this->wellModel().schedule().wellNames(this->episodeIndex())) {
+                const auto runtime = fractureAuxCells_->wellPerforations(wname);
+
+                std::vector<PerfData> perfs;
+                perfs.reserve(runtime.size());
+                for (const auto& rp : runtime) {
+                    auto& pd = perfs.emplace_back();
+                    pd.cell_index = rp.cell;
+                    pd.connection_transmissibility_factor = static_cast<Scalar>(rp.ctf);
+                }
+
+                this->wellModel().setAuxiliaryPerforations(wname, std::move(perfs));
             }
         }
 
@@ -162,8 +348,30 @@ namespace Opm{
                 }
                 geoMechModel_.beginTimeStep();
                 if(this->hasFractures()){
-                    this->wellModel().beginTimeStep();// just to be sure well conteiner is reinitialized
-                    this->addConnectionsToWell(); // modify wells WI wiht fracture well 
+                    if (this->fractureFlowIsEmbedded()) {
+                        // The fracture is part of the flow problem in its own right, so
+                        // the reservoir has to be told what it now looks like.
+                        this->bindFractureAuxCells();
+
+                        // The well perforates the fracture, not the reservoir cells the
+                        // fracture leaks into.  Registered before the well model starts
+                        // the step, so its dynamic-structure rebuild sizes the wells,
+                        // their state and their equations around the new perforations.
+                        this->addFracturePerforationsToWells();
+                        this->wellModel().beginTimeStep();
+
+                        // After the well model has rebuilt around them: what the wells
+                        // now carry at the fracture's degrees of freedom.  Reported here
+                        // as well as at the end of the step so that a step which never
+                        // converges still says whether the fracture was connected.
+                        if (embeddedLeakoffReport_) {
+                            fractureAuxCells_->perforationReport();
+                        }
+                    }
+                    else {
+                        this->wellModel().beginTimeStep();// just to be sure well conteiner is reinitialized
+                        this->addConnectionsToWell(); // modify wells WI wiht fracture well 
+                    }
                 }
                 
             }
@@ -171,6 +379,14 @@ namespace Opm{
             this->emptyFractureLogger();
         }
         void endTimeStep() override{
+            // The state the step just converged on is still bound; compare the two
+            // representations' view of the leak-off before anything moves.
+            if (embeddedLeakoffReport_ && (fractureAuxCells_ != nullptr)
+                && this->geoMechModel().fractureModelActive())
+            {
+                fractureAuxCells_->leakoffReport(this->geoMechModel().fractureModel());
+            }
+
             if (this->gridView().comm().rank() == 0){
                 std::cout << "----------------------Start endTimeStep-------------------\n"
                 << std::flush;
@@ -180,10 +396,31 @@ namespace Opm{
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 geoMechModel_.endTimeStep();
                 if(this->hasFractures() && this->geoMechModel().fractureModelActive()){
+                    // Opt-in per-step growth guard: a fracture that grew more than
+                    // allowed in one step propagated on a pressure that would have
+                    // fallen had the flow seen the new volume. Reject the step; the
+                    // timestepper chops dt and retries from the fracture checkpoint.
+                    // MPI: any rank's violation fails the step on all ranks.
+                    const std::string violation =
+                        this->geoMechModel().fractureModel().growthGuardViolation();
+                    const int any_violation =
+                        this->gridView().comm().max(violation.empty() ? 0 : 1);
+                    if (any_violation) {
+                        // endTimeStep runs after the step is accepted, so it can
+                        // only warn here (PostSolve); the seq-implicit outer loop
+                        // raises the same guard inside the retry scope.
+                        OpmLog::warning("Fracture growth guard (post-acceptance, not retried): "
+                                        + (violation.empty() ? std::string("violation on another rank") : violation));
+                    }
                     // method for handling extra connections from fractures
                     // it is options for not including them in fractures i.e. addconnections
                     //if(addPerfsToSchedule_){
-                        this->addConnectionsToSchedual();
+                        if (!this->fractureFlowIsEmbedded()) {
+                            // In the embedded representation the schedule owns no fracture
+                            // completions: the well perforates the fracture's degrees of
+                            // freedom directly, refreshed each time the fracture is bound.
+                            this->addConnectionsToSchedual();
+                        }
                         this->gridView().comm().barrier();
                     //}else{
                     // not not working ... more work...

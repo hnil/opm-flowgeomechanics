@@ -33,7 +33,7 @@ namespace Opm{
         //! Called at the start of each time step.
         void beginTimeStep(){
             if(fracturemodel_){
-                fracturemodel_->moveForwardInTime();
+                fracturemodel_->moveForwardInTime(simulator_.timeStepSize());
             }
         }
 
@@ -242,6 +242,10 @@ namespace Opm{
         }
       }
 
+      FractureModel& fractureModel() {
+            assert(fracturemodel_);
+            return *fracturemodel_;
+      }
       const FractureModel& fractureModel() const{
             if(!fracturemodel_){
                 std::cout << "Fracture model not initialized, returning nullptr" << std::endl;

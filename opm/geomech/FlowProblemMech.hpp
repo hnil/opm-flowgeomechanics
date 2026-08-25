@@ -22,6 +22,8 @@
 #include <opm/common/ErrorMacros.hpp>
 #include <opm/common/OpmLog/OpmLog.hpp>
 
+#include <set>
+
 #include <opm/input/eclipse/EclipseState/Phase.hpp>
 
 #include <opm/material/densead/Evaluation.hpp>
@@ -162,6 +164,61 @@ namespace Opm{
             const auto& simulator = this->simulator();
             const auto& eclState = simulator.vanguard().eclState();
             if(eclState.runspec().mech()){
+                // The mechanical grid must be physical: a non-neighbour
+                // connection (NNC/EDITNNC) has no geometric face (CpGrid tags it
+                // face_tag::NNC_FACE, indexInInside() == -1) and is therefore
+                // silently dropped by the VEM assembly -- the mechanics would
+                // ignore a connection the deck intends, with no signal.  Refuse
+                // it rather than solve on a non-physical grid.  The numerical
+                // aquifer (AQUNUM/AQUCON) is the one handled exception: those
+                // NNCs sit on flow-only cells that are masked out of the
+                // mechanics (below), so a deck with a numerical aquifer is
+                // allowed (its AQUCON connections are merged into the input NNC
+                // set, which is why the guard is skipped when an aquifer is
+                // present).  Limitation: a deck with BOTH a numerical aquifer
+                // and independent NNC/EDITNNC would not be caught here -- those
+                // extra NNCs are still skipped by the VEM face filter, but are
+                // not surfaced.
+                if (eclState.hasInputNNC() && !eclState.aquifer().hasNumericalAquifer()) {
+                    OPM_THROW(std::runtime_error,
+                              "Explicit NNCs (NNC/EDITNNC) are not supported together "
+                              "with mechanics (MECH): a non-neighbour connection has no "
+                              "geometric face and is silently ignored by the VEM "
+                              "mechanics assembly, so the mechanical grid would not be "
+                              "physical. Remove the NNCs or disable mechanics.");
+                }
+                // Mechanics-domain mask for artificial (flow-only) cells --
+                // FRACTURE_FLOW_GRID_ASSESSMENT.md section 5.  v1 semantics
+                // (deliberately conservative): masked cells STAY in the elastic
+                // stiffness as inert rock (no structural change, so no parallel
+                // node-ownership / partition-of-unity risk), but are excluded
+                // from every pore-pressure/temperature load, and the fracture
+                // must never complete into them.  Numerical-aquifer (AQUNUM)
+                // cells are masked automatically.
+                mech_flow_only_cells_.assign(simulator.model().numGridDof(), false);
+                if (eclState.aquifer().hasNumericalAquifer()) {
+                    const auto aqu_cell_ids =
+                        eclState.aquifer().numericalAquifers().allAquiferCellIds();
+                    const std::set<std::size_t> aqu_cells(aqu_cell_ids.begin(),
+                                                          aqu_cell_ids.end());
+                    const auto& vanguard = simulator.vanguard();
+                    std::size_t num_masked = 0;
+                    for (unsigned elemIdx = 0;
+                         elemIdx < simulator.model().numGridDof(); ++elemIdx) {
+                        if (aqu_cells.count(vanguard.cartesianIndex(elemIdx)) > 0) {
+                            mech_flow_only_cells_[elemIdx] = true;
+                            ++num_masked;
+                        }
+                    }
+                    has_mech_flow_only_cells_ =
+                        (simulator.gridView().comm().sum(num_masked) > 0);
+                    if (simulator.gridView().comm().rank() == 0) {
+                        OpmLog::info("Mechanics: numerical-aquifer cells masked as "
+                                     "flow-only (kept as inert rock in the stiffness, "
+                                     "no mech loads); local masked cells: "
+                                     + std::to_string(num_masked));
+                    }
+                }
                 const auto& fp = eclState.fieldProps();
                 std::vector<std::string> needkeys = {"YMODULE","PRATIO"};
                 for(size_t i=0; i < needkeys.size(); ++i){
@@ -462,6 +519,19 @@ namespace Opm{
                 auto extra = std::vector<Connection>{};
 
                 for (const auto& wellconn : wellcons) {
+                    // Safeguard: a fracture must never complete into a
+                    // flow-only (mech-masked) cell -- e.g. a numerical-aquifer
+                    // cell.  That would inject through the fracture straight
+                    // into the aquifer bookkeeping volume with no mechanical
+                    // counterpart.
+                    if (this->mechFlowOnlyCell(wellconn.cell)) {
+                        OPM_THROW(std::runtime_error,
+                                  "Fracture-driven completion targets a flow-only "
+                                  "(mech-masked) cell, e.g. a numerical-aquifer "
+                                  "cell (compressed index "
+                                  + std::to_string(wellconn.cell)
+                                  + "). This configuration is not supported.");
+                    }
                     // simple calculated with upscaling
                     // map to cartesian (level-zero), or LGR-local for cells
                     // inside a refined region
@@ -672,6 +742,17 @@ namespace Opm{
         }
 
         bool hasFractures() const{ return hasFractures_;}
+
+        // Mechanics-domain mask: true for cells that exist for flow
+        // bookkeeping only (numerical-aquifer cells; later fracture
+        // pseudo-cells).  Such cells receive no mech loads and must not
+        // acquire fracture completions.
+        bool mechFlowOnlyCell(unsigned dofIdx) const
+        {
+            return dofIdx < mech_flow_only_cells_.size()
+                && mech_flow_only_cells_[dofIdx];
+        }
+        bool hasMechFlowOnlyCells() const { return has_mech_flow_only_cells_; }
         Opm::PropertyTree getFractureParam() const{return fracture_param_.get_child("fractureparam");};
         Opm::PropertyTree getGeoMechParam() const{return fracture_param_;};
         // used for fracture model
@@ -744,6 +825,9 @@ namespace Opm{
 
         std::vector<double> ymodule_;
         std::vector<double> pratio_;
+        // see mechFlowOnlyCell()
+        std::vector<bool> mech_flow_only_cells_{};
+        bool has_mech_flow_only_cells_{false};
         std::vector<double> biotcoef_;
         std::vector<double> poelcoef_;
         std::vector<double> thermexr_;

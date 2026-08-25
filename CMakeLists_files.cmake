@@ -68,7 +68,9 @@ list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/FracturePressureAssemblerAD.hpp
 	opm/geomech/Fracture.hpp
 	opm/geomech/Fracture_impl.hpp
-	opm/geomech/FractureModel.hpp
+	opm/geomech/FractureAuxCells.hpp
+  opm/geomech/FractureAuxCells_impl.hpp
+  opm/geomech/FractureModel.hpp
 	opm/geomech/FractureModel_impl.hpp
 	opm/geomech/FractureWell.hpp
 	opm/geomech/GeometryHelpers.hpp

@@ -105,6 +105,11 @@ public:
     template <class TypeTag, class Simulator>
     double maxFlowTimeStep(const Simulator& simulator) const;
 
+    // Per-step growth guard: first violation message across all active
+    // fractures (empty = none). Not MPI-reduced; caller decides.
+    std::string growthGuardViolation() const;
+    void writeIterationSnapshots(int step, int round, const std::string& tag) const;
+
         void updateReservoirProperties(); // for testing without simulator
         void initFractureStates();
 
@@ -114,7 +119,7 @@ public:
         void updateReservoirAndWellProperties(const Simulator& simulator);
         template <class TypeTag, class Simulator>
         void resetFractures(const Simulator& simulator);
-        void moveForwardInTime();
+        void moveForwardInTime(double dt_last = -1.0);
 
         template <class TypeTag, class Simulator>
         void updateReservoirWellProperties(const Simulator& simulator);
@@ -134,6 +139,28 @@ public:
         const FractureSolveStats& lastSolveStats() const;
         const FractureSolveStats& totalSolveStats() const;
         static Opm::DeferredLogger fractureLogger;
+
+        //! The fractures of each well, in well order.
+        const std::vector<std::vector<Fracture>>& wellFractures() const
+        { return well_fractures_; }
+
+        /*!
+         * \brief Bring every fracture's leak-off in step with its grid.
+         *
+         * Called before the embedded flow representation reads the fractures, so that a
+         * propagation attempt rolled back after the last leak-off update does not leave
+         * a stale array behind.  Returns whether every fracture is now consistent.
+         */
+        bool ensureFlowDescriptionCurrent()
+        {
+            bool ok = true;
+            for (auto& well_fracture : well_fractures_) {
+                for (auto& fracture : well_fracture) {
+                    ok = fracture.ensureLeakoffCurrent() && ok;
+                }
+            }
+            return ok;
+        }
 
     private:
         bool vtkwritewells_ = false; // write wells to VTK files

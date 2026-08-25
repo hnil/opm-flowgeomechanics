@@ -260,6 +260,11 @@ public:
     std::string name() const;
     void write(int reportStep = -1) const;
     void writemulti(double time) const;
+    // Opt-in (solver.write_iteration_snapshots): append the current fracture
+    // state to <output>/<name>_iter.csv (per cell) and <name>_iter_summary.csv
+    // (one line) tagged with timestep, outer coupling round and a label — lets
+    // the open/closed branches the coupling visits be plotted round by round.
+    void writeIterationSnapshot(int step, int round, const std::string& tag) const;
     void updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
                             const Dune::CpGrid& grid,
                             const std::vector<EntitySeed>& entity_seeds);
@@ -296,10 +301,82 @@ public:
     WellInfo& wellInfo();
     const WellInfo& wellInfo() const { return wellinfo_; }
     std::vector<double> leakOfRate() const;
+
+    // ---- Access for the embedded (auxiliary-cell) fracture flow representation ----
+    //
+    // The upscaled well-index formulation consumes these quantities internally; the
+    // embedded one hands them to the reservoir discretization instead, which needs to
+    // read them from outside.
+
+    //! Number of cells in the fracture grid.
+    std::size_t numCells() const { return numFractureCells(); }
+
+    /*!
+     * \brief Recompute the leak-off coefficients if they lag the grid.
+     *
+     * The propagation may rebuild the grid after the last leak-off update -- an attempt
+     * that was rolled back leaves leakof_ sized for the grid that was tried -- and the
+     * embedded flow representation reads it per current cell.  Returns whether leak-off
+     * now matches the grid; false when the reservoir property arrays lag it as well, in
+     * which case nothing sensible can be computed and the caller keeps what it has.
+     */
+    bool ensureLeakoffCurrent();
+
+    //! Reservoir cell each fracture cell leaks into, by fracture cell index.
+    const std::vector<int>& reservoirCells() const { return reservoir_cells_; }
+
+    //! Leak-off coefficient per fracture cell.  Includes the reservoir mobility.
+    const std::vector<double>& leakOf() const { return leakof_; }
+
+    //! Reservoir mobility used to form leakOf(), so that it can be divided back out.
+    const std::vector<double>& reservoirMobility() const { return reservoir_mobility_; }
+
+    //! Pressure per fracture cell as the fracture's own solver last left it.  In the
+    //! embedded representation the same quantity is also a degree of freedom of the
+    //! flow problem, and the two must agree; this is what makes that checkable.
+    const Dune::BlockVector<Dune::FieldVector<double, 1>>& fracturePressure() const
+    { return fracture_pressure_; }
+
+    //! The width floor this fracture's own cubic-law assembly applies
+    //! (config.min_width).  The embedded representation must apply the same floor to
+    //! the same law, or the two solve differently conductive fractures.
+    double cubicLawMinWidth() const { return min_width_; }
+
+    //! Well-to-fracture connections: (fracture cell, well index).  The well injects
+    //! into these cells directly, which in the embedded representation is a perforation
+    //! of the fracture's own degrees of freedom rather than of the reservoir.
+    const std::vector<std::tuple<int, double>>& wellPerforations() const { return perfinj_; }
+
+    //! Half transmissibilities (i, j, t_i, t_j) between neighbouring fracture cells.
+    const std::vector<Htrans>& halfTrans() const { return htrans_; }
+
+    /*!
+     * \brief Half transmissibilities computed fresh from the current grid.
+     *
+     * The cached htrans_ is rebuilt at particular points of the pressure solve and can
+     * lag a re-gridding with indices that are still in range -- a wrong answer that no
+     * size check catches.  A consumer describing the fracture to another system reads
+     * this instead: pure geometry of the grid as it stands, nothing cached.
+     */
+    std::vector<Htrans> currentHalfTrans() const;
+
+    //! Aperture per fracture cell.
+    const Dune::BlockVector<Dune::FieldVector<double, 1>>& fractureWidth() const
+    { return fracture_width_; }
+
+    //! Area of each fracture cell.
+    std::vector<double> cellAreas() const;
+
+    //! Depth of each fracture cell's centre, positive downwards.
+    std::vector<double> cellDepths() const;
     double injectionPressure() const;
     double injectionBhp() const;// {return injectionPressure() - dp_perf_;};
     void setPerfProps(double perfpressure,double perf_depth, double perfrate);//{perf_pressure_ = perfpressure;}
-    void setWellProps(double wellrate, double WI, double wi_dp, double wi_respress, double ref_depth);//{well_rate_ = wellrate; total_wellindex_ = WI;}
+    void setWellProps(double wellrate, double WI, double wi_dp, double wi_respress, double ref_depth);
+    // Reservoir cells the well perforates (all perforations, not just this
+    // fracture's), used by solver.well_source_all_perfs to feed the fracture
+    // wherever the well crosses it.
+    void setWellPerfCells(std::vector<int> cells) { well_perf_cells_ = std::move(cells); }//{well_rate_ = wellrate; total_wellindex_ = WI;}
     Dune::FieldVector<double, 6> stress(Dune::FieldVector<double, 3> obs) const;
     Dune::FieldVector<double, 6> strain(Dune::FieldVector<double, 3> obs) const;
     Dune::FieldVector<double, 3> disp(Dune::FieldVector<double, 3> obs) const;
@@ -311,9 +388,17 @@ public:
     const FractureSolveStats& lastSolveStats() const;
     std::array<double,2> hightAndWidth() const;
     double maxFlowTimeStep() const;
+    // Per-step growth guard: area now vs at the step checkpoint. Returns a
+    // non-empty message if growth exceeded solver.max_area_growth_per_step
+    // (relative factor; the absolute floor solver.min_area_growth_guard lets a
+    // small seed open freely). Empty string = fine / guard off.
+    std::string growthGuardViolation() const;
+    // Onset dt-hold: true while the fracture is still an unopened seed and the
+    // perf pressure is rising (solver.onset_dt_limit > 0 arms it).
+    bool onsetHoldActive() const;
     double filterCakeVolume() const;
     void resetFracture();
-    void moveForwardInTime();
+    void moveForwardInTime(double dt_last = -1.0);
 
 private:
    struct CouplingMixState
@@ -496,11 +581,32 @@ private:
     // copy of state variables
     Dune::BlockVector<Dune::FieldVector<double, 1>> fracture_width_prev_;
     Dune::BlockVector<Dune::FieldVector<double, 1>> fracture_pressure_prev_;
+    // width exposed to the coupling last outer round (solver.coupling_state_relaxation);
+    // valid only within one timestep's outer iterations
+    Dune::BlockVector<Dune::FieldVector<double, 1>> width_round_prev_;
+    bool width_round_valid_{false};
+    // contact set at the end of the previous coupling round in this timestep
+    // (solver.propagate_on_stable_contact): growth is only allowed once the
+    // open/closed set has stopped changing between rounds
+    std::vector<int> closed_cells_round_prev_;
+    bool contact_round_valid_{false};
+    bool contact_stable_this_round_{true};
+    int score_calls_this_round_{0};
+    // fracture area and perf pressure at the timestep checkpoint (moveForwardInTime);
+    // used by the per-step growth guard and the onset dt-hold
+    double area_step_start_{-1.0};
+    double perf_pressure_step_start_{-1.0};
+    double volume_step_start_{-1.0}; // V0 for volume-paced propagation
+    // coupling-rate dt controller (opt-in): cap on the next flow step, set at the
+    // step checkpoint from how fast perf pressure / area moved in the last step
+    double coupling_dt_cap_{-1.0};
+    int coupling_quiet_steps_{0};
 
     // transmissibilities
     using Htrans = std::tuple<size_t, size_t, double, double>;
     std::vector<Htrans> htrans_;
     std::vector<std::tuple<int,double>> perfinj_;
+    std::vector<int> well_perf_cells_; // see setWellPerfCells
     double perf_pressure_;
     std::vector<double> leakof_;
     

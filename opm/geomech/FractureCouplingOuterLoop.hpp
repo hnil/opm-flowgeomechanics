@@ -104,6 +104,14 @@ namespace Opm
         // Diagnostics: mechanics solves actually performed vs skipped in the outer loop.
         mutable int mech_solves_performed_{0};
         mutable int mech_solves_skipped_{0};
+        // Mechanics solves performed within the current timestep; used by the
+        // opt-in per-step cap (solver.max_mech_solves_per_step). Reset at the
+        // first outer iteration of each step.
+        mutable int mech_solves_this_step_{0};
+        // Growth sub-iterations spent within the current timestep
+        // (solver.max_growth_iterations is a per-timestep budget: contact
+        // chatter must not re-arm the loop on every outer iteration).
+        mutable int growth_rounds_this_step_{0};
 
         struct StorageCacheBackup
         {
@@ -121,7 +129,11 @@ namespace Opm
             }
 
             backup.enabled = true;
-            const unsigned num_dof = flow_model.numGridDof();
+            // Over every degree of freedom, not just the grid ones: restoring invalidates
+            // the whole cache before putting the saved entries back, so anything left out
+            // here is not preserved but destroyed.  That matters as soon as the fracture
+            // itself has degrees of freedom in this system.
+            const unsigned num_dof = flow_model.numTotalDof();
             backup.values.assign(num_time_indices, std::vector<EqVector>(num_dof, EqVector(0.0)));
             backup.valid.assign(num_time_indices, std::vector<unsigned char>(num_dof, 0));
 
@@ -191,7 +203,15 @@ namespace Opm
             // this is a hack to call all setup need for the system without changing states which matter for the calculations
             const auto storage_cache_backup = this->backupStorageCache();
             const auto solution_backup = this->backupSolution0();
+            // The setup iteration also solves the wells, mutating the well/group
+            // state.  solution(0) + storage cache alone do not cover that: for a
+            // MultisegmentWell the segment state is left inconsistent with the
+            // restored solution and the reported rate collapses to zero while the
+            // perforations keep injecting.  Snapshot and restore the WGState too so
+            // the setup iteration is genuinely state-neutral.
+            auto wgstate_backup = derived().simulator_.problem().wellModel().snapshotWGState();
             auto report = this->runParentSetupIteration(timer, nonlinear_solver);
+            derived().simulator_.problem().wellModel().restoreWGState(std::move(wgstate_backup));
             this->restoreSolution0(solution_backup);
             this->restoreStorageCache(storage_cache_backup);
             std::cout << "Finished parent first iteration" << std::endl;
@@ -393,7 +413,42 @@ namespace Opm
             // + parent setup iteration. Structure changes always take the full path.
             const bool value_only_wi_update =
                 prm.get<bool>("fractureparam.solver.value_only_wi_update", false);
-            if(do_update_connections){
+            if (derived().simulator_.problem().fractureFlowIsEmbedded()) {
+                // The fracture flows through degrees of freedom of its own, so a fracture
+                // solve changed apertures and possibly opened cells: re-describe them to
+                // the reservoir and refresh the well's perforations of them.  No schedule
+                // rebuild and no upscaled well index -- re-adding those here is how the
+                // wells would silently fall back to the representation being replaced.
+                derived().simulator_.problem().bindFractureAuxCells(/*allowTopologyChange=*/false);
+                // The well's perforations of the fracture keep the indices they were
+                // given at the step boundary: within the step both the topology and the
+                // perforation factors are held fixed -- the sequentially implicit lag --
+                // and re-registering here would demand a well-structure rebuild the
+                // step is not going to perform.
+
+                // The coupling residual is the change in what the flow was just fed --
+                // total conductance and pore volume of the binding -- not the well-index
+                // change list, which is computed above but never applied here.  Contact
+                // chatter moves individual cells' indices every iteration; the
+                // aggregates cancel it the way the upscaled index summed over it.
+                const double coupling_tolerance =
+                    prm.get<double>("fractureparam.solver.coupling_tolerance", 1e-3);
+                const double embedded_change =
+                    derived().simulator_.problem().embeddedCouplingChange();
+                if (!fracture_converged_global || embedded_change > coupling_tolerance) {
+                    if (!fracture_converged_global) {
+                        OpmLog::info("Keeping outer loop active: fracture solve did not converge");
+                    } else {
+                        OpmLog::info("Keeping outer loop active: embedded coupling change "
+                                     + std::to_string(embedded_change) + " > "
+                                     + std::to_string(coupling_tolerance));
+                    }
+                    report.converged = false;
+                }
+                comm.barrier();
+                return;
+            }
+            else if(do_update_connections){
                 if (value_only_wi_update && !coupling_metrics.structure_changed) {
                     OpmLog::info("Updating fracture CTFs in place (value_only_wi_update, no structure change)");
                     derived().simulator_.problem().addConnectionsToWell();
@@ -412,6 +467,13 @@ namespace Opm
                     derived().simulator_.problem().wellModel().prepareTimeStep(group_state_helper.deferredLogger());
                 }
 
+                // The parent setup iteration is REQUIRED when the well structure
+                // actually changed (new fracture connections): skipping it kills
+                // the well/fracture on fine grids (verified 2026-07-24 on
+                // CASE_REFINE_nx_21..._THERMAL_MSW).  It is redundant only for
+                // value-only CTF changes, which take the value_only path above.
+                // Keep it; runParentFirstIterationPreservingState is now
+                // state-neutral for the wells (WGState snapshot/restore).
                 [[maybe_unused]] auto tmp_report =
                     legacy_parent_setup_iteration
                         ? this->runParentFirstIterationLegacy(timer, nonlinear_solver)

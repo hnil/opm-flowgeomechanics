@@ -3,6 +3,9 @@
 //#include <StrumpackSparseSolver.hpp>
 
 #include <cmath>
+#include <utility>
+
+#include <opm/common/ErrorMacros.hpp>
 
 namespace Opm
 {
@@ -120,6 +123,7 @@ FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::Frac
     int verbosity = prm.get<bool>("verbosity",0);
     mech_press_coupling_ = prm.get<bool>("mech_press_coupling", true);
     mech_first_ = prm_.get<bool>("mech_first");
+    lu_pivoting_ = prm_.get<bool>("lu_pivoting", false);
     if (!diag_mech_) {
         OPM_TIMEBLOCK(SetupLuFactorization);
         if(verbosity>0){
@@ -127,7 +131,13 @@ FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::Frac
         }
         // luM_ = S[_0][_0];
         luM_ = S[_0][_0];
-        MyDenseMatrix<double>::luDecomp(luM_);
+        if (lu_pivoting_) {
+            MyDenseMatrix<double>::luDecomp(luM_, lu_pivot_);
+        } else {
+            lu_pivot_.clear();
+            MyDenseMatrix<double>::luDecomp(luM_);
+        }
+        checkLuFactor();
     }
     active_mode_ = selectMode(S);
     if (verbosity > 0 && mode_policy_ == "manual") {
@@ -148,7 +158,13 @@ void FractureMechanicsPreconditioner::update(const Opm::FractureSystemMatrix& S,
                 luM_[i][j] = S[_0][_0][i][j];
             }
         }
-        MyDenseMatrix<double>::luDecomp(luM_);
+        if (lu_pivoting_) {
+            MyDenseMatrix<double>::luDecomp(luM_, lu_pivot_);
+        } else {
+            lu_pivot_.clear();
+            MyDenseMatrix<double>::luDecomp(luM_);
+        }
+        checkLuFactor();
     }
     if(diag_mech_ && new_lu_mech){
         // if we are using a diagonal mechanics preconditioner, we need to update the diagonal entries
@@ -240,12 +256,29 @@ FractureMechanicsPreconditioner::updateFixedStressFlowMatrix(const Opm::Fracture
 
     auto& fs = *fixed_stress_matrix_;
     fs = 0;
-    copyMatrixValuesWithSameSparsity(fs, M);
+    // fs's pattern is M union C, so a lock-step copy (identical-sparsity) is not
+    // safe when C carries an entry outside M's pattern - copy M by lookup, and
+    // fail recoverably (upstream chop) on any inconsistency instead of UB.
+    if (C.N() != M.N() || I.N() != C.M() || fs.N() != M.N() || fs.M() != M.M())
+        OPM_THROW(std::runtime_error, "fixed-stress flow matrix: inconsistent block dimensions");
+    for (auto rowIt = M.begin(); rowIt != M.end(); ++rowIt) {
+        auto& fsrow = fs[rowIt.index()];
+        for (auto colIt = rowIt->begin(); colIt != rowIt->end(); ++colIt) {
+            auto fit = fsrow.find(colIt.index());
+            if (fit == fsrow.end())
+                OPM_THROW(std::runtime_error,
+                          "fixed-stress flow matrix: M entry outside stored pattern");
+            *fit = *colIt;
+        }
+    }
 
     for (auto rowIt = C.begin(); rowIt != C.end(); ++rowIt) {
         const size_t row = rowIt.index();
         for (auto colIt = rowIt->begin(); colIt != rowIt->end(); ++colIt) {
             const size_t col = colIt.index();
+            if (col >= I.N() || col >= A_diag_.size())
+                OPM_THROW(std::runtime_error,
+                          "fixed-stress flow matrix: C column outside mechanics block");
             const auto iit = I[col].find(col);
             if (iit == I[col].end()) {
                 continue;
@@ -256,7 +289,11 @@ FractureMechanicsPreconditioner::updateFixedStressFlowMatrix(const Opm::Fracture
             if (adiag == 0.0) {
                 continue;
             }
-            fs[row][col][0][0] -= coupling * ij / adiag;
+            auto fit = fs[row].find(col);
+            if (fit == fs[row].end())
+                OPM_THROW(std::runtime_error,
+                          "fixed-stress flow matrix: C entry outside stored pattern");
+            (*fit)[0][0] -= coupling * ij / adiag;
         }
     }
 }
@@ -342,12 +379,29 @@ FractureMechanicsPreconditioner::applymech_last(Opm::VectorHP& v, const Opm::Vec
 };
 
 void
+FractureMechanicsPreconditioner::checkLuFactor() const
+{
+    // A non-finite or zero pivot poisons every later apply and surfaces only as
+    // an opaque Krylov "defect=nan" - fail here, recoverably and by name.
+    for (size_t i = 0; i < luM_.rows(); ++i) {
+        const double piv = luM_[i][i];
+        if (!std::isfinite(piv) || piv == 0.0)
+            OPM_THROW(std::runtime_error,
+                      "mechanics dense LU: bad pivot " + std::to_string(piv)
+                          + " at row " + std::to_string(i));
+    }
+}
+
+void
 FractureMechanicsPreconditioner::backSolve(Opm::Vector& x, const Opm::Vector& rhs) const
 {
-    // Vector& rhs = x;
-    // rhs = rhs_in;
+    // apply the row permutation recorded by the pivoted decomposition
+    auto prhs = rhs;
+    for (size_t i = 0; i < lu_pivot_.size(); ++i)
+        if (lu_pivot_[i] != i)
+            std::swap(prhs[i], prhs[lu_pivot_[i]]);
     for (int i = 0; i < int(luM_.rows()); i++) {
-        x[i] = rhs[i];
+        x[i] = prhs[i];
         for (int j = 0; j < i; j++) {
             x[i] -= luM_[i][j] * x[j];
         }

@@ -165,7 +165,8 @@ bool
 solve_coupled_direct(const SystemMatrix& S, const VectorHP& rhs, VectorHP& dx)
 {
     const size_t n = S[_0][_0].N();
-    FMatrix K(2 * n, 2 * n, 0.0);
+    const size_t m = S[_1][_1].N(); // n + numWellEquations (rate_well appends a row)
+    FMatrix K(n + m, n + m, 0.0);
     const auto& A = S[_0][_0];
     for (size_t i = 0; i != n; ++i)
         for (size_t j = 0; j != n; ++j)
@@ -179,18 +180,20 @@ solve_coupled_direct(const SystemMatrix& S, const VectorHP& rhs, VectorHP& dx)
     fill(S[_1][_0], n, 0);
     fill(S[_1][_1], n, n);
 
-    ResVector b(2 * n), y(2 * n);
-    for (size_t i = 0; i != n; ++i) { b[i] = rhs[_0][i]; b[n + i] = rhs[_1][i]; }
+    ResVector b(n + m), y(n + m);
+    for (size_t i = 0; i != n; ++i) b[i] = rhs[_0][i];
+    for (size_t i = 0; i != m; ++i) b[n + i] = rhs[_1][i];
     y = 0;
     try {
         K.solve(y, b); // dense LU (factorises K in place)
     } catch (const Dune::Exception&) {
         return false; // singular
     }
-    for (size_t i = 0; i != 2 * n; ++i)
+    for (size_t i = 0; i != n + m; ++i)
         if (!std::isfinite(y[i][0]))
             return false;
-    for (size_t i = 0; i != n; ++i) { dx[_0][i] = y[i]; dx[_1][i] = y[n + i]; }
+    for (size_t i = 0; i != n; ++i) dx[_0][i] = y[i];
+    for (size_t i = 0; i != m; ++i) dx[_1][i] = y[n + i];
     return true;
 }
 
@@ -1011,7 +1014,8 @@ Fracture::makePressureAssemblyInput() const
     input.viscosity.resize(nc + nw);
 
     for (size_t i = 0; i < nc + nw; ++i) {
-        input.fracture_width[i] = fracture_width_[i][0];
+        // fracture_width_ has no entry for well equations (rate_well)
+        input.fracture_width[i] = (i < fracture_width_.size()) ? fracture_width_[i][0] : 0.0;
         input.fracture_pressure[i] = fracture_pressure_[i][0];
         if (i < fracture_dgh_.size()) {
             input.fracture_pressure[i] -= fracture_dgh_[i];
@@ -1180,12 +1184,14 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     const bool is_fb = (prm_.get<std::string>("solver.closed_cell_policy", "sticky")
                         == "fischer_burmeister");
     std::vector<double> fb_phi; // FB residual per cell; rhs[_0][i] = -fb_phi[i]
+    std::vector<double> fb_scale; // per-cell scale 1+|a|+|b| for the scaled convergence test
     if (is_fb) {
         const FMatrix& Aorig = fractureMatrix();
         const size_t n = Aorig.N();
         const ResVector& w = x[_0];
         const ResVector& p = x[_1];
         fb_phi.assign(n, 0.0);
+        fb_scale.assign(n, 1.0);
         if (first_iteration) A_.reset(new FMatrix(Aorig));
         FMatrix& Afb = *A_;
         if (first_iteration) I_.reset(new SMatrix(makeIdentity(n, numWellEquations())));
@@ -1202,6 +1208,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
             const double da = 1.0 - a / r;
             const double db = 1.0 - b / r;
             fb_phi[i] = a + b - std::sqrt(a * a + b * b);
+            fb_scale[i] = 1.0 + std::abs(a) + std::abs(b);
             for (size_t j = 0; j < n; ++j) Afb[i][j] = -db * Aorig[i][j];
             Afb[i][i] += da * c_i;
             Ifb[i][i] = -db;
@@ -1337,9 +1344,33 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         for (size_t i = 0; i < fb_phi.size(); ++i)
             rhs[_0][i] = -fb_phi[i];
 
+    // Fail recoverably (upstream catch -> timestep chop) instead of aborting GMRES
+    // with an opaque "defect=nan"; a non-finite residual means S or rhs is bad.
+    for (size_t i = 0; i < rhs[_0].size(); ++i)
+        if (!std::isfinite(rhs[_0][i][0]))
+            OPM_THROW(std::runtime_error,
+                      "Fracture full-system residual non-finite in mechanics row "
+                          + std::to_string(i));
+    for (size_t i = 0; i < rhs[_1].size(); ++i)
+        if (!std::isfinite(rhs[_1][i][0]))
+            OPM_THROW(std::runtime_error,
+                      "Fracture full-system residual non-finite in pressure row "
+                          + std::to_string(i));
+    if (numWellEquations() > 0) {
+        // a zero well-equation pivot passes the finite checks but makes the
+        // preconditioner emit NaN mid-Krylov ("defect=nan")
+        const auto wix = M.N() - 1;
+        const double wdiag = M[wix][wix][0][0];
+        if (!std::isfinite(wdiag) || wdiag == 0.0)
+            OPM_THROW(std::runtime_error,
+                      "rate_well equation diagonal is " + std::to_string(wdiag)
+                          + " (total_wellindex " + std::to_string(total_wellindex_)
+                          + ", well_rate " + std::to_string(well_rate_) + ")");
+    }
+
     auto rhs_org(rhs);
 
-    
+
     // Verify that equations have been chosen correctly
     // for (size_t i = 0; i != fracture_width_.size(); ++i)
     //   assert( !(rhs[_0][i] >= 0.0 && x[_0][i] <= 0.0));
@@ -1351,9 +1382,18 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     // flow system (where residuals scale with M*p)
     const double tol_flow = tol;//*std::max(A.infinity_norm(), M.infinity_norm()) * std::numeric_limits<double>::epsilon();
     const double tol_mech = tol;// * M.infinity_norm();
-    if (convergence_test(rhs,
-                         tol_mech,
-                         tol_flow, nlin_verbosity))
+    // FB scaled convergence (opt-in): phi mixes width*stiffness with force units,
+    // and c_i varies with cell size/mesh level - test phi_i/(1+|a_i|+|b_i|) so the
+    // tolerance means the same physical accuracy on every cell.
+    if (is_fb && prm_.get<bool>("solver.fb_scaled_convergence", false)) {
+        VectorHP rtest(rhs);
+        for (size_t i = 0; i < fb_scale.size() && i < rtest[_0].size(); ++i)
+            rtest[_0][i][0] /= fb_scale[i];
+        if (convergence_test(rtest, tol_mech, tol_flow, nlin_verbosity))
+            return true;
+    } else if (convergence_test(rhs,
+                                tol_mech,
+                                tol_flow, nlin_verbosity))
         return true;
 
     // Optional symmetric block scaling of the coupled system (opt-in; default
@@ -1479,13 +1519,44 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         OPM_TIMEBLOCK(SolveCoupledSystem);
         try {
             run_solver(*psolver_);
-        } catch (const std::exception&) {
+        } catch (const std::exception& e1) {
+            // Identify which preconditioner block generates non-finite values -
+            // the Krylov abort ("defect=nan") is otherwise opaque.
+            try {
+                VectorHP vprobe(rhs_solve_org), dprobe(rhs_solve_org);
+                vprobe = 0;
+                precond.apply(vprobe, dprobe);
+                size_t bad_m = 0, bad_f = 0;
+                for (size_t i = 0; i < vprobe[_0].size(); ++i)
+                    if (!std::isfinite(vprobe[_0][i][0])) ++bad_m;
+                for (size_t i = 0; i < vprobe[_1].size(); ++i)
+                    if (!std::isfinite(vprobe[_1][i][0])) ++bad_f;
+                std::cout << "Coupled solver abort (" << e1.what()
+                          << "); precond probe non-finite: mech " << bad_m << "/"
+                          << vprobe[_0].size() << ", flow " << bad_f << "/"
+                          << vprobe[_1].size() << std::endl;
+            } catch (const std::exception& ep) {
+                std::cout << "Coupled solver abort (" << e1.what()
+                          << "); precond probe itself threw: " << ep.what() << std::endl;
+            }
             const bool allow_gmres_fallback = prm_.get<bool>(
                 "solver.linsolver.fallback_gmres_on_breakdown", true);
+            iores.converged = false;
             if (allow_gmres_fallback && iter_solver_type == "bicgstab") {
                 psolver_ = setupLinearSolver("gmres", *S_linop_, precond, prm_, lintol, max_iter, verbosity);
-                run_solver(*psolver_);
-            } else {
+                if (failure_policy == "ladder") {
+                    // A Krylov abort (overflow -> defect=nan) is just another
+                    // failed rung: fall through to the rescue ladder instead of
+                    // aborting the nonlinear iteration.
+                    try {
+                        run_solver(*psolver_);
+                    } catch (const std::exception&) {
+                        iores.converged = false;
+                    }
+                } else {
+                    run_solver(*psolver_);
+                }
+            } else if (failure_policy != "ladder") {
                 throw;
             }
         }
@@ -1628,6 +1699,40 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
                 std::cout << "Coupled step limited: rel-change " << fmax << " > "
                           << coupled_step_limit << ", scaling step by " << lim << std::endl;
         }
+    }
+    // FB backtracking line search (opt-in): far from the solution the full
+    // semismooth Newton step overshoots and the iteration stalls at the cap -
+    // damp the step until the complementarity merit ||phi||^2 decreases.
+    if (is_fb && prm_.get<bool>("solver.fb_line_search", false)) {
+        const FMatrix& Aorig = fractureMatrix();
+        const size_t n = Aorig.N();
+        double merit0 = 0.0;
+        for (size_t i = 0; i < n; ++i) merit0 += fb_phi[i] * fb_phi[i];
+        const double s_min = prm_.get<double>("solver.fb_line_search_min", 0.0625);
+        double sstep = 1.0, best_s = 1.0;
+        double best_merit = std::numeric_limits<double>::max();
+        std::vector<double> w_t(n);
+        while (sstep >= s_min) {
+            for (size_t j = 0; j < n; ++j)
+                w_t[j] = std::max(0.0, x[_0][j][0] + sstep * dx[_0][j][0]);
+            double merit = 0.0;
+            for (size_t i = 0; i < n; ++i) {
+                double lam = mech_rhs[i];
+                for (size_t j = 0; j < n; ++j) lam -= Aorig[i][j] * w_t[j];
+                lam -= x[_1][i][0] + sstep * dx[_1][i][0];
+                const double c_i = std::max(std::abs(Aorig[i][i]), 1e-30);
+                const double a = c_i * w_t[i];
+                const double phi = a + lam - std::sqrt(a * a + lam * lam);
+                merit += phi * phi;
+            }
+            if (merit < best_merit) { best_merit = merit; best_s = sstep; }
+            if (merit <= (1.0 - 1e-4 * sstep) * merit0) break; // sufficient decrease
+            sstep *= 0.5;
+        }
+        step_fac *= best_s;
+        if (nlin_verbosity > 1 && best_s < 1.0)
+            std::cout << "FB line search: step " << best_s
+                      << " merit " << merit0 << " -> " << best_merit << std::endl;
     }
     // std::cout << "fac: " << step_fac << std::endl;
     if (nlin_verbosity > 2) {

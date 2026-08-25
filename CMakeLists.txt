@@ -771,6 +771,24 @@ add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_rate
 
 
 
+# Multisegment-well + fracture: a fracture on an MSW injector.  Guards the
+# WGState-preservation fix (commits c70a98f89 / 068c544) -- without it the
+# MSW well reports zero rate after a fracture-driven well re-init while the
+# perforations keep injecting.  Coarse deck (fracture stays in one reservoir
+# cell -> CTF-value-only update path); the fine-grid structural-change
+# counterpart is data/CASE_REFINE_nx_21_ny_21_nz_25_THERMAL_MSW.DATA.
+add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_msw
+                         FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW
+                         SIMULATOR flow_energy_geomech
+                         ABS_TOL ${abs_tol}
+                         REL_TOL ${rel_tol}
+                         DIR ${CMAKE_CURRENT_LIST_DIR}/data/
+						 PREFIX geomech_frac_seq_msw
+						 TEST_ARGS --parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac_seq.ini
+						--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_bhp_seq_final.json
+						--enable-write-all-solutions=true
+						--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json)
+
 
 # fracture test
 

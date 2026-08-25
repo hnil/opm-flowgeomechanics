@@ -90,11 +90,17 @@ namespace Opm
         //     //using type = BlackOilIntensiveQuantitiesDryGas<TypeTag>;
         // };
 
-        // template<class TypeTag>
-        // struct Linearizer<TypeTag, TTag::FlowProblemMech> { using type = TpfaLinearizer<TypeTag>; };
+        // Assemble per degree of freedom rather than per grid element, as every other
+        // black-oil target does.  Beyond being the mainstream path, it is what lets a
+        // degree of freedom that has no grid element -- a numerical aquifer or a fracture
+        // represented as auxiliary cells -- carry the flow equations at all: the
+        // element-driven linearizer walks straight past such a degree of freedom and
+        // leaves its row empty.
+        template<class TypeTag>
+        struct Linearizer<TypeTag, TTag::FlowProblemMech> { using type = TpfaLinearizer<TypeTag>; };
 
-        // template<class TypeTag>
-        // struct LocalResidual<TypeTag, TTag::FlowProblemMech> { using type = BlackOilLocalResidualTPFA<TypeTag>; };
+        template<class TypeTag>
+        struct LocalResidual<TypeTag, TTag::FlowProblemMech> { using type = BlackOilLocalResidualTPFA<TypeTag>; };
 
         template <class TypeTag>
         struct EnableDiffusion<TypeTag, TTag::FlowProblemMech> {

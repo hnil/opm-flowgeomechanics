@@ -129,6 +129,8 @@ namespace Opm{
 
        const FractureModel& fractureModel() const{ return fracHost_.fractureModel(); }
 
+       FractureModel& fractureModel() { return fracHost_.fractureModel(); }
+
        void resetFractureModel(){ fracHost_.resetFractureModel(); }
 
         void updatePotentialForces(bool relative_solve = true){
@@ -182,6 +184,17 @@ namespace Opm{
                 }
                 //NB check sign !!
                 mechPotentialForce_[dofIdx] *= 1.0;
+
+                // Flow-only cells (numerical-aquifer cells etc.) carry no
+                // mechanical loads: they stay in the stiffness as inert rock
+                // but must not push on the mechanics (their pressure/PV/depth
+                // are flow bookkeeping, not rock state).
+                if (problem.mechFlowOnlyCell(dofIdx)) {
+                    mechPotentialForce_[dofIdx] = 0.0;
+                    mechPotentialPressForce_[dofIdx] = 0.0;
+                    mechPotentialPressForceFracture_[dofIdx] = 0.0;
+                    mechPotentialTempForce_[dofIdx] = 0.0;
+                }
             }
             Opm::PropertyTree param = problem.getFractureParam();
             bool smooth = param.get<bool>("smooth_force",false);
@@ -192,6 +205,16 @@ namespace Opm{
             // conductive thermal front.  Takes precedence over the legacy one-ring
             // 'smooth_force' smoothing, whose radius is grid dependent.
             double smooth_length = param.get<double>("smooth_force_length",0.0);
+            // Safeguard: force smoothing averages neighbor values, so the
+            // zeroed loads of flow-only cells would bleed into the adjacent
+            // rock.  Warn loudly rather than silently distort the loads.
+            if ((smooth || smooth_length > 0.0) && problem.hasMechFlowOnlyCells()
+                && simulator_.gridView().comm().rank() == 0) {
+                OpmLog::warning("smooth_force(_length) is active while flow-only "
+                                "(mech-masked) cells exist: smoothing will mix their "
+                                "zero loads into neighboring rock cells near the "
+                                "aquifer attachment.");
+            }
             if(smooth_length > 0.0){
               mechPotentialForce_ = vem::diffuseCellVector(simulator_.vanguard().grid(),mechPotentialForce_,smooth_length);
             } else if(smooth){

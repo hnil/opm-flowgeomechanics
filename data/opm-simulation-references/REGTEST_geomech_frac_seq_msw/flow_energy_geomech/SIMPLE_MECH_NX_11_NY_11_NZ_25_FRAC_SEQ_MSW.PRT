@@ -1,0 +1,996 @@
+
+
+
+ ########  #          ######   #           #
+ #         #         #      #   #         # 
+ #####     #         #      #    #   #   #  
+ #         #         #      #     # # # #   
+ #         #######    ######       #   #    
+
+Flow is a simulator for fully implicit three-phase black-oil flow, and is part of OPM.
+For more information visit: https://opm-project.org 
+
+Flow Version     =  2026.04-pre (068c544*)
+Machine name     =  Halvors-MBP.sintef.no (Number of logical cores: 14, Memory size: 24576.00 MB) 
+Operating system =  Darwin arm64 (Kernel: 25.5.0, Darwin Kernel Version 25.5.0: Tue Jun  9 22:28:34 PDT 2026; root:xnu-12377.121.10~1/RELEASE_ARM64_T6041 )
+Build time       =  2026-07-24 at 14:18:00 hrs
+User             =  root
+Simulation started on 24-07-2026 at 15:08:48 hrs
+Using 1 MPI processes with 1 OMP threads on each 
+Parameters used by Flow:
+# [known parameters which were specified at run-time]
+ParameterFile="data/myparamsfrac_seq.ini" # default: ""
+EclDeckFileName="data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA" # default: ""
+FractureParamFile="data/fracture_simple_bhp_seq_final.json" # default: "notafile"
+EnableWriteAllSolutions="true" # default: "0"
+LinearSolverMech="data/amgmechsolverhypre_geosxcpu_new_nv.json" # default: "ilu0"
+OutputDir="data/opm-simulation-references/REGTEST_geomech_frac_seq_msw/flow_energy_geomech" # default: ""
+LinearSolver="cpr_trueimpesanalytic" # default: "cprw"
+EdgeConformal="true" # default: "0"
+AddCorners="true" # default: "0"
+RelaxedMaxPvFraction="0.0" # default: "0.03"
+AllowSplittingInactiveWells="false" # default: "1"
+PartitionMethod="zoltanwell" # default: "zoltanwell"
+EdgeWeightsMethod="uniform" # default: "transmissibility"
+ThreadsPerProcess="1" # default: "1"
+EnableVtkOutput="false" # default: "1"
+NewtonMaxIterations="15" # default: "20"
+TimeStepControl="general3rdorder" # default: "pid+newtoniteration"
+EnableAdaptiveTimeStepping="true" # default: "1"
+# [parameters which were specified at compile-time]
+AcceleratorMode="none"
+ActionParsingStrictness="normal"
+AllowDistributedWells="0"
+AlternativeWellRateInit="1"
+CheckGroupConstraintsInnerWellIterations="1"
+CheckSatfuncConsistency="1"
+ConserveInnerEnergyThermal="0"
+ContinueOnConvergenceError="0"
+ConvergenceMonitoring="0"
+ConvergenceMonitoringCutOff="6"
+ConvergenceMonitoringDecayFactor="0.75"
+CprReuseInterval="30"
+CprReuseSetup="4"
+CprWeightsThreadParallel="0"
+DbhpMaxRel="1"
+DebugEmitCellPartition="0"
+DebugVerbosityLevel="1"
+DpMaxRel="0.3"
+DsMax="0.2"
+DwellFractionMax="0.2"
+EclOutputDoublePrecision="0"
+EclOutputInterval="-1"
+EnableAsyncEclOutput="0"
+EnableAsyncVtkOutput="0"
+EnableDriftCompensation="0"
+EnableDriftCompensationTemp="1"
+EnableDryRun="auto"
+EnableEclOutput="1"
+EnableEsmry="1"
+EnableGravity="1"
+EnableGridAdaptation="0"
+EnableIntensiveQuantityCache="1"
+EnableLoggingFalloutWarning="0"
+EnableOpmRstFile="1"
+EnableStorageCache="1"
+EnableTerminalOutput="1"
+EnableThermodynamicHints="0"
+EnableTuning="0"
+EnableWellOperabilityCheck="1"
+EnableWellOperabilityCheckIter="0"
+EndTime="1e+100"
+ExplicitRockCompaction="0"
+ExternalPartition=""
+ForceDisableFluidInPlaceOutput="0"
+ForceDisableResvFluidInPlaceOutput="0"
+FullTimeStepInitially="0"
+GpuAwareMpi="0"
+GpuDeviceId="0"
+GroupControlFractionTolerance="0.0001"
+HybridNewtonConfigFile="hybridNewtonConfig.json"
+IgnoreKeywords=""
+IluFillinLevel="0"
+IluRedblack="0"
+IluRelaxation="0.9"
+IluReorderSpheres="0"
+ImbalanceTol="1.1"
+InitialTimeStepInDays="1"
+InitialTimeStepSize="86400"
+InjMultDampMult="0.9"
+InjMultMinDampFactor="0.05"
+InjMultOscThreshold="0.1"
+InputSkipMode="100"
+LinearSolverAccelerator="cpu"
+LinearSolverIgnoreConvergenceFailure="0"
+LinearSolverMaxIter="200"
+LinearSolverMechMaxIter="200"
+LinearSolverMechPrintJsonDefinition="1"
+LinearSolverMechReduction="1e-06"
+LinearSolverMechVerbosity="0"
+LinearSolverPrintJsonDefinition="1"
+LinearSolverReduction="0.01"
+LinearSolverRestart="40"
+LinearSolverVerbosity="0"
+LoadFile=""
+LoadStep="-1"
+LocalDomainsOrderingMeasure="maxpressure"
+LocalDomainsPartitionWellNeighborLevels="1"
+LocalDomainsPartitioningImbalance="1.03"
+LocalDomainsPartitioningMethod="zoltan"
+LocalSolveApproach="gauss-seidel"
+LocalToleranceScalingCnv="0.1"
+LocalToleranceScalingMb="1"
+LocalWellSolveControlSwitching="1"
+MatrixAddWellContributions="0"
+MaxInnerIterMsWells="100"
+MaxInnerIterWells="50"
+MaxLocalSolveIterations="20"
+MaxNewtonIterationsWithInnerWellIterations="99"
+MaxPressureChangeMsWells="1e+06"
+MaxResidualAllowed="1e+07"
+MaxSinglePrecisionDays="20"
+MaxTemperatureChange="5"
+MaxTimeStepDivisions="10"
+MaxTimeStepSize="inf"
+MaxWellStatusSwitchForWells="99"
+MaxWellStatusSwitchInInnerIterWells="99"
+MaxWelleqIter="30"
+MaximumNumberOfGroupSwitches="3"
+MaximumNumberOfWellSwitches="3"
+MaximumWaterSaturation="1"
+MechPorosityCoupling="0"
+MetisParams="default"
+MiluVariant="ilu"
+MinStrictCnvIter="-1"
+MinStrictMbIter="-1"
+MinTimeStepBasedOnNewtonIterations="0"
+MinTimeStepBeforeShuttingProblematicWellsInDays="0.01"
+MinTimeStepSize="0"
+NetworkMaxOuterIterations="3"
+NetworkMaxPressureUpdateInBars="5"
+NetworkMaxStrictOuterIterations="10"
+NetworkMaxSubIterations="100"
+NetworkPressureUpdateDampingFactor="0.1"
+NewtonMaxError="1e+100"
+NewtonMaxRelax="0.5"
+NewtonMinIterations="2"
+NewtonRelaxationType="dampen"
+NewtonTargetIterations="10"
+NewtonTolerance="0.01"
+NewtonVerbose="1"
+NewtonWriteConvergence="0"
+NlddLocalLinearSolver="ilu0"
+NlddLocalLinearSolverMaxIter="200"
+NlddLocalLinearSolverReduction="0.01"
+NlddNumInitialNewtonIter="1"
+NlddRelativeMobilityChangeTol="0.1"
+NonlinearSolver="newton"
+NumLocalDomains="0"
+NumOverlap="1"
+NumPressurePointsEquil="2000"
+NumSatfuncConsistencySamplePoints="5"
+NupcolGroupRateTolerance="0.001"
+OpenclIluParallel="1"
+OpenclPlatformId="0"
+OutputExtraConvergenceInfo="none"
+OutputInterval="1"
+OutputMode="all"
+OwnerCellsFirst="1"
+ParsingStrictness="normal"
+PreSolveNetwork="1"
+PredeterminedTimeStepsFile=""
+PressureMax="1e+99"
+PressureMin="-1e+99"
+PressureScale="1"
+PriVarOscilationThreshold="1e-05"
+PrintParameters="2"
+ProjectSaturations="0"
+RcNetworkLooseCoupling="0"
+RegularizationFactorWells="100"
+RelaxedLinearSolverReduction="0.01"
+RelaxedPressureTolMsw="10000"
+RelaxedWellFlowTol="0.001"
+RescoupSyncAtReportSteps="0"
+RestartTime="-1e+35"
+RestartWritingInterval="16777215"
+SaveFile=""
+SaveStep=""
+ScaleLinearSystem="0"
+SchedRestart="0"
+SerialPartitioning="0"
+ShutUnsolvableWells="1"
+Slave="0"
+SolveWelleqInitially="1"
+SolverContinueOnConvergenceFailure="0"
+SolverGrowthFactor="2"
+SolverMaxGrowth="3"
+SolverMaxRestarts="10"
+SolverMaxTimeStepInDays="365"
+SolverMinTimeStep="1e-12"
+SolverRestartFactor="0.33"
+SolverVerbosity="1"
+StrictInnerIterWells="40"
+StrictOuterIterWells="6"
+TemperatureMax="1e+09"
+TemperatureMin="0"
+TimeStepAfterEventInDays="-1"
+TimeStepControlDecayDampingFactor="1"
+TimeStepControlDecayRate="0.75"
+TimeStepControlFileName="timesteps"
+TimeStepControlGrowthDampingFactor="3.2"
+TimeStepControlGrowthRate="1.25"
+TimeStepControlMaxReductionTimeStep="0.1"
+TimeStepControlParameters="0.125;0.25;0.125;0.75;0.25"
+TimeStepControlRejectCompletedStep="0"
+TimeStepControlSafetyFactor="0.8"
+TimeStepControlTargetIterations="30"
+TimeStepControlTargetNewtonIterations="8"
+TimeStepControlTolerance="0.1"
+TimeStepControlToleranceTestVersion="standard"
+TimeStepVerbosity="1"
+ToleranceCnv="0.01"
+ToleranceCnvEnergy="0.4182"
+ToleranceCnvEnergyRelaxed="41.82"
+ToleranceCnvRelaxed="1"
+ToleranceEnergyBalance="4.182e-06"
+ToleranceEnergyBalanceRelaxed="4.182e-05"
+ToleranceMaxDp="0"
+ToleranceMaxDrs="0"
+ToleranceMaxDrv="0"
+ToleranceMaxDs="0"
+ToleranceMb="1e-07"
+ToleranceMbRelaxed="1e-06"
+TolerancePressureMsWells="1000"
+ToleranceWellControl="1e-07"
+ToleranceWells="0.0001"
+TpsaIluFillinLevel="0"
+TpsaIluRelaxation="0.9"
+TpsaLinearSolver="ilu0"
+TpsaLinearSolverIgnoreConvergenceFailure="0"
+TpsaLinearSolverMaxIter="200"
+TpsaLinearSolverPrintJsonDefinition="0"
+TpsaLinearSolverReduction="0.001"
+TpsaLinearSolverRestart="40"
+TpsaLinearSolverVerbosity="0"
+TpsaNewtonMaxError="1e+100"
+TpsaNewtonMaxIterations="20"
+TpsaNewtonMinIterations="1"
+TpsaNewtonTargetIterations="10"
+TpsaNewtonTolerance="0.001"
+TpsaNewtonVerbosity="1"
+TpsaRelaxedLinearSolverReduction="0.001"
+TpsaUseGmres="0"
+TruncateTimeStepToFloat="0"
+UpdateEquationsScaling="0"
+UseAverageDensityMsWells="0"
+UseGmres="0"
+UseHybridNewton="0"
+UseImplicitIpr="1"
+UseMultisegmentWell="1"
+UseUpdateStabilization="1"
+VerifyGpuAwareMpi="0"
+VtkWriteAverageMolarMasses="0"
+VtkWriteDensities="1"
+VtkWriteDofIndex="0"
+VtkWriteExtrusionFactor="0"
+VtkWriteFilterVelocities="0"
+VtkWriteFluidEnthalpies="1"
+VtkWriteFluidInternalEnergies="1"
+VtkWriteFugacities="0"
+VtkWriteFugacityCoeffs="0"
+VtkWriteGasDissolutionFactor="0"
+VtkWriteGasFormationVolumeFactor="0"
+VtkWriteGasSaturationPressure="0"
+VtkWriteGeoMech="1"
+VtkWriteIntrinsicPermeabilities="0"
+VtkWriteMassFractions="0"
+VtkWriteMobilities="0"
+VtkWriteMolarities="0"
+VtkWriteMoleFractions="1"
+VtkWriteOilFormationVolumeFactor="0"
+VtkWriteOilSaturationPressure="0"
+VtkWriteOilVaporizationFactor="0"
+VtkWritePorosity="1"
+VtkWritePotentialGradients="0"
+VtkWritePressures="1"
+VtkWritePrimaryVars="0"
+VtkWritePrimaryVarsMeaning="0"
+VtkWriteProcessRank="0"
+VtkWriteRelativePermeabilities="1"
+VtkWriteRockInternalEnergy="1"
+VtkWriteSaturatedGasOilVaporizationFactor="0"
+VtkWriteSaturatedOilGasDissolutionFactor="0"
+VtkWriteSaturationRatios="0"
+VtkWriteSaturations="1"
+VtkWriteTemperature="1"
+VtkWriteTotalMassFractions="0"
+VtkWriteTotalMoleFractions="0"
+VtkWriteTotalThermalConductivity="1"
+VtkWriteTracerConcentration="0"
+VtkWriteViscosities="0"
+VtkWriteWaterFormationVolumeFactor="0"
+WaterOnlyThreshold="1"
+WellGroupConstraintsMaxIterations="1"
+ZoltanImbalanceTol="1.1"
+ZoltanParams="graph"
+ZoltanPhgEdgeSizeThreshold="0.35"
+
+Reading deck file 'data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA'
+    0 Reading RUNSPEC  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 2
+    1 Reading DIMENS   in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 3
+    2 Reading OIL      in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 6
+    3 Reading WATER    in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 7
+    4 Reading GAS      in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 8
+    5 Reading DISGAS   in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 9
+    6 Reading METRIC   in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 10
+    7 Reading THERMAL  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 11
+    8 Reading MECH     in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 13
+    9 Reading FRAC     in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 14
+   10 Reading START    in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 15
+   11 Reading GRIDOPTS in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 17
+   12 Reading EQLDIMS  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 19
+   13 Reading REGDIMS  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 21
+   14 Reading TABDIMS  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 23
+   15 Reading WELLDIMS in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 25
+   16 Reading WSEGDIMS in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 27
+   17 Reading VFPPDIMS in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 30
+   18 Reading UNIFIN   in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 32
+   19 Reading UNIFOUT  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 33
+   20 Reading GRID     in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 34
+   21 Reading NEWTRAN  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 35
+   22 Reading GRIDFILE in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 36
+   23 Reading GRIDUNIT in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 38
+   24 Reading INIT     in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 40
+   25 Reading TOPS     in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 44
+   26 Reading DXV      in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 46
+   27 Reading DYV      in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 48
+   28 Reading DZV      in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 50
+   29 Reading EQUALS   in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 61
+   30 Reading EQUALS   in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 66
+   31 Reading COPY     in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 75
+   32 Reading MULTIPLY in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 79
+   33 Reading EQUALS   in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 84
+   34 Reading BCCON    in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 95
+   35 Reading RPTGRID  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 104
+   36 Reading EDIT     in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 106
+   37 Reading PROPS    in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 107
+   38 Reading NOECHO   in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 108
+   39 Reading SPECROCK in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 110
+   40 Reading SPECHEAT in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 114
+   41 Reading DENSITY  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 118
+   42 Reading PVTW     in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 121
+   43 Reading PVTO     in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 124
+   44 Reading PVDG     in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 141
+   45 Reading ROCK     in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 144
+   46 Reading SWOF     in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 147
+   47 Reading SGOF     in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 149
+   48 Reading REGIONS  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 151
+   49 Reading EQUALS   in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 152
+   50 Reading SOLUTION in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 157
+   51 Reading RPTRST   in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 158
+   52 Reading EQUIL    in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 160
+   53 Reading PBVD     in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 163
+   54 Reading RTEMPVD  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 168
+   55 Reading STREQUIL in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 173
+   56 Reading SUMMARY  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 180
+   57 Reading ALL      in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 181
+   58 Reading PERFORMA in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 182
+   59 Reading WFCFFVIR in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 183
+   60 Reading WFCFFVIR in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 186
+   61 Reading WFCWFVIR in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 190
+   62 Reading WFCFVIR  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 193
+   63 Reading CFCFFVIR in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 196
+   64 Reading CFCWFVIR in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 201
+   65 Reading CFCFVIR  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 205
+   66 Reading WFCFFVIT in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 210
+   67 Reading WFCWFVIR in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 213
+   68 Reading WFCWFVIT in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 215
+   69 Reading WFCFVIR  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 218
+   70 Reading WFCFVIT  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 221
+   71 Reading WWIRFRAC in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 224
+   72 Reading CWIR     in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 226
+   73 Reading CWIRFRAC in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 229
+   74 Reading CFCFFRAC in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 233
+   75 Reading CFCFRATE in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 236
+   76 Reading CPI      in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 240
+   77 Reading CINJFVR  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 243
+   78 Reading CINJFVT  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 246
+   79 Reading CFCSKIN  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 249
+   80 Reading CFCWIDTH in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 252
+   81 Reading CFCPERM  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 255
+   82 Reading CFCPORO  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 258
+   83 Reading CFCRAD   in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 261
+   84 Reading CFCAOF   in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 264
+   85 Reading CFRINJPR in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 268
+   86 Reading CFRINJBH in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 272
+   87 Reading CFRINJRA in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 276
+   88 Reading CWIR     in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 280
+   89 Reading CTFAC    in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 283
+   90 Reading CPR      in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 287
+   91 Reading CFRAREA  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 291
+   92 Reading CFRFLUX  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 294
+   93 Reading CFRHEIGH in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 297
+   94 Reading CFRLENGT in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 300
+   95 Reading CFRFVOLU in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 304
+   96 Reading CFRWI    in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 307
+   97 Reading CFRAVGW  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 310
+   98 Reading CFRAVGFW in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 313
+   99 Reading CPI      in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 317
+  100 Reading CINJFVR  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 320
+  101 Reading CINJFVT  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 323
+  102 Reading BPR      in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 327
+  103 Reading BTEMP    in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 330
+  104 Reading BSTRSSXX in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 333
+  105 Reading SCHEDULE in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 339
+  106 Reading TUNING   in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 340
+  107 Reading NUPCOL   in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 344
+  108 Reading BCPROP   in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 347
+  109 Reading GRUPTREE in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 355
+  110 Reading WELSPECS in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 367
+  111 Reading COMPDAT  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 371
+  112 Reading WELSEGS  in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 376
+  113 Reading COMPSEGS in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 383
+  114 Reading WCONINJE in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 409
+  115 Reading WSEED    in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 414
+  116 Reading WTEMP    in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 426
+  117 Reading TSTEP    in data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 429
+
+Warning: Unsupported keywords or keyword items:
+
+  RPTGRID: keyword not supported
+  In file: data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA, line 104
+
+  NOECHO: keyword not supported
+  In file: data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA, line 108
+
+Simulation will solve for mechanical quantities
+
+Simulation will solve with fractures in wells
+
+Creating grid from keywords DX, DY, DZ and TOPS
+4 fluid phases are active
+
+Processing dynamic information from
+data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 339
+Initializing report step 0/3 at 2020-01-01 0 DAYS line 339
+Processing keyword TUNING at line 340
+Processing keyword NUPCOL at line 344
+Processing keyword BCPROP at line 347
+Processing keyword GRUPTREE at line 355
+Processing keyword WELSPECS at line 367
+Processing keyword COMPDAT at line 371
+Processing keyword WELSEGS at line 376
+Processing keyword COMPSEGS at line 383
+Processing keyword WCONINJE at line 409
+Processing keyword WSEED at line 414
+Processing keyword WTEMP at line 426
+Complete report step 1 (5 DAYS) at 2020-01-06 (0 DAYS)
+
+Initializing report step 2/3 at 2020-01-06 (0 DAYS) line 429
+Complete report step 2 (5 DAYS) at 2020-01-11 (5 DAYS)
+
+Initializing report step 3/3 at 2020-01-11 (5 DAYS) line 429
+Complete report step 3 (5 DAYS) at 2020-01-16 (10 DAYS)
+
+
+Simulation will solve for mechanical quantities
+
+Simulation will solve with fractures in wells
+
+Simulation will solve for mechanical quantities
+
+Simulation will solve with fractures in wells
+
+Processing grid
+Total number of active cells: 3025 / total pore volume: 340910966 RM3
+
+Property tree for linear solvers:
+{
+    "maxiter": "20",
+    "tol": "0.0050000000000000001",
+    "verbosity": "0",
+    "solver": "bicgstab",
+    "preconditioner": {
+        "type": "cpr",
+        "weight_type": "trueimpesanalytic",
+        "pre_smooth": "0",
+        "post_smooth": "1",
+        "finesmoother": {
+            "type": "paroverilu0",
+            "relaxation": "1"
+        },
+        "verbosity": "0",
+        "coarsesolver": {
+            "maxiter": "1",
+            "tol": "0.10000000000000001",
+            "solver": "loopsolver",
+            "verbosity": "0",
+            "preconditioner": {
+                "type": "amg",
+                "alpha": "0.33333333333300003",
+                "relaxation": "1",
+                "iterations": "1",
+                "coarsenTarget": "1200",
+                "pre_smooth": "1",
+                "post_smooth": "1",
+                "beta": "0",
+                "smoother": "ilu0",
+                "verbosity": "0",
+                "maxlevel": "15",
+                "skip_isolated": "0",
+                "accumulate": "1",
+                "prolongationdamping": "1",
+                "maxdistance": "2",
+                "maxconnectivity": "15",
+                "maxaggsize": "6",
+                "minaggsize": "4"
+            }
+        }
+    }
+}
+
+
+Warning: ESMRY is incompatible with MECH/FRAC. Request for ESMRY output ignored.
+
+Warning: Unhandled summary keyword ALL/FAQR
+In data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 181
+
+Warning: Unhandled summary keyword ALL/FAQRG
+In data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 181
+
+Warning: Unhandled summary keyword ALL/FAQT
+In data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 181
+
+Warning: Unhandled summary keyword ALL/FAQTG
+In data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ_MSW.DATA line 181
+{
+    "__doc": "opm-flowgeomechanics fracture parameter file. method=SeqMechFrac (sequential-implicit). Grouped + annotated; see fracture_settings_REFERENCE.md",
+    "hasfractures": "true",
+    "add_perfs_to_schedule": "true",
+    "verbosity": "0",
+    "solver": {
+        "__doc": "Top-level SeqMechFrac driver options (read from getGeoMechParam().solver). See fracture_settings_REFERENCE.md",
+        "method": "SeqMechFrac",
+        "implicit_flow": "true",
+        "max_mech_it": "90",
+        "max_frac_it": "90",
+        "verbosity": "0"
+    },
+    "fractureparam": {
+        "__doc": "Fracture model parameters. Outer SeqMechFrac coupling knobs live here and under .solver",
+        "verbosity": "0",
+        "reduce_boundary": "false",
+        "vem_stability_choice": "1",
+        "vem_source": "true",
+        "vem_stress": "true",
+        "vem_force": "true",
+        "stab_on_stress": "false",
+        "smooth_force": "false",
+        "addconnections": "true",
+        "include_fracture_contributions": "false",
+        "KMax": "1000000",
+        "extended_fractures": "true",
+        "fractureWI": "1e-6",
+        "write_pressure_system": "false",
+        "write_fracture_system": "false",
+        "pressuresolver": "umfpack",
+        "fracturesolver": "notused",
+        "require_converged_fracture_for_wi_update": "true",
+        "topology_hysteresis": {
+            "enable": "false",
+            "on_threshold": "1.0",
+            "off_threshold": "0.3",
+            "confirm_iterations": "1",
+            "cooldown_iterations": "0",
+            "emergency_threshold": "10.0"
+        },
+        "method": {
+            "iterate": "true",
+            "max_it": "3",
+            "tolerance": "0.0001"
+        },
+        "config": {
+            "type": "well_seed",
+            "initial_fracture_width": "0.0001",
+            "min_width": "0",
+            "trires": "10",
+            "gravity_off": "false",
+            "scale_filtrate": "true"
+        },
+        "solver": {
+            "__doc": "Fracture inner-solver + outer-coupling options (read from fractureparam.solver). See fracture_settings_REFERENCE.md",
+            "method": "if_propagate_trimesh",
+            "__1_propagation_growth": "--- fracture grid growth \/ trimesh propagation (KEEP fidelity here) ---",
+            "area_change_fac": "1.2",
+            "dt_limit": "10",
+            "efac": "0.5",
+            "rfac": "0.1",
+            "max_expand_iter": "20",
+            "max_iter_on_same_level": "100000000",
+            "target_cellcount": "400",
+            "cellcount_threshold": "800",
+            "numcell_threshold": "1500",
+            "max_num_coarsening": "0",
+            "smooth_boundary": "false",
+            "remap_solution": "true",
+            "full_intersections": "true",
+            "divide_wellidx": "true",
+            "no_leakof_outercells": "false",
+            "__2_inner_nonlinear_solve": "--- inner width\/pressure Newton (per fixed geometry) ---",
+            "max_iter": "100",
+            "tolerance": "1e-6",
+            "damping": "1",
+            "min_width": "0.001",
+            "max_width": "0.5",
+            "max_dwidth": "0.005",
+            "max_dp": "1000000000",
+            "max_change": "100000",
+            "force_limit": "0.0",
+            "failure_on_nonconvergence": "false",
+            "__3_closed_cell_handling": "--- closed-cell (contact) logic; drives convergence AND growth ---",
+            "closing_type": "org",
+            "closed_cell_policy": "sticky",
+            "close_force_tolerance": "0.0",
+            "reopen_force_tolerance": "0.0",
+            "reopen_width_tolerance": "0.0",
+            "max_closed_cell_toggle_count": "1000000000",
+            "max_closed_cell_toggle_fraction": "1.0",
+            "__4_fracture_flow_mech_coupling": "--- coupling block C inside the fracture system ---",
+            "drop_fluid_mech_linearization": "true",
+            "drop_tol_h": "100.0",
+            "drop_tol_p": "1.0",
+            "use_ad_pressure_assembly": "true",
+            "__5_state_guards": "--- robustness guards on the nonlinear state ---",
+            "guard_state": "true",
+            "guard_max_abs_width": "1.0",
+            "guard_max_abs_pressure": "100000000000.0",
+            "__6_wellindex_coupling_stability": "--- OUTER coupling: when to update well CTF\/perf-pressure from fracture, and how to damp\/accelerate it ---",
+            "ctf_change_threshold": "1e-15",
+            "ctf_change_threshold_rel": "0.0",
+            "ctf_relative_scale": "1.0",
+            "perf_pressure_change_threshold": "1e+30",
+            "perf_pressure_change_threshold_rel": "0.0",
+            "perf_pressure_relative_scale": "1.0",
+            "coupling_update_mode": "legacy",
+            "damping_factor_perf": "0.0",
+            "damping_factor_wi": "0.0",
+            "enable_wi_coupling_update": "false",
+            "coupling_relax_init": "1.0",
+            "coupling_relax_min": "0.05",
+            "coupling_relax_max": "1.25",
+            "coupling_acceptance_factor": "1.0",
+            "coupling_fallback_legacy": "true",
+            "coupling_anderson_alpha_min": "-1.0",
+            "coupling_anderson_alpha_max": "2.0",
+            "coupling_legacy_first_damp": "false",
+            "legacy_coupling_change_logic": "false",
+            "legacy_parent_setup_iteration": "false",
+            "__7_debug_output": "--- diagnostics (off for production) ---",
+            "verbosity": "0",
+            "dump_linear_system_on_failure": "false",
+            "write_coupled_linear_system": "false",
+            "linsolver": {
+                "tol": "1e-10",
+                "atol": "1e-20",
+                "max_iter": "100",
+                "verbosity": "0",
+                "solver": "bicgstab",
+                "preconditioner": {
+                    "verbosity": "0",
+                    "diag_mech": "false",
+                    "diag_flow": "false",
+                    "mech_first": "false",
+                    "fixed_stress": "false",
+                    "mode_policy": "manual",
+                    "mode_switch_coupling_threshold": "0.25",
+                    "mech_press_coupling": "true",
+                    "update_mech_on_reuse": "false",
+                    "flow_solver": {
+                        "solver": "umfpack",
+                        "verbosity": "0",
+                        "tol": "1",
+                        "maxiter": "1",
+                        "preconditioner": {
+                            "type": "DILU",
+                            "verbosity": "0"
+                        }
+                    }
+                }
+            }
+        },
+        "reservoir": {
+            "dist": "1",
+            "calculate_dist": "true",
+            "mobility": "0.0013",
+            "perm": "1e-13"
+        },
+        "control": {
+            "type": "perf_pressure",
+            "rate": "0.029",
+            "WI": "1e-6"
+        }
+    }
+}
+
+
+The deck has TUNING in the SCHEDULE section, but it is ignored due
+to the flag --enable-tuning=false. Set this flag to true to activate it.
+Manually tuning the simulator with the TUNING keyword may increase run time.
+It is recommended using the simulator's default tuning (--enable-tuning=false).
+Geomech init
+
+Update Forces for Geomechanics
+
+
+================ Starting main simulation loop ===============
+
+
+Report step  0/3 at day 0/15, date = 01-Jan-2020
+Restart file written for report step 0/3, date = 01-Jan-2020 00:00:00
+Using Newton nonlinear solver.
+
+Starting time step 0, stepsize 1 days, at day 0/5, date = 01-Jan-2020
+Geomech begin time step
+
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 0
+Flow solve report converged: 0
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 1
+Flow solve report converged: 0
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 2
+Flow solve report converged: 0
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 3
+Flow solve report converged: 1
+Solve Geomechanics:
+Update Forces for Geomechanics
+Setting stability choise to 1
+Property tree for mech linear solver:
+{
+    "tol": "1e-5",
+    "maxiter": "100",
+    "verbosity": "1",
+    "solver": "gmres",
+    "restart": "60",
+    "preconditioner": {
+        "type": "hypre",
+        "max_levels": "25",
+        "print_level": "0",
+        "coarsen_type": "8",
+        "strong_threshold": "0.7",
+        "agg_num_levels": "0",
+        "agg_interp_levels": "0",
+        "max_row_sum": "0.8",
+        "interp_type": "6",
+        "relax_type": "6",
+        "relax_order": "1",
+        "max_coarse_size": "500",
+        "num_sweeps": "2",
+        "nodal": "1",
+        "interp_vec_variant": "2",
+        "num_functions": "3",
+        "num_functions": "1"
+    }
+}
+
+Mechanical solve stats: solves=1, linear_iterations=13 (total 13), solve_time_s=0.0549646 (total 0.0549646), converged=true
+Solve Fractures:
+
+Writing fracture data to VTK files at time: 0grid_size342
+
+Fracture solve stats: fractures_solved=1 (total 1), nonlinear_iterations=2 (total 2), linear_solves=1 (total 1), linear_iterations=0 (total 0), closed_cell_toggles=690 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.146218 (total 0.146218), converged=true
+---------- Starting propagation at level: 0 --------
+Adding connections to schedule
+
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 4
+Flow solve report converged: 1
+Solve Geomechanics:
+Update Forces for Geomechanics
+Mechanical solve stats: solves=2, linear_iterations=18 (total 31), solve_time_s=0.075132 (total 0.130097), converged=true
+Solve Fractures:
+
+Fracture solve stats: fractures_solved=1 (total 2), nonlinear_iterations=2 (total 4), linear_solves=1 (total 2), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.148298 (total 0.294516), converged=true
+---------- Starting propagation at level: 0 --------
+Adding connections to schedule
+
+Geomech model endstimeStep
+
+Update Forces for Geomechanics
+Mechanical solve stats: solves=3, linear_iterations=18 (total 49), solve_time_s=0.0756729 (total 0.205769), converged=true
+
+Fracture solve stats: fractures_solved=1 (total 3), nonlinear_iterations=2 (total 6), linear_solves=1 (total 3), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.144873 (total 0.439389), converged=true
+---------- Starting propagation at level: 0 --------
+Adding connections to schedule
+
+Writing fracture data to VTK files at time: 0grid_size690
+
+ Newton its= 3, linearizations= 5 (0.0sec), linear its=  2 (0.0sec)
+Restart file written for report step 1/3, date = 02-Jan-2020 00:00:00
+
+Starting time step 1, stepsize 2 days, at day 1/5, date = 02-Jan-2020
+Geomech begin time step
+
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 0
+Flow solve report converged: 0
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 1
+Flow solve report converged: 0
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 2
+Flow solve report converged: 1
+Solve Geomechanics:
+Update Forces for Geomechanics
+Mechanical solve stats: solves=4, linear_iterations=15 (total 64), solve_time_s=0.0626925 (total 0.268462), converged=true
+Solve Fractures:
+
+Fracture solve stats: fractures_solved=1 (total 4), nonlinear_iterations=2 (total 8), linear_solves=1 (total 4), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.145923 (total 0.585312), converged=true
+---------- Starting propagation at level: 0 --------
+Adding connections to schedule
+
+Geomech model endstimeStep
+
+Update Forces for Geomechanics
+Mechanical solve stats: solves=5, linear_iterations=18 (total 82), solve_time_s=0.0756959 (total 0.344158), converged=true
+
+Fracture solve stats: fractures_solved=1 (total 5), nonlinear_iterations=2 (total 10), linear_solves=1 (total 5), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.148392 (total 0.733704), converged=true
+---------- Starting propagation at level: 0 --------
+Adding connections to schedule
+
+Writing fracture data to VTK files at time: 86400grid_size690
+
+ Newton its= 2, linearizations= 3 (0.0sec), linear its=  0 (0.0sec)
+Restart file written for report step 1/3, date = 04-Jan-2020 00:00:00
+
+Starting time step 2, stepsize 2 days, at day 3/5, date = 04-Jan-2020
+Geomech begin time step
+
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 0
+Flow solve report converged: 0
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 1
+Flow solve report converged: 0
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 2
+Flow solve report converged: 1
+Solve Geomechanics:
+Update Forces for Geomechanics
+Mechanical solve stats: solves=6, linear_iterations=14 (total 96), solve_time_s=0.0593616 (total 0.403519), converged=true
+Solve Fractures:
+
+Fracture solve stats: fractures_solved=1 (total 6), nonlinear_iterations=2 (total 12), linear_solves=1 (total 6), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.145774 (total 0.879479), converged=true
+---------- Starting propagation at level: 0 --------
+Adding connections to schedule
+
+Geomech model endstimeStep
+
+Update Forces for Geomechanics
+Mechanical solve stats: solves=7, linear_iterations=18 (total 114), solve_time_s=0.0755522 (total 0.479072), converged=true
+
+Fracture solve stats: fractures_solved=1 (total 7), nonlinear_iterations=2 (total 14), linear_solves=1 (total 7), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.146605 (total 1.02608), converged=true
+---------- Starting propagation at level: 0 --------
+Adding connections to schedule
+
+Writing fracture data to VTK files at time: 259200grid_size690
+
+ Newton its= 2, linearizations= 3 (0.0sec), linear its=  0 (0.0sec)
+Restart file written for report step 1/3, date = 06-Jan-2020 00:00:00
+
+
+Report step  1/3 at day 5/15, date = 06-Jan-2020
+
+Starting time step 0, stepsize 5 days, at day 5/10, date = 06-Jan-2020
+Geomech begin time step
+
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 0
+Flow solve report converged: 0
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 1
+Flow solve report converged: 0
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 2
+Flow solve report converged: 0
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 3
+Flow solve report converged: 1
+Solve Geomechanics:
+Update Forces for Geomechanics
+Mechanical solve stats: solves=8, linear_iterations=14 (total 128), solve_time_s=0.0605309 (total 0.539602), converged=true
+Solve Fractures:
+
+Fracture solve stats: fractures_solved=1 (total 8), nonlinear_iterations=2 (total 16), linear_solves=1 (total 8), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.146115 (total 1.1722), converged=true
+---------- Starting propagation at level: 0 --------
+Adding connections to schedule
+
+Geomech model endstimeStep
+
+Update Forces for Geomechanics
+Mechanical solve stats: solves=9, linear_iterations=18 (total 146), solve_time_s=0.0756307 (total 0.615233), converged=true
+
+Fracture solve stats: fractures_solved=1 (total 9), nonlinear_iterations=2 (total 18), linear_solves=1 (total 9), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 690), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.146648 (total 1.31885), converged=true
+---------- Starting propagation at level: 0 --------
+Adding connections to schedule
+
+Writing fracture data to VTK files at time: 432000grid_size690
+
+ Newton its= 3, linearizations= 4 (0.0sec), linear its=  0 (0.0sec)
+Restart file written for report step 2/3, date = 11-Jan-2020 00:00:00
+
+
+Report step  2/3 at day 10/15, date = 11-Jan-2020
+
+Starting time step 0, stepsize 5 days, at day 10/15, date = 11-Jan-2020
+Geomech begin time step
+
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 0
+Flow solve report converged: 0
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 1
+Flow solve report converged: 0
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 2
+Flow solve report converged: 1
+Solve Geomechanics:
+Update Forces for Geomechanics
+Mechanical solve stats: solves=10, linear_iterations=13 (total 159), solve_time_s=0.055494 (total 0.670727), converged=true
+Solve Fractures:
+
+Fracture solve stats: fractures_solved=1 (total 10), nonlinear_iterations=22 (total 40), linear_solves=18 (total 27), linear_iterations=9 (total 9), closed_cell_toggles=690 (total 1380), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.876139 (total 2.19499), converged=true
+---------- Starting propagation at level: 0 --------
+Adding connections to schedule
+
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 3
+Flow solve report converged: 1
+Solve Geomechanics:
+Update Forces for Geomechanics
+Mechanical solve stats: solves=11, linear_iterations=18 (total 177), solve_time_s=0.0768555 (total 0.747583), converged=true
+Solve Fractures:
+
+Fracture solve stats: fractures_solved=1 (total 11), nonlinear_iterations=15 (total 55), linear_solves=12 (total 39), linear_iterations=7 (total 16), closed_cell_toggles=588 (total 1968), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.585674 (total 2.78066), converged=true
+---------- Starting propagation at level: 1 --------
+Adding connections to schedule
+
+Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: 4
+Flow solve report converged: 1
+Solve Geomechanics:
+Update Forces for Geomechanics
+Mechanical solve stats: solves=12, linear_iterations=18 (total 195), solve_time_s=0.0768744 (total 0.824457), converged=true
+Solve Fractures:
+
+Fracture solve stats: fractures_solved=1 (total 12), nonlinear_iterations=11 (total 66), linear_solves=9 (total 48), linear_iterations=5 (total 21), closed_cell_toggles=612 (total 2580), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.35458 (total 3.13524), converged=true
+---------- Starting propagation at level: 1 --------
+Adding connections to schedule
+
+Geomech model endstimeStep
+
+Update Forces for Geomechanics
+Mechanical solve stats: solves=13, linear_iterations=16 (total 211), solve_time_s=0.0676 (total 0.892057), converged=true
+
+Fracture solve stats: fractures_solved=1 (total 13), nonlinear_iterations=16 (total 82), linear_solves=13 (total 61), linear_iterations=6 (total 27), closed_cell_toggles=348 (total 2928), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.0883213 (total 3.22356), converged=true
+---------- Starting propagation at level: 1 --------
+Adding connections to schedule
+
+Writing fracture data to VTK files at time: 864000grid_size270
+
+ Newton its= 2, linearizations= 5 (0.0sec), linear its=  0 (0.0sec)
+Restart file written for report step 3/3, date = 16-Jan-2020 00:00:00
+
+
+
+================    End of simulation     ===============
+
+Number of MPI processes:         1
+Threads per MPI process:         1
+Setup time:                      0.06 s
+  Deck input:                    0.03 s
+Number of timesteps:             5
+Simulation time:                 4.96 s
+  Assembly time:                 0.06 s (Wasted: 0.0 s; 0.0%)
+    Well assembly:               0.00 s (Wasted: 0.0 s; 0.0%)
+  Linear solve time:             0.03 s (Wasted: 0.0 s; 0.0%)
+    Linear setup:                0.03 s (Wasted: 0.0 s; 0.0%)
+  Props/update time:             0.02 s (Wasted: 0.0 s; 0.0%)
+  Pre/post step:                 1.08 s (Wasted: 0.0 s; 0.0%)
+  Output write time:             0.02 s
+Overall Linearizations:         20      (Wasted:     0; 0.0%)
+Overall Newton Iterations:      12      (Wasted:     0; 0.0%)
+Overall Linear Iterations:       2      (Wasted:     0; 0.0%)
+
+
+
+Error summary:
+Warnings          6
+Info              303
+Errors            0
+Bugs              0
+Debug             0
+Problems          0
+

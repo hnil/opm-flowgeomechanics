@@ -364,7 +364,11 @@ buildMatrixStructure(const std::vector<Htrans>& htrans,
                      size_t num_well_equations = 0)
 {
     const size_t total_size = nc + num_well_equations;
-    auto mat = std::make_unique<BCRSMatrix1x1>(total_size, total_size, 4, 0.4,
+    // implicit build: avg 4 entries/row; the overflow buffer must also hold the
+    // well row, which has one entry per well-source cell (many with
+    // solver.well_source_all_perfs), so size it from perfinj
+    const double overflow = 0.4 + (total_size > 0 ? 2.0 * perfinj.size() / static_cast<double>(total_size) : 0.0);
+    auto mat = std::make_unique<BCRSMatrix1x1>(total_size, total_size, 4, overflow,
                                                 BCRSMatrix1x1::implicit);
 
     for (const auto& ht : htrans) {
