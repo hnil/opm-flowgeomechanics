@@ -969,3 +969,35 @@ add_test(NAME Unit.FractureContactReport.N5
 set_tests_properties(Unit.FractureContactReport.N5
 	PROPERTIES PASS_REGULAR_EXPRESSION "open but force wants close .f>=close_tol.: 456"
 )
+
+# --- Best-practice band tests (qualitative guards, not bit-compare) ----------
+# Protect the recommended sequential-implicit settings: the run must complete,
+# the fracture must grow into a physical band (under-growth = suppressed
+# fracturing, over-growth = runaway) and the well pressure must be physical.
+# Bands from the 2026-08-25 baselines; re-baseline deliberately, not casually.
+add_test(NAME BANDTEST_geomech_best_practice_ratewell
+         COMMAND bash ${CMAKE_CURRENT_LIST_DIR}/tests/run_band_test.sh
+                 $<TARGET_FILE:flow_energy_geomech>
+                 ${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA
+                 ${CMAKE_CURRENT_LIST_DIR}/data/best_practice/seq_implicit_ratewell.json
+                 ${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
+                 ${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac_seq.ini
+                 ${CMAKE_BINARY_DIR}/tests/band_ratewell
+                 ${CMAKE_CURRENT_LIST_DIR}/tests/check_fracture_bands.py
+                 --vtu-glob ${CMAKE_BINARY_DIR}/tests/band_ratewell/*nr-*.vtu
+                 --bhp-min 200 --bhp-max 265
+                 --area-min 1500 --area-max 8000
+                 --open-frac-min 0.3)
+add_test(NAME BANDTEST_geomech_best_practice_fb
+         COMMAND bash ${CMAKE_CURRENT_LIST_DIR}/tests/run_band_test.sh
+                 $<TARGET_FILE:flow_energy_geomech>
+                 ${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA
+                 ${CMAKE_CURRENT_LIST_DIR}/data/best_practice/seq_implicit_fb.json
+                 ${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
+                 ${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac_seq.ini
+                 ${CMAKE_BINARY_DIR}/tests/band_fb
+                 ${CMAKE_CURRENT_LIST_DIR}/tests/check_fracture_bands.py
+                 --vtu-glob ${CMAKE_BINARY_DIR}/tests/band_fb/*nr-*.vtu
+                 --bhp-min 220 --bhp-max 285
+                 --area-min 400 --area-max 3000
+                 --open-frac-min 0.5)

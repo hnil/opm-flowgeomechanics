@@ -592,10 +592,6 @@ private:
     // contact set at the end of the previous coupling round in this timestep
     // (solver.propagate_on_stable_contact): growth is only allowed once the
     // open/closed set has stopped changing between rounds
-    std::vector<int> closed_cells_round_prev_;
-    bool contact_round_valid_{false};
-    bool contact_stable_this_round_{true};
-    int score_calls_this_round_{0};
     // fracture area and perf pressure at the timestep checkpoint (moveForwardInTime);
     // used by the per-step growth guard and the onset dt-hold
     double area_step_start_{-1.0};
