@@ -233,7 +233,8 @@ Fracture::growthGuardViolation() const
 inline int
 Fracture::numWellEquations() const
 {
-    return effectiveControlType() == "rate_well" ? 1 : 0;
+    const std::string t = effectiveControlType();
+    return (t == "rate_well" || t == "bhp_well") ? 1 : 0;
 }
 
 inline Fracture::DynamicMatrix&
@@ -642,19 +643,12 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         // count must not change between rounds - the remap asserts otherwise),
         // and resize the persistent pressure vector across a control transition.
         if (prm_.get_child("control").get<std::string>("type") == "well") {
-            const std::string ctrl_now = well_control_is_rate_ ? "rate_well" : "perf_pressure";
+            // generalized well row: both constraints keep the well DOF, so a
+            // control switch changes one row's content only - no state resize
+            const std::string ctrl_now = well_control_is_rate_ ? "rate_well" : "bhp_well";
             if (ctrl_now != effective_control_latched_) {
-                const size_t np = fracture_pressure_.size();
-                if (effective_control_latched_ == "rate_well" && ctrl_now == "perf_pressure"
-                    && np > 0) {
-                    fracture_pressure_.resize(np - 1); // drop the well DOF
-                } else if (effective_control_latched_ == "perf_pressure"
-                           && ctrl_now == "rate_well" && np > 0) {
-                    fracture_pressure_.resize(np + 1);
-                    fracture_pressure_[np] = fracture_pressure_[0]; // init well DOF
-                }
                 if (!effective_control_latched_.empty())
-                    std::cout << "Fracture " << name() << ": control switched "
+                    std::cout << "Fracture " << name() << ": well constraint switched "
                               << effective_control_latched_ << " -> " << ctrl_now << std::endl;
                 effective_control_latched_ = ctrl_now;
             }

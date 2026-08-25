@@ -1182,6 +1182,15 @@ Fracture::addSource()
         wi_dzfac -= wi_dz_*density*gravity_; // sum wi dz
         wi_dzfac += (WI* (perf_ref_depth_- well_ref_depth_))*gravity_*density; // convert from bhp ref depth to perf ref depth
         rhs_pressure_[rhs_pressure_.size() - 1] = well_rate + lambda * wi_dzfac;
+    } else if (control_type == "bhp_well") {
+        // constraint row: scale*(p_w) = scale*(target at the perf-ref datum);
+        // scale MUST match bhpWellRowScale() in the assembler
+        assert(numWellEquations() == 1);
+        const double scale = std::max(total_wellindex_, 1e-14);
+        const double density = reservoir_density_[std::get<0>(perfinj_[0])];
+        const double p_target = well_target_bhp_
+            + density * gravity_ * (perf_ref_depth_ - well_ref_depth_);
+        rhs_pressure_[rhs_pressure_.size() - 1] = scale * p_target;
     } else {
         OPM_THROW(std::runtime_error, "Unknowns control");
     }
@@ -1221,8 +1230,8 @@ Fracture::injectionPressure() const
     } else if (control_type == "perf_pressure") {
         double bhp = perf_pressure_;
         return bhp;
-    } else if (control_type == "rate_well") {
-        // @@ We should use perf_pressure_ here too, but ensure it is updated
+    } else if (control_type == "rate_well" || control_type == "bhp_well") {
+        // the solved well DOF
         return fracture_pressure_[fracture_pressure_.size() - 1][0];
     } else {
         OPM_THROW(std::runtime_error, "Unknowns control");
@@ -1544,9 +1553,11 @@ std::string Fracture::effectiveControlType() const
     // across well types and mid-run control switches.
     const std::string t = prm_.get_child("control").get<std::string>("type");
     if (t == "well") {
+        // generalized well row: the well DOF is kept for BOTH constraints, only
+        // the well row's content differs (rate balance vs p_w = BHP target)
         if (!effective_control_latched_.empty())
             return effective_control_latched_;
-        return well_control_is_rate_ ? "rate_well" : "perf_pressure";
+        return well_control_is_rate_ ? "rate_well" : "bhp_well";
     }
     return t;
 }
