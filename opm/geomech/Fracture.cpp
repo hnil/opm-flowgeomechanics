@@ -1,3 +1,4 @@
+#include <set>
 #include "config.h"
 
 #include <iostream> // std::cout
@@ -715,6 +716,63 @@ double Fracture::leakofDp(int i) const{
    return fracture_pressure_[i][0] - reservoir_pressure_[i]
                 - (fracture_dgh_[i] - reservoir_cell_z_[i] * gravity_ * reservoir_density_[i]);
 }
+void
+Fracture::writeIterationSnapshot(int step, int round, const std::string& tag) const
+{
+    if (!prm_.get<bool>("solver.write_iteration_snapshots", false) || !active_)
+        return;
+    const std::string dir = prm_.get<std::string>("solver.iteration_snapshot_dir", ".");
+    const std::string base = dir + "/" + name();
+    const bool per_cell = prm_.get<bool>("solver.iteration_snapshot_cells", true);
+    static std::set<std::string> headers_written;
+    const std::vector<double> K1 = stressIntensityK1();
+    const std::vector<double> leak = leakOfRate();
+    std::map<int, double> wimap;
+    for (const auto& w : wellIndices()) wimap.insert_or_assign(w.cell, w.ctf);
+    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+    double area = 0, open_area = 0, vol = 0, qleak = 0, wisum = 0, psum = 0, wmax = 0;
+    int nclosed = 0;
+    std::ofstream cf;
+    if (per_cell) {
+        const bool fresh = !headers_written.count(base + "_iter.csv");
+        cf.open(base + "_iter.csv", std::ios::app);
+        if (fresh) {
+            cf << "step,round,tag,cell,x,y,z,area,p_frac,p_res,traction,width,closed,K1,leakoff_rate,wi\n";
+            headers_written.insert(base + "_iter.csv");
+        }
+    }
+    for (const auto& e : Dune::elements(grid_->leafGridView())) {
+        const int i = mapper.index(e);
+        const auto g = e.geometry();
+        const double a = g.volume();
+        const auto c = g.center();
+        const double w = fracture_width_[i][0];
+        const double pf = fracture_pressure_[i][0];
+        const int closed = (i < static_cast<int>(closed_cells_.size())) ? closed_cells_[i] : 0;
+        area += a; if (w > 0) { open_area += a; vol += a * w; }
+        qleak += (i < static_cast<int>(leak.size()) ? leak[i] : 0.0) * a;
+        wisum += wimap.count(reservoir_cells_[i]) ? wimap[reservoir_cells_[i]] : 0.0;
+        psum += pf; wmax = std::max(wmax, w); nclosed += closed;
+        if (per_cell)
+            cf << step << "," << round << "," << tag << "," << i << "," << c[0] << "," << c[1] << "," << c[2]
+               << "," << a << "," << pf << "," << reservoir_pressure_[i] << "," << reservoirTraction(i)
+               << "," << w << "," << closed << "," << (i < static_cast<int>(K1.size()) ? K1[i] : 0.0)
+               << "," << (i < static_cast<int>(leak.size()) ? leak[i] : 0.0)
+               << "," << (wimap.count(reservoir_cells_[i]) ? wimap[reservoir_cells_[i]] : 0.0) << "\n";
+    }
+    const std::string sname = base + "_iter_summary.csv";
+    const bool fresh = !headers_written.count(sname);
+    std::ofstream sf(sname, std::ios::app);
+    if (fresh) {
+        sf << "step,round,tag,perf_pressure,well_rate,perf_rate,ncells,area,open_area,volume,Q_leak,WI_sum,p_frac_mean,width_max,n_closed\n";
+        headers_written.insert(sname);
+    }
+    const size_t n = numFractureCells();
+    sf << step << "," << round << "," << tag << "," << perf_pressure_ << "," << well_rate_ << "," << well_perf_rate_
+       << "," << n << "," << area << "," << open_area << "," << vol << "," << qleak << "," << wisum
+       << "," << (n ? psum / n : 0.0) << "," << wmax << "," << nclosed << "\n";
+}
+
 void
 Fracture::writemulti(double time) const
 {
@@ -2194,16 +2252,63 @@ void Fracture::resetFracture()
     // drop CTF-acceleration history; it belongs to the rolled-back solves
     wi_vec_mix_.has_prev_residual = false;
     wi_vec_mix_.prev_residual.clear();
+    width_round_valid_ = false; // relaxation history belongs to the rolled-back solves too
+    contact_round_valid_ = false;
     // Note: reservoir_cells_, all_reservoir_cells_, reservoir_properties_, etc.
     // are recalculated by FractureModel::resetFractures after this call returns.
 }
-void Fracture::moveForwardInTime()
+void Fracture::moveForwardInTime(double dt_last)
 {
     // CTF-vector acceleration: the secant information is only meaningful within
     // one timestep's outer iterations — the target jumps physically across the
     // step boundary. Keep prev_mixed (damping continuity) but drop the history.
     wi_vec_mix_.has_prev_residual = false;
     wi_vec_mix_.prev_residual.clear();
+    width_round_valid_ = false; // state relaxation history is per-timestep too
+    contact_round_valid_ = false;
+    // checkpoint values for the per-step growth guard / onset dt-hold
+    if (active_) {
+        const auto fp = calculateFractureProperties();
+        // Coupling-rate dt controller (opt-in via solver.coupling_dt_pressure_target,
+        // bar per step): suggest the next flow step from how fast the coupling state
+        // moved in the completed step - small steps arise exactly during transients
+        // (establishment, cake re-pressurisation) and release when the state is quiet.
+        const double dp_target = prm_.get<double>("solver.coupling_dt_pressure_target", 0.0) * 1e5;
+        if (dp_target > 0.0 && dt_last > 0.0 && perf_pressure_step_start_ >= 0.0) {
+            const double relA_target = prm_.get<double>("solver.coupling_dt_area_target", 0.2);
+            const double dp = std::abs(perf_pressure_ - perf_pressure_step_start_);
+            const double relA = (area_step_start_ > 0.0)
+                ? std::abs(fp.area - area_step_start_) / area_step_start_ : 0.0;
+            const bool violated = (dp > dp_target)
+                || (relA_target > 0.0 && relA > relA_target);
+            // Floor at the proven establishment step: per-step coupling changes do
+            // not vanish with dt during the bang-bang transient, so an unbounded
+            // multiplicative cap would ratchet dt to useless values.
+            const double dt_min = prm_.get<double>("solver.coupling_dt_min", 0.1) * 86400.0;
+            const int quiet_needed = prm_.get<int>("solver.coupling_dt_quiet_steps", 5);
+            if (violated) {
+                // shrink immediately, proportionally to the excursion
+                double fac = 1.0;
+                if (dp > dp_target) fac = std::min(fac, dp_target / dp);
+                if (relA_target > 0.0 && relA > relA_target)
+                    fac = std::min(fac, relA_target / relA);
+                coupling_quiet_steps_ = 0;
+                coupling_dt_cap_ = std::max(dt_last * std::max(fac, 0.5), dt_min);
+            } else if (++coupling_quiet_steps_ >= quiet_needed) {
+                // transients settle in episodes: release only after a run of
+                // quiet steps, and gently
+                coupling_dt_cap_ = std::max(dt_last * 1.5, dt_min);
+            } else {
+                coupling_dt_cap_ = std::max(dt_last, dt_min); // hold
+            }
+        }
+        area_step_start_ = fp.area;
+        volume_step_start_ = fp.volume;
+    } else {
+        area_step_start_ = -1.0;
+        volume_step_start_ = -1.0;
+    }
+    perf_pressure_step_start_ = perf_pressure_;
     // copy current state to "previous" state
     //grid_prev_ = grid_ ? std::make_unique<Grid>(*grid_) : nullptr;
     //grid_stretcher_prev_ = grid_strecher_ ? std::make_unique<Opm::RegularGridStretcher>(*grid_strecher_) : nullptr;
@@ -2350,11 +2455,39 @@ Fracture::initPressureMatrix()
     // size_t num_columns = 0;
     //  index of the neighbour    //
     // Flow from wells to fracture cells
-    double fWI = prm_.get<double>("fractureWI");
+    const double fWI_cfg = prm_.get<double>("fractureWI");
+    // fractureWI_mode: "constant" (config fractureWI, legacy) or "estimate"
+    // (radial flow in the fracture plane towards the wellbore, cubic-law
+    // permeability: WI = 2*pi*(w^3/12)/ln(re/rw), same estimate as the embedded
+    // aux-cell path; w = max(current width, flow floor)).
+    const std::string fwi_mode = prm_.get<std::string>("solver.fractureWI_mode", "constant");
+    const double fwi_rw = prm_.get<double>("solver.fractureWI_rw", 0.1);
     perfinj_.clear();
     htrans_.clear();
-    for (int cell : well_source_) {
-        perfinj_.push_back({cell, fWI});
+    ElementMapper wsmapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+    std::vector<double> cell_area(numFractureCells(), 0.0);
+    for (const auto& e : Dune::elements(grid_->leafGridView()))
+        cell_area[wsmapper.index(e)] = e.geometry().volume();
+    auto fwi_for = [&](int cell) {
+        if (fwi_mode != "estimate") return fWI_cfg;
+        const double w = std::max(cell < static_cast<int>(fracture_width_.size()) ? fracture_width_[cell][0] : 0.0,
+                                  min_width_);
+        const double re = std::sqrt(std::max(cell_area[cell], 1e-12) / M_PI);
+        const double lnTerm = std::log(std::max(re / fwi_rw, 1.1));
+        return 2.0 * M_PI * (w * w * w / 12.0) / lnTerm;
+    };
+    // Well sources: the seed ring (legacy) and, with solver.well_source_all_perfs,
+    // every fracture cell that lies in a reservoir cell the well perforates — so a
+    // fracture that grows across the perforated interval is fed along it (as in a
+    // rate-fed fracture model) instead of only at the seed.
+    std::set<int> sources(well_source_.begin(), well_source_.end());
+    if (prm_.get<bool>("solver.well_source_all_perfs", false) && !well_perf_cells_.empty()) {
+        std::set<int> perfcells(well_perf_cells_.begin(), well_perf_cells_.end());
+        for (size_t i = 0; i < reservoir_cells_.size(); ++i)
+            if (perfcells.count(reservoir_cells_[i])) sources.insert(static_cast<int>(i));
+    }
+    for (int cell : sources) {
+        perfinj_.push_back({cell, fwi_for(cell)});
     }
     // flow between fracture cells
     const size_t nc = numFractureCells() + numWellEquations();
@@ -2394,7 +2527,9 @@ Fracture::initPressureMatrix()
     //  build matrix
     // if (pressure_matrix_.bu == 0){
     // size_t nc = numFractureCells();
-    pressure_matrix_ = std::make_unique<Matrix>(nc, nc, 4, 0.4, Matrix::implicit);
+    // overflow budget must hold the well row (one entry per well-source cell)
+    const double overflow = 0.4 + (nc > 0 ? 2.0 * perfinj_.size() / static_cast<double>(nc) : 0.0);
+    pressure_matrix_ = std::make_unique<Matrix>(nc, nc, 4, overflow, Matrix::implicit);
     auto& matrix = *pressure_matrix_;
     // matrix.setBuildMode(Matrix::implicit);
     //  map from dof=3*nodes at a cell (ca 3*3*3) to cell

@@ -108,6 +108,10 @@ namespace Opm
         // opt-in per-step cap (solver.max_mech_solves_per_step). Reset at the
         // first outer iteration of each step.
         mutable int mech_solves_this_step_{0};
+        // Growth sub-iterations spent within the current timestep
+        // (solver.max_growth_iterations is a per-timestep budget: contact
+        // chatter must not re-arm the loop on every outer iteration).
+        mutable int growth_rounds_this_step_{0};
 
         struct StorageCacheBackup
         {

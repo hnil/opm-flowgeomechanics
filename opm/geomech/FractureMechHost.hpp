@@ -33,7 +33,7 @@ namespace Opm{
         //! Called at the start of each time step.
         void beginTimeStep(){
             if(fracturemodel_){
-                fracturemodel_->moveForwardInTime();
+                fracturemodel_->moveForwardInTime(simulator_.timeStepSize());
             }
         }
 

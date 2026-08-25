@@ -114,12 +114,27 @@ namespace Opm {
     FractureModel::solve(const Simulator& simulator)
     {
         last_solve_stats_ = {};
+        // Opt-in: outside the timestep retry scope (endTimeStep) a fracture solve
+        // failure is fatal; "warn_keep_state" logs and continues on whatever state
+        // the solve left. Serial-tested only.
+        const bool warn_keep_state =
+            prm_.get<std::string>("solver.solve_failure_policy", "throw") == "warn_keep_state";
         for (size_t i = 0; i < wells_.size(); ++i) {
             std::vector<Fracture>& fractures = well_fractures_[i];
             for (size_t j = 0; j < fractures.size(); ++j) {
                 if (fractures[j].isActive()) {
                     std::cout << "Solving fracture " << fractures[j].name() << std::endl;
-                    fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator);
+                    if (warn_keep_state) {
+                        try {
+                            fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator);
+                        } catch (const std::exception& e) {
+                            OpmLog::warning("Fracture solve FAILED for " + fractures[j].name()
+                                            + "; solve_failure_policy=warn_keep_state, continuing: "
+                                            + e.what());
+                        }
+                    } else {
+                        fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator);
+                    }
                     last_solve_stats_ += fractures[j].lastSolveStats();
                 }
             }
@@ -195,11 +210,31 @@ namespace Opm {
     }
 
     inline void
-    FractureModel::moveForwardInTime()
+    FractureModel::writeIterationSnapshots(int step, int round, const std::string& tag) const
+    {
+        for (size_t i = 0; i < wells_.size(); ++i)
+            for (const auto& fracture : well_fractures_[i])
+                fracture.writeIterationSnapshot(step, round, tag);
+    }
+
+    inline std::string
+    FractureModel::growthGuardViolation() const
+    {
+        for (size_t i = 0; i < wells_.size(); ++i) {
+            for (const auto& fracture : well_fractures_[i]) {
+                const std::string msg = fracture.growthGuardViolation();
+                if (!msg.empty()) return msg;
+            }
+        }
+        return {};
+    }
+
+    inline void
+    FractureModel::moveForwardInTime(double dt_last)
     {
         for (size_t i = 0; i < wells_.size(); ++i) {
             for (auto& fracture : well_fractures_[i]) {
-                fracture.moveForwardInTime();
+                fracture.moveForwardInTime(dt_last);
             }
         }
     }
@@ -274,6 +309,7 @@ namespace Opm {
         for (size_t i=0; i < wells_.size(); ++i) {
             // TO DO set wells to active even without fractures
             double injection_rate = 0.0;
+            std::vector<int> perf_cell_indices;
             double well_depth = 0.0;
             double total_wellindex = 0.0;
             double wi_dz = 0.0;
@@ -300,6 +336,7 @@ namespace Opm {
                             //int  perf_index =  findPerf(wellstate, cell_idx);
                             ///if(perf_index == -1) continue; // skip if not found
                             const int cell_idx = wellstate.perf_data.cell_index[perf_index];
+                            perf_cell_indices.push_back(cell_idx);
                             const auto& intQuants = simulator.model()
                                 .intensiveQuantities(cell_idx, /*timeIdx=*/0);
                             using Scalar = double;
@@ -351,6 +388,7 @@ namespace Opm {
                 OpmLog::info(os.str());
               }  
               fracture.setWellProps(injection_rate,  total_wellindex,  wi_dz,  wi_respress,  well_depth);
+              fracture.setWellPerfCells(perf_cell_indices);
                 // do update wells
                 // set well properties
 

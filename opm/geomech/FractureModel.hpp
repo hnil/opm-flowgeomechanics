@@ -92,6 +92,11 @@ public:
     template <class TypeTag, class Simulator>
     double maxFlowTimeStep(const Simulator& simulator) const;
 
+    // Per-step growth guard: first violation message across all active
+    // fractures (empty = none). Not MPI-reduced; caller decides.
+    std::string growthGuardViolation() const;
+    void writeIterationSnapshots(int step, int round, const std::string& tag) const;
+
         void updateReservoirProperties(); // for testing without simulator
         void initFractureStates();
 
@@ -101,7 +106,7 @@ public:
         void updateReservoirAndWellProperties(const Simulator& simulator);
         template <class TypeTag, class Simulator>
         void resetFractures(const Simulator& simulator);
-        void moveForwardInTime();
+        void moveForwardInTime(double dt_last = -1.0);
 
         template <class TypeTag, class Simulator>
         void updateReservoirWellProperties(const Simulator& simulator);

@@ -2,6 +2,8 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <opm/common/ErrorMacros.hpp>
+#include <opm/common/Exceptions.hpp>
 #include <opm/geomech/FractureCouplingOuterLoop.hpp>
 #include <opm/simulators/flow/NewtonIterationContext.hpp>
 #include <opm/simulators/flow/NonlinearSystemBlackOilReservoir.hpp>
@@ -80,6 +82,7 @@ namespace Opm
                 // First outer iteration of a step always solves mechanics.
                 this->last_coupling_composite_norm_ = std::numeric_limits<double>::max();
                 this->mech_solves_this_step_ = 0;
+                this->growth_rounds_this_step_ = 0;
             }
             bool implicit_flow = prm.get<bool>("solver.implicit_flow");
             SimulatorReportSingle report;
@@ -156,6 +159,116 @@ namespace Opm
             }
             if(do_fracture && this->simulator_.problem().hasFractures()){
                 this->fractureOuterBlock(report, timer, nonlinear_solver);
+                this->simulator_.problem().geoMechModel().fractureModel()
+                    .writeIterationSnapshots(timer.currentStepNum(), iteration, "outer");
+
+                // Opt-in growth sub-iterations (default 0 = off): during fracture
+                // establishment the coupling legitimately changes every round, so
+                // iterate flow+mech+fracture here, inside one outer Newton
+                // iteration, instead of burning the flow Newton budget (whose
+                // exhaustion chops dt, which cannot help: the required growth is
+                // a ratio per solve, not per unit time).
+                const int max_growth_it = prm.get<int>("solver.max_growth_iterations", 0);
+                // Growth-driven switch (opt-in): keep iterating only while a
+                // fracture is growing "faster than the timestep" — i.e. it hit
+                // its per-solve growth cap (finite maxFlowTimeStep). When growth
+                // is small the lagged (PostSolve-style) coupling of this round is
+                // accepted, which is what PostSolve does on every step; the
+                // sequential-implicit rounds are spent only where they matter.
+                const bool growth_switch = prm.get<bool>("solver.growth_driven_switch", false);
+                auto fracture_at_growth_cap = [&]() {
+                    return this->simulator_.problem().geoMechModel().fractureModel()
+                        .template maxFlowTimeStep<TypeTag, Simulator>(this->simulator_)
+                        < std::numeric_limits<double>::max();
+                };
+                if (growth_switch && !report.converged && !fracture_at_growth_cap()) {
+                    OpmLog::info("Fracture coupling change accepted lagged (growth_driven_switch: "
+                                 "no fracture at its growth cap this round)");
+                    report.converged = true;
+                }
+                while (max_growth_it > 0 && implicit_flow && !report.converged
+                       && this->growth_rounds_this_step_ < max_growth_it) {
+                    const int growth_round = ++this->growth_rounds_this_step_;
+                    // Re-solve flow to convergence without advancing the outer
+                    // Newton counter; after a connection update this needs
+                    // several iterations, exactly like a fresh timestep.
+                    SimulatorReportSingle flow_report;
+                    bool flow_ok = false;
+                    {
+                        const SetupIterationContextGuard guard{this->simulator_.problem()};
+                        const int max_flow_it =
+                            prm.get<int>("solver.growth_flow_iterations", 12);
+                        for (int fit = 0; fit < max_flow_it; ++fit) {
+                            flow_report = Parent::nonlinearIteration(timer, nonlinear_solver);
+                            report += flow_report;
+                            if (flow_report.converged) {
+                                flow_ok = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!flow_ok) {
+                        // genuine flow trouble: hand back to the outer Newton loop
+                        report.converged = false;
+                        OpmLog::info("Fracture growth sub-iteration "
+                                     + std::to_string(growth_round)
+                                     + ": flow did not reconverge, returning to outer loop");
+                        break;
+                    }
+                    const bool growth_mech_cap_reached = (max_mech_solves_per_step > 0)
+                        && (this->mech_solves_this_step_ >= max_mech_solves_per_step);
+                    if (growth_mech_cap_reached) {
+                        ++this->mech_solves_skipped_;
+                    } else {
+                        this->simulator_.problem().geoMechModel().solveGeomechanics();
+                        ++this->mech_solves_performed_;
+                        ++this->mech_solves_this_step_;
+                    }
+                    SimulatorReportSingle round_report = flow_report;
+                    this->fractureOuterBlock(round_report, timer, nonlinear_solver);
+                    this->simulator_.problem().geoMechModel().fractureModel()
+                        .writeIterationSnapshots(timer.currentStepNum(), 1000 + growth_round, "growth");
+                    report.converged = round_report.converged;
+                    if (growth_switch && !report.converged && !fracture_at_growth_cap()) {
+                        OpmLog::info("Fracture growth stopped; accepting lagged coupling "
+                                     "(growth_driven_switch)");
+                        report.converged = true;
+                    }
+                    OpmLog::info("Fracture growth sub-iteration "
+                                 + std::to_string(growth_round) + "/"
+                                 + std::to_string(max_growth_it)
+                                 + (round_report.converged ? ": coupling settled"
+                                                           : ": still growing"));
+                }
+                // Opt-in fallback: accept the step with the coupling unconverged
+                // (the fracture state is lagged for this step, PostSolve-style)
+                // instead of letting the outer Newton chop dt — which cannot help
+                // when the blocker is contact cycling, not the flow.
+                if (!report.converged && max_growth_it > 0
+                    && this->growth_rounds_this_step_ >= max_growth_it
+                    && prm.get<bool>("solver.accept_unconverged_growth", false)) {
+                    OpmLog::warning("ACCEPTING timestep with UNCONVERGED fracture coupling "
+                                    "after " + std::to_string(this->growth_rounds_this_step_)
+                                    + " growth sub-iterations; fracture/well coupling is "
+                                    "lagged this step (accept_unconverged_growth)");
+                    report.converged = true;
+                }
+                // Per-step growth guard (opt-in): a fracture that grew more than
+                // allowed within this step propagated on a pressure the flow had
+                // not yet responded to. Raised here, inside the retry scope, so
+                // the timestepper chops dt and re-solves from the checkpoint.
+                if (report.converged) {
+                    const std::string violation = this->simulator_.problem()
+                        .geoMechModel().fractureModel().growthGuardViolation();
+                    const int any_violation =
+                        this->simulator_.vanguard().grid().comm().max(violation.empty() ? 0 : 1);
+                    if (any_violation) {
+                        OpmLog::warning("Fracture growth guard: "
+                                        + (violation.empty() ? std::string("violation on another rank")
+                                                             : violation));
+                        OPM_THROW_NOLOG(NumericalProblem, "fracture growth guard: " + violation);
+                    }
+                }
             }
 
             return report;
