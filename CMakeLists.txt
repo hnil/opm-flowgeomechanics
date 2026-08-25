@@ -975,6 +975,13 @@ set_tests_properties(Unit.FractureContactReport.N5
 # the fracture must grow into a physical band (under-growth = suppressed
 # fracturing, over-growth = runaway) and the well pressure must be physical.
 # Bands from the 2026-08-25 baselines; re-baseline deliberately, not casually.
+#
+# Why bands and NOT compareECL against references: the coupled fracture run is
+# measurably not run-to-run reproducible even single-threaded (two identical
+# invocations differed by 11 bar BHP and 46 % fracture rate at the end of this
+# deck, 2026-08-25) - the contact/growth dynamics amplify round-off. Any
+# tolerance-compare test of these configs is structurally flaky; the bands are
+# chosen wider than the measured run-to-run spread.
 add_test(NAME BANDTEST_geomech_best_practice_ratewell
          COMMAND bash ${CMAKE_CURRENT_LIST_DIR}/tests/run_band_test.sh
                  $<TARGET_FILE:flow_energy_geomech>

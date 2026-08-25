@@ -568,10 +568,18 @@ Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched)
             const auto frac_size = Dune::FieldVector<double, 3> {seedSize.verticalExtent(),
                                                                  seedSize.horizontalExtent(),
                                                                  seedSize.width()};
-            // hack
+            // The DECK is the source of these per-seed quantities: WSEED item 8
+            // (vertical size) sets the seed scale, and WSEED item 10 (WIDTH, the
+            // minimum flow width of the cubic law - default 1e-4 m) sets the
+            // flow-width floor, overriding any config.min_width in the JSON.
+            // config.min_width remains only for standalone/test setups without a
+            // deck WSEED. Note this is distinct from solver.min_width (a
+            // numerical clamp inside the width solve).
             prm_.put("config.axis_scale", frac_size[0]); // vertical scale
-            // prm_.put("fractureparam.config.axis_scale", frac_size[1]);// horizontal scale
             prm_.put("config.min_width", frac_size[2]);
+            OpmLog::info("Fracture seed on " + fracWell.name()
+                         + ": flow-width floor (WSEED WIDTH) = "
+                         + std::to_string(frac_size[2]) + " m");
 
             assert(normal.two_norm() > 0.0);
             const auto& conn = sched.wells(fracWell.name()).getConnections();
