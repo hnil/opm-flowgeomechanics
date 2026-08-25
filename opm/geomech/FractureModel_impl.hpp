@@ -309,6 +309,7 @@ namespace Opm {
         for (size_t i=0; i < wells_.size(); ++i) {
             // TO DO set wells to active even without fractures
             double injection_rate = 0.0;
+            bool well_control_is_rate = true; // active well constraint (for control.type=="well")
             std::vector<int> perf_cell_indices;
             double well_depth = 0.0;
             double total_wellindex = 0.0;
@@ -325,6 +326,18 @@ namespace Opm {
                     // get cell index from well perforation data
                     // check if well is open
                     if(wellstate.status == ::Opm::WellStatus::OPEN) {
+                      // the ACTIVE constraint decides the fracture BC when
+                      // control.type == "well": pressure-constrained -> perf_pressure,
+                      // anything rate-like (RATE/RESV/GRUP/...) -> rate_well
+                      if (wellstate.producer) {
+                          const auto c = wellstate.production_cmode;
+                          well_control_is_rate = !(c == WellProducerCMode::BHP
+                                                   || c == WellProducerCMode::THP);
+                      } else {
+                          const auto c = wellstate.injection_cmode;
+                          well_control_is_rate = !(c == WellInjectorCMode::BHP
+                                                   || c == WellInjectorCMode::THP);
+                      }
                       const auto& wells = wellmodel.localNonshutWells();
                       const auto& well = wells[*well_index];
                       assert(well->name() == wells_[i].name());
@@ -387,6 +400,7 @@ namespace Opm {
                         << injection_rate << " WI " << total_wellindex << std::endl;
                 OpmLog::info(os.str());
               }  
+              fracture.setWellControlIsRate(well_control_is_rate);
               fracture.setWellProps(injection_rate,  total_wellindex,  wi_dz,  wi_respress,  well_depth);
               fracture.setWellPerfCells(perf_cell_indices);
                 // do update wells

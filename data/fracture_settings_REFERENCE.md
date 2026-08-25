@@ -213,3 +213,5 @@ across outer iterations. Implemented in `Fracture::applyCouplingUpdate`.
 Diagnostics added to the per-solve stats log (`eclgeomechmodel.hh`): `closed_cell_toggles`
 (contact chatter), `linear_solve_failures`, `ladder_rescues`. The contact/opening state of a
 dumped case can be inspected offline with `replay_fracture_linear_system <prefix> --contact-report`.
+
+| `control.type = well` | `fractureparam.control` | — | Pick the fracture BC from the well's ACTIVE constraint: BHP/THP → perf_pressure, rate-like → rate_well. |

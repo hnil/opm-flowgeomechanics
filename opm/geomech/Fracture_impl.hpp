@@ -233,7 +233,7 @@ Fracture::growthGuardViolation() const
 inline int
 Fracture::numWellEquations() const
 {
-    return prm_.get_child("control").get<std::string>("type") == "rate_well" ? 1 : 0;
+    return effectiveControlType() == "rate_well" ? 1 : 0;
 }
 
 inline Fracture::DynamicMatrix&
@@ -638,6 +638,27 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
     }
         Dune::Timer solve_timer;
         last_solve_stats_ = {};
+        // control.type=="well": latch the BC for this whole solve (the well DOF
+        // count must not change between rounds - the remap asserts otherwise),
+        // and resize the persistent pressure vector across a control transition.
+        if (prm_.get_child("control").get<std::string>("type") == "well") {
+            const std::string ctrl_now = well_control_is_rate_ ? "rate_well" : "perf_pressure";
+            if (ctrl_now != effective_control_latched_) {
+                const size_t np = fracture_pressure_.size();
+                if (effective_control_latched_ == "rate_well" && ctrl_now == "perf_pressure"
+                    && np > 0) {
+                    fracture_pressure_.resize(np - 1); // drop the well DOF
+                } else if (effective_control_latched_ == "perf_pressure"
+                           && ctrl_now == "rate_well" && np > 0) {
+                    fracture_pressure_.resize(np + 1);
+                    fracture_pressure_[np] = fracture_pressure_[0]; // init well DOF
+                }
+                if (!effective_control_latched_.empty())
+                    std::cout << "Fracture " << name() << ": control switched "
+                              << effective_control_latched_ << " -> " << ctrl_now << std::endl;
+                effective_control_latched_ = ctrl_now;
+            }
+        }
         last_solve_stats_.fractures_solved = 1;
     OPM_TIMEBLOCK(SolveFracture);
     //std::cout << "Solve Fracture Pressure" << std::endl;

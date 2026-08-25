@@ -1139,7 +1139,7 @@ Fracture::addSource()
     // gravity contributions between fracture cells
 
     auto control = prm_.get_child("control");
-    std::string control_type = control.get<std::string>("type");
+    std::string control_type = effectiveControlType();
     if (control_type == "rate") {
         double scale = well_source_.size();
         double rate = control.get<double>("rate");
@@ -1222,7 +1222,7 @@ Fracture::injectionBhp() const
 double
 Fracture::injectionPressure() const
 {
-    std::string control_type = prm_.get<std::string>("control.type");
+    std::string control_type = effectiveControlType();
     if (control_type == "rate") {
         double bhp = 0.0;
         double scale = well_source_.size();
@@ -1552,6 +1552,21 @@ void Fracture::setPerfProps(double perfpressure, double depth, double perfrate){
     }
     well_perf_rate_ = perfrate;
     perf_ref_depth_ = depth;
+}
+
+std::string Fracture::effectiveControlType() const
+{
+    // control.type == "well": pick the fracture BC from the well's currently
+    // ACTIVE constraint - rate-constrained (RATE/RESV/GRUP) -> rate_well,
+    // pressure-constrained (BHP/THP) -> perf_pressure. Makes one config safe
+    // across well types and mid-run control switches.
+    const std::string t = prm_.get_child("control").get<std::string>("type");
+    if (t == "well") {
+        if (!effective_control_latched_.empty())
+            return effective_control_latched_;
+        return well_control_is_rate_ ? "rate_well" : "perf_pressure";
+    }
+    return t;
 }
 
 void Fracture::setWellProps(double wellrate,

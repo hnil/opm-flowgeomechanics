@@ -991,7 +991,7 @@ Fracture::makePressureAssemblyInput() const
     input.num_cells = nc;
     input.min_width = min_width_;
     input.htrans = htrans_;
-    input.control_type = prm_.get_child("control").get<std::string>("type");
+    input.control_type = effectiveControlType();
     input.num_well_equations = nw;
     input.perfinj.assign(perfinj_.begin(), perfinj_.end());
     input.total_wellindex = total_wellindex_;

@@ -372,6 +372,10 @@ public:
     double injectionPressure() const;
     double injectionBhp() const;// {return injectionPressure() - dp_perf_;};
     void setPerfProps(double perfpressure,double perf_depth, double perfrate);//{perf_pressure_ = perfpressure;}
+    //! resolved fracture-BC control: "control.type" verbatim, or picked from the
+    //! well's active constraint when control.type == "well"
+    std::string effectiveControlType() const;
+    void setWellControlIsRate(bool is_rate) { well_control_is_rate_ = is_rate; }
     void setWellProps(double wellrate, double WI, double wi_dp, double wi_respress, double ref_depth);
     // Reservoir cells the well perforates (all perforations, not just this
     // fracture's), used by solver.well_source_all_perfs to feed the fracture
@@ -600,6 +604,11 @@ private:
     // coupling-rate dt controller (opt-in): cap on the next flow step, set at the
     // step checkpoint from how fast perf pressure / area moved in the last step
     double coupling_dt_cap_{-1.0};
+    bool well_control_is_rate_{true}; // active well constraint (from the well state)
+    // control.type=="well": the BC resolved at the start of the current solve.
+    // Latched so the system size (well DOF) is stable within a solve; transitions
+    // between solves resize the persistent state.
+    std::string effective_control_latched_;
     int coupling_quiet_steps_{0};
 
     // transmissibilities
