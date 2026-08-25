@@ -329,15 +329,24 @@ namespace Opm {
                       // the ACTIVE constraint decides the fracture BC when
                       // control.type == "well": pressure-constrained -> perf_pressure,
                       // anything rate-like (RATE/RESV/GRUP/...) -> rate_well
+                      bool is_thp = false;
                       if (wellstate.producer) {
                           const auto c = wellstate.production_cmode;
-                          well_control_is_rate = !(c == WellProducerCMode::BHP
-                                                   || c == WellProducerCMode::THP);
+                          is_thp = (c == WellProducerCMode::THP);
+                          well_control_is_rate = !(c == WellProducerCMode::BHP || is_thp);
                       } else {
                           const auto c = wellstate.injection_cmode;
-                          well_control_is_rate = !(c == WellInjectorCMode::BHP
-                                                   || c == WellInjectorCMode::THP);
+                          is_thp = (c == WellInjectorCMode::THP);
+                          well_control_is_rate = !(c == WellInjectorCMode::BHP || is_thp);
                       }
+                      // THP is not supported by the automatic BC selection yet
+                      // (needs the generalized well-constraint row with a VFP
+                      // linearization) - fail loudly rather than mis-couple.
+                      if (is_thp && prm_.get<std::string>("control.type", "") == "well")
+                          OPM_THROW(std::runtime_error,
+                                    "control.type='well': THP-constrained well '"
+                                        + wells_[i].name()
+                                        + "' is not supported - set an explicit fracture control");
                       const auto& wells = wellmodel.localNonshutWells();
                       const auto& well = wells[*well_index];
                       assert(well->name() == wells_[i].name());
