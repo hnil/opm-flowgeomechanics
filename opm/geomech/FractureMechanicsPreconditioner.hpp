@@ -59,7 +59,17 @@ using VectorHP = Dune::MultiTypeBlockVector<Vector, Vector>;
       //AutonomousValue<MAT> A(asImp());
       Dune::Simd::Mask<double> nonsing(true);
       Dune::DynamicMatrix<value_t>::luDecomposition(mat,elim, nonsing, false, false);
-    } 
+    }
+    // Partially pivoted variant. The unpivoted decomposition overflows to
+    // Inf/NaN when O(1) pinned closed-cell rows mix with O(1e9) BEM rows.
+    using pivot_index = std::size_t; // == DenseMatrix::simd_index_type for scalar entries
+    static void luDecomp(Dune::DynamicMatrix<value_t>& mat,
+                         std::vector<pivot_index>& pivot){
+      pivot.resize(mat.N());
+      typename Dune::DynamicMatrix<value_t>::ElimPivot elim(pivot);
+      Dune::Simd::Mask<double> nonsing(true);
+      Dune::DynamicMatrix<value_t>::luDecomposition(mat, elim, nonsing, false, true);
+    }
   };
 
 
@@ -154,8 +164,11 @@ Vector diagvec(const Mat& M)
   void solveMechanics(Vector& x, const Vector& rhs) const;
   void solveFlow(Vector& x, const Vector& rhs);
   void backSolve(Vector& x,const Vector& rhs_in) const;
+  void checkLuFactor() const;
     const FractureSystemMatrix& A_;
     mutable FMatrix luM_;
+    std::vector<MyDenseMatrix<double>::pivot_index> lu_pivot_;
+    bool lu_pivoting_{false};
     mutable Vector A_diag_;
     mutable Vector M_diag_;
     Opm::PropertyTree prm_;
