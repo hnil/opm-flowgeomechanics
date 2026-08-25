@@ -255,3 +255,20 @@ python3 $ROOT/data/mac_tests_result/analysis/compare_runs.py <run-dir> \
 # FAILS if any case aborts, frac% drops below its floor, or (refine/pressure cases)
 # fracture area collapses -- i.e. it catches a config that gained stability by not fracturing.
 ```
+
+
+## Status of the configs (2026-08-25)
+
+- **`seq_implicit_ratewell.json`** — the recommended uniform setting (rate-
+  controlled injectors). **`seq_implicit_fb.json`** — the Fischer-Burmeister
+  alternative (same scope; zero contact chatter, see
+  fracture_settings_REFERENCE.md and the coworker note TESTING_BEST_SETTINGS).
+- `seq_implicit_reveal.json` — the perf_pressure near-Reveal setting (needs the
+  1 mm deck floor; kept for BHP-driven wells and comparison work).
+- `seq_implicit_growth.json` / `seq_implicit_robust.json` — historical
+  intermediate states of the recommended setting (growth loop only; growth loop
+  + switch + hysteresis). Superseded by seq_implicit_ratewell.json; kept as
+  reference points for the development history. `seq_implicit_growth_cake.json`
+  (accept-unconverged fallback) has been removed — its mechanism was replaced by
+  the upstream --solver-min-time-step/--solver-continue-on-convergence-failure
+  flags.

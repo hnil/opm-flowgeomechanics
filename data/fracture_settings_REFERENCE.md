@@ -77,7 +77,7 @@ configs) is **dead**. It now lives under `fractureparam.solver` in the final con
 | `max_iter` | max Newton iterations per fracture solve (non-convergence → warning, or throw if `failure_on_nonconvergence`) |
 | `tolerance` | convergence tol on the (mech, flow) residual infinity-norms |
 | `damping` | Newton step scaling (1 = full step) |
-| `min_width`,`max_width` | aperture bounds used in flow transmissibility |
+| `min_width`,`max_width` | numerical width clamps inside the width solve. NOT the flow floor — that is `config.min_width`, and for deck runs it is SET BY THE DECK: `WSEED` item 10 (WIDTH, default 1e-4 m) overrides the JSON (`FractureModel.cpp`, logged at seed creation). Recommended deck value 3e-4 (≈ Reveal's conductivity floor); `config.min_width` in JSON matters only for standalone/test setups without a deck `WSEED`. |
 | `max_dwidth`,`max_dp` | per-iteration clamps on width / pressure update (stability) |
 | `max_change` | misc step clamp |
 | `force_limit` | traction floor in closed-cell force test |
@@ -122,6 +122,7 @@ across outer iterations. Implemented in `Fracture::applyCouplingUpdate`.
 | key | default | meaning |
 |---|---|---|
 | `ctf_change_threshold` | 1e-15 | abs CTF change above which connections are considered changed (triggers schedule/WI update) |
+| `wi_upscaling` | `legacy` | KEEP BOTH options; the default stays `legacy` (the safe one). `legacy` zeroes CTF contributions where p_well < p_cell — a discontinuity, but it implicitly limits over-injection through cells the fracture cannot actually feed. `conductivity` is continuous but MISSES the in-fracture pressure drop (it upscales as if the whole fracture sat at the perforation pressure), over-stating conduction on long fractures. The proper fix arrives with the well-in-the-loop integration, where the fracture pressure profile enters the well equations directly. |
 | `ctf_change_threshold_rel` | 0.0 | optional relative CTF change gate (AND-ed with abs when >0) |
 | `ctf_relative_scale` | 1.0 | floor scale for the relative CTF change |
 | `perf_pressure_change_threshold` | 1e30 | abs perf-pressure change gate (1e30 ⇒ effectively never gates on perf pressure) |

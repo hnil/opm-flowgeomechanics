@@ -1169,14 +1169,14 @@ Fracture::addSource()
             rhs_pressure_[cell] += value * (perf_pressure_ - dh);
         }
     } else if (control_type == "rate_well") {
-      // this tries to make control equation for single phase standard wells with one phase and static reservoir
-        assert(numWellEquations() == 1); // @@ for now, we assume there is just one well equation
-        const double well_rate = well_rate_;//control.get<double>("rate") / 24 / 60 / 60; // convert to m3/sec
-        const double WI = total_wellindex_; //eclude lambdacontrol.get<double>("WI");
-        const int cell = std::get<0>(perfinj_[0]); // @@ will this be the correct index?
-        const double pres = reservoir_pressure_[cell];
-        const double density = reservoir_density_[cell];
-        //const double lambda = reservoir_mobility_[cell]; // @@ only correct if mobility is constant!
+        // Single-DOF well row: a static single-phase stand-in for the well model
+        // (matrix WI/p_res frozen from the last flow solve, unit mobility). Known
+        // limitations - one fracture per well, lambda=1, no THP - are addressed
+        // by the planned generalized well-constraint row, not by patching here.
+        assert(numWellEquations() == 1);
+        const double well_rate = well_rate_;
+        const double WI = total_wellindex_;
+        const double density = reservoir_density_[std::get<0>(perfinj_[0])];
         const double lambda = 1.0;
         double wi_dzfac = wi_respress_;
         wi_dzfac -= wi_dz_*density*gravity_; // sum wi dz
