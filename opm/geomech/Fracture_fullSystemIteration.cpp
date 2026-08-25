@@ -992,6 +992,11 @@ Fracture::makePressureAssemblyInput() const
     input.min_width = min_width_;
     input.htrans = htrans_;
     input.control_type = effectiveControlType();
+    if (input.control_type == "bhp_well" && !perfinj_.empty()) {
+        const double density = reservoir_density_[std::get<0>(perfinj_[0])];
+        input.well_target_pressure = well_target_bhp_
+            + density * gravity_ * (perf_ref_depth_ - well_ref_depth_);
+    }
     input.num_well_equations = nw;
     input.perfinj.assign(perfinj_.begin(), perfinj_.end());
     input.total_wellindex = total_wellindex_;

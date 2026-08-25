@@ -318,6 +318,7 @@ namespace Opm {
             // TO DO set wells to active even without fractures
             double injection_rate = 0.0;
             bool well_control_is_rate = true; // active well constraint (for control.type=="well")
+            double well_bhp = -1.0;           // active BHP (bhp_well constraint target)
             std::vector<int> perf_cell_indices;
             double well_depth = 0.0;
             double total_wellindex = 0.0;
@@ -350,6 +351,7 @@ namespace Opm {
                       // THP is not supported by the automatic BC selection yet
                       // (needs the generalized well-constraint row with a VFP
                       // linearization) - fail loudly rather than mis-couple.
+                      well_bhp = wellstate.bhp;
                       if (is_thp && prm_.get<std::string>("control.type", "") == "well")
                           OPM_THROW(std::runtime_error,
                                     "control.type='well': THP-constrained well '"
@@ -417,7 +419,7 @@ namespace Opm {
                         << injection_rate << " WI " << total_wellindex << std::endl;
                 OpmLog::info(os.str());
               }  
-              fracture.setWellControlIsRate(well_control_is_rate);
+              fracture.setWellControl(well_control_is_rate, well_bhp);
               fracture.setWellProps(injection_rate,  total_wellindex,  wi_dz,  wi_respress,  well_depth);
               fracture.setWellPerfCells(perf_cell_indices);
                 // do update wells

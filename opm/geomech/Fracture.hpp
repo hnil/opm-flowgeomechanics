@@ -375,7 +375,11 @@ public:
     //! resolved fracture-BC control: "control.type" verbatim, or picked from the
     //! well's active constraint when control.type == "well"
     std::string effectiveControlType() const;
-    void setWellControlIsRate(bool is_rate) { well_control_is_rate_ = is_rate; }
+    void setWellControl(bool is_rate, double bhp)
+    {
+        well_control_is_rate_ = is_rate;
+        well_target_bhp_ = bhp;
+    }
     void setWellProps(double wellrate, double WI, double wi_dp, double wi_respress, double ref_depth);
     // Reservoir cells the well perforates (all perforations, not just this
     // fracture's), used by solver.well_source_all_perfs to feed the fracture
@@ -601,6 +605,7 @@ private:
     // step checkpoint from how fast perf pressure / area moved in the last step
     double coupling_dt_cap_{-1.0};
     bool well_control_is_rate_{true}; // active well constraint (from the well state)
+    double well_target_bhp_{-1.0};    // active BHP (bhp_well constraint target)
     // control.type=="well": the BC resolved at the start of the current solve.
     // Latched so the system size (well DOF) is stable within a solve; transitions
     // between solves resize the persistent state.

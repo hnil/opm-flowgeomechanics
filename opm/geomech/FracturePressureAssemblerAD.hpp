@@ -200,6 +200,7 @@ struct FracturePressureInput
     std::vector<std::tuple<int, double>> perfinj;
     std::string control_type = "rate";
     double total_wellindex = 0.0;
+    double well_target_pressure = 0.0; // bhp_well: p_w target at the perf-ref datum
     double mobility_water_perf = 1.0;
     size_t num_well_equations = 0;
     bool use_fluid_mobility_for_internal_faces = false;
@@ -322,6 +323,67 @@ assembleRateWellControlAD(const FracturePressureInput& input,
         pmat[weqix][weqix] += flux.derivatives[WELL_P];
         pmat[cell][cell] -= flux.derivatives[CELL_P];
         pmat[cell][weqix] -= flux.derivatives[WELL_P];
+    }
+}
+
+// Constraint-row scale for the bhp_well row: the natural magnitude is the
+// matrix-perforation WI sum (same as the rate row's leading diagonal term).
+inline double
+bhpWellRowScale(const FracturePressureInput& input)
+{
+    return std::max(input.total_wellindex, 1e-14);
+}
+
+// bhp_well: the well DOF is kept, the cell<->well fWI couplings are identical
+// to the rate row, but the WELL row is the constraint  scale*(p_w - target) = 0.
+// A control switch (rate <-> bhp) therefore changes one row's content only.
+template <int NumDerivs>
+void
+assembleBhpWellControlAD(const FracturePressureInput& input,
+                         BCRSMatrix1x1& pmat,
+                         BlockVector1& residual)
+{
+    using AD = LocalAD<NumDerivs>;
+    constexpr int CELL_P = 0;
+    constexpr int WELL_P = 1;
+
+    assert(input.num_well_equations == 1);
+    const size_t total_size = input.num_cells + input.num_well_equations;
+    const size_t weqix = total_size - 1;
+
+    const double scale = bhpWellRowScale(input);
+    pmat[weqix][weqix] += scale;
+    residual[weqix] += scale * (input.fracture_pressure[weqix] - input.well_target_pressure);
+
+    for (const auto& pi : input.perfinj) {
+        const int cell = std::get<0>(pi);
+        AD cell_pressure = AD::variable(input.fracture_pressure[cell], CELL_P);
+        AD well_pressure = AD::variable(input.fracture_pressure[weqix], WELL_P);
+        AD mobility = wellConnectionMobilityAD<NumDerivs>(input, cell, CELL_P);
+        AD flux = AD::constant(std::get<1>(pi)) * mobility * (well_pressure - cell_pressure);
+
+        // cells receive the flux; the well row is the constraint, not a balance
+        residual[cell] -= flux.value;
+        pmat[cell][cell] -= flux.derivatives[CELL_P];
+        pmat[cell][weqix] -= flux.derivatives[WELL_P];
+    }
+}
+
+inline void
+assembleBhpWellControlOriginal(const FracturePressureInput& input,
+                               BCRSMatrix1x1& matrix)
+{
+    assert(input.num_well_equations == 1);
+    const size_t total_size = input.num_cells + input.num_well_equations;
+    const size_t weqix = total_size - 1;
+
+    matrix[weqix][weqix] += bhpWellRowScale(input);
+
+    for (const auto& pi : input.perfinj) {
+        const int cell = std::get<0>(pi);
+        const double value = std::get<1>(pi) * wellConnectionMobilityValue(input, cell);
+        matrix[cell][weqix] -= value;
+        matrix[cell][cell] += value;
     }
 }
 
@@ -495,6 +557,8 @@ assemblePressureAD(const FracturePressureInput& input)
         }
     } else if (input.control_type == "rate_well") {
         assembleRateWellControlAD<2>(input, pmat, result.residual);
+    } else if (input.control_type == "bhp_well") {
+        assembleBhpWellControlAD<2>(input, pmat, result.residual);
     }
 
     return result;
@@ -551,6 +615,8 @@ assemblePressureOriginal(const FracturePressureInput& input)
         }
     } else if (input.control_type == "rate_well") {
         assembleRateWellControlOriginal(input, matrix);
+    } else if (input.control_type == "bhp_well") {
+        assembleBhpWellControlOriginal(input, matrix);
     }
 
     return mat;
