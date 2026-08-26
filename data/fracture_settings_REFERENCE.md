@@ -101,7 +101,7 @@ configs) is **dead**. It now lives under `fractureparam.solver` in the final con
 | key | default | meaning |
 |---|---|---|
 | `drop_fluid_mech_linearization` | true | `true` ⇒ always zero the coupling block `C` (decoupled / Picard). `false` ⇒ keep `C` (true Newton) subject to the drop tolerances below |
-| `drop_tol_h` | 1e1 | drop `C` when the **mech traction** infinity-norm exceeds this. The traction is ~confining stress (O(1e6–1e7 Pa)), so values like 100 mean `C` is *always* dropped even with `drop_fluid_mech_linearization=false`. To actually keep coupling, set ≳1e8 — **but** the coupled linear solver currently fails on these systems (see notes). |
+| `drop_tol_h` | 1e1 | drop `C` when the **mech traction** infinity-norm exceeds this. The traction is ~confining stress (O(1e6–1e7 Pa)), so values like 100 mean `C` is *always* dropped even with `drop_fluid_mech_linearization=false` — setting that flag alone reproduces drop-C bit for bit. To actually keep coupling, lift this (≳1e8) **and** `drop_tol_p`. ⚠️ The old note here said the coupled solver fails on these systems; that was measured before the 2026-08-26 out-of-bounds fix and no longer holds — keep-C now runs with zero linear-solve failures and fewer nonlinear iterations than drop-C on both the SIMPLE deck and 92-day model2 (see `fixed_tests/NEXT_WORK.md` item 1c). Defaults unchanged pending a full matrix re-run. |
 | `drop_tol_p` | 1.0 | same, on the pressure residual |
 | `use_ad_pressure_assembly` | false | use the consistent AD assembler for the pressure+coupling matrices |
 
