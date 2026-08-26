@@ -1,5 +1,5 @@
 {
- "__doc": "EXPERIMENTAL candidate (2026-08-25): Fischer-Burmeister contact + propagation gates + WI-update-every-round. closed_cell_policy=fischer_burmeister (smooth complementarity - ZERO contact toggles vs 16.5k for sticky, 28 nonlinear its/solve vs 151) + fb_line_search + fb_scaled_convergence + conservative_propagation + propagate_open_front_only (fresh rock opens only off a converged, open front) + require_converged_fracture_for_wi_update=false (safe under FB: no chatter; leaving it true blocks conduction during establishment and causes a 660-bar onset overshoot). 92-day caked model2: peak 478 (Reveal's own peak 495 - no overshoot), day-10 462 vs 469, end 416.5 vs 412.1, share 0.93, establishment 491 m2 (27x24) with gradual growth - 237 s. Same deck/flags as seq_implicit_ratewell.json. Not yet the recommended default: single-case validation; run the matrix (no-cake, iso, box, dev decks) first.",
+ "__doc": "EXPERIMENTAL candidate (2026-08-25): Fischer-Burmeister contact + propagation gates + WI-update-every-round. closed_cell_policy=fischer_burmeister (smooth complementarity - ZERO contact toggles vs 16.5k for sticky, 28 nonlinear its/solve vs 151) + fb_line_search + fb_scaled_convergence + conservative_propagation + propagate_open_front_only (fresh rock opens only off a converged, open front) + require_converged_fracture_for_wi_update=false (safe under FB: no chatter; leaving it true blocks conduction during establishment and causes a 660-bar onset overshoot). 92-day caked model2: peak 478 (Reveal's own peak 495 - no overshoot), day-10 462 vs 469, end 416.5 vs 412.1, share 0.93, establishment 491 m2 (27x24) with gradual growth - 237 s. Same deck/flags and same control.type=well (fracture BC = the well's ACTIVE constraint) as seq_implicit_ratewell.json. Validated on the matrix (caked/no-cake/isothermal model2, CASE_REFINE, box 295k, SIMPLE regression, BHP dev deck) - see fixed_tests/TESTING_BEST_SETTINGS.md. Kept as an OPTION pending collaborator sign-off, not the default.",
  "hasfractures": "true",
  "add_perfs_to_schedule": "true",
  "verbosity": 0,
@@ -177,7 +177,7 @@
    "perm": "1e-13"
   },
   "control": {
-   "type": "rate_well",
+   "type": "well",
    "rate": "0.029",
    "WI": "1e-6"
   }

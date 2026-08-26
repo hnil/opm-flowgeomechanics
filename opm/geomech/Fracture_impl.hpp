@@ -647,9 +647,11 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             // control switch changes one row's content only - no state resize
             const std::string ctrl_now = well_control_is_rate_ ? "rate_well" : "bhp_well";
             if (ctrl_now != effective_control_latched_) {
-                if (!effective_control_latched_.empty())
-                    std::cout << "Fracture " << name() << ": well constraint switched "
-                              << effective_control_latched_ << " -> " << ctrl_now << std::endl;
+                std::cout << "Fracture " << name() << ": well constraint "
+                          << (effective_control_latched_.empty()
+                                  ? std::string("initialized to ")
+                                  : effective_control_latched_ + " -> ")
+                          << ctrl_now << std::endl;
                 effective_control_latched_ = ctrl_now;
             }
         }
