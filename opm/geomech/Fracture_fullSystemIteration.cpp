@@ -5,6 +5,7 @@
 #include <functional>
 #include <iostream>
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <sstream>
 #include <string>
@@ -112,6 +113,31 @@ scale_dense(FMatrix& m, const double factor)
     for (size_t i = 0; i != m.N(); ++i)
         for (size_t j = 0; j != m.M(); ++j)
             m[i][j] *= factor;
+}
+
+// Bit-exact FNV-1a hash of a double sequence; used only by the
+// solver.linsolver.debug_checksum diagnostic to tell whether two runs assemble
+// the same coupled system.
+struct Hash64
+{
+    uint64_t h {1469598103934665603ull};
+    void operator()(double v)
+    {
+        uint64_t b;
+        std::memcpy(&b, &v, sizeof b);
+        h = (h ^ b) * 1099511628211ull;
+    }
+};
+
+template <class SM>
+void
+hash_sparse(Hash64& h, const SM& m)
+{
+    for (auto row = m.begin(); row != m.end(); ++row)
+        for (auto col = row->begin(); col != row->end(); ++col) {
+            h(static_cast<double>(col.index()));
+            h((*col)[0][0]);
+        }
 }
 
 // Compute s_m, s_p from the current diagonal blocks for the requested mode.
@@ -1337,6 +1363,29 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     rhs[_0] = mech_rhs;
     rhs[_1] = rhs_pressure_;
     
+    {
+        // A block whose column count disagrees with the vector it multiplies
+        // reads past the end of that vector: silent garbage in the residual and
+        // in every Krylov matrix-vector product (run-to-run noise, sporadic
+        // "defect=nan"). Fail by name instead.
+        const size_t nm = rhs[_0].size(), np = rhs[_1].size();
+        if (dx[_0].size() != nm || dx[_1].size() != np)
+            OPM_THROW(std::runtime_error,
+                      "Fracture coupled solve: iterate/residual size mismatch: dx="
+                          + std::to_string(dx[_0].size()) + "/" + std::to_string(dx[_1].size())
+                          + " rhs=" + std::to_string(nm) + "/" + std::to_string(np));
+        auto bad = [](const auto& B, size_t n, size_t m) { return B.N() != n || B.M() != m; };
+        if (bad(S[_0][_0], nm, nm) || bad(S[_0][_1], nm, np) || bad(S[_1][_0], np, nm)
+            || bad(S[_1][_1], np, np))
+            OPM_THROW(std::runtime_error,
+                      "Fracture coupled system block dimensions inconsistent: nm=" + std::to_string(nm)
+                          + " np=" + std::to_string(np) + " A=" + std::to_string(S[_0][_0].N()) + "x"
+                          + std::to_string(S[_0][_0].M()) + " I=" + std::to_string(S[_0][_1].N()) + "x"
+                          + std::to_string(S[_0][_1].M()) + " C=" + std::to_string(S[_1][_0].N()) + "x"
+                          + std::to_string(S[_1][_0].M()) + " M=" + std::to_string(S[_1][_1].N()) + "x"
+                          + std::to_string(S[_1][_1].M()));
+    }
+
        // S[_1][_0].mmv(x[_0], rhs[_1]);
         S[_1][_1].mmv(x[_1], rhs[_1]);
         S[_0][_0].mmv(x[_0], rhs[_0]);
@@ -1503,6 +1552,34 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
                                     prm_,
                                     makePressureAssemblyInput());
         if (block_scaling.active()) scale_system_matrix(S, block_scaling, +1);
+    }
+
+    if (prm_.get<bool>("solver.linsolver.debug_checksum", false)) {
+        Hash64 hs, hr;
+        for (size_t i = 0; i != S[_0][_0].N(); ++i)
+            for (size_t j = 0; j != S[_0][_0].M(); ++j)
+                hs(S[_0][_0][i][j]);
+        hash_sparse(hs, S[_0][_1]);
+        hash_sparse(hs, S[_1][_0]);
+        hash_sparse(hs, S[_1][_1]);
+        for (size_t i = 0; i != rhs[_0].size(); ++i) hr(rhs[_0][i][0]);
+        for (size_t i = 0; i != rhs[_1].size(); ++i) hr(rhs[_1][i][0]);
+        // Characterize the preconditioner as an operator: apply it to a fixed
+        // probe and hash the result, so a stale/garbage internal state shows up
+        // even though S and rhs are identical.
+        Hash64 hp;
+        {
+            VectorHP probe(rhs), out(rhs);
+            for (size_t i = 0; i != probe[_0].size(); ++i) probe[_0][i][0] = 1.0;
+            for (size_t i = 0; i != probe[_1].size(); ++i) probe[_1][i][0] = 1.0;
+            out = 0;
+            precond.apply(out, probe);
+            for (size_t i = 0; i != out[_0].size(); ++i) hp(out[_0][i][0]);
+            for (size_t i = 0; i != out[_1].size(); ++i) hp(out[_1][i][0]);
+        }
+        std::cout << "linsys checksum nlin=" << nlin_iteration << " S=" << std::hex << hs.h
+                  << " rhs=" << hr.h << " prec=" << hp.h << std::dec << " nm=" << rhs[_0].size()
+                  << " np=" << rhs[_1].size() << std::endl;
     }
 
     // Pristine copy of the (possibly scaled) rhs fed to the solver, so each retry
