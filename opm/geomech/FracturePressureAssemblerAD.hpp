@@ -416,6 +416,32 @@ struct PressureAssemblyADResult
     BlockVector1 residual;                            // R(p, w)
 };
 
+// dR/dw has one column per fracture cell, so it is (nc+nw) x nc - NOT square.
+// A square version makes every matrix-vector product read one entry past the
+// end of the width vector (garbage: 0*NaN = NaN in the Krylov solve).
+inline std::unique_ptr<BCRSMatrix1x1>
+buildCouplingMatrixStructure(const std::vector<Htrans>& htrans,
+                             size_t nc,
+                             size_t num_well_equations)
+{
+    auto mat = std::make_unique<BCRSMatrix1x1>(
+        nc + num_well_equations, nc, 4, 0.4, BCRSMatrix1x1::implicit);
+
+    for (const auto& ht : htrans) {
+        const size_t i = std::get<0>(ht);
+        const size_t j = std::get<1>(ht);
+        mat->entry(i, j) = 0.0;
+        mat->entry(j, i) = 0.0;
+        mat->entry(i, i) = 0.0;
+        mat->entry(j, j) = 0.0;
+    }
+    for (size_t i = 0; i < nc; ++i)
+        mat->entry(i, i) = 0.0;
+
+    mat->compress();
+    return mat;
+}
+
 // ============================================================================
 // Build the sparse matrix sparsity structure from connectivity information
 // ============================================================================
@@ -481,8 +507,8 @@ assemblePressureAD(const FracturePressureInput& input)
     PressureAssemblyADResult result;
     result.pressure_matrix = buildMatrixStructure(
         input.htrans, nc, input.perfinj, input.num_well_equations);
-    result.coupling_matrix = buildMatrixStructure(
-        input.htrans, nc, input.perfinj, input.num_well_equations);
+    result.coupling_matrix
+        = buildCouplingMatrixStructure(input.htrans, nc, input.num_well_equations);
     result.residual.resize(total_size);
     result.residual = 0;
 

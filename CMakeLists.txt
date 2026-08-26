@@ -22,6 +22,13 @@ project(opm-flowgeomechanics C CXX)
 set(USE_OPENMP_DEFAULT OFF) # Use of OpenMP is considered experimental
 
 option(SIBLING_SEARCH "Search for other modules in sibling directories?" ON)
+# Debug aid: instrument only this module with ASan (the rest of the stack stays
+# as built). Catches out-of-bounds/use-after-free in the geomech sources.
+option(GEOMECH_ASAN "Build this module with AddressSanitizer" OFF)
+if(GEOMECH_ASAN)
+	add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
+	add_link_options(-fsanitize=address)
+endif()
 option(USE_TRACY_PROFILER "Enable tracy profiling" OFF)
 option(USE_HYPRE "Use the Hypre library for linear solvers?" OFF)
 
@@ -1012,12 +1019,11 @@ set_tests_properties(Unit.FractureContactReport.N5
 # fracturing, over-growth = runaway) and the well pressure must be physical.
 # Bands from the 2026-08-25 baselines; re-baseline deliberately, not casually.
 #
-# Why bands and NOT compareECL against references: the coupled fracture run is
-# measurably not run-to-run reproducible even single-threaded (two identical
-# invocations differed by 11 bar BHP and 46 % fracture rate at the end of this
-# deck, 2026-08-25) - the contact/growth dynamics amplify round-off. Any
-# tolerance-compare test of these configs is structurally flaky; the bands are
-# chosen wider than the measured run-to-run spread.
+# Bands guard the physics (did it fracture, is the pressure sane) rather than
+# the digits, so they survive deliberate solver changes. The runs themselves are
+# reproducible again since the AD coupling matrix was given its correct
+# (nc+nw) x nc shape (2026-08-26); the run-to-run scatter that motivated bands
+# was that out-of-bounds read.
 add_test(NAME BANDTEST_geomech_best_practice_ratewell
          COMMAND bash ${CMAKE_CURRENT_LIST_DIR}/tests/run_band_test.sh
                  $<TARGET_FILE:flow_energy_geomech>
