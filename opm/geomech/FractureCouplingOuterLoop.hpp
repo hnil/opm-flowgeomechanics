@@ -373,6 +373,11 @@ namespace Opm
                 prm.get<bool>("fractureparam.solver.legacy_parent_setup_iteration", false);
             const auto allwellIndices = derived().simulator_.problem().getAllExtraWellIndices();
             derived().simulator_.problem().fractureHost().solveFractures();
+            // A FRAC deck with no WSEED has no fracture: nothing to solve and no
+            // well indices to push back. Everything else must behave as usual.
+            if (!derived().simulator_.problem().fractureHost().fractureModelActive()) {
+                return;
+            }
             const bool fracture_converged = derived().simulator_.problem().fractureHost().fractureModel().lastSolveStats().converged;
             const bool require_converged_fracture_for_wi_update =
                 prm.get<bool>("fractureparam.require_converged_fracture_for_wi_update", true);

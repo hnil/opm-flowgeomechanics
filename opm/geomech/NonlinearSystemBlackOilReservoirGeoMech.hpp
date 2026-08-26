@@ -157,10 +157,15 @@ namespace Opm
                     ++this->mech_solves_this_step_;
                 }
             }
+            // hasFractures() only says the deck has FRAC; a deck with no WSEED
+            // has no fracture model, and then this whole block is a no-op.
+            const bool have_fracture = this->simulator_.problem().hasFractures()
+                && this->simulator_.problem().fractureHost().fractureModelActive();
             if(do_fracture && this->simulator_.problem().hasFractures()){
                 this->fractureOuterBlock(report, timer, nonlinear_solver);
-                this->simulator_.problem().geoMechModel().fractureModel()
-                    .writeIterationSnapshots(timer.currentStepNum(), iteration, "outer");
+                if (have_fracture)
+                    this->simulator_.problem().geoMechModel().fractureModel()
+                        .writeIterationSnapshots(timer.currentStepNum(), iteration, "outer");
 
                 // Opt-in growth sub-iterations (default 0 = off): during fracture
                 // establishment the coupling legitimately changes every round, so
@@ -177,6 +182,8 @@ namespace Opm
                 // sequential-implicit rounds are spent only where they matter.
                 const bool growth_switch = prm.get<bool>("solver.growth_driven_switch", false);
                 auto fracture_at_growth_cap = [&]() {
+                    if (!have_fracture)
+                        return false;
                     return this->simulator_.problem().geoMechModel().fractureModel()
                         .template maxFlowTimeStep<TypeTag, Simulator>(this->simulator_)
                         < std::numeric_limits<double>::max();
@@ -226,8 +233,9 @@ namespace Opm
                     }
                     SimulatorReportSingle round_report = flow_report;
                     this->fractureOuterBlock(round_report, timer, nonlinear_solver);
-                    this->simulator_.problem().geoMechModel().fractureModel()
-                        .writeIterationSnapshots(timer.currentStepNum(), 1000 + growth_round, "growth");
+                    if (have_fracture)
+                        this->simulator_.problem().geoMechModel().fractureModel()
+                            .writeIterationSnapshots(timer.currentStepNum(), 1000 + growth_round, "growth");
                     report.converged = round_report.converged;
                     if (growth_switch && !report.converged && !fracture_at_growth_cap()) {
                         OpmLog::info("Fracture growth stopped; accepting lagged coupling "
@@ -244,7 +252,7 @@ namespace Opm
                 // allowed within this step propagated on a pressure the flow had
                 // not yet responded to. Raised here, inside the retry scope, so
                 // the timestepper chops dt and re-solves from the checkpoint.
-                if (report.converged) {
+                if (report.converged && have_fracture) {
                     const std::string violation = this->simulator_.problem()
                         .geoMechModel().fractureModel().growthGuardViolation();
                     const int any_violation =
@@ -270,7 +278,11 @@ namespace Opm
             bool implicit_flow = prm.get<bool>("solver.implicit_flow");
             SimulatorReportSingle report;
             if(implicit_flow){
-                assert(false);
+                // Never implemented; assert(false) meant a release build walked
+                // straight into undefined behaviour instead of saying so.
+                OPM_THROW(std::runtime_error,
+                          "solver.method=SeqMech with solver.implicit_flow=true is not "
+                          "implemented - use SeqMechFrac, PostSolve, or set implicit_flow=false");
             }else{
                 report = Parent::nonlinearIteration(timer, nonlinear_solver);
             }
