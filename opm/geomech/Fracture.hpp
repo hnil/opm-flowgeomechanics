@@ -340,7 +340,7 @@ public:
     //! The width floor this fracture's own cubic-law assembly applies
     //! (config.min_width).  The embedded representation must apply the same floor to
     //! the same law, or the two solve differently conductive fractures.
-    double cubicLawMinWidth() const { return min_width_; }
+    double cubicLawMinWidth() const { return flow_min_width_; }
 
     //! Well-to-fracture connections: (fracture cell, well index).  The well injects
     //! into these cells directly, which in the embedded representation is a perforation
@@ -401,6 +401,11 @@ public:
     // (relative factor; the absolute floor solver.min_area_growth_guard lets a
     // small seed open freely). Empty string = fine / guard off.
     std::string growthGuardViolation() const;
+
+    //! Largest K1/K1c over the current boundary cells (0 when the fracture is
+    //! inactive or has no boundary). >1 means the propagation criterion is not
+    //! satisfied: the fracture wants to be bigger than it is.
+    double maxK1Ratio() const;
     // Onset dt-hold: true while the fracture is still an unopened seed and the
     // perf pressure is rising (solver.onset_dt_limit > 0 arms it).
     bool onsetHoldActive() const;
@@ -639,7 +644,14 @@ private:
   
     double E_;
     double nu_;
-    double min_width_; // minimum width of fracture, used for convergence criterion
+    //! Cubic-law FLOW floor (deck WSEED item 10, else config.min_width): the
+    //! aperture the conductivity w^3/12 is evaluated at when the mechanical
+    //! width is smaller.  It is a conductivity floor ONLY - never a mechanical
+    //! width, never an open/closed test, never an input to K1.  Three different
+    //! "min_width" exist: this one, config.min_width (its JSON fallback) and
+    //! solver.min_width (a clamp on the mechanical width inside the legacy
+    //! "simple"/"iterative"/"if" solves; inert for if_propagate_trimesh).
+    double flow_min_width_;
     double gravity_{Opm::unit::gravity};//{9.81}; // gravity acceleration, used for leakoff calculations
     std::vector<double> fracture_dgh_; // gravity contribution to fracture pressure, used for leakoff calculations  
     PropertyTree prm_;

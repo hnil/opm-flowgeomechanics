@@ -237,6 +237,31 @@ namespace Opm {
         return {};
     }
 
+    inline double
+    FractureModel::maxK1Ratio() const
+    {
+        double worst = 0.0;
+        for (size_t i = 0; i < wells_.size(); ++i) {
+            for (const auto& fracture : well_fractures_[i]) {
+                worst = std::max(worst, fracture.maxK1Ratio());
+            }
+        }
+        return worst;
+    }
+
+    inline double
+    FractureModel::totalFractureArea() const
+    {
+        double area = 0.0;
+        for (size_t i = 0; i < wells_.size(); ++i) {
+            for (const auto& fracture : well_fractures_[i]) {
+                if (fracture.isActive())
+                    area += fracture.calculateFractureProperties().area;
+            }
+        }
+        return area;
+    }
+
     inline void
     FractureModel::moveForwardInTime(double dt_last)
     {

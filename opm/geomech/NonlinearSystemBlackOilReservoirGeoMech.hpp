@@ -193,6 +193,49 @@ namespace Opm
                                  "no fracture at its growth cap this round)");
                     report.converged = true;
                 }
+                // Opt-in propagation-aware acceptance (default off). The step is
+                // otherwise accepted on the coupling change alone, which can settle
+                // while the front is far past its propagation criterion - the state
+                // behind the establishment pressure spike ends the step at
+                // K1/K1c ~ 30. Refusing to converge while K1 exceeds the limit sends
+                // the growth loop round again instead.
+                const bool k1_accept = prm.get<bool>("solver.require_k1_below_k1c", false);
+                const double k1_accept_factor = prm.get<double>("solver.k1_accept_factor", 1.0);
+                // K1 > K1c means the front wants to advance, but the cells it would
+                // advance into are retracted again by removeNewZeroWithCells when
+                // they end up zero-width - the K1 (front-profile) and the local
+                // force/width criteria do not have to agree.  Blocking acceptance
+                // on K1 alone then grows and retracts forever, so only block while
+                // the fracture is actually getting bigger; a blocked front is
+                // accepted with a warning instead of cycling.
+                double k1_prev_area = -1.0;
+                auto k1_blocks_acceptance = [&]() {
+                    if (!k1_accept || !have_fracture)
+                        return false;
+                    const auto& fmod = this->simulator_.problem().geoMechModel().fractureModel();
+                    auto& comm = this->simulator_.vanguard().grid().comm();
+                    const double worst = comm.max(fmod.maxK1Ratio());
+                    if (worst <= k1_accept_factor) {
+                        k1_prev_area = -1.0;
+                        return false;
+                    }
+                    const double area = comm.sum(fmod.totalFractureArea());
+                    const bool advancing = (k1_prev_area < 0.0) || (area > k1_prev_area * 1.001);
+                    k1_prev_area = area;
+                    if (!advancing) {
+                        OpmLog::warning("Fracture propagation criterion still unmet (max K1/K1c = "
+                                        + std::to_string(worst)
+                                        + ") but the front stopped advancing at "
+                                        + std::to_string(area) + " m2; accepting");
+                        return false;
+                    }
+                    OpmLog::info("Fracture propagation criterion not met (max K1/K1c = "
+                                 + std::to_string(worst) + " > "
+                                 + std::to_string(k1_accept_factor) + "); not accepting yet");
+                    return true;
+                };
+                if (k1_blocks_acceptance())
+                    report.converged = false;
                 while (max_growth_it > 0 && implicit_flow && !report.converged
                        && this->growth_rounds_this_step_ < max_growth_it) {
                     const int growth_round = ++this->growth_rounds_this_step_;
@@ -237,6 +280,8 @@ namespace Opm
                         this->simulator_.problem().geoMechModel().fractureModel()
                             .writeIterationSnapshots(timer.currentStepNum(), 1000 + growth_round, "growth");
                     report.converged = round_report.converged;
+                    if (report.converged && k1_blocks_acceptance())
+                        report.converged = false;
                     if (growth_switch && !report.converged && !fracture_at_growth_cap()) {
                         OpmLog::info("Fracture growth stopped; accepting lagged coupling "
                                      "(growth_driven_switch)");

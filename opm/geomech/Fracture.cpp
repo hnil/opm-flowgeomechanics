@@ -89,7 +89,7 @@ Fracture::init(const std::string& well,
         gravity_ = 0.0;
     }
 
-    min_width_ = prm_.get<double>("config.min_width", 1e-3);
+    flow_min_width_ = prm_.get<double>("config.min_width", 1e-3);
     wellinfo_ = WellInfo({well, perf, well_cell, global_index, segment, perf_range});
 
     origo_ = origo;
@@ -820,7 +820,7 @@ Fracture::writemulti(double time) const
 
         for (size_t i = 0; i < fracture_width_.size(); ++i) {
             fracture_width[i] = fracture_width_[i][0];
-            flow_width[i] = std::max(fracture_width_[i][0], min_width_);
+            flow_width[i] = std::max(fracture_width_[i][0], flow_min_width_);
             fracture_pressure[i] = fracture_pressure_[i][0];
             reservoir_cells[i] = reservoir_cells_[i]; // only converts to double
             reservoir_traction[i] = reservoirTraction(i);//ddm::tractionSymTensor(reservoir_stress_[i], cell_normals_[i]);
@@ -1107,12 +1107,12 @@ Fracture::addSource()
         size_t j = std::get<1>(matel);
         double t1 = std::get<2>(matel);
         double t2 = std::get<3>(matel);
-        //double h1 = fracture_width_[i] + min_width_;
-        //double h2 = fracture_width_[j] + min_width_;
-        const double h1 = std::max(fracture_width_[i][0],min_width_);
-        const double h2 = std::max(fracture_width_[j][0],min_width_);
-        //const double h1 = min_width_;
-        //const double h2 = min_width_;
+        //double h1 = fracture_width_[i] + flow_min_width_;
+        //double h2 = fracture_width_[j] + flow_min_width_;
+        const double h1 = std::max(fracture_width_[i][0],flow_min_width_);
+        const double h2 = std::max(fracture_width_[j][0],flow_min_width_);
+        //const double h1 = flow_min_width_;
+        //const double h2 = flow_min_width_;
         // harmonic mean of surface flow
         double value = 12. / (h1 * h1 * h1 * t1) + 12. / (h2 * h2 * h2 * t2);
 
@@ -2411,7 +2411,7 @@ Fracture::calculateFractureProperties() const
         int eIdx = mapper.index(element);
         auto geom = element.geometry();
         area += geom.volume();
-        volume += geom.volume() * (fracture_width_[eIdx]);// + min_width_);
+        volume += geom.volume() * (fracture_width_[eIdx]);// + flow_min_width_);
         filter_volume += geom.volume() * filtercake_thikness_[eIdx];//
         auto dist = geom.center() - origo_;
         double dh = dist.dot(naxis_[0]);
@@ -2477,7 +2477,7 @@ Fracture::initPressureMatrix()
     auto fwi_for = [&](int cell) {
         if (fwi_mode != "estimate") return fWI_cfg;
         const double w = std::max(cell < static_cast<int>(fracture_width_.size()) ? fracture_width_[cell][0] : 0.0,
-                                  min_width_);
+                                  flow_min_width_);
         const double re = std::sqrt(std::max(cell_area[cell], 1e-12) / M_PI);
         const double lnTerm = std::log(std::max(re / fwi_rw, 1.1));
         return 2.0 * M_PI * (w * w * w / 12.0) / lnTerm;
@@ -2604,6 +2604,14 @@ Fracture::removeNewZeroWithCells(RegularTrimesh& mesh,
     // oscillate against growth across outer iterations; keep it gated/conservative.
     const bool retract_established =
         prm_.get<bool>("solver.retract_established_compressed", false);
+    // The retraction exists to stop the old, unstable contact solve from
+    // overshooting: a newly grown cell that ends zero-width or compressed is
+    // taken back out of the mesh.  With a contact formulation that converges
+    // (Fischer-Burmeister) the overshoot it guards against may no longer occur,
+    // and the retraction then fights the propagation criterion - K1 says advance,
+    // the new cells are removed, K1 still says advance.  Opt out to test that.
+    if (!prm_.get<bool>("solver.retract_new_zero_width", true))
+        return false;
     bool any_removed = false;
     using GridView = typename Grid::LeafGridView;
     using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
@@ -2644,6 +2652,39 @@ Fracture::removeNewZeroWithCells(RegularTrimesh& mesh,
 }
 
 
+
+double
+Fracture::maxK1Ratio() const
+{
+    if (!active_ || !grid_)
+        return 0.0;
+
+    // stressIntensityK1() leaves interior cells NaN and fills only the boundary,
+    // so skipping the NaNs gives the maximum over the front.
+    const std::vector<double> K1 = this->stressIntensityK1();
+    size_t n = std::min(K1.size(), reservoir_cstress_.size());
+    n = std::min(n, fracture_width_.size());
+
+    // K1 is derived from the width profile behind the front, so it only means
+    // anything where the fracture is mechanically open. A closed cell has its
+    // width pinned to zero by the contact condition; evaluating K1 there (or on
+    // the pre-solve initial width) reports a front load that does not exist - on
+    // the seed, 150 bar BELOW closure, it gives K1/K1c = 5.6 - and growing on
+    // that spreads the same zero volume over more area, keeping the fracture
+    // shut. NB the test is on the MECHANICAL width only: flow_min_width_ is the
+    // cubic-law flow floor (config.min_width) and has no business here.
+    constexpr double open_tol = 1e-12;
+    double worst = 0.0;
+    for (size_t i = 0; i < n; ++i) {
+        const double k1c = reservoir_cstress_[i];
+        if (!std::isfinite(K1[i]) || !(k1c > 0.0))
+            continue;
+        if (fracture_width_[i][0] <= open_tol)
+            continue;
+        worst = std::max(worst, K1[i] / k1c);
+    }
+    return worst;
+}
 
 double
 Fracture::normalFractureTraction(size_t eIdx) const

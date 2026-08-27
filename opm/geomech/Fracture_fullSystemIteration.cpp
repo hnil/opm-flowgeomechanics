@@ -1015,7 +1015,7 @@ Fracture::makePressureAssemblyInput() const
 
     FracturePressureInput input;
     input.num_cells = nc;
-    input.min_width = min_width_;
+    input.min_width = flow_min_width_;
     input.htrans = htrans_;
     input.control_type = effectiveControlType();
     if (input.control_type == "bhp_well" && !perfinj_.empty()) {
@@ -1081,7 +1081,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     ++last_solve_stats_.nonlinear_iterations;
 
     ++DEBUG_COUNT;
-    // min_width_ = prm_.get<double>("solver.min_width"); // min with only used for flow calculations
+    // flow_min_width_ = prm_.get<double>("solver.min_width"); // min with only used for flow calculations
     //const double max_width = prm_.get<double>("solver.max_width");
 
     // update pressure matrix with the current values of `fracture_width_` and
@@ -1276,7 +1276,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
                              fracture_width_,
                              closed_cells,
                              reservoir_mobility_,
-                             min_width_);
+                             flow_min_width_);
     }
     // setup the full system
     if(prm_.get<bool>("solver.drop_fluid_mech_linearization",true)){
