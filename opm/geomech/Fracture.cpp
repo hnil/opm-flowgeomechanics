@@ -2136,19 +2136,19 @@ Fracture::updateLeakoff()
         double area = geom.volume();
         double res_mob = reservoir_mobility_[eIdx];
         leakof_[eIdx] = res_mob * reservoir_perm_[eIdx] * area / reservoir_dist_[eIdx];
+        // two-sided: the fracture leaks through both faces (was applied only with a
+        // filter cake, so cake and no-cake decks disagreed by 2x — WP2 A0)
+        double invtrans = 1 / leakof_[eIdx];
         if (has_filtercake_) {
-            double invtrans = 1 / leakof_[eIdx];
             assert(filtercake_thikness_[eIdx] >= 0.0);
             if (filtercake_thikness_[eIdx] > 0.0) {
                 double fitercaketrans = res_mob * filtercake_perm_ * area / (filtercake_thikness_[eIdx]/2.0); // div by 2 since filtercake thikness is sum of filtercake on each side
                 invtrans += 1 / fitercaketrans;
-                // assert(filtercake_perm_ > 0.0);
-                // assert(filtercake_thikness_[eIdx] > 0.0);
             }
-            leakof_[eIdx] = 2.0 / invtrans;
-            if(elementHasBoundaryNode[eIdx] && no_leakof_outercells){
-              leakof_[eIdx] = 0.0;
-            }
+        }
+        leakof_[eIdx] = 2.0 / invtrans;
+        if(elementHasBoundaryNode[eIdx] && no_leakof_outercells){
+          leakof_[eIdx] = 0.0;
         }
     }
 }
