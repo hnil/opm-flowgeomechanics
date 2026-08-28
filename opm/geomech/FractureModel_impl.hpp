@@ -5,6 +5,7 @@
 #include <opm/simulators/linalg/PropertyTree.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 
 namespace Opm {
@@ -432,6 +433,31 @@ namespace Opm {
                 OpmLog::info(os.str());
               }  
               fracture.setWellControl(well_control_is_rate, well_bhp);
+              // Consistency check: the fracture's duplicated well row should
+              // track the reservoir well model. A large BHP gap means the row's
+              // frozen WI/mobility no longer represents the well (the missing
+              // filter-cake multiplier hid exactly this way). Warn only.
+              {
+                  const double warn_bar =
+                      prm_.get<double>("solver.well_consistency_warn_bhp", 50.0);
+                  const std::string ctrl = fracture.effectiveControlType();
+                  if (warn_bar > 0.0 && well_bhp > 0.0
+                      && (ctrl == "rate_well" || ctrl == "bhp_well")) {
+                      const double frac_bhp = fracture.injectionBhp();
+                      if (std::isfinite(frac_bhp) && frac_bhp > 1.0e5
+                          && std::abs(frac_bhp - well_bhp) > warn_bar * 1.0e5) {
+                          OpmLog::warning(
+                              "Fracture " + fracture.name() + ": well DOF "
+                              + std::to_string(frac_bhp / 1.0e5)
+                              + " bar deviates from the reservoir well model BHP "
+                              + std::to_string(well_bhp / 1.0e5)
+                              + " bar by more than "
+                              + std::to_string(warn_bar)
+                              + " bar - the duplicated well row (frozen WI/mobility) "
+                                "is out of sync with the well");
+                      }
+                  }
+              }
               fracture.setWellProps(injection_rate,  total_wellindex,  wi_dz,  wi_respress,  well_depth);
               fracture.setWellPerfCells(perf_cell_indices);
                 // do update wells
