@@ -373,6 +373,9 @@ public:
     std::vector<double> cellDepths() const;
     double injectionPressure() const;
     double injectionBhp() const;// {return injectionPressure() - dp_perf_;};
+    //! true once fracture_pressure_ holds a solved state (injectionPressure/
+    //! injectionBhp index into it and must not be called before)
+    bool hasPressureState() const { return fracture_pressure_.size() > 0; }
     void setPerfProps(double perfpressure,double perf_depth, double perfrate);//{perf_pressure_ = perfpressure;}
     //! resolved fracture-BC control: "control.type" verbatim, or picked from the
     //! well's active constraint when control.type == "well"

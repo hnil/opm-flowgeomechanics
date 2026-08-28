@@ -442,6 +442,7 @@ namespace Opm {
                       prm_.get<double>("solver.well_consistency_warn_bhp", 50.0);
                   const std::string ctrl = fracture.effectiveControlType();
                   if (warn_bar > 0.0 && well_bhp > 0.0
+                      && fracture.hasPressureState()
                       && (ctrl == "rate_well" || ctrl == "bhp_well")) {
                       const double frac_bhp = fracture.injectionBhp();
                       if (std::isfinite(frac_bhp) && frac_bhp > 1.0e5
