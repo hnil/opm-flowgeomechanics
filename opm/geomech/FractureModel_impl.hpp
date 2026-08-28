@@ -377,8 +377,21 @@ namespace Opm {
                             // fracture contribution, which must be excluded
                             // when computing the reference well indices for
                             // the fracture solve.
+                            // The WINJDAM filter-cake multiplier is applied to Tw
+                            // inside the well model, NOT via wellTransMultiplier -
+                            // without it the duplicated well row believes the caked
+                            // perfs are open and solves its well DOF near reservoir
+                            // pressure while the real well runs far above it.
+                            double fc_mult = 1.0;
+                            const auto& fc = well->filterCakeMultipliers();
+                            if (!fc.empty() && static_cast<size_t>(perf_index) < fc.size()) {
+                                const auto perf_ecl_index = well->perforationData()[perf_index].ecl_index;
+                                const auto& connection = well->wellEcl().getConnections()[perf_ecl_index];
+                                if (connection.filterCakeActive())
+                                    fc_mult = fc[perf_index];
+                            }
                             const auto effective_well_index_perf =
-                                well->wellIndex()[perf_index] * trans_mult;
+                                well->wellIndex()[perf_index] * trans_mult * fc_mult;
 
                                                  
                             //const auto mobibility = well->getMobility(simulator, perf_index, mob);
