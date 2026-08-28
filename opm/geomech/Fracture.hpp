@@ -26,6 +26,8 @@
 
 
 
+#include <limits>
+
 #include <dune/common/exceptions.hh>
 #include <dune/foamgrid/foamgrid.hh>
 #include <dune/grid/common/mcmgmapper.hh> // mapper class
@@ -604,6 +606,12 @@ private:
     // coupling-rate dt controller (opt-in): cap on the next flow step, set at the
     // step checkpoint from how fast perf pressure / area moved in the last step
     double coupling_dt_cap_{-1.0};
+    // stress-rate dt controller (opt-in, solver.stress_dt_target bar/step): the
+    // thermal closure-stress transient is smooth, so a proportional cap on the
+    // per-step traction change paces dt through cooling without the episode
+    // problem of the coupling-rate controller
+    double traction_step_start_{std::numeric_limits<double>::quiet_NaN()};
+    double stress_dt_cap_{-1.0};
     bool well_control_is_rate_{true}; // active well constraint (from the well state)
     double well_target_bhp_{-1.0};    // active BHP (bhp_well constraint target)
     // control.type=="well": the BC resolved at the start of the current solve.

@@ -27,6 +27,7 @@
 #include <opm/common/TimingMacros.hpp>
 #include <opm/geomech/RegularTrimesh.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <iostream>
@@ -2307,6 +2308,26 @@ void Fracture::moveForwardInTime(double dt_last)
             } else {
                 coupling_dt_cap_ = std::max(dt_last, dt_min); // hold
             }
+        }
+        // Stress-rate dt controller (opt-in via solver.stress_dt_target, bar per
+        // step): pace dt so the mean fracture traction moves at most the target
+        // per step. The thermal transient is smooth, so a plain proportional
+        // controller suffices (no quiet-step episodes needed).
+        const double ds_target = prm_.get<double>("solver.stress_dt_target", 0.0) * 1e5;
+        const size_t ncf = numFractureCells();
+        if (ds_target > 0.0 && dt_last > 0.0 && reservoir_stress_.size() >= ncf
+            && cell_normals_.size() >= ncf) {
+            double tsum = 0.0;
+            for (size_t i = 0; i < ncf; ++i)
+                tsum += normalFractureTraction(i);
+            const double tmean = (ncf > 0) ? tsum / ncf : 0.0;
+            if (std::isfinite(traction_step_start_)) {
+                const double ds = std::abs(tmean - traction_step_start_);
+                const double dt_min = prm_.get<double>("solver.stress_dt_min", 0.1) * 86400.0;
+                const double fac = std::clamp(ds_target / std::max(ds, 1.0), 0.5, 2.0);
+                stress_dt_cap_ = std::max(dt_last * fac, dt_min);
+            }
+            traction_step_start_ = tmean;
         }
         area_step_start_ = fp.area;
         volume_step_start_ = fp.volume;

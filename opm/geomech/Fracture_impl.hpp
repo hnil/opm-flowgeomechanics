@@ -193,6 +193,9 @@ Fracture::maxFlowTimeStep() const
     if (coupling_dt_cap_ > 0.0) {
         cap = (cap > 0.0) ? std::min(cap, coupling_dt_cap_) : coupling_dt_cap_;
     }
+    if (stress_dt_cap_ > 0.0) {
+        cap = (cap > 0.0) ? std::min(cap, stress_dt_cap_) : stress_dt_cap_;
+    }
     if (onset_dt > 0.0 && onsetHoldActive()) {
         return (cap > 0.0) ? std::min(cap, onset_dt * 86400.0) : onset_dt * 86400.0;
     }
