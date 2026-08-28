@@ -4,6 +4,7 @@
 
 #include <opm/simulators/linalg/PropertyTree.hpp>
 
+#include <algorithm>
 #include <limits>
 
 namespace Opm {
@@ -349,10 +350,15 @@ namespace Opm {
                                     "control.type='well': THP-constrained well '"
                                         + wells_[i].name()
                                         + "' is not supported - set an explicit fracture control");
+                      // wellState() indexes all wells, localNonshutWells() only
+                      // the non-shut ones - with shut wells in the deck the two
+                      // indices diverge, so look up by name.
                       const auto& wells = wellmodel.localNonshutWells();
-                      const auto& well = wells[*well_index];
-                      assert(well->name() == wells_[i].name());
-                      
+                      const auto well_it = std::find_if(wells.begin(), wells.end(),
+                          [&](const auto& w) { return w->name() == wells_[i].name(); });
+                      if (well_it != wells.end()) {
+                      const auto& well = *well_it;
+
                       //for (const auto& perf : wellstate.perf_data) {
                       for (int perf_index=0; perf_index < wellstate.perf_data.cell_index.size(); ++perf_index) {    
                             //water_rate += perf.flux[TypeTag::FluidSystem    ::waterPhaseIdx];
@@ -399,8 +405,9 @@ namespace Opm {
                         //injection_rate = wellstate.surface_rates[FluidSystem::waterPhaseIdx];
                         well_depth = well->refDepth();
                         perf_depths = well->perfDepth();
-                    }   
-                 }  
+                      } // well found in localNonshutWells
+                    }
+                 }
             }
             assert(well_fractures_[i].size() < 2);// for now asser this if not better "well model is need"
             for (auto& fracture : well_fractures_[i]){
