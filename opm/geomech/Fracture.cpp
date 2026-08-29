@@ -2509,9 +2509,38 @@ Fracture::initPressureMatrix()
     // rate-fed fracture model) instead of only at the seed.
     std::set<int> sources(well_source_.begin(), well_source_.end());
     if (prm_.get<bool>("solver.well_source_all_perfs", false) && !well_perf_cells_.empty()) {
+        // The wellbore CUTS the fracture along a line, so the cells the well feeds
+        // directly are those within about a wellbore radius of that line - not every
+        // cell that happens to share a reservoir cell with a perforation. On a
+        // coarse grid the latter is the whole fracture (model2: 100 m cells vs a
+        // 40-130 m fracture), which short-circuits the in-fracture cubic law and
+        // makes the fracture one equipotential body.
+        // solver.well_source_radius > 0 applies the geometric limit; the line is
+        // the global vertical projected into the fracture plane through origo_
+        // (vertical wells). The test is purely geometric, so the source set grows
+        // monotonically with the fracture and never jumps between remeshes.
+        const double wsr = prm_.get<double>("solver.well_source_radius", 0.0);
+        Point3D wdir({0.0, 0.0, 1.0});
+        if (wsr > 0.0) {
+            const double dn = wdir * naxis_[2];
+            for (int d = 0; d < 3; ++d) wdir[d] -= dn * naxis_[2][d];
+            const double wn = wdir.two_norm();
+            if (wn > 1e-12) wdir /= wn;
+        }
         std::set<int> perfcells(well_perf_cells_.begin(), well_perf_cells_.end());
-        for (size_t i = 0; i < reservoir_cells_.size(); ++i)
-            if (perfcells.count(reservoir_cells_[i])) sources.insert(static_cast<int>(i));
+        for (const auto& e : Dune::elements(grid_->leafGridView())) {
+            const int i = wsmapper.index(e);
+            if (i >= static_cast<int>(reservoir_cells_.size())) continue;
+            if (!perfcells.count(reservoir_cells_[i])) continue;
+            if (wsr > 0.0) {
+                const auto c = e.geometry().center();
+                Point3D r({c[0] - origo_[0], c[1] - origo_[1], c[2] - origo_[2]});
+                const double along = r * wdir;
+                for (int d = 0; d < 3; ++d) r[d] -= along * wdir[d];
+                if (r.two_norm() > wsr) continue; // too far from the wellbore line
+            }
+            sources.insert(i);
+        }
     }
     for (int cell : sources) {
         perfinj_.push_back({cell, fwi_for(cell)});
