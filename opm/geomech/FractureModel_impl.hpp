@@ -219,6 +219,16 @@ namespace Opm {
                 fracture.writeIterationSnapshot(step, round, tag);
     }
 
+    inline bool
+    FractureModel::anyLastSolveUnconverged() const
+    {
+        for (size_t i = 0; i < wells_.size(); ++i)
+            for (const auto& fracture : well_fractures_[i])
+                if (fracture.isActive() && !fracture.lastSolveStats().converged)
+                    return true;
+        return false;
+    }
+
     inline std::string
     FractureModel::growthGuardViolation() const
     {

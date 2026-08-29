@@ -252,6 +252,27 @@ namespace Opm
                 // allowed within this step propagated on a pressure the flow had
                 // not yet responded to. Raised here, inside the retry scope, so
                 // the timestepper chops dt and re-solves from the checkpoint.
+                // Unconverged-fracture dt cut (opt-in): the conservative gates
+                // rightly refuse to grow off an unconverged contact solve, but
+                // refusing forever SUPPRESSES growth. Cut the step instead so
+                // the retry can converge and grow legitimately; at the floor,
+                // accept with a warning (same pattern as the growth guard).
+                if (report.converged && have_fracture
+                    && prm.get<bool>("solver.unconverged_fracture_dt_cut", false)
+                    && this->simulator_.problem().geoMechModel()
+                           .fractureModel().anyLastSolveUnconverged()) {
+                    const double floor_dt =
+                        prm.get<double>("solver.area_growth_guard_min_dt", 0.05) * 86400.0;
+                    if (timer.currentStepLength() <= floor_dt) {
+                        OpmLog::warning("Fracture solve unconverged at minimum dt - "
+                                        "accepting the step");
+                    } else {
+                        OpmLog::warning("Fracture solve unconverged - cutting the "
+                                        "timestep to let contact converge before growth");
+                        OPM_THROW_NOLOG(NumericalProblem,
+                                        "fracture solve unconverged: dt cut requested");
+                    }
+                }
                 if (report.converged && have_fracture) {
                     const std::string violation = this->simulator_.problem()
                         .geoMechModel().fractureModel().growthGuardViolation();

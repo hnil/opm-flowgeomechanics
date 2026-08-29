@@ -95,6 +95,8 @@ public:
     // Per-step growth guard: first violation message across all active
     // fractures (empty = none). Not MPI-reduced; caller decides.
     std::string growthGuardViolation() const;
+    //! true when any active fracture's last solve ended unconverged
+    bool anyLastSolveUnconverged() const;
     void writeIterationSnapshots(int step, int round, const std::string& tag) const;
 
         void updateReservoirProperties(); // for testing without simulator
