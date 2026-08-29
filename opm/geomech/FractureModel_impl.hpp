@@ -442,6 +442,7 @@ namespace Opm {
                         << injection_rate << " WI " << total_wellindex << std::endl;
                 OpmLog::info(os.str());
               }  
+              fracture.setTimeStep(simulator.timeStepSize());
               fracture.setWellControl(well_control_is_rate, well_bhp);
               // Consistency check: the fracture's duplicated well row should
               // track the reservoir well model. A large BHP gap means the row's

@@ -390,6 +390,8 @@ public:
     // fracture's), used by solver.well_source_all_perfs to feed the fracture
     // wherever the well crosses it.
     void setWellPerfCells(std::vector<int> cells) { well_perf_cells_ = std::move(cells); }//{well_rate_ = wellrate; total_wellindex_ = WI;}
+    //! current flow timestep (s); needed by the opt-in fracture storage term
+    void setTimeStep(double dt) { current_dt_ = dt; }
     Dune::FieldVector<double, 6> stress(Dune::FieldVector<double, 3> obs) const;
     Dune::FieldVector<double, 6> strain(Dune::FieldVector<double, 3> obs) const;
     Dune::FieldVector<double, 3> disp(Dune::FieldVector<double, 3> obs) const;
@@ -632,6 +634,7 @@ private:
     //! assembled iterate; empty unless closed_cell_policy=fischer_burmeister.
     //! Lets propagation veto individual untrustworthy cells instead of all growth.
     std::vector<double> fb_cell_residual_;
+    double current_dt_{-1.0}; // flow timestep (s), see setTimeStep
     double perf_pressure_;
     std::vector<double> leakof_;
     

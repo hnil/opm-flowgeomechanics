@@ -1394,6 +1394,25 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         S[_0][_1].mmv(x[_1], rhs[_0]);
     //}
 
+    // Fracture volume storage (opt-in solver.fracture_storage_term): the cell mass
+    // balance carries an accumulation term A_i (w_i - w_i^n)/dt that the
+    // steady-state pressure equation omits. It is negligible once the fracture is
+    // established (m3 stored vs hundreds delivered) but dominant exactly while a
+    // cell is opening fast, where it makes opening cost pressure - the physical
+    // form of a drawdown-on-growth feedback, and a damping diagonal for the solve.
+    // Cells added by growth inside the step have no previous width and correctly
+    // store their full opening; index mapping to the checkpoint assumes the mesh
+    // has not been renumbered within the step.
+    if (prm_.get<bool>("solver.fracture_storage_term", false) && current_dt_ > 0.0) {
+        const std::vector<double> areas = cellAreas();
+        const size_t ncell = std::min(areas.size(), numFractureCells());
+        for (size_t i = 0; i < ncell && i < rhs[_1].size() && i < x[_0].size(); ++i) {
+            const double w_prev = (i < fracture_width_prev_.size())
+                ? fracture_width_prev_[i][0] : 0.0;
+            rhs[_1][i][0] -= areas[i] * (x[_0][i][0] - w_prev) / current_dt_;
+        }
+    }
+
     // Fischer-Burmeister: the mechanics residual is the nonlinear complementarity
     // function, not the linear mmv result, so overwrite the mech rows with -phi_FB.
     if (is_fb)
