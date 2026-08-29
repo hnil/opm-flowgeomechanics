@@ -986,6 +986,32 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             }
 
 
+            // Per-cell propagation veto (opt-in): refuse to grow from a front cell
+            // that is closed or whose FB complementarity has not converged, instead
+            // of vetoing ALL growth when the solve hit its iteration cap
+            // (conservative_propagation) - a global veto starves the fracture while
+            // the well keeps pressurising. Only front cells are scored at all, so
+            // this leaves every trustworthy open front free to propagate.
+            if (prm_.get<bool>("solver.propagate_converged_cells_only", false)) {
+                const double fbtol = prm_.get<double>("solver.propagate_fb_tol", 1e-3);
+                int vetoed = 0;
+                for (size_t i = 0; i != result.size(); ++i) {
+                    const int bind = bmap[boundary_cells[i]];
+                    if (bind < 0) continue;
+                    const bool closed = bind < static_cast<int>(closed_cells_.size())
+                                        && closed_cells_[bind];
+                    const bool unconverged = bind < static_cast<int>(fb_cell_residual_.size())
+                                             && fb_cell_residual_[bind] > fbtol;
+                    if (closed || unconverged) {
+                        result[i] = -1.0;
+                        ++vetoed;
+                    }
+                }
+                if (vetoed > 0 && prm_.get<int>("verbosity", 0) > 1)
+                    std::cout << "Propagation veto: " << vetoed << "/" << result.size()
+                              << " front cells closed or unconverged" << std::endl;
+            }
+
             // Fixed-topology mode: freeze the mesh at the seed (Reveal comparison).
             if (prm_.get<bool>("solver.disable_propagation", false)) {
                 std::fill(result.begin(), result.end(), -1.0);

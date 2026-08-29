@@ -1223,6 +1223,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         const ResVector& p = x[_1];
         fb_phi.assign(n, 0.0);
         fb_scale.assign(n, 1.0);
+        fb_cell_residual_.assign(n, 0.0);
         if (first_iteration) A_.reset(new FMatrix(Aorig));
         FMatrix& Afb = *A_;
         if (first_iteration) I_.reset(new SMatrix(makeIdentity(n, numWellEquations())));
@@ -1240,6 +1241,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
             const double db = 1.0 - b / r;
             fb_phi[i] = a + b - std::sqrt(a * a + b * b);
             fb_scale[i] = 1.0 + std::abs(a) + std::abs(b);
+            fb_cell_residual_[i] = std::abs(fb_phi[i]) / fb_scale[i];
             for (size_t j = 0; j < n; ++j) Afb[i][j] = -db * Aorig[i][j];
             Afb[i][i] += da * c_i;
             Ifb[i][i] = -db;
@@ -1847,8 +1849,16 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     // The "none" contact policy keeps the fracture open and permits negative
     // aperture, so it must NOT clamp width to >= 0 (that clamp is itself a contact
     // nonlinearity that would reintroduce the open/close behaviour).
+    // FB satisfies w >= 0 at convergence by construction, so clamping its ITERATES
+    // re-imposes exactly the nonsmooth projection FB exists to remove (opt-in
+    // solver.fb_clamp_width=false lifts it). Flow floors the width it consumes at
+    // min_width regardless, so a small negative in an unconverged cell is harmless
+    // there; volume/width reporting can show it.
+    const std::string ccpolicy = prm_.get<std::string>("solver.closed_cell_policy", "sticky");
     const bool allow_negative_width =
-        (prm_.get<std::string>("solver.closed_cell_policy", "sticky") == "none");
+        (ccpolicy == "none")
+        || (ccpolicy == "fischer_burmeister"
+            && !prm_.get<bool>("solver.fb_clamp_width", true));
     if (!allow_negative_width) {
         for (size_t i = 0; i != fracture_width_.size(); ++i) {
             fracture_width_[i][0] = std::max(0.0, fracture_width_[i][0]); // ensure non-negativity

@@ -628,6 +628,10 @@ private:
     std::vector<Htrans> htrans_;
     std::vector<std::tuple<int,double>> perfinj_;
     std::vector<int> well_perf_cells_; // see setWellPerfCells
+    //! Per-cell scaled FB complementarity residual |phi|/(1+|a|+|b|) from the last
+    //! assembled iterate; empty unless closed_cell_policy=fischer_burmeister.
+    //! Lets propagation veto individual untrustworthy cells instead of all growth.
+    std::vector<double> fb_cell_residual_;
     double perf_pressure_;
     std::vector<double> leakof_;
     
