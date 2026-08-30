@@ -1236,10 +1236,17 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
             const double c_i = std::max(std::abs(Aorig[i][i]), eps);
             const double a = c_i * w[i][0];
             const double b = tmp_i;
-            const double r = std::sqrt(a * a + b * b) + eps;
+            // Chen-Mangasarian mu-smoothing (opt-in solver.fb_mu > 0):
+            // phi_mu = a + b - sqrt(a^2 + b^2 + 2 mu), which is differentiable
+            // everywhere including the a=b=0 corner where the plain FB kink sits.
+            // mu > 0 relaxes complementarity by ~mu, so it is a regularisation:
+            // it must be small against the local scale (c_i * w_typ)^2 or it
+            // holds cells artificially open.
+            const double mu = prm_.get<double>("solver.fb_mu", 0.0);
+            const double r = std::sqrt(a * a + b * b + 2.0 * mu) + eps;
             const double da = 1.0 - a / r;
             const double db = 1.0 - b / r;
-            fb_phi[i] = a + b - std::sqrt(a * a + b * b);
+            fb_phi[i] = a + b - std::sqrt(a * a + b * b + 2.0 * mu);
             fb_scale[i] = 1.0 + std::abs(a) + std::abs(b);
             fb_cell_residual_[i] = std::abs(fb_phi[i]) / fb_scale[i];
             for (size_t j = 0; j < n; ++j) Afb[i][j] = -db * Aorig[i][j];
