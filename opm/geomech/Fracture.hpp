@@ -635,9 +635,11 @@ private:
     //! Lets propagation veto individual untrustworthy cells instead of all growth.
     std::vector<double> fb_cell_residual_;
     double current_dt_{-1.0}; // flow timestep (s), see setTimeStep
-    //! Per-cell open/closed toggle count within the current solve; the binary
-    //! active set's analogue of fb_cell_residual_ for the propagation veto.
-    std::vector<int> cell_toggle_count_;
+    //! Nonlinear iteration at which each cell last flipped open/closed in the
+    //! current solve; the binary active set's analogue of fb_cell_residual_ for
+    //! the propagation veto (recent stability, not lifetime stability).
+    std::vector<int> cell_last_toggle_iter_;
+    int current_solve_iter_{0}; //!< last nonlinear iteration index of the solve
     double perf_pressure_;
     std::vector<double> leakof_;
     

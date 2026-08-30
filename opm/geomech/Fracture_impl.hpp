@@ -1003,12 +1003,12 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                     // FB: scaled complementarity residual. Sticky/pdas: the cell's
                     // own toggle count, so the veto is available to the binary
                     // active set as well (solver.propagate_max_toggles).
-                    const int maxtog = prm_.get<int>("solver.propagate_max_toggles", 0);
+                    const int stable = prm_.get<int>("solver.propagate_stable_iters", 2);
                     const bool unconverged =
                         (bind < static_cast<int>(fb_cell_residual_.size())
                          && fb_cell_residual_[bind] > fbtol)
-                        || (bind < static_cast<int>(cell_toggle_count_.size())
-                            && cell_toggle_count_[bind] > maxtog);
+                        || (bind < static_cast<int>(cell_last_toggle_iter_.size())
+                            && current_solve_iter_ - cell_last_toggle_iter_[bind] < stable);
                     if (closed || unconverged) {
                         result[i] = -1.0;
                         ++vetoed;

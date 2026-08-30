@@ -1200,13 +1200,20 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         // complementarity residual, so the per-cell propagation veto works for
         // the sticky policy too - a front cell whose contact state was still
         // flipping when the solve stopped is not a trustworthy place to grow.
-        if (cell_toggle_count_.size() != closed_cells.size())
-            cell_toggle_count_.assign(closed_cells.size(), 0);
+        // Record WHEN each cell last toggled, not how often: a policy that
+        // chatters by nature (sticky: ~1400 toggles/solve vs FB's 0) never has
+        // a cell with zero lifetime toggles, so a lifetime counter degenerates
+        // into vetoing every front cell. What matters is whether the cell had
+        // settled by the end of the solve.
+        if (cell_last_toggle_iter_.size() != closed_cells.size())
+            cell_last_toggle_iter_.assign(closed_cells.size(), -1000);
         for (size_t i = 0; i < closed_cells.size(); ++i)
-            if (closed_cells_[i] != closed_cells[i]) ++cell_toggle_count_[i];
+            if (closed_cells_[i] != closed_cells[i])
+                cell_last_toggle_iter_[i] = nlin_iteration;
     } else {
-        cell_toggle_count_.assign(closed_cells.size(), 0);
+        cell_last_toggle_iter_.assign(closed_cells.size(), -1000);
     }
+    current_solve_iter_ = nlin_iteration;
     closed_cells_ = closed_cells;
     // dump_vector(closed_cells, debug_filename("closed_cells_").c_str());
     // dump_vector(closed_cells, "closed_cells", true);
