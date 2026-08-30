@@ -1196,6 +1196,16 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     if (closed_cells_.size() == closed_cells.size()) {
         last_solve_stats_.closed_cell_toggles +=
             static_cast<int>(count_toggled_cells(closed_cells_, closed_cells));
+        // Per-cell toggle count: the binary-active-set analogue of the FB
+        // complementarity residual, so the per-cell propagation veto works for
+        // the sticky policy too - a front cell whose contact state was still
+        // flipping when the solve stopped is not a trustworthy place to grow.
+        if (cell_toggle_count_.size() != closed_cells.size())
+            cell_toggle_count_.assign(closed_cells.size(), 0);
+        for (size_t i = 0; i < closed_cells.size(); ++i)
+            if (closed_cells_[i] != closed_cells[i]) ++cell_toggle_count_[i];
+    } else {
+        cell_toggle_count_.assign(closed_cells.size(), 0);
     }
     closed_cells_ = closed_cells;
     // dump_vector(closed_cells, debug_filename("closed_cells_").c_str());
