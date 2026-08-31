@@ -2695,6 +2695,40 @@ Fracture::removeNewZeroWithCells(RegularTrimesh& mesh,
 
 
 
+void
+Fracture::warnIfOpenButNotConducting() const
+{
+    // An open, conductive fracture cannot carry zero rate. When it reports one,
+    // the well connection has been lost rather than the physics changed - the
+    // legacy WI upscaling zeroes a connection whose sign flips, which made an
+    // open 2880 m2 fracture at 400 bar report zero rate for a whole report step
+    // and read as a pressure transient. Opt out with warn_open_not_conducting=0.
+    if (!prm_.get<bool>("solver.warn_open_not_conducting", true) || !active_)
+        return;
+    if (fracture_width_.size() == 0)
+        return;
+
+    const auto fp = calculateFractureProperties();
+    // "Open" means mechanically open, not merely meshed: cells carrying real
+    // aperture above the flow floor.
+    double open_area = 0.0;
+    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+    for (const auto& e : Dune::elements(grid_->leafGridView())) {
+        const int i = mapper.index(e);
+        if (i < static_cast<int>(fracture_width_.size())
+            && fracture_width_[i][0] > min_width_)
+            open_area += e.geometry().volume();
+    }
+    const double min_open = prm_.get<double>("solver.warn_open_area", 1.0); // m2
+    const double q_tol = prm_.get<double>("solver.warn_flux_tol", 1e-12);   // m3/s
+    if (open_area > min_open && std::abs(fp.flux) < q_tol) {
+        OpmLog::warning("Fracture " + name() + ": " + std::to_string(open_area)
+                        + " m2 is mechanically open but the fracture carries no flow ("
+                        + std::to_string(fp.flux)
+                        + " m3/s) - the well connection looks lost, not the fracture");
+    }
+}
+
 double
 Fracture::normalFractureTraction(size_t eIdx) const
 {

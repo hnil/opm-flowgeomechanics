@@ -376,6 +376,10 @@ public:
     //! true once fracture_pressure_ holds a solved state (injectionPressure/
     //! injectionBhp index into it and must not be called before)
     bool hasPressureState() const { return fracture_pressure_.size() > 0; }
+    //! Warn when the fracture is mechanically open yet carries no flow - the
+    //! signature of a lost well connection (e.g. CTFs zeroed by the legacy WI
+    //! upscaling), which otherwise passes silently as a pressure transient.
+    void warnIfOpenButNotConducting() const;
     void setPerfProps(double perfpressure,double perf_depth, double perfrate);//{perf_pressure_ = perfpressure;}
     //! resolved fracture-BC control: "control.type" verbatim, or picked from the
     //! well's active constraint when control.type == "well"

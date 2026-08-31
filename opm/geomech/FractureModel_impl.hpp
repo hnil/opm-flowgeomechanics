@@ -138,6 +138,7 @@ namespace Opm {
                         fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator);
                     }
                     last_solve_stats_ += fractures[j].lastSolveStats();
+                    fractures[j].warnIfOpenButNotConducting();
                 }
             }
         }
