@@ -2004,8 +2004,18 @@ Fracture::solveFractureWidth()
             fracture_width_[i] = max_width;
         }
         if (fracture_width_[i] < min_width) {
-            std::cout << "Remove small Fracture width" << std::endl;
-            fracture_width_[i] = min_width;
+            // Suspected dead / actively harmful: solver.min_width is 1 mm in all
+            // shipped configs, and this clamps the MECHANICAL width, so no cell
+            // could ever be closed and K1 would be non-zero everywhere. Reached
+            // only by the legacy "simple"/"only_width"/"iterative" methods, never
+            // by if_propagate_trimesh. Fail loudly until we are sure, then delete.
+            OPM_THROW(std::runtime_error,
+                      "solver.min_width clamped the mechanical fracture width to "
+                      + std::to_string(min_width)
+                      + " m. That is a flow-conductivity floor being applied to a "
+                        "mechanical width: it prevents cells from ever closing. Set "
+                        "solver.min_width=0, or report this - the path was believed "
+                        "unreachable from if_propagate_trimesh.");
         }
         assert(std::isfinite(fracture_width_[i]));
     }
@@ -2673,13 +2683,51 @@ Fracture::maxK1Ratio() const
     // that spreads the same zero volume over more area, keeping the fracture
     // shut. NB the test is on the MECHANICAL width only: flow_min_width_ is the
     // cubic-law flow floor (config.min_width) and has no business here.
-    constexpr double open_tol = 1e-12;
+    // Which cells count as "open enough for the front to be loaded" is a physics
+    // choice, not a numerical one, so it is selectable:
+    //   width   - any positive mechanical width (w > 0). Permissive: a cell with
+    //             a sub-micron aperture still reports K1/K1c > 1 and drives
+    //             growth into closure.
+    //   pressure- net pressure above closure (p - traction > 0). The physical
+    //             open condition, independent of any floor. DEFAULT.
+    //   contact - the contact solver's own verdict (cell not in closed_cells_),
+    //             i.e. exactly what the sticky/FB policy resolved.
+    //   relative- aperture above a fraction (solver.k1_open_width_fraction) of
+    //             the fracture's own maximum width: scale-free, and the only one
+    //             of the four that distinguishes "barely open" from "loaded".
+    const std::string crit = prm_.get<std::string>("solver.k1_open_criterion", "pressure");
+    std::vector<char> is_closed;
+    if (crit == "contact") {
+        is_closed.assign(n, 0);
+        for (const int c : closed_cells_)
+            if (c >= 0 && c < static_cast<int>(n)) is_closed[c] = 1;
+    } else if (crit != "width" && crit != "pressure" && crit != "relative") {
+        OPM_THROW(std::runtime_error, "Unknown solver.k1_open_criterion: " + crit);
+    }
+    double w_ref = 0.0;
+    if (crit == "relative") {
+        for (size_t i = 0; i < n; ++i)
+            w_ref = std::max(w_ref, fracture_width_[i][0]);
+        w_ref *= prm_.get<double>("solver.k1_open_width_fraction", 0.05);
+    }
+
     double worst = 0.0;
     for (size_t i = 0; i < n; ++i) {
         const double k1c = reservoir_cstress_[i];
         if (!std::isfinite(K1[i]) || !(k1c > 0.0))
             continue;
-        if (fracture_width_[i][0] <= open_tol)
+        bool open = false;
+        if (crit == "width") {
+            open = fracture_width_[i][0] > 1e-12;
+        } else if (crit == "pressure") {
+            open = (i < fracture_pressure_.size())
+                && (fracture_pressure_[i][0] - normalFractureTraction(i) > 0.0);
+        } else if (crit == "relative") {
+            open = (w_ref > 0.0) && (fracture_width_[i][0] > w_ref);
+        } else {
+            open = !is_closed[i];
+        }
+        if (!open)
             continue;
         worst = std::max(worst, K1[i] / k1c);
     }

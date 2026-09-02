@@ -696,9 +696,16 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         // ----------------------------------------------------------------------------
         // iterate full nonlinear system until convergence
         std::cout << "Solve Fracture Pressure using Iterative Fracture" << std::endl;
-        double min_width = prm_.get<double>("solver.min_width");
-        for (auto& width : fracture_width_) {
-            width[0] = std::max(width[0], min_width); // Ensure not completely closed
+        // Same suspected-dead clamp as in solveFractureWidth(): a mechanical
+        // width floored at the (1 mm) solver.min_width can never close. Only the
+        // legacy "if" method reaches this. Fail loudly until we are sure.
+        const double min_width = prm_.get<double>("solver.min_width");
+        if (min_width > 0.0) {
+            OPM_THROW(std::runtime_error,
+                      "solver.method=if floors the mechanical width at solver.min_width="
+                      + std::to_string(min_width)
+                      + " m, which prevents cells from ever closing. Set "
+                        "solver.min_width=0 to use this method.");
         }
         // start by assuming pressure equal to confining stress (will also set
         // fracture_pressure_ to its correct size
