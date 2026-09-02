@@ -27,6 +27,7 @@
 #include <opm/common/TimingMacros.hpp>
 #include <opm/geomech/RegularTrimesh.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <iostream>
@@ -2135,19 +2136,19 @@ Fracture::updateLeakoff()
         double area = geom.volume();
         double res_mob = reservoir_mobility_[eIdx];
         leakof_[eIdx] = res_mob * reservoir_perm_[eIdx] * area / reservoir_dist_[eIdx];
+        // two-sided: the fracture leaks through both faces (was applied only with a
+        // filter cake, so cake and no-cake decks disagreed by 2x — WP2 A0)
+        double invtrans = 1 / leakof_[eIdx];
         if (has_filtercake_) {
-            double invtrans = 1 / leakof_[eIdx];
             assert(filtercake_thikness_[eIdx] >= 0.0);
             if (filtercake_thikness_[eIdx] > 0.0) {
                 double fitercaketrans = res_mob * filtercake_perm_ * area / (filtercake_thikness_[eIdx]/2.0); // div by 2 since filtercake thikness is sum of filtercake on each side
                 invtrans += 1 / fitercaketrans;
-                // assert(filtercake_perm_ > 0.0);
-                // assert(filtercake_thikness_[eIdx] > 0.0);
             }
-            leakof_[eIdx] = 2.0 / invtrans;
-            if(elementHasBoundaryNode[eIdx] && no_leakof_outercells){
-              leakof_[eIdx] = 0.0;
-            }
+        }
+        leakof_[eIdx] = 2.0 / invtrans;
+        if(elementHasBoundaryNode[eIdx] && no_leakof_outercells){
+          leakof_[eIdx] = 0.0;
         }
     }
 }
@@ -2307,6 +2308,26 @@ void Fracture::moveForwardInTime(double dt_last)
             } else {
                 coupling_dt_cap_ = std::max(dt_last, dt_min); // hold
             }
+        }
+        // Stress-rate dt controller (opt-in via solver.stress_dt_target, bar per
+        // step): pace dt so the mean fracture traction moves at most the target
+        // per step. The thermal transient is smooth, so a plain proportional
+        // controller suffices (no quiet-step episodes needed).
+        const double ds_target = prm_.get<double>("solver.stress_dt_target", 0.0) * 1e5;
+        const size_t ncf = numFractureCells();
+        if (ds_target > 0.0 && dt_last > 0.0 && reservoir_stress_.size() >= ncf
+            && cell_normals_.size() >= ncf) {
+            double tsum = 0.0;
+            for (size_t i = 0; i < ncf; ++i)
+                tsum += normalFractureTraction(i);
+            const double tmean = (ncf > 0) ? tsum / ncf : 0.0;
+            if (std::isfinite(traction_step_start_)) {
+                const double ds = std::abs(tmean - traction_step_start_);
+                const double dt_min = prm_.get<double>("solver.stress_dt_min", 0.1) * 86400.0;
+                const double fac = std::clamp(ds_target / std::max(ds, 1.0), 0.5, 2.0);
+                stress_dt_cap_ = std::max(dt_last * fac, dt_min);
+            }
+            traction_step_start_ = tmean;
         }
         area_step_start_ = fp.area;
         volume_step_start_ = fp.volume;
@@ -2488,9 +2509,38 @@ Fracture::initPressureMatrix()
     // rate-fed fracture model) instead of only at the seed.
     std::set<int> sources(well_source_.begin(), well_source_.end());
     if (prm_.get<bool>("solver.well_source_all_perfs", false) && !well_perf_cells_.empty()) {
+        // The wellbore CUTS the fracture along a line, so the cells the well feeds
+        // directly are those within about a wellbore radius of that line - not every
+        // cell that happens to share a reservoir cell with a perforation. On a
+        // coarse grid the latter is the whole fracture (model2: 100 m cells vs a
+        // 40-130 m fracture), which short-circuits the in-fracture cubic law and
+        // makes the fracture one equipotential body.
+        // solver.well_source_radius > 0 applies the geometric limit; the line is
+        // the global vertical projected into the fracture plane through origo_
+        // (vertical wells). The test is purely geometric, so the source set grows
+        // monotonically with the fracture and never jumps between remeshes.
+        const double wsr = prm_.get<double>("solver.well_source_radius", 0.0);
+        Point3D wdir({0.0, 0.0, 1.0});
+        if (wsr > 0.0) {
+            const double dn = wdir * naxis_[2];
+            for (int d = 0; d < 3; ++d) wdir[d] -= dn * naxis_[2][d];
+            const double wn = wdir.two_norm();
+            if (wn > 1e-12) wdir /= wn;
+        }
         std::set<int> perfcells(well_perf_cells_.begin(), well_perf_cells_.end());
-        for (size_t i = 0; i < reservoir_cells_.size(); ++i)
-            if (perfcells.count(reservoir_cells_[i])) sources.insert(static_cast<int>(i));
+        for (const auto& e : Dune::elements(grid_->leafGridView())) {
+            const int i = wsmapper.index(e);
+            if (i >= static_cast<int>(reservoir_cells_.size())) continue;
+            if (!perfcells.count(reservoir_cells_[i])) continue;
+            if (wsr > 0.0) {
+                const auto c = e.geometry().center();
+                Point3D r({c[0] - origo_[0], c[1] - origo_[1], c[2] - origo_[2]});
+                const double along = r * wdir;
+                for (int d = 0; d < 3; ++d) r[d] -= along * wdir[d];
+                if (r.two_norm() > wsr) continue; // too far from the wellbore line
+            }
+            sources.insert(i);
+        }
     }
     for (int cell : sources) {
         perfinj_.push_back({cell, fwi_for(cell)});
@@ -2652,6 +2702,40 @@ Fracture::removeNewZeroWithCells(RegularTrimesh& mesh,
 }
 
 
+
+void
+Fracture::warnIfOpenButNotConducting() const
+{
+    // An open, conductive fracture cannot carry zero rate. When it reports one,
+    // the well connection has been lost rather than the physics changed - the
+    // legacy WI upscaling zeroes a connection whose sign flips, which made an
+    // open 2880 m2 fracture at 400 bar report zero rate for a whole report step
+    // and read as a pressure transient. Opt out with warn_open_not_conducting=0.
+    if (!prm_.get<bool>("solver.warn_open_not_conducting", true) || !active_)
+        return;
+    if (fracture_width_.size() == 0)
+        return;
+
+    const auto fp = calculateFractureProperties();
+    // "Open" means mechanically open, not merely meshed: cells carrying real
+    // aperture above the flow floor.
+    double open_area = 0.0;
+    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+    for (const auto& e : Dune::elements(grid_->leafGridView())) {
+        const int i = mapper.index(e);
+        if (i < static_cast<int>(fracture_width_.size())
+            && fracture_width_[i][0] > min_width_)
+            open_area += e.geometry().volume();
+    }
+    const double min_open = prm_.get<double>("solver.warn_open_area", 1.0); // m2
+    const double q_tol = prm_.get<double>("solver.warn_flux_tol", 1e-12);   // m3/s
+    if (open_area > min_open && std::abs(fp.flux) < q_tol) {
+        OpmLog::warning("Fracture " + name() + ": " + std::to_string(open_area)
+                        + " m2 is mechanically open but the fracture carries no flow ("
+                        + std::to_string(fp.flux)
+                        + " m3/s) - the well connection looks lost, not the fracture");
+    }
+}
 
 double
 Fracture::maxK1Ratio() const

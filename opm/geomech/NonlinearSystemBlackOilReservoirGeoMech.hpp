@@ -297,16 +297,51 @@ namespace Opm
                 // allowed within this step propagated on a pressure the flow had
                 // not yet responded to. Raised here, inside the retry scope, so
                 // the timestepper chops dt and re-solves from the checkpoint.
+                // Unconverged-fracture dt cut (opt-in): the conservative gates
+                // rightly refuse to grow off an unconverged contact solve, but
+                // refusing forever SUPPRESSES growth. Cut the step instead so
+                // the retry can converge and grow legitimately; at the floor,
+                // accept with a warning (same pattern as the growth guard).
+                if (report.converged && have_fracture
+                    && prm.get<bool>("solver.unconverged_fracture_dt_cut", false)
+                    && this->simulator_.problem().geoMechModel()
+                           .fractureModel().anyLastSolveUnconverged()) {
+                    const double floor_dt =
+                        prm.get<double>("solver.area_growth_guard_min_dt", 0.05) * 86400.0;
+                    if (timer.currentStepLength() <= floor_dt) {
+                        OpmLog::warning("Fracture solve unconverged at minimum dt - "
+                                        "accepting the step");
+                    } else {
+                        OpmLog::warning("Fracture solve unconverged - cutting the "
+                                        "timestep to let contact converge before growth");
+                        OPM_THROW_NOLOG(NumericalProblem,
+                                        "fracture solve unconverged: dt cut requested");
+                    }
+                }
                 if (report.converged && have_fracture) {
                     const std::string violation = this->simulator_.problem()
                         .geoMechModel().fractureModel().growthGuardViolation();
                     const int any_violation =
                         this->simulator_.vanguard().grid().comm().max(violation.empty() ? 0 : 1);
                     if (any_violation) {
-                        OpmLog::warning("Fracture growth guard: "
-                                        + (violation.empty() ? std::string("violation on another rank")
-                                                             : violation));
-                        OPM_THROW_NOLOG(NumericalProblem, "fracture growth guard: " + violation);
+                        // Growth-per-solve is a ratio independent of dt, so on decks
+                        // where any step would burst (e.g. pressure-controlled onset)
+                        // rejection alone cascades dt to the floor without ever
+                        // passing. At/below the guard's own dt floor, accept the
+                        // oversized step with a warning instead.
+                        const double guard_min_dt =
+                            prm.get<double>("solver.area_growth_guard_min_dt", 0.05) * 86400.0;
+                        if (timer.currentStepLength() <= guard_min_dt) {
+                            OpmLog::warning("Fracture growth guard: accepting oversized growth "
+                                            "at minimum dt ("
+                                            + (violation.empty() ? std::string("violation on another rank")
+                                                                 : violation) + ")");
+                        } else {
+                            OpmLog::warning("Fracture growth guard: "
+                                            + (violation.empty() ? std::string("violation on another rank")
+                                                                 : violation));
+                            OPM_THROW_NOLOG(NumericalProblem, "fracture growth guard: " + violation);
+                        }
                     }
                 }
             }

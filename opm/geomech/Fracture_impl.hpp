@@ -193,6 +193,9 @@ Fracture::maxFlowTimeStep() const
     if (coupling_dt_cap_ > 0.0) {
         cap = (cap > 0.0) ? std::min(cap, coupling_dt_cap_) : coupling_dt_cap_;
     }
+    if (stress_dt_cap_ > 0.0) {
+        cap = (cap > 0.0) ? std::min(cap, stress_dt_cap_) : stress_dt_cap_;
+    }
     if (onset_dt > 0.0 && onsetHoldActive()) {
         return (cap > 0.0) ? std::min(cap, onset_dt * 86400.0) : onset_dt * 86400.0;
     }
@@ -982,6 +985,39 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 std::fill(result.begin(), result.end(), -1.0);
             }
 
+
+            // Per-cell propagation veto (opt-in): refuse to grow from a front cell
+            // that is closed or whose FB complementarity has not converged, instead
+            // of vetoing ALL growth when the solve hit its iteration cap
+            // (conservative_propagation) - a global veto starves the fracture while
+            // the well keeps pressurising. Only front cells are scored at all, so
+            // this leaves every trustworthy open front free to propagate.
+            if (prm_.get<bool>("solver.propagate_converged_cells_only", false)) {
+                const double fbtol = prm_.get<double>("solver.propagate_fb_tol", 1e-3);
+                int vetoed = 0;
+                for (size_t i = 0; i != result.size(); ++i) {
+                    const int bind = bmap[boundary_cells[i]];
+                    if (bind < 0) continue;
+                    const bool closed = bind < static_cast<int>(closed_cells_.size())
+                                        && closed_cells_[bind];
+                    // FB: scaled complementarity residual. Sticky/pdas: the cell's
+                    // own toggle count, so the veto is available to the binary
+                    // active set as well (solver.propagate_max_toggles).
+                    const int stable = prm_.get<int>("solver.propagate_stable_iters", 2);
+                    const bool unconverged =
+                        (bind < static_cast<int>(fb_cell_residual_.size())
+                         && fb_cell_residual_[bind] > fbtol)
+                        || (bind < static_cast<int>(cell_last_toggle_iter_.size())
+                            && current_solve_iter_ - cell_last_toggle_iter_[bind] < stable);
+                    if (closed || unconverged) {
+                        result[i] = -1.0;
+                        ++vetoed;
+                    }
+                }
+                if (vetoed > 0 && prm_.get<int>("verbosity", 0) > 1)
+                    std::cout << "Propagation veto: " << vetoed << "/" << result.size()
+                              << " front cells closed or unconverged" << std::endl;
+            }
 
             // Fixed-topology mode: freeze the mesh at the seed (Reveal comparison).
             if (prm_.get<bool>("solver.disable_propagation", false)) {

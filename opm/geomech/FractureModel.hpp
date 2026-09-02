@@ -109,6 +109,7 @@ public:
     // fractures (empty = none). Not MPI-reduced; caller decides.
     std::string growthGuardViolation() const;
 
+
     //! Largest K1/K1c over all active fractures; >1 means at least one fracture
     //! front still satisfies the propagation criterion and wants to grow.
     double maxK1Ratio() const;
@@ -116,6 +117,8 @@ public:
     //! Summed area over all active fractures - used to tell "the front is still
     //! advancing" from "the front is blocked" without inspecting the meshes.
     double totalFractureArea() const;
+    //! true when any active fracture's last solve ended unconverged
+    bool anyLastSolveUnconverged() const;
     void writeIterationSnapshots(int step, int round, const std::string& tag) const;
 
         void updateReservoirProperties(); // for testing without simulator

@@ -4,6 +4,8 @@
 
 #include <opm/simulators/linalg/PropertyTree.hpp>
 
+#include <algorithm>
+#include <cmath>
 #include <limits>
 
 namespace Opm {
@@ -144,6 +146,7 @@ namespace Opm {
                         fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator);
                     }
                     last_solve_stats_ += fractures[j].lastSolveStats();
+                    fractures[j].warnIfOpenButNotConducting();
                 }
             }
         }
@@ -223,6 +226,16 @@ namespace Opm {
         for (size_t i = 0; i < wells_.size(); ++i)
             for (const auto& fracture : well_fractures_[i])
                 fracture.writeIterationSnapshot(step, round, tag);
+    }
+
+    inline bool
+    FractureModel::anyLastSolveUnconverged() const
+    {
+        for (size_t i = 0; i < wells_.size(); ++i)
+            for (const auto& fracture : well_fractures_[i])
+                if (fracture.isActive() && !fracture.lastSolveStats().converged)
+                    return true;
+        return false;
     }
 
     inline std::string
@@ -382,10 +395,15 @@ namespace Opm {
                                     "control.type='well': THP-constrained well '"
                                         + wells_[i].name()
                                         + "' is not supported - set an explicit fracture control");
+                      // wellState() indexes all wells, localNonshutWells() only
+                      // the non-shut ones - with shut wells in the deck the two
+                      // indices diverge, so look up by name.
                       const auto& wells = wellmodel.localNonshutWells();
-                      const auto& well = wells[*well_index];
-                      assert(well->name() == wells_[i].name());
-                      
+                      const auto well_it = std::find_if(wells.begin(), wells.end(),
+                          [&](const auto& w) { return w->name() == wells_[i].name(); });
+                      if (well_it != wells.end()) {
+                      const auto& well = *well_it;
+
                       //for (const auto& perf : wellstate.perf_data) {
                       for (int perf_index=0; perf_index < wellstate.perf_data.cell_index.size(); ++perf_index) {    
                             //water_rate += perf.flux[TypeTag::FluidSystem    ::waterPhaseIdx];
@@ -404,8 +422,21 @@ namespace Opm {
                             // fracture contribution, which must be excluded
                             // when computing the reference well indices for
                             // the fracture solve.
+                            // The WINJDAM filter-cake multiplier is applied to Tw
+                            // inside the well model, NOT via wellTransMultiplier -
+                            // without it the duplicated well row believes the caked
+                            // perfs are open and solves its well DOF near reservoir
+                            // pressure while the real well runs far above it.
+                            double fc_mult = 1.0;
+                            const auto& fc = well->filterCakeMultipliers();
+                            if (!fc.empty() && static_cast<size_t>(perf_index) < fc.size()) {
+                                const auto perf_ecl_index = well->perforationData()[perf_index].ecl_index;
+                                const auto& connection = well->wellEcl().getConnections()[perf_ecl_index];
+                                if (connection.filterCakeActive())
+                                    fc_mult = fc[perf_index];
+                            }
                             const auto effective_well_index_perf =
-                                well->wellIndex()[perf_index] * trans_mult;
+                                well->wellIndex()[perf_index] * trans_mult * fc_mult;
 
                                                  
                             //const auto mobibility = well->getMobility(simulator, perf_index, mob);
@@ -432,8 +463,9 @@ namespace Opm {
                         //injection_rate = wellstate.surface_rates[FluidSystem::waterPhaseIdx];
                         well_depth = well->refDepth();
                         perf_depths = well->perfDepth();
-                    }   
-                 }  
+                      } // well found in localNonshutWells
+                    }
+                 }
             }
             assert(well_fractures_[i].size() < 2);// for now asser this if not better "well model is need"
             for (auto& fracture : well_fractures_[i]){
@@ -444,7 +476,34 @@ namespace Opm {
                         << injection_rate << " WI " << total_wellindex << std::endl;
                 OpmLog::info(os.str());
               }  
+              fracture.setTimeStep(simulator.timeStepSize());
               fracture.setWellControl(well_control_is_rate, well_bhp);
+              // Consistency check: the fracture's duplicated well row should
+              // track the reservoir well model. A large BHP gap means the row's
+              // frozen WI/mobility no longer represents the well (the missing
+              // filter-cake multiplier hid exactly this way). Warn only.
+              {
+                  const double warn_bar =
+                      prm_.get<double>("solver.well_consistency_warn_bhp", 50.0);
+                  const std::string ctrl = fracture.effectiveControlType();
+                  if (warn_bar > 0.0 && well_bhp > 0.0
+                      && fracture.hasPressureState()
+                      && (ctrl == "rate_well" || ctrl == "bhp_well")) {
+                      const double frac_bhp = fracture.injectionBhp();
+                      if (std::isfinite(frac_bhp) && frac_bhp > 1.0e5
+                          && std::abs(frac_bhp - well_bhp) > warn_bar * 1.0e5) {
+                          OpmLog::warning(
+                              "Fracture " + fracture.name() + ": well DOF "
+                              + std::to_string(frac_bhp / 1.0e5)
+                              + " bar deviates from the reservoir well model BHP "
+                              + std::to_string(well_bhp / 1.0e5)
+                              + " bar by more than "
+                              + std::to_string(warn_bar)
+                              + " bar - the duplicated well row (frozen WI/mobility) "
+                                "is out of sync with the well");
+                      }
+                  }
+              }
               fracture.setWellProps(injection_rate,  total_wellindex,  wi_dz,  wi_respress,  well_depth);
               fracture.setWellPerfCells(perf_cell_indices);
                 // do update wells

@@ -26,6 +26,8 @@
 
 
 
+#include <limits>
+
 #include <dune/common/exceptions.hh>
 #include <dune/foamgrid/foamgrid.hh>
 #include <dune/grid/common/mcmgmapper.hh> // mapper class
@@ -371,6 +373,13 @@ public:
     std::vector<double> cellDepths() const;
     double injectionPressure() const;
     double injectionBhp() const;// {return injectionPressure() - dp_perf_;};
+    //! true once fracture_pressure_ holds a solved state (injectionPressure/
+    //! injectionBhp index into it and must not be called before)
+    bool hasPressureState() const { return fracture_pressure_.size() > 0; }
+    //! Warn when the fracture is mechanically open yet carries no flow - the
+    //! signature of a lost well connection (e.g. CTFs zeroed by the legacy WI
+    //! upscaling), which otherwise passes silently as a pressure transient.
+    void warnIfOpenButNotConducting() const;
     void setPerfProps(double perfpressure,double perf_depth, double perfrate);//{perf_pressure_ = perfpressure;}
     //! resolved fracture-BC control: "control.type" verbatim, or picked from the
     //! well's active constraint when control.type == "well"
@@ -385,6 +394,8 @@ public:
     // fracture's), used by solver.well_source_all_perfs to feed the fracture
     // wherever the well crosses it.
     void setWellPerfCells(std::vector<int> cells) { well_perf_cells_ = std::move(cells); }//{well_rate_ = wellrate; total_wellindex_ = WI;}
+    //! current flow timestep (s); needed by the opt-in fracture storage term
+    void setTimeStep(double dt) { current_dt_ = dt; }
     Dune::FieldVector<double, 6> stress(Dune::FieldVector<double, 3> obs) const;
     Dune::FieldVector<double, 6> strain(Dune::FieldVector<double, 3> obs) const;
     Dune::FieldVector<double, 3> disp(Dune::FieldVector<double, 3> obs) const;
@@ -609,6 +620,12 @@ private:
     // coupling-rate dt controller (opt-in): cap on the next flow step, set at the
     // step checkpoint from how fast perf pressure / area moved in the last step
     double coupling_dt_cap_{-1.0};
+    // stress-rate dt controller (opt-in, solver.stress_dt_target bar/step): the
+    // thermal closure-stress transient is smooth, so a proportional cap on the
+    // per-step traction change paces dt through cooling without the episode
+    // problem of the coupling-rate controller
+    double traction_step_start_{std::numeric_limits<double>::quiet_NaN()};
+    double stress_dt_cap_{-1.0};
     bool well_control_is_rate_{true}; // active well constraint (from the well state)
     double well_target_bhp_{-1.0};    // active BHP (bhp_well constraint target)
     // control.type=="well": the BC resolved at the start of the current solve.
@@ -622,6 +639,16 @@ private:
     std::vector<Htrans> htrans_;
     std::vector<std::tuple<int,double>> perfinj_;
     std::vector<int> well_perf_cells_; // see setWellPerfCells
+    //! Per-cell scaled FB complementarity residual |phi|/(1+|a|+|b|) from the last
+    //! assembled iterate; empty unless closed_cell_policy=fischer_burmeister.
+    //! Lets propagation veto individual untrustworthy cells instead of all growth.
+    std::vector<double> fb_cell_residual_;
+    double current_dt_{-1.0}; // flow timestep (s), see setTimeStep
+    //! Nonlinear iteration at which each cell last flipped open/closed in the
+    //! current solve; the binary active set's analogue of fb_cell_residual_ for
+    //! the propagation veto (recent stability, not lifetime stability).
+    std::vector<int> cell_last_toggle_iter_;
+    int current_solve_iter_{0}; //!< last nonlinear iteration index of the solve
     double perf_pressure_;
     std::vector<double> leakof_;
     
