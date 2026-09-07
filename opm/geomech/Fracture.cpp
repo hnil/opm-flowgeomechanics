@@ -1775,6 +1775,7 @@ Fracture::wellIndices_() const
     // near equilibration (units: Pa).
     const double wi_dp_floor = prm_.get<double>("solver.wi_pressure_floor", 1.0e4);
     const double wi_alpha_max = prm_.get<double>("solver.wi_normalization_max", 2.0);
+    const bool wi_sign_gate = prm_.get<bool>("solver.wi_sign_gate", false);
     double sum_q = 0.0;
     double sum_ctf_dp = 0.0;
     int legacy_negative_count = 0;
@@ -1804,8 +1805,16 @@ Fracture::wellIndices_() const
             // Diagnostics + normalization bookkeeping against the legacy
             // operating point.
             const double dp_well = (inj_press - dh_perf) - (p_cells[i] - dh_res);
-            if (q_cells[i] < 0.0 || (dp_well <= 0.0 && q_cells[i] > 0.0)) {
+            const bool not_fed = (q_cells[i] < 0.0 || (dp_well <= 0.0 && q_cells[i] > 0.0));
+            if (not_fed) {
                 ++legacy_negative_count; // legacy would have zeroed this perf
+            }
+            // A cell the fracture does not feed must get no CTF: the flow
+            // applies it against its own well-cell dp and would drive the
+            // cell backwards (measured: 377x the target rate recirculated).
+            if (wi_sign_gate && not_fed) {
+                ctf = 0.0;
+                WI = 0.0;
             }
             sum_q += q_cells[i];
             sum_ctf_dp += ctf * std::max(mob_cells[i], 0.0)
