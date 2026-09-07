@@ -309,6 +309,27 @@ namespace Opm
                         OPM_THROW_NOLOG(NumericalProblem, "fracture growth guard: " + violation);
                     }
                 }
+                // Propagation-aware timestep control (opt-in, default off).
+                // Ending a step far above the propagation criterion means the
+                // step was too long: the front became strongly supercritical
+                // within it.  Rejecting the step so the timestepper chops dt and
+                // re-solves the SAME interval is well posed; demanding the extra
+                // growth at fixed dt is not, because the fracture cannot grow at
+                // constant injected volume without dropping below closure - which
+                // is exactly what require_k1_below_k1c does to it.
+                const double k1_chop = prm.get<double>("solver.k1_chop_factor", 0.0);
+                if (k1_chop > 0.0 && report.converged && have_fracture) {
+                    const double worst = this->simulator_.vanguard().grid().comm().max(
+                        this->simulator_.problem().geoMechModel().fractureModel().maxK1Ratio());
+                    if (worst > k1_chop) {
+                        OpmLog::warning("Fracture propagation: step ended at K1/K1c = "
+                                        + std::to_string(worst) + " > " + std::to_string(k1_chop)
+                                        + "; chopping the timestep");
+                        OPM_THROW_NOLOG(NumericalProblem,
+                                        "fracture propagation criterion: K1/K1c = "
+                                            + std::to_string(worst));
+                    }
+                }
             }
 
             return report;
