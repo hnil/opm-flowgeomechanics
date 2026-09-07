@@ -2070,6 +2070,31 @@ Fracture::ensureLeakoffCurrent()
     return leakof_.size() == nc;
 }
 
+// Presets: legacy = 2 faces, d = L/4 (8 lambda k A/L, frozen default);
+// onesided = 1 face, d = L/4 (4 lambda k A/L); reveal = 1 face, d = 0.632 L
+// (1.58 lambda k A/L, fitted to the dz20 reference — no physical argument).
+// solver.leakoff_sides / solver.leakoff_distance_factor override the preset.
+int
+Fracture::leakoffSides() const
+{
+    const std::string model = prm_.get<std::string>("solver.leakoff_model", "legacy");
+    int sides = 2;
+    if (model == "onesided" || model == "reveal") {
+        sides = 1;
+    } else if (model != "legacy") {
+        OPM_THROW(std::runtime_error, "Unknown solver.leakoff_model: " + model);
+    }
+    return prm_.get<int>("solver.leakoff_sides", sides);
+}
+
+double
+Fracture::leakoffDistanceFactor() const
+{
+    const std::string model = prm_.get<std::string>("solver.leakoff_model", "legacy");
+    const double factor = (model == "reveal") ? 0.632 : 0.25;
+    return prm_.get<double>("solver.leakoff_distance_factor", factor);
+}
+
 void
 Fracture::updateLeakoff()
 {
@@ -2130,23 +2155,24 @@ Fracture::updateLeakoff()
     const size_t nc = numFractureCells();
     leakof_.resize(nc, 0.0);
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+    // per leaking face: reservoir path in series with its share of the cake
+    // (filtercake_thikness_ is the total over all faces); faces act in parallel
+    const double sides = leakoffSides();
     for (auto& element : Dune::elements(grid_->leafGridView())) {
         const int eIdx = mapper.index(element);
         const auto geom = element.geometry();
         double area = geom.volume();
         double res_mob = reservoir_mobility_[eIdx];
         leakof_[eIdx] = res_mob * reservoir_perm_[eIdx] * area / reservoir_dist_[eIdx];
-        // two-sided: the fracture leaks through both faces (was applied only with a
-        // filter cake, so cake and no-cake decks disagreed by 2x — WP2 A0)
         double invtrans = 1 / leakof_[eIdx];
         if (has_filtercake_) {
             assert(filtercake_thikness_[eIdx] >= 0.0);
             if (filtercake_thikness_[eIdx] > 0.0) {
-                double fitercaketrans = res_mob * filtercake_perm_ * area / (filtercake_thikness_[eIdx]/2.0); // div by 2 since filtercake thikness is sum of filtercake on each side
+                double fitercaketrans = res_mob * filtercake_perm_ * area / (filtercake_thikness_[eIdx]/sides);
                 invtrans += 1 / fitercaketrans;
             }
         }
-        leakof_[eIdx] = 2.0 / invtrans;
+        leakof_[eIdx] = sides / invtrans;
         if(elementHasBoundaryNode[eIdx] && no_leakof_outercells){
           leakof_[eIdx] = 0.0;
         }

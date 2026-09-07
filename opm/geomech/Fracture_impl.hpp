@@ -318,6 +318,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         filtercake_thikness_.resize(ncf, 0.0);
         // should be calculated
         bool calculate_dist = prm_.get<bool>("reservoir.calculate_dist");
+        const double dist_factor = leakoffDistanceFactor();
         if(!calculate_dist){
           double dist = prm_.get<double>("reservoir.dist");
           reservoir_dist_.resize(ncf, dist);
@@ -470,8 +471,8 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                     cdist -= geom.corner(li);
                     dist += std::abs(normal.dot(cdist));
                   }
-                  dist /= num_corners;
-                  reservoir_dist_[i] = dist/2.0;
+                  dist /= num_corners; // = L/2 for a box cell: mean |n.(centre-corner)|
+                  reservoir_dist_[i] = 2.0*dist*dist_factor;
                 }
                 reservoir_cell_z_[i] = cell_center[2];
                    

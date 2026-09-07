@@ -545,6 +545,10 @@ private:
     void setupPressureSolver();
     void updateFractureRHS();
     void updateLeakoff();
+    // leak-off convention (solver.leakoff_model): number of leaking faces and the
+    // reservoir distance as a fraction of the cell extent normal to the fracture
+    int leakoffSides() const;
+    double leakoffDistanceFactor() const;
     void updateCellNormals();
     void normalFractureTraction(Dune::BlockVector<Dune::FieldVector<double, 1>>& traction, bool resize=true) const;
     double normalFractureTraction(size_t ix) const;
