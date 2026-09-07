@@ -68,6 +68,7 @@ configs) is **dead**. It now lives under `fractureparam.solver` in the final con
 | `max_expand_iter` | max grid-expansion iterations per fracture solve |
 | `max_iter_on_same_level` | cap on solves at one refinement level |
 | `target_cellcount`, `cellcount_threshold`, `numcell_threshold`, `max_num_coarsening` | trimesh coarsening / size control |
+| `leakoff_model` | leak-off convention: `legacy` (default; 2 faces, d = L/4 → 8λkA/L), `onesided` (1 face, d = L/4 → 4λkA/L), `reveal` (1 face, d = 0.632 L → 1.58λkA/L, fitted to the dz20 reference, no physical argument). Filter cake follows the same face count (total thickness split over the faces). `leakoff_sides` / `leakoff_distance_factor` override the preset. L = cell extent normal to the fracture, λ = total mobility. |
 | `smooth_boundary`, `full_intersections`, `divide_wellidx`, `no_leakof_outercells`, `remap_solution` | geometry / remap options (`remap_solution=true` carries width/pressure across grid changes instead of re-initialising) |
 
 ## 4. `fractureparam.solver` — inner nonlinear (width/pressure) solve  *(group `__2`)*

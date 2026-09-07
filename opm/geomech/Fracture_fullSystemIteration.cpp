@@ -1196,7 +1196,24 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     if (closed_cells_.size() == closed_cells.size()) {
         last_solve_stats_.closed_cell_toggles +=
             static_cast<int>(count_toggled_cells(closed_cells_, closed_cells));
+        // Per-cell toggle count: the binary-active-set analogue of the FB
+        // complementarity residual, so the per-cell propagation veto works for
+        // the sticky policy too - a front cell whose contact state was still
+        // flipping when the solve stopped is not a trustworthy place to grow.
+        // Record WHEN each cell last toggled, not how often: a policy that
+        // chatters by nature (sticky: ~1400 toggles/solve vs FB's 0) never has
+        // a cell with zero lifetime toggles, so a lifetime counter degenerates
+        // into vetoing every front cell. What matters is whether the cell had
+        // settled by the end of the solve.
+        if (cell_last_toggle_iter_.size() != closed_cells.size())
+            cell_last_toggle_iter_.assign(closed_cells.size(), -1000);
+        for (size_t i = 0; i < closed_cells.size(); ++i)
+            if (closed_cells_[i] != closed_cells[i])
+                cell_last_toggle_iter_[i] = nlin_iteration;
+    } else {
+        cell_last_toggle_iter_.assign(closed_cells.size(), -1000);
     }
+    current_solve_iter_ = nlin_iteration;
     closed_cells_ = closed_cells;
     // dump_vector(closed_cells, debug_filename("closed_cells_").c_str());
     // dump_vector(closed_cells, "closed_cells", true);
@@ -1223,6 +1240,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         const ResVector& p = x[_1];
         fb_phi.assign(n, 0.0);
         fb_scale.assign(n, 1.0);
+        fb_cell_residual_.assign(n, 0.0);
         if (first_iteration) A_.reset(new FMatrix(Aorig));
         FMatrix& Afb = *A_;
         if (first_iteration) I_.reset(new SMatrix(makeIdentity(n, numWellEquations())));
@@ -1235,11 +1253,19 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
             const double c_i = std::max(std::abs(Aorig[i][i]), eps);
             const double a = c_i * w[i][0];
             const double b = tmp_i;
-            const double r = std::sqrt(a * a + b * b) + eps;
+            // Chen-Mangasarian mu-smoothing (opt-in solver.fb_mu > 0):
+            // phi_mu = a + b - sqrt(a^2 + b^2 + 2 mu), which is differentiable
+            // everywhere including the a=b=0 corner where the plain FB kink sits.
+            // mu > 0 relaxes complementarity by ~mu, so it is a regularisation:
+            // it must be small against the local scale (c_i * w_typ)^2 or it
+            // holds cells artificially open.
+            const double mu = prm_.get<double>("solver.fb_mu", 0.0);
+            const double r = std::sqrt(a * a + b * b + 2.0 * mu) + eps;
             const double da = 1.0 - a / r;
             const double db = 1.0 - b / r;
-            fb_phi[i] = a + b - std::sqrt(a * a + b * b);
+            fb_phi[i] = a + b - std::sqrt(a * a + b * b + 2.0 * mu);
             fb_scale[i] = 1.0 + std::abs(a) + std::abs(b);
+            fb_cell_residual_[i] = std::abs(fb_phi[i]) / fb_scale[i];
             for (size_t j = 0; j < n; ++j) Afb[i][j] = -db * Aorig[i][j];
             Afb[i][i] += da * c_i;
             Ifb[i][i] = -db;
@@ -1391,6 +1417,25 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         S[_0][_0].mmv(x[_0], rhs[_0]);
         S[_0][_1].mmv(x[_1], rhs[_0]);
     //}
+
+    // Fracture volume storage (opt-in solver.fracture_storage_term): the cell mass
+    // balance carries an accumulation term A_i (w_i - w_i^n)/dt that the
+    // steady-state pressure equation omits. It is negligible once the fracture is
+    // established (m3 stored vs hundreds delivered) but dominant exactly while a
+    // cell is opening fast, where it makes opening cost pressure - the physical
+    // form of a drawdown-on-growth feedback, and a damping diagonal for the solve.
+    // Cells added by growth inside the step have no previous width and correctly
+    // store their full opening; index mapping to the checkpoint assumes the mesh
+    // has not been renumbered within the step.
+    if (prm_.get<bool>("solver.fracture_storage_term", false) && current_dt_ > 0.0) {
+        const std::vector<double> areas = cellAreas();
+        const size_t ncell = std::min(areas.size(), numFractureCells());
+        for (size_t i = 0; i < ncell && i < rhs[_1].size() && i < x[_0].size(); ++i) {
+            const double w_prev = (i < fracture_width_prev_.size())
+                ? fracture_width_prev_[i][0] : 0.0;
+            rhs[_1][i][0] -= areas[i] * (x[_0][i][0] - w_prev) / current_dt_;
+        }
+    }
 
     // Fischer-Burmeister: the mechanics residual is the nonlinear complementarity
     // function, not the linear mmv result, so overwrite the mech rows with -phi_FB.
@@ -1847,8 +1892,16 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     // The "none" contact policy keeps the fracture open and permits negative
     // aperture, so it must NOT clamp width to >= 0 (that clamp is itself a contact
     // nonlinearity that would reintroduce the open/close behaviour).
+    // FB satisfies w >= 0 at convergence by construction, so clamping its ITERATES
+    // re-imposes exactly the nonsmooth projection FB exists to remove (opt-in
+    // solver.fb_clamp_width=false lifts it). Flow floors the width it consumes at
+    // min_width regardless, so a small negative in an unconverged cell is harmless
+    // there; volume/width reporting can show it.
+    const std::string ccpolicy = prm_.get<std::string>("solver.closed_cell_policy", "sticky");
     const bool allow_negative_width =
-        (prm_.get<std::string>("solver.closed_cell_policy", "sticky") == "none");
+        (ccpolicy == "none")
+        || (ccpolicy == "fischer_burmeister"
+            && !prm_.get<bool>("solver.fb_clamp_width", true));
     if (!allow_negative_width) {
         for (size_t i = 0; i != fracture_width_.size(); ++i) {
             fracture_width_[i][0] = std::max(0.0, fracture_width_[i][0]); // ensure non-negativity

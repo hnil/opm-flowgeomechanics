@@ -131,3 +131,51 @@ implicitly.
 | `volume_pacing_factor` | `1.0` | `f_vol` in (1) |
 | `volume_pacing_pressure` | `false` | also apply the draw-down (3)–(4) between rounds |
 | `volume_pacing_verbosity` | `0` | >0 logs `V(k)`, `V0`, `Q_leak`, `V_avail`, and any draw-down per round |
+
+## Review 2026-09-04 (HMN + Claude): measured on the Reveal-comparison boxes
+
+**Verdict: the volume budget never binds on the thermal boxes, and the physics it
+encodes is not what paces Reveal.** Keep it as an opt-in guard; do not rely on it
+for establishment.
+
+Measured, dz20 caked (20 m cells, 3000 Sm3/d), candX with and without
+`volume_paced_propagation=true, volume_pacing_source=well, volume_pacing_pressure=true`:
+**bit-identical** — BHP, area (0.3 → 6327 m2 in the single step day 70.5→75.5),
+`WWIRFRAC`, everything. The budget is `q·dt ≈ 3062 m3/d × 5 d ≈ 15 000 m3` against a
+fracture volume of ~800 m3 (8400 m2 × 0.1 m): a factor ~20 too loose, and
+`Q_leak(k)` never exceeds `q_perf` during the burst, so (1) is inactive. This is the
+"far too loose" case the uncertainty paragraph above anticipated.
+
+**What actually paces growth in the reference.** Reveal's per-node output on the same
+deck (`..._10ppm_nodes.csv`) shows its closure stress at the seed relaxing with
+cooling — 312 → 265 → 225 → 213 bar over days 0–90 as T falls 78 → 33 °C — the
+crack opening where the cake-driven fracture pressure (223 → 232) crosses it, and
+from then on **every perimeter node sits inside the cooled zone** (node T 32–45 °C at
+day 90, 17–20 °C by day 300, far field 90 °C) with closure 183–215 bar against a
+fracture pressure of ~220. The front tracks the isotherm at which σ(T) drops below p.
+Growth is limited by how far the thermal front has reached, not by fluid volume. On
+the isothermal-looking fine box (dxyz2, 2 m cells, injection 30 °C) the same holds
+with a very small front: the seed node is already at 30 °C on day 0, `p_frac ≈
+p_res` to 0.1 bar, and the fracture creeps 0.3 → 974 m2 over 180 days.
+
+**Why OPM candX bursts instead.** Inside one step the sub-iterations run the
+fracture to its K1 = K1c equilibrium against a reservoir frozen at the start of the
+step; the feedback that exists (the duplicated well row's BHP falls 227.5 → 214.9
+bar while the area walks 0.7 → 6327 m2) is pressure-only and local to the fracture
+solve. The stress state it equilibrates against is the cell-averaged one:
+`THERMEXR=3e-5, YMODULE=14 GPa` give ≈5.6 bar/°C, and OPM relieves −125 to −189 bar
+at the seed cell by day 60–90 (Reveal's node: −87 bar by day 60, at a colder node),
+applied to whole 20 m cells. Reveal's closure responds to the cooled *volume*
+(sub-grid). So the reach of the cooled region — the thing that limits Reveal — is
+grid-resolved in OPM and a full cell face opens at once. That is a discretisation
+issue, not missing physics; the criterion basis is the same (the fracture samples the
+total stress, `GeoMechModel::stress()` = effective + `initStress` + pore term, and
+OPM's initial closure, 0.167 bar/m ≈ 369 bar, is *higher* than Reveal's 312).
+
+**Consequence for this note.** A per-step pacing that would matter here is one tied
+to the *stress state change per step* at the front, not to fluid volume: e.g. do not
+propagate into a front cell whose sampled closure has not changed since the last
+mech solve of this step (equivalently: one propagation round per mech solve, which
+is what PostSolve does and which reproduces Reveal's BHP to ~1 bar on both boxes).
+The volume balance (1)–(4) stays correct and harmless; it is simply not the active
+constraint on injection-fracturing cases with leak-off.

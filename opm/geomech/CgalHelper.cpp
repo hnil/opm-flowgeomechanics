@@ -27,9 +27,22 @@ std::vector<Point_3> intersect_hex_with_plane(const Mesh& mesh, const Plane_3& p
       const auto& vresult = result.value();
 	  if (std::holds_alternative<Point_3>(vresult))
 	    pts.push_back(std::get<Point_3>(vresult));
+	  else if (std::holds_alternative<Segment_3>(vresult)) {
+	    // An edge lying IN the plane intersects as a segment, not a point.
+	    // Dropping it loses real cross-section and can leave fewer than three
+	    // points for a cut that does exist - the 44-46 degree seeding abort.
+	    const auto& s = std::get<Segment_3>(vresult);
+	    pts.push_back(s.source());
+	    pts.push_back(s.target());
+	  }
 #else //old version
       	  if (const Point_3* ip = boost::get<Point_3>(&*result))
 	         pts.push_back(*ip);
+	  else if (const Segment_3* is = boost::get<Segment_3>(&*result)) {
+	    // see the comment in the branch above: in-plane edge
+	    pts.push_back(is->source());
+	    pts.push_back(is->target());
+	  }
 #endif      
 	  //if (const Point_3* ip = std::get<Point_3>(*result))
 	  //    pts.push_back(ip);
@@ -114,6 +127,13 @@ double area_of_intersection(const std::vector<std::array<double,3>>& hex_org,
     Plane_3 plane(t[0],t[1],t[2]); // z = 0.5
     // intersect of plane and hex
     auto poly = intersect_hex_with_plane(hex, plane);
+    // The plane can miss the cell entirely, or meet it only at a corner or
+    // along one edge. Fewer than three distinct points is no cross-section -
+    // and indexing poly[0] on an empty vector is what aborted every deck
+    // seeded at 44-46 degrees to the grid.
+    if (poly.size() < 3) {
+        return 0.0;
+    }
     // make basis
     PlaneBasis B = make_basis(plane, poly[0]);
     // project polygon to 2D

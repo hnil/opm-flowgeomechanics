@@ -116,6 +116,9 @@ public:
     //! Summed area over all active fractures - used to tell "the front is still
     //! advancing" from "the front is blocked" without inspecting the meshes.
     double totalFractureArea() const;
+
+    //! true when any active fracture's last solve ended unconverged
+    bool anyLastSolveUnconverged() const;
     void writeIterationSnapshots(int step, int round, const std::string& tag) const;
 
         void updateReservoirProperties(); // for testing without simulator
