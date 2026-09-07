@@ -333,6 +333,19 @@ namespace Opm{
             }
             Parent::timeIntegration();
         }
+        // The sequential mech/fracture coupling re-solves flow inside a step with
+        // the Newton iteration context reset (SetupIterationContextGuard), so the
+        // parent's first-iteration storage recycling would rebase the start-of-step
+        // storage onto a mid-step iterate and silently destroy mass.  Same reason
+        // the parent already disables it for TPSA.
+        bool recycleFirstIterationStorage() const
+        {
+            if (this->simulator().vanguard().eclState().runspec().mech()) {
+                return false;
+            }
+            return Parent::recycleFirstIterationStorage();
+        }
+
         void beginTimeStep() override{
             if (this->gridView().comm().rank() == 0){
                 std::cout << "----------------------Start beginTimeStep-------------------\n"
@@ -393,6 +406,7 @@ namespace Opm{
             }
             //Parent::FlowProblemType::endTimeStep();
             OPM_BEGIN_PARALLEL_TRY_CATCH();
+            this->wellModel().traceWellSources();
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 geoMechModel_.endTimeStep();
                 if(this->hasFractures() && this->geoMechModel().fractureModelActive()){

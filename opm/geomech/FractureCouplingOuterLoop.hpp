@@ -8,8 +8,11 @@
 // iteration of its flow parent).
 
 #include <cmath>
+#include <cstdlib>
+#include <iomanip>
 #include <iostream>
 #include <limits>
+#include <sstream>
 #include <opm/common/OpmLog/OpmLog.hpp>
 #include <opm/simulators/flow/NewtonIterationContext.hpp>
 #include <opm/simulators/linalg/PropertyTree.hpp>
@@ -171,6 +174,29 @@ namespace Opm
             return derived().simulator_.model().solution(0);
         }
 
+        // Opt-in (OPM_GEOMECH_MASS_TRACE=1): total conserved mass at both time
+        // levels, to localise where a mid-step topology change loses it.
+        void traceGlobalStorage(const char* where) const
+        {
+            static const bool on = (std::getenv("OPM_GEOMECH_MASS_TRACE") != nullptr);
+            if (!on) {
+                return;
+            }
+            EqVector s0(0.0), s1(0.0);
+            derived().simulator_.model().globalStorage(s0, 0);
+            derived().simulator_.model().globalStorage(s1, 1);
+            std::stringstream os;
+            os << "MASSTRACE " << where << " t=" << derived().simulator_.time()
+               << " dt=" << derived().simulator_.timeStepSize();
+            for (unsigned i = 0; i < s0.size(); ++i) {
+                os << " s0[" << i << "]=" << std::setprecision(16) << s0[i];
+            }
+            for (unsigned i = 0; i < s1.size(); ++i) {
+                os << " s1[" << i << "]=" << std::setprecision(16) << s1[i];
+            }
+            OpmLog::info(os.str());
+        }
+
         void restoreSolution0(const SolutionVector& solution_backup)
         {
             auto& flow_model = derived().simulator_.model();
@@ -210,10 +236,25 @@ namespace Opm
             // perforations keep injecting.  Snapshot and restore the WGState too so
             // the setup iteration is genuinely state-neutral.
             auto wgstate_backup = derived().simulator_.problem().wellModel().snapshotWGState();
-            auto report = this->runParentSetupIteration(timer, nonlinear_solver);
-            derived().simulator_.problem().wellModel().restoreWGState(std::move(wgstate_backup));
-            this->restoreSolution0(solution_backup);
-            this->restoreStorageCache(storage_cache_backup);
+            // Restore on every exit path.  A throwing setup iteration (a failed
+            // linear solve) would otherwise leave its half-applied iterate and an
+            // invalidated storage cache behind as the step's state.
+            auto restore_state = [&] {
+                derived().simulator_.problem().wellModel().restoreWGState(std::move(wgstate_backup));
+                this->restoreSolution0(solution_backup);
+                this->restoreStorageCache(storage_cache_backup);
+            };
+            this->traceGlobalStorage("before_parentSetupIteration");
+            SimulatorReportSingle report;
+            try {
+                report = this->runParentSetupIteration(timer, nonlinear_solver);
+            } catch (...) {
+                restore_state();
+                throw;
+            }
+            this->traceGlobalStorage("after_parentSetupIteration_beforeRestore");
+            restore_state();
+            this->traceGlobalStorage("after_restore");
             std::cout << "Finished parent first iteration" << std::endl;
             return report;
         }
@@ -370,7 +411,7 @@ namespace Opm
             const bool legacy_coupling_change_logic =
                 prm.get<bool>("fractureparam.solver.legacy_coupling_change_logic", false);
             const bool legacy_parent_setup_iteration =
-                prm.get<bool>("fractureparam.solver.legacy_parent_setup_iteration", false);
+                prm.get<bool>("fractureparam.solver.legacy_parent_setup_iteration", true);
             const auto allwellIndices = derived().simulator_.problem().getAllExtraWellIndices();
             derived().simulator_.problem().fractureHost().solveFractures();
             // A FRAC deck with no WSEED has no fracture: nothing to solve and no
@@ -459,8 +500,11 @@ namespace Opm
                     derived().simulator_.problem().addConnectionsToWell();
                 } else {
                 std::cout << "Add connections in iterations" << std::endl;
+                this->traceGlobalStorage("before_addConnectionsToSchedual");
                 derived().simulator_.problem().addConnectionsToSchedual();// add new connections in the schedual
+                this->traceGlobalStorage("after_addConnectionsToSchedual");
                 derived().simulator_.problem().wellModel().beginTimeStep(); // reinitialize well structure
+                this->traceGlobalStorage("after_wellModel_beginTimeStep");
                 derived().simulator_.problem().addConnectionsToWell(); // set the new well indices
                 derived().simulator_.problem().emptyFractureLogger();
                 {
@@ -472,6 +516,11 @@ namespace Opm
                     derived().simulator_.problem().wellModel().prepareTimeStep(group_state_helper.deferredLogger());
                 }
 
+                // Default is now the plain setup iteration: the state-preserving
+                // variant existed to hide the first-iteration storage recycling
+                // (fixed in FlowProblemGeoMech::recycleFirstIterationStorage), and
+                // its WGState restore desynchronises booked and residual well rates
+                // for free-rate wells (model5: +9 % unbooked water under a BHP cap).
                 // The parent setup iteration is REQUIRED when the well structure
                 // actually changed (new fracture connections): skipping it kills
                 // the well/fracture on fine grids (verified 2026-07-24 on
