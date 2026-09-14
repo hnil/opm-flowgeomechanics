@@ -2,6 +2,7 @@
 #define OPM_FLOW_PROBLEM_GEOMECH_HPP
 
 #include <opm/common/ErrorMacros.hpp>
+#include <fmt/format.h>
 
 #include <opm/common/utility/Serializer.hpp>
 
@@ -78,6 +79,13 @@ namespace Opm{
         FractureAuxCells<TypeTag>* fractureAuxCells_ = nullptr;
         double embeddedCouplingChange_ = 0.0;
         bool embeddedStatic_ = false;
+        // Opt-in (solver.embedded_satnum, 1-based): saturation-function region for
+        // the fracture cells instead of the partner's rock table (a fracture has
+        // straight-line kr and no capillary pressure). Resolved lazily to the first
+        // grid cell of that region, which the material-law lookup is redirected to.
+        int embeddedSatnum_ = 0;
+        int embeddedCellDump_ = 0; // solver.embedded_cell_dump: worst-N aux cells per report
+        mutable int embeddedSatProxyCell_ = -1;
         bool embeddedLeakoffReport_ = false;
 
     public:
@@ -90,6 +98,45 @@ namespace Opm{
          * exists, since the fracture model is built at the first report step that seeds
          * one.  So a fixed number is reserved here and handed out as cells appear.
          */
+        using MaterialLawParams = typename Parent::MaterialLawParams;
+
+        template <class Context>
+        const MaterialLawParams& materialLawParams(const Context& context,
+                                                   unsigned spaceIdx, unsigned timeIdx) const
+        { return this->materialLawParams(context.globalSpaceIndex(spaceIdx, timeIdx)); }
+
+        const MaterialLawParams& materialLawParams(unsigned globalDofIdx) const
+        {
+            const int proxy = embeddedSatProxy_(globalDofIdx);
+            return (proxy >= 0) ? this->materialLawManager()->materialLawParams(proxy)
+                                : Parent::materialLawParams(globalDofIdx);
+        }
+
+        const MaterialLawParams& materialLawParams(unsigned globalDofIdx, FaceDir::DirEnum facedir) const
+        {
+            const int proxy = embeddedSatProxy_(globalDofIdx);
+            return (proxy >= 0) ? this->materialLawManager()->materialLawParams(proxy, facedir)
+                                : Parent::materialLawParams(globalDofIdx, facedir);
+        }
+
+        // relperms go through this rather than materialLawParams(), so the
+        // fracture-cell redirect has to be applied here as well
+        template <class FluidState, class... Args>
+        void updateRelperms(std::array<GetPropType<TypeTag, Properties::Evaluation>, GetPropType<TypeTag, Properties::FluidSystem>::numPhases>& mobility,
+                            typename Parent::DirectionalMobilityPtr& dirMob,
+                            FluidState& fluidState,
+                            unsigned globalSpaceIdx) const
+        {
+            const int proxy = embeddedSatProxy_(globalSpaceIdx);
+            if (proxy < 0) {
+                Parent::template updateRelperms<FluidState, Args...>(mobility, dirMob, fluidState, globalSpaceIdx);
+                return;
+            }
+            using ContainerT = std::array<GetPropType<TypeTag, Properties::Evaluation>, GetPropType<TypeTag, Properties::FluidSystem>::numPhases>;
+            GetPropType<TypeTag, Properties::MaterialLaw>::template relativePermeabilities<ContainerT, FluidState, Args...>
+                (mobility, this->materialLawManager()->materialLawParams(proxy), fluidState);
+        }
+
         void registerAuxiliaryCellModules()
         {
             MechParent::registerAuxiliaryCellModules();
@@ -128,6 +175,8 @@ namespace Opm{
             // validation configuration: growth feedback cannot confound a comparison of
             // the conductances themselves.
             embeddedStatic_ = prm.get<bool>("solver.embedded_static", false);
+            embeddedSatnum_ = prm.get<int>("solver.embedded_satnum", 0);
+            embeddedCellDump_ = prm.get<int>("solver.embedded_cell_dump", 0);
             embeddedLeakoffReport_ = prm.get<bool>("solver.embedded_leakoff_report", false);
 
             // The floor under the aperture used for the cells' volume and cubic-law
@@ -164,6 +213,26 @@ namespace Opm{
          * Called once the fracture model has been built or has moved, so that what the
          * reservoir sees matches what the fracture is.
          */
+        // grid cell whose saturation functions an auxiliary DOF borrows, -1 = partner
+        int embeddedSatProxy_(unsigned globalDofIdx) const
+        {
+            if ((embeddedSatnum_ <= 0) || (globalDofIdx < this->model().numGridDof())) {
+                return -1;
+            }
+            if (embeddedSatProxyCell_ < 0) {
+                const unsigned want = static_cast<unsigned>(embeddedSatnum_ - 1);
+                const unsigned n = this->model().numGridDof();
+                for (unsigned c = 0; c < n; ++c) {
+                    if (this->satnumRegionIndex(c) == want) { embeddedSatProxyCell_ = static_cast<int>(c); break; }
+                }
+                if (embeddedSatProxyCell_ < 0) {
+                    OPM_THROW(std::runtime_error, "solver.embedded_satnum=" + std::to_string(embeddedSatnum_)
+                              + ": no grid cell carries that SATNUM region");
+                }
+            }
+            return embeddedSatProxyCell_;
+        }
+
         void bindFractureAuxCells(const bool allowTopologyChange = true)
         {
             if ((fractureAuxCells_ == nullptr) || !this->geoMechModel().fractureModelActive()) {
@@ -203,7 +272,14 @@ namespace Opm{
                 fractureAuxCells_->bind(this->geoMechModel().fractureModel());
 
             this->refreshAuxCellModules_(topologyChanged);
+            // newborn cells were assigned at both time levels; refresh their cached
+            // intensive quantities so the first linearization sees that state
+            this->model().updateAuxiliaryIntQuants(/*timeIdx=*/0);
+            this->model().updateAuxiliaryIntQuants(/*timeIdx=*/1);
             embeddedCouplingChange_ = fractureAuxCells_->lastBindChange();
+            if (allowTopologyChange) {
+                fractureAuxCells_->cellDump(this->geoMechModel().fractureModel(), "after-bind", embeddedCellDump_);
+            }
         }
 
         /*!
@@ -398,6 +474,9 @@ namespace Opm{
                 && this->geoMechModel().fractureModelActive())
             {
                 fractureAuxCells_->leakoffReport(this->geoMechModel().fractureModel());
+            }
+            if ((fractureAuxCells_ != nullptr) && this->geoMechModel().fractureModelActive()) {
+                fractureAuxCells_->cellDump(this->geoMechModel().fractureModel(), "step-end", embeddedCellDump_);
             }
 
             if (this->gridView().comm().rank() == 0){

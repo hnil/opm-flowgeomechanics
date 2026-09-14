@@ -248,6 +248,11 @@ public:
      * whether the binding still describes the fracture's current shape.
      */
     void perforationReport() const;
+    //! Diagnostic: per-cell state of the binding (pressure vs partner and vs the
+    //! fracture's own solve, connections, well index); the nWorst cells by
+    //! partner-pressure deviation plus every isolated cell. Prints regardless of
+    //! whether the binding layout matches the fracture state.
+    void cellDump(const FractureModel& fractures, const std::string& where, int nWorst) const;
 
     /*!
      * \brief Relative change of the binding between the last two binds.
@@ -278,14 +283,43 @@ public:
     { return static_cast<unsigned>(std::count(this->active_.begin(), this->active_.end(), true)); }
 
 private:
+    //! useCurrentState: the partner's present state (bind-time, needs valid
+    //! intensive quantities) rather than its initial one (model init).
     template <class SolutionVector>
-    void assignStateFromPartner(SolutionVector& solution, const unsigned localIdx)
+    void assignStateFromPartner(SolutionVector& solution, const unsigned localIdx,
+                                const bool useCurrentState = false)
     {
         const auto globalIdx = static_cast<unsigned>(this->localToGlobalDof(localIdx));
         const auto partner = this->partner_.at(localIdx);
         const auto& problem = this->simulator_.problem();
 
         auto fs = problem.initialFluidState(partner);
+        // A cell born mid-run starts from the rock's state NOW: at the initial
+        // pressure it sits tens of bar below its partner, the well drops to it and
+        // cross-flows from its matrix perforations.
+        if (useCurrentState) {
+            const auto& cur = this->simulator_.model().intensiveQuantities(partner, /*timeIdx=*/0).fluidState();
+            for (unsigned phase = 0; phase < FluidSystem::numPhases; ++phase) {
+                if (!FluidSystem::phaseIsActive(phase)) {
+                    continue;
+                }
+                fs.setPressure(phase, getValue(cur.pressure(phase)));
+                // the fracture volume is created by the injected water and the
+                // fracture's own solve treats it as water-filled; starting at the
+                // rock's Sw would force a 0 -> 1 saturation transient inside the
+                // first step, one limiter-capped Newton iteration at a time
+                fs.setSaturation(phase, (phase == FluidSystem::waterPhaseIdx) ? 1.0 : 0.0);
+            }
+            if constexpr (getPropValue<TypeTag, Properties::EnableEnergy>()) {
+                fs.setTemperature(getValue(cur.temperature(0)));
+            }
+            if (FluidSystem::enableDissolvedGas()) {
+                fs.setRs(getValue(cur.Rs()));
+            }
+            if (FluidSystem::enableVaporizedOil()) {
+                fs.setRv(getValue(cur.Rv()));
+            }
+        }
 
         // Carry the phase pressures to the fracture cell's own depth; the fluid is the
         // rock's, so nothing else about the state changes.
