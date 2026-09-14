@@ -64,6 +64,7 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
     this->connections_.clear();
     this->slotOf_.clear();
     this->wellPerforations_.clear();
+    this->wellCells_.clear();
 
     // Which slots already held a cell.  A slot that did keeps the state it has solved
     // its way to; only a slot that has just been handed out needs one made up for it.
@@ -126,6 +127,7 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
 
                 this->partner_[slot] = static_cast<unsigned>(reservoirCell);
                 this->active_[slot] = true;
+                this->wellCells_[fracture.wellInfo().name].push_back(static_cast<int>(this->localToGlobalDof(slot)));
 
                 // leakOf() carries the reservoir mobility, which the reservoir's own
                 // local residual applies again from the upwind cell.  Divide it back out

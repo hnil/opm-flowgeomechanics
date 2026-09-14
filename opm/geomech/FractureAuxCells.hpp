@@ -277,6 +277,15 @@ public:
      * over directly instead of going through the schedule.
      */
     std::vector<RuntimePerforation> wellPerforations(const std::string& wellName) const;
+    //! Global DOF indices of every active cell of the fractures attached to a well.
+    std::vector<int> cellsOfWell(const std::string& wellName) const
+    {
+        std::vector<int> cells;
+        if (const auto pos = this->wellCells_.find(wellName); pos != this->wellCells_.end()) {
+            cells = pos->second;
+        }
+        return cells;
+    }
 
     //! Cells handed out so far, for the high-water mark in the log.
     unsigned numActive() const
@@ -367,6 +376,7 @@ private:
 
     //! Well name -> the perforations of that well's fractures, in degrees of freedom.
     std::map<std::string, std::vector<RuntimePerforation>> wellPerforations_{};
+    std::map<std::string, std::vector<int>> wellCells_{}; // active aux DOFs per well
 };
 
 } // namespace Opm

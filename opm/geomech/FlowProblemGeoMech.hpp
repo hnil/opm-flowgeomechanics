@@ -293,6 +293,9 @@ namespace Opm{
         double embeddedCouplingChange() const
         { return embeddedCouplingChange_; }
 
+        const FractureAuxCells<TypeTag>* fractureAuxCells() const
+        { return fractureAuxCells_; }
+
         //! Whether the fracture flows through degrees of freedom of its own.
         bool fractureFlowIsEmbedded() const
         { return fractureAuxCells_ != nullptr; }

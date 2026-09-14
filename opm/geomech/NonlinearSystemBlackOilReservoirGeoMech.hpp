@@ -3,8 +3,10 @@
 #include <iostream>
 #include <limits>
 #include <opm/common/ErrorMacros.hpp>
+#include <fmt/format.h>
 #include <opm/common/Exceptions.hpp>
 #include <opm/geomech/FractureCouplingOuterLoop.hpp>
+#include <opm/geomech/WellLocalSolver.hpp>
 #include <opm/simulators/flow/NewtonIterationContext.hpp>
 #include <opm/simulators/flow/NonlinearSystemBlackOilReservoir.hpp>
 namespace Opm
@@ -48,11 +50,50 @@ namespace Opm
         {
         }
 
+        // Opt-in (solver.well_local_solve = none | fractured | all): before every
+        // global iteration after the first, solve each selected well together
+        // with its fracture cells (and solver.well_local_ring rings of grid
+        // neighbours) with the rest of the reservoir frozen. The global Newton
+        // still decides convergence, so only the iteration count can change.
+        void wellLocalPreSolve(const SimulatorTimerInterface& timer)
+        {
+            auto& problem = this->simulator_.problem();
+            const PropertyTree& prm = problem.getGeoMechParam();
+            const auto mode = prm.get<std::string>("solver.well_local_solve", "none");
+            if (mode == "none" || problem.iterationContext().inLocalSolve()
+                || problem.iterationContext().iteration() < 1) {
+                return;
+            }
+            using Solver = WellLocalSolver<TypeTag>;
+            typename Solver::Settings settings;
+            settings.ring = prm.get<int>("solver.well_local_ring", -1);
+            settings.maxIter = prm.get<int>("solver.well_local_max_iter", 20);
+            settings.reduction = prm.get<double>("solver.well_local_reduction", 1e-4);
+            settings.verbosity = prm.get<int>("solver.well_local_verbosity", 0);
+            Solver solver(this->simulator_);
+            const auto* aux = problem.fractureAuxCells();
+            for (const auto& well : problem.wellModel().wellContainer()) {
+                const auto domain = solver.buildDomain(well->name(), aux, settings);
+                if (domain.cells.empty() || (mode == "fractured" && domain.numAux == 0)) {
+                    continue;
+                }
+                const auto rep = solver.solve(domain, timer.currentStepLength(), settings);
+                if (settings.verbosity > 0 || !rep.converged) {
+                    OpmLog::info(fmt::format("WellLocalSolver {}: {} cells ({} fracture), {} iterations, "
+                                             "residual {:.3e} -> {:.3e}, {}",
+                                             well->name(), domain.cells.size(), domain.numAux,
+                                             rep.iterations, rep.residual0, rep.residual,
+                                             rep.converged ? "converged" : "not converged"));
+                }
+            }
+        }
+
         template <class NonlinearSolverType>
         SimulatorReportSingle nonlinearIteration(const SimulatorTimerInterface& timer,
                                                  NonlinearSolverType& nonlinear_solver){
                 SimulatorReportSingle report;
                 const PropertyTree& prm = this->simulator_.problem().getGeoMechParam();
+                this->wellLocalPreSolve(timer);
                 std::string method = prm.get<std::string>("solver.method");
                 if (method == "PostSolve") {
                     report = Parent::nonlinearIteration(timer, nonlinear_solver);
