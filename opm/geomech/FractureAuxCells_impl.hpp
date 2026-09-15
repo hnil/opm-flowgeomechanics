@@ -555,8 +555,18 @@ FractureAuxCells<TypeTag>::cellDump(const FractureModel& fractures,
         bound[fidx] = std::max(bound[fidx], cell + 1);
     }
     std::string layout;
-    for (std::size_t f = 0; f < fracs.size(); ++f)
-        layout += fmt::format(" f{}:{}/{}", f, (f < bound.size()) ? bound[f] : 0, fracs[f]->numCells());
+    for (std::size_t f = 0; f < fracs.size(); ++f) {
+        // the fracture's own aperture array as it stands right now: what the
+        // binding reads, and what the mechanics coupling is built from
+        const auto& fw = fracs[f]->fractureWidth();
+        Scalar wmax = 0.0;
+        for (std::size_t c = 0; c < fw.size(); ++c) {
+            wmax = std::max(wmax, static_cast<Scalar>(fw[c][0]));
+        }
+        layout += fmt::format(" f{}:{}/{} (w[{}] max {:.3g} m)", f,
+                              (f < bound.size()) ? bound[f] : 0, fracs[f]->numCells(),
+                              fw.size(), wmax);
+    }
 
     unsigned isolated = 0, noGrid = 0; Scalar pMin = 1e30, pMax = -1e30, dPartMax = 0, dOwnMax = 0;
     for (const auto& r : rows) {

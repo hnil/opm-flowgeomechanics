@@ -22,6 +22,7 @@
 #include <opm/common/ErrorMacros.hpp>
 #include <opm/common/OpmLog/OpmLog.hpp>
 
+#include <opm/geomech/FractureMechCoupling.hpp>
 #include <opm/simulators/flow/FlowAuxCellModule.hpp>
 #include <opm/simulators/wells/RuntimePerforation.hpp>
 #include <opm/models/nonlinear/newtonmethodproperties.hh>
@@ -297,6 +298,97 @@ public:
         }
         return p;
     }
+    /*!
+     * \brief Gather what the fracture <-> mechanics coupling blocks are built from.
+     *
+     * The flow side of the numbers is this module's: the apertures and the
+     * pressures the flow actually holds, the areas and half transmissibilities
+     * of the current grid, and the two floors the binding applies.  Pass the
+     * result to buildFlowMechCoupling() / buildMechFlowCoupling(), or to
+     * checkCouplingMatricesFD() to have them verified.
+     */
+    MechCouplingInput couplingInput(const Fracture& fracture,
+                                    std::size_t fractureIdx,
+                                    Scalar dt) const
+    {
+        MechCouplingInput in;
+        const auto nc = fracture.numCells();
+        const auto& width = fracture.fractureWidth();
+        const auto areas = fracture.cellAreas();
+        const auto& mobility = fracture.reservoirMobility();
+
+        in.htrans = fracture.currentHalfTrans();
+        in.cubic_law_min_width = fracture.cubicLawMinWidth();
+        in.volume_min_width = this->minWidth_;
+        in.dt = dt;
+
+        in.aperture.resize(nc, 0.0);
+        in.area.resize(nc, 0.0);
+        in.face_mobility.resize(nc, 0.0);
+        in.density.resize(nc, 1000.0);
+        in.open.assign(nc, 1);
+        for (std::size_t c = 0; c < nc; ++c) {
+            in.aperture[c] = (c < width.size()) ? width[c][0] : 0.0;
+            in.area[c] = (c < areas.size()) ? areas[c] : 0.0;
+            in.face_mobility[c] = (c < mobility.size()) ? mobility[c] : 0.0;
+        }
+        for (const auto c : fracture.closedCells()) {
+            if ((c >= 0) && (static_cast<std::size_t>(c) < nc)) {
+                in.open[c] = 0;
+            }
+        }
+
+        // the pressures and the volumes are the flow's, not the fracture's
+        in.pressure = this->cellPressures(fractureIdx);
+        in.pressure.resize(nc, 0.0);
+        in.volume_prev.resize(nc, 0.0);
+        const auto& model = this->simulator_.model();
+        for (unsigned slot = 0; slot < this->slotOf_.size() && slot < this->capacity_; ++slot) {
+            const auto [fidx, cell] = this->slotOf_[slot];
+            if ((fidx != fractureIdx) || !this->active_[slot] || (cell >= nc)) {
+                continue;
+            }
+            const auto dof = static_cast<unsigned>(this->localToGlobalDof(slot));
+            in.volume_prev[cell] = this->bulkVolume_[slot];
+            in.density[cell] = getValue(model.intensiveQuantities(dof, 0)
+                                        .fluidState().density(FluidSystem::waterPhaseIdx));
+        }
+        return in;
+    }
+
+    /*!
+     * \brief Verify the coupling blocks of every bound fracture against finite
+     *        differences (opt-in; see solver.check_coupling_fd).
+     *
+     * Costs one residual evaluation per checked column, so a production run
+     * should leave \p opt.max_columns small.
+     */
+    bool checkCoupling(const FractureModel& fractures,
+                       const CouplingCheckOptions& opt,
+                       Scalar dt) const
+    {
+        if (!opt.enabled) {
+            return true;
+        }
+        bool ok = true;
+        std::size_t fidx = 0;
+        for (const auto& wellFractures : fractures.wellFractures()) {
+            for (const auto& fracture : wellFractures) {
+                const auto in = this->couplingInput(fracture, fidx++, dt);
+                if (in.numCells() == 0) {
+                    continue;
+                }
+                std::vector<CouplingCheckReport> reports;
+                const bool fine = checkCouplingMatricesFD(in, opt, &reports);
+                ok = ok && fine;
+                for (const auto& rep : reports) {
+                    OpmLog::info(fmt::format("Fracture {}: {}", fracture.name(), rep.summary()));
+                }
+            }
+        }
+        return ok;
+    }
+
     //! Global DOF indices of every active cell of the fractures attached to a well.
     std::vector<int> cellsOfWell(const std::string& wellName) const
     {

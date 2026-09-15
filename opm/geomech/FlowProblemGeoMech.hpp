@@ -280,6 +280,39 @@ namespace Opm{
             if (allowTopologyChange) {
                 fractureAuxCells_->cellDump(this->geoMechModel().fractureModel(), "after-bind", embeddedCellDump_);
             }
+            this->checkFractureCouplingIfRequested_();
+        }
+
+        /*!
+         * \brief Verify the fracture <-> mechanics coupling blocks against finite
+         *        differences (opt-in, fractureparam.solver.check_coupling_fd).
+         *
+         * The blocks themselves are built with AD; this differentiates the same
+         * residual kernels numerically and compares. check_coupling_fd_columns
+         * keeps the cost bounded by checking only that many columns per
+         * fracture, spread over the matrix; -1 checks every one.
+         */
+        void checkFractureCouplingIfRequested_()
+        {
+            if ((fractureAuxCells_ == nullptr) || !this->geoMechModel().fractureModelActive()) {
+                return;
+            }
+            const PropertyTree prm = this->getFractureParam();
+            CouplingCheckOptions opt;
+            opt.enabled = prm.get<bool>("solver.check_coupling_fd", false);
+            if (!opt.enabled) {
+                return;
+            }
+            opt.max_columns = prm.get<int>("solver.check_coupling_fd_columns", 4);
+            opt.tolerance = prm.get<double>("solver.check_coupling_fd_tolerance", 1e-5);
+            opt.perturbation = prm.get<double>("solver.check_coupling_fd_perturbation", 1e-6);
+            opt.verbosity = prm.get<int>("solver.check_coupling_fd_verbosity", 0);
+            const bool ok = fractureAuxCells_->checkCoupling(
+                this->geoMechModel().fractureModel(), opt, this->simulator().timeStepSize());
+            if (!ok) {
+                OpmLog::warning("Fracture coupling matrices disagree with finite differences; "
+                                "see the per-fracture reports above");
+            }
         }
 
         /*!

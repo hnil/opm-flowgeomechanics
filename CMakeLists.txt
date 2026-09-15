@@ -346,6 +346,14 @@ target_link_libraries(test_fracture_pressure_ad
 		opmflowgeomechanics
 )
 
+add_executable(test_fracture_mech_coupling
+	examples/test_fracture_mech_coupling.cpp
+)
+target_link_libraries(test_fracture_mech_coupling
+	PUBLIC
+		opmflowgeomechanics
+)
+
 add_executable(test_patch_recovery
 	examples/test_patch_recovery.cpp
 )
@@ -440,6 +448,9 @@ endfunction()
 
 add_test(NAME Test.FracturePressureAD
 	COMMAND test_fracture_pressure_ad
+)
+add_test(NAME Test.FractureMechCoupling
+	COMMAND test_fracture_mech_coupling
 )
 
 add_executable(test_ddm_assembly

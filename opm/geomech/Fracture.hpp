@@ -368,6 +368,9 @@ public:
 
     //! Area of each fracture cell.
     std::vector<double> cellAreas() const;
+    //! Indices of the cells contact currently holds shut; empty before the first
+    //! solve. Used by the fracture <-> mechanics coupling blocks for their mask.
+    const std::vector<int>& closedCells() const { return closed_cells_; }
 
     //! Depth of each fracture cell's centre, positive downwards.
     std::vector<double> cellDepths() const;
