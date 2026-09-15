@@ -70,8 +70,15 @@ public:
     struct Settings {
         int ring = -1;          //!< -1: fracture cells only; >= 0: perforated cells + rings
         int maxIter = 20;
-        double reduction = 1e-4; //!< stop when the local residual fell by this factor ...
-        double absTol = 1e-9;    //!< ... or is below this (per-equation max, SI rates)
+        //! Convergence is judged the way the flow model judges it, not on a raw
+        //! residual: the cell rows are scaled to a CNV measure (residual times
+        //! the step over the pore volume) and compared against the same
+        //! tolerance the global solver uses, and the well rows are measured
+        //! relative to the well's own rate. A raw max-norm mixes a mass balance
+        //! in kg/s with a well control equation and is not a convergence test.
+        double toleranceCnv = 1e-2;   //!< as ToleranceCnv
+        double toleranceWell = 1e-4;  //!< well residual relative to its rate
+        double reduction = 1e-4;      //!< or this much reduction, whichever first
         int verbosity = 0;
     };
 
@@ -236,21 +243,47 @@ public:
             for (std::size_t i = 0; i < wcells.size(); ++i) {
                 residual[wcells[i]] = rloc[i];
             }
+            // cell rows as a CNV measure: |R| * dt / pore volume, the same
+            // quantity the global convergence check maxes over
             rmax = 0.0;
+            const auto numGridDof = model.numGridDof();
             for (const int c : domain.cells) {
+                // A fracture cell's pore volume is an aperture times an area, so
+                // its volume-scaled residual dwarfs any tolerance while the mass
+                // it stands for is negligible. The global convergence check
+                // leaves these cells out of the CNV measure for exactly that
+                // reason (FlowAuxCellModule::participatesInCnv), and a local
+                // check that did not would never converge.
+                if (static_cast<unsigned>(c) >= numGridDof) {
+                    continue;
+                }
+                const auto pv = problem.referencePorosity(c, /*timeIdx=*/0)
+                    * model.dofTotalVolume(c);
+                if (!(pv > 0.0)) {
+                    continue;
+                }
                 for (const auto v : residual[c]) {
-                    rmax = std::max(rmax, std::abs(v));
+                    rmax = std::max(rmax, std::abs(v) * dt / pv);
                 }
             }
+            // well rows relative to the rate the well is moving
             wmax = 0.0;
             if (stdWell != nullptr) {
+                const auto& ws = wellModel.wellState().well(well.indexOfWell());
+                double scale = 0.0;
+                for (const auto r : ws.surface_rates) {
+                    scale = std::max(scale, std::abs(r));
+                }
+                scale = std::max(scale, 1.0e-6);
                 for (const auto& blk : stdWell->linSys().residual()) {
                     for (const auto v : blk) {
-                        wmax = std::max(wmax, std::abs(v));
+                        wmax = std::max(wmax, std::abs(v) / scale);
                     }
                 }
             }
-            return std::max(rmax, wmax);
+            // one number for the line search; the convergence test below keeps
+            // the two apart because they have different tolerances
+            return std::max(rmax / settings.toleranceCnv, wmax / settings.toleranceWell);
         };
         double rmax = 0.0, wmax = 0.0;
         double rnorm = assembleAndMeasure(rmax, wmax);
@@ -267,7 +300,9 @@ public:
                 OpmLog::info(fmt::format("WellLocalSolver {} it {} res {:.3e} (res {:.3e} well {:.3e})",
                                          domain.well, it, rnorm, rmax, wmax));
             }
-            if (rnorm < settings.absTol || rnorm < settings.reduction * rep.residual0) {
+            // rnorm is already in units of "times the tolerance", so converged
+            // means both measures are inside their own tolerance
+            if (rnorm < 1.0 || rnorm < settings.reduction * rep.residual0) {
                 rep.converged = true;
                 break;
             }
@@ -324,7 +359,11 @@ public:
                                                            wellModel.groupStateHelper(),
                                                            wellModel.wellState());
                 rnorm = assembleAndMeasure(rmax, wmax);
-                accepted = std::isfinite(rnorm) && (rnorm < rPrev || rnorm < settings.absTol);
+                // take the damped step on the last attempt even if it did not
+                // reduce the residual: standing still is not better than a small
+                // step, and the global Newton still owns the verdict
+                accepted = std::isfinite(rnorm)
+                    && ((rnorm < rPrev) || (rnorm < 1.0) || (ls == 4));
                 if (!accepted && settings.verbosity > 1) {
                     OpmLog::info(fmt::format("WellLocalSolver {} it {} step {:.3g} rejected: res {:.3e} -> {:.3e}",
                                              domain.well, it, alpha, rPrev, rnorm));
