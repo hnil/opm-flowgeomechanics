@@ -80,9 +80,10 @@ namespace Opm
                 const auto rep = solver.solve(domain, timer.currentStepLength(), settings);
                 if (settings.verbosity > 0 || !rep.converged) {
                     OpmLog::info(fmt::format("WellLocalSolver {}: {} cells ({} fracture), {} iterations, "
-                                             "residual {:.3e} -> {:.3e}, {}",
+                                             "residual {:.3e} -> {:.3e}, bhp {:.4f} bar, {}",
                                              well->name(), domain.cells.size(), domain.numAux,
                                              rep.iterations, rep.residual0, rep.residual,
+                                             rep.bhp / 1e5,
                                              rep.converged ? "converged" : "not converged"));
                 }
             }

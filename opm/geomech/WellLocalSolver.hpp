@@ -87,6 +87,9 @@ public:
         int iterations = 0;
         double residual0 = 0.0;
         double residual = 0.0;
+        //! The well's bottom-hole pressure the local solve ended on [Pa]: what
+        //! the well and its fracture cells agree on with the reservoir frozen.
+        double bhp = 0.0;
     };
 
     explicit WellLocalSolver(Simulator& simulator)
@@ -340,6 +343,7 @@ public:
         // leave the well's cell rates consistent with its final state
         well.assembleWellEq(simulator_, dt, wellModel.groupStateHelper(), wellModel.wellState());
         wellModel.updateCellRates();
+        rep.bhp = wellModel.wellState().well(well.indexOfWell()).bhp;
         return rep;
     }
 

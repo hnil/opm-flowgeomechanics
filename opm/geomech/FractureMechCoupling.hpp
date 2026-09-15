@@ -306,7 +306,12 @@ struct CouplingCheckOptions
     double perturbation {1.0e-6};
     //! Relative tolerance; entries below abs_floor are compared absolutely.
     double tolerance {1.0e-5};
+    //! Absolute floor, last resort when a column is entirely zero.
     double abs_floor {1.0e-12};
+    //! Entries this far below the largest in their own column are not compared:
+    //! a derivative orders below its neighbours sits inside a much larger
+    //! residual, and a difference of two such residuals is round-off, not signal.
+    double column_floor_fraction {1.0e-6};
     int verbosity {0};
 };
 
@@ -406,10 +411,11 @@ namespace detail
 
     inline void
     accumulate(CouplingCheckReport& rep, const std::size_t i, const std::size_t k,
-               const double ad, const double fd, const CouplingCheckOptions& opt)
+               const double ad, const double fd, const CouplingCheckOptions& opt,
+               const double floor)
     {
         ++rep.checked;
-        const double scale = std::max({std::abs(ad), std::abs(fd), opt.abs_floor});
+        const double scale = std::max({std::abs(ad), std::abs(fd), floor});
         const double rel = std::abs(ad - fd) / scale;
         if (rel > rep.max_rel_error) {
             rep.max_rel_error = rel;
@@ -470,6 +476,17 @@ checkFlowMechCouplingFD(const MechCouplingInput& input,
         const auto rPlus = flowResidualFromAperture(input, wPlus);
         const auto rMinus = flowResidualFromAperture(input, wMinus);
 
+        // scale of this column: entries far below it cannot be resolved by a
+        // difference of residuals in double precision
+        double colMax = 0.0;
+        for (std::size_t i = 0; i < nc; ++i) {
+            const auto it = (*mat)[i].find(k);
+            if (it != (*mat)[i].end()) {
+                colMax = std::max(colMax, std::abs((*it)[0][0]));
+            }
+        }
+        const double entryFloor = std::max(opt.abs_floor, colMax * opt.column_floor_fraction);
+
         for (std::size_t i = 0; i < nc; ++i) {
             double ad = 0.0;
             const auto& row = (*mat)[i];
@@ -478,10 +495,10 @@ checkFlowMechCouplingFD(const MechCouplingInput& input,
                 ad = (*it)[0][0];
             }
             const double fd = (rPlus[i] - rMinus[i]) / denom;
-            if ((ad == 0.0) && (fd == 0.0)) {
-                continue; // structural zero on both sides: nothing to compare
+            if ((std::abs(ad) <= entryFloor) && (std::abs(fd) <= entryFloor)) {
+                continue; // nothing resolvable here
             }
-            detail::accumulate(rep, i, k, ad, fd, opt);
+            detail::accumulate(rep, i, k, ad, fd, opt, entryFloor);
         }
     }
 
@@ -525,7 +542,7 @@ checkMechFlowCouplingFD(const MechCouplingInput& input,
             if ((ad == 0.0) && (fd == 0.0)) {
                 continue;
             }
-            detail::accumulate(rep, i, k, ad, fd, opt);
+            detail::accumulate(rep, i, k, ad, fd, opt, opt.abs_floor);
         }
     }
 
