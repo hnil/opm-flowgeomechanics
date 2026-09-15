@@ -358,6 +358,13 @@ namespace Opm{
             this->model().updateAuxiliaryIntQuants(/*timeIdx=*/0);
             this->model().updateAuxiliaryIntQuants(/*timeIdx=*/1);
             embeddedCouplingChange_ = fractureAuxCells_->lastBindChange();
+            if (topologyChanged && requireStableLayout) {
+                // A restructure inside the step handed the fracture different
+                // degrees of freedom; the well's perforations of them are stale
+                // and must be re-registered, or the well silently loses its
+                // fracture (zero connection factor, no rate through it).
+                this->addFracturePerforationsToWells();
+            }
             if (mayRestructure) {
                 fractureAuxCells_->cellDump(this->geoMechModel().fractureModel(), "after-bind", embeddedCellDump_);
             }
