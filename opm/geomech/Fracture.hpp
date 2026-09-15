@@ -396,6 +396,27 @@ public:
     void setWellPerfCells(std::vector<int> cells) { well_perf_cells_ = std::move(cells); }//{well_rate_ = wellrate; total_wellindex_ = WI;}
     //! current flow timestep (s); needed by the opt-in fracture storage term
     void setTimeStep(double dt) { current_dt_ = dt; }
+    //! External-pressure mode: the coupled iteration keeps the pressure fixed
+    //! (identity pressure block, zero residual) and solves mechanics, contact
+    //! and propagation at it; the flow's aux cells own the pressure.
+    void setExternalPressureMode(bool on) { external_pressure_ = on; }
+    bool externalPressureMode() const { return external_pressure_; }
+    //! Set the fracture pressure per cell (and the well DOF, if any) from
+    //! outside; false if the sizes do not match the current grid.
+    bool setExternalPressure(const std::vector<double>& cellPressures, double wellPressure)
+    {
+        const std::size_t nc = numFractureCells();
+        if (cellPressures.size() != nc || fracture_pressure_.size() < nc) {
+            return false;
+        }
+        for (std::size_t i = 0; i < nc; ++i) {
+            fracture_pressure_[i][0] = cellPressures[i];
+        }
+        if (numWellEquations() > 0 && fracture_pressure_.size() > nc) {
+            fracture_pressure_[nc][0] = wellPressure;
+        }
+        return true;
+    }
     Dune::FieldVector<double, 6> stress(Dune::FieldVector<double, 3> obs) const;
     Dune::FieldVector<double, 6> strain(Dune::FieldVector<double, 3> obs) const;
     Dune::FieldVector<double, 3> disp(Dune::FieldVector<double, 3> obs) const;
@@ -643,6 +664,7 @@ private:
     //! Lets propagation veto individual untrustworthy cells instead of all growth.
     std::vector<double> fb_cell_residual_;
     double current_dt_{-1.0}; // flow timestep (s), see setTimeStep
+    bool external_pressure_{false}; // see setExternalPressureMode
     //! Nonlinear iteration at which each cell last flipped open/closed in the
     //! current solve; the binary active set's analogue of fb_cell_residual_ for
     //! the propagation veto (recent stability, not lifetime stability).

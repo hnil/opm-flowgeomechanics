@@ -88,6 +88,82 @@ namespace Opm
             }
         }
 
+        // W4: fracture pressure from the flow. Alternates, within the fracture
+        // stage of one outer iteration, (1) push the aux-cell pressures into the
+        // fractures, (2) fracture solve = mechanics/contact/propagation at that
+        // pressure, (3) bind the new widths, (4) local well+fracture-cell solve
+        // for the new pressures - until the fracture pressure stops moving. The
+        // width-pressure feedback of the cubic law needs this inner loop; one
+        // pressure update per outer iteration is not enough to open a fracture.
+        // Returns false when the mode is off (caller does the plain solve).
+        bool wellFracturePicard(const SimulatorTimerInterface& timer)
+        {
+            auto& problem = this->simulator_.problem();
+            const PropertyTree& prm = problem.getGeoMechParam();
+            // The fracture model is built lazily by the first solveFractures();
+            // until it exists there is nothing to iterate on.
+            const bool on = prm.get<bool>("fractureparam.solver.pressure_from_flow", false)
+                && problem.fractureFlowIsEmbedded() && (problem.fractureAuxCells() != nullptr)
+                && problem.fractureHost().fractureModelActive();
+            if (!on) {
+                return false;
+            }
+            const int maxIt = prm.get<int>("fractureparam.solver.pressure_from_flow_iterations", 10);
+            const double tolBar = prm.get<double>("fractureparam.solver.pressure_from_flow_tolerance", 0.1);
+            const int verbosity = prm.get<int>("fractureparam.solver.pressure_from_flow_verbosity", 0);
+            using Solver = WellLocalSolver<TypeTag>;
+            typename Solver::Settings settings;
+            settings.ring = prm.get<int>("solver.well_local_ring", 1);
+            settings.maxIter = prm.get<int>("solver.well_local_max_iter", 20);
+            settings.reduction = prm.get<double>("solver.well_local_reduction", 1e-4);
+            settings.verbosity = prm.get<int>("solver.well_local_verbosity", 0);
+            Solver solver(this->simulator_);
+            const auto* aux = problem.fractureAuxCells();
+
+            auto pressures = [&]() {
+                std::vector<double> p;
+                std::size_t fidx = 0;
+                for (const auto& wf : problem.fractureHost().fractureModel().wellFractures()) {
+                    for (const auto& f : wf) {
+                        static_cast<void>(f);
+                        const auto pf = aux->cellPressures(fidx++);
+                        p.insert(p.end(), pf.begin(), pf.end());
+                    }
+                }
+                return p;
+            };
+
+            for (int it = 0; it < maxIt; ++it) {
+                const auto pBefore = pressures();
+                problem.pushAuxPressuresToFractures();
+                problem.fractureHost().solveFractures();
+                problem.bindFractureAuxCells(/*allowTopologyChange=*/false);
+                for (const auto& well : problem.wellModel().wellContainer()) {
+                    const auto domain = solver.buildDomain(well->name(), aux, settings);
+                    if (domain.numAux == 0) {
+                        continue;
+                    }
+                    solver.solve(domain, timer.currentStepLength(), settings);
+                }
+                const auto pAfter = pressures();
+                double dp = 0.0;
+                for (std::size_t i = 0; i < pBefore.size() && i < pAfter.size(); ++i) {
+                    if (std::isfinite(pBefore[i]) && std::isfinite(pAfter[i])) {
+                        dp = std::max(dp, std::abs(pAfter[i] - pBefore[i]));
+                    }
+                }
+                const double dbind = problem.embeddedCouplingChange();
+                if (verbosity > 0) {
+                    OpmLog::info(fmt::format("WellFracturePicard it {}: max |dp| {:.3f} bar, binding change {:.3e}",
+                                             it, dp / 1e5, dbind));
+                }
+                if (dp / 1e5 < tolBar && it > 0) {
+                    break;
+                }
+            }
+            return true;
+        }
+
         template <class NonlinearSolverType>
         SimulatorReportSingle nonlinearIteration(const SimulatorTimerInterface& timer,
                                                  NonlinearSolverType& nonlinear_solver){

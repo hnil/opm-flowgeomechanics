@@ -188,37 +188,52 @@ public:
         auto& solution = model.solution(/*timeIdx=*/0);
         GlobalEqVector dxGlobal(model.numTotalDof());
 
-        for (int it = 0; it < settings.maxIter; ++it) {
-            // assemble the well at the current iterate, then the domain rows
+        // a failed local solve must be harmless: keep what we started from
+        std::vector<typename std::remove_reference_t<decltype(solution)>::block_type> solution0;
+        solution0.reserve(domain.cells.size());
+        for (const int c : domain.cells) {
+            solution0.push_back(solution[c]);
+        }
+        const auto wellState0 = wellModel.wellState();
+        auto refreshCache = [&]() {
+            for (const int c : domain.cells) {
+                IntensiveQuantities iq;
+                iq.update(problem, solution[c], static_cast<unsigned>(c), /*timeIdx=*/0);
+                model.updateCachedIntensiveQuantities(iq, static_cast<unsigned>(c), /*timeIdx=*/0);
+            }
+        };
+        auto rollback = [&]() {
+            for (std::size_t i = 0; i < domain.cells.size(); ++i) {
+                solution[domain.cells[i]] = solution0[i];
+            }
+            refreshCache();
+            wellModel.wellState() = wellState0;
+            well.updatePrimaryVariables(wellModel.groupStateHelper());
+        };
+        // residual of the domain + well at the current iterate (assembles both)
+        auto assembleAndMeasure = [&](double& rmax, double& wmax) {
             well.assembleWellEq(simulator_, dt, wellModel.groupStateHelper(), wellModel.wellState());
             wellModel.updateCellRates();
             linearizer.linearizeDomain(dom);
-
-            // the well's Schur complement into the matrix and the residual, as
-            // the global linearization does for every well
             auto& jacobian = linearizer.jacobian();
             auto& residual = linearizer.residual();
             well.addWellContributions(jacobian);
-            {
-                const auto& wcells = well.cells();
-                GlobalEqVector rloc(wcells.size());
-                for (std::size_t i = 0; i < wcells.size(); ++i) {
-                    rloc[i] = residual[wcells[i]];
-                }
-                well.apply(rloc);
-                for (std::size_t i = 0; i < wcells.size(); ++i) {
-                    residual[wcells[i]] = rloc[i];
-                }
+            const auto& wcells = well.cells();
+            GlobalEqVector rloc(wcells.size());
+            for (std::size_t i = 0; i < wcells.size(); ++i) {
+                rloc[i] = residual[wcells[i]];
             }
-
-            const auto rDom = Details::extractVector(residual, domain.cells);
-            double rmax = 0.0;
-            for (const auto& blk : rDom) {
-                for (const auto v : blk) {
+            well.apply(rloc);
+            for (std::size_t i = 0; i < wcells.size(); ++i) {
+                residual[wcells[i]] = rloc[i];
+            }
+            rmax = 0.0;
+            for (const int c : domain.cells) {
+                for (const auto v : residual[c]) {
                     rmax = std::max(rmax, std::abs(v));
                 }
             }
-            double wmax = 0.0;
+            wmax = 0.0;
             if (stdWell != nullptr) {
                 for (const auto& blk : stdWell->linSys().residual()) {
                     for (const auto v : blk) {
@@ -226,10 +241,17 @@ public:
                     }
                 }
             }
-            const double rnorm = std::max(rmax, wmax);
-            if (it == 0) {
-                rep.residual0 = rnorm;
-            }
+            return std::max(rmax, wmax);
+        };
+        double rmax = 0.0, wmax = 0.0;
+        double rnorm = assembleAndMeasure(rmax, wmax);
+        rep.residual0 = rnorm;
+        if (!std::isfinite(rnorm)) {
+            rollback();
+            return rep;
+        }
+
+        for (int it = 0; it < settings.maxIter; ++it) {
             rep.residual = rnorm;
             rep.iterations = it;
             if (settings.verbosity > 0) {
@@ -241,7 +263,10 @@ public:
                 break;
             }
 
-            // direct solve of the extracted block
+            // direct solve of the extracted block at the current linearization
+            auto& jacobian = linearizer.jacobian();
+            auto& residual = linearizer.residual();
+            const auto rDom = Details::extractVector(residual, domain.cells);
             auto jDom = Details::extractMatrix(jacobian.istlMatrix(), domain.cells);
             GlobalEqVector xDom(domain.cells.size());
             xDom = 0.0;
@@ -251,30 +276,61 @@ public:
                 auto rhs = rDom;
                 lu.apply(xDom, rhs, res);
             }
+            bool finite = true;
             for (const auto& blk : xDom) {
                 for (const auto v : blk) {
-                    if (!std::isfinite(v)) {
-                        OPM_THROW(NumericalProblem, "WellLocalSolver: non-finite update for well " + domain.well);
-                    }
+                    finite = finite && std::isfinite(v);
                 }
             }
-
-            // update the domain's primary variables (with the blackoil
-            // limiters and variable switching), their cached intensive
-            // quantities, and the well's own unknowns
-            dxGlobal = 0.0;
-            Details::setGlobal(xDom, domain.cells, dxGlobal);
-            model.newtonMethod().update_(solution, solution, dxGlobal, dxGlobal, domain.cells);
-            for (const int c : domain.cells) {
-                IntensiveQuantities iq;
-                iq.update(problem, solution[c], static_cast<unsigned>(c), /*timeIdx=*/0);
-                model.updateCachedIntensiveQuantities(iq, static_cast<unsigned>(c), /*timeIdx=*/0);
+            if (!finite) {
+                break;
             }
-            well.recoverWellSolutionAndUpdateWellState(simulator_, dxGlobal,
-                                                       wellModel.groupStateHelper(),
-                                                       wellModel.wellState());
+
+            // backtracking on the full step: accept the first fraction that
+            // lowers the residual; the blackoil update keeps its limiters and
+            // variable switching
+            std::vector<typename std::remove_reference_t<decltype(solution)>::block_type> solutionIt;
+            for (const int c : domain.cells) {
+                solutionIt.push_back(solution[c]);
+            }
+            const auto wellStateIt = wellModel.wellState();
+            const double rPrev = rnorm;
+            bool accepted = false;
+            double alpha = 1.0;
+            for (int ls = 0; ls < 5 && !accepted; ++ls, alpha *= 0.5) {
+                if (ls > 0) {
+                    for (std::size_t i = 0; i < domain.cells.size(); ++i) {
+                        solution[domain.cells[i]] = solutionIt[i];
+                    }
+                    wellModel.wellState() = wellStateIt;
+                    well.updatePrimaryVariables(wellModel.groupStateHelper());
+                }
+                dxGlobal = 0.0;
+                auto xStep = xDom;
+                xStep *= alpha;
+                Details::setGlobal(xStep, domain.cells, dxGlobal);
+                model.newtonMethod().update_(solution, solution, dxGlobal, dxGlobal, domain.cells);
+                refreshCache();
+                well.recoverWellSolutionAndUpdateWellState(simulator_, dxGlobal,
+                                                           wellModel.groupStateHelper(),
+                                                           wellModel.wellState());
+                rnorm = assembleAndMeasure(rmax, wmax);
+                accepted = std::isfinite(rnorm) && (rnorm < rPrev || rnorm < settings.absTol);
+                if (!accepted && settings.verbosity > 1) {
+                    OpmLog::info(fmt::format("WellLocalSolver {} it {} step {:.3g} rejected: res {:.3e} -> {:.3e}",
+                                             domain.well, it, alpha, rPrev, rnorm));
+                }
+            }
+            if (!accepted) {
+                break;
+            }
         }
 
+        if (!rep.converged && !(rep.residual < rep.residual0)) {
+            // nothing gained: leave the model exactly as it was
+            rollback();
+            rep.residual = rep.residual0;
+        }
         // leave the well's cell rates consistent with its final state
         well.assembleWellEq(simulator_, dt, wellModel.groupStateHelper(), wellModel.wellState());
         wellModel.updateCellRates();

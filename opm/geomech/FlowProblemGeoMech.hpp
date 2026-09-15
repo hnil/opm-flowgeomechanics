@@ -296,6 +296,64 @@ namespace Opm{
         const FractureAuxCells<TypeTag>* fractureAuxCells() const
         { return fractureAuxCells_; }
 
+        /*!
+         * \brief Hand the flow's fracture pressures to the fractures (opt-in
+         *        fractureparam.solver.pressure_from_flow).
+         *
+         * Each bound fracture is switched to external-pressure mode and given the
+         * water pressure of its aux cells plus the well's BHP for its well DOF, so
+         * its next solve does mechanics, contact and propagation at the pressure
+         * the flow (and the well) actually hold. Unbound fractures (seed phase, or
+         * a grid the binding has not caught up with) keep solving their own pressure.
+         */
+        void pushAuxPressuresToFractures()
+        {
+            if ((fractureAuxCells_ == nullptr) || !this->geoMechModel().fractureModelActive()) {
+                return;
+            }
+            const PropertyTree prm = this->getFractureParam();
+            if (!prm.get<bool>("solver.pressure_from_flow", false)) {
+                return;
+            }
+            const double minWidthFactor =
+                prm.get<double>("solver.pressure_from_flow_min_width_factor", 2.0);
+            auto& fractures = this->geoMechModel().fractureModel();
+            const auto& wellState = this->wellModel().wellState();
+            std::size_t fidx = 0;
+            for (auto& wellFractures : fractures.wellFractures()) {
+                for (auto& fracture : wellFractures) {
+                    const auto p = fractureAuxCells_->cellPressures(fidx);
+                    ++fidx;
+                    if (p.size() != fracture.numCells()) {
+                        continue;
+                    }
+                    double bhp = -1.0;
+                    if (const auto wi = wellState.index(fracture.wellInfo().name); wi.has_value()) {
+                        bhp = wellState.well(*wi).bhp;
+                    }
+                    if (bhp <= 0.0 && !p.empty()) {
+                        bhp = p.front();
+                    }
+                    // Only hand over the pressure of a fracture that is already
+                    // open: while it is establishing, its aperture is at the
+                    // cubic-law floor and the flow's pressure is the pressure of a
+                    // closed fracture, so pinning it there removes the
+                    // width-pressure feedback that opens and propagates it.
+                    const auto& w = fracture.fractureWidth();
+                    double wmax = 0.0;
+                    for (std::size_t i = 0; i < w.size(); ++i) {
+                        wmax = std::max(wmax, w[i][0]);
+                    }
+                    const bool established = wmax > minWidthFactor * fracture.cubicLawMinWidth();
+                    if (established && fracture.setExternalPressure(p, bhp)) {
+                        fracture.setExternalPressureMode(true);
+                    } else {
+                        fracture.setExternalPressureMode(false);
+                    }
+                }
+            }
+        }
+
         //! Whether the fracture flows through degrees of freedom of its own.
         bool fractureFlowIsEmbedded() const
         { return fractureAuxCells_ != nullptr; }

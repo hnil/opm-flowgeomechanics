@@ -30,6 +30,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <limits>
 #include <map>
 #include <string>
 #include <utility>
@@ -277,6 +278,25 @@ public:
      * over directly instead of going through the schedule.
      */
     std::vector<RuntimePerforation> wellPerforations(const std::string& wellName) const;
+    //! Water pressure of the bound cells of one fracture (binding order), per
+    //! fracture cell; empty if the fracture is not bound.
+    std::vector<Scalar> cellPressures(std::size_t fractureIdx) const
+    {
+        std::vector<Scalar> p;
+        const auto& model = this->simulator_.model();
+        for (unsigned slot = 0; slot < this->slotOf_.size() && slot < this->capacity_; ++slot) {
+            const auto [fidx, cell] = this->slotOf_[slot];
+            if (fidx != fractureIdx || !this->active_[slot]) {
+                continue;
+            }
+            if (cell >= p.size()) {
+                p.resize(cell + 1, std::numeric_limits<Scalar>::quiet_NaN());
+            }
+            const auto dof = static_cast<unsigned>(this->localToGlobalDof(slot));
+            p[cell] = getValue(model.intensiveQuantities(dof, 0).fluidState().pressure(FluidSystem::waterPhaseIdx));
+        }
+        return p;
+    }
     //! Global DOF indices of every active cell of the fractures attached to a well.
     std::vector<int> cellsOfWell(const std::string& wellName) const
     {
