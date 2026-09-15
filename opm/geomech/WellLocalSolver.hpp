@@ -31,6 +31,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <optional>
 #include <cmath>
 #include <set>
 #include <string>
@@ -63,6 +64,7 @@ class WellLocalSolver
     using SparseMatrixAdapter = GetPropType<TypeTag, Properties::SparseMatrixAdapter>;
     using Matrix = typename SparseMatrixAdapter::IstlMatrix;
     using Indices = GetPropType<TypeTag, Properties::Indices>;
+    static constexpr bool enableEnergy = getPropValue<TypeTag, Properties::EnableEnergy>();
     using IntensiveQuantities = GetPropType<TypeTag, Properties::IntensiveQuantities>;
     using StdWell = StandardWell<TypeTag>;
 
@@ -77,8 +79,23 @@ public:
         //! relative to the well's own rate. A raw max-norm mixes a mass balance
         //! in kg/s with a well control equation and is not a convergence test.
         double toleranceCnv = 1e-2;   //!< as ToleranceCnv
+        //! Energy carries its own, much looser tolerance in the flow model
+        //! (ToleranceCnvEnergy); judging it by the mass tolerance reports a
+        //! converged cell as unconverged.
+        double toleranceCnvEnergy = 1e-2 * 41.82;
         double toleranceWell = 1e-4;  //!< well residual relative to its rate
         double reduction = 1e-4;      //!< or this much reduction, whichever first
+        /*!
+         * \brief Run the well's own inner nonlinear iterations inside each local
+         *        iteration (opt-in).
+         *
+         * A local solve turns them off, on the assumption that the local Newton
+         * iterates the well itself.  Whether that is the better split is not
+         * obvious: the coupled system needs its iterations regardless, so the
+         * inner well solve may be duplicated work -- or it may be what makes the
+         * local solve converge at all.  Measure it rather than assume.
+         */
+        bool innerWellIterations = false;
         int verbosity = 0;
     };
 
@@ -195,7 +212,15 @@ public:
         // local iteration context: the domain linearization then resets only
         // the domain's rows, and the well skips its own inner iterations (the
         // local Newton iterates it)
-        LocalContextGuard<std::remove_reference_t<decltype(problem)>> guard(problem);
+        // The local-solve context is what turns the well's own inner nonlinear
+        // iterations off (assembleWellEq consults it). Leaving it uninstalled
+        // gives them back; the cost is that the domain linearization then resets
+        // the whole system rather than only the domain's rows, which is harmless
+        // here because the global Newton re-linearizes before it uses anything.
+        std::optional<LocalContextGuard<std::remove_reference_t<decltype(problem)>>> guard;
+        if (!settings.innerWellIterations) {
+            guard.emplace(problem);
+        }
         // the well code logs through the group-state helper's deferred logger,
         // which the well model only pushes around its own assembly
         auto loggerGuard = wellModel.groupStateHelper().pushLogger(/*do_mpi_gather=*/false);
@@ -227,6 +252,8 @@ public:
             well.updatePrimaryVariables(wellModel.groupStateHelper());
         };
         // residual of the domain + well at the current iterate (assembles both)
+        int worstCell = -1;
+        int worstEq = -1;
         auto assembleAndMeasure = [&](double& rmax, double& wmax) {
             well.assembleWellEq(simulator_, dt, wellModel.groupStateHelper(), wellModel.wellState());
             wellModel.updateCellRates();
@@ -262,8 +289,19 @@ public:
                 if (!(pv > 0.0)) {
                     continue;
                 }
-                for (const auto v : residual[c]) {
-                    rmax = std::max(rmax, std::abs(v) * dt / pv);
+                for (unsigned e = 0; e < residual[c].size(); ++e) {
+                    const bool isEnergy = enableEnergy
+                        && (static_cast<int>(e) == Indices::contiEnergyEqIdx);
+                    const auto tol = isEnergy ? settings.toleranceCnvEnergy
+                                              : settings.toleranceCnv;
+                    // measured in units of its own tolerance, so the maximum is
+                    // over comparable numbers
+                    const auto cnv = std::abs(residual[c][e]) * dt / pv / tol;
+                    if (cnv > rmax) {
+                        rmax = cnv;
+                        worstCell = c;
+                        worstEq = static_cast<int>(e);
+                    }
                 }
             }
             // well rows relative to the rate the well is moving
@@ -283,7 +321,7 @@ public:
             }
             // one number for the line search; the convergence test below keeps
             // the two apart because they have different tolerances
-            return std::max(rmax / settings.toleranceCnv, wmax / settings.toleranceWell);
+            return std::max(rmax, wmax / settings.toleranceWell);
         };
         double rmax = 0.0, wmax = 0.0;
         double rnorm = assembleAndMeasure(rmax, wmax);
@@ -297,8 +335,9 @@ public:
             rep.residual = rnorm;
             rep.iterations = it;
             if (settings.verbosity > 0) {
-                OpmLog::info(fmt::format("WellLocalSolver {} it {} res {:.3e} (res {:.3e} well {:.3e})",
-                                         domain.well, it, rnorm, rmax, wmax));
+                OpmLog::info(fmt::format("WellLocalSolver {} it {} res {:.3e} "
+                                         "(cells {:.3e} at dof {} eq {}, well {:.3e})",
+                                         domain.well, it, rnorm, rmax, worstCell, worstEq, wmax));
             }
             // rnorm is already in units of "times the tolerance", so converged
             // means both measures are inside their own tolerance

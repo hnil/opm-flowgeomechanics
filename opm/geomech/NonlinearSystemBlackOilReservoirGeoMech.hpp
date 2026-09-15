@@ -70,6 +70,8 @@ namespace Opm
             settings.maxIter = prm.get<int>("solver.well_local_max_iter", 20);
             settings.reduction = prm.get<double>("solver.well_local_reduction", 1e-4);
             settings.verbosity = prm.get<int>("solver.well_local_verbosity", 0);
+            settings.innerWellIterations =
+                prm.get<bool>("solver.well_local_inner_well_iterations", false);
             Solver solver(this->simulator_);
             const auto* aux = problem.fractureAuxCells();
             for (const auto& well : problem.wellModel().wellContainer()) {
@@ -118,6 +120,8 @@ namespace Opm
             settings.maxIter = prm.get<int>("solver.well_local_max_iter", 20);
             settings.reduction = prm.get<double>("solver.well_local_reduction", 1e-4);
             settings.verbosity = prm.get<int>("solver.well_local_verbosity", 0);
+            settings.innerWellIterations =
+                prm.get<bool>("solver.well_local_inner_well_iterations", false);
             Solver solver(this->simulator_);
             const auto* aux = problem.fractureAuxCells();
 
