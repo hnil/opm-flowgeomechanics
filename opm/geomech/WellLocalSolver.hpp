@@ -117,6 +117,7 @@ public:
         if (settings.ring >= 0) {
             const auto& model = simulator_.model();
             const auto numGridDof = static_cast<int>(model.numGridDof());
+            static_cast<void>(numGridDof);
             const auto& well = simulator_.problem().wellModel().getWell(wellName);
             std::set<int> front;
             for (const int c : well.cells()) {
@@ -124,8 +125,13 @@ public:
                     front.insert(c);
                 }
             }
+            // A topology change erases the Jacobian, and with it the neighbour
+            // table; until the next linearization rebuilds it there are no rings
+            // to walk, so take the perforated cells alone rather than index into
+            // an empty table.
             const auto& nbInfo = model.linearizer().getNeighborInfo();
-            for (int r = 0; r < settings.ring; ++r) {
+            const int rings = (nbInfo.size() >= numGridDof) ? settings.ring : 0;
+            for (int r = 0; r < rings; ++r) {
                 std::set<int> next;
                 for (const int c : front) {
                     for (const auto& nb : nbInfo[c]) {

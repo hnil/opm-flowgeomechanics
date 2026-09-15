@@ -259,17 +259,43 @@ namespace Opm{
             // iteration already under way cannot converge on a moving target.  Value
             // changes -- apertures, transmissibilities -- pass through; shape changes
             // wait for the step boundary, which is the sequentially implicit contract.
-            if (!allowTopologyChange
-                && !fractureAuxCells_->layoutMatches(this->geoMechModel().fractureModel()))
-            {
-                // The fracture wants a different shape; that waits for the step
-                // boundary, and what the flow sees is unchanged.
+            // Three distinct things can be asked of the binding, at very
+            // different cost:
+            //
+            //  - the shape is unchanged and only the apertures have moved, which
+            //    is every iteration of the coupled mechanics-pressure solve:
+            //    refresh the pore volumes, the cubic-law transmissibilities and
+            //    the connection factors over the binding that exists.  No
+            //    sparsity change and no matrix rebuild;
+            //  - the shape may change and restructuring is allowed -- a step
+            //    boundary, or right after a fracture solve that grew: rebind;
+            //  - the shape changed and restructuring is not allowed: nothing
+            //    per-cell is well defined, because a regrid renumbers the
+            //    trimesh and a cell index stops meaning the same cell, so the
+            //    old binding stands until someone may rebind.
+            auto& fractureModel = this->geoMechModel().fractureModel();
+
+            if (!allowTopologyChange) {
+                if (fractureAuxCells_->updateValues(fractureModel)) {
+                    embeddedCouplingChange_ = fractureAuxCells_->lastBindChange();
+                    this->refreshAuxCellModules_(/*topologyChanged=*/false);
+                    // both time levels: the pore volume moved with the aperture,
+                    // and the start-of-step state is stored as a volume too
+                    this->model().updateAuxiliaryIntQuants(/*timeIdx=*/0);
+                    this->model().updateAuxiliaryIntQuants(/*timeIdx=*/1);
+                    this->checkFractureCouplingIfRequested_();
+                    return;
+                }
+                if (embeddedCellDump_ > 0) {
+                    OpmLog::info("Embedded fracture flow: the fracture changed shape "
+                                 "mid-step; keeping the previous binding until it may "
+                                 "be rebuilt");
+                }
                 embeddedCouplingChange_ = 0.0;
                 return;
             }
 
-            const bool topologyChanged =
-                fractureAuxCells_->bind(this->geoMechModel().fractureModel());
+            const bool topologyChanged = fractureAuxCells_->bind(fractureModel);
 
             this->refreshAuxCellModules_(topologyChanged);
             // newborn cells were assigned at both time levels; refresh their cached

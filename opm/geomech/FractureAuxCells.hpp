@@ -217,6 +217,23 @@ public:
     bool bind(const FractureModel& fractures);
 
     /*!
+     * \brief Refresh what the flow is fed, without touching the shape.
+     *
+     * Apertures, and with them pore volumes and cubic-law transmissibilities,
+     * move at every iteration of the coupled mechanics-pressure solve; the set
+     * of cells only changes when the fracture grows.  This recomputes the
+     * former over the binding that exists, leaving the slot map, the active
+     * set and the sparsity pattern alone, so it is cheap and needs no matrix
+     * rebuild.
+     *
+     * Requires the layout to still match the fracture: once the cell count
+     * changes the trimesh has been renumbered and a cell index no longer means
+     * the same cell, so there is nothing well defined to update.  Returns false
+     * in that case, and the caller must rebind instead.
+     */
+    bool updateValues(const FractureModel& fractures);
+
+    /*!
      * \brief Whether the fractures still have the shape of the current binding.
      *
      * True when every fracture has the cell count its slots were handed out for.  Used

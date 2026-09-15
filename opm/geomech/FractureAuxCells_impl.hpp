@@ -276,6 +276,125 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
 
 template <class TypeTag>
 bool
+FractureAuxCells<TypeTag>::updateValues(const FractureModel& fractures)
+{
+    if (!this->layoutMatches(fractures)) {
+        return false;
+    }
+
+    const auto previousConnections = this->connections_.size();
+    std::vector<Connection> connections;
+    connections.reserve(previousConnections);
+    std::map<std::string, std::vector<RuntimePerforation>> perforations;
+
+    std::size_t nextSlot = 0;
+    std::size_t fractureIdx = 0;
+    for (const auto& wellFractures : fractures.wellFractures()) {
+        for (const auto& fracture : wellFractures) {
+            const auto numCells = fracture.numCells();
+            const auto& reservoirCells = fracture.reservoirCells();
+            const auto& leakOf = fracture.leakOf();
+            const auto& mobility = fracture.reservoirMobility();
+            const auto& width = fracture.fractureWidth();
+            const auto areas = fracture.cellAreas();
+
+            if ((reservoirCells.size() != numCells) || (leakOf.size() != numCells)
+                || (mobility.size() != numCells)
+                || (static_cast<std::size_t>(width.size()) != numCells))
+            {
+                return false; // the fracture is mid-regrid; keep what we have
+            }
+
+            const auto firstSlot = nextSlot;
+            for (std::size_t cell = 0; cell < numCells; ++cell) {
+                const auto slot = firstSlot + cell;
+                const auto aperture
+                    = std::max(static_cast<Scalar>(width[cell][0]), this->minWidth_);
+                this->bulkVolume_[slot] = static_cast<Scalar>(areas[cell]) * aperture;
+
+                if (!this->active_[slot]) {
+                    continue;
+                }
+                const auto mob = mobility[cell];
+                const auto trans = (mob > 0.0)
+                    ? static_cast<Scalar>(leakOf[cell] / mob)
+                    : Scalar{0};
+                connections.push_back({static_cast<unsigned>(this->localToGlobalDof(slot)),
+                                       static_cast<unsigned>(this->partner_[slot]),
+                                       trans, 0.0, 0.0});
+            }
+
+            const auto freshHalfTrans = fracture.currentHalfTrans();
+            const auto cubicFloor = static_cast<Scalar>(fracture.cubicLawMinWidth());
+            for (const auto& [i, j, t1, t2] : freshHalfTrans) {
+                const auto slotI = firstSlot + i;
+                const auto slotJ = firstSlot + j;
+                const auto h1 = std::max(static_cast<Scalar>(width[i][0]), cubicFloor);
+                const auto h2 = std::max(static_cast<Scalar>(width[j][0]), cubicFloor);
+                const auto invTrans
+                    = 12.0 / (h1 * h1 * h1 * t1) + 12.0 / (h2 * h2 * h2 * t2);
+                connections.push_back({static_cast<unsigned>(this->localToGlobalDof(slotI)),
+                                       static_cast<unsigned>(this->localToGlobalDof(slotJ)),
+                                       static_cast<Scalar>(1.0 / invTrans), 0.0, 0.0});
+            }
+
+            auto& perfs = perforations[fracture.wellInfo().name];
+            for (const auto& [cell, wellIndex] : fracture.wellPerforations()) {
+                const auto slot = firstSlot + static_cast<std::size_t>(cell);
+                RuntimePerforation perf;
+                perf.cell = static_cast<int>(this->localToGlobalDof(slot));
+                perf.depth = this->depth_[slot];
+                if (this->perfWiMode_ == PerfWiMode::Estimate) {
+                    const auto w = this->perfWidth_;
+                    const auto re = std::sqrt(static_cast<Scalar>(areas[cell]) / M_PI);
+                    const auto lnTerm = std::log(std::max(re / this->perfRw_, Scalar{1.1}));
+                    perf.ctf = 2.0 * M_PI * (w * w * w / 12.0) / lnTerm;
+                }
+                else {
+                    perf.ctf = wellIndex;
+                }
+                perfs.push_back(perf);
+            }
+
+            nextSlot = firstSlot + numCells;
+            ++fractureIdx;
+        }
+    }
+
+    // A value update that changed the connection list is not a value update;
+    // refuse rather than hand the flow a pattern its matrix was not built for.
+    if (connections.size() != previousConnections) {
+        return false;
+    }
+    this->connections_ = std::move(connections);
+    this->wellPerforations_ = std::move(perforations);
+
+    Scalar totalTrans = 0.0;
+    const auto gridDofLimit = this->simulator_.model().numGridDof();
+    for (const auto& conn : this->connections_) {
+        if (conn.dof1 < gridDofLimit || conn.dof2 < gridDofLimit) {
+            totalTrans += conn.trans;
+        }
+    }
+    Scalar totalPv = 0.0;
+    for (unsigned slot = 0; slot < this->capacity_; ++slot) {
+        totalPv += this->bulkVolume_[slot];
+    }
+    const auto rel = [](const Scalar now, const Scalar before) {
+        if (before <= 0.0) {
+            return (now > 0.0) ? Scalar{1} : Scalar{0};
+        }
+        return std::abs(now - before) / before;
+    };
+    this->lastBindChange_ = std::max(rel(totalTrans, this->lastTotalTrans_),
+                                     rel(totalPv, this->lastTotalPv_));
+    this->lastTotalTrans_ = totalTrans;
+    this->lastTotalPv_ = totalPv;
+    return true;
+}
+
+template <class TypeTag>
+bool
 FractureAuxCells<TypeTag>::layoutMatches(const FractureModel& fractures) const
 {
     // Cell counts per fracture, in binding order, reconstructed from the slot registry.
