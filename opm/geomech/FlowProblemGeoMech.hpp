@@ -1,6 +1,7 @@
 #ifndef OPM_FLOW_PROBLEM_GEOMECH_HPP
 #define OPM_FLOW_PROBLEM_GEOMECH_HPP
 
+#include <algorithm>
 #include <opm/common/ErrorMacros.hpp>
 #include <fmt/format.h>
 
@@ -86,6 +87,7 @@ namespace Opm{
         int embeddedSatnum_ = 0;
         int embeddedCellDump_ = 0; // solver.embedded_cell_dump: worst-N aux cells per report
         mutable int embeddedSatProxyCell_ = -1;
+        std::vector<std::size_t> lastSeenFractureLayout_ {}; // see bindFractureAuxCells
         bool embeddedLeakoffReport_ = false;
 
     public:
@@ -233,7 +235,18 @@ namespace Opm{
             return embeddedSatProxyCell_;
         }
 
-        void bindFractureAuxCells(const bool allowTopologyChange = true)
+        /*!
+         * \brief Hand the fracture's cells their degrees of freedom.
+         *
+         * \param allowTopologyChange whether the set of cells may change here.
+         * \param requireStableLayout only restructure if the fracture asked for
+         *        the same shape as at the previous call.  A fracture solve
+         *        re-grids while it searches for its propagation front, so a bind
+         *        inside the step that followed every one of those would chase a
+         *        moving target and the coupling residual would never settle.
+         */
+        void bindFractureAuxCells(const bool allowTopologyChange = true,
+                                  const bool requireStableLayout = false)
         {
             if ((fractureAuxCells_ == nullptr) || !this->geoMechModel().fractureModelActive()) {
                 return;
@@ -275,7 +288,21 @@ namespace Opm{
             //    old binding stands until someone may rebind.
             auto& fractureModel = this->geoMechModel().fractureModel();
 
-            if (!allowTopologyChange) {
+            // What shape is the fracture asking for now, and is it the same one
+            // it asked for last time?
+            std::vector<std::size_t> layoutNow;
+            for (const auto& wellFractures : fractureModel.wellFractures()) {
+                for (const auto& fracture : wellFractures) {
+                    layoutNow.push_back(fracture.numCells());
+                }
+            }
+            const bool layoutStable = (layoutNow == lastSeenFractureLayout_);
+            lastSeenFractureLayout_ = layoutNow;
+
+            const bool mayRestructure
+                = allowTopologyChange && (layoutStable || !requireStableLayout);
+
+            if (!mayRestructure) {
                 if (fractureAuxCells_->updateValues(fractureModel)) {
                     embeddedCouplingChange_ = fractureAuxCells_->lastBindChange();
                     this->refreshAuxCellModules_(/*topologyChanged=*/false);
@@ -295,15 +322,43 @@ namespace Opm{
                 return;
             }
 
+            // A topology change makes the flow problem copy the current state of
+            // every auxiliary degree of freedom into the previous-time state.
+            // That is right for a cell that has just appeared -- it has no
+            // history, so it has moved no mass by coming into existence -- and
+            // harmless at a step boundary, where the two are equal anyway.  In
+            // the middle of a step it would also erase the start-of-step state
+            // of every cell that was already there, which is the reference its
+            // accumulation term is measured against.  Keep theirs.
+            auto& previous = this->model().solution(/*timeIdx=*/1);
+            const auto firstAux = this->model().numGridDof();
+            const auto numTotalDof = this->model().numTotalDof();
+            std::vector<typename std::decay_t<decltype(previous)>::block_type> previousAux;
+            previousAux.reserve(numTotalDof - firstAux);
+            for (unsigned dof = firstAux; dof < numTotalDof; ++dof) {
+                previousAux.push_back(previous[dof]);
+            }
+
             const bool topologyChanged = fractureAuxCells_->bind(fractureModel);
 
             this->refreshAuxCellModules_(topologyChanged);
+
+            if (topologyChanged) {
+                const auto& newborn = fractureAuxCells_->newbornDofs();
+                for (unsigned dof = firstAux; dof < numTotalDof; ++dof) {
+                    const bool isNewborn
+                        = std::find(newborn.begin(), newborn.end(), dof) != newborn.end();
+                    if (!isNewborn) {
+                        previous[dof] = previousAux[dof - firstAux];
+                    }
+                }
+            }
             // newborn cells were assigned at both time levels; refresh their cached
             // intensive quantities so the first linearization sees that state
             this->model().updateAuxiliaryIntQuants(/*timeIdx=*/0);
             this->model().updateAuxiliaryIntQuants(/*timeIdx=*/1);
             embeddedCouplingChange_ = fractureAuxCells_->lastBindChange();
-            if (allowTopologyChange) {
+            if (mayRestructure) {
                 fractureAuxCells_->cellDump(this->geoMechModel().fractureModel(), "after-bind", embeddedCellDump_);
             }
             this->checkFractureCouplingIfRequested_();

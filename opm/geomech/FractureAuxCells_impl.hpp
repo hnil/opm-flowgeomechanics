@@ -224,10 +224,12 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
     // its current one and the accumulation term starts from zero.
     auto& solution = this->simulator_.model().solution(/*timeIdx=*/0);
     auto& solutionOld = this->simulator_.model().solution(/*timeIdx=*/1);
+    this->newbornDofs_.clear();
     for (unsigned slot = 0; slot < nextSlot; ++slot) {
         if (this->active_[slot] && !wasActive[slot]) {
             this->assignStateFromPartner(solution, slot, /*useCurrentState=*/true);
             this->assignStateFromPartner(solutionOld, slot, /*useCurrentState=*/true);
+            this->newbornDofs_.push_back(static_cast<unsigned>(this->localToGlobalDof(slot)));
         }
     }
 

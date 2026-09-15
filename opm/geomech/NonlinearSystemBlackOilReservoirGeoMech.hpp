@@ -139,7 +139,8 @@ namespace Opm
                 problem.fractureHost().solveFractures();
                 problem.bindFractureAuxCells(
                     /*allowTopologyChange=*/prm.get<bool>(
-                        "fractureparam.solver.rebind_after_growth", false));
+                        "fractureparam.solver.rebind_after_growth", false),
+                    /*requireStableLayout=*/true);
                 for (const auto& well : problem.wellModel().wellContainer()) {
                     const auto domain = solver.buildDomain(well->name(), aux, settings);
                     if (domain.numAux == 0) {

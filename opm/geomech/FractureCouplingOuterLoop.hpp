@@ -474,7 +474,8 @@ namespace Opm
                 const bool rebindAfterGrowth =
                     prm.get<bool>("fractureparam.solver.rebind_after_growth", false);
                 derived().simulator_.problem().bindFractureAuxCells(
-                    /*allowTopologyChange=*/rebindAfterGrowth && fracture_converged_global);
+                    /*allowTopologyChange=*/rebindAfterGrowth && fracture_converged_global,
+                    /*requireStableLayout=*/true);
                 // The well's perforations of the fracture keep the indices they were
                 // given at the step boundary: within the step both the topology and the
                 // perforation factors are held fixed -- the sequentially implicit lag --

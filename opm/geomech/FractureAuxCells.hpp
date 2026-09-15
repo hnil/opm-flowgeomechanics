@@ -234,6 +234,17 @@ public:
     bool updateValues(const FractureModel& fractures);
 
     /*!
+     * \brief Global degrees of freedom the last bind() brought into existence.
+     *
+     * A cell that has just appeared has no start-of-step state; one that was
+     * already there does, and it is the reference its accumulation term is
+     * measured against.  The two have to be told apart when a bind happens
+     * inside a step.
+     */
+    const std::vector<unsigned>& newbornDofs() const
+    { return this->newbornDofs_; }
+
+    /*!
      * \brief Whether the fractures still have the shape of the current binding.
      *
      * True when every fracture has the cell count its slots were handed out for.  Used
@@ -506,6 +517,7 @@ private:
     //! Well name -> the perforations of that well's fractures, in degrees of freedom.
     std::map<std::string, std::vector<RuntimePerforation>> wellPerforations_{};
     std::map<std::string, std::vector<int>> wellCells_{}; // active aux DOFs per well
+    std::vector<unsigned> newbornDofs_{}; // see newbornDofs()
 };
 
 } // namespace Opm
