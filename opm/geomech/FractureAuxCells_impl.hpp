@@ -49,6 +49,7 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
             std::string bad;
             if (fracture.reservoirCells().size() != n) { bad = "reservoir cells"; }
             else if (fracture.leakOf().size() != n) { bad = "leak-off"; }
+            else if (fracture.leakoffMobility().size() != n) { bad = "leak-off mobility"; }
             else if (fracture.reservoirMobility().size() != n) { bad = "mobility"; }
             else if (static_cast<std::size_t>(fracture.fractureWidth().size()) != n) { bad = "width"; }
 
@@ -90,7 +91,7 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
 
             const auto& reservoirCells = fracture.reservoirCells();
             const auto& leakOf = fracture.leakOf();
-            const auto& mobility = fracture.reservoirMobility();
+            const auto& leakMobility = fracture.leakoffMobility();
             const auto& width = fracture.fractureWidth();
             const auto areas = fracture.cellAreas();
             const auto depths = fracture.cellDepths();
@@ -129,10 +130,12 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
                 this->active_[slot] = true;
                 this->wellCells_[fracture.wellInfo().name].push_back(static_cast<int>(this->localToGlobalDof(slot)));
 
-                // leakOf() carries the reservoir mobility, which the reservoir's own
-                // local residual applies again from the upwind cell.  Divide it back out
-                // so the connection is a transmissibility and nothing else.
-                const auto mob = mobility[cell];
+                // leakOf() carries a mobility, which the reservoir's own local residual
+                // applies again from the upwind cell.  Divide back out the one the
+                // fracture actually used -- which is not reservoirMobility() under
+                // solver.leakoff_mobility=upwind -- so the connection is a
+                // transmissibility and nothing else.
+                const auto mob = leakMobility[cell];
                 const auto trans = (mob > 0.0)
                     ? static_cast<Scalar>(leakOf[cell] / mob)
                     : Scalar{0};
@@ -296,12 +299,12 @@ FractureAuxCells<TypeTag>::updateValues(const FractureModel& fractures)
             const auto numCells = fracture.numCells();
             const auto& reservoirCells = fracture.reservoirCells();
             const auto& leakOf = fracture.leakOf();
-            const auto& mobility = fracture.reservoirMobility();
+            const auto& leakMobility = fracture.leakoffMobility();
             const auto& width = fracture.fractureWidth();
             const auto areas = fracture.cellAreas();
 
             if ((reservoirCells.size() != numCells) || (leakOf.size() != numCells)
-                || (mobility.size() != numCells)
+                || (leakMobility.size() != numCells)
                 || (static_cast<std::size_t>(width.size()) != numCells))
             {
                 return false; // the fracture is mid-regrid; keep what we have
@@ -317,7 +320,7 @@ FractureAuxCells<TypeTag>::updateValues(const FractureModel& fractures)
                 if (!this->active_[slot]) {
                     continue;
                 }
-                const auto mob = mobility[cell];
+                const auto mob = leakMobility[cell];
                 const auto trans = (mob > 0.0)
                     ? static_cast<Scalar>(leakOf[cell] / mob)
                     : Scalar{0};
@@ -450,9 +453,9 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
         Scalar condEmb = 0.0;   // sum of trans * upwind water mobility
         Scalar condFrac = 0.0;  // sum of the fracture's leakof_ (trans * total mobility)
         // The two conductances differ only by which mobility multiplies the same
-        // transmissibility: the flow upwinds the fracture cell's water mobility,
-        // updateLeakoff() uses the reservoir cell's total mobility. Single phase in
-        // the reservoir makes them equal; anything else does not.
+        // transmissibility: the flow upwinds the fracture cell's water mobility, and
+        // updateLeakoff() uses whatever solver.leakoff_mobility asks for. These two
+        // means say how far apart the conventions are on this case.
         Scalar mobFracSum = 0.0, mobResTotSum = 0.0;
         Scalar pFracSum = 0.0, pResSum = 0.0;
         Scalar dFracSum = 0.0, dResSum = 0.0, dZgSum = 0.0, dpotSum = 0.0;

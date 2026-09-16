@@ -2104,6 +2104,47 @@ Fracture::leakoffDistanceFactor() const
     return prm_.get<double>("solver.leakoff_distance_factor", factor);
 }
 
+// Which mobility multiplies k*A/d on the leak-off connection. Legacy sums every
+// phase mobility of the reservoir cell; upwind mirrors the flow's water equation --
+// the fracture cell when it is feeding the formation, the reservoir cell's water
+// mobility when the flow reverses.
+double
+Fracture::leakoffMobilityFor(const int eIdx, const bool upwind) const
+{
+    const double total = reservoir_mobility_[eIdx];
+    if (!upwind) {
+        return total;
+    }
+
+    const bool have_state = (static_cast<size_t>(eIdx) < fracture_pressure_.size())
+        && (static_cast<size_t>(eIdx) < reservoir_pressure_.size());
+    if (!have_state) {
+        return total;
+    }
+
+    const double dh_frac = (static_cast<size_t>(eIdx) < fracture_dgh_.size())
+        ? fracture_dgh_[eIdx] : 0.0;
+    const double dh_res = reservoir_cell_z_[eIdx] * gravity_ * reservoir_density_[eIdx];
+    const double dpot = (fracture_pressure_[eIdx][0] - dh_frac)
+        - (reservoir_pressure_[eIdx] - dh_res);
+
+    if (dpot > 0.0) {
+        // Out of the fracture: the fracture cell is water filled by construction, so
+        // its relative permeability is one and the mobility is the reciprocal
+        // viscosity. Without the fluid system's water properties there is nothing
+        // better than the legacy value.
+        if (!fracture_water_property_evaluator_) {
+            return total;
+        }
+        const auto props = fracture_water_property_evaluator_(eIdx, fracture_pressure_[eIdx][0]);
+        const double mu = props.second.value;
+        return (mu > 0.0) ? 1.0 / mu : total;
+    }
+
+    return (static_cast<size_t>(eIdx) < reservoir_water_mobility_.size())
+        ? reservoir_water_mobility_[eIdx] : total;
+}
+
 void
 Fracture::updateLeakoff()
 {
@@ -2163,6 +2204,14 @@ Fracture::updateLeakoff()
     bool no_leakof_outercells = prm_.get<bool>("solver.no_leakof_outercells",false);
     const size_t nc = numFractureCells();
     leakof_.resize(nc, 0.0);
+    leakoff_mobility_.resize(nc, 0.0);
+    // "reservoir_total" (legacy): the reservoir cell's summed phase mobilities.
+    // "upwind": what the flow's water equation actually applies across the same
+    // connection, so that the embedded representation and the fracture's own solve
+    // form the same conductance instead of differing by a mobility ratio.
+    const std::string mob_mode =
+        prm_.get<std::string>("solver.leakoff_mobility", "reservoir_total");
+    const bool upwind_mobility = (mob_mode == "upwind");
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     // per leaking face: reservoir path in series with its share of the cake
     // (filtercake_thikness_ is the total over all faces); faces act in parallel
@@ -2171,7 +2220,8 @@ Fracture::updateLeakoff()
         const int eIdx = mapper.index(element);
         const auto geom = element.geometry();
         double area = geom.volume();
-        double res_mob = reservoir_mobility_[eIdx];
+        double res_mob = leakoffMobilityFor(eIdx, upwind_mobility);
+        leakoff_mobility_[eIdx] = res_mob;
         leakof_[eIdx] = res_mob * reservoir_perm_[eIdx] * area / reservoir_dist_[eIdx];
         double invtrans = 1 / leakof_[eIdx];
         if (has_filtercake_) {

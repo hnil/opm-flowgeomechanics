@@ -333,6 +333,10 @@ public:
     //! Reservoir mobility used to form leakOf(), so that it can be divided back out.
     const std::vector<double>& reservoirMobility() const { return reservoir_mobility_; }
 
+    //! The mobility actually folded into leakOf(), which is reservoirMobility() only
+    //! under the legacy convention. Divide by this, not by reservoirMobility().
+    const std::vector<double>& leakoffMobility() const { return leakoff_mobility_; }
+
     //! Pressure per fracture cell as the fracture's own solver last left it.  In the
     //! embedded representation the same quantity is also a degree of freedom of the
     //! flow problem, and the two must agree; this is what makes that checkable.
@@ -569,6 +573,7 @@ private:
     void setupPressureSolver();
     void updateFractureRHS();
     void updateLeakoff();
+    double leakoffMobilityFor(int eIdx, bool upwind) const;
     // leak-off convention (solver.leakoff_model): number of leaking faces and the
     // reservoir distance as a fraction of the cell extent normal to the fracture
     int leakoffSides() const;
@@ -596,6 +601,7 @@ private:
     std::vector<double> reservoir_perm_;
     std::vector<double> reservoir_cstress_;
     std::vector<double> reservoir_mobility_;
+    std::vector<double> reservoir_water_mobility_;
     std::vector<double> reservoir_density_;
     std::vector<double> reservoir_cell_z_;
     using WaterPropertyEvaluator = std::function<std::pair<CellFluidProperty, CellFluidProperty>(size_t, double)>;
@@ -675,6 +681,7 @@ private:
     int current_solve_iter_{0}; //!< last nonlinear iteration index of the solve
     double perf_pressure_;
     std::vector<double> leakof_;
+    std::vector<double> leakoff_mobility_;
     
     PropertyTree prmpressure_;
     using PressureOperatorType = Dune::MatrixAdapter<Matrix, Vector, Vector>;
