@@ -449,6 +449,11 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
         Scalar qFrac = 0.0;     // fracture solver's own leak-off opinion [m3/s]
         Scalar condEmb = 0.0;   // sum of trans * upwind water mobility
         Scalar condFrac = 0.0;  // sum of the fracture's leakof_ (trans * total mobility)
+        // The two conductances differ only by which mobility multiplies the same
+        // transmissibility: the flow upwinds the fracture cell's water mobility,
+        // updateLeakoff() uses the reservoir cell's total mobility. Single phase in
+        // the reservoir makes them equal; anything else does not.
+        Scalar mobFracSum = 0.0, mobResTotSum = 0.0;
         Scalar pFracSum = 0.0, pResSum = 0.0;
         Scalar dFracSum = 0.0, dResSum = 0.0, dZgSum = 0.0, dpotSum = 0.0;
         Scalar pMin = 1e30, pMax = -1e30, pPerfSum = 0.0;
@@ -543,6 +548,12 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
 
                         condEmb += nbInfo.res_nbinfo.trans
                             * getValue(iqF.mobility(waterPos));
+                        mobFracSum += getValue(iqF.mobility(waterPos));
+                        for (unsigned ph = 0; ph < FluidSystem::numPhases; ++ph) {
+                            if (FluidSystem::phaseIsActive(ph)) {
+                                mobResTotSum += getValue(iqR.mobility(ph));
+                            }
+                        }
                         dZgSum += nbInfo.res_nbinfo.dZg;
                         dpotSum += getValue(iqF.fluidState().pressure(waterPos))
                                  - getValue(iqR.fluidState().pressure(waterPos))
@@ -591,7 +602,8 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
             "mean pFrac {:.6g} bar  mean pRes {:.6g} bar  "
             "mean depthFrac {:.6g} m  mean depthRes {:.6g} m  "
             "mean dZg {:.6g}  mean dpot {:.6g} bar  "
-            "pFrac min {:.6g} max {:.6g} bar  wellPerfs {} meanPatPerf {:.6g} bar",
+            "pFrac min {:.6g} max {:.6g} bar  wellPerfs {} meanPatPerf {:.6g} bar  "
+            "mean mobWaterFrac {:.6g} mean mobTotalRes {:.6g}",
             n, qEmb * day, qFrac * day, condEmb, condFrac,
             (condFrac > 0.0) ? condEmb / condFrac : Scalar{0},
             (n > 0) ? pFracSum / n / 1e5 : Scalar{0},
@@ -601,7 +613,9 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
             (n > 0) ? dZgSum / n : Scalar{0},
             (n > 0) ? dpotSum / n / 1e5 : Scalar{0},
             pMin / 1e5, pMax / 1e5, nPerf,
-            (nPerf > 0) ? pPerfSum / nPerf / 1e5 : Scalar{0}));
+            (nPerf > 0) ? pPerfSum / nPerf / 1e5 : Scalar{0},
+            (n > 0) ? mobFracSum / n : Scalar{0},
+            (n > 0) ? mobResTotSum / n : Scalar{0}));
 
         OpmLog::info(fmt::format(
             "LEAKOFF-CHECK pressure vs fracture solver: mean own {:.6g} bar  "

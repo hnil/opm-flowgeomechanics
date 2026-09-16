@@ -3,6 +3,7 @@
 #include <opm/material/common/MathToolbox.hpp>
 
 #include <opm/simulators/linalg/PropertyTree.hpp>
+#include <opm/simulators/wells/PerforationData.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -327,6 +328,8 @@ namespace Opm {
             std::vector<int> perf_cell_indices;
             double well_depth = 0.0;
             double total_wellindex = 0.0;
+            int n_aux_perfs = 0;
+            double aux_wellindex = 0.0;
             double wi_dz = 0.0;
             double wi_respress = 0.0;
             std::vector<double> perf_depths;// well.perfDepth()[perf_index]; 
@@ -378,6 +381,18 @@ namespace Opm {
                             //int  perf_index =  findPerf(wellstate, cell_idx);
                             ///if(perf_index == -1) continue; // skip if not found
                             const int cell_idx = wellstate.perf_data.cell_index[perf_index];
+                            // Auxiliary perforations are the embedded fracture cells.
+                            // The fracture's own solve already carries that same
+                            // connection in perfinj_, so folding them in here counts
+                            // the fracture twice -- and at fractureWI scale they swamp
+                            // the matrix connections the reference index is meant to be.
+                            if (perf_index < static_cast<int>(wellstate.perf_data.ecl_index.size())
+                                && wellstate.perf_data.ecl_index[perf_index]
+                                    == AUX_PERFORATION_ECL_INDEX) {
+                                ++n_aux_perfs;
+                                aux_wellindex += well->wellIndex()[perf_index];
+                                continue;
+                            }
                             perf_cell_indices.push_back(cell_idx);
                             const auto& intQuants = simulator.model()
                                 .intensiveQuantities(cell_idx, /*timeIdx=*/0);
@@ -440,7 +455,10 @@ namespace Opm {
               if(verbosity > 1){
                 std::stringstream os;
                 os << " Well " << wellinfo.name << " injection "
-                        << injection_rate << " WI " << total_wellindex << std::endl;
+                        << injection_rate << " WI " << total_wellindex
+                        << " (matrix perforations only; " << n_aux_perfs
+                        << " auxiliary fracture perforations excluded, their CTF sum "
+                        << aux_wellindex << ")" << std::endl;
                 OpmLog::info(os.str());
               }  
               fracture.setTimeStep(simulator.timeStepSize());
