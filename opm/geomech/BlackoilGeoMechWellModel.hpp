@@ -22,13 +22,28 @@ public:
     //using BlackoilWellModel::BlackoilWellModel;
 
     using NeighborSet = typename Parent::NeighborSet;
-    void addNeighbors(std::vector<NeighborSet>& /*neighbors*/) const
+    // Wells-in-matrix (--matrix-add-well-contributions): the parent adds the
+    // clique of every schedule connection; auxiliary (fracture-DOF)
+    // perforations are not schedule connections, so their clique is added here.
+    void addNeighbors(std::vector<NeighborSet>& neighbors) const override
     {
         if (!this->param_.matrix_add_well_contributions_) {
             return;
         }
-        OPM_THROW(std::runtime_error, "Not implemented");
-    };
+        Parent::addNeighbors(neighbors);
+        for (const auto& [wname, auxPerfs] : this->auxiliary_perforations_) {
+            if (auxPerfs.empty() || !this->schedule().hasWell(wname)) {
+                continue;
+            }
+            auto cells = this->getCellsForConnections(this->schedule().back().wells(wname));
+            for (const auto& aux : auxPerfs) {
+                cells.push_back(aux.cell_index);
+            }
+            for (const int c : cells) {
+                neighbors[c].insert(cells.begin(), cells.end());
+            }
+        }
+    }
     // Fracture-created connections are added to the schedule at runtime and
     // may not (yet) exist on every rank that hosts part of the well; log and
     // continue instead of aborting the run.

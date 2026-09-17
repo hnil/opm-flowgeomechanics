@@ -333,6 +333,15 @@ public:
     //! Reservoir mobility used to form leakOf(), so that it can be divided back out.
     const std::vector<double>& reservoirMobility() const { return reservoir_mobility_; }
 
+    //! Distance from the fracture face to the reservoir cell's pressure point used by
+    //! the leak-off, and the number of faces that leak.
+    const std::vector<double>& reservoirDistance() const { return reservoir_dist_; }
+    int leakingSides() const { return leakoffSides(); }
+
+    //! The mobility actually folded into leakOf(), which is reservoirMobility() only
+    //! under the legacy convention. Divide by this, not by reservoirMobility().
+    const std::vector<double>& leakoffMobility() const { return leakoff_mobility_; }
+
     //! Pressure per fracture cell as the fracture's own solver last left it.  In the
     //! embedded representation the same quantity is also a degree of freedom of the
     //! flow problem, and the two must agree; this is what makes that checkable.
@@ -368,6 +377,9 @@ public:
 
     //! Area of each fracture cell.
     std::vector<double> cellAreas() const;
+    //! Indices of the cells contact currently holds shut; empty before the first
+    //! solve. Used by the fracture <-> mechanics coupling blocks for their mask.
+    const std::vector<int>& closedCells() const { return closed_cells_; }
 
     //! Depth of each fracture cell's centre, positive downwards.
     std::vector<double> cellDepths() const;
@@ -396,6 +408,27 @@ public:
     void setWellPerfCells(std::vector<int> cells) { well_perf_cells_ = std::move(cells); }//{well_rate_ = wellrate; total_wellindex_ = WI;}
     //! current flow timestep (s); needed by the opt-in fracture storage term
     void setTimeStep(double dt) { current_dt_ = dt; }
+    //! External-pressure mode: the coupled iteration keeps the pressure fixed
+    //! (identity pressure block, zero residual) and solves mechanics, contact
+    //! and propagation at it; the flow's aux cells own the pressure.
+    void setExternalPressureMode(bool on) { external_pressure_ = on; }
+    bool externalPressureMode() const { return external_pressure_; }
+    //! Set the fracture pressure per cell (and the well DOF, if any) from
+    //! outside; false if the sizes do not match the current grid.
+    bool setExternalPressure(const std::vector<double>& cellPressures, double wellPressure)
+    {
+        const std::size_t nc = numFractureCells();
+        if (cellPressures.size() != nc || fracture_pressure_.size() < nc) {
+            return false;
+        }
+        for (std::size_t i = 0; i < nc; ++i) {
+            fracture_pressure_[i][0] = cellPressures[i];
+        }
+        if (numWellEquations() > 0 && fracture_pressure_.size() > nc) {
+            fracture_pressure_[nc][0] = wellPressure;
+        }
+        return true;
+    }
     Dune::FieldVector<double, 6> stress(Dune::FieldVector<double, 3> obs) const;
     Dune::FieldVector<double, 6> strain(Dune::FieldVector<double, 3> obs) const;
     Dune::FieldVector<double, 3> disp(Dune::FieldVector<double, 3> obs) const;
@@ -550,6 +583,7 @@ private:
     void setupPressureSolver();
     void updateFractureRHS();
     void updateLeakoff();
+    double leakoffMobilityFor(int eIdx, bool upwind) const;
     // leak-off convention (solver.leakoff_model): number of leaking faces and the
     // reservoir distance as a fraction of the cell extent normal to the fracture
     int leakoffSides() const;
@@ -577,6 +611,7 @@ private:
     std::vector<double> reservoir_perm_;
     std::vector<double> reservoir_cstress_;
     std::vector<double> reservoir_mobility_;
+    std::vector<double> reservoir_water_mobility_;
     std::vector<double> reservoir_density_;
     std::vector<double> reservoir_cell_z_;
     using WaterPropertyEvaluator = std::function<std::pair<CellFluidProperty, CellFluidProperty>(size_t, double)>;
@@ -648,6 +683,7 @@ private:
     //! Lets propagation veto individual untrustworthy cells instead of all growth.
     std::vector<double> fb_cell_residual_;
     double current_dt_{-1.0}; // flow timestep (s), see setTimeStep
+    bool external_pressure_{false}; // see setExternalPressureMode
     //! Nonlinear iteration at which each cell last flipped open/closed in the
     //! current solve; the binary active set's analogue of fb_cell_residual_ for
     //! the propagation veto (recent stability, not lifetime stability).
@@ -655,6 +691,7 @@ private:
     int current_solve_iter_{0}; //!< last nonlinear iteration index of the solve
     double perf_pressure_;
     std::vector<double> leakof_;
+    std::vector<double> leakoff_mobility_;
     
     PropertyTree prmpressure_;
     using PressureOperatorType = Dune::MatrixAdapter<Matrix, Vector, Vector>;

@@ -1315,6 +1315,19 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
       }
 
     }
+    // External-pressure mode: pressure rows become p = p_external (identity,
+    // zero residual, no width coupling), so the Newton reduces to mechanics
+    // and contact at the pressure the flow's aux cells hold.
+    if (external_pressure_) {
+        *coupling_matrix_ = 0;
+        auto& Mx = *pressure_matrix_;
+        for (auto row = Mx.begin(); row != Mx.end(); ++row) {
+            for (auto col = row->begin(); col != row->end(); ++col) {
+                *col = (col.index() == row.index()) ? 1.0 : 0.0;
+            }
+        }
+        rhs_pressure_ = fracture_pressure_;
+    }
     const auto& M = *pressure_matrix_;
     const auto& C = *coupling_matrix_;
     
@@ -1427,7 +1440,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     // Cells added by growth inside the step have no previous width and correctly
     // store their full opening; index mapping to the checkpoint assumes the mesh
     // has not been renumbered within the step.
-    if (prm_.get<bool>("solver.fracture_storage_term", false) && current_dt_ > 0.0) {
+    if (!external_pressure_ && prm_.get<bool>("solver.fracture_storage_term", false) && current_dt_ > 0.0) {
         const std::vector<double> areas = cellAreas();
         const size_t ncell = std::min(areas.size(), numFractureCells());
         for (size_t i = 0; i < ncell && i < rhs[_1].size() && i < x[_0].size(); ++i) {

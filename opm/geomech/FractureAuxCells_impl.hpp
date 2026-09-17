@@ -23,6 +23,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <map>
 #include <set>
 
 namespace Opm {
@@ -47,6 +49,7 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
             std::string bad;
             if (fracture.reservoirCells().size() != n) { bad = "reservoir cells"; }
             else if (fracture.leakOf().size() != n) { bad = "leak-off"; }
+            else if (fracture.leakoffMobility().size() != n) { bad = "leak-off mobility"; }
             else if (fracture.reservoirMobility().size() != n) { bad = "mobility"; }
             else if (static_cast<std::size_t>(fracture.fractureWidth().size()) != n) { bad = "width"; }
 
@@ -62,6 +65,7 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
     this->connections_.clear();
     this->slotOf_.clear();
     this->wellPerforations_.clear();
+    this->wellCells_.clear();
 
     // Which slots already held a cell.  A slot that did keeps the state it has solved
     // its way to; only a slot that has just been handed out needs one made up for it.
@@ -87,7 +91,7 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
 
             const auto& reservoirCells = fracture.reservoirCells();
             const auto& leakOf = fracture.leakOf();
-            const auto& mobility = fracture.reservoirMobility();
+            const auto& leakMobility = fracture.leakoffMobility();
             const auto& width = fracture.fractureWidth();
             const auto areas = fracture.cellAreas();
             const auto depths = fracture.cellDepths();
@@ -124,18 +128,24 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
 
                 this->partner_[slot] = static_cast<unsigned>(reservoirCell);
                 this->active_[slot] = true;
+                this->wellCells_[fracture.wellInfo().name].push_back(static_cast<int>(this->localToGlobalDof(slot)));
 
-                // leakOf() carries the reservoir mobility, which the reservoir's own
-                // local residual applies again from the upwind cell.  Divide it back out
-                // so the connection is a transmissibility and nothing else.
-                const auto mob = mobility[cell];
+                // leakOf() carries a mobility, which the reservoir's own local residual
+                // applies again from the upwind cell.  Divide back out the one the
+                // fracture actually used -- which is not reservoirMobility() under
+                // solver.leakoff_mobility=upwind -- so the connection is a
+                // transmissibility and nothing else.
+                const auto mob = leakMobility[cell];
                 const auto trans = (mob > 0.0)
                     ? static_cast<Scalar>(leakOf[cell] / mob)
                     : Scalar{0};
+                const auto [alphaFrac, alphaRock]
+                    = this->wallConduction_(fracture, cell, static_cast<Scalar>(areas[cell]),
+                                            static_cast<Scalar>(width[cell][0]));
 
                 this->connections_.push_back({static_cast<unsigned>(this->localToGlobalDof(slot)),
                                               static_cast<unsigned>(reservoirCell),
-                                              trans, 0.0, 0.0});
+                                              trans, alphaFrac, alphaRock});
             }
 
             // Fracture cell to fracture cell: the cubic law over the two half
@@ -216,10 +226,20 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
     // and re-initialising the whole fracture there would overwrite the pressure it has
     // just solved for with the reservoir's, every step, so the fracture could never hold
     // a pressure of its own at all.
+    // Both time levels: a newborn cell has no history, so its old-time state is
+    // its current one and the accumulation term starts from zero.
     auto& solution = this->simulator_.model().solution(/*timeIdx=*/0);
+    auto& solutionOld = this->simulator_.model().solution(/*timeIdx=*/1);
+    this->newbornDofs_.clear();
     for (unsigned slot = 0; slot < nextSlot; ++slot) {
         if (this->active_[slot] && !wasActive[slot]) {
-            this->assignStateFromPartner(solution, slot);
+            this->assignStateFromPartner(solution, slot, /*useCurrentState=*/true);
+            this->assignStateFromPartner(solutionOld, slot, /*useCurrentState=*/true);
+            this->newbornDofs_.push_back(static_cast<unsigned>(this->localToGlobalDof(slot)));
+            // Its old state is its current one, so its old volume is too; otherwise the
+            // storage term would read the birth as a volume change and inject mass.
+            this->simulator_.model().setDofTotalVolumeOld(
+                static_cast<unsigned>(this->localToGlobalDof(slot)), this->bulkVolume_[slot]);
         }
     }
 
@@ -264,6 +284,128 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
     // Only a changed connection list needs the sparsity pattern rebuilt; apertures moving
     // is a change of values.
     return (this->connections_.size() != previousConnections) || (active != previousActive);
+}
+
+template <class TypeTag>
+bool
+FractureAuxCells<TypeTag>::updateValues(const FractureModel& fractures)
+{
+    if (!this->layoutMatches(fractures)) {
+        return false;
+    }
+
+    const auto previousConnections = this->connections_.size();
+    std::vector<Connection> connections;
+    connections.reserve(previousConnections);
+    std::map<std::string, std::vector<RuntimePerforation>> perforations;
+
+    std::size_t nextSlot = 0;
+    std::size_t fractureIdx = 0;
+    for (const auto& wellFractures : fractures.wellFractures()) {
+        for (const auto& fracture : wellFractures) {
+            const auto numCells = fracture.numCells();
+            const auto& reservoirCells = fracture.reservoirCells();
+            const auto& leakOf = fracture.leakOf();
+            const auto& leakMobility = fracture.leakoffMobility();
+            const auto& width = fracture.fractureWidth();
+            const auto areas = fracture.cellAreas();
+
+            if ((reservoirCells.size() != numCells) || (leakOf.size() != numCells)
+                || (leakMobility.size() != numCells)
+                || (static_cast<std::size_t>(width.size()) != numCells))
+            {
+                return false; // the fracture is mid-regrid; keep what we have
+            }
+
+            const auto firstSlot = nextSlot;
+            for (std::size_t cell = 0; cell < numCells; ++cell) {
+                const auto slot = firstSlot + cell;
+                const auto aperture
+                    = std::max(static_cast<Scalar>(width[cell][0]), this->minWidth_);
+                this->bulkVolume_[slot] = static_cast<Scalar>(areas[cell]) * aperture;
+
+                if (!this->active_[slot]) {
+                    continue;
+                }
+                const auto mob = leakMobility[cell];
+                const auto trans = (mob > 0.0)
+                    ? static_cast<Scalar>(leakOf[cell] / mob)
+                    : Scalar{0};
+                const auto [alphaFrac, alphaRock]
+                    = this->wallConduction_(fracture, cell, static_cast<Scalar>(areas[cell]),
+                                            static_cast<Scalar>(width[cell][0]));
+                connections.push_back({static_cast<unsigned>(this->localToGlobalDof(slot)),
+                                       static_cast<unsigned>(this->partner_[slot]),
+                                       trans, alphaFrac, alphaRock});
+            }
+
+            const auto freshHalfTrans = fracture.currentHalfTrans();
+            const auto cubicFloor = static_cast<Scalar>(fracture.cubicLawMinWidth());
+            for (const auto& [i, j, t1, t2] : freshHalfTrans) {
+                const auto slotI = firstSlot + i;
+                const auto slotJ = firstSlot + j;
+                const auto h1 = std::max(static_cast<Scalar>(width[i][0]), cubicFloor);
+                const auto h2 = std::max(static_cast<Scalar>(width[j][0]), cubicFloor);
+                const auto invTrans
+                    = 12.0 / (h1 * h1 * h1 * t1) + 12.0 / (h2 * h2 * h2 * t2);
+                connections.push_back({static_cast<unsigned>(this->localToGlobalDof(slotI)),
+                                       static_cast<unsigned>(this->localToGlobalDof(slotJ)),
+                                       static_cast<Scalar>(1.0 / invTrans), 0.0, 0.0});
+            }
+
+            auto& perfs = perforations[fracture.wellInfo().name];
+            for (const auto& [cell, wellIndex] : fracture.wellPerforations()) {
+                const auto slot = firstSlot + static_cast<std::size_t>(cell);
+                RuntimePerforation perf;
+                perf.cell = static_cast<int>(this->localToGlobalDof(slot));
+                perf.depth = this->depth_[slot];
+                if (this->perfWiMode_ == PerfWiMode::Estimate) {
+                    const auto w = this->perfWidth_;
+                    const auto re = std::sqrt(static_cast<Scalar>(areas[cell]) / M_PI);
+                    const auto lnTerm = std::log(std::max(re / this->perfRw_, Scalar{1.1}));
+                    perf.ctf = 2.0 * M_PI * (w * w * w / 12.0) / lnTerm;
+                }
+                else {
+                    perf.ctf = wellIndex;
+                }
+                perfs.push_back(perf);
+            }
+
+            nextSlot = firstSlot + numCells;
+            ++fractureIdx;
+        }
+    }
+
+    // A value update that changed the connection list is not a value update;
+    // refuse rather than hand the flow a pattern its matrix was not built for.
+    if (connections.size() != previousConnections) {
+        return false;
+    }
+    this->connections_ = std::move(connections);
+    this->wellPerforations_ = std::move(perforations);
+
+    Scalar totalTrans = 0.0;
+    const auto gridDofLimit = this->simulator_.model().numGridDof();
+    for (const auto& conn : this->connections_) {
+        if (conn.dof1 < gridDofLimit || conn.dof2 < gridDofLimit) {
+            totalTrans += conn.trans;
+        }
+    }
+    Scalar totalPv = 0.0;
+    for (unsigned slot = 0; slot < this->capacity_; ++slot) {
+        totalPv += this->bulkVolume_[slot];
+    }
+    const auto rel = [](const Scalar now, const Scalar before) {
+        if (before <= 0.0) {
+            return (now > 0.0) ? Scalar{1} : Scalar{0};
+        }
+        return std::abs(now - before) / before;
+    };
+    this->lastBindChange_ = std::max(rel(totalTrans, this->lastTotalTrans_),
+                                     rel(totalPv, this->lastTotalPv_));
+    this->lastTotalTrans_ = totalTrans;
+    this->lastTotalPv_ = totalPv;
+    return true;
 }
 
 template <class TypeTag>
@@ -320,6 +462,11 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
         Scalar qFrac = 0.0;     // fracture solver's own leak-off opinion [m3/s]
         Scalar condEmb = 0.0;   // sum of trans * upwind water mobility
         Scalar condFrac = 0.0;  // sum of the fracture's leakof_ (trans * total mobility)
+        // The two conductances differ only by which mobility multiplies the same
+        // transmissibility: the flow upwinds the fracture cell's water mobility, and
+        // updateLeakoff() uses whatever solver.leakoff_mobility asks for. These two
+        // means say how far apart the conventions are on this case.
+        Scalar mobFracSum = 0.0, mobResTotSum = 0.0;
         Scalar pFracSum = 0.0, pResSum = 0.0;
         Scalar dFracSum = 0.0, dResSum = 0.0, dZgSum = 0.0, dpotSum = 0.0;
         Scalar pMin = 1e30, pMax = -1e30, pPerfSum = 0.0;
@@ -414,6 +561,12 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
 
                         condEmb += nbInfo.res_nbinfo.trans
                             * getValue(iqF.mobility(waterPos));
+                        mobFracSum += getValue(iqF.mobility(waterPos));
+                        for (unsigned ph = 0; ph < FluidSystem::numPhases; ++ph) {
+                            if (FluidSystem::phaseIsActive(ph)) {
+                                mobResTotSum += getValue(iqR.mobility(ph));
+                            }
+                        }
                         dZgSum += nbInfo.res_nbinfo.dZg;
                         dpotSum += getValue(iqF.fluidState().pressure(waterPos))
                                  - getValue(iqR.fluidState().pressure(waterPos))
@@ -462,7 +615,8 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
             "mean pFrac {:.6g} bar  mean pRes {:.6g} bar  "
             "mean depthFrac {:.6g} m  mean depthRes {:.6g} m  "
             "mean dZg {:.6g}  mean dpot {:.6g} bar  "
-            "pFrac min {:.6g} max {:.6g} bar  wellPerfs {} meanPatPerf {:.6g} bar",
+            "pFrac min {:.6g} max {:.6g} bar  wellPerfs {} meanPatPerf {:.6g} bar  "
+            "mean mobWaterFrac {:.6g} mean mobTotalRes {:.6g}",
             n, qEmb * day, qFrac * day, condEmb, condFrac,
             (condFrac > 0.0) ? condEmb / condFrac : Scalar{0},
             (n > 0) ? pFracSum / n / 1e5 : Scalar{0},
@@ -472,7 +626,9 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
             (n > 0) ? dZgSum / n : Scalar{0},
             (n > 0) ? dpotSum / n / 1e5 : Scalar{0},
             pMin / 1e5, pMax / 1e5, nPerf,
-            (nPerf > 0) ? pPerfSum / nPerf / 1e5 : Scalar{0}));
+            (nPerf > 0) ? pPerfSum / nPerf / 1e5 : Scalar{0},
+            (n > 0) ? mobFracSum / n : Scalar{0},
+            (n > 0) ? mobResTotSum / n : Scalar{0}));
 
         OpmLog::info(fmt::format(
             "LEAKOFF-CHECK pressure vs fracture solver: mean own {:.6g} bar  "
@@ -481,6 +637,113 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
             (n > 0) ? pOwnSum / n / 1e5 : Scalar{0},
             (n > 0) ? pFracSum / n / 1e5 : Scalar{0},
             dpOwnMax / 1e5, cellAtMax, pOwnAtMax / 1e5, pEmbAtMax / 1e5));
+    }
+}
+
+template <class TypeTag>
+void
+FractureAuxCells<TypeTag>::cellDump(const FractureModel& fractures,
+                                    const std::string& where,
+                                    const int nWorst) const
+{
+    if (nWorst <= 0) {
+        return;
+    }
+    const auto& model = this->simulator_.model();
+    const unsigned numGridDof = model.numGridDof();
+    const auto offset = static_cast<unsigned>(this->dofOffset());
+
+    std::vector<unsigned> nConn(this->capacity_, 0);
+    std::vector<Scalar> transGrid(this->capacity_, 0.0), transIntra(this->capacity_, 0.0);
+    for (const auto& c : this->connections_) {
+        for (const auto [me, other] : {std::pair{c.dof1, c.dof2}, std::pair{c.dof2, c.dof1}}) {
+            if (me < numGridDof) continue;
+            const unsigned slot = me - offset;
+            if (slot >= this->capacity_) continue;
+            ++nConn[slot];
+            if (other < numGridDof) transGrid[slot] += c.trans; else transIntra[slot] += c.trans;
+        }
+    }
+    std::map<int, Scalar> perfCtf;
+    for (const auto& [wname, perfs] : this->wellPerforations_) {
+        static_cast<void>(wname);
+        for (const auto& p : perfs) perfCtf[p.cell] += p.ctf;
+    }
+    std::vector<const Fracture*> fracs;
+    for (const auto& wf : fractures.wellFractures()) for (const auto& f : wf) fracs.push_back(&f);
+
+    struct Row { unsigned slot, dof, partner; std::size_t fidx, cell; unsigned nc;
+                 Scalar p, pPart, pOwn, sw, sg, t, depth, vol, tg, ti, ctf; };
+    std::vector<Row> rows;
+    const auto wPos = FluidSystem::waterPhaseIdx;
+    for (unsigned slot = 0; slot < this->slotOf_.size() && slot < this->capacity_; ++slot) {
+        if (!this->active_[slot]) continue;
+        const auto [fidx, cell] = this->slotOf_[slot];
+        const auto dof = static_cast<unsigned>(this->localToGlobalDof(slot));
+        const auto& fs = model.intensiveQuantities(dof, 0).fluidState();
+        const auto partner = this->partner_[slot];
+        const auto& fsP = model.intensiveQuantities(partner, 0).fluidState();
+        Scalar pOwn = std::numeric_limits<Scalar>::quiet_NaN();
+        if (fidx < fracs.size() && cell < fracs[fidx]->fracturePressure().size())
+            pOwn = static_cast<Scalar>(fracs[fidx]->fracturePressure()[cell][0]);
+        Scalar sg = 0.0;
+        if (FluidSystem::phaseIsActive(FluidSystem::gasPhaseIdx))
+            sg = getValue(fs.saturation(FluidSystem::gasPhaseIdx));
+        rows.push_back({slot, dof, partner, fidx, cell, nConn[slot],
+                        getValue(fs.pressure(wPos)), getValue(fsP.pressure(wPos)), pOwn,
+                        getValue(fs.saturation(wPos)), sg, getValue(fs.temperature(0)),
+                        this->depth_[slot], this->bulkVolume_[slot], transGrid[slot], transIntra[slot],
+                        perfCtf.count(static_cast<int>(dof)) ? perfCtf.at(static_cast<int>(dof)) : Scalar{0}});
+    }
+
+    // layout: bound cells per fracture vs the fracture's current cell count
+    std::vector<std::size_t> bound;
+    for (const auto& [fidx, cell] : this->slotOf_) {
+        if (fidx >= bound.size()) bound.resize(fidx + 1, 0);
+        bound[fidx] = std::max(bound[fidx], cell + 1);
+    }
+    std::string layout;
+    for (std::size_t f = 0; f < fracs.size(); ++f) {
+        // the fracture's own aperture array as it stands right now: what the
+        // binding reads, and what the mechanics coupling is built from
+        const auto& fw = fracs[f]->fractureWidth();
+        Scalar wmax = 0.0;
+        for (std::size_t c = 0; c < fw.size(); ++c) {
+            wmax = std::max(wmax, static_cast<Scalar>(fw[c][0]));
+        }
+        layout += fmt::format(" f{}:{}/{} (w[{}] max {:.3g} m)", f,
+                              (f < bound.size()) ? bound[f] : 0, fracs[f]->numCells(),
+                              fw.size(), wmax);
+    }
+
+    unsigned isolated = 0, noGrid = 0; Scalar pMin = 1e30, pMax = -1e30, dPartMax = 0, dOwnMax = 0;
+    for (const auto& r : rows) {
+        if (r.nc == 0) ++isolated;
+        if (r.tg <= 0.0) ++noGrid;
+        pMin = std::min(pMin, r.p); pMax = std::max(pMax, r.p);
+        dPartMax = std::max(dPartMax, std::abs(r.p - r.pPart));
+        if (std::isfinite(r.pOwn)) dOwnMax = std::max(dOwnMax, std::abs(r.p - r.pOwn));
+    }
+    OpmLog::info(fmt::format("AUXDUMP [{}] active {}  isolated {}  no-grid-connection {}  "
+                             "p [{:.4g},{:.4g}] bar  max|p-pPartner| {:.4g} bar  max|p-pOwn| {:.4g} bar  "
+                             "layout(bound/fracture):{}",
+                             where, rows.size(), isolated, noGrid, pMin / 1e5, pMax / 1e5,
+                             dPartMax / 1e5, dOwnMax / 1e5, layout));
+    auto line = [&](const Row& r) {
+        OpmLog::info(fmt::format("AUXDUMP   slot {} dof {} f{} cell {} partner {} depth {:.2f} vol {:.3g}  "
+                                 "p {:.4f} pPart {:.4f} pOwn {:.4f} bar  Sw {:.4f} Sg {:.4f} T {:.2f}  "
+                                 "nconn {} transGrid {:.3g} transIntra {:.3g} ctf {:.3g} pvSol {:.4f}",
+                                 r.slot, r.dof, r.fidx, r.cell, r.partner, r.depth, r.vol,
+                                 r.p / 1e5, r.pPart / 1e5, r.pOwn / 1e5, r.sw, r.sg, r.t,
+                                 r.nc, r.tg, r.ti, r.ctf,
+                                 this->simulator_.model().solution(0)[r.dof][Indices::pressureSwitchIdx] / 1e5));
+    };
+    std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b)
+              { return std::abs(a.p - a.pPart) > std::abs(b.p - b.pPart); });
+    for (std::size_t k = 0; k < rows.size() && k < static_cast<std::size_t>(nWorst); ++k) line(rows[k]);
+    int printed = 0;
+    for (const auto& r : rows) {
+        if ((r.nc == 0 || r.tg <= 0.0) && printed < nWorst) { line(r); ++printed; }
     }
 }
 

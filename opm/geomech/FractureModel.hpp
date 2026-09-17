@@ -154,6 +154,9 @@ public:
         //! The fractures of each well, in well order.
         const std::vector<std::vector<Fracture>>& wellFractures() const
         { return well_fractures_; }
+        std::vector<std::vector<Fracture>>& wellFractures()
+        { return well_fractures_; }
+
 
         /*!
          * \brief Bring every fracture's leak-off in step with its grid.

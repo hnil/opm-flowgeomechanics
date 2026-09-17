@@ -1,7 +1,9 @@
 #ifndef OPM_FLOW_PROBLEM_GEOMECH_HPP
 #define OPM_FLOW_PROBLEM_GEOMECH_HPP
 
+#include <algorithm>
 #include <opm/common/ErrorMacros.hpp>
+#include <fmt/format.h>
 
 #include <opm/common/utility/Serializer.hpp>
 
@@ -78,6 +80,14 @@ namespace Opm{
         FractureAuxCells<TypeTag>* fractureAuxCells_ = nullptr;
         double embeddedCouplingChange_ = 0.0;
         bool embeddedStatic_ = false;
+        // Opt-in (solver.embedded_satnum, 1-based): saturation-function region for
+        // the fracture cells instead of the partner's rock table (a fracture has
+        // straight-line kr and no capillary pressure). Resolved lazily to the first
+        // grid cell of that region, which the material-law lookup is redirected to.
+        int embeddedSatnum_ = 0;
+        int embeddedCellDump_ = 0; // solver.embedded_cell_dump: worst-N aux cells per report
+        mutable int embeddedSatProxyCell_ = -1;
+        std::vector<std::size_t> lastSeenFractureLayout_ {}; // see bindFractureAuxCells
         bool embeddedLeakoffReport_ = false;
 
     public:
@@ -90,6 +100,45 @@ namespace Opm{
          * exists, since the fracture model is built at the first report step that seeds
          * one.  So a fixed number is reserved here and handed out as cells appear.
          */
+        using MaterialLawParams = typename Parent::MaterialLawParams;
+
+        template <class Context>
+        const MaterialLawParams& materialLawParams(const Context& context,
+                                                   unsigned spaceIdx, unsigned timeIdx) const
+        { return this->materialLawParams(context.globalSpaceIndex(spaceIdx, timeIdx)); }
+
+        const MaterialLawParams& materialLawParams(unsigned globalDofIdx) const
+        {
+            const int proxy = embeddedSatProxy_(globalDofIdx);
+            return (proxy >= 0) ? this->materialLawManager()->materialLawParams(proxy)
+                                : Parent::materialLawParams(globalDofIdx);
+        }
+
+        const MaterialLawParams& materialLawParams(unsigned globalDofIdx, FaceDir::DirEnum facedir) const
+        {
+            const int proxy = embeddedSatProxy_(globalDofIdx);
+            return (proxy >= 0) ? this->materialLawManager()->materialLawParams(proxy, facedir)
+                                : Parent::materialLawParams(globalDofIdx, facedir);
+        }
+
+        // relperms go through this rather than materialLawParams(), so the
+        // fracture-cell redirect has to be applied here as well
+        template <class FluidState, class... Args>
+        void updateRelperms(std::array<GetPropType<TypeTag, Properties::Evaluation>, GetPropType<TypeTag, Properties::FluidSystem>::numPhases>& mobility,
+                            typename Parent::DirectionalMobilityPtr& dirMob,
+                            FluidState& fluidState,
+                            unsigned globalSpaceIdx) const
+        {
+            const int proxy = embeddedSatProxy_(globalSpaceIdx);
+            if (proxy < 0) {
+                Parent::template updateRelperms<FluidState, Args...>(mobility, dirMob, fluidState, globalSpaceIdx);
+                return;
+            }
+            using ContainerT = std::array<GetPropType<TypeTag, Properties::Evaluation>, GetPropType<TypeTag, Properties::FluidSystem>::numPhases>;
+            GetPropType<TypeTag, Properties::MaterialLaw>::template relativePermeabilities<ContainerT, FluidState, Args...>
+                (mobility, this->materialLawManager()->materialLawParams(proxy), fluidState);
+        }
+
         void registerAuxiliaryCellModules()
         {
             MechParent::registerAuxiliaryCellModules();
@@ -128,6 +177,8 @@ namespace Opm{
             // validation configuration: growth feedback cannot confound a comparison of
             // the conductances themselves.
             embeddedStatic_ = prm.get<bool>("solver.embedded_static", false);
+            embeddedSatnum_ = prm.get<int>("solver.embedded_satnum", 0);
+            embeddedCellDump_ = prm.get<int>("solver.embedded_cell_dump", 0);
             embeddedLeakoffReport_ = prm.get<bool>("solver.embedded_leakoff_report", false);
 
             // The floor under the aperture used for the cells' volume and cubic-law
@@ -164,7 +215,38 @@ namespace Opm{
          * Called once the fracture model has been built or has moved, so that what the
          * reservoir sees matches what the fracture is.
          */
-        void bindFractureAuxCells(const bool allowTopologyChange = true)
+        // grid cell whose saturation functions an auxiliary DOF borrows, -1 = partner
+        int embeddedSatProxy_(unsigned globalDofIdx) const
+        {
+            if ((embeddedSatnum_ <= 0) || (globalDofIdx < this->model().numGridDof())) {
+                return -1;
+            }
+            if (embeddedSatProxyCell_ < 0) {
+                const unsigned want = static_cast<unsigned>(embeddedSatnum_ - 1);
+                const unsigned n = this->model().numGridDof();
+                for (unsigned c = 0; c < n; ++c) {
+                    if (this->satnumRegionIndex(c) == want) { embeddedSatProxyCell_ = static_cast<int>(c); break; }
+                }
+                if (embeddedSatProxyCell_ < 0) {
+                    OPM_THROW(std::runtime_error, "solver.embedded_satnum=" + std::to_string(embeddedSatnum_)
+                              + ": no grid cell carries that SATNUM region");
+                }
+            }
+            return embeddedSatProxyCell_;
+        }
+
+        /*!
+         * \brief Hand the fracture's cells their degrees of freedom.
+         *
+         * \param allowTopologyChange whether the set of cells may change here.
+         * \param requireStableLayout only restructure if the fracture asked for
+         *        the same shape as at the previous call.  A fracture solve
+         *        re-grids while it searches for its propagation front, so a bind
+         *        inside the step that followed every one of those would chase a
+         *        moving target and the coupling residual would never settle.
+         */
+        void bindFractureAuxCells(const bool allowTopologyChange = true,
+                                  const bool requireStableLayout = false)
         {
             if ((fractureAuxCells_ == nullptr) || !this->geoMechModel().fractureModelActive()) {
                 return;
@@ -190,20 +272,135 @@ namespace Opm{
             // iteration already under way cannot converge on a moving target.  Value
             // changes -- apertures, transmissibilities -- pass through; shape changes
             // wait for the step boundary, which is the sequentially implicit contract.
-            if (!allowTopologyChange
-                && !fractureAuxCells_->layoutMatches(this->geoMechModel().fractureModel()))
-            {
-                // The fracture wants a different shape; that waits for the step
-                // boundary, and what the flow sees is unchanged.
+            // Three distinct things can be asked of the binding, at very
+            // different cost:
+            //
+            //  - the shape is unchanged and only the apertures have moved, which
+            //    is every iteration of the coupled mechanics-pressure solve:
+            //    refresh the pore volumes, the cubic-law transmissibilities and
+            //    the connection factors over the binding that exists.  No
+            //    sparsity change and no matrix rebuild;
+            //  - the shape may change and restructuring is allowed -- a step
+            //    boundary, or right after a fracture solve that grew: rebind;
+            //  - the shape changed and restructuring is not allowed: nothing
+            //    per-cell is well defined, because a regrid renumbers the
+            //    trimesh and a cell index stops meaning the same cell, so the
+            //    old binding stands until someone may rebind.
+            auto& fractureModel = this->geoMechModel().fractureModel();
+
+            // What shape is the fracture asking for now, and is it the same one
+            // it asked for last time?
+            std::vector<std::size_t> layoutNow;
+            for (const auto& wellFractures : fractureModel.wellFractures()) {
+                for (const auto& fracture : wellFractures) {
+                    layoutNow.push_back(fracture.numCells());
+                }
+            }
+            const bool layoutStable = (layoutNow == lastSeenFractureLayout_);
+            lastSeenFractureLayout_ = layoutNow;
+
+            const bool mayRestructure
+                = allowTopologyChange && (layoutStable || !requireStableLayout);
+
+            if (!mayRestructure) {
+                if (fractureAuxCells_->updateValues(fractureModel)) {
+                    embeddedCouplingChange_ = fractureAuxCells_->lastBindChange();
+                    this->refreshAuxCellModules_(/*topologyChanged=*/false);
+                    // both time levels: the pore volume moved with the aperture,
+                    // and the start-of-step state is stored as a volume too
+                    this->model().updateAuxiliaryIntQuants(/*timeIdx=*/0);
+                    this->model().updateAuxiliaryIntQuants(/*timeIdx=*/1);
+                    this->checkFractureCouplingIfRequested_();
+                    return;
+                }
+                if (embeddedCellDump_ > 0) {
+                    OpmLog::info("Embedded fracture flow: the fracture changed shape "
+                                 "mid-step; keeping the previous binding until it may "
+                                 "be rebuilt");
+                }
                 embeddedCouplingChange_ = 0.0;
                 return;
             }
 
-            const bool topologyChanged =
-                fractureAuxCells_->bind(this->geoMechModel().fractureModel());
+            // A topology change makes the flow problem copy the current state of
+            // every auxiliary degree of freedom into the previous-time state.
+            // That is right for a cell that has just appeared -- it has no
+            // history, so it has moved no mass by coming into existence -- and
+            // harmless at a step boundary, where the two are equal anyway.  In
+            // the middle of a step it would also erase the start-of-step state
+            // of every cell that was already there, which is the reference its
+            // accumulation term is measured against.  Keep theirs.
+            auto& previous = this->model().solution(/*timeIdx=*/1);
+            const auto firstAux = this->model().numGridDof();
+            const auto numTotalDof = this->model().numTotalDof();
+            std::vector<typename std::decay_t<decltype(previous)>::block_type> previousAux;
+            previousAux.reserve(numTotalDof - firstAux);
+            for (unsigned dof = firstAux; dof < numTotalDof; ++dof) {
+                previousAux.push_back(previous[dof]);
+            }
+
+            const bool topologyChanged = fractureAuxCells_->bind(fractureModel);
 
             this->refreshAuxCellModules_(topologyChanged);
+
+            if (topologyChanged) {
+                const auto& newborn = fractureAuxCells_->newbornDofs();
+                for (unsigned dof = firstAux; dof < numTotalDof; ++dof) {
+                    const bool isNewborn
+                        = std::find(newborn.begin(), newborn.end(), dof) != newborn.end();
+                    if (!isNewborn) {
+                        previous[dof] = previousAux[dof - firstAux];
+                    }
+                }
+            }
+            // newborn cells were assigned at both time levels; refresh their cached
+            // intensive quantities so the first linearization sees that state
+            this->model().updateAuxiliaryIntQuants(/*timeIdx=*/0);
+            this->model().updateAuxiliaryIntQuants(/*timeIdx=*/1);
             embeddedCouplingChange_ = fractureAuxCells_->lastBindChange();
+            if (topologyChanged && requireStableLayout) {
+                // A restructure inside the step handed the fracture different
+                // degrees of freedom; the well's perforations of them are stale
+                // and must be re-registered, or the well silently loses its
+                // fracture (zero connection factor, no rate through it).
+                this->addFracturePerforationsToWells();
+            }
+            if (mayRestructure) {
+                fractureAuxCells_->cellDump(this->geoMechModel().fractureModel(), "after-bind", embeddedCellDump_);
+            }
+            this->checkFractureCouplingIfRequested_();
+        }
+
+        /*!
+         * \brief Verify the fracture <-> mechanics coupling blocks against finite
+         *        differences (opt-in, fractureparam.solver.check_coupling_fd).
+         *
+         * The blocks themselves are built with AD; this differentiates the same
+         * residual kernels numerically and compares. check_coupling_fd_columns
+         * keeps the cost bounded by checking only that many columns per
+         * fracture, spread over the matrix; -1 checks every one.
+         */
+        void checkFractureCouplingIfRequested_()
+        {
+            if ((fractureAuxCells_ == nullptr) || !this->geoMechModel().fractureModelActive()) {
+                return;
+            }
+            const PropertyTree prm = this->getFractureParam();
+            CouplingCheckOptions opt;
+            opt.enabled = prm.get<bool>("solver.check_coupling_fd", false);
+            if (!opt.enabled) {
+                return;
+            }
+            opt.max_columns = prm.get<int>("solver.check_coupling_fd_columns", 4);
+            opt.tolerance = prm.get<double>("solver.check_coupling_fd_tolerance", 1e-5);
+            opt.perturbation = prm.get<double>("solver.check_coupling_fd_perturbation", 1e-6);
+            opt.verbosity = prm.get<int>("solver.check_coupling_fd_verbosity", 0);
+            const bool ok = fractureAuxCells_->checkCoupling(
+                this->geoMechModel().fractureModel(), opt, this->simulator().timeStepSize());
+            if (!ok) {
+                OpmLog::warning("Fracture coupling matrices disagree with finite differences; "
+                                "see the per-fracture reports above");
+            }
         }
 
         /*!
@@ -216,6 +413,67 @@ namespace Opm{
          */
         double embeddedCouplingChange() const
         { return embeddedCouplingChange_; }
+
+        const FractureAuxCells<TypeTag>* fractureAuxCells() const
+        { return fractureAuxCells_; }
+
+        /*!
+         * \brief Hand the flow's fracture pressures to the fractures (opt-in
+         *        fractureparam.solver.pressure_from_flow).
+         *
+         * Each bound fracture is switched to external-pressure mode and given the
+         * water pressure of its aux cells plus the well's BHP for its well DOF, so
+         * its next solve does mechanics, contact and propagation at the pressure
+         * the flow (and the well) actually hold. Unbound fractures (seed phase, or
+         * a grid the binding has not caught up with) keep solving their own pressure.
+         */
+        void pushAuxPressuresToFractures()
+        {
+            if ((fractureAuxCells_ == nullptr) || !this->geoMechModel().fractureModelActive()) {
+                return;
+            }
+            const PropertyTree prm = this->getFractureParam();
+            if (!prm.get<bool>("solver.pressure_from_flow", false)) {
+                return;
+            }
+            const double minWidthFactor =
+                prm.get<double>("solver.pressure_from_flow_min_width_factor", 2.0);
+            auto& fractures = this->geoMechModel().fractureModel();
+            const auto& wellState = this->wellModel().wellState();
+            std::size_t fidx = 0;
+            for (auto& wellFractures : fractures.wellFractures()) {
+                for (auto& fracture : wellFractures) {
+                    const auto p = fractureAuxCells_->cellPressures(fidx);
+                    ++fidx;
+                    if (p.size() != fracture.numCells()) {
+                        continue;
+                    }
+                    double bhp = -1.0;
+                    if (const auto wi = wellState.index(fracture.wellInfo().name); wi.has_value()) {
+                        bhp = wellState.well(*wi).bhp;
+                    }
+                    if (bhp <= 0.0 && !p.empty()) {
+                        bhp = p.front();
+                    }
+                    // Only hand over the pressure of a fracture that is already
+                    // open: while it is establishing, its aperture is at the
+                    // cubic-law floor and the flow's pressure is the pressure of a
+                    // closed fracture, so pinning it there removes the
+                    // width-pressure feedback that opens and propagates it.
+                    const auto& w = fracture.fractureWidth();
+                    double wmax = 0.0;
+                    for (std::size_t i = 0; i < w.size(); ++i) {
+                        wmax = std::max(wmax, w[i][0]);
+                    }
+                    const bool established = wmax > minWidthFactor * fracture.cubicLawMinWidth();
+                    if (established && fracture.setExternalPressure(p, bhp)) {
+                        fracture.setExternalPressureMode(true);
+                    } else {
+                        fracture.setExternalPressureMode(false);
+                    }
+                }
+            }
+        }
 
         //! Whether the fracture flows through degrees of freedom of its own.
         bool fractureFlowIsEmbedded() const
@@ -398,6 +656,9 @@ namespace Opm{
                 && this->geoMechModel().fractureModelActive())
             {
                 fractureAuxCells_->leakoffReport(this->geoMechModel().fractureModel());
+            }
+            if ((fractureAuxCells_ != nullptr) && this->geoMechModel().fractureModelActive()) {
+                fractureAuxCells_->cellDump(this->geoMechModel().fractureModel(), "step-end", embeddedCellDump_);
             }
 
             if (this->gridView().comm().rank() == 0){

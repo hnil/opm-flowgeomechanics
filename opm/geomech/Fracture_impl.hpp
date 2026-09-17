@@ -400,6 +400,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
             }
         }
 
+        reservoir_water_mobility_.resize(ncf, 0.0);
         for (size_t i = 0; i < ncf; ++i) {
             int cell = reservoir_cells_[i];
             if (!(cell < 0)) {
@@ -419,6 +420,11 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                     reservoir_mobility_[i] += val.value();
                   }
                 }
+                // Kept apart from the total: the flow's water equation upwinds this
+                // one, so leakoff_mobility=upwind needs it when the reservoir feeds
+                // the fracture.
+                reservoir_water_mobility_[i] =
+                    value_of(intQuants.mobility(FluidSystem::waterPhaseIdx));
                 for (int dim = 0; dim < 3; ++dim) {
                   reservoir_stress_[i] = problem.stress(cell);
                 }
@@ -487,6 +493,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 //
                 reservoir_pressure_[i] = injectionPressure();
                 reservoir_mobility_[i] = 1000.0;
+                reservoir_water_mobility_[i] = 1000.0;
                 reservoir_density_[i] = 1000.0;
                 reservoir_perm_[i] = 0.0;
                 reservoir_cstress_[i]  = 1e99;

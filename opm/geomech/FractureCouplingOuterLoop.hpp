@@ -413,7 +413,9 @@ namespace Opm
             const bool legacy_parent_setup_iteration =
                 prm.get<bool>("fractureparam.solver.legacy_parent_setup_iteration", true);
             const auto allwellIndices = derived().simulator_.problem().getAllExtraWellIndices();
-            derived().simulator_.problem().fractureHost().solveFractures();
+            if (!derived().wellFracturePicard(timer)) {
+                derived().simulator_.problem().fractureHost().solveFractures();
+            }
             // A FRAC deck with no WSEED has no fracture: nothing to solve and no
             // well indices to push back. Everything else must behave as usual.
             if (!derived().simulator_.problem().fractureHost().fractureModelActive()) {
@@ -465,7 +467,15 @@ namespace Opm
                 // the reservoir and refresh the well's perforations of them.  No schedule
                 // rebuild and no upscaled well index -- re-adding those here is how the
                 // wells would silently fall back to the representation being replaced.
-                derived().simulator_.problem().bindFractureAuxCells(/*allowTopologyChange=*/false);
+                // A fracture that grew changed its cell count, and a value-only
+                // refresh cannot express that.  Opt in to restructuring here,
+                // between flow solves, so the flow sees the grown fracture
+                // within the step instead of at the next step boundary.
+                const bool rebindAfterGrowth =
+                    prm.get<bool>("fractureparam.solver.rebind_after_growth", false);
+                derived().simulator_.problem().bindFractureAuxCells(
+                    /*allowTopologyChange=*/rebindAfterGrowth && fracture_converged_global,
+                    /*requireStableLayout=*/true);
                 // The well's perforations of the fracture keep the indices they were
                 // given at the step boundary: within the step both the topology and the
                 // perforation factors are held fixed -- the sequentially implicit lag --

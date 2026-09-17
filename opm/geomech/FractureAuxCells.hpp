@@ -22,6 +22,7 @@
 #include <opm/common/ErrorMacros.hpp>
 #include <opm/common/OpmLog/OpmLog.hpp>
 
+#include <opm/geomech/FractureMechCoupling.hpp>
 #include <opm/simulators/flow/FlowAuxCellModule.hpp>
 #include <opm/simulators/wells/RuntimePerforation.hpp>
 #include <opm/models/nonlinear/newtonmethodproperties.hh>
@@ -30,6 +31,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <limits>
 #include <map>
 #include <string>
 #include <utility>
@@ -215,6 +217,34 @@ public:
     bool bind(const FractureModel& fractures);
 
     /*!
+     * \brief Refresh what the flow is fed, without touching the shape.
+     *
+     * Apertures, and with them pore volumes and cubic-law transmissibilities,
+     * move at every iteration of the coupled mechanics-pressure solve; the set
+     * of cells only changes when the fracture grows.  This recomputes the
+     * former over the binding that exists, leaving the slot map, the active
+     * set and the sparsity pattern alone, so it is cheap and needs no matrix
+     * rebuild.
+     *
+     * Requires the layout to still match the fracture: once the cell count
+     * changes the trimesh has been renumbered and a cell index no longer means
+     * the same cell, so there is nothing well defined to update.  Returns false
+     * in that case, and the caller must rebind instead.
+     */
+    bool updateValues(const FractureModel& fractures);
+
+    /*!
+     * \brief Global degrees of freedom the last bind() brought into existence.
+     *
+     * A cell that has just appeared has no start-of-step state; one that was
+     * already there does, and it is the reference its accumulation term is
+     * measured against.  The two have to be told apart when a bind happens
+     * inside a step.
+     */
+    const std::vector<unsigned>& newbornDofs() const
+    { return this->newbornDofs_; }
+
+    /*!
      * \brief Whether the fractures still have the shape of the current binding.
      *
      * True when every fracture has the cell count its slots were handed out for.  Used
@@ -248,6 +278,11 @@ public:
      * whether the binding still describes the fracture's current shape.
      */
     void perforationReport() const;
+    //! Diagnostic: per-cell state of the binding (pressure vs partner and vs the
+    //! fracture's own solve, connections, well index); the nWorst cells by
+    //! partner-pressure deviation plus every isolated cell. Prints regardless of
+    //! whether the binding layout matches the fracture state.
+    void cellDump(const FractureModel& fractures, const std::string& where, int nWorst) const;
 
     /*!
      * \brief Relative change of the binding between the last two binds.
@@ -272,20 +307,168 @@ public:
      * over directly instead of going through the schedule.
      */
     std::vector<RuntimePerforation> wellPerforations(const std::string& wellName) const;
+    //! Water pressure of the bound cells of one fracture (binding order), per
+    //! fracture cell; empty if the fracture is not bound.
+    std::vector<Scalar> cellPressures(std::size_t fractureIdx) const
+    {
+        std::vector<Scalar> p;
+        const auto& model = this->simulator_.model();
+        for (unsigned slot = 0; slot < this->slotOf_.size() && slot < this->capacity_; ++slot) {
+            const auto [fidx, cell] = this->slotOf_[slot];
+            if (fidx != fractureIdx || !this->active_[slot]) {
+                continue;
+            }
+            if (cell >= p.size()) {
+                p.resize(cell + 1, std::numeric_limits<Scalar>::quiet_NaN());
+            }
+            const auto dof = static_cast<unsigned>(this->localToGlobalDof(slot));
+            p[cell] = getValue(model.intensiveQuantities(dof, 0).fluidState().pressure(FluidSystem::waterPhaseIdx));
+        }
+        return p;
+    }
+    /*!
+     * \brief Gather what the fracture <-> mechanics coupling blocks are built from.
+     *
+     * The flow side of the numbers is this module's: the apertures and the
+     * pressures the flow actually holds, the areas and half transmissibilities
+     * of the current grid, and the two floors the binding applies.  Pass the
+     * result to buildFlowMechCoupling() / buildMechFlowCoupling(), or to
+     * checkCouplingMatricesFD() to have them verified.
+     */
+    MechCouplingInput couplingInput(const Fracture& fracture,
+                                    std::size_t fractureIdx,
+                                    Scalar dt) const
+    {
+        MechCouplingInput in;
+        const auto nc = fracture.numCells();
+        const auto& width = fracture.fractureWidth();
+        const auto areas = fracture.cellAreas();
+        const auto& mobility = fracture.reservoirMobility();
+
+        in.htrans = fracture.currentHalfTrans();
+        in.cubic_law_min_width = fracture.cubicLawMinWidth();
+        in.volume_min_width = this->minWidth_;
+        in.dt = dt;
+
+        in.aperture.resize(nc, 0.0);
+        in.area.resize(nc, 0.0);
+        in.face_mobility.resize(nc, 0.0);
+        in.density.resize(nc, 1000.0);
+        in.open.assign(nc, 1);
+        for (std::size_t c = 0; c < nc; ++c) {
+            in.aperture[c] = (c < width.size()) ? width[c][0] : 0.0;
+            in.area[c] = (c < areas.size()) ? areas[c] : 0.0;
+            in.face_mobility[c] = (c < mobility.size()) ? mobility[c] : 0.0;
+        }
+        for (const auto c : fracture.closedCells()) {
+            if ((c >= 0) && (static_cast<std::size_t>(c) < nc)) {
+                in.open[c] = 0;
+            }
+        }
+
+        // the pressures and the volumes are the flow's, not the fracture's
+        in.pressure = this->cellPressures(fractureIdx);
+        in.pressure.resize(nc, 0.0);
+        in.volume_prev.resize(nc, 0.0);
+        const auto& model = this->simulator_.model();
+        for (unsigned slot = 0; slot < this->slotOf_.size() && slot < this->capacity_; ++slot) {
+            const auto [fidx, cell] = this->slotOf_[slot];
+            if ((fidx != fractureIdx) || !this->active_[slot] || (cell >= nc)) {
+                continue;
+            }
+            const auto dof = static_cast<unsigned>(this->localToGlobalDof(slot));
+            in.volume_prev[cell] = this->bulkVolume_[slot];
+            in.density[cell] = getValue(model.intensiveQuantities(dof, 0)
+                                        .fluidState().density(FluidSystem::waterPhaseIdx));
+        }
+        return in;
+    }
+
+    /*!
+     * \brief Verify the coupling blocks of every bound fracture against finite
+     *        differences (opt-in; see solver.check_coupling_fd).
+     *
+     * Costs one residual evaluation per checked column, so a production run
+     * should leave \p opt.max_columns small.
+     */
+    bool checkCoupling(const FractureModel& fractures,
+                       const CouplingCheckOptions& opt,
+                       Scalar dt) const
+    {
+        if (!opt.enabled) {
+            return true;
+        }
+        bool ok = true;
+        std::size_t fidx = 0;
+        for (const auto& wellFractures : fractures.wellFractures()) {
+            for (const auto& fracture : wellFractures) {
+                const auto in = this->couplingInput(fracture, fidx++, dt);
+                if (in.numCells() == 0) {
+                    continue;
+                }
+                std::vector<CouplingCheckReport> reports;
+                const bool fine = checkCouplingMatricesFD(in, opt, &reports);
+                ok = ok && fine;
+                for (const auto& rep : reports) {
+                    OpmLog::info(fmt::format("Fracture {}: {}", fracture.name(), rep.summary()));
+                }
+            }
+        }
+        return ok;
+    }
+
+    //! Global DOF indices of every active cell of the fractures attached to a well.
+    std::vector<int> cellsOfWell(const std::string& wellName) const
+    {
+        std::vector<int> cells;
+        if (const auto pos = this->wellCells_.find(wellName); pos != this->wellCells_.end()) {
+            cells = pos->second;
+        }
+        return cells;
+    }
 
     //! Cells handed out so far, for the high-water mark in the log.
     unsigned numActive() const
     { return static_cast<unsigned>(std::count(this->active_.begin(), this->active_.end(), true)); }
 
 private:
+    //! useCurrentState: the partner's present state (bind-time, needs valid
+    //! intensive quantities) rather than its initial one (model init).
     template <class SolutionVector>
-    void assignStateFromPartner(SolutionVector& solution, const unsigned localIdx)
+    void assignStateFromPartner(SolutionVector& solution, const unsigned localIdx,
+                                const bool useCurrentState = false)
     {
         const auto globalIdx = static_cast<unsigned>(this->localToGlobalDof(localIdx));
         const auto partner = this->partner_.at(localIdx);
         const auto& problem = this->simulator_.problem();
 
         auto fs = problem.initialFluidState(partner);
+        // A cell born mid-run starts from the rock's state NOW: at the initial
+        // pressure it sits tens of bar below its partner, the well drops to it and
+        // cross-flows from its matrix perforations.
+        if (useCurrentState) {
+            const auto& cur = this->simulator_.model().intensiveQuantities(partner, /*timeIdx=*/0).fluidState();
+            for (unsigned phase = 0; phase < FluidSystem::numPhases; ++phase) {
+                if (!FluidSystem::phaseIsActive(phase)) {
+                    continue;
+                }
+                fs.setPressure(phase, getValue(cur.pressure(phase)));
+                // the fracture volume is created by the injected water and the
+                // fracture's own solve treats it as water-filled; starting at the
+                // rock's Sw would force a 0 -> 1 saturation transient inside the
+                // first step, one limiter-capped Newton iteration at a time
+                fs.setSaturation(phase, (phase == FluidSystem::waterPhaseIdx) ? 1.0 : 0.0);
+            }
+            if constexpr (getPropValue<TypeTag, Properties::EnableEnergy>()) {
+                fs.setTemperature(getValue(cur.temperature(0)));
+            }
+            if (FluidSystem::enableDissolvedGas()) {
+                fs.setRs(getValue(cur.Rs()));
+            }
+            if (FluidSystem::enableVaporizedOil()) {
+                fs.setRv(getValue(cur.Rv()));
+            }
+        }
 
         // Carry the phase pressures to the fracture cell's own depth; the fluid is the
         // rock's, so nothing else about the state changes.
@@ -310,6 +493,37 @@ private:
 
     unsigned capacity_{};
     Scalar minWidth_{};
+    // Heat exchange between the fracture fluid and the wall rock, as geometric half
+    // transmissibilities (the flow multiplies in conductivity). Without it a fracture
+    // cell holds heat only by advection, and a cell with little net flow has an
+    // energy row with nothing to anchor it: on a small seed fed from the ring the
+    // energy residual oscillates and the Newton never converges.
+    // solver.embedded_wall_conduction (default true); the rock side uses the leak-off
+    // distance unless solver.embedded_thermal_distance (m) is given.
+    std::pair<Scalar, Scalar> wallConduction_(const auto& fracture, std::size_t cell,
+                                              Scalar area, Scalar width) const
+    {
+        if (wallConductionOn_ < 0) {
+            const auto prm = this->simulator_.problem().getFractureParam();
+            wallConductionOn_ = prm.template get<bool>("solver.embedded_wall_conduction", true) ? 1 : 0;
+            thermalDistance_ = static_cast<Scalar>(
+                prm.template get<double>("solver.embedded_thermal_distance", 0.0));
+        }
+        const auto& dist = fracture.reservoirDistance();
+        if (wallConductionOn_ == 0 || area <= 0 || cell >= dist.size()) {
+            return {Scalar{0}, Scalar{0}};
+        }
+        const auto sides = static_cast<Scalar>(fracture.leakingSides());
+        const auto d = (thermalDistance_ > 0) ? thermalDistance_ : static_cast<Scalar>(dist[cell]);
+        if (!(d > 0)) {
+            return {Scalar{0}, Scalar{0}};
+        }
+        const auto halfWidth = std::max(width, this->minWidth_) / 2;
+        return {sides * area / halfWidth, sides * area / d};
+    }
+    mutable int wallConductionOn_{-1};
+    mutable Scalar thermalDistance_{0};
+
     PerfWiMode perfWiMode_{PerfWiMode::Fracture};
     Scalar perfWidth_{};
     Scalar perfRw_{};
@@ -333,6 +547,8 @@ private:
 
     //! Well name -> the perforations of that well's fractures, in degrees of freedom.
     std::map<std::string, std::vector<RuntimePerforation>> wellPerforations_{};
+    std::map<std::string, std::vector<int>> wellCells_{}; // active aux DOFs per well
+    std::vector<unsigned> newbornDofs_{}; // see newbornDofs()
 };
 
 } // namespace Opm
