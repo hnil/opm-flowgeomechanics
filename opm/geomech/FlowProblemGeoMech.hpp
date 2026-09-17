@@ -121,6 +121,12 @@ namespace Opm{
                                 : Parent::materialLawParams(globalDofIdx, facedir);
         }
 
+        unsigned saturationFunctionCell(unsigned globalDofIdx) const
+        {
+            const int proxy = embeddedSatProxy_(globalDofIdx);
+            return (proxy >= 0) ? static_cast<unsigned>(proxy) : Parent::saturationFunctionCell(globalDofIdx);
+        }
+
         // relperms go through this rather than materialLawParams(), so the
         // fracture-cell redirect has to be applied here as well
         template <class FluidState, class... Args>
