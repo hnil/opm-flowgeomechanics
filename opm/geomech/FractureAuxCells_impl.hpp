@@ -236,6 +236,10 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
             this->assignStateFromPartner(solution, slot, /*useCurrentState=*/true);
             this->assignStateFromPartner(solutionOld, slot, /*useCurrentState=*/true);
             this->newbornDofs_.push_back(static_cast<unsigned>(this->localToGlobalDof(slot)));
+            // Its old state is its current one, so its old volume is too; otherwise the
+            // storage term would read the birth as a volume change and inject mass.
+            this->simulator_.model().setDofTotalVolumeOld(
+                static_cast<unsigned>(this->localToGlobalDof(slot)), this->bulkVolume_[slot]);
         }
     }
 
