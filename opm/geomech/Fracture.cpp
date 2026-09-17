@@ -2593,7 +2593,20 @@ Fracture::initPressureMatrix()
     // fracture that grows across the perforated interval is fed along it (as in a
     // rate-fed fracture model) instead of only at the seed.
     std::set<int> sources(well_source_.begin(), well_source_.end());
-    if (prm_.get<bool>("solver.well_source_all_perfs", false) && !well_perf_cells_.empty()) {
+    // Embedded flow makes every source cell a well perforation, so feeding the whole
+    // fracture puts hundreds of perforations into one well (model5: 924, 130 s of
+    // linear setup for the same answer). Default there is the seed ring;
+    // solver.embedded_well_source=config follows the well_source_* settings instead.
+    const bool embedded_ring =
+        prm_.get<std::string>("solver.fracture_flow_mode", "wi_upscaling") == "embedded"
+        && prm_.get<std::string>("solver.embedded_well_source", "ring") == "ring";
+    {
+        const auto ews = prm_.get<std::string>("solver.embedded_well_source", "ring");
+        if (ews != "ring" && ews != "config") {
+            OPM_THROW(std::runtime_error, "Unknown solver.embedded_well_source: " + ews);
+        }
+    }
+    if (!embedded_ring && prm_.get<bool>("solver.well_source_all_perfs", false) && !well_perf_cells_.empty()) {
         // The wellbore CUTS the fracture along a line, so the cells the well feeds
         // directly are those within about a wellbore radius of that line - not every
         // cell that happens to share a reservoir cell with a perforation. On a
