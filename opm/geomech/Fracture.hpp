@@ -333,6 +333,11 @@ public:
     //! Reservoir mobility used to form leakOf(), so that it can be divided back out.
     const std::vector<double>& reservoirMobility() const { return reservoir_mobility_; }
 
+    //! Distance from the fracture face to the reservoir cell's pressure point used by
+    //! the leak-off, and the number of faces that leak.
+    const std::vector<double>& reservoirDistance() const { return reservoir_dist_; }
+    int leakingSides() const { return leakoffSides(); }
+
     //! The mobility actually folded into leakOf(), which is reservoirMobility() only
     //! under the legacy convention. Divide by this, not by reservoirMobility().
     const std::vector<double>& leakoffMobility() const { return leakoff_mobility_; }

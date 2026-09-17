@@ -493,6 +493,37 @@ private:
 
     unsigned capacity_{};
     Scalar minWidth_{};
+    // Heat exchange between the fracture fluid and the wall rock, as geometric half
+    // transmissibilities (the flow multiplies in conductivity). Without it a fracture
+    // cell holds heat only by advection, and a cell with little net flow has an
+    // energy row with nothing to anchor it: on a small seed fed from the ring the
+    // energy residual oscillates and the Newton never converges.
+    // solver.embedded_wall_conduction (default true); the rock side uses the leak-off
+    // distance unless solver.embedded_thermal_distance (m) is given.
+    std::pair<Scalar, Scalar> wallConduction_(const auto& fracture, std::size_t cell,
+                                              Scalar area, Scalar width) const
+    {
+        if (wallConductionOn_ < 0) {
+            const auto prm = this->simulator_.problem().getFractureParam();
+            wallConductionOn_ = prm.template get<bool>("solver.embedded_wall_conduction", true) ? 1 : 0;
+            thermalDistance_ = static_cast<Scalar>(
+                prm.template get<double>("solver.embedded_thermal_distance", 0.0));
+        }
+        const auto& dist = fracture.reservoirDistance();
+        if (wallConductionOn_ == 0 || area <= 0 || cell >= dist.size()) {
+            return {Scalar{0}, Scalar{0}};
+        }
+        const auto sides = static_cast<Scalar>(fracture.leakingSides());
+        const auto d = (thermalDistance_ > 0) ? thermalDistance_ : static_cast<Scalar>(dist[cell]);
+        if (!(d > 0)) {
+            return {Scalar{0}, Scalar{0}};
+        }
+        const auto halfWidth = std::max(width, this->minWidth_) / 2;
+        return {sides * area / halfWidth, sides * area / d};
+    }
+    mutable int wallConductionOn_{-1};
+    mutable Scalar thermalDistance_{0};
+
     PerfWiMode perfWiMode_{PerfWiMode::Fracture};
     Scalar perfWidth_{};
     Scalar perfRw_{};

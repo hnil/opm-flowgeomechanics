@@ -139,10 +139,13 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
                 const auto trans = (mob > 0.0)
                     ? static_cast<Scalar>(leakOf[cell] / mob)
                     : Scalar{0};
+                const auto [alphaFrac, alphaRock]
+                    = this->wallConduction_(fracture, cell, static_cast<Scalar>(areas[cell]),
+                                            static_cast<Scalar>(width[cell][0]));
 
                 this->connections_.push_back({static_cast<unsigned>(this->localToGlobalDof(slot)),
                                               static_cast<unsigned>(reservoirCell),
-                                              trans, 0.0, 0.0});
+                                              trans, alphaFrac, alphaRock});
             }
 
             // Fracture cell to fracture cell: the cubic law over the two half
@@ -324,9 +327,12 @@ FractureAuxCells<TypeTag>::updateValues(const FractureModel& fractures)
                 const auto trans = (mob > 0.0)
                     ? static_cast<Scalar>(leakOf[cell] / mob)
                     : Scalar{0};
+                const auto [alphaFrac, alphaRock]
+                    = this->wallConduction_(fracture, cell, static_cast<Scalar>(areas[cell]),
+                                            static_cast<Scalar>(width[cell][0]));
                 connections.push_back({static_cast<unsigned>(this->localToGlobalDof(slot)),
                                        static_cast<unsigned>(this->partner_[slot]),
-                                       trans, 0.0, 0.0});
+                                       trans, alphaFrac, alphaRock});
             }
 
             const auto freshHalfTrans = fracture.currentHalfTrans();
