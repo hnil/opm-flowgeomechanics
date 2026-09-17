@@ -1318,15 +1318,29 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     // External-pressure mode: pressure rows become p = p_external (identity,
     // zero residual, no width coupling), so the Newton reduces to mechanics
     // and contact at the pressure the flow's aux cells hold.
+    // Cells without an external value (no flow DOF yet) keep their own pressure
+    // equation, so a front that grew inside the step can still be pressurised.
     if (external_pressure_) {
-        *coupling_matrix_ = 0;
+        const std::size_t nc = numFractureCells();
+        const bool haveMask = (external_cell_mask_.size() == nc);
         auto& Mx = *pressure_matrix_;
+        auto& Cx = *coupling_matrix_;
         for (auto row = Mx.begin(); row != Mx.end(); ++row) {
-            for (auto col = row->begin(); col != row->end(); ++col) {
-                *col = (col.index() == row.index()) ? 1.0 : 0.0;
+            const std::size_t r = row.index();
+            const bool pinned = (r >= nc) || !haveMask || external_cell_mask_[r];
+            if (!pinned) {
+                continue;
             }
+            for (auto col = row->begin(); col != row->end(); ++col) {
+                *col = (col.index() == r) ? 1.0 : 0.0;
+            }
+            if (r < Cx.N()) {
+                for (auto& entry : Cx[r]) {
+                    entry = 0.0;
+                }
+            }
+            rhs_pressure_[r] = fracture_pressure_[r];
         }
-        rhs_pressure_ = fracture_pressure_;
     }
     const auto& M = *pressure_matrix_;
     const auto& C = *coupling_matrix_;

@@ -415,19 +415,27 @@ public:
     bool externalPressureMode() const { return external_pressure_; }
     //! Set the fracture pressure per cell (and the well DOF, if any) from
     //! outside; false if the sizes do not match the current grid.
+    //! A NaN entry marks a cell with no flow DOF (no reservoir partner, or born
+    //! since the last bind): it keeps the fracture's own pressure equation.
     bool setExternalPressure(const std::vector<double>& cellPressures, double wellPressure)
     {
         const std::size_t nc = numFractureCells();
         if (cellPressures.size() != nc || fracture_pressure_.size() < nc) {
             return false;
         }
+        external_cell_mask_.assign(nc, 0);
+        std::size_t pinned = 0;
         for (std::size_t i = 0; i < nc; ++i) {
-            fracture_pressure_[i][0] = cellPressures[i];
+            if (std::isfinite(cellPressures[i])) {
+                fracture_pressure_[i][0] = cellPressures[i];
+                external_cell_mask_[i] = 1;
+                ++pinned;
+            }
         }
         if (numWellEquations() > 0 && fracture_pressure_.size() > nc) {
             fracture_pressure_[nc][0] = wellPressure;
         }
-        return true;
+        return pinned > 0;
     }
     Dune::FieldVector<double, 6> stress(Dune::FieldVector<double, 3> obs) const;
     Dune::FieldVector<double, 6> strain(Dune::FieldVector<double, 3> obs) const;
@@ -679,6 +687,7 @@ private:
     std::vector<double> fb_cell_residual_;
     double current_dt_{-1.0}; // flow timestep (s), see setTimeStep
     bool external_pressure_{false}; // see setExternalPressureMode
+    std::vector<char> external_cell_mask_; // per cell: pressure pinned from outside
     //! Nonlinear iteration at which each cell last flipped open/closed in the
     //! current solve; the binary active set's analogue of fb_cell_residual_ for
     //! the propagation veto (recent stability, not lifetime stability).

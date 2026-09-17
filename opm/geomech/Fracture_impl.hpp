@@ -864,6 +864,19 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                     well_value = fracture_pressure_[fracture_pressure_.size() - 1];
                     fracture_pressure_.resize(fracture_pressure_.size() - 1);
                 }
+                if (external_cell_mask_.size() == old_fracture_width_.size()) {
+                    Dune::BlockVector<Dune::FieldVector<double, 1>> m(external_cell_mask_.size());
+                    for (size_t i = 0; i < m.size(); ++i) {
+                        m[i] = external_cell_mask_[i] ? 1.0 : 0.0;
+                    }
+                    redistribute_values(m, org_map, fsmap, level, /*point_wise*/true);
+                    external_cell_mask_.assign(m.size(), 0);
+                    for (size_t i = 0; i < m.size(); ++i) {
+                        external_cell_mask_[i] = (m[i][0] > 0.5) ? 1 : 0;
+                    }
+                } else {
+                    external_cell_mask_.clear();
+                }
                 redistribute_values(fracture_pressure_, org_map, fsmap, level, /*point_wise*/true);
                 if (numWellEquations() > 0){
                     assert(fracture_pressure_.size() == fracture_width_.size());

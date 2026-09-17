@@ -452,6 +452,9 @@ namespace Opm{
                     const auto p = fractureAuxCells_->cellPressures(fidx);
                     ++fidx;
                     if (p.size() != fracture.numCells()) {
+                        // binding older than the fracture (it grew mid-step): let it
+                        // solve its own pressure rather than freeze a stale one
+                        fracture.setExternalPressureMode(false);
                         continue;
                     }
                     double bhp = -1.0;

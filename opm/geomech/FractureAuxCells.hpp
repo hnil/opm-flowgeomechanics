@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <limits>
+#include <cmath>
 #include <map>
 #include <string>
 #include <utility>
@@ -313,13 +314,18 @@ public:
     {
         std::vector<Scalar> p;
         const auto& model = this->simulator_.model();
+        // one entry per fracture cell, bound or not, so the caller can tell a
+        // cell without a flow DOF (NaN) from a layout that no longer matches
+        for (unsigned slot = 0; slot < this->slotOf_.size() && slot < this->capacity_; ++slot) {
+            const auto [fidx, cell] = this->slotOf_[slot];
+            if (fidx == fractureIdx && cell >= p.size()) {
+                p.resize(cell + 1, std::numeric_limits<Scalar>::quiet_NaN());
+            }
+        }
         for (unsigned slot = 0; slot < this->slotOf_.size() && slot < this->capacity_; ++slot) {
             const auto [fidx, cell] = this->slotOf_[slot];
             if (fidx != fractureIdx || !this->active_[slot]) {
                 continue;
-            }
-            if (cell >= p.size()) {
-                p.resize(cell + 1, std::numeric_limits<Scalar>::quiet_NaN());
             }
             const auto dof = static_cast<unsigned>(this->localToGlobalDof(slot));
             p[cell] = getValue(model.intensiveQuantities(dof, 0).fluidState().pressure(FluidSystem::waterPhaseIdx));
@@ -369,6 +375,12 @@ public:
         // the pressures and the volumes are the flow's, not the fracture's
         in.pressure = this->cellPressures(fractureIdx);
         in.pressure.resize(nc, 0.0);
+        // cells without a flow DOF come back as NaN; the coupling wants a number
+        for (auto& pv : in.pressure) {
+            if (!std::isfinite(pv)) {
+                pv = 0.0;
+            }
+        }
         in.volume_prev.resize(nc, 0.0);
         const auto& model = this->simulator_.model();
         for (unsigned slot = 0; slot < this->slotOf_.size() && slot < this->capacity_; ++slot) {
