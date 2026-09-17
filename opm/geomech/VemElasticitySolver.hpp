@@ -204,6 +204,10 @@ class VemElasticitySolver
     void setupSolver(const Opm::PropertyTree& prm){
         OPM_TIMEBLOCK(setupLinearSolver);
         tsolver_.reset();
+        // Opt-in: stop the warm-started solve when the residual of the full
+        // load is below tol, not when the correction's own residual is.
+        tol_relative_to_load_ = prm.get<bool>("tol_relative_to_load", false);
+        linear_tol_ = prm.get<double>("tol", 1e-5);
 #if HAVE_MPI
 // grid_.comm() is something like collective communication
 // comm_ here is the entity communication
@@ -447,6 +451,8 @@ private:
     bool stab_on_stress_ = false;
     bool vem_stress_ = false;
     bool diagonal_scaling_ = false;
+    bool tol_relative_to_load_ = false;
+    double linear_tol_ = 1e-5;
     Dune::BlockVector<Dune::FieldVector<ctype,1>> scale_; // Jacobi scale factors (if diagonal_scaling_)
         int num_solves_ = 0;
         int last_linear_iterations_ = 0;
