@@ -20,6 +20,7 @@
 #include <tuple>
 #include <vector>
 #include <algorithm>
+#include <cmath>
 #include <opm/common/TimingMacros.hpp>
 #include <opm/input/eclipse/Deck/DeckKeyword.hpp>
 #include <opm/geomech/vem/vem.hpp>
@@ -553,7 +554,27 @@ IMPL_FUNC(void, solve())
         mat.mmv(y,rhs_tmp);
         auto dy = y;
         dy=0;
-        tsolver_->apply(dy, rhs_tmp, r);
+        if (tol_relative_to_load_) {
+            // ||b - A(y+dy)|| <= tol ||b||: the correction only needs the reduction
+            // that gets the full residual there, and none at all if it is already.
+            // Local norms summed over ranks; overlap dofs count twice, so this is a
+            // slightly conservative target in parallel.
+            double b2 = rhs_eff.two_norm2();
+            double r2 = rhs_tmp.two_norm2();
+            b2 = grid_.comm().sum(b2);
+            r2 = grid_.comm().sum(r2);
+            const double target = linear_tol_ * std::sqrt(b2);
+            const double have = std::sqrt(r2);
+            if (have <= target) {
+                r.iterations = 0;
+                r.converged = true;
+                r.reduction = 1.0;
+            } else {
+                tsolver_->apply(dy, rhs_tmp, std::min(0.5, target / have), r);
+            }
+        } else {
+            tsolver_->apply(dy, rhs_tmp, r);
+        }
         y += dy;
         sol_ = y;
         if (diagonal_scaling_)

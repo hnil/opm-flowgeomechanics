@@ -119,7 +119,7 @@
    "coupling_anderson_alpha_max": 2.0,
    "coupling_legacy_first_damp": false,
    "legacy_coupling_change_logic": false,
-   "legacy_parent_setup_iteration": false,
+   "legacy_parent_setup_iteration": true,
    "__7_debug_output": "--- diagnostics (off for production) ---",
    "verbosity": "0",
    "dump_linear_system_on_failure": false,
