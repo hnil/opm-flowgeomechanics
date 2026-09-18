@@ -26,6 +26,9 @@
 #include <opm/simulators/linalg/extractMatrix.hpp>
 #include <opm/simulators/wells/StandardWell.hpp>
 
+#include <dune/istl/bcrsmatrix.hh>
+#include <dune/istl/bvector.hh>
+#include <dune/istl/matrixindexset.hh>
 #include <dune/istl/umfpack.hh>
 
 #include <fmt/format.h>
@@ -35,9 +38,130 @@
 #include <cmath>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace Opm {
+
+namespace WellLocalDetails {
+
+// Solve [A C^T; B D] [x; xw] = [r; 0] as one scalar system and return x.  With r
+// already reduced by the well (r - C^T D^-1 rw) this is the same x as the Schur
+// form (A - C^T D^-1 B) x = r, without needing the well in the matrix.
+template <class Matrix, class Vector, class WellEquations>
+Vector solveWithExplicitWell(const Matrix& jDom, const Vector& rDom,
+                             const std::vector<int>& domainCells,
+                             const std::vector<int>& wellCells,
+                             const WellEquations& eq)
+{
+    using ScalarMatrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>;
+    using ScalarVector = Dune::BlockVector<Dune::FieldVector<double, 1>>;
+    constexpr int nEq = Vector::block_type::dimension;
+    const auto& B = eq.getB();
+    const auto& C = eq.getC();
+    const auto& D = eq.getD();
+    const int nW = static_cast<int>(D[0][0].rows());
+    const std::size_t nR = jDom.N() * nEq;
+    const std::size_t n = nR + nW;
+
+    std::unordered_map<int, int> local;
+    for (std::size_t i = 0; i < domainCells.size(); ++i) {
+        local[domainCells[i]] = static_cast<int>(i);
+    }
+    auto localOfPerf = [&](std::size_t perf) {
+        const auto it = local.find(wellCells[perf]);
+        return (it == local.end()) ? -1 : it->second; // outside: frozen, drops out
+    };
+
+    Dune::MatrixIndexSet pattern(n, n);
+    for (auto row = jDom.begin(); row != jDom.end(); ++row) {
+        for (auto col = row->begin(); col != row->end(); ++col) {
+            for (int a = 0; a < nEq; ++a) {
+                for (int b = 0; b < nEq; ++b) {
+                    pattern.add(row.index() * nEq + a, col.index() * nEq + b);
+                }
+            }
+        }
+    }
+    for (auto col = B[0].begin(); col != B[0].end(); ++col) {
+        const int l = localOfPerf(col.index());
+        if (l < 0) {
+            continue;
+        }
+        for (int a = 0; a < nW; ++a) {
+            for (int b = 0; b < nEq; ++b) {
+                pattern.add(nR + a, l * nEq + b);
+                pattern.add(l * nEq + b, nR + a);
+            }
+        }
+    }
+    for (int a = 0; a < nW; ++a) {
+        for (int b = 0; b < nW; ++b) {
+            pattern.add(nR + a, nR + b);
+        }
+    }
+    ScalarMatrix S;
+    pattern.exportIdx(S);
+    S = 0.0;
+    for (auto row = jDom.begin(); row != jDom.end(); ++row) {
+        for (auto col = row->begin(); col != row->end(); ++col) {
+            for (int a = 0; a < nEq; ++a) {
+                for (int b = 0; b < nEq; ++b) {
+                    S[row.index() * nEq + a][col.index() * nEq + b] = (*col)[a][b];
+                }
+            }
+        }
+    }
+    for (auto col = B[0].begin(); col != B[0].end(); ++col) {
+        const int l = localOfPerf(col.index());
+        if (l < 0) {
+            continue;
+        }
+        for (int a = 0; a < nW; ++a) {
+            for (int b = 0; b < nEq; ++b) {
+                S[nR + a][l * nEq + b] = (*col)[a][b];
+            }
+        }
+    }
+    for (auto col = C[0].begin(); col != C[0].end(); ++col) {
+        const int l = localOfPerf(col.index());
+        if (l < 0) {
+            continue;
+        }
+        for (int a = 0; a < nW; ++a) {
+            for (int b = 0; b < nEq; ++b) {
+                S[l * nEq + b][nR + a] = (*col)[a][b]; // C enters transposed
+            }
+        }
+    }
+    for (int a = 0; a < nW; ++a) {
+        for (int b = 0; b < nW; ++b) {
+            S[nR + a][nR + b] = D[0][0][a][b];
+        }
+    }
+
+    ScalarVector rhs(n), x(n);
+    rhs = 0.0;
+    x = 0.0;
+    for (std::size_t i = 0; i < rDom.size(); ++i) {
+        for (int a = 0; a < nEq; ++a) {
+            rhs[i * nEq + a] = rDom[i][a];
+        }
+    }
+    Dune::UMFPack<ScalarMatrix> lu(S, 0, false);
+    Dune::InverseOperatorResult res;
+    lu.apply(x, rhs, res);
+
+    Vector xDom(rDom.size());
+    for (std::size_t i = 0; i < rDom.size(); ++i) {
+        for (int a = 0; a < nEq; ++a) {
+            xDom[i][a] = x[i * nEq + a];
+        }
+    }
+    return xDom;
+}
+
+} // namespace WellLocalDetails
 
 /*!
  * \brief A local Newton solve of one well together with the cells it perforates.
@@ -46,9 +170,9 @@ namespace Opm {
  * perforated grid cells plus a number of rings of grid neighbours.  Everything
  * outside the domain is frozen at the current iterate: it enters only through
  * the off-diagonal columns the domain linearization already writes.  The
- * well's own equations enter through their Schur complement, which is why the
- * global run must carry the wells in the matrix
- * (--matrix-add-well-contributions=true).
+ * well's own equations enter through their Schur complement when the global run
+ * carries the wells in the matrix; otherwise a standard well is solved explicitly
+ * together with the domain (WellLocalDetails::solveWithExplicitWell).
  *
  * Built only from public entry points of the flow model: the linearizer's
  * domain-restricted linearization, the per-well assemble / contribute /
@@ -190,11 +314,7 @@ public:
         auto& wellModel = problem.wellModel();
         auto& linearizer = model.linearizer();
 
-        if (!wellModel.addMatrixContributions()) {
-            OPM_THROW(std::runtime_error,
-                      "WellLocalSolver needs the wells in the matrix "
-                      "(--matrix-add-well-contributions=true)");
-        }
+        const bool wellsInMatrix = wellModel.addMatrixContributions();
 
         // the well container holds the live well objects; find ours
         WellInterface<TypeTag>* wellPtr = nullptr;
@@ -208,6 +328,11 @@ public:
         }
         auto& well = *wellPtr;
         auto* stdWell = dynamic_cast<StdWell*>(wellPtr);
+        if (!wellsInMatrix && stdWell == nullptr) {
+            OPM_THROW(std::runtime_error,
+                      "WellLocalSolver: a well that is not a standard well needs the wells "
+                      "in the matrix (--matrix-add-well-contributions=true)");
+        }
 
         // local iteration context: the domain linearization then resets only
         // the domain's rows, and the well skips its own inner iterations (the
@@ -260,7 +385,9 @@ public:
             linearizer.linearizeDomain(dom);
             auto& jacobian = linearizer.jacobian();
             auto& residual = linearizer.residual();
-            well.addWellContributions(jacobian);
+            if (wellsInMatrix) {
+                well.addWellContributions(jacobian);
+            }
             const auto& wcells = well.cells();
             GlobalEqVector rloc(wcells.size());
             for (std::size_t i = 0; i < wcells.size(); ++i) {
@@ -353,11 +480,14 @@ public:
             auto jDom = Details::extractMatrix(jacobian.istlMatrix(), domain.cells);
             GlobalEqVector xDom(domain.cells.size());
             xDom = 0.0;
-            {
+            if (wellsInMatrix) {
                 Dune::UMFPack<Matrix> lu(jDom, 0, false);
                 Dune::InverseOperatorResult res;
                 auto rhs = rDom;
                 lu.apply(xDom, rhs, res);
+            } else {
+                xDom = WellLocalDetails::solveWithExplicitWell(jDom, rDom, domain.cells,
+                                                               well.cells(), stdWell->linSys());
             }
             bool finite = true;
             for (const auto& blk : xDom) {
