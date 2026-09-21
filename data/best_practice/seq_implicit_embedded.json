@@ -165,10 +165,11 @@
    "write_fracture_system": "false",
    "dump_case_min_nonlin_iter": 0,
    "__8": "---------- embedded fracture flow (2026-09-17) ----------",
-   "__embedded_doc": "Embedded, own pressure (M2 in HANDOVER_EMBEDDED_FRACTURE_2026-09-17.md): fracture cells are auxiliary flow DOFs; the fracture's own solve still sets the pressure the mechanics use. Same base as seq_implicit_ratewell.json. embedded_satnum MUST be set to the extra straight-line saturation region you add to the deck (see GUIDE_BRANCHES_BUILD_SETTINGS_2026-09-17.md); 0 inherits the host cell's region and is NOT what was validated. Ring feed (embedded_well_source=ring) is the code default. Run with --matrix-add-well-contributions=true. Serial only.",
+   "__embedded_doc": "Embedded, own pressure (M2 in HANDOVER_EMBEDDED_FRACTURE_2026-09-17.md): fracture cells are auxiliary flow DOFs; the fracture's own solve still sets the pressure the mechanics use. Same base as seq_implicit_ratewell.json. embedded_satnum MUST be set to the extra straight-line saturation region you add to the deck (see GUIDE_BRANCHES_BUILD_SETTINGS_2026-09-17.md); 0 inherits the host cell's region and is NOT what was validated. Ring feed (embedded_well_source=ring) is the code default. Run with --matrix-add-well-contributions=false --linear-solver=fg_cprw.json (this directory); plain cprw is not enough on a propagating seed. Serial only.",
    "fracture_flow_mode": "embedded",
    "embedded_satnum": 0,
-   "embedded_leakoff_report": true
+   "embedded_leakoff_report": true,
+   "embedded_remap_state": true
   },
   "reservoir": {
    "dist": "1",

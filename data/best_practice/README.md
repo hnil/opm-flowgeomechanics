@@ -65,6 +65,15 @@ conservative skip cut mech solves up to ~60 % with the solution preserved to ~1 
 **Do not raise the threshold on rate-controlled decks** (an aggressive value diverges under
 sharp rate-driven pressure drops).
 
+### `seq_implicit_embedded*.json` + `fg_cprw.json` — embedded fracture flow
+Fracture cells as auxiliary flow cells (own pressure, or `_coupled`). Serial. Run with
+`--matrix-add-well-contributions=false --linear-solver=$DATA/best_practice/fg_cprw.json`:
+flexible GMRES around CPR (ILU0 pre/post), pressure stage solved to 1e-6. Plain `cprw`
+and wells in the matrix both fail at the first regrid of a propagating seed on model2.
+Both files set `embedded_remap_state=true` (carry the cells' state across a regrid;
+code default off). `embedded_residual_check=true` (fracture cells checked against the
+host cell's pore volume) is optional; tested on a 5-day case only.
+
 ---
 
 ## Correspondence to the built-in aliases
