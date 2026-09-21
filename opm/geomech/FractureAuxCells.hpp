@@ -155,6 +155,19 @@ public:
     bool participatesInCnv() const override
     { return false; }
 
+    //! Residual check against the host rock cell's pore volume (opt-in): same units
+    //! and tolerance as CNV, and no through-flow in the denominator.
+    double cnvReferencePoreVolume(unsigned localIdx) const override
+    {
+        if (!this->residualCheck_ || localIdx >= this->partner_.size() || !this->active_[localIdx]) {
+            return 0.0;
+        }
+        const auto partner = static_cast<unsigned>(this->partner_[localIdx]);
+        return this->simulator_.problem().referencePorosity(partner, /*timeIdx=*/0)
+            * this->simulator_.model().dofTotalVolume(partner);
+    }
+    void setResidualCheck(const bool on) { this->residualCheck_ = on; }
+
     void connections(std::vector<Connection>& conns) const override
     { conns.insert(conns.end(), this->connections_.begin(), this->connections_.end()); }
 
@@ -439,6 +452,9 @@ public:
         return cells;
     }
 
+    //! Carry the cells' flow state across a regrid geometrically instead of by slot.
+    void setRemapState(const bool on) { this->remapState_ = on; }
+
     //! Cells handed out so far, for the high-water mark in the log.
     unsigned numActive() const
     { return static_cast<unsigned>(std::count(this->active_.begin(), this->active_.end(), true)); }
@@ -561,6 +577,9 @@ private:
     std::map<std::string, std::vector<RuntimePerforation>> wellPerforations_{};
     std::map<std::string, std::vector<int>> wellCells_{}; // active aux DOFs per well
     std::vector<unsigned> newbornDofs_{}; // see newbornDofs()
+    std::vector<std::pair<unsigned, std::size_t>> boundLayout_{}; // per fracture: first slot, cells
+    bool remapState_{false}; // see setRemapState()
+    bool residualCheck_{false}; // see cnvReferencePoreVolume()
 };
 
 } // namespace Opm

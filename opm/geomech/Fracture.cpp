@@ -2439,6 +2439,29 @@ void Fracture::moveForwardInTime(double dt_last)
 
 
 void
+Fracture::composeFlowStateDonor(const std::vector<std::vector<CellRef>>& map1,
+                                const std::vector<std::vector<CellRef>>& map2,
+                                const int level)
+{
+    // dominant overlap wins: the flow state is a set of primary variables, not averaged
+    const auto g2g = RegularTrimesh::createGridToGridMap(map1, map2, level);
+    std::vector<int> donor(map2.size(), -1);
+    std::vector<double> best(map2.size(), 0.0);
+    for (const auto& [i, j, w] : g2g) {
+        if (w > best[j]) {
+            best[j] = w;
+            if (!flow_state_remapped_) {
+                donor[j] = static_cast<int>(i);
+            } else {
+                donor[j] = (i < flow_state_donor_.size()) ? flow_state_donor_[i] : -1;
+            }
+        }
+    }
+    flow_state_donor_ = std::move(donor);
+    flow_state_remapped_ = true;
+}
+
+void
 Fracture::redistribute_values(Dune::BlockVector<Dune::FieldVector<double, 1>>& values,
                               const std::vector<std::vector<CellRef>>& map1,
                               const std::vector<std::vector<CellRef>>& map2,

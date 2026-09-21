@@ -209,6 +209,9 @@ namespace Opm{
                                                              static_cast<Scalar>(perfWidth),
                                                              static_cast<Scalar>(perfRw)));
 
+            fractureAuxCells_->setRemapState(prm.get<bool>("solver.embedded_remap_state", false));
+            fractureAuxCells_->setResidualCheck(prm.get<bool>("solver.embedded_residual_check", false));
+
             if (this->simulator().gridView().comm().rank() == 0) {
                 OpmLog::info(fmt::format("Embedded fracture flow: {} degrees of freedom "
                                          "reserved for fracture cells", capacity));
@@ -346,6 +349,13 @@ namespace Opm{
             }
 
             const bool topologyChanged = fractureAuxCells_->bind(fractureModel);
+            if (fractureAuxCells_->layoutMatches(fractureModel)) {
+                for (auto& wellFractures : fractureModel.wellFractures()) {
+                    for (auto& fracture : wellFractures) {
+                        fracture.markFlowStateBound();
+                    }
+                }
+            }
 
             this->refreshAuxCellModules_(topologyChanged);
 

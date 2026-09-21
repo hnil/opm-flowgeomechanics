@@ -413,6 +413,11 @@ public:
     //! and propagation at it; the flow's aux cells own the pressure.
     void setExternalPressureMode(bool on) { external_pressure_ = on; }
     bool externalPressureMode() const { return external_pressure_; }
+    //! Per cell: the cell of the layout at the last markFlowStateBound() whose flow
+    //! state it inherits across regrids (-1: none). Only valid if flowStateRemapped().
+    const std::vector<int>& flowStateDonor() const { return flow_state_donor_; }
+    bool flowStateRemapped() const { return flow_state_remapped_; }
+    void markFlowStateBound() { flow_state_donor_.clear(); flow_state_remapped_ = false; }
     //! Set the fracture pressure per cell (and the well DOF, if any) from
     //! outside; false if the sizes do not match the current grid.
     //! A NaN entry marks a cell with no flow DOF (no reservoir partner, or born
@@ -500,6 +505,9 @@ private:
    std::vector<RuntimePerforation> wellIndices_() const;
    bool  expantionMax(const FractureProperties& fprop);
    bool removeNewZeroWithCells(RegularTrimesh& mesh,int cur_level,const RegularTrimesh& original_mesh) const;
+   void composeFlowStateDonor(const std::vector<std::vector<CellRef>>& map1,
+                              const std::vector<std::vector<CellRef>>& map2,
+                              const int level);
    std::vector<double> redistribute_values(const std::vector<double>& values,
                                         const std::vector<std::vector<CellRef>>& map1,
                                         const std::vector<std::vector<CellRef>>& map2,
@@ -688,6 +696,8 @@ private:
     double current_dt_{-1.0}; // flow timestep (s), see setTimeStep
     bool external_pressure_{false}; // see setExternalPressureMode
     std::vector<char> external_cell_mask_; // per cell: pressure pinned from outside
+    std::vector<int> flow_state_donor_; // see flowStateDonor()
+    bool flow_state_remapped_{false};
     //! Nonlinear iteration at which each cell last flipped open/closed in the
     //! current solve; the binary active set's analogue of fb_cell_residual_ for
     //! the propagation veto (recent stability, not lifetime stability).
