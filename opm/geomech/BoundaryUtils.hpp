@@ -25,7 +25,7 @@
 #include <cstring>
 #include <iostream>
 #include <opm/input/eclipse/EclipseState/Grid/FaceDir.hpp>
-#include <opm/input/eclipse/Schedule/BCProp.hpp>
+#include <opm/input/eclipse/Schedule/BCState.hpp>
 namespace Opm{
     namespace Elasticity{
         template<int dimension>
@@ -131,7 +131,7 @@ namespace Opm{
         template<class BCConfig, class GvType, class CartMapperType>
         void nodesAtBoundary(std::vector<std::tuple<size_t,MechBCValue>>& bc_nodes,
                              const BCConfig& bcconfigs,
-                             const BCProp& bcprops,
+                             const BCState& bcprops,
                              const GvType& gv,
                              const CartMapperType& cartesianIndexMapper
             ){
@@ -182,7 +182,7 @@ namespace Opm{
                                     }
                                 }
 
-                                MechBCValue bcval = *bcprop.mechbcvalue;
+                                MechBCValue bcval = bcprop.mechbcvalue;
                                 for(const auto& cell:elements(gv)){
                                     auto index = gv.indexSet().index(cell);
                                     auto it = effected_cells.find(index);
@@ -198,7 +198,7 @@ namespace Opm{
                                     }
                                 }
                             } else {
-                                throw std::logic_error("invalid type for BC. Use FREE or RATE");
+                                throw std::logic_error("invalid mechanical type for BC. Use FREE or FIXED in BCMECH");
                             }
                         }
                     }

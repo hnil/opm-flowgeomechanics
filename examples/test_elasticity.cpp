@@ -248,7 +248,7 @@ run(Params& p, const std::string& name)
         esolver.setMaterial(ymodule, pratio);
         std::vector<std::tuple<size_t, Opm::MechBCValue>> bc_nodes;
         const auto& bcconfigs = eclState.getSimulationConfig().bcconfig();
-        const auto& bcprops = schedule[0].bcprop;
+        const auto& bcprops = schedule[0].bcstate;
         const auto& gv = grid.leafGridView();
         Opm::Elasticity::nodesAtBoundary(bc_nodes, bcconfigs, bcprops, gv, cartesianIndexMapper);
 

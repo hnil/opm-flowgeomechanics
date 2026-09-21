@@ -44,7 +44,7 @@
 
 #include <opm/input/eclipse/Parser/Parser.hpp>
 #include <opm/input/eclipse/Deck/Deck.hpp>
-#include <opm/input/eclipse/Schedule/BCProp.hpp>
+#include <opm/input/eclipse/Schedule/BCState.hpp>
 #include <opm/simulators/linalg/FlexibleSolver.hpp>
 #include <opm/geomech/DuneCommunicationHelpers.hpp>
 #include <opm/geomech/vem/vem.hpp>

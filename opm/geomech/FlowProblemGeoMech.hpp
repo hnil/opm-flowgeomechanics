@@ -484,6 +484,10 @@ namespace Opm{
             }
         }
 
+        //! Thermoelastic porosity reference (STCOND); only read by the TPSA porosity term.
+        Scalar rockReferenceTemperature() const
+        { return this->simulator().vanguard().eclState().getTableManager().stCond().temperature; }
+
         //! Whether the fracture flows through degrees of freedom of its own.
         bool fractureFlowIsEmbedded() const
         { return fractureAuxCells_ != nullptr; }
@@ -554,7 +558,7 @@ namespace Opm{
                 // read mechanical boundary conditions
                 const auto& vanguard = simulator.vanguard();
                 const auto& bcconfigs = vanguard.eclState().getSimulationConfig().bcconfig();
-                const auto& bcprops = this->simulator().vanguard().schedule()[this->episodeIndex()].bcprop;
+                const auto& bcprops = this->simulator().vanguard().schedule()[this->episodeIndex()].bcstate;
                 const auto& gv = this->gridView();
                 const auto& cartesianIndexMapper = vanguard.cartesianIndexMapper();
                 Opm::Elasticity::nodesAtBoundary(bc_nodes_,
