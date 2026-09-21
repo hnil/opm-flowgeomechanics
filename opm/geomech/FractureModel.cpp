@@ -401,6 +401,10 @@ FractureModel::assignGeoMechWellState(WellState<Scalar,IndexTraits>& wellState) 
         if (perfData.connFracStatistics.size() != perfData.cell_index.size()) {
             perfData.connFracStatistics.resize(perfData.cell_index.size());
         }
+        // PerfData leaves fracture_data empty until a fracture model sizes it.
+        if (perfData.fracture_data.area.size() != perfData.cell_index.size()) {
+            perfData.fracture_data.resize(perfData.cell_index.size());
+        }
 
         for (const auto& fracture : this->well_fractures_[i]) {
             if (!fracture.isActive()) {
@@ -602,6 +606,8 @@ Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched)
 // Explicit specialisations.  No other code below separator.
 // ===========================================================================
 
+#if FLOW_INSTANTIATE_FLOAT
 template void Opm::FractureModel::assignGeoMechWellState(WellState<float,Fracture::IndexTraits>&) const;
+#endif
 template void Opm::FractureModel::assignGeoMechWellState(WellState<double,Fracture::IndexTraits>&) const;
 Opm::DeferredLogger Opm::FractureModel::fractureLogger = Opm::DeferredLogger();
