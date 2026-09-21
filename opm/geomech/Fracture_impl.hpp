@@ -824,6 +824,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources,/* smoothed triangels */ smooth_boundary, numcell_threshold); // well cells kept intact!
             auto org_map = grid_mesh_map_; 
             grid_mesh_map_ = fsmap;
+            composeFlowStateDonor(org_map, fsmap, level);
             setFractureGrid(std::move(grid)); // true -> coarsen interior
             // generate the inverse map of fsmap_ (needed below)
             std::map<CellRef, size_t> fsmap_inv;

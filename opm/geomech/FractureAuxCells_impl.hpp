@@ -84,6 +84,7 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
     // A slot is claimed once and never moves, so that a cell keeps its unknown from one
     // report step to the next.  Walking the fractures in the order the model holds them
     // is what makes that stable.
+    std::vector<std::pair<unsigned, std::size_t>> newLayout;
     std::size_t fractureIdx = 0;
     for (const auto& wellFractures : fractures.wellFractures()) {
         for (const auto& fracture : wellFractures) {
@@ -215,6 +216,7 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
                 perfs.push_back(perf);
             }
 
+            newLayout.emplace_back(firstSlot, numCells);
             nextSlot = firstSlot + numCells;
             ++fractureIdx;
         }
@@ -242,6 +244,43 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
                 static_cast<unsigned>(this->localToGlobalDof(slot)), this->bulkVolume_[slot]);
         }
     }
+
+    // A regrid renumbers the fracture's cells; hand each its geometric predecessor's
+    // state rather than whatever its slot held.
+    if (this->remapState_) {
+        const auto prevNow = solution;
+        const auto prevOld = solutionOld;
+        std::size_t fIdx = 0;
+        for (const auto& wellFractures : fractures.wellFractures()) {
+            for (const auto& fracture : wellFractures) {
+                const bool known = fIdx < this->boundLayout_.size();
+                if (known && fracture.flowStateRemapped()
+                    && fracture.flowStateDonor().size() == newLayout[fIdx].second) {
+                    const auto [oldFirst, oldCells] = this->boundLayout_[fIdx];
+                    const auto& donor = fracture.flowStateDonor();
+                    for (std::size_t cell = 0; cell < donor.size(); ++cell) {
+                        const auto slot = newLayout[fIdx].first + cell;
+                        if (!this->active_[slot] || donor[cell] < 0
+                            || static_cast<std::size_t>(donor[cell]) >= oldCells
+                            || !wasActive[oldFirst + donor[cell]]) {
+                            continue;
+                        }
+                        const auto dof = static_cast<unsigned>(this->localToGlobalDof(slot));
+                        const auto from = this->localToGlobalDof(oldFirst + donor[cell]);
+                        solution[dof] = prevNow[from];
+                        solutionOld[dof] = prevOld[from];
+                        this->simulator_.model().setDofTotalVolumeOld(dof, this->bulkVolume_[slot]);
+                        if (std::find(this->newbornDofs_.begin(), this->newbornDofs_.end(), dof)
+                            == this->newbornDofs_.end()) {
+                            this->newbornDofs_.push_back(dof);
+                        }
+                    }
+                }
+                ++fIdx;
+            }
+        }
+    }
+    this->boundLayout_ = newLayout;
 
     static_cast<void>(numGridDof);
 
