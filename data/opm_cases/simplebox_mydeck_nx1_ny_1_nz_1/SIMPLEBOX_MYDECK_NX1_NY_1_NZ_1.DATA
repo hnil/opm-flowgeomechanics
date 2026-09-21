@@ -91,9 +91,10 @@ INCLUDE
 'BIOTCOEF.TXT'
 /
 
-INCLUDE
-'POELCOEF.TXT'
-/
+-- POELCOEF disabled: BIOTCOEF is also given and takes precedence (both is an input error)
+--INCLUDE
+--'POELCOEF.TXT'
+--/
 
 INCLUDE
 'THELCOEF.TXT'

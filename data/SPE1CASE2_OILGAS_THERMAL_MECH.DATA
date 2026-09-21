@@ -184,11 +184,19 @@ RPTRST
 	'BASIC=1' /
 
 BCPROP
-1 NONE * * * * FIXED 1 0 0 /
-2 NONE * * * * FIXED 1 0 0 /
-3 NONE * * * * FIXED 0 1 0 /
-4 NONE * * * * FIXED 0 1 0 /
-5 NONE * * * * FIXED 0 0 1 /
+  1 NONE * * * * /
+  2 NONE * * * * /
+  3 NONE * * * * /
+  4 NONE * * * * /
+  5 NONE * * * * /
+/
+
+BCMECH
+  1 FIXED 1 0 0 /
+  2 FIXED 1 0 0 /
+  3 FIXED 0 1 0 /
+  4 FIXED 0 1 0 /
+  5 FIXED 0 0 1 /
 /
 
 TSTEP

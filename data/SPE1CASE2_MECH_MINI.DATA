@@ -375,13 +375,21 @@ RPTRST
 -- BHP upper limit (item 7) should not be exceeding the highest
 -- pressure in the PVT table=9014.7psia (default is 100 000psia) 
 
-BCPROP
-1 NONE * * * * FIXED 1 0 0/
-2 NONE * * * * FIXED 1 0 0/
-3 NONE * * * * FIXED 0 1 0 /
-4 NONE * * * * FIXED 0 1 0 /
-5 NONE * * * * FIXED 0 0 1 /
 --6 NONE * * * * FIXED/
+BCPROP
+  1 NONE * * * * /
+  2 NONE * * * * /
+  3 NONE * * * * /
+  4 NONE * * * * /
+  5 NONE * * * * /
+/
+
+BCMECH
+  1 FIXED 1 0 0 /
+  2 FIXED 1 0 0 /
+  3 FIXED 0 1 0 /
+  4 FIXED 0 1 0 /
+  5 FIXED 0 0 1 /
 /
     
 TSTEP

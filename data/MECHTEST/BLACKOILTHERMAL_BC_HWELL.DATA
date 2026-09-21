@@ -88,8 +88,9 @@ PRATIO
 BIOTCOEF
        9610*0.9 /
 
-POELCOEF
-       9610*0.3 /
+-- POELCOEF disabled: BIOTCOEF is also given and takes precedence (both is an input error)
+--POELCOEF
+--       9610*0.3 /
 
 THELCOEF
        9610*0.1e5 /
