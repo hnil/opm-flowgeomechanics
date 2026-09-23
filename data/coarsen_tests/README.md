@@ -82,7 +82,16 @@ The boundary of that grid is not the one BCCON describes, so it gets its own
 constraint: `"mech_grid_bc"` in the parameter JSON, one of `fixed`, `roller` or
 `roller_free_top` (the default, which matches these decks' free top).
 
-Serial only so far, and not for decks with MINPV/PINCH.
+In parallel the flow grid is partitioned by the coarsening too, so each mechanics
+cell and all of its flow cells share a rank:
+
+```bash
+mpirun -np 4 $BIN --threads-per-process=1 --output-dir=/tmp/coarsen/twogrid_np4 \
+     --fracture-param-file=sequential_implicit \
+     --mech-coarsen-file=mech_coarsen_T1.txt T1_PAD_FINE.DATA
+```
+
+Not for decks with MINPV/PINCH yet.
 
 ## Baseline (2026-09-23, bcmech build, serial, 90 days, `sequential_implicit`)
 
@@ -94,6 +103,10 @@ Values at the last step. BHP is on its 290 bar limit in all three.
 | T1_PAD_FINE + `--mech-coarsen-file` | 176.88 | 719 | 3879.8 m² | 91.92 m³ | 70 s |
 | T1_PAD_COARSE (both coarse) | 176.96 | 691 | 3879.8 m² | 91.66 m³ | 62 s |
 | T2_CAPROCK (flow fine, mech fine) | 190.38 | 527 | 3879.8 m² | 79.74 m³ | 149 s |
+
+On 2 ranks, the two-grid run gives 175.92 / 718.98 / 3879.8 m² / 92.71 m³ in 64 s,
+against 175.87 / 718.69 / 3879.8 m² / 92.78 m³ in 110 s for the single-grid run on the
+same ranks. np=4 gives 175.04 / 718.73 / 3879.8 m² / 93.43 m³ in 62 s.
 
 Coarsening the padding — for flow and mechanics together — moves the stress at the
 well by 1.1 bar (0.6 %) and the fracture volume by 1.0 %, with the same fracture area,
