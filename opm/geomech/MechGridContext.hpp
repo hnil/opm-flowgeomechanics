@@ -61,11 +61,24 @@ public:
     /// map from the flow grid's cells to its own.
     /// `processed` is what the flow grid was built from (MINPV and PINCH
     /// included), and exists on rank 0 only.
+    enum class Method { Auto, Grdecl, Merge };
+
+    static Method method(const std::string& name)
+    {
+        if (name == "auto")   { return Method::Auto; }
+        if (name == "grdecl") { return Method::Grdecl; }
+        if (name == "merge")  { return Method::Merge; }
+        OPM_THROW(std::runtime_error,
+                  "Unknown mechanics coarsening method '" + name
+                  + "'; use grdecl, merge or auto");
+    }
+
     template <class FlowGrid, class CartesianMapper>
     MechGridContext(const RetainedCornerPointInput* processed,
                     const std::vector<Coarsening::CoarsenRequest>& requests,
                     const FlowGrid& flowGrid,
-                    const CartesianMapper& flowCartesianMapper)
+                    const CartesianMapper& flowCartesianMapper,
+                    const Method wanted = Method::Auto)
     {
         if (flowGrid.comm().size() > 1) {
             // The balancer runs on rank 0 only, so ask it there and let every
@@ -104,8 +117,8 @@ public:
         // through every layer, so it cannot coarsen part of a column. The
         // merge can, at the price of a coarse cell keeping all the faces it
         // has towards finer neighbours.
-        int useMerge = 0;
-        if (isRoot) {
+        int useMerge = (wanted == Method::Merge) ? 1 : 0;
+        if (isRoot && wanted == Method::Auto) {
             try {
                 Coarsening::cartesianMap(fineDims, requests);
             } catch (const std::invalid_argument& e) {

@@ -567,7 +567,9 @@ namespace Opm{
                         RetainCornerPointInput::get(),
                         MechGridContext::readRecords(coarsen_file),
                         simulator.vanguard().grid(),
-                        simulator.vanguard().cartesianIndexMapper());
+                        simulator.vanguard().cartesianIndexMapper(),
+                        MechGridContext::method(
+                            Parameters::Get<Parameters::MechCoarsenMethod>()));
                     geoMechModel_.setMechGrid(*mechGridContext_);
                 }
                 geoMechModel_.init(initconfig.restartRequested());
