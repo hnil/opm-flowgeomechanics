@@ -138,12 +138,15 @@ namespace Opm{
             RollerFreeTop,  ///< as Roller, but the Z- face is left free
         };
 
-        template<class GvType>
+        /// Every node of a boundary face, not just the cell's eight corners: a
+        /// cell merged from several others has faces with more nodes than
+        /// that, and leaving them free would make the boundary soft.
+        template<class Grid>
         void nodesAtOuterBoundary(std::vector<std::tuple<size_t,MechBCValue>>& bc_nodes,
-                                  const GvType& gv,
+                                  const Grid& grid,
                                   const OuterBoundary mode)
         {
-            static const int dim = 3;
+            const auto& gv = grid.leafGridView();
             for (const auto& cell : elements(gv)) {
                 // In parallel the outermost overlap cells have faces to cells
                 // this rank does not hold, which look like domain boundary and
@@ -151,23 +154,33 @@ namespace Opm{
                 if (cell.partitionType() != Dune::InteriorEntity) {
                     continue;
                 }
-                for (const auto& is : intersections(gv, cell)) {
-                    if (!is.boundary()) {
-                        continue;
+                const int cellIdx = gv.indexSet().index(cell);
+                for (int f = 0; f < grid.numCellFaces(cellIdx); ++f) {
+                    const int face = grid.cellFace(cellIdx, f);
+                    const int other = (grid.faceCell(face, 0) == cellIdx)
+                        ? grid.faceCell(face, 1) : grid.faceCell(face, 0);
+                    if (other >= 0) {
+                        continue;                      // not the domain boundary
                     }
-                    const auto dir = faceToFaceDir(is.indexInInside());
-                    if (mode == OuterBoundary::RollerFreeTop && dir == FaceDir::ZMinus) {
-                        continue;
+                    const auto normal = grid.faceAreaNormalEcl(face);
+                    int axis = 0;
+                    for (int d = 1; d < 3; ++d) {
+                        if (std::abs(normal[d]) > std::abs(normal[axis])) {
+                            axis = d;
+                        }
+                    }
+                    if (mode == OuterBoundary::RollerFreeTop && axis == 2
+                        && grid.faceCentroid(face)[2] < grid.cellCentroid(cellIdx)[2]) {
+                        continue;                      // the top of the model
                     }
                     MechBCValue bcval;
                     if (mode == OuterBoundary::Fixed) {
                         bcval.fixeddir = {true, true, true};
                     } else {
-                        const int normal = is.indexInInside()/2;
-                        bcval.fixeddir[normal] = true;
+                        bcval.fixeddir[axis] = true;
                     }
-                    for (const auto nind : faceDirToNodes(dir)) {
-                        bc_nodes.emplace_back(gv.indexSet().subIndex(cell, nind, dim), bcval);
+                    for (int v = 0; v < grid.numFaceVertices(face); ++v) {
+                        bc_nodes.emplace_back(grid.faceVertex(face, v), bcval);
                     }
                 }
             }
@@ -181,7 +194,7 @@ namespace Opm{
                 if (!unique_nodes.empty()
                     && std::get<0>(unique_nodes.back()) == std::get<0>(node)) {
                     auto& mask = std::get<1>(unique_nodes.back()).fixeddir;
-                    for (int d = 0; d < dim; ++d) {
+                    for (int d = 0; d < 3; ++d) {
                         mask[d] = mask[d] || std::get<1>(node).fixeddir[d];
                     }
                 } else {

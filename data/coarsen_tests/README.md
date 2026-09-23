@@ -134,28 +134,30 @@ against the input, whether each cell's oriented faces close, whether the corner
 average stays inside, and whether every face's node order runs with its
 face-to-cell orientation. With no arguments it runs a small built-in case.
 
-**Status: the merged route is not accurate enough to use.** The grid itself is sound
-(all four checks pass, up to 80 faces on a cell), but the mechanics on it is wrong.
+**Status (corrected 2026-09-23).** The merged route works. An earlier version of this
+note claimed it was 23 % out; that was wrong twice over — the comparison put a run that
+had aborted early against one that ran to the end, and the mechanics grid's boundary
+condition only constrained each cell's eight corners, leaving the extra nodes of a
+subdivided boundary face free.
 
-Measured with `--mech-coarsen-method` on one and the same coarsening (the T1 padding
-spec, 15 days), comparing STRESSZZ against the fine-grid mechanics cell by cell:
+With every node of a boundary face constrained, and comparing at the same date:
 
-| route | max error, reservoir | mean | max error, burden | DISPZ max error |
-|---|---|---|---|---|
-| grdecl | 1.3 bar (0.25 %) | 0.29 bar | 3.0 bar | 0.0011 m |
-| merge | 124.9 bar (23 %) | 30 bar | 30.5 bar | 0.073 m |
+| coarsening | route | STRESSZZ vs the fine-grid mechanics, reservoir |
+|---|---|---|
+| padding | grdecl | 0.88 bar (0.17 %), mean 0.19 |
+| padding | merge | 3.77 bar (0.71 %), mean 0.97 |
+| burden laterally | merge | 1.95 bar (0.37 %), mean 0.36 |
+| uniform 2×2×2 | merge vs grdecl | 8.66 bar (1.59 %), mean 0.98 |
 
-Both grids have the same cells; the merged one differs only in keeping every face it
-has towards finer neighbours, and with them the nodes on those faces — 13 632 nodes
-against about 8 200. The error is largest **inside the reservoir**, where the mechanics
-grid is 1:1 in both routes, and the displacements are some 60 times larger, so the
-merged grid is markedly softer rather than locally inaccurate. That points at VEM's
-treatment of the extra face nodes, which is also what makes the aggressive 5 × 5
-version abort on the fracture width assertion.
+The grid is face- and edge-conformal in both routes — `test_merged_grid` checks that no
+node sits inside another face's edge, and finds none — so a coarse cell carries the nodes
+of the faces it is subdivided into, which is what VEM needs. Hanging nodes in that sense
+are ordinary: faults produce them routinely.
 
-So: keep using the grdecl route. The merge is the only way to coarsen part of a column,
-and the grid machinery for it is in place and tested, but VEM has to handle many-noded
-faces correctly before the result means anything.
+What remains is robustness rather than accuracy: an aggressive 5 × 5 lateral grouping
+still aborts on the fracture width assertion, and cells with 80 faces of very different
+size are worth avoiding anyway — away from the wells the mechanics wants well-shaped
+cells.
 
 ## Baseline (2026-09-23, bcmech build, serial, 90 days, `sequential_implicit`)
 

@@ -597,7 +597,7 @@ namespace Opm{
                                   "mech_grid_bc must be fixed, roller or roller_free_top, not " + bc);
                     }
                     Opm::Elasticity::nodesAtOuterBoundary(bc_nodes_,
-                                                          mechGridContext_->grid().leafGridView(),
+                                                          mechGridContext_->grid(),
                                                           mode);
                 } else {
                     Opm::Elasticity::nodesAtBoundary(bc_nodes_,
