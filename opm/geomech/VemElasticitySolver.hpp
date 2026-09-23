@@ -321,6 +321,19 @@ class VemElasticitySolver
         }
     }
 
+
+    /// Entries per row to preallocate: a cell that meets finer neighbours has
+    /// more than a hexahedron's share, so a fixed guess is not enough.
+    template <class Entries>
+    static int entriesPerRow(const Entries& entries, int nrows, int fallback)
+    {
+        std::vector<int> count(nrows, 0);
+        for (const auto& entry : entries) {
+            ++count[std::get<0>(entry)];
+        }
+        const auto worst = std::max_element(count.begin(), count.end());
+        return std::max(fallback, (worst == count.end()) ? 0 : *worst);
+    }
     void makeDuneSystemMatrix(const std::vector<std::tuple<int, int, double>>& A_entries)
     {
         OPM_TIMEBLOCK(makeDuneSystemMatrix);
@@ -337,7 +350,7 @@ class VemElasticitySolver
         Matrix& MAT = this->getOperator();
         MAT = 0;
         MAT.setBuildMode(Matrix::implicit);
-        MAT.setImplicitBuildModeParameters(81, 0.4);
+        MAT.setImplicitBuildModeParameters(entriesPerRow(A_entries, nrows, 81), 0.4);
         MAT.setSize(nrows, ncols);
         makeDuneMatrixCompressed(A_entries, MAT);
     }

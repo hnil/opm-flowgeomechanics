@@ -324,11 +324,11 @@ namespace Elasticity {
         // finaly make dune matrix
         divmat_.setBuildMode(Matrix::implicit);
         // map from dof=3*nodes at a cell (ca 3*3*3) to cell
-        divmat_.setImplicitBuildModeParameters (3*8, 0.4);
-        if(reduce_boundary){
-            divmat_.setSize(idx_free_.size(), num_cells_);
-        }else{
-            divmat_.setSize(grid_.leafGridView().size(3)*3, num_cells_);
+        {
+            const int rows = reduce_boundary ? int(idx_free_.size())
+                                             : grid_.leafGridView().size(3)*3;
+            divmat_.setImplicitBuildModeParameters(entriesPerRow(divmatdof, rows, 3*8), 0.4);
+            divmat_.setSize(rows, num_cells_);
         }
         makeDuneMatrixCompressed(divmatdof,divmat_);
         }

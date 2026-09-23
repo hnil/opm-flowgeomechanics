@@ -97,13 +97,35 @@ public:
 
         const auto size = flowGrid.logicalCartesianSize();
         const std::array<int,3> fineDims{size[0], size[1], size[2]};
-        // The index side needs no geometry, so every rank can have it.
-        const auto cartesian = Coarsening::cartesianMap(fineDims, requests);
 
         // Corner-point processing is a rank-0 job with collective steps, so
         // every rank calls it and only rank 0 passes the description.
+        // The grdecl route gives clean six-faced cells, but pillars run
+        // through every layer, so it cannot coarsen part of a column. The
+        // merge can, at the price of a coarse cell keeping all the faces it
+        // has towards finer neighbours.
+        int useMerge = 0;
+        if (isRoot) {
+            try {
+                Coarsening::cartesianMap(fineDims, requests);
+            } catch (const std::invalid_argument& e) {
+                OpmLog::info(std::string("Mechanics grid: cannot be written as a corner-point "
+                                         "description (") + e.what()
+                             + "); merging cells of the flow grid instead.");
+                useMerge = 1;
+            }
+        }
+        useMerge = flowGrid.comm().max(useMerge);
+        merged_ = useMerge != 0;
+
+        // The index side needs no geometry, so every rank can have it.
+        Coarsening::CartesianMap cartesian;
+        if (!merged_) {
+            cartesian = Coarsening::cartesianMap(fineDims, requests);
+        }
+
         std::unique_ptr<EclipseGrid> coarseGrid;
-        if (processed != nullptr) {
+        if (processed != nullptr && !merged_) {
             Coarsening::Grdecl fine;
             fine.dims = fineDims;
             fine.coord = processed->coord;
@@ -137,15 +159,61 @@ public:
         }
 
         grid_ = std::make_unique<Dune::CpGrid>(flowGrid.comm());
-        grid_->processEclipseFormat(coarseGrid.get(), /*ecl_state*/ nullptr,
-                                    /*periodic_extension*/ false, /*turn_normals*/ false,
-                                    /*clip_z*/ false, /*pinchActive*/ false,
-                                    /*edge_conformal*/ true);
+        if (merged_) {
+            grdecl input{};
+            Coarsening::BlockLayout layout;
+            if (processed != nullptr) {
+                input.dims[0] = fineDims[0];
+                input.dims[1] = fineDims[1];
+                input.dims[2] = fineDims[2];
+                input.coord = processed->coord.data();
+                input.zcorn = processed->zcorn.data();
+                input.actnum = processed->actnum.data();
+                layout = Coarsening::blockLayout(fineDims, requests);
+                std::ostringstream os;
+                os << "Mechanics grid: merging " << fineDims[0]*fineDims[1]*fineDims[2]
+                   << " cells into " << layout.boxes.size() << " blocks";
+                OpmLog::info(os.str());
+            }
+            grid_->processEclipseFormatCoarsened(input, layout.blockOfCartesian, layout.boxes,
+                                                 /*edge_conformal*/ true);
+        } else {
+            grid_->processEclipseFormat(coarseGrid.get(), /*ecl_state*/ nullptr,
+                                        /*periodic_extension*/ false, /*turn_normals*/ false,
+                                        /*clip_z*/ false, /*pinchActive*/ false,
+                                        /*edge_conformal*/ true);
+        }
 
         if (flowGrid.comm().size() > 1) {
-            distribute();
+            // The balancer gave every Cartesian cell a rank; the merge keeps
+            // that index space, the grdecl route has its own.
+            const auto& partOfFine = MechPartition::Registry::get();
+            std::vector<int> partOfMech;
+            if (merged_) {
+                partOfMech = partOfFine;
+            } else if (flowGrid.comm().rank() == 0) {
+                partOfMech.assign(static_cast<std::size_t>(cartesian.coarseDims[0])
+                                  * cartesian.coarseDims[1]*cartesian.coarseDims[2], 0);
+                for (std::size_t f = 0; f < cartesian.fineToCoarse.size(); ++f) {
+                    if (cartesian.fineToCoarse[f] >= 0) {
+                        partOfMech[cartesian.fineToCoarse[f]] = partOfFine[f];
+                    }
+                }
+            }
+            distribute(partOfMech);
         }
-        buildMap(cartesian, flowGrid, flowCartesianMapper);
+        if (merged_) {
+            // Anchor index of each cell's block, in the fine index space.
+            const auto layout = Coarsening::blockLayout(fineDims, requests);
+            std::vector<int> anchorOfCartesian(layout.blockOfCartesian.size(), -1);
+            for (std::size_t c = 0; c < layout.blockOfCartesian.size(); ++c) {
+                const auto& box = layout.boxes[layout.blockOfCartesian[c]];
+                anchorOfCartesian[c] = box[0] + fineDims[0]*(box[1] + fineDims[1]*box[2]);
+            }
+            buildMap(anchorOfCartesian, fineDims, flowGrid, flowCartesianMapper);
+        } else {
+            buildMap(cartesian.fineToCoarse, cartesian.coarseDims, flowGrid, flowCartesianMapper);
+        }
     }
 
     const Dune::CpGrid& grid() const { return *grid_; }
@@ -207,35 +275,40 @@ private:
         const IndexSet& index_set_;
     };
 
-    void distribute()
+    /// `partOfMechCartesian` gives the rank of each cell of the mechanics
+    /// grid's own Cartesian space.
+    void distribute(const std::vector<int>& partOfMechCartesian)
     {
         std::vector<int> parts;
         if (grid_->comm().rank() == 0) {
             const Dune::CartesianIndexMapper<Dune::CpGrid> mapper(*grid_);
-            const auto& partOfCoarseCell = MechPartition::Registry::get();
             parts.resize(grid_->leafGridView().size(0));
             for (std::size_t c = 0; c < parts.size(); ++c) {
-                parts[c] = partOfCoarseCell[mapper.cartesianIndex(static_cast<int>(c))];
+                parts[c] = partOfMechCartesian[mapper.cartesianIndex(static_cast<int>(c))];
             }
         }
         grid_->loadBalance(parts, /*ownersFirst*/ false, /*addCornerCells*/ true,
                            /*overlapLayers*/ 1);
     }
 
-    template <class FlowGrid, class CartesianMapper>
-    void buildMap(const Coarsening::CartesianMap& cartesian, const FlowGrid& flowGrid,
-                  const CartesianMapper& flowCartesianMapper)
+    /// `toMech` takes a fine Cartesian index to the mechanics grid's own
+    /// Cartesian index: the coarse index for the grdecl route, the block's
+    /// anchor for the merge, which keeps the fine index space.
+    template <class FlowGrid, class CartesianMapper, class ToMech>
+    void buildMap(const ToMech& toMech, const std::array<int,3>& mechDims,
+                  const FlowGrid& flowGrid, const CartesianMapper& flowCartesianMapper)
     {
         const Dune::CartesianIndexMapper<Dune::CpGrid> mechMapper(*grid_);
         const auto& mechView = grid_->leafGridView();
-        std::vector<int> cartesianToMech(static_cast<std::size_t>(cartesian.coarseDims[0])
-                                         * cartesian.coarseDims[1]*cartesian.coarseDims[2], -1);
+        std::vector<int> cartesianToMech(static_cast<std::size_t>(mechDims[0])
+                                         * mechDims[1]*mechDims[2], -1);
         for (const auto& cell : elements(mechView)) {
             const int idx = mechView.indexSet().index(cell);
             cartesianToMech[mechMapper.cartesianIndex(idx)] = idx;
         }
 
         const auto& flowView = flowGrid.leafGridView();
+
         const std::size_t numFlowCells = flowView.size(0);
         std::vector<int> flowToMech(numFlowCells, -1);
         std::vector<double> weight(numFlowCells, 0.0);
@@ -244,7 +317,7 @@ private:
         for (const auto& cell : elements(flowView)) {
             const int f = flowView.indexSet().index(cell);
             weight[f] = cell.geometry().volume();
-            const int coarseCartesian = cartesian.fineToCoarse[flowCartesianMapper.cartesianIndex(f)];
+            const int coarseCartesian = toMech[flowCartesianMapper.cartesianIndex(f)];
             const int m = (coarseCartesian < 0) ? -1 : cartesianToMech[coarseCartesian];
             flowToMech[f] = m;
             if (m < 0) {
@@ -279,6 +352,7 @@ private:
 
     std::unique_ptr<Dune::CpGrid> grid_;
     MechFlowMap map_;
+    bool merged_{false};
 };
 
 } // namespace Opm

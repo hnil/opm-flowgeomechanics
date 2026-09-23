@@ -370,6 +370,14 @@ target_link_libraries(replay_fracture_linear_system
 		opmflowgeomechanics
 )
 
+add_executable(test_merged_grid
+	examples/test_merged_grid.cpp
+	)
+target_link_libraries(test_merged_grid
+	PUBLIC
+		opmflowgeomechanics
+)
+
 add_executable(test_partition_of_unity
 	examples/test_partition_of_unity.cpp
 )

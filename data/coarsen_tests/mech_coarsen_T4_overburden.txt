@@ -1,0 +1,8 @@
+-- Lateral coarsening of the over- and underburden only, on T1_PAD_FINE
+-- (19 x 19 x 37): pairs of columns, pairs of layers. The reservoir section
+-- keeps its lateral resolution, so this cannot be written as COORD/ZCORN --
+-- pillars run through every layer -- and the mechanics grid is built by
+-- merging cells of the flow grid instead.
+-- I1 I2 J1 J2 K1 K2 NX NY NZ
+   1 19   1 19   1  6  10 10  3
+   1 19   1 19  32 37  10 10  3

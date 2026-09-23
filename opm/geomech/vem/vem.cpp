@@ -9,6 +9,7 @@
 #include <map>
 #include <numeric>
 #include <set>
+#include <sstream>
 #include <stdexcept>
 
 using namespace std;
@@ -1513,8 +1514,13 @@ identify_star_point(const array<double, 3>& point,
         if (++count == N)
             break;
     }
-    if (count != N)
-        throw runtime_error("Unable to find a star point for cell.");
+    if (count != N) {
+        std::ostringstream os;
+        os << "Unable to find a star point for cell. faces=" << N
+           << " start=(" << point[0] << ',' << point[1] << ',' << point[2]
+           << ") last=(" << result[0] << ',' << result[1] << ',' << result[2] << ')';
+        throw runtime_error(os.str());
+    }
 
     return result;
 }
@@ -1731,8 +1737,21 @@ compute_cell_geometry(const double* points,
     // assert(face_centroids.size() == static_cast<std::size_t>(num_faces*3));
 
     // identify a star point (usually, mean_point qualifies, but not necessarily)
-    star_point
-        = identify_star_point(point_average<3>(points, num_points), outward_normals, face_centroids);
+    try {
+        star_point = identify_star_point(point_average<3>(points, num_points),
+                                         outward_normals, face_centroids);
+    } catch (const runtime_error&) {
+        // A cell merged from several others has many faces of very different
+        // size, and the average of its corners is pulled towards the finely
+        // divided ones, sometimes out of the cell. The face centroids are
+        // spread evenly over its surface.
+        const int nf = (int)face_centroids.size()/3;
+        array<double, 3> mid {0, 0, 0};
+        for (int f = 0; f != nf; ++f)
+            for (int d = 0; d != 3; ++d)
+                mid[d] += face_centroids[3*f + d]/nf;
+        star_point = identify_star_point(mid, outward_normals, face_centroids);
+    }
 
     // compute cell centroid and volume
     volume = 0;

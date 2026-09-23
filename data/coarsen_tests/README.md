@@ -107,6 +107,26 @@ $BIN --output-dir=/tmp/coarsen/t3 --edge-conformal=true \
 T3's mechanics grid is 15 × 15 × 31 with every cell active: flow's 363 removed cells
 leave no hole in the body.
 
+## Lateral coarsening of the burden
+
+`mech_coarsen_T4_overburden.txt` coarsens the over- and underburden laterally while
+the reservoir section keeps its lateral resolution. Pillars run through every layer,
+so this cannot be written as COORD/ZCORN: the run says so and builds the mechanics
+grid by merging cells of the flow grid instead (opm-grid's
+`processEclipseFormatCoarsened`).
+
+`test_merged_grid <grid.INC> <records.txt>` checks such a grid on its own: volumes
+against the input, whether each cell's oriented faces close, whether the corner
+average stays inside, and whether every face's node order runs with its
+face-to-cell orientation. With no arguments it runs a small built-in case.
+
+**Status.** The grid is geometrically sound (all four checks pass, up to 80 faces on a
+cell), and the case runs: 90 days in 203 s. But the answer moves a lot — stress at the
+well 190.3 against 175.9 for the all-fine run, fracture area 7926 m² against 3879.8 —
+and a more aggressive version (5 × 5 lateral groups) aborts on the fracture width
+assertion. So VEM's accuracy and stability on these large, many-faced cells is **not**
+established; treat this path as experimental.
+
 ## Baseline (2026-09-23, bcmech build, serial, 90 days, `sequential_implicit`)
 
 Values at the last step. BHP is on its 290 bar limit in all three.

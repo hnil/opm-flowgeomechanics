@@ -188,9 +188,9 @@ inline std::vector<int> partitionCoarseCells(const std::array<int,3>& coarseDims
     return part;
 }
 
-/// The rank of each coarse Cartesian cell, computed once by the load balancer
-/// that partitions the flow grid and read back when the mechanics grid is
-/// distributed, so the two cannot disagree.
+/// The rank of each cell of the flow grid's Cartesian space, computed once by
+/// the load balancer and read back when the mechanics grid is distributed, so
+/// the two cannot disagree.
 class Registry
 {
 public:
@@ -218,21 +218,36 @@ std::vector<int> flowPartition(const Grid& grid,
 {
     const auto size = grid.logicalCartesianSize();
     const std::array<int,3> dims{size[0], size[1], size[2]};
-    const auto map = Coarsening::cartesianMap(dims, requests);
+    // The blocks, not the coarse grid: this has to work for a coarsening the
+    // mechanics builds by merging cells as well as for one written as
+    // COORD/ZCORN.
+    const auto layout = Coarsening::blockLayout(dims, requests);
 
+    const auto anchor = [&layout, &dims](int cartesian) {
+        const auto& box = layout.boxes[layout.blockOfCartesian[cartesian]];
+        return box[0] + dims[0]*(box[1] + static_cast<std::size_t>(dims[1])*box[2]);
+    };
+
+    // Each block is weighted where its first corner sits, so the bisection
+    // runs over the Cartesian box as usual.
     const auto& globalCell = grid.globalCell();
-    std::vector<double> weight(static_cast<std::size_t>(map.coarseDims[0])
-                               * map.coarseDims[1]*map.coarseDims[2], 0.0);
+    std::vector<double> weight(layout.blockOfCartesian.size(), 0.0);
     for (const int cartesian : globalCell) {
-        weight[map.fineToCoarse[cartesian]] += 1.0;
+        weight[anchor(cartesian)] += 1.0;
     }
 
-    const auto part = partitionCoarseCells(map.coarseDims, weight, grid.comm().size());
-    Registry::set(part);
+    const auto partOfAnchor = partitionCoarseCells(dims, weight, grid.comm().size());
+
+    // Rank of every Cartesian cell, which the mechanics grid reads back.
+    std::vector<int> partOfCartesian(layout.blockOfCartesian.size(), 0);
+    for (std::size_t c = 0; c < partOfCartesian.size(); ++c) {
+        partOfCartesian[c] = partOfAnchor[anchor(static_cast<int>(c))];
+    }
+    Registry::set(partOfCartesian);
 
     std::vector<int> flowPart(globalCell.size(), 0);
     for (std::size_t c = 0; c < globalCell.size(); ++c) {
-        flowPart[c] = part[map.fineToCoarse[globalCell[c]]];
+        flowPart[c] = partOfCartesian[globalCell[c]];
     }
     return flowPart;
 }
