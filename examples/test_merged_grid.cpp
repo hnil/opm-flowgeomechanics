@@ -2,6 +2,7 @@
 #include "config.h"
 
 #include <opm/grid/CpGrid.hpp>
+#include <dune/grid/io/file/vtk/vtkwriter.hh>
 #include <opm/grid/cpgrid/coarsening/CornerPointCoarsening.hpp>
 #include <opm/grid/cpgpreprocess/preprocess.h>
 
@@ -103,6 +104,108 @@ std::vector<Opm::Coarsening::CoarsenRequest> readRecords(const std::string& path
     return out;
 }
 
+/// Write each face as a polygon, so a coarse cell's subdivided faces and the
+/// nodes on them are visible. Cell data: how many nodes the face has, and the
+/// two cells it separates.
+void writeFaceVtu(const Dune::CpGrid& grid, const std::string& path)
+{
+    const auto& gv = grid.leafGridView();
+
+    // Faces reachable from the cells, in order.
+    std::vector<int> faces;
+    std::vector<char> seen;
+    for (const auto& cell : elements(gv)) {
+        const int c = gv.indexSet().index(cell);
+        for (int f = 0; f < grid.numCellFaces(c); ++f) {
+            const int face = grid.cellFace(c, f);
+            if (face >= static_cast<int>(seen.size())) {
+                seen.resize(face + 1, 0);
+            }
+            if (!seen[face]) {
+                seen[face] = 1;
+                faces.push_back(face);
+            }
+        }
+    }
+
+    std::ofstream os(path);
+    os << "<?xml version=\"1.0\"?>\n"
+       << "<VTKFile type=\"UnstructuredGrid\" version=\"0.1\" byte_order=\"LittleEndian\">\n"
+       << "  <UnstructuredGrid>\n";
+
+    std::size_t nodes = 0;
+    for (const int face : faces) {
+        nodes += grid.numFaceVertices(face);
+    }
+    os << "    <Piece NumberOfPoints=\"" << nodes << "\" NumberOfCells=\"" << faces.size()
+       << "\">\n";
+
+    // One point per face corner: the polygons then draw their own nodes, and a
+    // node shared by a coarse and a fine face is not silently welded.
+    os << "      <Points>\n        <DataArray type=\"Float64\" NumberOfComponents=\"3\" "
+          "format=\"ascii\">\n";
+    for (const int face : faces) {
+        for (int v = 0; v < grid.numFaceVertices(face); ++v) {
+            const auto& p = grid.vertexPosition(grid.faceVertex(face, v));
+            os << "          " << p[0] << ' ' << p[1] << ' ' << p[2] << '\n';
+        }
+    }
+    os << "        </DataArray>\n      </Points>\n";
+
+    os << "      <Cells>\n        <DataArray type=\"Int64\" Name=\"connectivity\" "
+          "format=\"ascii\">\n";
+    std::size_t next = 0;
+    std::vector<std::size_t> offsets;
+    for (const int face : faces) {
+        os << "         ";
+        for (int v = 0; v < grid.numFaceVertices(face); ++v) {
+            os << ' ' << next++;
+        }
+        os << '\n';
+        offsets.push_back(next);
+    }
+    os << "        </DataArray>\n";
+    os << "        <DataArray type=\"Int64\" Name=\"offsets\" format=\"ascii\">\n         ";
+    for (const auto o : offsets) {
+        os << ' ' << o;
+    }
+    os << "\n        </DataArray>\n";
+    os << "        <DataArray type=\"UInt8\" Name=\"types\" format=\"ascii\">\n         ";
+    for (std::size_t f = 0; f < faces.size(); ++f) {
+        os << " 7";                       // VTK_POLYGON
+    }
+    os << "\n        </DataArray>\n      </Cells>\n";
+
+    os << "      <CellData Scalars=\"nodes\">\n";
+    const auto array = [&os, &faces](const char* name, auto value) {
+        os << "        <DataArray type=\"Int32\" Name=\"" << name << "\" format=\"ascii\">\n"
+           << "         ";
+        for (const int face : faces) {
+            os << ' ' << value(face);
+        }
+        os << "\n        </DataArray>\n";
+    };
+    array("nodes", [&grid](int f) { return grid.numFaceVertices(f); });
+    array("cell0", [&grid](int f) { return grid.faceCell(f, 0); });
+    array("cell1", [&grid](int f) { return grid.faceCell(f, 1); });
+    // How many faces the cell on each side has: a merged cell that meets
+    // finer neighbours has many more than the six of a hexahedron.
+    array("facesOnCell0", [&grid](int f) {
+        const int c = grid.faceCell(f, 0);
+        return (c < 0) ? 0 : grid.numCellFaces(c);
+    });
+    array("facesOnCell1", [&grid](int f) {
+        const int c = grid.faceCell(f, 1);
+        return (c < 0) ? 0 : grid.numCellFaces(c);
+    });
+    array("boundary", [&grid](int f) {
+        return (grid.faceCell(f, 0) < 0 || grid.faceCell(f, 1) < 0) ? 1 : 0;
+    });
+    os << "      </CellData>\n    </Piece>\n  </UnstructuredGrid>\n</VTKFile>\n";
+
+    std::cout << "wrote " << path << " (" << faces.size() << " faces)\n";
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -125,6 +228,7 @@ int main(int argc, char** argv)
         r.cellsPerDim = {2, 2, 1};
         requests = {r};
     }
+    const std::string vtkPrefix = (argc > 3) ? argv[3] : std::string{};
     const int nx = fine.dims[0], ny = fine.dims[1], nz = fine.dims[2];
     if (fine.actnum.empty()) { fine.actnum.assign(1ull*nx*ny*nz, 1); }
     const auto layout = Opm::Coarsening::blockLayout(fine.dims, requests);
@@ -258,5 +362,48 @@ int main(int argc, char** argv)
     std::cout << "total volume: " << total << '\n';
     std::cout << "cells whose faces do not close: " << openCells
               << ", most faces on a cell: " << worstFaces << '\n';
+
+    if (!vtkPrefix.empty()) {
+        // The cells are written as hexahedra through their eight corners, so
+        // the picture shows each coarse cell's extent, not the faces it is
+        // subdivided into.
+        const auto write = [&vtkPrefix](const Dune::CpGrid& g, const std::string& name) {
+            Dune::VTKWriter<Dune::CpGrid::LeafGridView> writer(g.leafGridView());
+            writer.write(vtkPrefix + name);
+            std::cout << "wrote " << vtkPrefix + name << ".vtu\n";
+        };
+        write(grid, "_merged");
+        writeFaceVtu(grid, vtkPrefix + "_merged_faces.vtu");
+
+        Dune::CpGrid fineGrid;
+        grdecl asIs{};
+        asIs.dims[0] = nx; asIs.dims[1] = ny; asIs.dims[2] = nz;
+        asIs.coord = fine.coord.data();
+        asIs.zcorn = fine.zcorn.data();
+        asIs.actnum = fine.actnum.data();
+        fineGrid.processEclipseFormat(asIs, false, false, true);
+        write(fineGrid, "_fine");
+        writeFaceVtu(fineGrid, vtkPrefix + "_fine_faces.vtu");
+
+        // The same coarsening as a corner-point description, where possible.
+        try {
+            Opm::Coarsening::Options options;
+            options.activity = Opm::Coarsening::Activity::FillHoles;
+            const auto coarse = Opm::Coarsening::coarsenCornerPoint(fine, requests, options);
+            grdecl cg{};
+            cg.dims[0] = coarse.grid.dims[0];
+            cg.dims[1] = coarse.grid.dims[1];
+            cg.dims[2] = coarse.grid.dims[2];
+            cg.coord = coarse.grid.coord.data();
+            cg.zcorn = coarse.grid.zcorn.data();
+            cg.actnum = coarse.grid.actnum.data();
+            Dune::CpGrid grdeclGrid;
+            grdeclGrid.processEclipseFormat(cg, false, false, true);
+            write(grdeclGrid, "_grdecl");
+            writeFaceVtu(grdeclGrid, vtkPrefix + "_grdecl_faces.vtu");
+        } catch (const std::invalid_argument& e) {
+            std::cout << "no corner-point version of this coarsening: " << e.what() << '\n';
+        }
+    }
     return openCells == 0 ? 0 : 1;
 }
