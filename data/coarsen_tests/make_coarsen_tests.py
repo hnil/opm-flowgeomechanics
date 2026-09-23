@@ -69,6 +69,8 @@ PROPS_ROCK = {"PERMX": 10.0, "PORO": 0.10}
 PROPS_RES = {"PERMX": 1000.0, "PORO": 0.28}
 PROPS_PAD = {"PERMX": 0.001, "PORO": 0.01}
 PROPS_CAPROCK = {"PERMX": 0.0001, "PORO": 0.05}
+# T3 only: above each thin seal cell's pore volume, so flow removes them.
+MINPV_LIMIT = 1000.0
 
 
 def cumulative(start, deltas):
@@ -278,7 +280,7 @@ def substitute(text, pattern, replacement, what, flags=re.S):
     return new
 
 
-def make_deck(base, lay, grid_include, steps):
+def make_deck(base, lay, grid_include, steps, extra_grid=""):
     text = base
 
     text = substitute(text, r"DIMENS\n(?:--[^\n]*\n)*\s*\d+\s+\d+\s+\d+\s*/[^\n]*",
@@ -294,6 +296,9 @@ def make_deck(base, lay, grid_include, steps):
     text = substitute(text,
                       r"EQUALS\n  PERMX 10 6\* /.*?PORO  0\.28 4\* 11 20 / \n/",
                       props_block(lay), "property EQUALS blocks")
+
+    if extra_grid:
+        text = substitute(text, r"\nCOPY\n", "\n" + extra_grid + "\nCOPY\n", "COPY", flags=0)
 
     text = substitute(text, r"BCCON\n.*?\n/", bccon_block(lay), "BCCON")
 
@@ -372,16 +377,26 @@ def main():
     coarse, groups = coarsen_layout(fine)
     caprock = build_fine(with_caprock=True)
 
+    # T3: flow drops the thin seal cells in the core, the mechanics keeps the
+    # rock. MINPVV rather than MINPV, so the removal stays inside the core: a
+    # removal in only some of the padding columns would leave the merged
+    # geometry discontinuous across a pillar the coarsening drops.
+    minpv = ("-- Each thin seal cell in the core holds %.0f m3, below this limit\n"
+             "EQUALS\n  MINPVV %g %s /\n/\n"
+             % (CORE_DX*CORE_DY*CAPROCK_DZ*PROPS_CAPROCK["PORO"], MINPV_LIMIT,
+                box(caprock.core_i, caprock.core_j, caprock.caprock_k)))
+
     cases = [
-        ("T1_PAD_FINE", fine),
-        ("T1_PAD_COARSE", coarse),
-        ("T2_CAPROCK", caprock),
+        ("T1_PAD_FINE", fine, ""),
+        ("T1_PAD_COARSE", coarse, ""),
+        ("T2_CAPROCK", caprock, ""),
+        ("T3_MINPV", caprock, minpv),
     ]
-    for name, lay in cases:
+    for name, lay, extra in cases:
         grid = "%s_GRID.INC" % name
         write_grid_include(os.path.join(HERE, grid), lay)
         with open(os.path.join(HERE, "%s.DATA" % name), "w") as f:
-            f.write(make_deck(base, lay, grid, args.steps))
+            f.write(make_deck(base, lay, grid, args.steps, extra))
         print("%-14s %3d x %3d x %3d = %6d cells   core i%s j%s k%s   well %s"
               % (name, lay.nx, lay.ny, lay.nz, lay.nx * lay.ny * lay.nz,
                  lay.core_i, lay.core_j, lay.core_k, lay.well))

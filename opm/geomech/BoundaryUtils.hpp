@@ -145,6 +145,12 @@ namespace Opm{
         {
             static const int dim = 3;
             for (const auto& cell : elements(gv)) {
+                // In parallel the outermost overlap cells have faces to cells
+                // this rank does not hold, which look like domain boundary and
+                // would constrain the interior.
+                if (cell.partitionType() != Dune::InteriorEntity) {
+                    continue;
+                }
                 for (const auto& is : intersections(gv, cell)) {
                     if (!is.boundary()) {
                         continue;

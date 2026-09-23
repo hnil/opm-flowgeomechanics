@@ -25,6 +25,7 @@
 #include <opm/grid/CpGrid.hpp>
 #include <opm/grid/common/CartesianIndexMapper.hpp>
 #include <opm/grid/cpgrid/coarsening/CornerPointCoarsening.hpp>
+#include <opm/grid/cpgrid/RetainedCornerPointInput.hpp>
 #include <opm/grid/cpgpreprocess/preprocess.h>
 
 #include <opm/input/eclipse/EclipseState/Grid/EclipseGrid.hpp>
@@ -58,8 +59,10 @@ public:
 
     /// Build the mechanics grid from the deck's grid and the records, and the
     /// map from the flow grid's cells to its own.
+    /// `processed` is what the flow grid was built from (MINPV and PINCH
+    /// included), and exists on rank 0 only.
     template <class FlowGrid, class CartesianMapper>
-    MechGridContext(const EclipseGrid* inputGrid,
+    MechGridContext(const RetainedCornerPointInput* processed,
                     const std::vector<Coarsening::CoarsenRequest>& requests,
                     const FlowGrid& flowGrid,
                     const CartesianMapper& flowCartesianMapper)
@@ -78,18 +81,18 @@ public:
                                 "simulator is created.");
             }
         }
-        // Only rank 0 holds the deck's grid, so it decides and tells the others.
-        int pinchOrMinpv = 0;
-        if (inputGrid != nullptr) {
-            pinchOrMinpv = (inputGrid->isPinchActive()
-                            || inputGrid->getMinpvMode() != MinpvMode::Inactive) ? 1 : 0;
+        // Only rank 0 holds the processed description, so it decides for all.
+        const bool isRoot = flowGrid.comm().rank() == 0;
+        int problem = 0;
+        if (isRoot) {
+            problem = (processed == nullptr) ? 1 : 0;
         }
-        pinchOrMinpv = flowGrid.comm().max(pinchOrMinpv);
-        if (pinchOrMinpv != 0) {
+        problem = flowGrid.comm().max(problem);
+        if (problem != 0) {
             OPM_THROW_NOLOG(std::runtime_error,
-                            "A separate mechanics grid needs the deck's geometry as flow sees "
-                            "it; MINPV/PINCH decks need the edge-conformal processed grid to "
-                            "be retained first, which is not implemented.");
+                            "The mechanics grid needs the description the flow grid was built "
+                            "from: call RetainCornerPointInput::enable() before the grid is "
+                            "created (MechPartition::installFlowPartition does).");
         }
 
         const auto size = flowGrid.logicalCartesianSize();
@@ -100,20 +103,33 @@ public:
         // Corner-point processing is a rank-0 job with collective steps, so
         // every rank calls it and only rank 0 passes the description.
         std::unique_ptr<EclipseGrid> coarseGrid;
-        if (inputGrid != nullptr) {
+        if (processed != nullptr) {
             Coarsening::Grdecl fine;
             fine.dims = fineDims;
-            fine.coord = inputGrid->getCOORD();
-            fine.zcorn = inputGrid->getZCORN();
-            fine.actnum = inputGrid->getACTNUM();
+            fine.coord = processed->coord;
+            fine.zcorn = processed->zcorn;
+            fine.actnum = processed->actnum;
 
             Coarsening::Options options;
-            // Mechanics wants rock everywhere the block has volume, so inactive
-            // cells with real volume are absorbed instead of left as holes.
+            // Mechanics wants rock everywhere the block has volume, so cells
+            // that are inactive or that MINPV removed are absorbed instead of
+            // left as holes.
             options.activity = Coarsening::Activity::FillHoles;
+            // Without edge-conformal processing, MINPV leaves the removed
+            // cells' volume as a gap between their neighbours; the mechanics
+            // body takes it back as rock.
+            options.allowVerticalGaps = !processed->edgeConformal;
             const auto result = Coarsening::coarsenCornerPoint(fine, requests, options);
             for (const auto& note : result.report.notes) {
                 OpmLog::info("Mechanics grid: " + note);
+            }
+            if (result.report.absorbedGapVolume > 0.0) {
+                OpmLog::warning("Mechanics grid: took "
+                                + std::to_string(result.report.absorbedGapVolume)
+                                + " m3 of gaps left by cell removal back as rock. Run with "
+                                "--edge-conformal=true so the removal merges the cells "
+                                "geometrically; gaps under cells the mechanics does not "
+                                "coarsen stay holes in the body.");
             }
             coarseGrid = std::make_unique<EclipseGrid>(result.grid.dims, result.grid.coord,
                                                        result.grid.zcorn,

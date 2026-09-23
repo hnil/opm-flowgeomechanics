@@ -20,6 +20,7 @@
 #define OPM_MECH_GRID_PARTITION_HPP
 
 #include <opm/grid/cpgrid/coarsening/CornerPointCoarsening.hpp>
+#include <opm/grid/cpgrid/RetainedCornerPointInput.hpp>
 
 #include <opm/common/ErrorMacros.hpp>
 #include <opm/models/utils/propertysystem.hh>
@@ -264,6 +265,9 @@ void installFlowPartition(int argc, char** argv)
         return;
     }
     const auto requests = readRecords(file);
+    // The mechanics grid is a coarsening of what flow was built from, so the
+    // processing has to keep that description.
+    RetainCornerPointInput::enable();
     using Vanguard = GetPropType<TypeTag, Properties::Vanguard>;
     Vanguard::setExternalLoadBalancer(
         [requests](const Dune::CpGrid& grid) { return flowPartition(grid, requests); });

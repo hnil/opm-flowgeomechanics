@@ -23,6 +23,7 @@ work, since only BCCON is rewritten.
 | `T1_PAD_FINE` | 19 × 19 × 37 = 13 357 | SIMPLE's 11×11×25 core (181 m, 20 m layers) with 4 lateral padding cells per side (362 … 2896 m) and 6 layers of over- and underburden (20 … 1130 m), reaching the surface and 4300 m |
 | `T1_PAD_COARSE` | 15 × 15 × 31 = 6 975 | the same model with every padding pair merged; the **exact geometric reference** the coarsening tool must reproduce from T1_PAD_FINE |
 | `T2_CAPROCK` | 19 × 19 × 40 = 14 440 | T1_PAD_FINE with the seal layer above the reservoir split into 18.5 m + 3 × 0.5 m low-perm layers (aspect ≈ 360), which flow keeps and mechanics is meant to coarsen away |
+| `T3_MINPV` | 19 × 19 × 40 = 14 440 | T2_CAPROCK with MINPVV over the core's thin layers, so flow drops those 363 cells while the mechanics keeps the rock. MINPVV rather than MINPV: a removal in only some padding columns would leave the merged geometry discontinuous across a pillar the coarsening drops, and the coarsening refuses that |
 
 Both coarse grids are strictly nested in their fine grid: every coarse cell is a union
 of fine cells, and the generator asserts that every coarse breakpoint is a fine one.
@@ -91,7 +92,20 @@ mpirun -np 4 $BIN --threads-per-process=1 --output-dir=/tmp/coarsen/twogrid_np4 
      --mech-coarsen-file=mech_coarsen_T1.txt T1_PAD_FINE.DATA
 ```
 
-Not for decks with MINPV/PINCH yet.
+With MINPV or PINCH, the mechanics grid is built from the geometry flow was
+processed into, not from the deck's own grid, so the two agree on where the rock is.
+Use `--edge-conformal=true`: the removed cells are then merged into their neighbours
+and the mechanics body stays whole. Without it the removal leaves gaps, which only a
+coarsened block takes back as rock — the run warns and says how much.
+
+```bash
+$BIN --output-dir=/tmp/coarsen/t3 --edge-conformal=true \
+     --fracture-param-file=sequential_implicit \
+     --mech-coarsen-file=mech_coarsen_T3.txt T3_MINPV.DATA
+```
+
+T3's mechanics grid is 15 × 15 × 31 with every cell active: flow's 363 removed cells
+leave no hole in the body.
 
 ## Baseline (2026-09-23, bcmech build, serial, 90 days, `sequential_implicit`)
 
@@ -104,7 +118,18 @@ Values at the last step. BHP is on its 290 bar limit in all three.
 | T1_PAD_COARSE (both coarse) | 176.96 | 691 | 3879.8 m² | 91.66 m³ | 62 s |
 | T2_CAPROCK (flow fine, mech fine) | 190.38 | 527 | 3879.8 m² | 79.74 m³ | 149 s |
 
-On 2 ranks, the two-grid run gives 175.92 / 718.98 / 3879.8 m² / 92.71 m³ in 64 s,
+T3 (edge-conformal, two-grid, serial): stress 191.31, WWIRFRAC 493, area 3879.8 m²,
+volume 79.06 m³, 65 s. The same deck with the mechanics on the fine grid **aborts** in
+the fracture solve on a width assertion — the thin cells are exactly what the coarse
+mechanics grid is for.
+
+On the thin-caprock decks (T2, T3) the coarse-mechanics runs are sensitive to the
+partition: serial and np=2 track each other in stress to ~1.3 % but the fracture front
+stops one growth ring apart (3921 vs 3547 m²), and the late WWIRFRAC is a decaying
+tail where small absolute differences look large. T1, without thin layers, matches
+closely.
+
+On 2 ranks, the T1 two-grid run gives 175.92 / 718.98 / 3879.8 m² / 92.71 m³ in 64 s,
 against 175.87 / 718.69 / 3879.8 m² / 92.78 m³ in 110 s for the single-grid run on the
 same ranks. np=4 gives 175.04 / 718.73 / 3879.8 m² / 93.43 m³ in 62 s.
 
