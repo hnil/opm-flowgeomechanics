@@ -180,13 +180,33 @@ for describing the model as an LGR in the first place rather than merging a fine
 
 ### CARFIN in this stack
 
-CARFIN is listed in `UnsupportedFlowKeywords.cpp`, but only the message is blocked: with
-`--parsing-strictness=low` the deck's LGRs reach EclipseState and the vanguard refines
-the grid ("1 (new) refined level grid(s)"). Two geomech blockers behind it are fixed
-here — STRESSEQUILNUM and the mechanical properties are now read by Cartesian index, so
-a refined cell takes the value of the cell it came from. The next one is VEM failing to
-find a star point for a six-faced cell in the leaf, which is the LGR handling that lives
-on the geomech_lgr branch.
+**It works.** Run with `--parsing-strictness=low`: the unsupported-keyword list only
+blocks the message, and the deck's LGRs reach EclipseState either way, so the vanguard
+refines the grid. On SIMPLE with `CARFIN 'LGRW' 5 7 5 7 15 17 9 9 3`, flow runs on the
+3241-cell leaf and the mechanics on either grid:
+
+| mechanics grid | cells | STRESSZZ vs mechanics on the leaf | time |
+|---|---|---|---|
+| the leaf | 3241 | reference | 2.83 s |
+| level zero (an empty records file) | 3025 | 0.10 bar (0.02 %) | 2.75 s |
+
+An empty coarsening records file is all it takes: the mechanics grid is then the deck's
+own grid, and every refined flow cell maps to the cell it came from.
+
+### What had to be fixed first
+
+Three things, all in geomech. STRESSEQUILNUM and the mechanical properties were read
+per active cell and indexed by cell, which breaks as soon as the leaf has more cells
+than the field properties; they now go through the Cartesian index mapper, so a refined
+cell takes the value of the cell it came from.
+
+The third was the interesting one. VEM could not find a star point for an ordinary
+six-faced cell of the leaf, because `vemutils` ordered each face's corners from the
+face-to-cell orientation — first cell, then second — and on a refined leaf 540 of 19662
+cell-face entries do not follow that convention, so those faces were built inside-out.
+The orientation now comes from the geometry instead: the polygon normal against the
+line from the cell centre to the face centre. That holds on any grid, refined or not,
+and leaves ordinary decks byte-identical.
 
 Note that properties cannot be given *inside* a CARFIN block: block-local PORO, PERMX
 and so on are scoped out and refined cells inherit the father (opm-gridrefined

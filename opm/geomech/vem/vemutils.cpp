@@ -183,27 +183,36 @@ getGridVectors(const Dune::CpGrid& grid,
             // assert(faceSize == 4);
             // auto numface_cells = grid.numCellFaces();
             // assert(numface_cells == 2);
-            auto out_cell = grid.faceCell(face, 1);
-            auto in_cell = grid.faceCell(face, 0);
-            assert((out_cell < nc) && (in_cell < nc));
-            assert(out_cell != in_cell);
-            if (out_cell != cellIdx) {
-                assert(in_cell == cellIdx);
+            // VEM needs the corners of each face listed so that the polygon
+            // normal points out of the cell. Take that from the geometry
+            // rather than from face-to-cell orientation: on a refined leaf
+            // grid the stored node order does not always run from the first
+            // cell of the face to the second.
+            const auto& face_centre = grid.faceCentroid(face);
+            const auto& cell_centre = grid.cellCentroid(cellIdx);
+            std::array<double, 3> normal {0.0, 0.0, 0.0};
+            for (int v = 0; v < faceSize; ++v) {
+                const auto& a = grid.vertexPosition(grid.faceVertex(face, v));
+                const auto& b = grid.vertexPosition(grid.faceVertex(face, (v + 1) % faceSize));
+                const std::array<double, 3> u {a[0] - face_centre[0], a[1] - face_centre[1],
+                                               a[2] - face_centre[2]};
+                const std::array<double, 3> w {b[0] - face_centre[0], b[1] - face_centre[1],
+                                               b[2] - face_centre[2]};
+                normal[0] += u[1]*w[2] - u[2]*w[1];
+                normal[1] += u[2]*w[0] - u[0]*w[2];
+                normal[2] += u[0]*w[1] - u[1]*w[0];
+            }
+            double outward = 0.0;
+            for (int d = 0; d < 3; ++d) {
+                outward += normal[d]*(face_centre[d] - cell_centre[d]);
+            }
+            if (outward >= 0.0) {
                 for (int v = 0; v < faceSize; ++v) {
-                    int fv = grid.faceVertex(face, v);
-                    // const auto& point = cpgrid::Entity<3>(*currentData().back(), fv, true);
-                    // const auto& localId = currentData().back()->localIdSet().id(point);
-                    // const auto& globalId = currentData().back()->globalIdSet().id(point);
-                    face_corners.push_back(fv);
+                    face_corners.push_back(grid.faceVertex(face, v));
                 }
             } else {
-                // assert(in_cell==cellIdx);
                 for (int v = faceSize - 1; v > -1; --v) {
-                    int fv = grid.faceVertex(face, v);
-                    // const auto& point = cpgrid::Entity<3>(*currentData().back(), fv, true);
-                    // const auto& localId = currentData().back()->localIdSet().id(point);
-                    // const auto& globalId = currentData().back()->globalIdSet().id(point);
-                    face_corners.push_back(fv);
+                    face_corners.push_back(grid.faceVertex(face, v));
                 }
             }
         }
