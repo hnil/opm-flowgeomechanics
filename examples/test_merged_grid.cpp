@@ -11,6 +11,7 @@
 #include <array>
 #include <cmath>
 #include <fstream>
+#include <map>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -359,6 +360,86 @@ int main(int argc, char** argv)
     }
     std::cout << "cell-face entries whose face does not know the cell: " << notMine
               << ", faces with the cell on both sides: " << bothSides << '\n';
+
+    // Edge conformality: no node may sit inside another face's edge. A node on
+    // an edge has to be a corner of every face that edge belongs to, or a cell
+    // meeting it does not carry that degree of freedom.
+    {
+        std::vector<std::array<double,3>> pts;
+        pts.reserve(gv.size(3));
+        for (int v = 0; v < gv.size(3); ++v) {
+            const auto& p = grid.vertexPosition(v);
+            pts.push_back({p[0], p[1], p[2]});
+        }
+        // bucket the nodes so each edge only looks at what is near it
+        double lo[3] = {1e30, 1e30, 1e30}, hi[3] = {-1e30, -1e30, -1e30};
+        for (const auto& p : pts) {
+            for (int d = 0; d < 3; ++d) {
+                lo[d] = std::min(lo[d], p[d]);
+                hi[d] = std::max(hi[d], p[d]);
+            }
+        }
+        const int N = 64;
+        const auto bucket = [&](const std::array<double,3>& p) {
+            int b = 0;
+            for (int d = 0; d < 3; ++d) {
+                const double t = (p[d] - lo[d])/std::max(1e-30, hi[d] - lo[d]);
+                const int i = std::min(N - 1, std::max(0, int(t*N)));
+                b = b*N + i;
+            }
+            return b;
+        };
+        std::map<int, std::vector<int>> cells;
+        for (std::size_t v = 0; v < pts.size(); ++v) {
+            cells[bucket(pts[v])].push_back(int(v));
+        }
+
+        std::size_t onEdge = 0;
+        for (int c = 0; c < gv.size(0); ++c) {
+            for (int f = 0; f < grid.numCellFaces(c); ++f) {
+                const int face = grid.cellFace(c, f);
+                const int nv = grid.numFaceVertices(face);
+                for (int e = 0; e < nv; ++e) {
+                    const int a = grid.faceVertex(face, e);
+                    const int b = grid.faceVertex(face, (e + 1) % nv);
+                    const auto& pa = pts[a];
+                    const auto& pb = pts[b];
+                    double len2 = 0.0;
+                    for (int d = 0; d < 3; ++d) {
+                        len2 += (pb[d]-pa[d])*(pb[d]-pa[d]);
+                    }
+                    if (len2 < 1e-18) { continue; }
+                    // candidates: nodes bucketed near the midpoint
+                    std::array<double,3> mid{0.5*(pa[0]+pb[0]), 0.5*(pa[1]+pb[1]),
+                                             0.5*(pa[2]+pb[2])};
+                    const int mb = bucket(mid);
+                    for (const int v : cells[mb]) {
+                        if (v == a || v == b) { continue; }
+                        const auto& p = pts[v];
+                        double t = 0.0;
+                        for (int d = 0; d < 3; ++d) {
+                            t += (p[d]-pa[d])*(pb[d]-pa[d]);
+                        }
+                        t /= len2;
+                        if (t <= 1e-9 || t >= 1 - 1e-9) { continue; }
+                        double off = 0.0;
+                        for (int d = 0; d < 3; ++d) {
+                            const double proj = pa[d] + t*(pb[d]-pa[d]);
+                            off += (p[d]-proj)*(p[d]-proj);
+                        }
+                        if (off < 1e-12*len2) {
+                            if (onEdge < 5) {
+                                std::cout << "node " << v << " sits inside an edge of face "
+                                          << face << " (cell " << c << ")\n";
+                            }
+                            ++onEdge;
+                        }
+                    }
+                }
+            }
+        }
+        std::cout << "nodes sitting inside another face's edge: " << onEdge << '\n';
+    }
     std::cout << "total volume: " << total << '\n';
     std::cout << "cells whose faces do not close: " << openCells
               << ", most faces on a cell: " << worstFaces << '\n';
