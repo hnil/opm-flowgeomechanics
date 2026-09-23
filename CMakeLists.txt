@@ -378,6 +378,14 @@ target_link_libraries(test_merged_grid
 		opmflowgeomechanics
 )
 
+add_executable(test_leaf_orientation
+	examples/test_leaf_orientation.cpp
+)
+target_link_libraries(test_leaf_orientation
+	PUBLIC
+		opmflowgeomechanics
+)
+
 add_executable(test_partition_of_unity
 	examples/test_partition_of_unity.cpp
 )

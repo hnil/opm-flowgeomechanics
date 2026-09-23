@@ -65,6 +65,10 @@ PAD_GROUPING = 2
 CAPROCK_N = 3
 CAPROCK_DZ = 0.5
 
+# T7: the same split, 3 x 1 cm, but of the seal's own rock, so the model is
+# T1_PAD_FINE's and only the grid differs.
+THIN_DZ = 0.01
+
 PROPS_ROCK = {"PERMX": 10.0, "PORO": 0.10}
 PROPS_RES = {"PERMX": 1000.0, "PORO": 0.28}
 PROPS_PAD = {"PERMX": 0.001, "PORO": 0.01}
@@ -88,16 +92,17 @@ class Layout:
     """
 
     def __init__(self, xs, ys, zs, core_i, core_j, core_k, res_k, well,
-                 caprock_k=None):
+                 caprock_k=None, thin_k=None):
         self.xs, self.ys, self.zs = xs, ys, zs
         self.nx, self.ny, self.nz = len(xs) - 1, len(ys) - 1, len(zs) - 1
         self.core_i, self.core_j, self.core_k = core_i, core_j, core_k
         self.res_k = res_k
         self.well = well
         self.caprock_k = caprock_k
+        self.thin_k = thin_k
 
 
-def build_fine(with_caprock=False):
+def build_fine(with_caprock=False, thin_dz=CAPROCK_DZ, same_rock=False):
     npad = len(PAD_LATERAL)
     xs = cumulative(-sum(PAD_LATERAL),
                     PAD_LATERAL[::-1] + [CORE_DX] * CORE_NX + PAD_LATERAL)
@@ -111,8 +116,8 @@ def build_fine(with_caprock=False):
         # remainder plus CAPROCK_N thin layers sitting on the reservoir.
         host = RES_K1 - 2                      # 0-based index of that layer
         core_dz = (core_dz[:host]
-                   + [CORE_DZ - CAPROCK_N * CAPROCK_DZ]
-                   + [CAPROCK_DZ] * CAPROCK_N
+                   + [CORE_DZ - CAPROCK_N * thin_dz]
+                   + [thin_dz] * CAPROCK_N
                    + core_dz[host + 1:])
         first_thin = len(PAD_ABOVE) + host + 2
         caprock_k = (first_thin, first_thin + CAPROCK_N - 1)
@@ -127,7 +132,8 @@ def build_fine(with_caprock=False):
                   core_k=(kcore0 + 1, kcore0 + CORE_NZ + extra),
                   res_k=(kcore0 + RES_K1 + extra, kcore0 + RES_K2 + extra),
                   well=(npad + WELL_I, npad + WELL_J, kcore0 + WELL_K + extra),
-                  caprock_k=caprock_k)
+                  caprock_k=None if same_rock else caprock_k,
+                  thin_k=caprock_k)
 
 
 def group_sizes(fine_count, core_range, grouping):
@@ -376,6 +382,7 @@ def main():
     fine = build_fine()
     coarse, groups = coarsen_layout(fine)
     caprock = build_fine(with_caprock=True)
+    thin = build_fine(with_caprock=True, thin_dz=THIN_DZ, same_rock=True)
 
     # T3: flow drops the thin seal cells in the core, the mechanics keeps the
     # rock. MINPVV rather than MINPV, so the removal stays inside the core: a
@@ -391,6 +398,7 @@ def main():
         ("T1_PAD_COARSE", coarse, ""),
         ("T2_CAPROCK", caprock, ""),
         ("T3_MINPV", caprock, minpv),
+        ("T7_THIN", thin, ""),
     ]
     for name, lay, extra in cases:
         grid = "%s_GRID.INC" % name
@@ -420,6 +428,18 @@ def main():
     with open(os.path.join(HERE, "coarsen_spec_T2.json"), "w") as f:
         json.dump(cap_spec, f, indent=2)
     print("wrote coarsen_spec_T1.json, coarsen_spec_T2.json")
+
+    # T7: only the thin layers go back into their host; the rest stays fine,
+    # so the mechanics grid is T1_PAD_FINE's.
+    host = thin.thin_k[0] - 1
+    with open(os.path.join(HERE, "mech_coarsen_T7_thin.txt"), "w") as f:
+        f.write("-- T7_THIN: merge the %d thin layers back into the seal layer they\n"
+                "-- were cut from, which gives T1_PAD_FINE's grid.\n"
+                "-- I1 I2 J1 J2 K1 K2 NX NY NZ\n"
+                "%d %d %d %d %d %d %d %d 1\n"
+                % (CAPROCK_N, 1, thin.nx, 1, thin.ny, host, host + CAPROCK_N,
+                   thin.nx, thin.ny))
+    print("wrote mech_coarsen_T7_thin.txt")
 
 
 def sum_to_index(sizes, target_cell):

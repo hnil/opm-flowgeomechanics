@@ -24,6 +24,7 @@ work, since only BCCON is rewritten.
 | `T1_PAD_COARSE` | 15 × 15 × 31 = 6 975 | the same model with every padding pair merged; the **exact geometric reference** the coarsening tool must reproduce from T1_PAD_FINE |
 | `T2_CAPROCK` | 19 × 19 × 40 = 14 440 | T1_PAD_FINE with the seal layer above the reservoir split into 18.5 m + 3 × 0.5 m low-perm layers (aspect ≈ 360), which flow keeps and mechanics is meant to coarsen away |
 | `T3_MINPV` | 19 × 19 × 40 = 14 440 | T2_CAPROCK with MINPVV over the core's thin layers, so flow drops those 363 cells while the mechanics keeps the rock. MINPVV rather than MINPV: a removal in only some padding columns would leave the merged geometry discontinuous across a pillar the coarsening drops, and the coarsening refuses that |
+| `T7_THIN` | 19 × 19 × 40 = 14 440 | T1_PAD_FINE with the seal layer above the reservoir split into 19.97 m + 3 × 1 cm of the **same** rock, so T1_PAD_FINE is its exact reference and only the grid differs. `mech_coarsen_T7_thin.txt` merges the thin layers back |
 
 Both coarse grids are strictly nested in their fine grid: every coarse cell is a union
 of fine cells, and the generator asserts that every coarse breakpoint is a fine one.
@@ -203,10 +204,53 @@ cell takes the value of the cell it came from.
 The third was the interesting one. VEM could not find a star point for an ordinary
 six-faced cell of the leaf, because `vemutils` ordered each face's corners from the
 face-to-cell orientation — first cell, then second — and on a refined leaf 540 of 19662
-cell-face entries do not follow that convention, so those faces were built inside-out.
+cell-face entries did not follow that convention, so those faces were built inside-out.
 The orientation now comes from the geometry instead: the polygon normal against the
 line from the cell centre to the face centre. That holds on any grid, refined or not,
 and leaves ordinary decks byte-identical.
+
+The root cause was in opm-grid, and is fixed there too (`34ac898d`, also present in
+upstream master): `Geometry::refine` listed each refined **J-face**'s corners winding
+around −y and then flipped the stored normal to +y to compensate. Normals and
+face-to-cell order were right; only the corner order of every refined J-face ran
+against its normal — 6804 faces on a 9 × 9 × 3 refinement of 3 × 3 × 3 cells, exactly
+the box's J-faces. `examples/test_leaf_orientation.cpp` checks corner order, stored
+normal and face-to-cell order on every level; it now finds 0. Flow output of an LGR
+deck is unchanged (INIT, EGRID and solution identical), and mechanics moves at
+round-off (1e-9 relative, the polygon now starts at another corner).
+
+### Very thin layers, and coarsening them away
+
+`make_thin_layers.py OUTDIR --eps E --carfin` writes the CARFIN deck with the
+overburden layer above the reservoir split into (20 m − 3E) + 3 × E of the same rock,
+plus `mech_merge_thin.txt`, which merges the thin layers back for the mechanics.
+Five days × 2, mechanics on level zero as the reference:
+
+| thin layers | mechanics grid | mech solves unconverged | linear its / solve | stress vs reference | time |
+|---|---|---|---|---|---|
+| none | level zero | 0 of 9 | 37–57 | reference | 3.3 s |
+| 3 × 10 cm | leaf, with the layers | 3 of 9 | 175–200 | 0.10 bar | 7.0 s |
+| 3 × 1 cm | leaf, with the layers | **9 of 9** | 200 (cap) | 0.10 bar | 7.1 s |
+| 3 × 1 mm | leaf, with the layers | **9 of 9** | 200 (cap) | 0.10 bar | 7.1 s |
+| 3 × 1 mm | layers merged back | 0 of 9 | 37–53 | **1e-6 bar** | 3.4 s |
+
+(0.10 bar is the leaf-vs-level-zero difference the unsplit deck already has.) This
+deck's fracture stays at its seed (WSEED width 1e-4), so for fracture growth the same
+test is T7, 90 days, against T1_PAD_FINE:
+
+| run | mech solves unconverged | linear its | fracture area / volume | time |
+|---|---|---|---|---|
+| T1_PAD_FINE | 0 of 78 | 10 833 | 3879.8 m² / 92.787 m³ | 127 s |
+| T7_THIN, mechanics with the 1 cm layers | **78 of 78** | 15 600 | 3879.8 m² / 92.835 m³ | 170 s |
+| T7_THIN + `mech_coarsen_T7_thin.txt` | 0 of 78 | 10 849 | 3879.8 m² / 92.835 m³ | 128 s |
+
+So very thin cells do not crash VEM here and do not spoil the answer outside them: every
+mechanics linear solve runs to the iteration cap without meeting its tolerance, at 40 %
+more linear work, but stress away from the thin layers matches the merged run to 1e-3 bar.
+Merging them back for the mechanics restores converged solves at the reference cost.
+Against T1_PAD_FINE the merged run is within 0.03 bar in stress and 0.05 % in fracture
+volume; that residue is flow's (the 1 cm flow cells move temperature by 0.015 °C), since
+the thin-layer mechanics run gives the same fracture volume to four decimals.
 
 Note that properties cannot be given *inside* a CARFIN block: block-local PORO, PERMX
 and so on are scoped out and refined cells inherit the father (opm-gridrefined

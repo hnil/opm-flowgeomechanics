@@ -183,11 +183,8 @@ getGridVectors(const Dune::CpGrid& grid,
             // assert(faceSize == 4);
             // auto numface_cells = grid.numCellFaces();
             // assert(numface_cells == 2);
-            // VEM needs the corners of each face listed so that the polygon
-            // normal points out of the cell. Take that from the geometry
-            // rather than from face-to-cell orientation: on a refined leaf
-            // grid the stored node order does not always run from the first
-            // cell of the face to the second.
+            // VEM needs each face's corners wound outward. Take that from the
+            // geometry, not from the grid's node order convention.
             const auto& face_centre = grid.faceCentroid(face);
             const auto& cell_centre = grid.cellCentroid(cellIdx);
             std::array<double, 3> normal {0.0, 0.0, 0.0};

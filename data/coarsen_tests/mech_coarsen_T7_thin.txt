@@ -1,0 +1,4 @@
+-- T7_THIN: merge the 3 thin layers back into the seal layer they
+-- were cut from, which gives T1_PAD_FINE's grid.
+-- I1 I2 J1 J2 K1 K2 NX NY NZ
+1 19 1 19 16 19 19 19 1
