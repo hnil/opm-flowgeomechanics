@@ -8,6 +8,7 @@
 
 #include <opm/geomech/FlowGeoMechLinearSolverParameters.hpp>
 #include <opm/geomech/FractureMechHost.hpp>
+#include <opm/geomech/MechFlowMap.hpp>
 #include <opm/geomech/FractureModel.hpp>
 #include <opm/simulators/linalg/WriteSystemMatrixHelper.hpp>
 
@@ -220,6 +221,22 @@ namespace Opm{
             } else if(smooth){
               mechPotentialForce_ = vem::smoothCellVector(simulator_.vanguard().grid(),mechPotentialForce_);
             }
+            // Smoothing belongs on the flow grid; the mechanics grid sees the
+            // volume-weighted mean, which keeps the load integral.
+            if(!mechMap_.isIdentity()){
+                mechMap_.restrict(mechPotentialForce_, mechPotentialForceMech_);
+            }
+        }
+
+        //! The load the mechanics solver assembles: flow cells when the grids
+        //! are the same, mechanics cells otherwise.
+        const Dune::BlockVector<Dune::FieldVector<double,1>>& mechLoad() const {
+            return mechMap_.isIdentity() ? mechPotentialForce_ : mechPotentialForceMech_;
+        }
+
+        //! Mechanics index of a flow cell; the identity while the grids agree.
+        std::size_t mechIdx(std::size_t globalIdx) const {
+            return static_cast<std::size_t>(mechMap_.mechCell(globalIdx));
         }
         void setupMechSolver(bool use_body_force = false){
                 const auto& problem = simulator_.problem();
@@ -253,7 +270,7 @@ namespace Opm{
                 elacticitysolver_.fixNodes(problem.bcNodes());
                 //
                 elacticitysolver_.initForAssembly();
-                elacticitysolver_.assemble(mechPotentialForce_, do_matrix, do_vector,reduce_boundary_);
+                elacticitysolver_.assemble(this->mechLoad(), do_matrix, do_vector,reduce_boundary_);
                 //elacticitysolver_.assemble_fem(mechPotentialForce_, do_matrix, do_vector,reduce_boundary_);
                 FlowLinearSolverParametersGeoMech p;
                 p.init<TypeTag>();
@@ -402,7 +419,7 @@ namespace Opm{
                 //elacticitysolver_.A.initForAssembly();
                 //elacticitysolver_.assemble(mechPotentialForce_, do_matrix, do_vector);
                 // need precomputed divgrad operator
-                elacticitysolver_.updateRhsWithGrad(mechPotentialForce_);
+                elacticitysolver_.updateRhsWithGrad(this->mechLoad());
             }    
         }
         void solveGeomechanics(bool use_body_force = false, bool relative_solve = true){
@@ -451,6 +468,7 @@ namespace Opm{
             celldisplacement_.resize(numDof);
             std::fill(celldisplacement_.begin(),celldisplacement_.end(),0.0);
             //stress_.resize(numDof);
+            mechMap_ = MechFlowMap::identity(numDof);
             linstress_.resize(numDof);
             std::fill(linstress_.begin(),linstress_.end(),0.0);
             outputstress_.resize(numDof);
@@ -507,7 +525,7 @@ namespace Opm{
             return mechPotentialTempForce_[globalDofIdx] / fac;
         }
         const Dune::FieldVector<double,3> disp(size_t globalIdx,bool with_fracture = false) const{
-            auto disp =  celldisplacement_[globalIdx];
+            auto disp =  celldisplacement_[this->mechIdx(globalIdx)];
             if(fracHost_.includeFractureContributions() && with_fracture){
                 for(auto& elem: Dune::elements(simulator_.vanguard().grid().leafGridView())){
                     //size_t locglobalIdx = simulator_.problem().elementMapper().index(elem);
@@ -534,20 +552,20 @@ namespace Opm{
         }
 
         const SymTensor linstress(size_t globalIdx) const{
-	  return linstress_[globalIdx];
+	  return linstress_[this->mechIdx(globalIdx)];
         }
 
         const SymTensor outputstress(size_t globalIdx) const{
-	        return outputstress_[globalIdx];
+	        return outputstress_[this->mechIdx(globalIdx)];
         }
 
         const SymTensor effstress(size_t globalIdx) const{
 	  // make stress in with positive with compression
-	         return -1.0*linstress_[globalIdx];
+	         return -1.0*linstress_[this->mechIdx(globalIdx)];
         }
 
         const SymTensor strain(size_t globalIdx,bool with_fracture = false) const{
-            auto strain = strain_[globalIdx];
+            auto strain = strain_[this->mechIdx(globalIdx)];
             if(fracHost_.includeFractureContributions() && with_fracture){
                 for(auto& elem: Dune::elements(simulator_.vanguard().grid().leafGridView())){
                     //size_t locglobalIdx = simulator_.problem().elementMapper().index(elem);
@@ -560,7 +578,7 @@ namespace Opm{
                     }
                 }
             }
-            return strain_[globalIdx];
+            return strain_[this->mechIdx(globalIdx)];
         }   
 
         const SymTensor stress(size_t globalIdx,bool with_fracture = false) const{
@@ -712,6 +730,9 @@ namespace Opm{
 
         Dune::BlockVector<Dune::FieldVector<double,1>> pressure_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialForce_;
+        // Only filled when the mechanics grid is a coarsening of the flow grid.
+        Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialForceMech_;
+        MechFlowMap mechMap_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialPressForce_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialPressForceFracture_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialTempForce_;
