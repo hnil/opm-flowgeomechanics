@@ -16,7 +16,6 @@
   You should have received a copy of the GNU General Public License
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 */
-#include <opm/geomech/MechGridPartition.hpp>
 #include "config.h"
 #if USE_TRACY
 // #define DETAILED_PROFILING 1
@@ -25,6 +24,7 @@
 #include <opm/simulators/flow/Main.hpp>
 
 #include "OilGasEnergyMechTypeTag.hpp"
+#include <opm/geomech/MechGridPartition.hpp>
 
 int
 main(int argc, char** argv)

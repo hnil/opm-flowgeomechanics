@@ -23,6 +23,8 @@
 #include <opm/grid/cpgrid/RetainedCornerPointInput.hpp>
 
 #include <opm/common/ErrorMacros.hpp>
+#include <opm/grid/CpGrid.hpp>
+#include <opm/models/utils/basicproperties.hh>
 #include <opm/models/utils/propertysystem.hh>
 
 #include <algorithm>
