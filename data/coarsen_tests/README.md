@@ -66,22 +66,44 @@ eval coarsen_grdecl T1_PAD_FINE_GRID.INC /tmp/T1_COARSENED.INC $ARGS --lgr
 `--lgr` prints the CARFIN-style requests that refine the coarse grid back to the fine
 one (26 boxes for T1; the 1:1 core is not listed).
 
+## Running the mechanics on its own grid
+
+`mech_coarsen_T1.txt` holds the same records as `coarsen_spec_T1.json`, one per line,
+for `--mech-coarsen-file`: flow stays on the fine grid, the mechanics runs on the
+coarse one.
+
+```bash
+$BIN --output-dir=/tmp/coarsen/twogrid \
+     --fracture-param-file=sequential_implicit \
+     --mech-coarsen-file=mech_coarsen_T1.txt T1_PAD_FINE.DATA
+```
+
+The boundary of that grid is not the one BCCON describes, so it gets its own
+constraint: `"mech_grid_bc"` in the parameter JSON, one of `fixed`, `roller` or
+`roller_free_top` (the default, which matches these decks' free top).
+
+Serial only so far, and not for decks with MINPV/PINCH.
+
 ## Baseline (2026-09-23, bcmech build, serial, 90 days, `sequential_implicit`)
 
 Values at the last step. BHP is on its 290 bar limit in all three.
 
-| Deck | BSTRSSXX | WWIRFRAC | fracture area | fracture volume | run time |
+| Run | BSTRSSXX | WWIRFRAC | fracture area | fracture volume | run time |
 |---|---|---|---|---|---|
-| T1_PAD_FINE | 175.86 | 719 | 3879.8 m² | 92.60 m³ | 114 s |
-| T1_PAD_COARSE | 176.96 | 691 | 3879.8 m² | 91.66 m³ | 62 s |
-| T2_CAPROCK | 190.38 | 527 | 3879.8 m² | 79.74 m³ | 149 s |
+| T1_PAD_FINE (flow fine, mech fine) | 175.86 | 719 | 3879.8 m² | 92.60 m³ | 114 s |
+| T1_PAD_FINE + `--mech-coarsen-file` | 176.88 | 719 | 3879.8 m² | 91.92 m³ | 70 s |
+| T1_PAD_COARSE (both coarse) | 176.96 | 691 | 3879.8 m² | 91.66 m³ | 62 s |
+| T2_CAPROCK (flow fine, mech fine) | 190.38 | 527 | 3879.8 m² | 79.74 m³ | 149 s |
 
 Coarsening the padding — for flow and mechanics together — moves the stress at the
 well by 1.1 bar (0.6 %) and the fracture volume by 1.0 %, with the same fracture area,
-and halves the run time. That is the band the two-grid path has to stay within.
+and halves the run time.
 
-T2 is a different model, not a coarsening of T1, so its numbers are not comparable;
-they are recorded as its own reference.
+The two-grid run sits between the two, at 0.6 % in stress and 0.7 % in fracture volume
+from the all-fine run, with the same fracture area and the same fracture injection
+rate, in 61 % of the time. T2 is a different model, not a coarsening of T1, so its
+numbers are its own reference.
+
 
 With `--steps 3` (15 days) the fracture is still at its 74.7 m² seed in every case, so
 that schedule is a smoke test only.
