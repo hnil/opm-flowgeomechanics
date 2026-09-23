@@ -128,6 +128,63 @@ namespace Opm{
         }
 
 
+        /// Constrain the nodes on the grid's outer boundary. Used for a
+        /// mechanics grid of its own, whose boundary is not the one BCCON
+        /// describes. Rollers still remove every rigid mode of a box, and
+        /// leaving the top free lets the overburden move vertically.
+        enum class OuterBoundary {
+            Fixed,          ///< all three components on every outer face
+            Roller,         ///< the normal component on every outer face
+            RollerFreeTop,  ///< as Roller, but the Z- face is left free
+        };
+
+        template<class GvType>
+        void nodesAtOuterBoundary(std::vector<std::tuple<size_t,MechBCValue>>& bc_nodes,
+                                  const GvType& gv,
+                                  const OuterBoundary mode)
+        {
+            static const int dim = 3;
+            for (const auto& cell : elements(gv)) {
+                for (const auto& is : intersections(gv, cell)) {
+                    if (!is.boundary()) {
+                        continue;
+                    }
+                    const auto dir = faceToFaceDir(is.indexInInside());
+                    if (mode == OuterBoundary::RollerFreeTop && dir == FaceDir::ZMinus) {
+                        continue;
+                    }
+                    MechBCValue bcval;
+                    if (mode == OuterBoundary::Fixed) {
+                        bcval.fixeddir = {true, true, true};
+                    } else {
+                        const int normal = is.indexInInside()/2;
+                        bcval.fixeddir[normal] = true;
+                    }
+                    for (const auto nind : faceDirToNodes(dir)) {
+                        bc_nodes.emplace_back(gv.indexSet().subIndex(cell, nind, dim), bcval);
+                    }
+                }
+            }
+
+            std::sort(bc_nodes.begin(), bc_nodes.end(),
+                      [](const auto& a, const auto& b){ return std::get<0>(a) < std::get<0>(b); });
+            // A node on an edge or corner is met once per face: keep one entry
+            // with the union of the masks.
+            std::vector<std::tuple<size_t,MechBCValue>> unique_nodes;
+            for (const auto& node : bc_nodes) {
+                if (!unique_nodes.empty()
+                    && std::get<0>(unique_nodes.back()) == std::get<0>(node)) {
+                    auto& mask = std::get<1>(unique_nodes.back()).fixeddir;
+                    for (int d = 0; d < dim; ++d) {
+                        mask[d] = mask[d] || std::get<1>(node).fixeddir[d];
+                    }
+                } else {
+                    unique_nodes.push_back(node);
+                }
+            }
+            bc_nodes.swap(unique_nodes);
+        }
+
         template<class BCConfig, class GvType, class CartMapperType>
         void nodesAtBoundary(std::vector<std::tuple<size_t,MechBCValue>>& bc_nodes,
                              const BCConfig& bcconfigs,

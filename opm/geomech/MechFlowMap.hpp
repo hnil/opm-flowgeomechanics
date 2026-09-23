@@ -19,6 +19,7 @@
 #ifndef OPM_MECH_FLOW_MAP_HPP
 #define OPM_MECH_FLOW_MAP_HPP
 
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <vector>
@@ -83,7 +84,7 @@ public:
             return;
         }
         mech.resize(num_mech_cells_);
-        mech = 0.0;
+        std::fill(mech.begin(), mech.end(), typename Vector::value_type{0.0});
         for (std::size_t f = 0; f < flow_to_mech_.size(); ++f) {
             const int m = flow_to_mech_[f];
             if (m >= 0) {

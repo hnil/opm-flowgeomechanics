@@ -60,6 +60,9 @@ namespace Opm::Parameters {
     struct FractureParamFile {
         inline static std::string value{"notafile"};
     };
+    struct MechCoarsenFile {
+        inline static std::string value{"none"};
+    };
 }
 
 namespace Opm{
@@ -154,6 +157,7 @@ namespace Opm{
         static void registerParameters(){
             Base::registerParameters();
 	    Parameters::Register<Parameters::FractureParamFile>("json file defining fracture setting or alias: standard, sequential_implicit");
+	    Parameters::Register<Parameters::MechCoarsenFile>("file of COARSEN records (I1 I2 J1 J2 K1 K2 NX NY NZ, one per line) giving a mechanics grid coarser than the flow grid");
         }
 
         void finishInit(){

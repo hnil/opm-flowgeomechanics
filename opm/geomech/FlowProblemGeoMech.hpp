@@ -560,6 +560,15 @@ namespace Opm{
             const auto& eclState = simulator.vanguard().eclState();
             if(eclState.runspec().mech()){
                 const auto& initconfig = eclState.getInitConfig();
+                const std::string coarsen_file = Parameters::Get<Parameters::MechCoarsenFile>();
+                if(coarsen_file != "none"){
+                    mechGridContext_ = std::make_unique<MechGridContext>(
+                        eclState.getInputGrid(),
+                        MechGridContext::readRecords(coarsen_file),
+                        simulator.vanguard().grid(),
+                        simulator.vanguard().cartesianIndexMapper());
+                    geoMechModel_.setMechGrid(*mechGridContext_);
+                }
                 geoMechModel_.init(initconfig.restartRequested());
                 for(size_t i=0; i < this->ymodule_.size(); ++i){
                     using IsoMat = Opm::Elasticity::Isotropic;
@@ -571,13 +580,31 @@ namespace Opm{
                 const auto& bcprops = this->simulator().vanguard().schedule()[this->episodeIndex()].bcstate;
                 const auto& gv = this->gridView();
                 const auto& cartesianIndexMapper = vanguard.cartesianIndexMapper();
-                Opm::Elasticity::nodesAtBoundary(bc_nodes_,
-                                                 bcconfigs,
-                                                 bcprops,
-                                                 gv,
-                                                 cartesianIndexMapper);
+                if(mechGridContext_){
+                    // BCCON describes the flow grid's boundary, not this one:
+                    // constrain the mechanics grid's own outer boundary.
+                    const std::string bc = this->getFractureParam()
+                        .template get<std::string>("mech_grid_bc", "roller_free_top");
+                    using OuterBoundary = Opm::Elasticity::OuterBoundary;
+                    const auto mode = (bc == "fixed")  ? OuterBoundary::Fixed
+                                    : (bc == "roller") ? OuterBoundary::Roller
+                                                       : OuterBoundary::RollerFreeTop;
+                    if(bc != "fixed" && bc != "roller" && bc != "roller_free_top"){
+                        OPM_THROW(std::runtime_error,
+                                  "mech_grid_bc must be fixed, roller or roller_free_top, not " + bc);
+                    }
+                    Opm::Elasticity::nodesAtOuterBoundary(bc_nodes_,
+                                                          mechGridContext_->grid().leafGridView(),
+                                                          mode);
+                } else {
+                    Opm::Elasticity::nodesAtBoundary(bc_nodes_,
+                                                     bcconfigs,
+                                                     bcprops,
+                                                     gv,
+                                                     cartesianIndexMapper);
+                }
 
-                bool is_ok = checkBcConfig(bc_nodes_);
+                bool is_ok = mechGridContext_ ? true : checkBcConfig(bc_nodes_);
                 if(!is_ok){
                   // this need to be fixed for parallel runs
                   std::cout << "Error in boundary condition specification not proper for mechanical problem" << std::endl;
@@ -915,6 +942,8 @@ namespace Opm{
         GeoMechModel<TypeTag> geoMechModel_;
 
         std::vector<std::tuple<size_t,MechBCValue>> bc_nodes_;
+        // Only set when the mechanics runs on a grid of its own.
+        std::unique_ptr<MechGridContext> mechGridContext_;
         //std::vector<Opm::Elasticity::Material> elasticparams_;
         std::vector<std::shared_ptr<Opm::Elasticity::Material>> elasticparams_;
       //std::vector< CellSeedType > entity_seed_;
