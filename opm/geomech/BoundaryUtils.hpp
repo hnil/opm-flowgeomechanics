@@ -273,6 +273,10 @@ namespace Opm{
             {
                 return std::get<0>(t1) == std::get<0>(t2);
             };
+            if (bc_nodes.empty()) {
+                // In parallel a rank may hold no cell on a BCCON face.
+                return;
+            }
             //TODO: make unique with masks removing boundary set on same dofs mayr romve masks
             const std::vector<std::tuple<size_t,MechBCValue>> org_bc_nodes = bc_nodes;
             std::sort(bc_nodes.begin(), bc_nodes.end(), compare); // {1 1 2 3 4 4 5}

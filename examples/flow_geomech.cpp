@@ -30,6 +30,7 @@
 // #include <opm/flowexperimental/blackoilintensivequantitiessimple.hh>
 #include <opm/geomech/GeoMechModel.hpp>
 #include <opm/geomech/FlowProblemGeoMech.hpp>
+#include <opm/geomech/MechGridPartition.hpp>
 #include <opm/models/discretization/common/baseauxiliarymodule.hh>
 #include <opm/simulators/wells/BlackoilWellModel.hpp>
 
@@ -82,6 +83,8 @@ main(int argc, char** argv)
     // Opm::Parameters::SetDefault<Opm::Parameters::EnableAsyncEclOutput>(false);
     OPM_TIMEBLOCK(fullSimulation);
     using TypeTag = Opm::Properties::TTag::FlowProblemMechNoTemp;
+    // A mechanics grid of its own decides the flow partition too.
+    Opm::MechPartition::installFlowPartition<TypeTag>(argc, argv);
     auto mainObject = Opm::Main(argc, argv);
     return mainObject.runStatic<TypeTag>();
     // return Opm::start<TypeTag>(argc, argv);

@@ -562,8 +562,10 @@ namespace Opm{
                 const auto& initconfig = eclState.getInitConfig();
                 const std::string coarsen_file = Parameters::Get<Parameters::MechCoarsenFile>();
                 if(coarsen_file != "none"){
+                    // The deck's grid is only available on rank 0.
+                    const bool isRoot = simulator.vanguard().grid().comm().rank() == 0;
                     mechGridContext_ = std::make_unique<MechGridContext>(
-                        eclState.getInputGrid(),
+                        isRoot ? &eclState.getInputGrid() : nullptr,
                         MechGridContext::readRecords(coarsen_file),
                         simulator.vanguard().grid(),
                         simulator.vanguard().cartesianIndexMapper());

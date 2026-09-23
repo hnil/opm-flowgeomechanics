@@ -32,6 +32,7 @@
 #include <opm/geomech/BlackoilGeoMechWellModel.hpp>
 #include <opm/geomech/GeoMechModel.hpp>
 #include <opm/geomech/FlowProblemGeoMech.hpp>
+#include <opm/geomech/MechGridPartition.hpp>
 #include <opm/models/discretization/common/baseauxiliarymodule.hh>
 #include <opm/simulators/wells/BlackoilWellModel.hpp>
 // adding linearshe sould be chaning the update_ function in the same class with condition that the error
@@ -63,6 +64,8 @@ main(int argc, char** argv)
 
     OPM_TIMEBLOCK(fullSimulation);
     using TypeTag = Opm::Properties::TTag::FlowProblemMechTemp;
+    // A mechanics grid of its own decides the flow partition too.
+    Opm::MechPartition::installFlowPartition<TypeTag>(argc, argv);
     auto mainObject = Opm::Main(argc, argv);
     return mainObject.runStatic<TypeTag>();
     // return Opm::start<TypeTag>(argc, argv);

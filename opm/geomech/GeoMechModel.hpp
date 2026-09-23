@@ -238,6 +238,8 @@ namespace Opm{
             // volume-weighted mean, which keeps the load integral.
             if(!mechMap_.isIdentity()){
                 mechMap_.restrict(mechPotentialForce_, mechPotentialForceMech_);
+                // Restriction only reaches cells whose flow children are local.
+                mechCtx_->communicate(mechPotentialForceMech_);
             }
         }
 
@@ -511,6 +513,8 @@ namespace Opm{
             std::vector<double> ymodule_mech, pratio_mech;
             mechMap_.restrict(ymodule, ymodule_mech);
             mechMap_.restrict(pratio, pratio_mech);
+            mechCtx_->communicate(ymodule_mech);
+            mechCtx_->communicate(pratio_mech);
             elacticitysolver_->setMaterial(ymodule_mech,pratio_mech);
         }
         const Dune::FieldVector<double,3>& displacement(size_t vertexIndex) const{

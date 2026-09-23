@@ -16,6 +16,7 @@
   You should have received a copy of the GNU General Public License
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 */
+#include <opm/geomech/MechGridPartition.hpp>
 #include "config.h"
 #if USE_TRACY
 // #define DETAILED_PROFILING 1
@@ -30,6 +31,8 @@ main(int argc, char** argv)
 {
     OPM_TIMEBLOCK(fullSimulation);
     using TypeTag = Opm::Properties::TTag::FlowProblemOilGasEnergyMech;
+    // A mechanics grid of its own decides the flow partition too.
+    Opm::MechPartition::installFlowPartition<TypeTag>(argc, argv);
     auto mainObject = Opm::Main(argc, argv);
     return mainObject.runStatic<TypeTag>();
 }
