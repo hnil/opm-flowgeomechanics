@@ -353,7 +353,8 @@ namespace Elasticity {
                                stab_on_stress_
         );
         stressmat_.setBuildMode(Matrix::implicit);
-        stressmat_.setImplicitBuildModeParameters (3*3*3, 0.4);
+        stressmat_.setImplicitBuildModeParameters(
+            entriesPerRow(stressmat, num_cells_*6, 3*3*3), 0.4);
         stressmat_.setSize(num_cells_*6, dispall.size());
         makeDuneMatrixCompressed(stressmat, stressmat_);
         }
@@ -375,7 +376,8 @@ namespace Elasticity {
                                stab_on_stress_
         );
         strainmat_.setBuildMode(Matrix::implicit);
-        strainmat_.setImplicitBuildModeParameters (3*3*3, 0.4);
+        strainmat_.setImplicitBuildModeParameters(
+            entriesPerRow(strainmat, num_cells_*6, 3*3*3), 0.4);
         strainmat_.setSize(num_cells_*6, dispall.size());
         makeDuneMatrixCompressed(strainmat, strainmat_);
         }

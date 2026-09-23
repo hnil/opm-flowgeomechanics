@@ -107,6 +107,20 @@ $BIN --output-dir=/tmp/coarsen/t3 --edge-conformal=true \
 T3's mechanics grid is 15 × 15 × 31 with every cell active: flow's 363 removed cells
 leave no hole in the body.
 
+## Coarse burden plus vertical coarsening in the reservoir
+
+`mech_coarsen_T5_burden_and_reservoir.txt` is the spec to reach for: the padding merged
+laterally in pairs over the full column, the over- and underburden merged in threes, and
+the reservoir merged vertically in pairs except the three layers around the well. All of
+it is expressible as COORD/ZCORN, so it takes the corner-point route.
+
+13 357 flow cells → **4 050 mechanics cells**, and against the fine-grid mechanics
+(15 days) the stress stays within **0.5 %** everywhere in the reservoir: STRESSZZ max
+2.17 bar, mean 0.40; STRESSXX max 1.98 bar, mean 0.46. Run time 8.8 s against 36.4 s
+with the mechanics on the fine grid.
+
+That is the useful operating point today, and it needs no merging.
+
 ## Lateral coarsening of the burden
 
 `mech_coarsen_T4_overburden.txt` coarsens the over- and underburden laterally while
