@@ -265,10 +265,23 @@ namespace Opm{
                     OPM_THROW(std::runtime_error, ss.str());
                 }
                 }
-                ymodule_ = fp.get_double("YMODULE");
-                pratio_ = fp.get_double("PRATIO");
+                // Per cell of this grid, taken by Cartesian index: with an LGR
+                // the leaf has more cells than the field properties, and a
+                // refined cell takes the value of the cell it came from.
+                const auto& mapper = simulator.vanguard().cartesianIndexMapper();
+                const unsigned numCells = simulator.gridView().size(0);
+                const auto onCells = [&mapper, numCells](const std::vector<double>& global) {
+                    std::vector<double> v(numCells);
+                    for (unsigned c = 0; c < numCells; ++c) {
+                        v[c] = global[mapper.cartesianIndex(c)];
+                    }
+                    return v;
+                };
+
+                ymodule_ = onCells(fp.get_global_double("YMODULE"));
+                pratio_ = onCells(fp.get_global_double("PRATIO"));
                 if(fp.has_double("BIOTCOEF")){
-                    biotcoef_ = fp.get_double("BIOTCOEF");
+                    biotcoef_ = onCells(fp.get_global_double("BIOTCOEF"));
                     poelcoef_.resize(ymodule_.size());
                     for(std::size_t i=0; i < ymodule_.size(); ++i){
                         poelcoef_[i] = (1-2*pratio_[i])/(1-pratio_[i])*biotcoef_[i];
@@ -277,7 +290,7 @@ namespace Opm{
                     if(!fp.has_double("POELCOEF")){
                         OPM_THROW(std::runtime_error,"Missing keyword BIOTCOEF or POELCOEF");
                     }
-                    poelcoef_ = fp.get_double("POELCOEF");
+                    poelcoef_ = onCells(fp.get_global_double("POELCOEF"));
                     biotcoef_.resize(ymodule_.size());
                     for(std::size_t i=0; i < ymodule_.size(); ++i){
                         biotcoef_[i] = poelcoef_[i]*(1-pratio_[i])/(1-2*pratio_[i]);
@@ -288,7 +301,7 @@ namespace Opm{
                 bool thermal_expansion = getPropValue<TypeTag, Properties::EnableEnergy>();
                 if(thermal_expansion){
                     if(fp.has_double("THELCOEF")){
-                        thelcoef_ = fp.get_double("THELCOEF");
+                        thelcoef_ = onCells(fp.get_global_double("THELCOEF"));
                         thermexr_.resize(ymodule_.size());
                         for(std::size_t i=0; i < ymodule_.size(); ++i){
                             thermexr_[i] = thelcoef_[i]*(1-pratio_[i])/ymodule_[i];
@@ -297,7 +310,7 @@ namespace Opm{
                         if(!fp.has_double("THERMEXR")){
                             OPM_THROW(std::runtime_error,"Missing keyword THELCOEF or THERMEXR");
                         }
-                        thermexr_ = fp.get_double("THERMEXR");
+                        thermexr_ = onCells(fp.get_global_double("THERMEXR"));
                         thelcoef_.resize(ymodule_.size());
                         for(std::size_t i=0; i < ymodule_.size(); ++i){
                             thelcoef_[i] = thermexr_[i]*ymodule_[i]/(1-pratio_[i]);
@@ -313,7 +326,7 @@ namespace Opm{
                     }
                 }
                 if(fp.has_double("CSTRESS")){
-                    cstress_ = fp.get_double("CSTRESS");
+                    cstress_ = onCells(fp.get_global_double("CSTRESS"));
                 }
 
                 const auto& initconfig = eclState.getInitConfig();
@@ -327,7 +340,10 @@ namespace Opm{
                         cartesianToCompressedElemIdx[cartesianIndexMapper.cartesianIndex(elemIdx)] = elemIdx;
                     }
                     const auto& stressequil = initconfig.getStressEquil();
-                    const auto& equilRegionData = fp.get_int("STRESSEQUILNUM");
+                    // By Cartesian index, not by cell: with an LGR the leaf has
+                    // more cells than the field properties, and a refined cell
+                    // takes the region of the cell it was refined from.
+                    const auto& equilRegionData = fp.get_global_int("STRESSEQUILNUM");
                     //make lambda functions for each regaion
                     std::vector<std::function<std::array<double,6>()>> functors;
                     int recnum=1;
@@ -350,8 +366,8 @@ namespace Opm{
                         for(const auto& cell : elements(gv)){
                             const auto& center = cell.geometry().center();
                             const auto& cellIdx = gv.indexSet().index(cell);
-                            assert(cellIdx < equilRegionData.size());
-                            const auto& region = equilRegionData[cellIdx];//cartesianIndexMapper.cartesianIndex(cellIdx)];
+                            const auto& region =
+                                equilRegionData[cartesianIndexMapper.cartesianIndex(cellIdx)];
                             assert(region <= stressequil.size());
                             if(region == recnum){
                                 Dune::FieldVector<double, 6> initstress;

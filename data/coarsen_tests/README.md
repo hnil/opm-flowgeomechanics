@@ -159,6 +159,39 @@ still aborts on the fracture width assertion, and cells with 80 faces of very di
 size are worth avoiding anyway — away from the wells the mechanics wants well-shaped
 cells.
 
+## The LGR-inner layout (T6)
+
+`make_lgr_inner.py` writes `T6_LGR_INNER.DATA`: one uniform 30 × 30 × 30 grid at the
+refined resolution (200 × 200 × 100 m), with the reservoir box at i,j 11–20, k 11–20.
+`mech_coarsen_T6_level0.txt` merges everything outside that box back to base cells
+(5 × 5 × 5), so the mechanics grid is the base grid outside and the refined grid inside —
+what mechanics on level zero plus a refined region would be. It needs the merge route,
+since a box refined in part of a column is not a corner-point description.
+
+| mechanics grid | cells | STRESSZZ in the box | run time |
+|---|---|---|---|
+| the refined grid (as flow) | 27 000 | reference | 16 s |
+| base grid outside, refined box inside | 1 208 | 0.03 bar (**0.01 %**) | 87 s |
+
+Accuracy is excellent; the cost is not. The merge keeps every fine face, so *every*
+coarse cell has subdivided faces (150 of them here), while a real LGR would have plain
+six-faced cells everywhere except against the refinement boundary. That is the argument
+for describing the model as an LGR in the first place rather than merging a fine grid.
+
+### CARFIN in this stack
+
+CARFIN is listed in `UnsupportedFlowKeywords.cpp`, but only the message is blocked: with
+`--parsing-strictness=low` the deck's LGRs reach EclipseState and the vanguard refines
+the grid ("1 (new) refined level grid(s)"). Two geomech blockers behind it are fixed
+here — STRESSEQUILNUM and the mechanical properties are now read by Cartesian index, so
+a refined cell takes the value of the cell it came from. The next one is VEM failing to
+find a star point for a six-faced cell in the leaf, which is the LGR handling that lives
+on the geomech_lgr branch.
+
+Note that properties cannot be given *inside* a CARFIN block: block-local PORO, PERMX
+and so on are scoped out and refined cells inherit the father (opm-gridrefined
+`docs/STATUS.md`); block-local MINPV is the one exception.
+
 ## Baseline (2026-09-23, bcmech build, serial, 90 days, `sequential_implicit`)
 
 Values at the last step. BHP is on its 290 bar limit in all three.
