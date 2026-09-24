@@ -15,9 +15,14 @@
 
 #include <opm/input/eclipse/Schedule/Schedule.hpp>
 
+#include <dune/common/fmatrix.hh>
 #include <dune/common/timer.hh>
 
+#include <algorithm>
+#include <array>
+#include <cmath>
 #include <iomanip>
+#include <map>
 #include <memory>
 #include <sstream>
 
@@ -500,6 +505,10 @@ namespace Opm{
             std::fill(strain_.begin(),strain_.end(),0.0);
             const auto& gv = this->mechGrid().leafGridView();
             displacement_.resize(gv.indexSet().size(3));
+            if (!mechMap_.isIdentity()) {
+                flowDisplacement_.resize(simulator_.gridView().size(3));
+                flowDisplacement_ = 0.0;
+            }
         };
 
         void setMaterial(const std::vector<std::shared_ptr<Opm::Elasticity::Material>>& materials){
@@ -517,8 +526,10 @@ namespace Opm{
             mechCtx_->communicate(pratio_mech);
             elacticitysolver_->setMaterial(ymodule_mech,pratio_mech);
         }
+        /// Displacement of a flow grid vertex.
         const Dune::FieldVector<double,3>& displacement(size_t vertexIndex) const{
-            return displacement_[vertexIndex];
+            return mechMap_.isIdentity() ? displacement_[vertexIndex]
+                                         : flowDisplacement_[vertexIndex];
         }
         const double& mechPotentialForce(unsigned globalDofIdx) const
         {
@@ -691,6 +702,124 @@ namespace Opm{
         // void setStress(const Dune::BlockVector<SymTensor >& stress){
         //     stress_ = stress;
         // }
+        // A flow vertex that is a mechanics vertex copies it; any other is
+        // trilinear in the corners of its flow cell's mechanics cell.
+        void buildFlowVertexSource_()
+        {
+            const auto& mgv = this->mechGrid().leafGridView();
+            const auto key = [](const auto& p) {
+                return std::array<long long,3>{std::llround(p[0]*1e6), std::llround(p[1]*1e6),
+                                               std::llround(p[2]*1e6)};
+            };
+            std::map<std::array<long long,3>, int> mechVertexAt;
+            for (const auto& v : Dune::vertices(mgv)) {
+                mechVertexAt.emplace(key(v.geometry().center()), mgv.indexSet().index(v));
+            }
+            using MechElement = typename std::decay_t<decltype(mgv)>::template Codim<0>::Entity;
+            std::vector<MechElement> mechCells;
+            mechCells.reserve(mgv.size(0));
+            for (const auto& e : Dune::elements(mgv)) {
+                mechCells.push_back(e);
+            }
+
+            const auto& fgv = simulator_.gridView();
+            flowVertexSource_.assign(fgv.size(3), FlowVertexSource{});
+            int copied = 0, interpolated = 0;
+            double misfit = 0.0;
+            for (const auto& cell : Dune::elements(fgv)) {
+                const int m = mechMap_.mechCell(fgv.indexSet().index(cell));
+                for (const auto& v : Dune::subEntities(cell, Dune::Codim<3>{})) {
+                    auto& src = flowVertexSource_[fgv.indexSet().index(v)];
+                    if (src.count > 0) {
+                        continue;
+                    }
+                    const auto x = v.geometry().center();
+                    if (const auto it = mechVertexAt.find(key(x)); it != mechVertexAt.end()) {
+                        src.vertex[0] = it->second;
+                        src.weight[0] = 1.0;
+                        src.count = 1;
+                        ++copied;
+                        continue;
+                    }
+                    if (m < 0) {
+                        continue;
+                    }
+                    const auto& mcell = mechCells[m];
+                    const auto u = localInCell_(mcell.geometry(), x);
+                    for (int c = 0; c < 8; ++c) {
+                        src.vertex[c] = mgv.indexSet().index(mcell.template subEntity<3>(c));
+                        src.weight[c] = ((c & 1) ? u[0] : 1.0 - u[0])
+                                      * ((c & 2) ? u[1] : 1.0 - u[1])
+                                      * ((c & 4) ? u[2] : 1.0 - u[2]);
+                    }
+                    src.count = 8;
+                    ++interpolated;
+                    Dune::FieldVector<double,3> y(0.0);
+                    for (int c = 0; c < 8; ++c) {
+                        auto p = mcell.geometry().corner(c);
+                        p *= src.weight[c];
+                        y += p;
+                    }
+                    y -= x;
+                    misfit = std::max(misfit, y.two_norm());
+                }
+            }
+            std::ostringstream os;
+            os << "Mechanics grid: flow vertices " << copied << " copied, " << interpolated
+               << " interpolated (worst position misfit " << misfit << " m)";
+            OpmLog::info(os.str());
+        }
+
+        // Newton on the trilinear map, capped: collapsed cells need not converge.
+        template <class Geometry>
+        static Dune::FieldVector<double,3>
+        localInCell_(const Geometry& geo, const Dune::FieldVector<double,3>& x)
+        {
+            Dune::FieldVector<double,3> u(0.5);
+            for (int it = 0; it < 30; ++it) {
+                auto r = geo.global(u);
+                r -= x;
+                const auto jt = geo.jacobianTransposed(u);
+                Dune::FieldMatrix<double,3,3> j;
+                for (int a = 0; a < 3; ++a) {
+                    for (int b = 0; b < 3; ++b) {
+                        j[a][b] = jt[b][a];
+                    }
+                }
+                Dune::FieldVector<double,3> du;
+                try {
+                    j.solve(du, r);
+                } catch (const Dune::FMatrixError&) {
+                    break;
+                }
+                u -= du;
+                if (du.two_norm() < 1e-10) {
+                    break;
+                }
+            }
+            for (auto& c : u) {
+                c = std::clamp(c, 0.0, 1.0);
+            }
+            return u;
+        }
+
+        void prolongDisplacement_()
+        {
+            if (flowVertexSource_.empty()) {
+                this->buildFlowVertexSource_();
+            }
+            flowDisplacement_.resize(flowVertexSource_.size());
+            for (std::size_t i = 0; i < flowVertexSource_.size(); ++i) {
+                const auto& src = flowVertexSource_[i];
+                flowDisplacement_[i] = 0.0;
+                for (int c = 0; c < src.count; ++c) {
+                    auto d = displacement_[src.vertex[c]];
+                    d *= src.weight[c];
+                    flowDisplacement_[i] += d;
+                }
+            }
+        }
+
         void makeDisplacement(const Opm::Elasticity::Vector& field) {
             // make displacement on all nodes used for output to vtk
             const auto& grid = this->mechGrid();
@@ -701,6 +830,9 @@ namespace Opm{
                 for(int k=0; k < dim; ++k){
                     displacement_[index][k] = field[index*dim+k];
                 }
+            }
+            if (!mechMap_.isIdentity()) {
+                this->prolongDisplacement_();
             }
             for (const auto& cell: elements(gv)){
                 auto cellindex = gv.indexSet().index(cell);
@@ -770,6 +902,16 @@ namespace Opm{
         //Dune::BlockVector<Dune::FieldVector<double,1> > solution_;
         Dune::BlockVector<Dune::FieldVector<double,3> > celldisplacement_;
         Dune::BlockVector<Dune::FieldVector<double,3> > displacement_;
+        // Flow vertices, when the mechanics grid is coarser: each takes the
+        // weighted displacement of up to eight mechanics vertices.
+        struct FlowVertexSource
+        {
+            std::array<int,8> vertex{};
+            std::array<double,8> weight{};
+            int count{0};
+        };
+        std::vector<FlowVertexSource> flowVertexSource_;
+        Dune::BlockVector<Dune::FieldVector<double,3> > flowDisplacement_;
         //Dune::BlockVector<Dune::FieldVector<double,6> > stress_;//NB is also stored in esolver
         Dune::BlockVector<Dune::FieldVector<double,6> > linstress_;//NB is also stored in esolver
         Dune::BlockVector<Dune::FieldVector<double,6> > outputstress_;// used in to avoid trouble with initialstress_
