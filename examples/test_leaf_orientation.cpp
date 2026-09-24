@@ -23,10 +23,13 @@
 
 #include <opm/grid/CpGrid.hpp>
 #include <opm/grid/cpgpreprocess/preprocess.h>
+#include <opm/grid/cpgrid/refinement/ConformingBlockBuilder.hpp>
+#include <opm/grid/cpgrid/refinement/RefinementBuilder.hpp>
 
 #include <dune/common/parallel/mpihelper.hh>
 
 #include <array>
+#include <memory>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -175,6 +178,9 @@ int main(int argc, char** argv)
     Dune::CpGrid grid;
     grid.processEclipseFormat(input, false, false, edgeConformal);
     checkLeaf(grid);
+    // opm-gridrefined refines by resampling the corner-point description.
+    Opm::Refinement::setBuilder(std::make_unique<Opm::Refinement::ConformingBlockBuilder>(
+        std::array<int, 3>{nx, ny, nz}, g.coord, g.zcorn, g.actnum));
     grid.addLgrsUpdateLeafView({refine}, {lo}, {hi}, {"LGR1"});
 
     for (int l = 0; l <= grid.maxLevel(); ++l) {
