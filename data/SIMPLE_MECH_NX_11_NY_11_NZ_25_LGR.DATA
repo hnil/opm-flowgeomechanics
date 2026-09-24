@@ -11,7 +11,7 @@ METRIC
 THERMAL
 --TEMP
 MECH
-FRAC
+--FRAC
 START
  1 'JAN' 2020 /
 GRIDOPTS
@@ -23,7 +23,7 @@ REGDIMS
 TABDIMS
  1 1 150 60 3 60 /
 WELLDIMS
- 10 800 90 10 /
+ 10 15 90 10 /
 VFPPDIMS
  22 13 10 13 13 50 /
 UNIFIN
@@ -98,6 +98,10 @@ BCCON
        6        2*        2*       25       25         Z+ / 
 /
 
+CARFIN
+-- name  I1 I2 J1 J2 K1 K2  NX NY NZ
+ 'LGRW' 5 7 5 7 15 17 9 9 3 /
+ENDFIN
 
 RPTGRID
  'ALLNNC' /
@@ -176,15 +180,152 @@ STREQUIL
     
     
 SUMMARY
+ALL
 PERFORMA
-WBHP
+WFCFFVIR
 /
-WWIR
+
+WFCFFVIR
 /
-WWIT
+
+
+WFCWFVIR
 /
+    
+WFCFVIR
+/    
+
+CFCFFVIR
+    *  /
+/
+
+
+CFCWFVIR
+    *  /
+/
+    
+CFCFVIR
+    *  /
+/    
+      
+
+WFCFFVIT
+/
+
+WFCWFVIR
+/
+WFCWFVIT
+/
+
+WFCFVIR
+/    
+
+WFCFVIT
+/
+
 WWIRFRAC
 /
+CWIR
+*  /
+/
+CWIRFRAC
+*  /
+/        
+
+CFCFFRAC
+'B-3H'*/
+/
+CFCFRATE
+'B-3H'*/
+/
+
+CPI
+'B-3H' /
+/
+CINJFVR
+  'B-3H' /
+/
+CINJFVT
+  'B-3H' /
+/
+CFCSKIN
+  'B-3H' /
+/
+CFCWIDTH
+  'B-3H' /
+/
+CFCPERM
+  'B-3H' /
+/
+CFCPORO
+  'B-3H' /
+/
+CFCRAD
+  'B-3H' /
+/
+CFCAOF
+  'B-3H' /
+/
+
+CFRINJPR
+*/
+/
+
+CFRINJBH
+    */
+/
+    
+CFRINJRA
+*/
+/
+--
+CWIR
+* * /
+/
+CTFAC
+* * /
+/
+
+CPR
+* */
+/
+
+CFRAREA
+'B-3H' */
+/
+CFRFLUX
+'B-3H' */
+/
+CFRHEIGH
+'B-3H' */
+/            
+CFRLENGT
+'B-3H' */
+/    
+
+CFRFVOLU
+'B-3H'*/
+/
+CFRWI
+'B-3H'*/
+/
+CFRAVGW
+'B-3H'*/
+/
+CFRAVGFW
+'B-3H'*/
+/                                        
+
+CPI
+'B-3H' /
+/
+CINJFVR
+  'B-3H' /
+/
+CINJFVT
+  'B-3H' /
+/
+
 BPR
   6 6 16 /
 /
@@ -193,8 +334,9 @@ BTEMP
 /
 BSTRSSXX
   6 6 16 /
-/
-
+/    
+            
+--
 
 SCHEDULE
 TUNING
@@ -232,11 +374,11 @@ GRUPTREE
 --RPTRST
 -- 'BASIC=2' /
 
-WELSPECS
- 'B-3H' 'B1' 6 6 1* 'WATER' 2* 'SHUT' /
+WELSPECL
+ 'B-3H' 'B1' 'LGRW' 5 5 1* 'WATER' 2* 'SHUT' /
 /
-COMPDAT
-  'B-3H' 6 6 16 16 'OPEN' 2* 0.216 1* 0 1* 'Z' /
+COMPDATL
+  'B-3H' 'LGRW' 5 5 2 2 'OPEN' 2* 0.216 1* 0 1* 'Z' /
 /
 
 -- WELTRAJ
@@ -264,9 +406,6 @@ WCONINJE
 /
 --UDQ
 --DEFINE FUFRAC BSTRESSXX  6 6 16 - BPR  6 6 16 /
-WSEED
- 'B-3H' 6 6 16 0 1 0 5 0 1e-4/
-/
 
 -- WINJDAM
 --    'B-3H' 'LINRAD' 10.0 0.0 /
@@ -280,11 +419,67 @@ WTEMP
  'B-3H' 15 /
 /
 TSTEP
--- fine early steps: resolve the small near-well fracture as it initiates
- 8*2
+ -- 18*5
+ 3*5
+/    
+DATES
+ 31 'JAN' 2020 12:00:00 /
 /
+END    
+DATES
+ 10 'FEB' 2021 12:00:00 /
+/
+END        
 TSTEP
--- grow the fracture out to ~106 days
- 18*5
+  10*36500
+/ 
+
+    
+END    
+DATES
+ 10 'FEB' 2020 12:00:00 /
+/
+--END
+DATES
+ 11 'MAR' 2020 12:00:00 /
 /
 END
+DATES
+ 10 'APR' 2020 12:00:00 /
+/
+
+DATES
+ 10 'MAY' 2020 12:00:00 /
+/
+
+DATES
+ 09 'JUN' 2020 12:00:00 /
+/
+
+DATES
+ 09 'JUL' 2020 12:00:00 /
+/
+
+DATES
+ 08 'AUG' 2020 12:00:00 /
+/
+
+DATES
+ 07 'SEP' 2020 12:00:00 /
+/
+
+DATES
+ 07 'OCT' 2020 12:00:00 /
+/
+
+DATES
+ 06 'NOV' 2020 12:00:00 /
+/
+
+DATES
+ 06 'DEC' 2020 12:00:00 /
+/
+
+DATES
+ 1 'JAN' 2021 /
+/
