@@ -122,6 +122,13 @@ with the mechanics on the fine grid.
 
 That is the useful operating point today, and it needs no merging.
 
+Displacement is another matter. It accumulates through the thick merged burden cells,
+so it does not share the stress's accuracy: at 90 days the cell DISP differs from the
+fine-grid mechanics by up to 30 % of its peak for both T4 and T5 (median 3 % and 6 %). The
+VTK vertex displacement on the flow grid copies a mechanics vertex where one coincides
+and interpolates trilinearly in the mechanics cell otherwise (the setup logs the
+counts); before that fix it read past the end of the mechanics vector.
+
 ## Lateral coarsening of the burden
 
 `mech_coarsen_T4_overburden.txt` coarsens the over- and underburden laterally while
@@ -181,18 +188,31 @@ for describing the model as an LGR in the first place rather than merging a fine
 
 ### CARFIN in this stack
 
-**It works.** Run with `--parsing-strictness=low`: the unsupported-keyword list only
-blocks the message, and the deck's LGRs reach EclipseState either way, so the vanguard
-refines the grid. On SIMPLE with `CARFIN 'LGRW' 5 7 5 7 15 17 9 9 3`, flow runs on the
-3241-cell leaf and the mechanics on either grid:
+This branch builds on opm-gridrefined (`gridrefined/STACK.md` beside the worktrees).
+Run LGR decks with `--parsing-strictness=low`. On SIMPLE with
+`CARFIN 'LGRW' 5 7 5 7 15 17 9 9 3`, flow runs on the 3241-cell leaf and the mechanics
+on either the leaf or level zero (an empty coarsening records file):
 
-| mechanics grid | cells | STRESSZZ vs mechanics on the leaf | time |
-|---|---|---|---|
-| the leaf | 3241 | reference | 2.83 s |
-| level zero (an empty records file) | 3025 | 0.10 bar (0.02 %) | 2.75 s |
+| mechanics grid | fracture area / volume, day 10 | STRESSZZ vs leaf, day 5 | BHP | fracture rate |
+|---|---|---|---|---|
+| the leaf | 1285 m² / 13.7 m³ | reference | 233.23 | 16 982 |
+| level zero | 4032 m² / 176.2 m³ | 13.7 bar | 233.48 | 16 837 |
 
-An empty coarsening records file is all it takes: the mechanics grid is then the deck's
-own grid, and every refined flow cell maps to the cell it came from.
+The well and the fracture's injection barely move, but the fracture grows three times as
+large on level-zero mechanics: it samples near-well stress, which level zero smears over
+the parent cells. Mechanics on level zero is therefore not a substitute for mechanics on
+the refinement near the fracture.
+
+**Correction.** An earlier version of this section, on the bcmech stack with opm-grid's
+own LGR, reported level zero and leaf agreeing to 0.02 %. On that stack the injector,
+whose COMPDAT cell lies inside the refined box, was never connected ("Could not find
+perforation for well B-3H": zero rate, zero BHP), so that comparison had no load.
+
+**Open.** When the fracture grows out of the refined box, the well gets connections in
+both grids. The injector counts as an LGR well (its COMPDAT cell was refined), and the
+restart writer places every connection of an LGR well in the LGR, so the level-zero
+connections throw ("Input IJK index (6, 6, 14) not part of grid with dimensions
+9 x 9 x 3") and that report step's restart is not written.
 
 ### What had to be fixed first
 
@@ -224,19 +244,19 @@ round-off (1e-9 relative, the polygon now starts at another corner).
 `make_thin_layers.py OUTDIR --eps E --carfin` writes the CARFIN deck with the
 overburden layer above the reservoir split into (20 m − 3E) + 3 × E of the same rock,
 plus `mech_merge_thin.txt`, which merges the thin layers back for the mechanics.
-Five days × 2, mechanics on level zero as the reference:
+Five days × 2, on the opm-gridrefined stack (the injector connected):
 
-| thin layers | mechanics grid | mech solves unconverged | linear its / solve | stress vs reference | time |
-|---|---|---|---|---|---|
-| none | level zero | 0 of 9 | 37–57 | reference | 3.3 s |
-| 3 × 10 cm | leaf, with the layers | 3 of 9 | 175–200 | 0.10 bar | 7.0 s |
-| 3 × 1 cm | leaf, with the layers | **9 of 9** | 200 (cap) | 0.10 bar | 7.1 s |
-| 3 × 1 mm | leaf, with the layers | **9 of 9** | 200 (cap) | 0.10 bar | 7.1 s |
-| 3 × 1 mm | layers merged back | 0 of 9 | 37–53 | **1e-6 bar** | 3.4 s |
+| thin layers | mechanics grid | mech solves unconverged | fracture area / volume | stress vs its reference, day 5 |
+|---|---|---|---|---|
+| none | leaf | 0 of 26 | 1285 m² / 13.72 m³ | reference |
+| 3 × 1 cm or 1 mm | leaf, with the layers | **28 of 28** | 1259 m² / 13.17 m³ | 3e-5 bar |
+| none | level zero | 0 of 33 | 4032 m² / 176.2 m³ | reference |
+| 3 × 1 cm or 1 mm | layers merged back (level zero) | 0 of 33 | 3949 m² / 168.4 m³ | 0 |
 
-(0.10 bar is the leaf-vs-level-zero difference the unsplit deck already has.) This
-deck's fracture stays at its seed (WSEED width 1e-4), so for fracture growth the same
-test is T7, 90 days, against T1_PAD_FINE:
+1 cm and 1 mm give the same numbers. The 2 % in fracture area and 4 % in volume against
+each reference is the same in both columns, so it comes from the thin flow cells, not the
+mechanics. For fracture growth over a longer run, the same test is T7, 90 days, against
+T1_PAD_FINE:
 
 | run | mech solves unconverged | linear its | fracture area / volume | time |
 |---|---|---|---|---|
