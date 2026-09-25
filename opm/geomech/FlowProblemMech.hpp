@@ -556,6 +556,7 @@ namespace Opm{
             //for (auto& wellPtr : wellcontainer) {
             int new_conns = 0;
             int old_conns = 0;
+            std::string outsideLgr;
             for (const auto& wellName : schedule.wellNames(reportStep)) {
                 const auto wellcons = this->derived().fractureHost().getExtraWellIndices(wellName);
 
@@ -568,6 +569,15 @@ namespace Opm{
                     .wells(wellName).getConnections();
 
                 auto extra = std::vector<Connection>{};
+
+                // A well completed in an LGR can only have connections there.
+                int wellLgr = 0;
+                for (const auto& c : origConns) {
+                    if (c.get_lgr_level() > 0) {
+                        wellLgr = c.get_lgr_level();
+                        break;
+                    }
+                }
 
                 for (const auto& wellconn : wellcons) {
                     // Safeguard: a fracture must never complete into a
@@ -605,6 +615,18 @@ namespace Opm{
                         ijk[1] = static_cast<int>((lgrCart / lgrDim[0]) % lgrDim[1]);
                         ijk[2] = static_cast<int>(lgrCart / (static_cast<std::size_t>(lgrDim[0]) * lgrDim[1]));
                         lgrNumber = levelToLgrNumber[lvl];
+                    }
+
+                    if (wellLgr > 0 && lgrNumber != wellLgr && outsideLgr.empty()) {
+                        const auto& inputGrid = simulator.vanguard().eclState().getInputGrid();
+                        std::ostringstream os;
+                        os << "The fracture of well " << wellName << " reaches cell ("
+                           << ijk[0] + 1 << ", " << ijk[1] + 1 << ", " << ijk[2] + 1 << ")"
+                           << (lgrNumber > 0 ? " of another LGR" : " of the main grid")
+                           << ", outside the LGR '" << inputGrid.get_lgr_labels_by_number(wellLgr)
+                           << "' the well is completed in. Enlarge the CARFIN box so that it "
+                              "contains the fracture.";
+                        outsideLgr = os.str();
                     }
 
                     // Duplicate check: same global index AND same grid (the
@@ -688,6 +710,13 @@ namespace Opm{
 
                     extra_perfs.insert_or_assign(wellName, std::move(extra));
                 }
+            }
+
+            if (this->gridView().comm().max(static_cast<int>(!outsideLgr.empty())) > 0) {
+                const std::string msg = outsideLgr.empty()
+                    ? std::string("A fracture reaches outside the LGR its well is completed in.")
+                    : outsideLgr;
+                OPM_THROW(std::runtime_error, msg);
             }
 
             if (this->gridView().comm().sum(static_cast<int>(extra_perfs.size())) == 0) {

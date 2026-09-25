@@ -208,11 +208,11 @@ own LGR, reported level zero and leaf agreeing to 0.02 %. On that stack the inje
 whose COMPDAT cell lies inside the refined box, was never connected ("Could not find
 perforation for well B-3H": zero rate, zero BHP), so that comparison had no load.
 
-**Open.** When the fracture grows out of the refined box, the well gets connections in
-both grids. The injector counts as an LGR well (its COMPDAT cell was refined), and the
-restart writer places every connection of an LGR well in the LGR, so the level-zero
-connections throw ("Input IJK index (6, 6, 14) not part of grid with dimensions
-9 x 9 x 3") and that report step's restart is not written.
+**The fracture must stay inside the box.** A well completed in an LGR counts as an LGR
+well, and the restart writer places all its connections in the LGR, so a fracture that
+grows out of the box cannot be written. The run now stops at that step and says which
+cell left the box and which CARFIN to enlarge. The level-zero rows above grow out of the
+box on day 10 and stop there with that message; the leaf rows stay inside.
 
 ### What had to be fixed first
 
