@@ -214,6 +214,15 @@ grows out of the box cannot be written. The run now stops at that step and says 
 cell left the box and which CARFIN to enlarge. The level-zero rows above grow out of the
 box on day 10 and stop there with that message; the leaf rows stay inside.
 
+**A deck that runs through.** `../SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_LGR_CONTAINED.DATA`
+is the July showcase with the box made tall enough for the fracture:
+`CARFIN 'LGRW' 4 8 4 8 13 19 25 25 21` (5x laterally, 3x vertically; the showcase's
+15-17 box is left by day 41). With `--parsing-strictness=low
+--fracture-param-file=sequential_implicit` it runs the full 106 days in 288 s: fracture
+15 990 m2 / 452 m3 at z 2170-2254 m inside the box's 2140-2280 m, BHP 256 -> 276 bar,
+fracture share of the injection 82 % -> 60 %, all 179 mechanics solves converged, and a
+complete restart for every step.
+
 ### What had to be fixed first
 
 Three things, all in geomech. STRESSEQUILNUM and the mechanical properties were read
