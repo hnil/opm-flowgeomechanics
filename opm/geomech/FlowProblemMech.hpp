@@ -534,7 +534,8 @@ namespace Opm{
                     }
                     // level -> lgr grid number via the level's name and the
                     // EclipseGrid label ordering (deck order).
-                    const auto& eclGrid = simulator.vanguard().eclState().getInputGrid();
+                    const LgrLookup lgrs(simulator.vanguard().eclState().getLgrs(),
+                                         simulator.vanguard().cartesianDimensions());
                     const auto& nameToLevel = cpgrid.getLgrNameToLevel();
                     levelToLgrNumber.assign(mappers.size(), 0);
                     for (const auto& [name, lvl] : nameToLevel) {
@@ -542,7 +543,7 @@ namespace Opm{
                             continue;
                         }
                         for (std::size_t num = 1; num <= nameToLevel.size(); ++num) {
-                            if (eclGrid.get_lgr_labels_by_number(num) == name) {
+                            if (lgrs.name(static_cast<int>(num)) == name) {
                                 levelToLgrNumber[lvl] = static_cast<int>(num);
                                 break;
                             }
@@ -618,12 +619,13 @@ namespace Opm{
                     }
 
                     if (wellLgr > 0 && lgrNumber != wellLgr && outsideLgr.empty()) {
-                        const auto& inputGrid = simulator.vanguard().eclState().getInputGrid();
                         std::ostringstream os;
                         os << "The fracture of well " << wellName << " reaches cell ("
                            << ijk[0] + 1 << ", " << ijk[1] + 1 << ", " << ijk[2] + 1 << ")"
                            << (lgrNumber > 0 ? " of another LGR" : " of the main grid")
-                           << ", outside the LGR '" << inputGrid.get_lgr_labels_by_number(wellLgr)
+                           << ", outside the LGR '"
+                           << LgrLookup(simulator.vanguard().eclState().getLgrs(),
+                                        simulator.vanguard().cartesianDimensions()).name(wellLgr)
                            << "' the well is completed in. Enlarge the CARFIN box so that it "
                               "contains the fracture.";
                         outsideLgr = os.str();

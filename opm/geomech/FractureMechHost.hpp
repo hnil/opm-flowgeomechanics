@@ -110,11 +110,12 @@ namespace Opm{
                     // connections carry LGR-local global indices which must
                     // be mapped through the vanguard's LGR machinery, not the
                     // level-zero Cartesian mapper.
-                    const auto& eclGrid = simulator_.vanguard().eclState().getInputGrid();
+                    const LgrLookup lgrs(simulator_.vanguard().eclState().getLgrs(),
+                                         simulator_.vanguard().cartesianDimensions());
                     FractureModel::ConnCellResolver connCellResolver =
-                        [this, &eclGrid](const Opm::Well&, const Opm::Connection& conn) -> int {
+                        [this, lgrs](const Opm::Well&, const Opm::Connection& conn) -> int {
                             if (conn.get_lgr_level() > 0) {
-                                const auto& tag = eclGrid.get_lgr_labels_by_number(conn.get_lgr_level());
+                                const auto tag = lgrs.name(conn.get_lgr_level());
                                 return simulator_.vanguard().compressedIndexForInteriorLGR(tag, conn);
                             }
                             return simulator_.vanguard().compressedIndexForInterior(conn.global_index());
@@ -136,7 +137,7 @@ namespace Opm{
                     //fracturemodel_->addFractures(schedule[reportStepIdx]);
                     fracturemodel_->addFractures(
                         schedule[end_step],
-                        &simulator_.vanguard().eclState().getInputGrid());
+                        &lgrs);
 
                     fracturemodel_->updateFractureReservoirCells(grid);
                     fracturemodel_->initReservoirProperties<TypeTag,Simulator>(simulator_);

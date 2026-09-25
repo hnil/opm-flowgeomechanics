@@ -71,6 +71,7 @@ list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/FractureAuxCells.hpp
   opm/geomech/FractureAuxCells_impl.hpp
   opm/geomech/FractureModel.hpp
+  opm/geomech/LgrLookup.hpp
 	opm/geomech/FractureModel_impl.hpp
 	opm/geomech/FractureWell.hpp
 	opm/geomech/GeometryHelpers.hpp

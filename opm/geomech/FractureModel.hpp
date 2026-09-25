@@ -3,6 +3,7 @@
 #include "Fracture.hpp"
 #include "FractureWell.hpp"
 #include "GeometryHelpers.hpp"
+#include "LgrLookup.hpp"
 
 #include <opm/grid/common/CartesianIndexMapper.hpp>
 #include <opm/grid/utility/compressedToCartesian.hpp>
@@ -67,7 +68,7 @@ public:
     /// including well fracturing seed points and fracturing plane normal
     /// vectors in addition to all current well objects.
     void addFractures(const ScheduleState& sched,
-                      const EclipseGrid* eclGrid = nullptr);
+                      const LgrLookup* lgrs = nullptr);
 
      void updateFractureReservoirCells(const Dune::CpGrid& cpgrid);
   
@@ -192,7 +193,7 @@ public:
         /// including well fracturing seed points and fracturing plane normal
         /// vectors in addition to all current well objects.
         void addFracturesWellSeed(const ScheduleState& sched,
-                                  const EclipseGrid* eclGrid = nullptr);
+                                  const LgrLookup* lgrs = nullptr);
 
     };
 }
