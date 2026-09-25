@@ -145,6 +145,38 @@ namespace Opm{
                 (mobility, this->materialLawManager()->materialLawParams(proxy), fluidState);
         }
 
+        // The embedded fracture needs the well outside the matrix and a pressure
+        // stage solved to a tolerance (best_practice/fg_cprw.json); both measured on
+        // model2, see fixed_tests/EMBEDDED_M2S_STATUS_2026-09-25.md.
+        static void warnEmbeddedSolverSetup_()
+        {
+            if (Parameters::Get<Parameters::MatrixAddWellContributions>()) {
+                OpmLog::warning("Embedded fracture flow with the wells in the matrix: the "
+                                "linear solve is known to fail once the fracture remeshes. "
+                                "Run with --matrix-add-well-contributions=false.");
+            }
+            const std::string solver = Parameters::Get<Parameters::LinearSolver>();
+            bool pressureToTolerance = false;
+            if (solver.size() > 5 && solver.compare(solver.size() - 5, 5, ".json") == 0) {
+                try {
+                    const Opm::PropertyTree tree(solver);
+                    pressureToTolerance =
+                        tree.get<std::string>("solver", "") == "flexgmres"
+                        && tree.get_child_optional("preconditioner.coarsesolver.solver").has_value();
+                } catch (const std::exception&) {
+                    // Unreadable here; the linear solver setup will report it.
+                    pressureToTolerance = true;
+                }
+            }
+            if (!pressureToTolerance) {
+                OpmLog::warning("Embedded fracture flow with linear solver '" + solver
+                                + "': a single AMG cycle as pressure stage is known to fail on "
+                                  "a small fed fracture. Use a flexible outer solver with the "
+                                  "pressure system solved to a tolerance, e.g. "
+                                  "--linear-solver=<opm-flowgeomechanics>/data/best_practice/fg_cprw.json.");
+            }
+        }
+
         void registerAuxiliaryCellModules()
         {
             MechParent::registerAuxiliaryCellModules();
@@ -159,6 +191,8 @@ namespace Opm{
             {
                 return;
             }
+
+            this->warnEmbeddedSolverSetup_();
 
             const auto capacity = prm.get<int>("solver.embedded_capacity", 5000);
 
