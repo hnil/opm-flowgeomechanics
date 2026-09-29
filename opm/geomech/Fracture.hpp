@@ -288,6 +288,7 @@ public:
     void updateFilterCakeProps(const Opm::Connection& connection,
                                const Opm::SingleWellState<double,IndexTraits>& wellstate,double dt);
     void initFracturePressureFromReservoir();
+    double hydrostaticReservoirPressure(size_t i) const;
     void initFractureStates();
     void initFractureWidth();
     void solveFractureWidth();
