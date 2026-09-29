@@ -2050,8 +2050,19 @@ Fracture::initFracturePressureFromReservoir()
     fracture_pressure_.resize(nc + numWellEquations());
     fracture_pressure_ = 0;
     for (size_t i = 0; i < nc; ++i) {
-        fracture_pressure_[i] = reservoir_pressure_[i];
+        fracture_pressure_[i] = hydrostaticReservoirPressure(i);
     }
+}
+
+double
+Fracture::hydrostaticReservoirPressure(size_t i) const
+{
+    // reservoir pressure moved hydrostatically from the reservoir cell depth to the fracture cell depth
+    if (i >= fracture_dgh_.size()) {
+        return reservoir_pressure_[i];
+    }
+    return reservoir_pressure_[i] + fracture_dgh_[i]
+        - gravity_ * reservoir_density_[i] * reservoir_cell_z_[i];
 }
 
 
