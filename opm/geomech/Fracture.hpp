@@ -588,6 +588,7 @@ private:
 
     // help function for solving
     FracturePressureInput makePressureAssemblyInput() const;
+    std::vector<double> faceGravityHeads() const;
     void assemblePressure();
     void assemblePressureAndCouplingAD(const std::vector<int>& closed_cells);
     void addSource();

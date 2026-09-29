@@ -187,6 +187,7 @@ struct CellFluidProperty
 struct FracturePressureInput
 {
     std::vector<Htrans> htrans;
+    std::vector<double> face_gravity; // g*rho_face*(z_i - z_j) per htrans entry; empty: no gravity
     std::vector<double> fracture_width;
     std::vector<double> fracture_pressure;
     std::vector<double> face_mobility;
@@ -522,7 +523,8 @@ assemblePressureAD(const FracturePressureInput& input)
     constexpr int P_I = 0, P_J = 1, W_I = 2, W_J = 3;
 
     // ----- flow between fracture cells (face loop) -----
-    for (const auto& ht : input.htrans) {
+    for (size_t k = 0; k < input.htrans.size(); ++k) {
+        const auto& ht = input.htrans[k];
         const size_t i = std::get<0>(ht);
         const size_t j = std::get<1>(ht);
         const double t1 = std::get<2>(ht);
@@ -548,7 +550,8 @@ assemblePressureAD(const FracturePressureInput& input)
         AD4 trans = mobility * (AD4::constant(1.0) / inv_trans);
 
         // flux from cell i to cell j
-        AD4 flux = trans * (p_i_ad - p_j_ad);
+        const double g_ij = input.face_gravity.empty() ? 0.0 : input.face_gravity[k];
+        AD4 flux = trans * (p_i_ad - p_j_ad - AD4::constant(g_ij));
 
         // scatter value into residual
         result.residual[i] += flux.value;
