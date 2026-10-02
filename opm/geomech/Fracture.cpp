@@ -1215,6 +1215,20 @@ Fracture::addSource()
     } else {
         OPM_THROW(std::runtime_error, "Unknowns control");
     }
+    if (control_type == "rate_well" || control_type == "bhp_well") {
+        // the well DOF is at the perf-ref datum; fed cells see its hydrostatic column
+        const auto input = makePressureAssemblyInput();
+        double well_dh = 0.0;
+        for (const auto& [cell, wi] : perfinj_) {
+            const double v = wi * wellConnectionMobilityValue(input, cell);
+            const double dh = fracture_dgh_[cell] - gravity_ * reservoir_density_[cell] * perf_ref_depth_;
+            rhs_pressure_[cell] += v * dh;
+            well_dh += v * dh;
+        }
+        if (control_type == "rate_well") {
+            rhs_pressure_[rhs_pressure_.size() - 1] -= well_dh;
+        }
+    }
 }
 
 double
