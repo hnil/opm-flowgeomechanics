@@ -404,7 +404,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 map_reservoir_density_[cell] = fs.density(FluidSystem::waterPhaseIdx).value();
                 auto pval = fs.pressure(FluidSystem::waterPhaseIdx);
                 map_reservoir_pressure_[cell] = pval.value();
-                map_reservoir_cell_z_[cell] = cell_center[2];
+                map_reservoir_cell_z_[cell] = problem.dofCenterDepth(cell);
                 map_reservoir_well_pressure_[cell] = well_model_cell_pressure(fs);
             }
         }
