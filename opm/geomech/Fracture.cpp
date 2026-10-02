@@ -1807,7 +1807,8 @@ Fracture::wellIndices_() const
     // Floor on the well-to-reservoir pressure difference used in the flux
     // normalization denominator: protects against a vanishing denominator
     // near equilibration (units: Pa).
-    const double wi_dp_floor = prm_.get<double>("solver.wi_pressure_floor", 1.0e4);
+    // Must stay well below near-closure leak-off differences (~1e2-1e3 Pa), or alpha is underestimated.
+    const double wi_dp_floor = prm_.get<double>("solver.wi_pressure_floor", 1.0e2);
     const double wi_alpha_max = prm_.get<double>("solver.wi_normalization_max", 2.0);
     const bool wi_sign_gate = prm_.get<bool>("solver.wi_sign_gate", false);
     double sum_q = 0.0;
