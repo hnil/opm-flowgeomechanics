@@ -406,6 +406,7 @@ public:
     // fracture's), used by solver.well_source_all_perfs to feed the fracture
     // wherever the well crosses it.
     void setWellPerfCells(std::vector<int> cells) { well_perf_cells_ = std::move(cells); }//{well_rate_ = wellrate; total_wellindex_ = WI;}
+    void setFlowConnectionPressures(std::map<int, double> p) { flow_connection_pressure_ = std::move(p); }
     //! current flow timestep (s); needed by the opt-in fracture storage term
     void setTimeStep(double dt) { current_dt_ = dt; }
     //! External-pressure mode: the coupled iteration keeps the pressure fixed
@@ -633,6 +634,8 @@ private:
     std::map<int,double> map_reservoir_density_;
     std::map<int,double> map_reservoir_cell_z_;
     std::map<int,double> map_reservoir_pressure_;
+    std::map<int,double> map_reservoir_well_pressure_; // cell pressure as seen by Flow's well model
+    std::map<int,double> flow_connection_pressure_;    // Flow's connection pressure per reservoir cell
     //
 
     std::vector<double> reservoir_dist_;

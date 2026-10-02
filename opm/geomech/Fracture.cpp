@@ -1798,6 +1798,18 @@ Fracture::wellIndices_() const
     const double wi_dp_floor = prm_.get<double>("solver.wi_pressure_floor", 1.0e4);
     const double wi_alpha_max = prm_.get<double>("solver.wi_normalization_max", 2.0);
     const bool wi_sign_gate = prm_.get<bool>("solver.wi_sign_gate", false);
+    // opt-in: back-calculate the CTF against the pressure difference Flow's well model applies
+    const auto seed_conn = flow_connection_pressure_.find(this->wellinfo_.well_cell);
+    const bool flow_column = prm_.get<bool>("solver.wi_flow_column", false)
+        && (seed_conn != flow_connection_pressure_.end());
+    // Flow's wellbore pressure gradient, for connections the well does not have yet
+    double flow_gradient = gravity_ * density_perf_;
+    if (flow_column && well_target_bhp_ > 0.0 && std::abs(perf_ref_depth_ - well_ref_depth_) > 1.0) {
+        const double g = (seed_conn->second - well_target_bhp_) / (perf_ref_depth_ - well_ref_depth_);
+        if (g > 0.0) {
+            flow_gradient = g;
+        }
+    }
     double sum_q = 0.0;
     double sum_ctf_dp = 0.0;
     int legacy_negative_count = 0;
@@ -1817,6 +1829,18 @@ Fracture::wellIndices_() const
         double dh_res = z_cells[i] * gravity_ * dens_cells[i];
         double perf_density = dens_cells[i];
         double dh_perf = gravity_ * perf_density * origo_[2];
+        double dp_well = (inj_press - dh_perf) - (p_cells[i] - dh_res);
+        if (flow_column) {
+            const auto conn = flow_connection_pressure_.find(res_cells[i]);
+            const double p_conn = (conn != flow_connection_pressure_.end())
+                ? conn->second
+                : seed_conn->second + flow_gradient * (z_cells[i] - perf_ref_depth_);
+            const auto cell_p = map_reservoir_well_pressure_.find(res_cells[i]);
+            const double p_cell = (cell_p != map_reservoir_well_pressure_.end())
+                ? cell_p->second : p_cells[i];
+            // shift Flow's connection pressures to the fracture's injection pressure
+            dp_well = p_conn + (inj_press - seed_conn->second) - p_cell;
+        }
         double WI = 0.0;
         double ctf = 0.0;
         if (fracture_pressure_drive) {
@@ -1832,7 +1856,6 @@ Fracture::wellIndices_() const
             WI = ctf * std::max(mob_cells[i], 0.0);
             // Diagnostics + normalization bookkeeping against the legacy
             // operating point.
-            const double dp_well = (inj_press - dh_perf) - (p_cells[i] - dh_res);
             const bool not_fed = (q_cells[i] < 0.0 || (dp_well <= 0.0 && q_cells[i] > 0.0));
             if (not_fed) {
                 ++legacy_negative_count; // legacy would have zeroed this perf
@@ -1852,7 +1875,7 @@ Fracture::wellIndices_() const
             std::cout << "Warning zero mobility for perf cell: " << res_cells[i] << std::endl;
             WI = 0.0;
         }else{
-            WI = q_cells[i] / ((inj_press - dh_perf) - (p_cells[i] - dh_res));//NB d_perf def
+            WI = q_cells[i] / dp_well;
             ctf = WI/mob_cells[i]; // convert to ctf
         }
         if (WI < 0.0) {
