@@ -1634,6 +1634,10 @@ Fracture::wellIndicesAvrg(const std::vector<std::vector<RuntimePerforation>>& we
       //wellindices[ind].pressure = 0.0;
     }
   }
+  // the fracture pressure offset must match the newest fracture state
+  for (const auto& wind : well_indices[0]) {
+    wellindices[cell_pind[wind.cell]].fracture_pressure_offset = wind.fracture_pressure_offset;
+  }
   for(size_t tind=0; tind < well_indices.size(); ++tind){ 
     for (const auto& wind : well_indices[tind]){
       int ind = cell_pind[wind.cell];
@@ -1694,6 +1698,11 @@ Fracture::wellIndices_() const
     // no sign flips and no blow-up when the reservoir pressure approaches
     // the injection pressure (see SEQ_COUPLING_REVIEW / H1).
     std::vector<double> trans_cells(res_cells.size(), 0.0);
+    // opt-in: Flow drives the fracture CTF with the fracture's own pressure
+    const bool fracture_pressure_drive = prm_.get<bool>("solver.wi_fracture_pressure", false);
+    std::vector<double> pfrac_leak_sum(res_cells.size(), 0.0);
+    std::vector<double> leak_sum(res_cells.size(), 0.0);
+    std::vector<double> pfrac_area_sum(res_cells.size(), 0.0);
     std::vector<double> leakofrate = this->leakOfRate();
     double q_prev = 0;
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
@@ -1754,6 +1763,16 @@ Fracture::wellIndices_() const
                 // need to collect this values if no cell has centroid nearest to this
                 // reservoir cell
             }
+            if (fracture_pressure_drive) {
+                // fracture pressure moved hydrostatically to the connection depth
+                const double p_at_conn = fracture_pressure_[eIdx][0]
+                    + gravity_ * reservoir_density_[eIdx] * (z_cells[ind_wellIdx] - geom.center()[2]);
+                const double w_leak = (eIdx < static_cast<int>(leakof_.size()))
+                    ? area_frac * leakof_[eIdx] : 0.0;
+                pfrac_leak_sum[ind_wellIdx] += w_leak * p_at_conn;
+                leak_sum[ind_wellIdx] += w_leak;
+                pfrac_area_sum[ind_wellIdx] += loc_area * p_at_conn;
+            }
         }
     }
     std::vector<RuntimePerforation> wellIndices(res_cells.size());
@@ -1768,7 +1787,10 @@ Fracture::wellIndices_() const
     if (wi_upscaling != "legacy" && wi_upscaling != "conductivity") {
         OPM_THROW(std::runtime_error, "Unknown solver.wi_upscaling: " + wi_upscaling);
     }
-    const bool conductivity_wi = (wi_upscaling == "conductivity");
+    const bool conductivity_wi = !fracture_pressure_drive && (wi_upscaling == "conductivity");
+    // Flow adds the offset to BHP, or to the seed segment pressure for multi-segment wells
+    const double anchor_pressure = this->wellinfo_.perf_range.has_value()
+        ? inj_press : injectionBhp();
     const bool wi_flux_norm = prm_.get<bool>("solver.wi_flux_normalization", true);
     // Floor on the well-to-reservoir pressure difference used in the flux
     // normalization denominator: protects against a vanishing denominator
@@ -1797,7 +1819,13 @@ Fracture::wellIndices_() const
         double dh_perf = gravity_ * perf_density * origo_[2];
         double WI = 0.0;
         double ctf = 0.0;
-        if (conductivity_wi) {
+        if (fracture_pressure_drive) {
+            // leak-off weighted, so Flow reproduces the fracture's leak-off at this state
+            ctf = trans_cells[i];
+            const double p_frac = (leak_sum[i] > 0.0) ? pfrac_leak_sum[i] / leak_sum[i]
+                : (area[i] > 0.0 ? pfrac_area_sum[i] / area[i] : inj_press);
+            perf.fracture_pressure_offset = p_frac - anchor_pressure;
+        } else if (conductivity_wi) {
             // M1: sign-consistent aggregated conductivity; never negative,
             // never divided by a vanishing pressure difference.
             ctf = trans_cells[i];
