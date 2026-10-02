@@ -115,6 +115,10 @@ namespace Opm
         // (solver.max_growth_iterations is a per-timestep budget: contact
         // chatter must not re-arm the loop on every outer iteration).
         mutable int growth_rounds_this_step_{0};
+        // The legacy setup iteration left an unconverged Newton update in the flow state.
+        mutable bool flow_state_modified_by_setup_{false};
+        // Coupling accepted; flow must re-converge before the step may end.
+        mutable bool reconverge_flow_pending_{false};
 
         struct StorageCacheBackup
         {
@@ -265,6 +269,7 @@ namespace Opm
             NonlinearSolverType& nonlinear_solver)
         {
             std::cout << "Running parent first iteration in legacy mode (no state restore)" << std::endl;
+            flow_state_modified_by_setup_ = true;
             auto report = this->runParentSetupIteration(timer, nonlinear_solver);
             std::cout << "Finished parent first iteration" << std::endl;
             return report;
@@ -408,6 +413,7 @@ namespace Opm
                 os << "Solve Fractures:";
                 OpmLog::info(os.str());
             }
+            flow_state_modified_by_setup_ = false;
             const bool legacy_coupling_change_logic =
                 prm.get<bool>("fractureparam.solver.legacy_coupling_change_logic", false);
             const bool legacy_parent_setup_iteration =
