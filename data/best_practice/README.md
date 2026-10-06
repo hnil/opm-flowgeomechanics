@@ -71,8 +71,12 @@ Fracture cells as auxiliary flow cells (own pressure, or `_coupled`). Serial. Ru
 flexible GMRES around CPR (ILU0 pre/post), pressure stage solved to 1e-6. Plain `cprw`
 and wells in the matrix both fail at the first regrid of a propagating seed on model2.
 Both files set `embedded_remap_state=true` (carry the cells' state across a regrid;
-code default off). `embedded_residual_check=true` (fracture cells checked against the
-host cell's pore volume) is optional; tested on a 5-day case only.
+code default off). Fracture cells are outside CNV; instead each must ask for a local
+Newton step (its diagonal block solved against its residual) below `embedded_max_dp`
+(bar, default 1), `embedded_max_ds` (0.01) and `embedded_max_dt` (K, 1); a value <= 0
+disables that check. Temperature is the one that binds: without it the fracture
+temperatures were left unconverged. `embedded_residual_check=true` (CNV against the host
+cell's pore volume) is ineffective, ~1e11 too lenient.
 
 ---
 

@@ -168,6 +168,11 @@ public:
     }
     void setResidualCheck(const bool on) { this->residualCheck_ = on; }
 
+    typename ParentType::LocalStepTolerance localStepTolerance() const override
+    { return this->stepTolerance_; }
+    void setLocalStepTolerance(const typename ParentType::LocalStepTolerance& tol)
+    { this->stepTolerance_ = tol; }
+
     void connections(std::vector<Connection>& conns) const override
     { conns.insert(conns.end(), this->connections_.begin(), this->connections_.end()); }
 
@@ -580,6 +585,7 @@ private:
     std::vector<std::pair<unsigned, std::size_t>> boundLayout_{}; // per fracture: first slot, cells
     bool remapState_{false}; // see setRemapState()
     bool residualCheck_{false}; // see cnvReferencePoreVolume()
+    typename ParentType::LocalStepTolerance stepTolerance_{};
 };
 
 } // namespace Opm
