@@ -77,7 +77,10 @@ Newton step (its diagonal block solved against its residual) below `embedded_max
 disables that check. Temperature is the one that binds: without it the fracture
 temperatures were left unconverged. Their Newton temperature step is limited to
 `embedded_max_temp_change` (K, default 20) instead of the global 5 K: 25-45 % fewer
-Newton; unlimited overshoots on model2. `embedded_residual_check=true` (CNV against the host
+Newton; unlimited overshoots on model2. `rebind_after_growth=true` (opt-in) binds a grown
+fracture within the step (confirming non-propagating fracture solve, well rebuilt, flow
+re-solved on it): about half the step-size error in fracture area and rate on model2 and
+SIMPLE, for 40-55 % more Newton; see `fixed_tests/EMBEDDED_M2S_STATUS_2026-10-06_rebind.md`. `embedded_residual_check=true` (CNV against the host
 cell's pore volume) is ineffective, ~1e11 too lenient.
 
 ---

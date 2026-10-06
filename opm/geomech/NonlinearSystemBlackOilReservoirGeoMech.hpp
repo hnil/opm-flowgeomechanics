@@ -318,7 +318,8 @@ namespace Opm
                         .template maxFlowTimeStep<TypeTag, Simulator>(this->simulator_)
                         < std::numeric_limits<double>::max();
                 };
-                if (growth_switch && !report.converged && !fracture_at_growth_cap()) {
+                if (growth_switch && !report.converged && !fracture_at_growth_cap()
+                    && !this->simulator_.problem().embeddedHoldOuterLoop()) {
                     OpmLog::info("Fracture coupling change accepted lagged (growth_driven_switch: "
                                  "no fracture at its growth cap this round)");
                     report.converged = true;
@@ -369,7 +370,8 @@ namespace Opm
                         this->simulator_.problem().geoMechModel().fractureModel()
                             .writeIterationSnapshots(timer.currentStepNum(), 1000 + growth_round, "growth");
                     report.converged = round_report.converged;
-                    if (growth_switch && !report.converged && !fracture_at_growth_cap()) {
+                    if (growth_switch && !report.converged && !fracture_at_growth_cap()
+                    && !this->simulator_.problem().embeddedHoldOuterLoop()) {
                         OpmLog::info("Fracture growth stopped; accepting lagged coupling "
                                      "(growth_driven_switch)");
                         report.converged = true;

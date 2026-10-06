@@ -413,6 +413,7 @@ namespace Opm
             const bool legacy_parent_setup_iteration =
                 prm.get<bool>("fractureparam.solver.legacy_parent_setup_iteration", true);
             const auto allwellIndices = derived().simulator_.problem().getAllExtraWellIndices();
+            derived().simulator_.problem().clearEmbeddedRestructured();
             if (!derived().wellFracturePicard(timer)) {
                 derived().simulator_.problem().fractureHost().solveFractures();
             }
@@ -491,7 +492,35 @@ namespace Opm
                     prm.get<double>("fractureparam.solver.coupling_tolerance", 1e-3);
                 const double embedded_change =
                     derived().simulator_.problem().embeddedCouplingChange();
-                if (!fracture_converged_global || embedded_change > coupling_tolerance) {
+                auto& problem = derived().simulator_.problem();
+                if (!problem.embeddedRestructuredMidStep() && problem.embeddedLayoutPending()
+                    && problem.takeEmbeddedPendingRound(
+                           prm.get<int>("fractureparam.solver.rebind_after_growth_rounds", 2))) {
+                    // Confirm the grown layout by re-solving on it without growing,
+                    // so the binding can follow it without another growth round.
+                    auto& fractureModel = problem.fractureHost().fractureModel();
+                    auto setSuppressed = [&](const bool on) {
+                        for (auto& wellFractures : fractureModel.wellFractures()) {
+                            for (auto& fracture : wellFractures) {
+                                fracture.suppressPropagation(on);
+                            }
+                        }
+                    };
+                    setSuppressed(true);
+                    problem.fractureHost().solveFractures();
+                    setSuppressed(false);
+                    const bool confirmed = comm.min(fractureModel.lastSolveStats().converged);
+                    problem.bindFractureAuxCells(/*allowTopologyChange=*/confirmed,
+                                                 /*requireStableLayout=*/true);
+                }
+                if (problem.embeddedRestructuredMidStep()) {
+                    // The flow has not been solved on the grown fracture yet.
+                    OpmLog::info("Keeping outer loop active: fracture binding restructured "
+                                 "after growth (rebind_after_growth)");
+                    problem.holdEmbeddedOuterLoop();
+                    report.converged = false;
+                }
+                else if (!fracture_converged_global || embedded_change > coupling_tolerance) {
                     if (!fracture_converged_global) {
                         OpmLog::info("Keeping outer loop active: fracture solve did not converge");
                     } else {

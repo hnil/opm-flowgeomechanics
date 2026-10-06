@@ -90,6 +90,19 @@ namespace Opm{
         mutable int embeddedSatProxyCell_ = -1;
         std::vector<std::size_t> lastSeenFractureLayout_ {}; // see bindFractureAuxCells
         bool embeddedLeakoffReport_ = false;
+        bool embeddedRestructuredMidStep_ = false; // see embeddedRestructuredMidStep()
+        bool embeddedLayoutPending_ = false;
+        bool embeddedHoldOuterLoop_ = false;
+        int embeddedPendingRounds_ = 0; // per step, see takeEmbeddedPendingRound()
+
+        // Same well rebuild as at the step boundary, for perforations re-registered mid-step.
+        void rebuildWellsAroundFracture_()
+        {
+            this->wellModel().beginTimeStep();
+            auto& helper = this->wellModel().groupStateHelper();
+            auto guard = helper.pushLogger();
+            this->wellModel().prepareTimeStep(helper.deferredLogger());
+        }
 
     public:
 
@@ -352,8 +365,15 @@ namespace Opm{
             const bool layoutStable = (layoutNow == lastSeenFractureLayout_);
             lastSeenFractureLayout_ = layoutNow;
 
-            const bool mayRestructure
-                = allowTopologyChange && (layoutStable || !requireStableLayout);
+            // Mid-step only a fracture that is already bound may grow into new cells;
+            // a seed appears at the step boundary (bound mid-step it fails on model2).
+            const bool midStepAllowed = !requireStableLayout || (fractureAuxCells_->numActive() > 0);
+            const bool mayRestructure = allowTopologyChange && midStepAllowed
+                && (layoutStable || !requireStableLayout);
+            if (allowTopologyChange && requireStableLayout && midStepAllowed && !layoutStable
+                && !fractureAuxCells_->layoutMatches(fractureModel)) {
+                embeddedLayoutPending_ = true; // grown, but asked for only once so far
+            }
 
             if (!mayRestructure) {
                 if (fractureAuxCells_->updateValues(fractureModel)) {
@@ -424,6 +444,8 @@ namespace Opm{
                 // and must be re-registered, or the well silently loses its
                 // fracture (zero connection factor, no rate through it).
                 this->addFracturePerforationsToWells();
+                this->rebuildWellsAroundFracture_();
+                embeddedRestructuredMidStep_ = true;
             }
             if (mayRestructure) {
                 fractureAuxCells_->cellDump(this->geoMechModel().fractureModel(), "after-bind", embeddedCellDump_);
@@ -471,6 +493,23 @@ namespace Opm{
          * outer loop watches this in embedded mode instead of the well-index change
          * list, which is computed but never applied there.
          */
+        //! Whether a bind restructured the binding since clearEmbeddedRestructured().
+        bool embeddedRestructuredMidStep() const { return embeddedRestructuredMidStep_; }
+        //! A grown layout waits for a second fracture solve before it may be bound.
+        bool embeddedLayoutPending() const { return embeddedLayoutPending_; }
+        void clearEmbeddedRestructured()
+        {
+            embeddedRestructuredMidStep_ = false;
+            embeddedLayoutPending_ = false;
+            embeddedHoldOuterLoop_ = false;
+        }
+        //! Set by the outer loop when the flow must be solved again before accepting.
+        bool embeddedHoldOuterLoop() const { return embeddedHoldOuterLoop_; }
+        void holdEmbeddedOuterLoop() { embeddedHoldOuterLoop_ = true; }
+        //! At most this many extra rounds per step to let a grown layout settle.
+        bool takeEmbeddedPendingRound(const int maxRounds)
+        { return embeddedPendingRounds_++ < maxRounds; }
+
         double embeddedCouplingChange() const
         { return embeddedCouplingChange_; }
 
@@ -715,6 +754,7 @@ namespace Opm{
                     }
                 }
                 geoMechModel_.beginTimeStep();
+                embeddedPendingRounds_ = 0;
                 if(this->hasFractures()){
                     if (this->fractureFlowIsEmbedded()) {
                         // The fracture is part of the flow problem in its own right, so

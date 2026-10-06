@@ -1042,7 +1042,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             }
 
             // Fixed-topology mode: freeze the mesh at the seed (Reveal comparison).
-            if (prm_.get<bool>("solver.disable_propagation", false)) {
+            if (suppress_propagation_ || prm_.get<bool>("solver.disable_propagation", false)) {
                 std::fill(result.begin(), result.end(), -1.0);
             }
 

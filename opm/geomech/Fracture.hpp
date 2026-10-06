@@ -418,6 +418,8 @@ public:
     const std::vector<int>& flowStateDonor() const { return flow_state_donor_; }
     bool flowStateRemapped() const { return flow_state_remapped_; }
     void markFlowStateBound() { flow_state_donor_.clear(); flow_state_remapped_ = false; }
+    //! Re-solve on the current mesh without growing it (one call, set by the caller).
+    void suppressPropagation(bool on) { suppress_propagation_ = on; }
     //! Set the fracture pressure per cell (and the well DOF, if any) from
     //! outside; false if the sizes do not match the current grid.
     //! A NaN entry marks a cell with no flow DOF (no reservoir partner, or born
@@ -505,6 +507,7 @@ private:
    std::vector<RuntimePerforation> wellIndices_() const;
    bool  expantionMax(const FractureProperties& fprop);
    bool removeNewZeroWithCells(RegularTrimesh& mesh,int cur_level,const RegularTrimesh& original_mesh) const;
+   bool suppress_propagation_ = false;
    void composeFlowStateDonor(const std::vector<std::vector<CellRef>>& map1,
                               const std::vector<std::vector<CellRef>>& map2,
                               const int level);

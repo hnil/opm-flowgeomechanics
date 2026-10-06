@@ -495,6 +495,10 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
         const auto& model = this->simulator_.model();
         const auto& problem = this->simulator_.problem();
         const auto& neighborInfo = model.linearizer().getNeighborInfo();
+        if (neighborInfo.size() < model.numTotalDof()) {
+            OpmLog::info("LEAKOFF-CHECK skipped: no linearization since the last restructure");
+            return;
+        }
         const auto waterPos = FluidSystem::waterPhaseIdx;
 
         Scalar qEmb = 0.0;      // reservoir's water rate over the aux connections [sm3/s]
