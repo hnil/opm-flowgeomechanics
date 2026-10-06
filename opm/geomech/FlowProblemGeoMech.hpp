@@ -251,6 +251,10 @@ namespace Opm{
                 {std::max(0.0, prm.get<double>("solver.embedded_max_dp", 1.0)) * unit::barsa,
                  std::max(0.0, prm.get<double>("solver.embedded_max_ds", 0.01)),
                  std::max(0.0, prm.get<double>("solver.embedded_max_dt", 1.0))});
+            // Fracture temperatures follow their flow, not their storage: 20 K/iteration
+            // instead of the global 5 K; unlimited overshoots (M2S, exact solve).
+            fractureAuxCells_->setMaxTemperatureChange(
+                prm.get<double>("solver.embedded_max_temp_change", 20.0));
 
             if (this->simulator().gridView().comm().rank() == 0) {
                 OpmLog::info(fmt::format("Embedded fracture flow: {} degrees of freedom "

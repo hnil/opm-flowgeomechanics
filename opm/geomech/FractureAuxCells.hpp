@@ -173,6 +173,10 @@ public:
     void setLocalStepTolerance(const typename ParentType::LocalStepTolerance& tol)
     { this->stepTolerance_ = tol; }
 
+    double maxTemperatureChange() const override
+    { return this->maxTempChange_; }
+    void setMaxTemperatureChange(const double dT) { this->maxTempChange_ = dT; }
+
     void connections(std::vector<Connection>& conns) const override
     { conns.insert(conns.end(), this->connections_.begin(), this->connections_.end()); }
 
@@ -586,6 +590,7 @@ private:
     bool remapState_{false}; // see setRemapState()
     bool residualCheck_{false}; // see cnvReferencePoreVolume()
     typename ParentType::LocalStepTolerance stepTolerance_{};
+    double maxTempChange_{0.0}; // Newton step limit [K]; <= 0: the global one
 };
 
 } // namespace Opm

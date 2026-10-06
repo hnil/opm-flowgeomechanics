@@ -75,7 +75,9 @@ code default off). Fracture cells are outside CNV; instead each must ask for a l
 Newton step (its diagonal block solved against its residual) below `embedded_max_dp`
 (bar, default 1), `embedded_max_ds` (0.01) and `embedded_max_dt` (K, 1); a value <= 0
 disables that check. Temperature is the one that binds: without it the fracture
-temperatures were left unconverged. `embedded_residual_check=true` (CNV against the host
+temperatures were left unconverged. Their Newton temperature step is limited to
+`embedded_max_temp_change` (K, default 20) instead of the global 5 K: 25-45 % fewer
+Newton; unlimited overshoots on model2. `embedded_residual_check=true` (CNV against the host
 cell's pore volume) is ineffective, ~1e11 too lenient.
 
 ---
