@@ -8,6 +8,7 @@
 
 #include <dune/common/parallel/mpihelper.hh>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <fstream>
@@ -213,6 +214,16 @@ int main(int argc, char** argv)
 {
     Dune::MPIHelper::instance(argc, argv);
 
+    // --collapse: one face between two coarse cells, as an LGR would have it.
+    std::vector<char*> args(argv, argv + argc);
+    const auto flag = std::find(args.begin(), args.end(), std::string("--collapse"));
+    const bool collapse = flag != args.end();
+    if (collapse) {
+        args.erase(flag);
+    }
+    argc = static_cast<int>(args.size());
+    argv = args.data();
+
     // With two arguments: a grdecl include file and a file of COARSEN records.
     // Without: a small built-in case, the top two layers coarsened 2x2, which
     // cannot be written as a grdecl.
@@ -242,7 +253,7 @@ int main(int argc, char** argv)
     input.actnum = fine.actnum.data();
 
     Dune::CpGrid grid;
-    grid.processEclipseFormatCoarsened(input, layout.blockOfCartesian, layout.boxes, true);
+    grid.processEclipseFormatCoarsened(input, layout.blockOfCartesian, layout.boxes, true, collapse);
 
     const auto& gv = grid.leafGridView();
     std::cout << "cells: " << gv.size(0) << "  nodes: " << gv.size(3) << '\n';

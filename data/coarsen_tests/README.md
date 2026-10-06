@@ -167,6 +167,28 @@ still aborts on the fracture width assertion, and cells with 80 faces of very di
 size are worth avoiding anyway — away from the wells the mechanics wants well-shaped
 cells.
 
+### One face between coarse cells (`--mech-coarsen-method=collapse`)
+
+The merge keeps every fine face of a block, also against another coarse block. With
+`collapse`, the fine faces between two coarse cells become one face, keeping only the
+nodes where its outline turns or that another face has as a vertex (edge-conformal), and
+faces against finer cells stay as they are. The grid is then the same as the
+edge-conformal LGR of the coarse grid, in both directions (opm-grid test
+`coarsen_inverse_of_lgr_test`). `auto` still chooses grdecl, else the plain merge.
+
+| case | merge | collapse | fine mechanics |
+|---|---|---|---|
+| T6: nodes / most faces on a cell | 16 479 / 150 | 1 647 / 30 | 29 791 / 6 |
+| T6: run time | 80 s | 6 s | 16 s |
+| T6: STRESSZZ vs fine, box | 0.03 bar | 0.03 bar | — |
+| T1 + T4: run time | 169 s | 144 s | 116 s |
+| T1 + T4: STRESSZZ vs fine, reservoir, 90 d, max / mean | 7.8 / 1.38 bar | 6.6 / 0.77 bar | — |
+
+T4 stays slower than the fine grid: its time per linear iteration is now the fine
+grid's, but it needs more iterations. With either route the T4 fracture grows taller
+(top at 2174 against 2196 m) and twice the fine grid's area (7926 against 3880 m²),
+although the coarsened layers are far from it: open.
+
 ## The LGR-inner layout (T6)
 
 `make_lgr_inner.py` writes `T6_LGR_INNER.DATA`: one uniform 30 × 30 × 30 grid at the

@@ -61,16 +61,17 @@ public:
     /// map from the flow grid's cells to its own.
     /// `processed` is what the flow grid was built from (MINPV and PINCH
     /// included), and exists on rank 0 only.
-    enum class Method { Auto, Grdecl, Merge };
+    enum class Method { Auto, Grdecl, Merge, Collapse };
 
     static Method method(const std::string& name)
     {
         if (name == "auto")   { return Method::Auto; }
         if (name == "grdecl") { return Method::Grdecl; }
         if (name == "merge")  { return Method::Merge; }
+        if (name == "collapse") { return Method::Collapse; }
         OPM_THROW(std::runtime_error,
                   "Unknown mechanics coarsening method '" + name
-                  + "'; use grdecl, merge or auto");
+                  + "'; use grdecl, merge, collapse or auto");
     }
 
     template <class FlowGrid, class CartesianMapper>
@@ -117,7 +118,7 @@ public:
         // through every layer, so it cannot coarsen part of a column. The
         // merge can, at the price of a coarse cell keeping all the faces it
         // has towards finer neighbours.
-        int useMerge = (wanted == Method::Merge) ? 1 : 0;
+        int useMerge = (wanted == Method::Merge || wanted == Method::Collapse) ? 1 : 0;
         if (isRoot && wanted == Method::Auto) {
             try {
                 Coarsening::cartesianMap(fineDims, requests);
@@ -189,7 +190,8 @@ public:
                 OpmLog::info(os.str());
             }
             grid_->processEclipseFormatCoarsened(input, layout.blockOfCartesian, layout.boxes,
-                                                 /*edge_conformal*/ true);
+                                                 /*edge_conformal*/ true,
+                                                 /*collapse_coarse_faces*/ wanted == Method::Collapse);
         } else {
             grid_->processEclipseFormat(coarseGrid.get(), /*ecl_state*/ nullptr,
                                         /*periodic_extension*/ false, /*turn_normals*/ false,

@@ -164,7 +164,7 @@ namespace Opm{
             Base::registerParameters();
 	    Parameters::Register<Parameters::FractureParamFile>("json file defining fracture setting or alias: standard, sequential_implicit");
 	    Parameters::Register<Parameters::MechCoarsenFile>("file of COARSEN records (I1 I2 J1 J2 K1 K2 NX NY NZ, one per line) giving a mechanics grid coarser than the flow grid");
-	    Parameters::Register<Parameters::MechCoarsenMethod>("how to build the mechanics grid: grdecl (corner-point description), merge (merge cells of the flow grid), or auto");
+	    Parameters::Register<Parameters::MechCoarsenMethod>("how to build the mechanics grid: grdecl (corner-point description), merge (merge cells of the flow grid), collapse (merge, with one face between coarse cells, as an LGR), or auto");
         }
 
         void finishInit(){
