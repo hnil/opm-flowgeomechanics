@@ -114,32 +114,12 @@ public:
 
         // Corner-point processing is a rank-0 job with collective steps, so
         // every rank calls it and only rank 0 passes the description.
-        // The grdecl route gives clean six-faced cells, but pillars run
-        // through every layer, so it cannot coarsen part of a column. The
-        // merge can, at the price of a coarse cell keeping all the faces it
-        // has towards finer neighbours.
-        int useMerge = (wanted == Method::Merge || wanted == Method::Collapse) ? 1 : 0;
-        if (isRoot && wanted == Method::Auto) {
-            try {
-                Coarsening::cartesianMap(fineDims, requests);
-            } catch (const std::invalid_argument& e) {
-                OpmLog::info(std::string("Mechanics grid: cannot be written as a corner-point "
-                                         "description (") + e.what()
-                             + "); merging cells of the flow grid instead.");
-                useMerge = 1;
-            }
-        }
-        useMerge = flowGrid.comm().max(useMerge);
-        merged_ = useMerge != 0;
+        // auto merges cells with one face between coarse cells (collapse): the
+        // corner-point coarsening where that exists, and also part of a column.
+        merged_ = wanted != Method::Grdecl;
+        const bool collapse = wanted == Method::Collapse || wanted == Method::Auto;
 
-        // The index side needs no geometry, so every rank can have it.
-        Coarsening::CartesianMap cartesian;
-        if (!merged_) {
-            cartesian = Coarsening::cartesianMap(fineDims, requests);
-        }
-
-        std::unique_ptr<EclipseGrid> coarseGrid;
-        if (processed != nullptr && !merged_) {
+        const auto cornerPoint = [&]() {
             Coarsening::Grdecl fine;
             fine.dims = fineDims;
             fine.coord = processed->coord;
@@ -167,6 +147,42 @@ public:
                                 "geometrically; gaps under cells the mechanics does not "
                                 "coarsen stay holes in the body.");
             }
+            return result;
+        };
+
+        // Where the records are a corner-point coarsening, auto keeps its checks
+        // (faults, face counts, nested layer groupings).
+        if (wanted == Method::Auto) {
+            std::string refused;
+            if (isRoot) {
+                try {
+                    Coarsening::cartesianMap(fineDims, requests);
+                    try {
+                        cornerPoint();
+                    } catch (const std::exception& e) {
+                        refused = e.what();
+                    }
+                } catch (const std::invalid_argument& e) {
+                    OpmLog::info(std::string("Mechanics grid: not a corner-point coarsening (")
+                                 + e.what() + "); merging cells of the flow grid.");
+                }
+            }
+            if (flowGrid.comm().max(static_cast<int>(!refused.empty())) != 0) {
+                OPM_THROW_NOLOG(std::runtime_error,
+                                "Mechanics coarsening refused" + (refused.empty() ? std::string{}
+                                                                  : ": " + refused));
+            }
+        }
+
+        // The index side needs no geometry, so every rank can have it.
+        Coarsening::CartesianMap cartesian;
+        if (!merged_) {
+            cartesian = Coarsening::cartesianMap(fineDims, requests);
+        }
+
+        std::unique_ptr<EclipseGrid> coarseGrid;
+        if (processed != nullptr && !merged_) {
+            const auto result = cornerPoint();
             coarseGrid = std::make_unique<EclipseGrid>(result.grid.dims, result.grid.coord,
                                                        result.grid.zcorn,
                                                        result.grid.actnum.data());
@@ -175,6 +191,7 @@ public:
         grid_ = std::make_unique<Dune::CpGrid>(flowGrid.comm());
         if (merged_) {
             grdecl input{};
+            std::vector<int> allActive;
             Coarsening::BlockLayout layout;
             if (processed != nullptr) {
                 input.dims[0] = fineDims[0];
@@ -182,7 +199,11 @@ public:
                 input.dims[2] = fineDims[2];
                 input.coord = processed->coord.data();
                 input.zcorn = processed->zcorn.data();
-                input.actnum = processed->actnum.data();
+                // Rock wherever there is volume, as the grdecl route's FillHoles:
+                // inactive cells are mechanics cells too. Zero-thickness cells stay
+                // inactive, so the cells above and below them still touch.
+                allActive = withVolume(fineDims, processed->zcorn);
+                input.actnum = allActive.data();
                 layout = Coarsening::blockLayout(fineDims, requests);
                 std::ostringstream os;
                 os << "Mechanics grid: merging " << fineDims[0]*fineDims[1]*fineDims[2]
@@ -191,7 +212,7 @@ public:
             }
             grid_->processEclipseFormatCoarsened(input, layout.blockOfCartesian, layout.boxes,
                                                  /*edge_conformal*/ true,
-                                                 /*collapse_coarse_faces*/ wanted == Method::Collapse);
+                                                 /*collapse_coarse_faces*/ collapse);
         } else {
             grid_->processEclipseFormat(coarseGrid.get(), /*ecl_state*/ nullptr,
                                         /*periodic_extension*/ false, /*turn_normals*/ false,
@@ -289,6 +310,28 @@ private:
         Vector& data_;
         const IndexSet& index_set_;
     };
+
+    /// 1 for every cell whose top and bottom differ at some corner.
+    static std::vector<int> withVolume(const std::array<int,3>& dims,
+                                       const std::vector<double>& zcorn)
+    {
+        const std::size_t nx = dims[0], ny = dims[1], nz = dims[2];
+        std::vector<int> active(nx*ny*nz, 0);
+        for (std::size_t k = 0; k < nz; ++k) {
+            for (std::size_t j = 0; j < ny; ++j) {
+                for (std::size_t i = 0; i < nx; ++i) {
+                    for (std::size_t c = 0; c < 4; ++c) {
+                        const std::size_t top = 2*i + (c & 1) + 2*nx*(2*j + (c >> 1)) + 4*nx*ny*(2*k);
+                        if (zcorn[top + 4*nx*ny] != zcorn[top]) {
+                            active[i + nx*(j + ny*k)] = 1;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        return active;
+    }
 
     /// `partOfMechCartesian` gives the rank of each cell of the mechanics
     /// grid's own Cartesian space.

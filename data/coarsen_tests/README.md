@@ -167,14 +167,24 @@ still aborts on the fracture width assertion, and cells with 80 faces of very di
 size are worth avoiding anyway — away from the wells the mechanics wants well-shaped
 cells.
 
-### One face between coarse cells (`--mech-coarsen-method=collapse`)
+### One face between coarse cells (`collapse`, the `auto` default)
 
 The merge keeps every fine face of a block, also against another coarse block. With
-`collapse`, the fine faces between two coarse cells become one face, keeping only the
-nodes where its outline turns or that another face has as a vertex (edge-conformal), and
-faces against finer cells stay as they are. The grid is then the same as the
-edge-conformal LGR of the coarse grid, in both directions (opm-grid test
-`coarsen_inverse_of_lgr_test`). `auto` still chooses grdecl, else the plain merge.
+`collapse`, the fine faces between two coarse cells become one face through the patch
+corners, keeping the outline nodes that another face has as a vertex (edge-conformal);
+faces against finer cells stay as they are. Inactive cells with volume are rock, as
+grdecl's FillHoles, and cells on either side of a zero-thickness (MINPV-merged) cell
+touch. `auto` builds this way, and still runs the corner-point checks (faults, face
+counts, nested layers) wherever the records are a corner-point coarsening; `grdecl` and
+`merge` remain selectable.
+
+Where corner-point applies the collapse is the corner-point grid: same vertices, cells and
+faces, except that it lists a node where corner-point leaves it hanging on a face edge
+(neighbouring columns with different layer groupings, MINPV throws). It is also the
+edge-conformal LGR of the coarse grid, in both directions (opm-grid
+`coarsen_inverse_of_lgr_test`). Against grdecl, 90 days: T1, T5, T7, T2, T1 with ACTNUM
+and T1/T5 on 2 ranks agree to round-off with identical fractures; T3 (MINPV) differs by
+5e-4 in stress, from the listed nodes, with the same fracture.
 
 | case | merge | collapse | fine mechanics |
 |---|---|---|---|
