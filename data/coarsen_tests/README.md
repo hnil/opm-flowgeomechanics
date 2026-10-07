@@ -199,6 +199,22 @@ grid's, but it needs more iterations. With either route the T4 fracture grows ta
 (top at 2174 against 2196 m) and twice the fine grid's area (7926 against 3880 m²),
 although the coarsened layers are far from it: open.
 
+### The mechanics grid is checked
+
+Whenever mechanics runs, the mechanics grid (the flow grid, or its own) is checked to be
+a geometric body (`Dune::cpgrid::checkGeometric`, opm-grid): every cell closed with
+positive volume, faces meeting edge to edge, node order with the normals, and one closed
+boundary. A void or crack is a second closed boundary surface and stops the run
+(`--mech-grid-check=error`, the default; `warn` or `off` otherwise); hanging nodes and
+unpaired boundary edges are a warning. NNC faces are ignored by the mechanics and noted.
+
+On the test decks: all SIMPLE decks, CASE_REFINE and T1-T7 with `auto` are geometric. T3
+without `--edge-conformal` stops on its void (5.9e6 m3, the removed thin layers). Warnings:
+LGR decks (the LGR leaf is not edge-conformal by default), T3 with `--edge-conformal`
+(40 cells: the processing does not list a third column's corner on a pillar where a
+removed layer's volume moved into the cell below) and model2 (fault throws, processed
+without edge-conformal).
+
 ## The LGR-inner layout (T6)
 
 `make_lgr_inner.py` writes `T6_LGR_INNER.DATA`: one uniform 30 × 30 × 30 grid at the

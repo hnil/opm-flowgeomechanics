@@ -146,6 +146,52 @@ namespace Opm{
             return mechCtx_ ? mechCtx_->grid() : simulator_.vanguard().grid();
         }
 
+        //! The mechanics needs a body without voids or cracks; checked on the
+        //! whole grid on rank 0.
+        void checkMechGridIsGeometric_() const
+        {
+            const std::string mode = Parameters::Get<Parameters::MechGridCheck>();
+            if (mode == "off") {
+                return;
+            }
+            if constexpr (std::is_same_v<Grid, Dune::CpGrid>) {
+                auto& grid = const_cast<Grid&>(this->mechGrid());
+                const auto& comm = simulator_.gridView().comm();
+                int fatal = 0;
+                int defects = 0;
+                std::string message;
+                if (comm.rank() == 0) {
+                    if (comm.size() > 1) {
+                        grid.switchToGlobalView();
+                    }
+                    const auto check = Dune::cpgrid::checkGeometric(grid);
+                    if (comm.size() > 1) {
+                        grid.switchToDistributedView();
+                    }
+                    fatal = (check.nonPositiveCells + check.openCells + check.misorientedFaces) > 0
+                        || check.boundaries.size() > 1;
+                    defects = !check.ok();
+                    message = "Mechanics grid: " + check.summary();
+                }
+                fatal = comm.max(fatal);
+                defects = comm.max(defects);
+                if (comm.rank() == 0) {
+                    if (fatal && mode == "error") {
+                        OpmLog::error(message);
+                    } else if (defects) {
+                        OpmLog::warning(message);
+                    } else {
+                        OpmLog::info(message);
+                    }
+                }
+                if (fatal && mode == "error") {
+                    OPM_THROW_NOLOG(std::runtime_error,
+                                    "The mechanics grid has voids, cracks or broken cells (see "
+                                    "the log); --mech-grid-check=warn runs anyway.");
+                }
+            }
+        }
+
         //! Must be called before init().
         void setMechGrid(const MechGridContext& ctx){
             mechCtx_ = &ctx;
@@ -488,6 +534,7 @@ namespace Opm{
             if(!mechCtx_){
                 mechMap_ = MechFlowMap::identity(numDof);
             }
+            checkMechGridIsGeometric_();
             elacticitysolver_
                 = std::make_unique<Opm::Elasticity::VemElasticitySolver<Grid>>(this->mechGrid());
 

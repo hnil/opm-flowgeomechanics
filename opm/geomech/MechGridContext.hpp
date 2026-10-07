@@ -25,6 +25,7 @@
 #include <opm/grid/CpGrid.hpp>
 #include <opm/grid/common/CartesianIndexMapper.hpp>
 #include <opm/grid/cpgrid/coarsening/CornerPointCoarsening.hpp>
+#include <opm/grid/cpgrid/GeometricCheck.hpp>
 #include <opm/grid/cpgrid/RetainedCornerPointInput.hpp>
 #include <opm/grid/cpgpreprocess/preprocess.h>
 
@@ -40,6 +41,12 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
+namespace Opm::Parameters {
+    struct MechGridCheck {
+        inline static std::string value{"error"};
+    };
+}
 
 namespace Opm
 {
