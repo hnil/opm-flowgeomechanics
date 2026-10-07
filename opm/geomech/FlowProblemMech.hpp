@@ -34,6 +34,7 @@
 #include <opm/grid/common/CommunicationUtils.hpp>
 
 #include <opm/geomech/FractureModel.hpp>
+#include <opm/geomech/MechGridContext.hpp>
 
 #include <opm/simulators/flow/FlowProblemParameters.hpp>
 #include <opm/simulators/linalg/PropertyTree.hpp>

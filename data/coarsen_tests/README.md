@@ -108,6 +108,12 @@ $BIN --output-dir=/tmp/coarsen/t3 --edge-conformal=true \
 T3's mechanics grid is 15 × 15 × 31 with every cell active: flow's 363 removed cells
 leave no hole in the body.
 
+With `PINCH` and `--edge-conformal=true`, ZCORN values on a pillar that lie within the
+pinch threshold of each other are merged into one node after the thin cells are removed.
+A pinch-out otherwise leaves the neighbouring column's thin corners as sliver edges on the
+shared pillar. Nodes move by at most the threshold, and the total volume is unchanged
+(opm-grid `geometric_check_test`, `PinchOutLeavesNoSliverEdge`).
+
 ## Coarse burden plus vertical coarsening in the reservoir
 
 `mech_coarsen_T5_burden_and_reservoir.txt` is the spec to reach for: the padding merged
