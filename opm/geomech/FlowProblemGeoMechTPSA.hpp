@@ -17,6 +17,8 @@
 
 #include <opm/simulators/flow/FlowProblemTPSA.hpp>
 
+#include <opm/common/utility/SymmTensor.hpp>
+
 #include <string>
 #include <vector>
 
@@ -64,8 +66,34 @@ namespace Opm{
             // outputstress carries the initial-stress offset once
             // applyInitialOutputStress has run (STRESSEQUIL path), so this
             // is initstress + TPSA total-stress delta.
-            return this->geoMechModel().outputstress(globalIdx);
+            const auto t = this->geoMechModel().outputstress(globalIdx);
+            SymTensor s;
+            for (int k = 0; k < 6; ++k) {
+                s[k] = t[static_cast<VoigtIndex>(k)];
+            }
+            return s;
         }
+
+        // Embedded fracture flow (aux cells) is VEM-only; the coupling loop
+        // still compiles against these.
+        void registerAuxiliaryCellModules()
+        {
+            MechParent::registerAuxiliaryCellModules();
+            if (this->hasFractures()
+                && this->getFractureParam().template get<std::string>(
+                       "solver.fracture_flow_mode", std::string {"wi_upscaling"}) == "embedded") {
+                OPM_THROW(std::runtime_error,
+                          "solver.fracture_flow_mode=embedded is not supported with TPSA mechanics");
+            }
+        }
+        bool fractureFlowIsEmbedded() const { return false; }
+        void clearEmbeddedRestructured() {}
+        void bindFractureAuxCells(bool = true, bool = false) {}
+        double embeddedCouplingChange() const { return 0.0; }
+        bool embeddedRestructuredMidStep() const { return false; }
+        bool embeddedLayoutPending() const { return false; }
+        bool takeEmbeddedPendingRound(int) { return false; }
+        void holdEmbeddedOuterLoop() {}
 
         // ///
         // Backend hooks for the shared initial-stress handling
@@ -87,9 +115,11 @@ namespace Opm{
             // Seed the TPSA output stress with the initial stress so
             // outputstress()/BSTRSS report total stress; the TPSA solve
             // itself stays relative to the unstressed initial state.
-            std::vector<SymTensor> offset(this->initstress_.size());
+            std::vector<SymmTensor<double>> offset(this->initstress_.size());
             for (std::size_t i = 0; i < offset.size(); ++i) {
-                offset[i] = this->initstress_[i];
+                for (int k = 0; k < 6; ++k) {
+                    offset[i][static_cast<VoigtIndex>(k)] = this->initstress_[i][k];
+                }
             }
             this->geoMechModel().setOutputStressOffset(std::move(offset));
         }

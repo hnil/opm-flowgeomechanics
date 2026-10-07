@@ -53,6 +53,12 @@ namespace Opm
             return FlowParent::nonlinearIteration(timer, nonlinear_solver);
         }
 
+        //! Embedded fracture flow is VEM-only, so there is no well/fracture Picard.
+        bool wellFracturePicard(const SimulatorTimerInterface&)
+        {
+            return false;
+        }
+
         //! A fracture-driven well-structure change invalidates the current
         //! fixed-stress sequence; restart it defensively.
         void onConnectionsUpdated()
