@@ -114,6 +114,11 @@ A pinch-out otherwise leaves the neighbouring column's thin corners as sliver ed
 shared pillar. Nodes move by at most the threshold, and the total volume is unchanged
 (opm-grid `geometric_check_test`, `PinchOutLeavesNoSliverEdge`).
 
+`--edge-conformal-merge-tolerance=<m>` sets a larger merge distance than PINCH gives,
+or one without PINCH. Cells thinner than it on average are merged into the cell below,
+like pinched cells, so no kept cell can collapse. Then pillar points within it are merged.
+model2 (PINCH 1 mm) has 12 pillar gaps between 1.7 mm and 1 cm that only this reaches.
+
 ## Coarse burden plus vertical coarsening in the reservoir
 
 `mech_coarsen_T5_burden_and_reservoir.txt` is the spec to reach for: the padding merged
