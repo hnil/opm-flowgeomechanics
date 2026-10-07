@@ -146,8 +146,8 @@ namespace Opm{
             return mechCtx_ ? mechCtx_->grid() : simulator_.vanguard().grid();
         }
 
-        //! The mechanics needs a body without voids or cracks; checked on the
-        //! whole grid on rank 0.
+        //! VEM needs a body without voids, cracks or hanging nodes; checked on
+        //! the whole grid on rank 0.
         void checkMechGridIsGeometric_() const
         {
             const std::string mode = Parameters::Get<Parameters::MechGridCheck>();
@@ -168,9 +168,9 @@ namespace Opm{
                     if (comm.size() > 1) {
                         grid.switchToDistributedView();
                     }
-                    fatal = (check.nonPositiveCells + check.openCells + check.misorientedFaces) > 0
-                        || check.boundaries.size() > 1;
-                    defects = !check.ok();
+                    // VEM needs every cell closed and edge-conformal: no defect is benign.
+                    fatal = !check.ok();
+                    defects = fatal;
                     message = "Mechanics grid: " + check.summary();
                 }
                 fatal = comm.max(fatal);
@@ -186,8 +186,9 @@ namespace Opm{
                 }
                 if (fatal && mode == "error") {
                     OPM_THROW_NOLOG(std::runtime_error,
-                                    "The mechanics grid has voids, cracks or broken cells (see "
-                                    "the log); --mech-grid-check=warn runs anyway.");
+                                    "The mechanics grid is not a geometric body: voids, cracks, "
+                                    "broken cells or hanging nodes (see the log). Process with "
+                                    "--edge-conformal=true; --mech-grid-check=warn runs anyway.");
                 }
             }
         }

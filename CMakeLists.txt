@@ -652,12 +652,14 @@ set_tests_properties(Run.SPE1_OILGAS_THERMAL_MECH_FRAC_FAIL.OilGasEnergyGeomech
 # CARFIN LGR + mechanics smoke test (geomech_lgr branch): VEM on the refined
 # leaf, well completed inside the LGR via WELSPECL/COMPDATL.  Run-only for
 # now; --parsing-strictness=low is required while CARFIN/COMPDATL are on
-# flow's unsupported-keyword list.
+# flow's unsupported-keyword list, and --edge-conformal=true for a leaf
+# without hanging nodes, which the mechanics grid check requires.
 add_test(NAME Run.SIMPLE_MECH_LGR.EnergyGeomech
 	COMMAND
 	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
 	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_LGR.DATA
 	--parsing-strictness=low
+	--edge-conformal=true
 	--output-dir=test_simple_mech_lgr
 )
 
@@ -669,6 +671,7 @@ add_test(NAME Run.SIMPLE_MECH_LGR_TRAJ.EnergyGeomech
 	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
 	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_LGR_TRAJ.DATA
 	--parsing-strictness=low
+	--edge-conformal=true
 	--output-dir=test_simple_mech_lgr_traj
 )
 
@@ -682,6 +685,7 @@ add_test(NAME Run.SIMPLE_MECH_FRAC_LGR.EnergyGeomech
 	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_LGR.DATA
 	--parsing-strictness=low
 	--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_frac_postsolve_legacy_full.json
+	--edge-conformal=true
 	--output-dir=test_simple_mech_frac_lgr
 )
 

@@ -203,17 +203,15 @@ although the coarsened layers are far from it: open.
 
 Whenever mechanics runs, the mechanics grid (the flow grid, or its own) is checked to be
 a geometric body (`Dune::cpgrid::checkGeometric`, opm-grid): every cell closed with
-positive volume, faces meeting edge to edge, node order with the normals, and one closed
-boundary. A void or crack is a second closed boundary surface and stops the run
-(`--mech-grid-check=error`, the default; `warn` or `off` otherwise); hanging nodes and
-unpaired boundary edges are a warning. NNC faces are ignored by the mechanics and noted.
+positive volume, faces meeting edge to edge (no hanging nodes), node order with the
+normals, and one closed boundary, so no voids or cracks. Any defect stops the run
+(`--mech-grid-check=error`, the default; `warn` or `off` otherwise). NNC faces are
+ignored by the mechanics and only noted.
 
-On the test decks: all SIMPLE decks, CASE_REFINE and T1-T7 with `auto` are geometric. T3
-without `--edge-conformal` stops on its void (5.9e6 m3, the removed thin layers). Warnings:
-LGR decks (the LGR leaf is not edge-conformal by default), T3 with `--edge-conformal`
-(40 cells: the processing does not list a third column's corner on a pillar where a
-removed layer's volume moved into the cell below) and model2 (fault throws, processed
-without edge-conformal).
+Run VEM with `--edge-conformal=true` on anything with LGRs, faults or MINPV: with it all
+test decks are geometric (SIMPLE, CASE_REFINE, the LGR decks, T1-T7 fine and coarsened,
+T3 with MINPV, model2 with its faults). Without it the LGR decks and model2 stop on
+hanging nodes, and T3 on the void its removed layers leave (5.9e6 m3).
 
 ## The LGR-inner layout (T6)
 
