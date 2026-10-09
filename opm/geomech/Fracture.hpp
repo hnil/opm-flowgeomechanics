@@ -282,6 +282,7 @@ public:
     void updateFilterCakeProps(const Opm::WellConnections& connections,
                                const Opm::SingleWellState<double,IndexTraits>& wellstate,double dt);    
     void initFracturePressureFromReservoir();
+    double hydrostaticReservoirPressure(size_t i) const;
     void initFractureStates();
     void initFractureWidth();
     void solveFractureWidth();
@@ -590,6 +591,7 @@ private:
 
     // help function for solving
     FracturePressureInput makePressureAssemblyInput() const;
+    std::vector<double> faceGravityHeads() const;
     void assemblePressure();
     void assemblePressureAndCouplingAD(const std::vector<int>& closed_cells);
     void addSource();
