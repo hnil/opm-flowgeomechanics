@@ -54,7 +54,7 @@ public:
             return -1;
         }
         const auto& box = lgrs_.getLgr(static_cast<std::size_t>(n) - 1);
-        if (box.isGraded() || box.PARENT_NAME() != "GLOBAL") {
+        if (box.isGraded()) {
             return -1;
         }
         const std::array<int, 3> lo {box.I1(), box.J1(), box.K1()};
@@ -71,7 +71,18 @@ public:
             const int perParent = fine[d] / (hi[d] + 1 - lo[d]);
             ijk[d] = lo[d] + local[d] / perParent;
         }
-        return ijk[0] + dims_[0] * (ijk[1] + dims_[1] * ijk[2]);
+        if (box.PARENT_NAME() == "GLOBAL") {
+            return ijk[0] + dims_[0] * (ijk[1] + dims_[1] * ijk[2]);
+        }
+        // Nested: ijk is a cell of the parent LGR; continue from there.
+        for (std::size_t p = 0; p < lgrs_.size(); ++p) {
+            const auto& parent = lgrs_.getLgr(p);
+            if (parent.NAME() == box.PARENT_NAME()) {
+                return father(static_cast<int>(p) + 1,
+                              ijk[0] + parent.NX() * (ijk[1] + parent.NY() * ijk[2]));
+            }
+        }
+        return -1;
     }
 
 private:
