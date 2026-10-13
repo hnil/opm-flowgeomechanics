@@ -90,32 +90,35 @@ Results (2026-10-12, 106 days, 4 ranks):
   the well: the fracture-reservoir coupling depends on cell size (see the
   grid-controlled-initiation notes). Not a truncation: it sits well inside the ring.
 
-## model2: not geometric yet
+## model2
 
 `make_model2_wellref.py` writes the model2 deck with `'INJ1' 5 5 1 1 0 0 PERF 3`
-(I 1-3, J 12-14, K 10-19; fault F2 runs along the box's east face). The leaf is **not
-edge-conformal**: the mechanics check finds 61 cells with hanging nodes and unpaired
-boundary edges (with `KLAYERS 2`: 45 cells, a crack). The refined box against faulted
-corner-point neighbours is the cause; SIMPLE (Cartesian) is clean. It runs only with
-`--mech-grid-check=warn`, which puts VEM on that grid, so its numbers are a
-demonstration, not results. Also serial only (model2 has `EDIT` TRANX modifiers).
+(I 1-3, J 12-14, K 10-19; fault F2 runs along the box's east face). Serial only:
+model2 has `EDIT` TRANX modifiers, which a refined grid supports on one process.
 
 ```bash
 python3 $D/wellref/make_model2_wellref.py <model2 dir>/OPM_TEST_MODEL2_NOPARTICLES_MECH_FRAC.DATA /tmp/m2wr
 cd /tmp/m2wr && $BIN --parameter-file=<tests_2808 params.ini> OPM_TEST_MODEL2_NOPARTICLES_MECH_FRAC_WELLREF.DATA \
-  --mech-grid-check=warn --matrix-add-well-contributions=true --shut-unsolvable-wells=false \
+  --matrix-add-well-contributions=true --shut-unsolvable-wells=false \
   --solver-max-time-step-in-days=5 --solver-min-time-step=0.005 \
   --solver-continue-on-convergence-failure=true --output-dir=/tmp/m2wr/out
 ```
 
-2026-10-12, serial, 334 days, 56 min (unrefined np4: 6 min), 7594 leaf cells: BHP
-384.5 at day 10 and 411.2 at the end, WWIRFRAC/WWIR 48 % -> 65 %, area 2030 (1605
-open) m². Unrefined: 468.8 at day 10, 414.4, 64 %, 1322 m²; reference: 429.7, 411.1,
-1571 m².
+Until opm-grid `0fb8b09e` (2026-10-13) this leaf had hanging nodes (61 cells) and ran
+only with `--mech-grid-check=warn`: refined nodes on slanted pillars sit ~1e-8 of the
+edge length off the coarse neighbours' straight edges, a throw larger than one layer
+was missed at the box side, and a full face with extra edge-conformal nodes was taken
+for a fault split. With it the leaf is geometric.
+
+2026-10-13, `--mech-grid-check=error`, serial, 334 days, 46 min, no failed steps: BHP
+384.5 at day 10 and 411.2 at the end, WWIRFRAC/WWIR 48 % -> 65 %, fracture 1427 (812 open)
+m². Unrefined (np4): 468.8, 414.4, 64 %, 1322 m²; reference: 429.7, 411.1, 1571 m².
 
 ## Known gaps
 
-- LGR boxes on faulted corner-point grids are not edge-conformal (model2 above).
+- Nested rings: a fault on a ring's side is refused ("Nested LGR: box ... has a faulted
+  boundary"); move the box off the fault or use one ring. The single-ring path splits
+  faulted sides.
 - In parallel, the mechanics grid check sees level 0 only (the global view of an LGR
   grid is unrefined); the refined leaf is checked only in serial.
 - ResInsight does not draw a nested inner ring correctly; the outer ring is fine.
