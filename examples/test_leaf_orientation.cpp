@@ -23,7 +23,7 @@
 
 #include <opm/grid/CpGrid.hpp>
 #include <opm/grid/cpgpreprocess/preprocess.h>
-#include <opm/grid/cpgrid/refinement/ConformingBlockBuilder.hpp>
+#include <opm/grid/cpgrid/refinement/conforming/ConformingBlockBuilder.hpp>
 #include <opm/grid/cpgrid/refinement/RefinementBuilder.hpp>
 
 #include <dune/common/parallel/mpihelper.hh>
@@ -176,11 +176,12 @@ int main(int argc, char** argv)
     const bool edgeConformal = argc > 1 && std::string(argv[1]) == "ec";
 
     Dune::CpGrid grid;
+    grid.setLgrBackend(Opm::Refinement::Backend::Conforming);
     grid.processEclipseFormat(input, false, false, edgeConformal);
     checkLeaf(grid);
     // opm-gridrefined refines by resampling the corner-point description.
-    Opm::Refinement::setBuilder(std::make_unique<Opm::Refinement::ConformingBlockBuilder>(
-        std::array<int, 3>{nx, ny, nz}, g.coord, g.zcorn, g.actnum));
+    grid.setRefinementBuilder(std::make_shared<Opm::Refinement::ConformingBlockBuilder>(
+        std::array<int, 3>{nx, ny, nz}, g.coord, g.zcorn, g.actnum, edgeConformal));
     grid.addLgrsUpdateLeafView({refine}, {lo}, {hi}, {"LGR1"});
 
     for (int l = 0; l <= grid.maxLevel(); ++l) {

@@ -634,6 +634,9 @@ namespace Opm{
 	    Opm::Parameters::SetDefault<Opm::Parameters::ThreadsPerProcess>(1);
 	    Opm::Parameters::SetDefault<Opm::Parameters::EnableAsyncVtkOutput>(false);
 	    Opm::Parameters::SetDefault<Opm::Parameters::EnableAsyncEclOutput>(false);
+	    // VEM needs closed cells without hanging nodes, also on a refined leaf.
+	    Opm::Parameters::SetDefault<Opm::Parameters::EdgeConformal>(true);
+	    Opm::Parameters::SetDefault<Opm::Parameters::LgrBackend>("conforming");
         }
 
         void finishInit(){
@@ -642,6 +645,12 @@ namespace Opm{
             const auto& simulator = this->simulator();
             const auto& eclState = simulator.vanguard().eclState();
             if(eclState.runspec().mech()){
+                if (!Parameters::Get<Parameters::EdgeConformal>() ||
+                    Parameters::Get<Parameters::LgrBackend>() != std::string("conforming")) {
+                    OPM_THROW(std::runtime_error,
+                              "Geomechanics runs only on edge-conformal grids refined by the "
+                              "conforming backend: use --edge-conformal=true --lgr-backend=conforming.");
+                }
                 const auto& initconfig = eclState.getInitConfig();
                 const std::string coarsen_file = Parameters::Get<Parameters::MechCoarsenFile>();
                 if(coarsen_file != "none"){
