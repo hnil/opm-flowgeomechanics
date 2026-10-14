@@ -10,30 +10,51 @@ implementations behind `--lgr-backend`) and the geomechanics work. Geomechanics 
 on **edge-conformal** grids with the **conforming** LGR backend; `flow_energy_geomech` sets
 both by default and stops if you override them.
 
-## 1. Build
+## 1. Build (Ubuntu 24.04)
 
-### Prerequisites
+Use Ubuntu 24.04 or newer: the code is C++20 and needs GCC 13 or newer. The DUNE and OPM
+steps below were tried end to end on macOS; the Ubuntu package list has not been tried on
+Ubuntu itself, so if configure reports something missing, install it and tell Halvor.
 
-Tested on macOS (Apple Silicon) with Apple Clang and Homebrew:
+### System packages
 
 ```bash
-brew install cmake ninja open-mpi boost fmt suite-sparse hypre cgal gmp libomp python
+sudo apt update
+sudo apt install build-essential gfortran git cmake ninja-build pkg-config python3 \
+  libopenmpi-dev openmpi-bin libboost-all-dev libfmt-dev libsuitesparse-dev \
+  libblas-dev liblapack-dev libhypre-dev libtrilinos-zoltan-dev \
+  libcgal-dev libgmp-dev paraview
 ```
 
-DUNE **2.11** is needed: dune-common, dune-geometry, dune-grid, dune-istl,
-dune-localfunctions and **dune-foamgrid** (the fracture grid), installed into one prefix
-(`$DUNE` below). They build with plain CMake, in that order, each with
-`-DCMAKE_INSTALL_PREFIX=$DUNE -DCMAKE_PREFIX_PATH=$DUNE`. Use the same compiler for DUNE
-and OPM (on macOS: Apple Clang, not Homebrew's llvm/gcc).
+HYPRE is the mechanics linear solver, Zoltan the parallel partitioner, CGAL the fracture
+geometry.
 
-On Linux the same packages exist (`libboost-all-dev libfmt-dev libsuitesparse-dev
-libhypre-dev libcgal-dev libopenmpi-dev`); the OpenMP flag below is then not needed. This
-note has only been tested on macOS.
+### DUNE 2.11 from source
+
+Ubuntu packages DUNE 2.9 without dune-foamgrid (the fracture grid), so build these six
+modules into a folder of your own, in this order:
+
+```bash
+DUNE=$HOME/opm-geomech/dune-2.11
+mkdir -p ~/opm-geomech/dune-src && cd ~/opm-geomech/dune-src
+for m in core/dune-common core/dune-geometry core/dune-grid core/dune-istl \
+         core/dune-localfunctions extensions/dune-foamgrid; do
+  git clone -b v2.11.0 --depth 1 https://gitlab.dune-project.org/$m.git
+done
+for m in dune-common dune-geometry dune-grid dune-istl dune-localfunctions dune-foamgrid; do
+  cmake -S $m -B build-$m -G Ninja -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=$DUNE -DCMAKE_PREFIX_PATH=$DUNE \
+    -DDUNE_ENABLE_PYTHONBINDINGS=OFF -DDUNE_PYTHON_USE_VENV=OFF
+  cmake --build build-$m -j 8 && cmake --install build-$m
+done
+```
+
+A few minutes. Put `export DUNE=$HOME/opm-geomech/dune-2.11` in your `~/.bashrc`.
 
 ### Get the code
 
 ```bash
-mkdir -p ~/opm-geomech && cd ~/opm-geomech
+cd ~/opm-geomech
 for m in opm-common opm-grid opm-simulators opm-upscaling opm-flowgeomechanics; do
   git clone -b lgr-status-geomech https://github.com/hnil/$m.git
 done
@@ -45,19 +66,21 @@ The copied `CMakeLists.txt` builds all five as one project, so nothing has to be
 ### Configure and build
 
 ```bash
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_PREFIX_PATH="$DUNE;/opt/homebrew" \
-  -DUSE_MPI=ON -DUSE_HYPRE=ON -DUSE_OPENMP=ON \
-  -DOpenMP_ROOT=/opt/homebrew/opt/libomp
-cmake --build build --target flow_energy_geomech summary compareECL -j 6
+cd ~/opm-geomech
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=$DUNE \
+  -DUSE_MPI=ON -DUSE_HYPRE=ON -DUSE_OPENMP=ON 2>&1 | tee configure.log
+grep -i "requested but not found" configure.log    # must print nothing
+cmake --build build --target flow_energy_geomech summary compareECL -j 8
 ```
 
-- Check that OpenMP was found: `grep '^OpenMP_CXX_FLAGS:' build/CMakeCache.txt` must not say
-  `NOTFOUND`.
-- If the build is killed with `[code=137]`, it ran out of memory: use fewer jobs (`-j 3`).
-- The first build takes a while; after that only what you change is rebuilt. Build the
-  target you need, not everything: `flow_energy_geomech` is the simulator, `summary` a small
-  tool for reading results, `compareECL` what the regression tests compare with.
+- The `grep` catches a missing HYPRE: configure only warns, and the mechanics solver
+  settings used below then fail at run time. Install `libhypre-dev` and reconfigure.
+- If the build is killed (`[code=137]` or "Killed"), it ran out of memory: the heaviest
+  files need several GB each, so use fewer jobs (`-j 4`).
+- The first build takes a while (it compiles all of OPM); after that only what you change
+  is rebuilt. Build the targets you need, not everything: `flow_energy_geomech` is the
+  simulator, `summary` a small tool for reading results, `compareECL` what the regression
+  tests compare with.
 
 Quick check (under a minute):
 
@@ -67,6 +90,10 @@ cd build/opm-flowgeomechanics && ctest -R REGTEST_geomech -j 4; cd ../..
 
 The test driver rewrites a few files under `opm-flowgeomechanics/result/`; undo that with
 `git -C opm-flowgeomechanics checkout -- result/`.
+
+On macOS the same steps work with Homebrew (`brew install cmake ninja open-mpi boost fmt
+suite-sparse hypre trilinos cgal gmp libomp`), Apple Clang, and
+`-DCMAKE_PREFIX_PATH="$DUNE;/opt/homebrew" -DOpenMP_ROOT=/opt/homebrew/opt/libomp`.
 
 ## 2. Run the SIMPLE model
 
@@ -84,7 +111,7 @@ $BIN $DATA/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SHOWCASE.DATA \
      --output-dir=$OUT
 ```
 
-About 45 seconds on one core. What the options do:
+About 45 seconds on one core of a recent laptop. What the options do:
 
 | option | |
 |---|---|
@@ -118,8 +145,9 @@ about 11 700 m² (the seed is about 300 m²). The fracture starts to grow betwee
 
 Pictures:
 
-- **ResInsight** (https://resinsight.org): open `CASE.EGRID` for pressure, temperature and
-  stresses in the grid; summary plots from `CASE.SMSPEC`.
+- **ResInsight**: download the Linux release from
+  https://github.com/OPM/ResInsight/releases and unpack it. Open `CASE.EGRID` for pressure,
+  temperature and stresses in the grid; summary plots from `CASE.SMSPEC`.
 - **ParaView**: open the fracture `...Fracture_on_B-3H_perf_0_nr.pvd` and colour by
   `FractureWidth` or pressure; `CASE.pvd` holds the reservoir fields.
 
@@ -134,7 +162,11 @@ claude plugin marketplace add https://github.com/hnil/resinsight-live
 claude plugin install resinsight-live@hnil-reservoir-tools
 mkdir -p ~/.config/resinsight-live
 echo "RESINSIGHT_LIVE_ALLOWED_DIRS=$HOME/opm-geomech/runs" >> ~/.config/resinsight-live/env
+echo "RESINSIGHT_EXECUTABLE=/path/to/ResInsight" >> ~/.config/resinsight-live/env
 ```
+
+`RESINSIGHT_EXECUTABLE` points at the `ResInsight` program you unpacked (not needed if
+`ResInsight` is on your `PATH`). The plugin needs Python 3.11 or newer (24.04 has 3.12).
 
 Restart Claude Code. It only opens files inside `RESINSIGHT_LIVE_ALLOWED_DIRS`, so write
 your runs there. Then, for example:
@@ -142,9 +174,7 @@ your runs there. Then, for example:
 - *"Show PRESSURE and TEMP on the slice j=6 of ~/opm-geomech/runs/simple at the first and
   last step."*
 - *"Plot WBHP, WWIR and WWIRFRAC for B-3H."*
-- With your own ResInsight open (start the program itself on macOS:
-  `/Applications/ResInsight.app/Contents/MacOS/ResInsight &`): *"What are the values in the
-  cell I just clicked?"*
+- With your own ResInsight open: *"What are the values in the cell I just clicked?"*
 
 ## 4. Next steps
 
