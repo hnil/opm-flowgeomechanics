@@ -14,9 +14,12 @@ Ubuntu installer itself is described in opm-agentic.
 
 | works with the small model | not reliable, or not possible |
 |---|---|
-| run a deck with given options and say whether it succeeded | reading a trend from a time series: it mixes up which value belongs to which time, and so did the 14B model |
+| run a deck with given options and say whether it succeeded | conclusions from a time series, e.g. when a value crosses a threshold (wrong with and without `--think`) |
 | report a vector at the last report step, and simple arithmetic on it | pictures or plots: the agent has no plotting tool |
 | summarise how the run converged | runs on several processes (`mpirun`) |
+| copy a table of vectors over time (needs the opm-agentic `summary-rows` change) | |
+
+The prompts that were tried, with their answers: [LOCAL_AI_PROMPTS.md](LOCAL_AI_PROMPTS.md).
 
 Check every number against the tool results it prints (the `->` lines). For series and
 pictures, use the `summary` tool and ResInsight as in GETTING_STARTED.md section 3.
