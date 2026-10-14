@@ -1083,6 +1083,25 @@ Fracture::updateReservoirProperties()
 }
 
 
+// g * rho_face * (z_i - z_j) for each entry of htrans_; independent of the depth datum
+std::vector<double>
+Fracture::faceGravityHeads() const
+{
+    const auto& gv = grid_->leafGridView();
+    std::vector<double> z(gv.size(0), 0.0);
+    for (const auto& element : Dune::elements(gv)) {
+        z[gv.indexSet().index(element)] = element.geometry().center()[2];
+    }
+    std::vector<double> dgh(htrans_.size(), 0.0);
+    for (size_t k = 0; k < htrans_.size(); ++k) {
+        const size_t i = std::get<0>(htrans_[k]);
+        const size_t j = std::get<1>(htrans_[k]);
+        const double rho = 0.5 * (reservoir_density_[i] + reservoir_density_[j]);
+        dgh[k] = gravity_ * rho * (z[i] - z[j]);
+    }
+    return dgh;
+}
+
 void
 Fracture::addSource()
 {
@@ -1103,7 +1122,9 @@ Fracture::addSource()
         fracture_dgh_[i] = gravity_ * reservoir_density_[i] * z;
     }
     // could be put into the assemble loop
-    for (auto matel : htrans_) {
+    const std::vector<double> face_dgh = faceGravityHeads();
+    for (size_t k = 0; k < htrans_.size(); ++k) {
+        const auto& matel = htrans_[k];
         size_t i = std::get<0>(matel);
         size_t j = std::get<1>(matel);
         double t1 = std::get<2>(matel);
@@ -1120,9 +1141,8 @@ Fracture::addSource()
         const double mobility = 0.5 * (reservoir_mobility_[i] + reservoir_mobility_[j]);//NB shoul chane to mobility_water_perf_;
         value = 1 / value;
         value *= mobility;
-        double dh = (fracture_dgh_[i] - fracture_dgh_[j])*(-1.0);//NB -1.0??
-        rhs_pressure_[i] -= value * dh;
-        rhs_pressure_[j] += value * dh;
+        rhs_pressure_[i] += value * face_dgh[k];
+        rhs_pressure_[j] -= value * face_dgh[k];
     }
 
     for (size_t i = 0; i < reservoir_pressure_.size(); ++i) {
@@ -1194,6 +1214,20 @@ Fracture::addSource()
         rhs_pressure_[rhs_pressure_.size() - 1] = scale * p_target;
     } else {
         OPM_THROW(std::runtime_error, "Unknowns control");
+    }
+    if (control_type == "rate_well" || control_type == "bhp_well") {
+        // the well DOF is at the perf-ref datum; fed cells see its hydrostatic column
+        const auto input = makePressureAssemblyInput();
+        double well_dh = 0.0;
+        for (const auto& [cell, wi] : perfinj_) {
+            const double v = wi * wellConnectionMobilityValue(input, cell);
+            const double dh = fracture_dgh_[cell] - gravity_ * reservoir_density_[cell] * perf_ref_depth_;
+            rhs_pressure_[cell] += v * dh;
+            well_dh += v * dh;
+        }
+        if (control_type == "rate_well") {
+            rhs_pressure_[rhs_pressure_.size() - 1] -= well_dh;
+        }
     }
 }
 
@@ -1773,7 +1807,8 @@ Fracture::wellIndices_() const
     // Floor on the well-to-reservoir pressure difference used in the flux
     // normalization denominator: protects against a vanishing denominator
     // near equilibration (units: Pa).
-    const double wi_dp_floor = prm_.get<double>("solver.wi_pressure_floor", 1.0e4);
+    // Must stay well below near-closure leak-off differences (~1e2-1e3 Pa), or alpha is underestimated.
+    const double wi_dp_floor = prm_.get<double>("solver.wi_pressure_floor", 1.0e2);
     const double wi_alpha_max = prm_.get<double>("solver.wi_normalization_max", 2.0);
     const bool wi_sign_gate = prm_.get<bool>("solver.wi_sign_gate", false);
     double sum_q = 0.0;
@@ -1836,8 +1871,8 @@ Fracture::wellIndices_() const
         }
         perf.ctf = ctf;
         {
-                // NBsould probably be removed
-            perf.depth = this->origo_[2];
+            // the CTF was derived for a connection pressure at the reservoir cell depth
+            perf.depth = z_cells[i];
             perf.segment = this->wellinfo_.segment;
             perf.perf_range = this->wellinfo_.perf_range;
             perf.pressure = inj_press;
@@ -2050,8 +2085,19 @@ Fracture::initFracturePressureFromReservoir()
     fracture_pressure_.resize(nc + numWellEquations());
     fracture_pressure_ = 0;
     for (size_t i = 0; i < nc; ++i) {
-        fracture_pressure_[i] = reservoir_pressure_[i];
+        fracture_pressure_[i] = hydrostaticReservoirPressure(i);
     }
+}
+
+double
+Fracture::hydrostaticReservoirPressure(size_t i) const
+{
+    // reservoir pressure moved hydrostatically from the reservoir cell depth to the fracture cell depth
+    if (i >= fracture_dgh_.size()) {
+        return reservoir_pressure_[i];
+    }
+    return reservoir_pressure_[i] + fracture_dgh_[i]
+        - gravity_ * reservoir_density_[i] * reservoir_cell_z_[i];
 }
 
 

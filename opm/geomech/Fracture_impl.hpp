@@ -388,15 +388,11 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                         reservoir_mobility += val.value();
                     }
                 }
-                const auto& currentData = grid.currentData();
-                const auto& elem = Dune::cpgrid::Entity<0>(*currentData.back(), cell, true);
-                //const auto& geom = elem.geometry();
-                const auto& cell_center = elem.geometry().center();
                 map_reservoir_mobility_[cell] = reservoir_mobility;
                 map_reservoir_density_[cell] = fs.density(FluidSystem::waterPhaseIdx).value();
                 auto pval = fs.pressure(FluidSystem::waterPhaseIdx);
                 map_reservoir_pressure_[cell] = pval.value();
-                map_reservoir_cell_z_[cell] = cell_center[2];
+                map_reservoir_cell_z_[cell] = problem.dofCenterDepth(cell);
             }
         }
 
@@ -480,7 +476,8 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                   dist /= num_corners; // = L/2 for a box cell: mean |n.(centre-corner)|
                   reservoir_dist_[i] = 2.0*dist*dist_factor;
                 }
-                reservoir_cell_z_[i] = cell_center[2];
+                // depth at which Flow defines the cell pressure
+                reservoir_cell_z_[i] = problem.dofCenterDepth(cell);
                    
                 
             } else {
@@ -896,7 +893,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 for (size_t i = 0; i < num_press_cells; ++i) {
                     if(fracture_pressure_[i] == 0.0){
                       // not initialized values
-                      fracture_pressure_[i] = reservoir_pressure_[i];
+                      fracture_pressure_[i] = hydrostaticReservoirPressure(i);
                     }
                 }
                 if (numWellEquations() > 0 && fracture_pressure_[num_press_cells] == 0.0) {

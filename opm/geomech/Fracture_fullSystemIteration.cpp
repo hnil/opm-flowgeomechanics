@@ -569,7 +569,8 @@ updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
                      const size_t num_cells,
                      const size_t num_wells,
                      const std::vector<Htrans>& htrans,
-                     const ResVector& pressure,// is realy head
+                     const std::vector<double>& face_dgh, // empty: no gravity
+                     const ResVector& pressure,
                      const ResVector& aperture,
                      const std::vector<int>& closed_cells,
                      const std::vector<double>& reservoir_mobility,
@@ -585,7 +586,8 @@ updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
     //        the code below might need to be updated accordingly as well.
     auto& C = *Cptr;
     C = 0;
-    for (const auto& e : htrans) {
+    for (size_t k = 0; k < htrans.size(); ++k) {
+        const auto& e = htrans[k];
         const size_t i = std::get<0>(e);
         const size_t j = std::get<1>(e);
         assert(i != j);
@@ -600,8 +602,9 @@ updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
         assert(aperture[j][0]>=0.0);        
         const double h1 = std::max(aperture[i][0],min_width);//aperture[i] + min_width;
         const double h2 = std::max(aperture[j][0],min_width);//aperture[j] + min_width;
-        const double p1 = pressure[i];//-fracture_dgh[i];
-        const double p2 = pressure[j];//-fracture_dgh[j];; pressure should already be head
+        const double g_ij = face_dgh.empty() ? 0.0 : face_dgh[k];
+        const double p1 = pressure[i] - g_ij;
+        const double p2 = pressure[j];
 
         const double q = (h1 * h1 * h1) * (h2 * h2 * h2) * (t1 * t2); // numerator
         const double d1q = 3 * (h1 * h1) * (h2 * h2 * h2) * (t1 * t2)* dh1;
@@ -664,6 +667,7 @@ assemble_coupling_original(const Opm::FracturePressureInput& input,
                          input.num_cells,
                          input.num_well_equations,
                          input.htrans,
+                         input.face_gravity,
                          pressure,
                          aperture,
                          closed_cells,
@@ -1048,10 +1052,8 @@ Fracture::makePressureAssemblyInput() const
         // fracture_width_ has no entry for well equations (rate_well)
         input.fracture_width[i] = (i < fracture_width_.size()) ? fracture_width_[i][0] : 0.0;
         input.fracture_pressure[i] = fracture_pressure_[i][0];
-        if (i < fracture_dgh_.size()) {
-            input.fracture_pressure[i] -= fracture_dgh_[i];
-        }
     }
+    input.face_gravity = faceGravityHeads();
 
     for (size_t i = 0; i < nc; ++i) {
         if (use_fluid_system_water_properties) {
@@ -1288,17 +1290,12 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         assemblePressureAndCouplingAD(closed_cells);
     } else {
         // update the coupling matrix (possibly create it if not already initialized)
-        auto fracture_head(fracture_pressure_);
-        assert(fracture_dgh_.size() == (fracture_pressure_.size()-numWellEquations()));
-        for (size_t i = 0; i < fracture_dgh_.size(); ++i) {
-            fracture_head[i] = fracture_pressure_[i] - fracture_dgh_[i];
-        }
-
         updateCouplingMatrix(coupling_matrix_,
                              pressure_matrix_->N() - numWellEquations(), // num cells
                              numWellEquations(), // num wells
                              htrans_,
-                             fracture_head,//Note use head here
+                             faceGravityHeads(),
+                             fracture_pressure_,
                              fracture_width_,
                              closed_cells,
                              reservoir_mobility_,
