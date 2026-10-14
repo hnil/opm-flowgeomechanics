@@ -3,6 +3,7 @@
 `flow_energy_geomech` couples OPM Flow (thermal, black-oil) with a VEM mechanics solve and
 fracture growth from injection wells. This note gets you from nothing to a run you can look
 at: build the right branches, run the small SIMPLE model, check and plot the result.
+For macOS see [GETTING_STARTED_MACOS.md](GETTING_STARTED_MACOS.md).
 
 Current line: branch **`lgr-status-geomech`** in all five repositories on
 `github.com/hnil`. It is upstream OPM master (13 Oct 2026) plus the LGR work (both LGR
@@ -90,10 +91,6 @@ cd build/opm-flowgeomechanics && ctest -R REGTEST_geomech -j 4; cd ../..
 
 The test driver rewrites a few files under `opm-flowgeomechanics/result/`; undo that with
 `git -C opm-flowgeomechanics checkout -- result/`.
-
-On macOS the same steps work with Homebrew (`brew install cmake ninja open-mpi boost fmt
-suite-sparse hypre trilinos cgal gmp libomp`), Apple Clang, and
-`-DCMAKE_PREFIX_PATH="$DUNE;/opt/homebrew" -DOpenMP_ROOT=/opt/homebrew/opt/libomp`.
 
 ## 2. Run the SIMPLE model
 
