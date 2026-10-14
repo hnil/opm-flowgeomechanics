@@ -208,6 +208,7 @@ namespace Opm
                 this->last_coupling_composite_norm_ = std::numeric_limits<double>::max();
                 this->mech_solves_this_step_ = 0;
                 this->growth_rounds_this_step_ = 0;
+                this->reconverge_flow_pending_ = false;
             }
             bool implicit_flow = prm.get<bool>("solver.implicit_flow");
             SimulatorReportSingle report;
@@ -219,6 +220,14 @@ namespace Opm
                 os << "Flow solve report converged: " << report.converged;// << std::endl;
                 OpmLog::info(os.str());
             }
+            if (this->reconverge_flow_pending_) {
+                if (report.converged) {
+                    this->reconverge_flow_pending_ = false;
+                    OpmLog::info("Flow re-converged with the accepted fracture coupling");
+                }
+                return report;
+            }
+            this->flow_state_modified_by_setup_ = false;
             bool do_mech = true;
             bool do_fracture = true;
             if(implicit_flow){
@@ -433,6 +442,14 @@ namespace Opm
                         }
                     }
                 }
+            }
+
+            // Never end a step on the unconverged iterate left by the legacy setup iteration.
+            if (report.converged && this->flow_state_modified_by_setup_) {
+                OpmLog::info("Fracture coupling accepted after a connection update; "
+                             "re-converging flow before ending the step");
+                report.converged = false;
+                this->reconverge_flow_pending_ = true;
             }
 
             return report;
