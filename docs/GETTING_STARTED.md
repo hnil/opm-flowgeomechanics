@@ -175,6 +175,8 @@ your runs there. Then, for example:
 
 ## 4. Next steps
 
+- **An offline AI agent** on a local model can run this example and report the numbers:
+  [LOCAL_AI_AGENT.md](LOCAL_AI_AGENT.md).
 - **Local grid refinement around the well:** `data/wellref/SIMPLE_MECH_FRAC_WELLREF.DATA`
   (one refinement ring from the `WELLREF` keyword). Run it on 4 processes with
   `mpirun -np 4 $BIN ... --threads-per-process=1 --parsing-strictness=low` and the same
