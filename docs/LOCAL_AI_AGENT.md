@@ -17,7 +17,7 @@ Ubuntu installer itself is described in opm-agentic.
 | run a deck with given options and say whether it succeeded | conclusions from a time series, e.g. when a value crosses a threshold (wrong with and without `--think`) |
 | report a vector at the last report step, and simple arithmetic on it | pictures or plots: the agent has no plotting tool |
 | summarise how the run converged | runs on several processes (`mpirun`) |
-| copy a table of vectors over time (needs the opm-agentic `summary-rows` change) | |
+| copy a table of vectors over time (opm-agentic from 14 Oct 2026 or later) | |
 
 The prompts that were tried, with their answers: [LOCAL_AI_PROMPTS.md](LOCAL_AI_PROMPTS.md).
 

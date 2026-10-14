@@ -27,8 +27,8 @@ How did the run RUN converge? Give Newton iterations per time step, wasted itera
 ```
 
 **A table:** the values are copied exactly, but it may add a row outside the range. Needs
-opm-agentic with the `opm_summary` row format (branch `summary-rows`); before that it shifted
-a column by one row.
+opm-agentic from 14 Oct 2026 or later (`opm_summary` rows, `9b085ff7a`); before that it
+shifted a column by one row.
 
 ```text
 From the run RUN, give a table of time (days), WBHP:B-3H and WWIRFRAC:B-3H at every report step from day 10 to day 25. Copy the numbers exactly.
