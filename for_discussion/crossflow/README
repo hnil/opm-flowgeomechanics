@@ -1,0 +1,7 @@
+Crossflow through a fracture connected to a multi-completion well: derivation,
+synthetic example, wi_upscaling = conductivity, and formation damage (WINJDAM,
+properties of test/m51w/TEST.DATA).
+
+  python3 crossflow_example.py   # writes numbers.tex and figs/*
+  python3 m51w_case.py           # writes numbers_m51w.tex and figs/m51w_*
+  pdflatex crossflow_example.tex # twice

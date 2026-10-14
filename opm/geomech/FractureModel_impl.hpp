@@ -341,6 +341,7 @@ namespace Opm {
             double wi_dz = 0.0;
             double wi_respress = 0.0;
             std::vector<double> perf_depths;// well.perfDepth()[perf_index]; 
+            std::map<int, double> conn_pressures;
             {
               auto well_index = simulator.problem().wellModel().wellState().index(wells_[i].name());
                 if(well_index.has_value()){
@@ -402,6 +403,7 @@ namespace Opm {
                                 continue;
                             }
                             perf_cell_indices.push_back(cell_idx);
+                            conn_pressures[cell_idx] = wellstate.perf_data.pressure[perf_index];
                             const auto& intQuants = simulator.model()
                                 .intensiveQuantities(cell_idx, /*timeIdx=*/0);
                             using Scalar = double;
@@ -499,6 +501,7 @@ namespace Opm {
               }
               fracture.setWellProps(injection_rate,  total_wellindex,  wi_dz,  wi_respress,  well_depth);
               fracture.setWellPerfCells(perf_cell_indices);
+              fracture.setFlowConnectionPressures(conn_pressures);
                 // do update wells
                 // set well properties
 

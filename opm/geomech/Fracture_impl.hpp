@@ -305,6 +305,14 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         const auto& grid = simulator.vanguard().grid();
         GeometryHelper ghelper(grid);
         const auto value_of = [](const auto& value) { return Opm::scalarValue(value); };
+        // the cell pressure Flow's well model uses (WellInterface::getPerfCellPressure)
+        const auto well_model_cell_pressure = [&value_of](const auto& fs) {
+            if (FluidSystem::phaseIsActive(FluidSystem::oilPhaseIdx))
+                return value_of(fs.pressure(FluidSystem::oilPhaseIdx));
+            if (FluidSystem::phaseIsActive(FluidSystem::gasPhaseIdx))
+                return value_of(fs.pressure(FluidSystem::gasPhaseIdx));
+            return value_of(fs.pressure(FluidSystem::waterPhaseIdx));
+        };
         // NB burde truleg interpolere
         // NB reservoir dist not calculated
         size_t ncf = reservoir_cells_.size();
@@ -396,7 +404,8 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 map_reservoir_density_[cell] = fs.density(FluidSystem::waterPhaseIdx).value();
                 auto pval = fs.pressure(FluidSystem::waterPhaseIdx);
                 map_reservoir_pressure_[cell] = pval.value();
-                map_reservoir_cell_z_[cell] = cell_center[2];
+                map_reservoir_cell_z_[cell] = problem.dofCenterDepth(cell);
+                map_reservoir_well_pressure_[cell] = well_model_cell_pressure(fs);
             }
         }
 
@@ -410,6 +419,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                                 copyBlackOilFluidState(fracture_scalar_fluid_states[i], fs, value_of);
                                 fracture_scalar_fluid_state_valid[i] = true;
                                 reservoir_pressure_[i] = value_of(fs.pressure(FluidSystem::waterPhaseIdx));
+                map_reservoir_well_pressure_[cell] = well_model_cell_pressure(fs);
                 enum { numPhases = getPropValue<TypeTag, Properties::NumPhases>() };
                 reservoir_mobility_[i] = 0.0;
                                 reservoir_density_[i] = value_of(fs.density(FluidSystem::waterPhaseIdx));
