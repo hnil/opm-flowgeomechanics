@@ -66,8 +66,8 @@ All with `best_practice/seq_implicit_fb_robust_v2.json`, `--edge-conformal=true`
 | `make_model2_wellref.py IN.DATA OUTDIR` | model2 with one 5x5x1 ring around INJ1 | serial, see below |
 
 ```bash
-BIN=gridrefined/build/opm-flowgeomechanics/bin/flow_energy_geomech
-D=gridrefined/opm-flowgeomechanics/data
+BIN=build/opm-flowgeomechanics/bin/flow_energy_geomech
+D=opm-flowgeomechanics/data
 mpirun -np 4 $BIN $D/wellref/SIMPLE_MECH_FRAC_WELLREF.DATA \
   --fracture-param-file=$D/best_practice/seq_implicit_fb_robust_v2.json \
   --linear-solver-mech=$D/amgmechsolverhypre_geosxcpu_new_nv.json \
@@ -75,7 +75,19 @@ mpirun -np 4 $BIN $D/wellref/SIMPLE_MECH_FRAC_WELLREF.DATA \
   --enable-write-all-solutions=true --output-dir=/tmp/wellref_simple
 ```
 
-Results (2026-10-12, 106 days, 4 ranks):
+Results (2026-10-13, branch `lgr-status-geomech`, 106 days, 4 ranks):
+
+| case | leaf cells | BHP day 106 | WWIRFRAC/WWIR | fracture area (open) | wall |
+|---|---|---|---|---|---|
+| hand-written CARFIN + COMPDATL | 15975 | 219.7 | 99.8 % | 11002 (11002) m² | 149 s |
+| WELLREF one ring | 15975 | 219.8 | 99.4 % | 10891 (10891) m² | 280 s |
+
+The earlier numbers below are wrong: until opm-common `c7f5e1b6e` the connections a fracture
+added to an LGR well were put in the global grid and dropped by the well model, so the
+fracture fed the well only through the perforated cell. The two-ring and model2 results
+have not been rerun since.
+
+Earlier (2026-10-12, before the fix):
 
 | case | leaf cells | BHP day 106 | WWIRFRAC/WWIR | fracture area (open) | wall |
 |---|---|---|---|---|---|
@@ -83,9 +95,7 @@ Results (2026-10-12, 106 days, 4 ranks):
 | WELLREF one ring | 15975 | 240.9 | 64.9 % | 13136 (12998) m² | 210 s |
 | WELLREF two rings | 19153 | 247.3 | 61.0 % | 3014 (2903) m² | 141 s |
 
-- WELLREF builds exactly the hand-written box. The BHP differs because the
-  hand-written deck completes one refined cell (`COMPDATL ... 11 11`), while WELLREF
-  spreads the coarse connection over the three refined layers.
+- WELLREF builds exactly the hand-written box; with the fix both give the same result.
 - The nested run's fracture is a quarter of the single ring's on ~5x finer cells near
   the well: the fracture-reservoir coupling depends on cell size (see the
   grid-controlled-initiation notes). Not a truncation: it sits well inside the ring.
