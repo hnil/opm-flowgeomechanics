@@ -36,9 +36,17 @@
 #include <opm/models/blackoil/blackoilproperties.hh>
 
 
+#include <dune/common/fmatrix.hh>
 #include <dune/common/fvector.hh>
 
+#include <opm/grid/CpGrid.hpp>
+#include <opm/material/common/MathToolbox.hpp>
+
+#include <algorithm>
+#include <array>
 #include <cstdio>
+#include <type_traits>
+#include <vector>
 
 namespace Opm::Parameters {
 
@@ -48,6 +56,10 @@ namespace Opm::Parameters {
 
 struct VtkWriteGeoMech {
     static constexpr bool value = true;
+};
+
+struct VtkWriteGeoMechNodal {
+    static constexpr bool value = false;
 };
 
 } // namespace Opm::Properties
@@ -95,6 +107,10 @@ namespace Opm {
             Parameters::Register<Parameters::VtkWriteGeoMech>(
                                  "Include geomech quentities "
                                  "in the VTK output files");
+            Parameters::Register<Parameters::VtkWriteGeoMechNodal>(
+                                 "Also write stress, strain, pressure and temperature "
+                                 "as point data, recovered from the cell values by a linear least-squares "
+                                 "fit over the cells touching each node, and the cells' logical (0-based) ijk");
         }
 
         /*!
@@ -117,6 +133,15 @@ namespace Opm {
                 this->resizeScalarBuffer_(ymodule_, ParentType::BufferType::Element);
                 this->resizeScalarBuffer_(pratio_, ParentType::BufferType::Element);
                 this->resizeScalarBuffer_(poro_, ParentType::BufferType::Element);
+
+                if (nodalOutput_()) {
+                    this->resizeTensorBuffer_(nodalStress_, ParentType::BufferType::Vertex);
+                    this->resizeTensorBuffer_(nodalStrain_, ParentType::BufferType::Vertex);
+                    this->resizeScalarBuffer_(nodalPressure_, ParentType::BufferType::Vertex);
+                    this->resizeScalarBuffer_(nodalTemperature_, ParentType::BufferType::Vertex);
+                    this->resizeScalarBuffer_(cellTemperature_, ParentType::BufferType::Element);
+                    this->resizeVectorBuffer_(cellIjk_, ParentType::BufferType::Element);
+                }
                 
                 
                 //this->resizeVectorBuffer_(symstress_,ParentType::BufferType::ElementBuffer, 6);
@@ -178,7 +203,16 @@ namespace Opm {
                     const SymTensor& symtensor = geoMechModel.strain(globalDofIdx);
                     Tensor& strain = strain_[globalDofIdx];
                     this->setTensor(strain, symtensor);
-                }   
+                }
+                if (nodalOutput_()) {
+                    std::array<int, 3> ijk;
+                    elemCtx.simulator().vanguard().cartesianIndexMapper().cartesianCoordinate(globalDofIdx, ijk);
+                    for (int d = 0; d < 3; ++d) {
+                        cellIjk_[globalDofIdx][d] = ijk[d];
+                    }
+                    cellTemperature_[globalDofIdx] =
+                        getValue(elemCtx.intensiveQuantities(dofIdx, /*timeIdx=*/0).fluidState().temperature(/*phaseIdx=*/0));
+                }
             }
             // all vertices proably do it to many times for now
             auto gv  = elemCtx.gridView();
@@ -231,6 +265,14 @@ namespace Opm {
                                               strain_,
                                               ParentType::BufferType::Element);
                 }
+                if (nodalOutput_()) {
+                    recoverToNodes_();
+                    this->commitTensorBuffer_(baseWriter, "stress", nodalStress_, ParentType::BufferType::Vertex);
+                    this->commitTensorBuffer_(baseWriter, "strain", nodalStrain_, ParentType::BufferType::Vertex);
+                    this->commitScalarBuffer_(baseWriter, "pressure", nodalPressure_, ParentType::BufferType::Vertex);
+                    this->commitScalarBuffer_(baseWriter, "temperature", nodalTemperature_, ParentType::BufferType::Vertex);
+                    this->commitVectorBuffer_(baseWriter, "ijk", cellIjk_, ParentType::BufferType::Element);
+                }
 
             }
         }
@@ -244,6 +286,107 @@ namespace Opm {
             static bool val = Parameters::Get<Parameters::VtkWriteGeoMech>();
             return val;
         }
+        static bool nodalOutput_(){
+            static bool val = geoMechOutput_() && Parameters::Get<Parameters::VtkWriteGeoMechNodal>();
+            return val;
+        }
+
+        // Faces of the cell, so hanging nodes of edge-conformal corner-point
+        // grids also get the cells they lie on, not only those they are a corner of.
+        std::vector<int> cellNodes_(const Grid& grid, const typename GridView::template Codim<0>::Entity& elem,
+                                    int cellIdx) const
+        {
+            std::vector<int> nodes;
+            if constexpr (std::is_same_v<Grid, Dune::CpGrid>) {
+                for (int f = 0; f < grid.numCellFaces(cellIdx); ++f) {
+                    const int face = grid.cellFace(cellIdx, f);
+                    if (grid.numFaceVertices(face) < 3) {
+                        continue; // NNC pseudo-face
+                    }
+                    for (int v = 0; v < grid.numFaceVertices(face); ++v) {
+                        nodes.push_back(grid.faceVertex(face, v));
+                    }
+                }
+                std::ranges::sort(nodes);
+                nodes.erase(std::unique(nodes.begin(), nodes.end()), nodes.end());
+            } else {
+                const auto& gv = this->simulator_.gridView();
+                for (const auto& vertex : Dune::subEntities(elem, Dune::Codim<Grid::dimension>{})) {
+                    nodes.push_back(gv.indexSet().index(vertex));
+                }
+            }
+            return nodes;
+        }
+
+        // First step of patch recovery: a linear least-squares fit through the
+        // centroids of the cells touching the node, evaluated at the node.
+        void recoverToNodes_()
+        {
+            const auto& grid = this->simulator_.vanguard().grid();
+            const auto& gv = this->simulator_.gridView();
+            std::vector<Dune::FieldVector<double, 3>> nodePosition(gv.size(Grid::dimension));
+            for (const auto& vertex : Dune::vertices(gv)) {
+                nodePosition[gv.indexSet().index(vertex)] = vertex.geometry().center();
+            }
+            std::vector<std::vector<std::pair<int, Dune::FieldVector<double, 3>>>> patch(nodePosition.size());
+            for (const auto& elem : Dune::elements(gv)) {
+                const int cell = gv.indexSet().index(elem);
+                for (const int node : cellNodes_(grid, elem, cell)) {
+                    patch[node].emplace_back(cell, elem.geometry().center());
+                }
+            }
+            for (std::size_t node = 0; node < patch.size(); ++node) {
+                if (patch[node].empty()) {
+                    continue;
+                }
+                const auto weight = recoveryWeights_(nodePosition[node], patch[node]);
+                for (std::size_t k = 0; k < weight.size(); ++k) {
+                    const int cell = patch[node][k].first;
+                    Tensor stress = stress_[cell];
+                    Tensor strain = strain_[cell];
+                    stress *= weight[k];
+                    strain *= weight[k];
+                    nodalStress_[node] += stress;
+                    nodalStrain_[node] += strain;
+                    nodalPressure_[node] += weight[k] * pressure_[cell];
+                    nodalTemperature_[node] += weight[k] * cellTemperature_[cell];
+                }
+            }
+        }
+
+        // Weights w_c with v(x) = sum w_c v_c for the fit v = a + b.(c - x). The small
+        // penalty on b keeps directions the centroids do not span (boundaries, one or
+        // two cells) flat instead of extrapolating.
+        static std::vector<double>
+        recoveryWeights_(const Dune::FieldVector<double, 3>& x,
+                         const std::vector<std::pair<int, Dune::FieldVector<double, 3>>>& patch)
+        {
+            Dune::FieldMatrix<double, 4, 4> normal(0.0);
+            std::vector<Dune::FieldVector<double, 4>> rows;
+            double spread = 0.0;
+            for (const auto& [cell, centroid] : patch) {
+                Dune::FieldVector<double, 4> q{1.0, centroid[0] - x[0], centroid[1] - x[1], centroid[2] - x[2]};
+                for (int i = 0; i < 4; ++i) {
+                    for (int j = 0; j < 4; ++j) {
+                        normal[i][j] += q[i] * q[j];
+                    }
+                }
+                spread += q[1] * q[1] + q[2] * q[2] + q[3] * q[3];
+                rows.push_back(q);
+            }
+            const double penalty = 1e-3 * spread / patch.size();
+            for (int i = 1; i < 4; ++i) {
+                normal[i][i] += penalty;
+            }
+            Dune::FieldVector<double, 4> r;
+            normal.solve(r, Dune::FieldVector<double, 4>{1.0, 0.0, 0.0, 0.0});
+            std::vector<double> weight;
+            for (const auto& q : rows) {
+                weight.push_back(r * q);
+            }
+            return weight;
+        }
+
         ScalarBuffer pressDiff_;
         VectorBuffer disp_;
         VectorBuffer symstress_;
@@ -256,6 +399,13 @@ namespace Opm {
         ScalarBuffer ymodule_;
         ScalarBuffer pratio_;
         ScalarBuffer poro_;
+
+        TensorBuffer nodalStress_;
+        TensorBuffer nodalStrain_;
+        ScalarBuffer nodalPressure_;
+        ScalarBuffer nodalTemperature_;
+        ScalarBuffer cellTemperature_;
+        VectorBuffer cellIjk_;
     };
 } // namespace Opm
 
