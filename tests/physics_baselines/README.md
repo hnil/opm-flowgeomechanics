@@ -115,15 +115,16 @@ log rather than changing physics to obtain a pass. These checks do not yet certi
 that every rejected timestep or relaxed CNV acceptance has been detected.
 
 Known warnings are visible as `pass_with_warnings`: unsupported deck keywords in
-both cases, plus WELLREF's local mechanical-BC diagnostics,
-refined-away summary vectors and unavailable LGR well-average pressures. Their
-occurrences and other warning samples are retained. This is an explicit historical
+both cases, plus WELLREF's refined-away summary vectors and unavailable LGR
+well-average pressures. Their occurrences and other warning samples are retained. This is an explicit historical
 allowlist, not a declaration that those warnings are harmless. A new warning type
 fails; `--strict-warnings` also fails the known types. Occurrences count emitted
 messages and must not be interpreted as the number of affected MPI ranks. Warning
 classification currently recognizes `Warning:` messages and the known BC error;
 other launcher diagnostics remain available in the raw log.
-Missing-connection warnings now fail both cases: LGR completions are resolved by
+Mechanical boundary-condition warnings now fail both cases; constraints are
+validated globally against all six rigid-body modes per connected component.
+Missing-connection warnings also fail both cases: LGR completions are resolved by
 (grid number, completion index), separately from the WSEED parent-cell identity.
 
 ## Fast harness checks

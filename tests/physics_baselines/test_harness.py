@@ -86,6 +86,15 @@ class BaselineChecks(unittest.TestCase):
             self.assertEqual(result["status"], "fail")
             self.assertEqual(result["unexpected_warning_types"], ["missing_connection"])
 
+    def test_mechanical_constraint_warnings_are_no_longer_allowlisted(self):
+        profiles = json.loads(harness.PROFILES.read_text())
+        for case in profiles["cases"].values():
+            self.profile["known_warnings"] = case["known_warnings"]
+            result = self.assess(log=self.log +
+                "Mechanical BC configuration: no nodes are fixed in Z-direction\n")
+            self.assertEqual(result["status"], "fail")
+            self.assertEqual(result["unexpected_warning_types"], ["mechanical_bc"])
+
     def test_new_warning_category_fails(self):
         result = self.assess(log=self.log + "Warning: new physical inconsistency\n")
         self.assertEqual(result["status"], "fail")
