@@ -66,6 +66,7 @@ list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/ElasticitySolver_impl.hpp
 	opm/geomech/FlowGeoMechLinearSolverParameters.hpp
 	opm/geomech/FracturePressureAssemblerAD.hpp
+	opm/geomech/FractureConnectionId.hpp
 	opm/geomech/Fracture.hpp
 	opm/geomech/Fracture_impl.hpp
 	opm/geomech/FractureAuxCells.hpp

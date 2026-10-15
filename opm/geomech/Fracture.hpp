@@ -26,6 +26,7 @@
 
 
 
+#include <opm/geomech/FractureConnectionId.hpp>
 #include <limits>
 
 #include <dune/common/exceptions.hh>
@@ -197,7 +198,8 @@ struct WellInfo
     std::string name;
     int perf;
     int well_cell;
-    int global_index;
+    int global_index; // Level-zero WSEED identity, used for activation.
+    FractureConnectionId connection_id{};
     int segment{};
     std::optional<std::pair<double, double>> perf_range{};
 };
@@ -248,6 +250,8 @@ public:
     using DynamicMatrix = Dune::DynamicMatrix<double>;
     using EntitySeed = Dune::CpGrid::Codim<0>::Entity::EntitySeed;
 
+    // The completion identity is required; the WSEED parent index cannot
+    // safely provide a default, even when a caller expects grid zero.
     void init(const std::string& well,
               const int perf,
               const int well_cell,
@@ -256,7 +260,8 @@ public:
               const std::optional<std::pair<double, double>>& perf_range,
               const Point3D& origo,
               const Point3D& normal,
-              const PropertyTree& prm);
+              const PropertyTree& prm,
+              FractureConnectionId connection_id);
 
     void grow(int layers, int method);
     std::string name() const;
@@ -279,7 +284,7 @@ public:
     template <class TypeTag, class Simulator>
     void updateReservoirProperties(const Simulator& simulator, bool init_constant_vals=false,bool update_filtercake=true);
     
-    void updateFilterCakeProps(const Opm::WellConnections& connections,
+    void updateFilterCakeProps(const Opm::Connection& connection,
                                const Opm::SingleWellState<double,IndexTraits>& wellstate,double dt);    
     void initFracturePressureFromReservoir();
     void initFractureStates();
