@@ -57,6 +57,7 @@ namespace Opm {
 
                     auto& conn = conns.emplace_back();
                     conn.cell = cell_index;
+                    conn.identity = {connection.global_index(), connection.get_lgr_level()};
                     conn.segment = connection.segment();
                     conn.perf_range = connection.perf_range();
                 }

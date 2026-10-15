@@ -76,6 +76,16 @@ class BaselineChecks(unittest.TestCase):
         self.assertEqual(self.assess(log=log)["status"], "pass_with_warnings")
         self.assertEqual(self.assess(log=log, strict=True)["status"], "fail")
 
+    def test_missing_lgr_completion_is_no_longer_allowlisted(self):
+        profiles = json.loads(harness.PROFILES.read_text())
+        for case in profiles["cases"].values():
+            self.profile["known_warnings"] = case["known_warnings"]
+            log = self.log + ("Warning: Well connection with global index 6562 "
+                              "in grid 1 for well B-3H not found in schedule step 0\n")
+            result = self.assess(log=log)
+            self.assertEqual(result["status"], "fail")
+            self.assertEqual(result["unexpected_warning_types"], ["missing_connection"])
+
     def test_new_warning_category_fails(self):
         result = self.assess(log=self.log + "Warning: new physical inconsistency\n")
         self.assertEqual(result["status"], "fail")

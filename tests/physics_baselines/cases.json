@@ -36,7 +36,7 @@
         "fracture_open_area_m2": [10450, 11420],
         "fracture_volume_m3": [210, 233]
       },
-      "known_warnings": ["missing_connection", "mechanical_bc", "unsupported_keywords", "refined_summary", "lgr_well_averages"]
+      "known_warnings": ["mechanical_bc", "unsupported_keywords", "refined_summary", "lgr_well_averages"]
     }
   }
 }
