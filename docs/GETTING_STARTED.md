@@ -92,6 +92,19 @@ cd build/opm-flowgeomechanics && ctest -R REGTEST_geomech -j 4; cd ../..
 The test driver rewrites a few files under `opm-flowgeomechanics/result/`; undo that with
 `git -C opm-flowgeomechanics checkout -- result/`.
 
+For reproducible physics checks of both SIMPLE and four-rank WELLREF, use the
+[physics baseline harness](../tests/physics_baselines/README.md). It records source
+and input fingerprints, pressure/flow histories, fracture geometry and solver
+diagnostics in a new output directory:
+
+```bash
+python3 opm-flowgeomechanics/scripts/physics_baselines.py run \
+  --build-dir build --output-root ../runs/physics-baselines-001
+```
+
+These checks take several minutes. Known warnings remain visible, and the final
+summary and fracture-geometry timestamps are reported separately.
+
 ## 2. Run the SIMPLE model
 
 An 11 x 11 x 25 box with one water injector (`B-3H`, 20 000 m³/day of 15 °C water into a

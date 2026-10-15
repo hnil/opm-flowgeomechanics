@@ -446,6 +446,22 @@ function(add_mechtest_compareECLFiles)
  # if(PARAM_RESTART_SCHED STREQUAL "false" OR PARAM_RESTART_SCHED STREQUAL "true")
  #   list(APPEND DRIVER_ARGS -h ${PARAM_RESTART_SCHED})
  # endif()
+  # Only MPI-enabled builds need a launcher. Preserve each configured flag
+  # as a separate driver argument, including flags containing spaces.
+  if(USE_MPI)
+    if(NOT MPIEXEC_EXECUTABLE)
+      message(FATAL_ERROR "MPI regression tests require MPIEXEC_EXECUTABLE")
+    endif()
+    foreach(arg IN ITEMS "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}" "1")
+      list(APPEND DRIVER_ARGS -m "${arg}")
+    endforeach()
+    foreach(arg IN LISTS MPIEXEC_PREFLAGS)
+      list(APPEND DRIVER_ARGS -m "${arg}")
+    endforeach()
+    foreach(arg IN LISTS MPIEXEC_POSTFLAGS)
+      list(APPEND DRIVER_ARGS -p "${arg}")
+    endforeach()
+  endif()
   opm_add_test(${PARAM_CASENAME}_${PARAM_SIMULATOR}+${PARAM_FILENAME}
                EXE_TARGET ${PARAM_SIMULATOR}
                DRIVER_ARGS ${DRIVER_ARGS}
@@ -690,6 +706,16 @@ add_test(NAME Run.SIMPLE_MECH_FRAC_LGR.EnergyGeomech
 )
 
 ## regressuin
+find_package(Python3 3.9 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+  add_test(NAME Unit.PhysicsBaselineHarness
+    COMMAND ${CMAKE_COMMAND} -E env PYTHONDONTWRITEBYTECODE=1
+      ${Python3_EXECUTABLE} -m unittest discover
+      -s ${PROJECT_SOURCE_DIR}/tests/physics_baselines -p "test_*.py")
+  set_tests_properties(Unit.PhysicsBaselineHarness PROPERTIES
+    LABELS "physics;unit" TIMEOUT 30)
+endif()
+
 opm_set_test_driver(${PROJECT_SOURCE_DIR}/tests/run-mechRegressionTest.sh "")
 
 # Set absolute tolerance to be used passed to the macros in the following tests
