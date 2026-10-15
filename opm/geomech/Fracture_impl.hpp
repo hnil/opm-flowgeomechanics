@@ -532,8 +532,11 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
           assert(conn.CF() >= 0);
           total_WI_well_ += conn.CF();
         }
-        if(connections.hasGlobalIndex(wellinfo_.global_index) == false){
-            OpmLog::warning(fmt::format("Well connection with global index {} not found in schedule step {}", wellinfo_.global_index, reportStepIdx));
+        const auto* connection = wellinfo_.connection_id.find(connections);
+        if (connection == nullptr) {
+            OpmLog::warning(fmt::format("Well connection with global index {} in grid {} for well {} not found in schedule step {}",
+                                        wellinfo_.connection_id.global_index, wellinfo_.connection_id.lgr_level,
+                                        wellinfo_.name, reportStepIdx));
             return;
         }
         const auto& wellstates = simulator.problem().wellModel().wellState();
@@ -563,8 +566,11 @@ void Fracture::updateFilterCakePropertiesPost(const Simulator& simulator)
         const auto& well = schedule[reportStepIdx].wells(wellinfo_.name);
         const auto& connections = well.getConnections();
 
-        if(connections.hasGlobalIndex(wellinfo_.global_index) == false){
-            OpmLog::warning(fmt::format("Well connection with global index {} not found in schedule step {}", wellinfo_.global_index, reportStepIdx));
+        const auto* connection = wellinfo_.connection_id.find(connections);
+        if (connection == nullptr) {
+            OpmLog::warning(fmt::format("Well connection with global index {} in grid {} for well {} not found in schedule step {}",
+                                        wellinfo_.connection_id.global_index, wellinfo_.connection_id.lgr_level,
+                                        wellinfo_.name, reportStepIdx));
             return;
         }
         const auto& wellstates = simulator.problem().wellModel().wellState();
@@ -577,7 +583,7 @@ void Fracture::updateFilterCakePropertiesPost(const Simulator& simulator)
         const auto& wellstate = wellstates[*well_index];
 
         double dt = simulator.timeStepSize();
-        updateFilterCakeProps(connections, wellstate, dt);
+        updateFilterCakeProps(*connection, wellstate, dt);
 
     }
 
