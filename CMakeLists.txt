@@ -446,6 +446,22 @@ function(add_mechtest_compareECLFiles)
  # if(PARAM_RESTART_SCHED STREQUAL "false" OR PARAM_RESTART_SCHED STREQUAL "true")
  #   list(APPEND DRIVER_ARGS -h ${PARAM_RESTART_SCHED})
  # endif()
+  # Only MPI-enabled builds need a launcher. Preserve each configured flag
+  # as a separate driver argument, including flags containing spaces.
+  if(USE_MPI)
+    if(NOT MPIEXEC_EXECUTABLE)
+      message(FATAL_ERROR "MPI regression tests require MPIEXEC_EXECUTABLE")
+    endif()
+    foreach(arg IN ITEMS "${MPIEXEC_EXECUTABLE}" "${MPIEXEC_NUMPROC_FLAG}" "1")
+      list(APPEND DRIVER_ARGS -m "${arg}")
+    endforeach()
+    foreach(arg IN LISTS MPIEXEC_PREFLAGS)
+      list(APPEND DRIVER_ARGS -m "${arg}")
+    endforeach()
+    foreach(arg IN LISTS MPIEXEC_POSTFLAGS)
+      list(APPEND DRIVER_ARGS -p "${arg}")
+    endforeach()
+  endif()
   opm_add_test(${PARAM_CASENAME}_${PARAM_SIMULATOR}+${PARAM_FILENAME}
                EXE_TARGET ${PARAM_SIMULATOR}
                DRIVER_ARGS ${DRIVER_ARGS}

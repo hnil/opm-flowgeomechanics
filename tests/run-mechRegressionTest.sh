@@ -20,12 +20,16 @@ then
   echo -e "\t\t -s <step>     Step to do restart testing from"
   echo -e "\t\t -h value      sched_restart value to use in restart test"
   echo -e "\t\t -o value      case name for reference"
+  echo -e "\t\t -m value      MPI launcher argument (repeatable; before simulator)"
+  echo -e "\t\t -p value      MPI postflag (repeatable; after simulator)"
   exit 1
 fi
 
 RESTART_STEP=""
+MPI_COMMAND=()
+MPI_POSTFLAGS=()
 OPTIND=1
-while getopts "i:r:b:f:a:t:c:d:s:e:h:o:" OPT
+while getopts "i:r:b:f:a:t:c:d:s:e:h:o:m:p:" OPT
 do
   case "${OPT}" in
     i) INPUT_DATA_PATH=${OPTARG} ;;
@@ -40,16 +44,18 @@ do
     e) EXE_NAME=${OPTARG} ;;
     h) RESTART_SCHED=${OPTARG} ;;
     o) CASENAME=${OPTARG} ;;
+    m) MPI_COMMAND+=("${OPTARG}") ;;
+    p) MPI_POSTFLAGS+=("${OPTARG}") ;;
   esac
 done
 shift $(($OPTIND-1))
-TEST_ARGS="$@"
+TEST_ARGS=("$@")
 
-# opm_add_test passes the full path of the simulator with -e; run it
-# directly and keep only the basename for the reference-data lookup.
+# opm_add_test passes the full path of the simulator with -e; keep
+# only the basename for the reference-data lookup.
 case "${EXE_NAME}" in
   /*) SIM_BINARY=${EXE_NAME}
-      EXE_NAME=$(basename ${EXE_NAME}) ;;
+      EXE_NAME=$(basename "${EXE_NAME}") ;;
   *)  SIM_BINARY=${BINPATH}/${EXE_NAME} ;;
 esac
 
@@ -59,7 +65,10 @@ rm -f ${RESULT_PATH}/${FILENAME}.*
 rm -f ${RESULT_PATH}/${FILENAME}_RESTART_*.DATA
 rm -f ${RESULT_PATH}/${FILENAME}_RESTART_*.*
 cd ${RESULT_PATH}
-${SIM_BINARY} ${INPUT_DATA_PATH}/${FILENAME} ${TEST_ARGS} --output-dir=${RESULT_PATH}
+# MPI builds use the launcher supplied by CMake to avoid singleton-init hangs.
+# An empty command array launches serial builds directly.
+"${MPI_COMMAND[@]}" "${SIM_BINARY}" "${MPI_POSTFLAGS[@]}" \
+    "${INPUT_DATA_PATH}/${FILENAME}" "${TEST_ARGS[@]}" "--output-dir=${RESULT_PATH}"
 test $? -eq 0 || exit 1
 cd ..
 
