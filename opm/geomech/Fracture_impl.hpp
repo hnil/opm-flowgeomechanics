@@ -569,8 +569,11 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
           total_WI_well_ += conn.CF();
         }
         //const auto& connection = connections[wellinfo_.perf];// probably wrong
-        if(connections.hasGlobalIndex(wellinfo_.global_index) == false){
-            std::cerr << "Warning: Well connection with global index " << wellinfo_.global_index << " not found in schedule step " << reportStepIdx << std::endl;
+        const auto* connection = wellinfo_.connection_id.find(connections);
+        if (connection == nullptr) {
+            std::cerr << "Warning: Well connection with global index " << wellinfo_.connection_id.global_index
+                      << " in grid " << wellinfo_.connection_id.lgr_level
+                      << " for well " << wellinfo_.name << " not found in schedule step " << reportStepIdx << std::endl;
             return;
         }
         const auto& wellstates = simulator.problem().wellModel().wellState();
@@ -584,7 +587,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
 
         // if(update_filtercake){
         //   double dt = simulator.timeStepSize();
-        //   updateFilterCakeProps(connections, wellstate, dt);
+        //   updateFilterCakeProps(*connection, wellstate, dt);
         // } 
         // else {
         //   // remap
@@ -616,8 +619,11 @@ void Fracture::updateFilterCakePropertiesPost(const Simulator& simulator)//, boo
         const auto& connections = well.getConnections();
         
         //const auto& connection = connections[wellinfo_.perf];// probably wrong
-        if(connections.hasGlobalIndex(wellinfo_.global_index) == false){
-            std::cerr << "Warning: Well connection with global index " << wellinfo_.global_index << " not found in schedule step " << reportStepIdx << std::endl;
+        const auto* connection = wellinfo_.connection_id.find(connections);
+        if (connection == nullptr) {
+            std::cerr << "Warning: Well connection with global index " << wellinfo_.connection_id.global_index
+                      << " in grid " << wellinfo_.connection_id.lgr_level
+                      << " for well " << wellinfo_.name << " not found in schedule step " << reportStepIdx << std::endl;
             return;
         }
         const auto& wellstates = simulator.problem().wellModel().wellState();
@@ -630,7 +636,7 @@ void Fracture::updateFilterCakePropertiesPost(const Simulator& simulator)//, boo
         const auto& wellstate = wellstates[*well_index];
 
         double dt = simulator.timeStepSize();
-        updateFilterCakeProps(connections, wellstate, dt);
+        updateFilterCakeProps(*connection, wellstate, dt);
 
     }   
 

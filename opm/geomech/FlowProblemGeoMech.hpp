@@ -15,6 +15,7 @@
 #include <opm/geomech/FractureAuxCells.hpp>
 #include <opm/simulators/wells/PerforationData.hpp>
 #include <opm/geomech/BoundaryUtils.hpp>
+#include <opm/geomech/MechanicalConstraintValidation.hpp>
 #include <opm/geomech/GeoMechModel.hpp>
 #include <opm/geomech/VtkGeoMechModule.hpp>
 
@@ -699,10 +700,27 @@ namespace Opm{
                                                      cartesianIndexMapper);
                 }
 
-                bool is_ok = mechGridContext_ ? true : checkBcConfig(bc_nodes_);
-                if(!is_ok){
-                  // this need to be fixed for parallel runs
-                  std::cout << "Error in boundary condition specification not proper for mechanical problem" << std::endl;
+                const auto components = Opm::Elasticity::mechanicalConstraintRanks(
+                    geoMechModel_.mechGrid(), bc_nodes_);
+                bool unconstrained = components.empty();
+                for (const auto& component : components) {
+                    if (component.rank < 6) {
+                        unconstrained = true;
+                        if (gv.comm().rank() == 0) {
+                            OpmLog::error("Mechanical BC configuration: component "
+                                + std::to_string(component.id) + " constrains "
+                                + std::to_string(component.rank) + "/6 rigid-body modes");
+                        }
+                    }
+                }
+                if (unconstrained) {
+                    OPM_THROW_NOLOG(std::runtime_error,
+                        "Mechanical boundary conditions leave rigid-body motion unconstrained; "
+                        "each connected mechanical body must constrain all six modes.");
+                }
+                if (gv.comm().rank() == 0) {
+                    OpmLog::info("Mechanical constraints: " + std::to_string(components.size())
+                        + " connected component(s), all six rigid-body modes constrained");
                 }
             }
         }
@@ -913,128 +931,6 @@ namespace Opm{
         }
  
     private:
-        // ----------------------------------------------------------------------------
-        // Heuristic rotational constraint check based only on fixed-direction
-        // masks in bc_nodes.
-        //
-        // Since coordinates are not available here, this is a structural check:
-        // to constrain rotation around an axis, we require fixed DOFs in the two
-        // transverse directions on at least two distinct nodes.
-        // ----------------------------------------------------------------------------
-        static bool checkRotationsConstrained(
-            const std::vector<std::tuple<size_t, MechBCValue>>& bc_nodes)
-        {
-            auto constrainedAroundAxis = [&](int d1,
-                                             int d2,
-                                             const std::string& axisName) -> bool
-            {
-                std::set<size_t> nodes_d1;
-                std::set<size_t> nodes_d2;
-
-                for (const auto& [node_idx, bc] : bc_nodes) {
-                    if (bc.fixeddir[d1]) {
-                        nodes_d1.insert(node_idx);
-                    }
-                    if (bc.fixeddir[d2]) {
-                        nodes_d2.insert(node_idx);
-                    }
-                }
-
-                if (nodes_d1.empty() || nodes_d2.empty()) {
-                    OpmLog::warning(
-                        "Mechanical BC: rotation around " + axisName
-                        + " may be unconstrained (missing fixed DOFs in one or "
-                          "both transverse directions).");
-                    return false;
-                }
-
-                std::set<size_t> union_nodes = nodes_d1;
-                union_nodes.insert(nodes_d2.begin(), nodes_d2.end());
-
-                if (union_nodes.size() < 2) {
-                    OpmLog::warning(
-                        "Mechanical BC: rotation around " + axisName
-                        + " may be unconstrained (transverse constraints are "
-                          "applied at a single node only).");
-                    return false;
-                }
-
-                return true;
-            };
-
-            const bool rx = constrainedAroundAxis(1, 2, "X");
-            const bool ry = constrainedAroundAxis(0, 2, "Y");
-            const bool rz = constrainedAroundAxis(0, 1, "Z");
-
-            return rx && ry && rz;
-        }
-
-        // ----------------------------------------------------------------------------
-        // Check that the mechanical boundary conditions are self-consistent and
-        // cover enough DOFs to prevent rigid-body translations.
-        //
-        // Returns true if the configuration is valid, false otherwise.
-        // An empty bc_nodes list is accepted (e.g. stress-only BCs on all faces).
-        // A warning is emitted for any spatial direction that has no fixed node,
-        // since the resulting system may be singular.
-        // ----------------------------------------------------------------------------
-        static bool checkBcConfig(
-            const std::vector<std::tuple<size_t, MechBCValue>>& bc_nodes)
-        {
-            // Count how many nodes fix each direction, and check that every
-            // listed node actually constrains something.
-            std::array<int, 3> fixed_count = {0, 0, 0};
-            const std::array<std::string, 3> dir_name = {"X", "Y", "Z"};
-
-            for (const auto& [node_idx, bc] : bc_nodes) {
-                bool node_fixes_anything = false;
-                for (int d = 0; d < 3; ++d) {
-                    if (bc.fixeddir[d]) {
-                        ++fixed_count[d];
-                        node_fixes_anything = true;
-                    }
-                }
-                if (!node_fixes_anything) {
-                    OpmLog::warning("BC node " + std::to_string(node_idx)
-                        + " is listed in bc_nodes but does not fix any"
-                          " displacement direction – check BCMECH input.");
-                    //return false;
-                }
-            }
-
-            // Warn (but do not fail) when a direction has no fixed nodes.
-            // The system may still be well-posed via stress BCs or symmetry.
-            if(bc_nodes.empty()){
-                OpmLog::warning(
-                    "Mechanical BC configuration: no nodes are fixed.  The system may be singular");
-                return false;
-            }
-            if (!bc_nodes.empty()) {
-                for (int d = 0; d < 3; ++d) {
-                    if (fixed_count[d] == 0) {
-                        OpmLog::warning(
-                            "Mechanical BC configuration: no nodes are fixed in "
-                            + dir_name[d]
-                            + "-direction.  The system may is singular");
-                        return false;      
-                    };
-                    //  else {
-                    //     OpmLog::info(
-                    //         "Mechanical BC: " + std::to_string(fixed_count[d])
-                    //         + " node(s) fixed in " + dir_name[d] + "-direction.");
-                    // }
-                }
-            }
-
-            if (!checkRotationsConstrained(bc_nodes)) {
-                OpmLog::warning(
-                    "Mechanical BC configuration: rotational modes are not "
-                    "sufficiently constrained based on bc_nodes.");
-                return false;
-            }
-            return true;
-        }
-
         GeoMechModel<TypeTag> geoMechModel_;
 
         std::vector<std::tuple<size_t,MechBCValue>> bc_nodes_;

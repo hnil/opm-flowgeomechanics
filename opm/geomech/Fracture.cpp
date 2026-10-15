@@ -81,7 +81,8 @@ Fracture::init(const std::string& well,
                const std::optional<std::pair<double, double>>& perf_range,
                const Point3D& origo,
                const Point3D& normal,
-               const Opm::PropertyTree& prm)
+               const Opm::PropertyTree& prm,
+               FractureConnectionId connection_id)
 {
     OPM_TIMEFUNCTION();
     max_flow_time_step_ = std::numeric_limits<double>::max();
@@ -91,7 +92,9 @@ Fracture::init(const std::string& well,
     }
 
     min_width_ = prm_.get<double>("config.min_width", 1e-3);
-    wellinfo_ = WellInfo({well, perf, well_cell, global_index, segment, perf_range});
+    wellinfo_ = WellInfo({well, perf, well_cell, global_index,
+        connection_id,
+        segment, perf_range});
 
     origo_ = origo;
     axis_[2] = normal;
@@ -253,7 +256,7 @@ Fracture::removeCells()
 }
 
 void
-Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
+Fracture::updateFilterCakeProps(const Opm::Connection& connection,
                                 const Opm::SingleWellState<double,Fracture::IndexTraits>& wellstate,double dt)
 {
     OPM_TIMEFUNCTION();
@@ -299,7 +302,6 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
             scale_factor = std::max(0.0,sim_frac_flux) / frac_flux;
         }   
     }
-    const auto& connection = connections.getFromGlobalIndex(wellinfo_.global_index); // probably wrong
     double filtrate_conn = wellstate.filtrate_conc*xfact;
     has_filtercake_ = connection.filterCakeActive();
     if (has_filtercake_) {
