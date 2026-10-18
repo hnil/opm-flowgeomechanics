@@ -481,6 +481,27 @@ public:
     Dune::CpGrid& grid() { return *grid_; }
     const MechFlowMap& map() const { return map_; }
 
+    /// Give the mechanics cells without flow cells the mean of a deck array over
+    /// their own cells; `cartesian` is indexed like the deck's grid. Returns how
+    /// many cells were filled.
+    template <class Vector>
+    std::size_t fillWithoutFlow(const std::vector<double>& cartesian, Vector& mech) const
+    {
+        std::size_t filled = 0;
+        for (std::size_t m = 0; m < fine_of_mech_.size(); ++m) {
+            if (map_.hasFlowCells(m) || fine_of_mech_[m].empty()) {
+                continue;
+            }
+            double sum = 0.0;
+            for (const int f : fine_of_mech_[m]) {
+                sum += cartesian[f];
+            }
+            mech[m] = sum / fine_of_mech_[m].size();
+            ++filled;
+        }
+        return filled;
+    }
+
     /// Fill the overlap cells of a mechanics-cell vector from their owners.
     /// Restriction only fills cells whose flow children are local.
     template <class Vector>
@@ -1073,6 +1094,14 @@ private:
             cartesianToMech[mechMapper.cartesianIndex(idx)] = idx;
         }
 
+        fine_of_mech_.assign(mechView.size(0), {});
+        for (std::size_t f = 0; f < toMech.size(); ++f) {
+            const int mc = toMech[f];
+            if (mc >= 0 && cartesianToMech[mc] >= 0) {
+                fine_of_mech_[cartesianToMech[mc]].push_back(static_cast<int>(f));
+            }
+        }
+
         const auto& flowView = flowGrid.leafGridView();
 
         const std::size_t numFlowCells = flowView.size(0);
@@ -1118,6 +1147,7 @@ private:
 
     std::unique_ptr<Dune::CpGrid> grid_;
     MechFlowMap map_;
+    std::vector<std::vector<int>> fine_of_mech_;
     bool merged_{false};
     bool fromCornerPoints_{false};
     std::array<int,3> fineDims_{};

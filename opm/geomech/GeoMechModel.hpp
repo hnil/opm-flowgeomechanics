@@ -587,7 +587,10 @@ namespace Opm{
         void setMaterial(const std::vector<std::shared_ptr<Opm::Elasticity::Material>>& materials){
             elacticitysolver_->setMaterial(materials);
         }
-        void setMaterial(const std::vector<double>& ymodule,const std::vector<double>& pratio){
+        //! The Cartesian arrays supply mechanics cells outside the flow grid.
+        void setMaterial(const std::vector<double>& ymodule,const std::vector<double>& pratio,
+                         const std::vector<double>* ymoduleCartesian = nullptr,
+                         const std::vector<double>* pratioCartesian = nullptr){
             if(mechMap_.isIdentity()){
                 elacticitysolver_->setMaterial(ymodule,pratio);
                 return;
@@ -595,6 +598,23 @@ namespace Opm{
             std::vector<double> ymodule_mech, pratio_mech;
             mechMap_.restrict(ymodule, ymodule_mech);
             mechMap_.restrict(pratio, pratio_mech);
+            if (ymoduleCartesian && pratioCartesian) {
+                const auto filled = mechCtx_->fillWithoutFlow(*ymoduleCartesian, ymodule_mech);
+                mechCtx_->fillWithoutFlow(*pratioCartesian, pratio_mech);
+                if (filled > 0) {
+                    OpmLog::info("Mechanics grid: " + std::to_string(filled)
+                                 + " cells outside the flow grid take YMODULE and PRATIO "
+                                 "from the deck");
+                }
+            }
+            std::size_t noStiffness = 0;
+            for (const auto e : ymodule_mech) {
+                noStiffness += (e <= 0.0);
+            }
+            if (noStiffness > 0) {
+                OpmLog::warning("Mechanics grid: " + std::to_string(noStiffness)
+                                + " cells have no YMODULE (outside the flow grid, no deck value)");
+            }
             mechCtx_->communicate(ymodule_mech);
             mechCtx_->communicate(pratio_mech);
             elacticitysolver_->setMaterial(ymodule_mech,pratio_mech);

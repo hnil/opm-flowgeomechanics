@@ -13,6 +13,7 @@
 #include <opm/geomech/FlowGeoMechLinearSolverParameters.hpp>
 #include <opm/geomech/FlowProblemMech.hpp>
 #include <opm/geomech/FractureAuxCells.hpp>
+#include <opm/simulators/flow/flux/FluxActivation.hpp>
 #include <opm/simulators/wells/PerforationData.hpp>
 #include <opm/geomech/BoundaryUtils.hpp>
 #include <opm/geomech/GeoMechModel.hpp>
@@ -747,7 +748,10 @@ namespace Opm{
         // Backend hooks for the shared initial-stress handling
         // ///
         void prepareMechForInit() override{
-            this->geoMechModel_.setMaterial(this->ymodule_, this->pratio_);
+            // A USEFLUX run keeps the deck's values outside the sector for these.
+            this->geoMechModel_.setMaterial(this->ymodule_, this->pratio_,
+                                            retainedBeforeUseFlux("YMODULE"),
+                                            retainedBeforeUseFlux("PRATIO"));
             this->geoMechModel_.updatePotentialForces();//Neede only of output
         }
 

@@ -74,6 +74,10 @@ public:
     int mechCell(std::size_t flowCell) const
     { return identity_ ? static_cast<int>(flowCell) : flow_to_mech_[flowCell]; }
 
+    /// False for a mechanics cell outside the flow grid, which restriction leaves at zero.
+    bool hasFlowCells(std::size_t mechCell) const
+    { return identity_ || mech_weight_[mechCell] > 0.0; }
+
     /// Volume-weighted mean over each mechanics cell's flow cells, which
     /// preserves the integral of a force density.
     template <class Vector>
