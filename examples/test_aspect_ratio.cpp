@@ -280,6 +280,60 @@ patch_test_3D(const vem::StabilityChoice sc, const double aspect, const bool dia
 }
 
 // ----------------------------------------------------------------------------
+// 3D patch test with every node displaced pseudo-randomly by up to `warp` cell sizes,
+// so that almost no face is planar
+double
+patch_test_3D_warped(const vem::StabilityChoice sc, const double warp, const vem::FaceQuadrature fq)
+{
+    HexGrid g(3, 3, 3, 1.0, 1.0, 1.0);
+    unsigned seed = 12345u;
+    for (auto& x : g.points) {
+        seed = 1664525u * seed + 1013904223u;
+        x += warp * (double(seed >> 8) / double(1u << 24) - 0.5);
+    }
+    const double E = 1e9, nu = 0.3;
+    std::vector<double> young(g.num_cells(), E), poisson(g.num_cells(), nu);
+    std::vector<double> body(3 * g.num_cells(), 0.0);
+    const double A[3][3] = {{1e-2, 5e-3, 3e-3}, {2e-3, -4e-3, 6e-3}, {1e-3, 2e-3, 3e-3}};
+    auto exact = [&](const double* x, int d) {
+        return A[d][0] * x[0] + A[d][1] * x[1] + A[d][2] * x[2];
+    };
+    std::vector<int> fixed_ixs;
+    std::vector<double> fixed_vals;
+    for (int k = 0; k <= g.nz; ++k)
+        for (int j = 0; j <= g.ny; ++j)
+            for (int i = 0; i <= g.nx; ++i) {
+                if (!g.boundary_node(i, j, k))
+                    continue;
+                const int n = g.node(i, j, k);
+                for (int d = 0; d < 3; ++d) {
+                    fixed_ixs.push_back(3 * n + d);
+                    fixed_vals.push_back(exact(&g.points[3 * n], d));
+                }
+            }
+    const auto saved = vem::face_quadrature();
+    vem::set_face_quadrature(fq);
+    std::vector<std::tuple<int, int, double>> A_entries;
+    std::vector<double> b;
+    const int n_unknown = vem::assemble_mech_system_3D(&g.points[0], g.num_cells(), &g.num_cell_faces[0],
+                                                       &g.num_face_corners[0], &g.face_corners[0], &young[0],
+                                                       &poisson[0], &body[0], int(fixed_ixs.size()),
+                                                       &fixed_ixs[0], &fixed_vals[0], 0, nullptr, nullptr,
+                                                       A_entries, b, sc, true);
+    vem::set_face_quadrature(saved);
+    const auto x = dense_solve(vem::sparse2full(A_entries, n_unknown, n_unknown), b);
+    const auto full = expand_solution(x, fixed_ixs, fixed_vals, 3 * g.num_nodes());
+    double maxerr = 0.0, scale_u = 0.0;
+    for (int n = 0; n < g.num_nodes(); ++n)
+        for (int d = 0; d < 3; ++d) {
+            const double ex = exact(&g.points[3 * n], d);
+            maxerr = std::max(maxerr, std::fabs(full[3 * n + d] - ex));
+            scale_u = std::max(scale_u, std::fabs(ex));
+        }
+    return maxerr / scale_u;
+}
+
+// ----------------------------------------------------------------------------
 // 2D patch test on stretched quads
 double
 patch_test_2D(const vem::StabilityChoice sc, const double aspect)
@@ -524,6 +578,23 @@ main()
         std::printf("%-12s  %-15.3e (with diagonal scaling)\n", "ANISO_DIAG", err);
         if (err > 1e-6)
             ++failures;
+    }
+
+    // warped (non-planar) faces: only the triangulated face quadrature is exact
+    std::printf("\n=== 3D patch test, warped faces: kite / triangulated face quadrature ===\n");
+    for (const double w : {0.1, 0.3}) {
+        for (const auto& [sc, name] : variants) {
+            if (vem::is_fem_choice(sc))
+                continue;
+            const double ek = patch_test_3D_warped(sc, w, vem::FaceQuadrature::KITE);
+            const double et = patch_test_3D_warped(sc, w, vem::FaceQuadrature::TRIANGULATED);
+            std::printf("warp=%-4g %-12s  %-12.3e %-12.3e", w, name.c_str(), ek, et);
+            if (et > 1e-6) {
+                ++failures;
+                std::printf("(FAIL)");
+            }
+            std::printf("\n");
+        }
     }
 
     std::printf("\n=== 2D patch test, rel error ===\n");

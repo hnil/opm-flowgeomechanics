@@ -18,6 +18,12 @@ using namespace vem;
 namespace vem
 {
 
+namespace {
+FaceQuadrature face_quadrature_ = FaceQuadrature::KITE;
+}
+void set_face_quadrature(FaceQuadrature q) { face_quadrature_ = q; }
+FaceQuadrature face_quadrature() { return face_quadrature_; }
+
 // ============================================================================
 // Very basic helpers (since we here avoid having a defined point class)
 // ============================================================================
@@ -1149,6 +1155,66 @@ compute_q_2D(const double* const corners, const int num_corners)
 }
 
 // ----------------------------------------------------------------------------
+// Vector areas of the fan triangles (vertex mean, p_i, p_i+1) of a face, oriented
+// along the given outward normal; 3*m values.
+vector<double>
+fan_vector_areas(const double* const corners, const int* const fcorners, const int m, const double* const normal)
+// ----------------------------------------------------------------------------
+{
+    array<double, 3> c {0, 0, 0};
+    for (int i = 0; i != m; ++i)
+        for (int d = 0; d != 3; ++d)
+            c[d] += corners[3 * fcorners[i] + d] / m;
+    vector<double> res(3 * m);
+    double dot = 0;
+    for (int i = 0; i != m; ++i) {
+        const double* p = &corners[3 * fcorners[i]];
+        const double* q = &corners[3 * fcorners[(i + 1) % m]];
+        const array<double, 3> u {p[0] - c[0], p[1] - c[1], p[2] - c[2]};
+        const array<double, 3> v {q[0] - c[0], q[1] - c[1], q[2] - c[2]};
+        res[3 * i + 0] = 0.5 * (u[1] * v[2] - u[2] * v[1]);
+        res[3 * i + 1] = 0.5 * (u[2] * v[0] - u[0] * v[2]);
+        res[3 * i + 2] = 0.5 * (u[0] * v[1] - u[1] * v[0]);
+        for (int d = 0; d != 3; ++d)
+            dot += res[3 * i + d] * normal[d];
+    }
+    if (dot < 0)
+        for (auto& x : res)
+            x = -x;
+    return res;
+}
+
+// ----------------------------------------------------------------------------
+// Volume enclosed by the fan triangulation of the faces (divergence theorem).
+double
+fan_volume(const double* const corners,
+           const int num_corners,
+           const int* const faces,
+           const int* const num_face_edges,
+           const int num_faces,
+           const vector<double>& outward_normals)
+// ----------------------------------------------------------------------------
+{
+    const array<double, 3> o = point_average<3>(corners, num_corners);
+    double vol = 0;
+    for (int f = 0, pos = 0; f != num_faces; pos += num_face_edges[f++]) {
+        const int m = num_face_edges[f];
+        const auto tris = fan_vector_areas(corners, &faces[pos], m, &outward_normals[3 * f]);
+        array<double, 3> c {0, 0, 0};
+        for (int i = 0; i != m; ++i)
+            for (int d = 0; d != 3; ++d)
+                c[d] += corners[3 * faces[pos + i] + d] / m;
+        for (int i = 0; i != m; ++i) {
+            const double* p = &corners[3 * faces[pos + i]];
+            const double* q = &corners[3 * faces[pos + (i + 1) % m]];
+            for (int d = 0; d != 3; ++d)
+                vol += tris[3 * i + d] * (c[d] + p[d] + q[d] - 3 * o[d]) / 9.0;
+        }
+    }
+    return vol;
+}
+
+// ----------------------------------------------------------------------------
 // Compute the q-values that are related to virtual basis function integrals
 // over element faces in 3D.  These are used as intermediary values when
 // assembling the 2D stiffness matrix for a given element.  See (Gain, 2014)
@@ -1167,6 +1233,27 @@ compute_q_3D(const double* const corners,
 
     // common factor outside the integral: 1 / (2 |E|)
     const double fac = 1.0 / (2 * volume);
+
+    if (face_quadrature_ == FaceQuadrature::TRIANGULATED) {
+        // P1 on the fan (vertex mean, p_i, p_i+1): int_tri phi n = A n / 3 per triangle vertex,
+        // the centre carrying 1/m of each face vertex
+        int pos = 0;
+        for (int f = 0; f != num_faces; pos += num_face_edges[f++]) {
+            const int m = num_face_edges[f];
+            const auto tris = fan_vector_areas(corners, &faces[pos], m, &outward_normals[3 * f]);
+            for (int i = 0; i != m; ++i) {
+                const int a = faces[pos + i], b = faces[pos + (i + 1) % m];
+                for (int d = 0; d != 3; ++d) {
+                    const double w = fac * tris[3 * i + d] / 3.0;
+                    result[3 * a + d] += w;
+                    result[3 * b + d] += w;
+                    for (int k = 0; k != m; ++k)
+                        result[3 * faces[pos + k] + d] += w / m;
+                }
+            }
+        }
+        return result;
+    }
 
     // loop over faces, an accumulate q-values for the associated vertices
     int cur_vertex_ix = 0;
@@ -1772,6 +1859,10 @@ compute_cell_geometry(const double* points,
 
     for (int d = 0; d != 3; ++d)
         cell_centroid[d] /= volume;
+
+    // the strain projection divides by the volume its own face triangulation encloses
+    if (face_quadrature_ == FaceQuadrature::TRIANGULATED)
+        volume = fan_volume(points, num_points, faces, num_face_edges, num_faces, outward_normals);
 
     // if cell_centroid is also a star_point, use that as star_point instead
     if (is_star_point(cell_centroid, outward_normals, face_centroids))
