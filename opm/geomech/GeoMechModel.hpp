@@ -317,6 +317,15 @@ namespace Opm{
                 bool vem_stress = param.get<bool>("vem_stress",true);
                 bool stab_on_stress = param.get<bool>("stab_on_stress",false);
                 bool mech_diagonal_scaling = param.get<bool>("mech_diagonal_scaling",false);
+                const std::string face_quad = param.get<std::string>("vem_face_quadrature", "kite");
+                if (face_quad == "triangulated") {
+                    vem::set_face_quadrature(vem::FaceQuadrature::TRIANGULATED);
+                } else if (face_quad == "kite") {
+                    vem::set_face_quadrature(vem::FaceQuadrature::KITE);
+                } else {
+                    OPM_THROW(std::invalid_argument, "vem_face_quadrature must be 'kite' or 'triangulated', got " + face_quad);
+                }
+                OpmLog::info("VEM face quadrature: " + face_quad);
                 elacticitysolver_->setOptions(stability_choice_int,
                                              vem_source, vem_force,
                                              stab_on_stress,

@@ -22,6 +22,12 @@ namespace vem
     FEM_BBAR = 10   // as FEM, but Q1 with B-bar (mean dilatation) to reduce volumetric
                     // locking; VEM with ANISO_DIAG fallback on non-hex cells
   };
+  // Face integrals of the basis functions in the strain projection (3D).
+  // KITE: per-face kite areas and one averaged normal; exact on planar faces only.
+  // TRIANGULATED: fan from the face vertex mean with per-triangle normals; exact on warped faces.
+  enum class FaceQuadrature { KITE = 0, TRIANGULATED = 1 };
+  void set_face_quadrature(FaceQuadrature q);
+  FaceQuadrature face_quadrature();
   constexpr int STABILITY_CHOICE_MAX = 10;
   // true for choices that request Q1 FEM assembly on cells where it is applicable
   inline bool is_fem_choice(StabilityChoice c) { return c == FEM || c == FEM_BBAR; }
