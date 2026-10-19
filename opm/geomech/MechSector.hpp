@@ -275,6 +275,37 @@ inline Grdecl padVertical(const Grdecl& in, const Padding& top, const Padding& b
         return t;
     };
 
+    // Per pillar, the shallowest box top and deepest box bottom of the columns
+    // around it. Only the first padding layer follows each column; the layers
+    // beyond it are shared by all columns at a pillar, so faults stop there.
+    const int px = d[0] + 1, py = d[1] + 1;
+    std::vector<double> topP(px*py, std::numeric_limits<double>::max());
+    std::vector<double> botP(px*py, std::numeric_limits<double>::lowest());
+    for (int j = 0; j < d[1]; ++j)
+    for (int i = 0; i < d[0]; ++i)
+    for (int ci = 0; ci < 2; ++ci)
+    for (int cj = 0; cj < 2; ++cj) {
+        const int p = (i + ci) + px*(j + cj);
+        topP[p] = std::min(topP[p], in.zcorn[zIndex(d, i, j, 0, ci, cj, 0)]);
+        botP[p] = std::max(botP[p], in.zcorn[zIndex(d, i, j, d[2] - 1, ci, cj, 1)]);
+    }
+    // Boundaries of the shared layers at each pillar: z[m] is the far side of layer m.
+    const auto shared = [&](const std::vector<double>& surf, const Padding& pad,
+                            const std::vector<double>& f, bool up) {
+        std::vector<std::vector<double>> z(surf.size());
+        for (std::size_t p = 0; p < surf.size(); ++p) {
+            const double t = thickness(pad, surf[p], up);
+            double zz = surf[p];
+            for (int m = 0; m < pad.cells; ++m) {
+                zz += (up ? -1.0 : 1.0)*f[m]*t;
+                z[p].push_back(zz);
+            }
+        }
+        return z;
+    };
+    const auto zt = nt > 0 ? shared(topP, top, ft, true) : std::vector<std::vector<double>>{};
+    const auto zb = nb > 0 ? shared(botP, bottom, fb, false) : std::vector<std::vector<double>>{};
+
     for (int j = 0; j < d[1]; ++j)
     for (int i = 0; i < d[0]; ++i)
     for (int ci = 0; ci < 2; ++ci)
@@ -285,22 +316,19 @@ inline Grdecl padVertical(const Grdecl& in, const Padding& top, const Padding& b
                     in.zcorn[zIndex(d, i, j, k, ci, cj, ck)];
             }
         }
-        const double ztop = in.zcorn[zIndex(d, i, j, 0, ci, cj, 0)];
-        const double zbot = in.zcorn[zIndex(d, i, j, d[2] - 1, ci, cj, 1)];
-        const double tt = nt > 0 ? thickness(top, ztop, true) : 0.0;
-        const double tb = nb > 0 ? thickness(bottom, zbot, false) : 0.0;
-        double z = ztop;
+        const int p = (i + ci) + px*(j + cj);
+        double z = in.zcorn[zIndex(d, i, j, 0, ci, cj, 0)];
         for (int m = 0; m < nt; ++m) {    // m = 0 touches the box
             const int k = nt - 1 - m;
             out.zcorn[zIndex(out.dims, i, j, k, ci, cj, 1)] = z;
-            z -= ft[m]*tt;
+            z = zt[p][m];
             out.zcorn[zIndex(out.dims, i, j, k, ci, cj, 0)] = z;
         }
-        z = zbot;
+        z = in.zcorn[zIndex(d, i, j, d[2] - 1, ci, cj, 1)];
         for (int m = 0; m < nb; ++m) {
             const int k = nt + d[2] + m;
             out.zcorn[zIndex(out.dims, i, j, k, ci, cj, 0)] = z;
-            z += fb[m]*tb;
+            z = zb[p][m];
             out.zcorn[zIndex(out.dims, i, j, k, ci, cj, 1)] = z;
         }
     }
