@@ -662,7 +662,23 @@ namespace Opm{
                 }
                 const auto& initconfig = eclState.getInitConfig();
                 const std::string coarsen_file = Parameters::Get<Parameters::MechCoarsenFile>();
-                if(coarsen_file != "none" && !separate){
+                const std::string sector_file = Parameters::Get<Parameters::MechSectorFile>();
+                if(sector_file != "none"){
+                    if(coarsen_file != "none" || separate){
+                        OPM_THROW(std::runtime_error,
+                                  "--mech-sector-file builds its own mechanics grid; drop "
+                                  "--mech-coarsen-file, --mech-grid=separate and --mech-thin-cell-thickness");
+                    }
+                    const auto size = simulator.vanguard().grid().logicalCartesianSize();
+                    mechGridContext_ = std::make_unique<MechGridContext>(
+                        MechGridContext::Sector{},
+                        RetainCornerPointInput::get(),
+                        MechSector::readSpec(sector_file, {size[0], size[1], size[2]}),
+                        simulator.vanguard().grid(),
+                        simulator.vanguard().cartesianIndexMapper());
+                    geoMechModel_.setMechGrid(*mechGridContext_);
+                }
+                else if(coarsen_file != "none" && !separate){
                     // What the flow grid was built from; rank 0 only.
                     mechGridContext_ = std::make_unique<MechGridContext>(
                         RetainCornerPointInput::get(),
@@ -748,10 +764,19 @@ namespace Opm{
         // Backend hooks for the shared initial-stress handling
         // ///
         void prepareMechForInit() override{
-            // A USEFLUX run keeps the deck's values outside the sector for these.
-            this->geoMechModel_.setMaterial(this->ymodule_, this->pratio_,
-                                            retainedBeforeUseFlux("YMODULE"),
-                                            retainedBeforeUseFlux("PRATIO"));
+            // Mechanics cells outside the flow grid take deck values: the ones a
+            // USEFLUX run kept, else the deck's own for a mechanics sector.
+            const auto* ymodule = retainedBeforeUseFlux("YMODULE");
+            const auto* pratio = retainedBeforeUseFlux("PRATIO");
+            std::vector<double> ymoduleDeck, pratioDeck;
+            if (!ymodule && mechGridContext_ && mechGridContext_->isSector()) {
+                const auto& fp = this->simulator().vanguard().eclState().fieldProps();
+                ymoduleDeck = fp.get_global_double("YMODULE");
+                pratioDeck = fp.get_global_double("PRATIO");
+                ymodule = &ymoduleDeck;
+                pratio = &pratioDeck;
+            }
+            this->geoMechModel_.setMaterial(this->ymodule_, this->pratio_, ymodule, pratio);
             this->geoMechModel_.updatePotentialForces();//Neede only of output
         }
 

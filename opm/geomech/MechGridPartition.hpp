@@ -277,7 +277,9 @@ void installFlowPartition(int argc, char** argv)
 {
     const auto thin = argFromArgs(argc, argv, "--mech-thin-cell-thickness");
     if ((!thin.empty() && std::stod(thin) > 0.0)
-        || argFromArgs(argc, argv, "--mech-grid") == "separate") {
+        || argFromArgs(argc, argv, "--mech-grid") == "separate"
+        || (!argFromArgs(argc, argv, "--mech-sector-file").empty()
+            && argFromArgs(argc, argv, "--mech-sector-file") != "none")) {
         // The mechanics grid is rebuilt from the corner-point input.
         RetainCornerPointInput::enable();
     }

@@ -82,6 +82,10 @@ namespace Opm::Parameters {
     struct MechThinCellThickness {
         inline static double value{0.0};
     };
+
+    struct MechSectorFile {
+        inline static std::string value{"none"};
+    };
 }
 
 namespace Opm{
@@ -177,6 +181,7 @@ namespace Opm{
             Base::registerParameters();
 	    Parameters::Register<Parameters::FractureParamFile>("json file defining fracture setting or alias: standard, sequential_implicit");
 	    Parameters::Register<Parameters::MechCoarsenFile>("file of COARSEN records (I1 I2 J1 J2 K1 K2 NX NY NZ, one per line) giving a mechanics grid coarser than the flow grid");
+	    Parameters::Register<Parameters::MechSectorFile>("json file giving the mechanics grid as a box of the deck's grid with padding around it");
 	    Parameters::Register<Parameters::MechGridCheck>("check that the mechanics grid is a geometric body (no voids, cracks or hanging nodes): error, warn or off");
 	    Parameters::Register<Parameters::MechGrid>("mechanics grid: flow (the flow grid itself) or separate (rebuilt edge-conformal from the same corner points, so flow may be processed without --edge-conformal)");
 	    Parameters::Register<Parameters::MechGridVtu>("with --mech-grid=separate: write the mechanics grid to this .vtu file");

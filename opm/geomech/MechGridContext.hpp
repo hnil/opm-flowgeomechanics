@@ -21,6 +21,7 @@
 
 #include <opm/geomech/MechFlowMap.hpp>
 #include <opm/geomech/MechGridPartition.hpp>
+#include <opm/geomech/MechSector.hpp>
 
 #include <opm/grid/CpGrid.hpp>
 #include <opm/grid/common/CartesianIndexMapper.hpp>
@@ -365,6 +366,75 @@ public:
         }
         buildLeafMap_(fineToMech_, flowGrid, flowCartesianMapper);
     }
+
+    struct Sector {};
+
+    /// The mechanics grid is a box of the deck's grid with padding around it
+    /// (MechSector). Box cells map to deck cells by offset; padding cells take
+    /// the properties of the nearest box cell.
+    template <class FlowGrid, class CartesianMapper>
+    MechGridContext(Sector, const RetainedCornerPointInput* processed,
+                    const MechSector::Spec& spec,
+                    const FlowGrid& flowGrid,
+                    const CartesianMapper& flowCartesianMapper)
+        : sector_(true)
+    {
+        if (flowGrid.comm().size() > 1) {
+            OPM_THROW(std::runtime_error, "A mechanics sector runs in serial only so far");
+        }
+        if (processed == nullptr) {
+            OPM_THROW(std::runtime_error, "The mechanics sector needs the corner-point input "
+                      "the flow grid was built from (RetainCornerPointInput)");
+        }
+        const auto size = flowGrid.logicalCartesianSize();
+        const std::array<int,3> dd{size[0], size[1], size[2]};
+        const MechSector::Grdecl deck{dd, processed->coord, processed->zcorn};
+        const auto built = MechSector::build(deck, spec);
+        const auto& g = built.grid;
+        const auto actnum = withVolume(g.dims, g.zcorn);
+        const EclipseGrid mechInput(g.dims, g.coord, g.zcorn, actnum.data());
+        grid_ = std::make_unique<Dune::CpGrid>(flowGrid.comm());
+        grid_->processEclipseFormat(&mechInput, /*ecl_state*/ nullptr,
+                                    /*periodic_extension*/ false, /*turn_normals*/ false,
+                                    /*clip_z*/ false, /*pinchActive*/ false,
+                                    /*edge_conformal*/ true);
+
+        const auto& b = spec.box;
+        const auto& o = built.origin;
+        std::vector<int> toMech(static_cast<std::size_t>(dd[0])*dd[1]*dd[2], -1);
+        for (int k = b[4]; k < b[5]; ++k)
+        for (int j = b[2]; j < b[3]; ++j)
+        for (int i = b[0]; i < b[1]; ++i) {
+            toMech[i + dd[0]*(j + dd[1]*k)] =
+                (i - b[0] + o[0]) + g.dims[0]*((j - b[2] + o[1]) + g.dims[1]*(k - b[4] + o[2]));
+        }
+        buildMap(toMech, g.dims, flowGrid, flowCartesianMapper);
+
+        const Dune::CartesianIndexMapper<Dune::CpGrid> mechMapper(*grid_);
+        std::size_t padding = 0;
+        for (std::size_t m = 0; m < fine_of_mech_.size(); ++m) {
+            if (!fine_of_mech_[m].empty()) {
+                continue;
+            }
+            int c = mechMapper.cartesianIndex(static_cast<int>(m));
+            std::array<int,3> ijk;
+            for (int a = 0; a < 3; ++a) {
+                ijk[a] = c % g.dims[a];
+                c /= g.dims[a];
+                ijk[a] = std::clamp(ijk[a] - o[a], 0, b[2*a + 1] - b[2*a] - 1) + b[2*a];
+            }
+            fine_of_mech_[m].push_back(ijk[0] + dd[0]*(ijk[1] + dd[1]*ijk[2]));
+            ++padding;
+        }
+        std::ostringstream os;
+        os << "Mechanics sector: box " << b[1] - b[0] << "x" << b[3] - b[2] << "x" << b[5] - b[4]
+           << " at (" << b[0] + 1 << "," << b[2] + 1 << "," << b[4] + 1 << "), padded to "
+           << g.dims[0] << "x" << g.dims[1] << "x" << g.dims[2] << "; " << padding
+           << " padding cells";
+        OpmLog::info(os.str());
+    }
+
+    bool isSector() const { return sector_; }
 
     const Dune::CpGrid& grid() const { return *grid_; }
     /// Built from the flow grid's corner points: BCCON boxes, in the flow
@@ -1148,6 +1218,7 @@ private:
     std::unique_ptr<Dune::CpGrid> grid_;
     MechFlowMap map_;
     std::vector<std::vector<int>> fine_of_mech_;
+    bool sector_{false};
     bool merged_{false};
     bool fromCornerPoints_{false};
     std::array<int,3> fineDims_{};
