@@ -188,7 +188,8 @@ const std::vector<std::pair<vem::StabilityChoice, std::string>> variants
        {vem::ANISO_DIAG, "ANISO_DIAG"},
        {vem::ANISO_HARMONIC, "ANISO_HARM"},
        {vem::FEM, "FEM"},
-       {vem::FEM_BBAR, "FEM_BBAR"}};
+       {vem::FEM_BBAR, "FEM_BBAR"},
+       {vem::TRACE, "TRACE"}};
 
 // ----------------------------------------------------------------------------
 // expand reduced solution to full dof vector
@@ -331,6 +332,37 @@ patch_test_3D_warped(const vem::StabilityChoice sc, const double warp, const vem
             scale_u = std::max(scale_u, std::fabs(ex));
         }
     return maxerr / scale_u;
+}
+
+// ----------------------------------------------------------------------------
+// Unit cube whose x+ face is split at height s (a fault throw: neighbour corners on the two
+// x+ pillar edges).  Returns the energy of a unit x-displacement of the fault node alone.
+double
+fault_node_energy(const vem::StabilityChoice sc, const double s)
+{
+    std::vector<double> pts;
+    for (int k = 0; k < 8; ++k) {
+        pts.push_back(k & 1);
+        pts.push_back((k >> 1) & 1);
+        pts.push_back((k >> 2) & 1);
+    }
+    pts.insert(pts.end(), {1.0, 0.0, s, 1.0, 1.0, s}); // nodes 8, 9
+    const std::vector<std::vector<int>> faces = {{0, 4, 6, 2},     {0, 1, 8, 5, 4}, {2, 6, 7, 9, 3},
+                                                 {0, 2, 3, 1},     {4, 5, 7, 6},    {1, 3, 9, 8},
+                                                 {8, 9, 7, 5}};
+    std::vector<int> fc, nfc;
+    for (const auto& f : faces) {
+        nfc.push_back(int(f.size()));
+        fc.insert(fc.end(), f.begin(), f.end());
+    }
+    std::array<double, 3> centroid;
+    std::vector<int> indexing;
+    std::vector<double> K;
+    vem::assemble_stiffness_matrix_3D(&pts[0], &fc[0], &nfc[0], int(faces.size()), 1e9, 0.3, sc, centroid,
+                                      indexing, K);
+    const int n = 3 * int(indexing.size());
+    const int loc = int(std::find(indexing.begin(), indexing.end(), 8) - indexing.begin());
+    return K[(3 * loc) * n + 3 * loc];
 }
 
 // ----------------------------------------------------------------------------
@@ -597,6 +629,20 @@ main()
         }
     }
 
+    // moving a node on a short edge must cost more as the edge shrinks (gradient ~ 1/s); a
+    // stabilization scaled by the cell instead of the faces leaves a near-free mode there
+    std::printf("\n=== fault cell split at s: energy of moving the fault node, s=1/32 relative to s=1/2 ===\n");
+    for (const auto sc : {vem::SIMPLE, vem::D_RECIPE, vem::ANISO_HARMONIC, vem::TRACE}) {
+        const double r = fault_node_energy(sc, 1.0 / 32) / fault_node_energy(sc, 0.5);
+        std::printf("%-12s  %.2f", sc == vem::TRACE ? "TRACE" : sc == vem::SIMPLE ? "SIMPLE"
+                                   : sc == vem::D_RECIPE ? "D_RECIPE" : "ANISO_HARM", r);
+        if (sc == vem::TRACE && r < 4.0) {
+            ++failures;
+            std::printf(" (FAIL)");
+        }
+        std::printf("\n");
+    }
+
     std::printf("\n=== 2D patch test, rel error ===\n");
     for (const auto& [sc, name] : variants) {
         std::printf("%-12s", name.c_str());
@@ -618,7 +664,7 @@ main()
             const auto [nzero, ratio] = single_element_spectrum(sc, a);
             std::printf("  %d/%-10.2e", nzero, ratio);
             const bool is_new = (sc == vem::ANISO_DIAG || sc == vem::ANISO_HARMONIC
-                                 || sc == vem::FEM || sc == vem::FEM_BBAR);
+                                 || sc == vem::FEM || sc == vem::FEM_BBAR || sc == vem::TRACE);
             if (nzero != 6) {
                 std::printf(is_new ? "(FAIL)" : "(warn)");
                 if (is_new)
@@ -667,7 +713,7 @@ main()
             // the tolerance is limited by the conditioning of the solved system
             // (~1e-7 at this aspect ratio), not by the element formulation
             const bool must_be_invariant
-                = (sc == vem::ANISO_HARMONIC || sc == vem::FEM || sc == vem::FEM_BBAR);
+                = (sc == vem::ANISO_HARMONIC || sc == vem::FEM || sc == vem::FEM_BBAR || sc == vem::TRACE);
             if (must_be_invariant && diff > 1e-6) {
                 ++failures;
                 std::printf("  (FAIL)");
