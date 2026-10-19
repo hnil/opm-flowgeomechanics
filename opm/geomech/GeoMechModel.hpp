@@ -307,6 +307,11 @@ namespace Opm{
         std::size_t mechIdx(std::size_t globalIdx) const {
             return static_cast<std::size_t>(mechMap_.mechCell(globalIdx));
         }
+
+        //! False for a flow cell outside a mechanics sector; its mechanics output is zero.
+        bool hasMech(std::size_t globalIdx) const {
+            return mechMap_.mechCell(globalIdx) >= 0;
+        }
         void setupMechSolver(bool use_body_force = false){
                 const auto& problem = simulator_.problem();
                 //NB hack use fracture params to control mechancis
@@ -663,6 +668,9 @@ namespace Opm{
             return mechPotentialTempForce_[globalDofIdx] / fac;
         }
         const Dune::FieldVector<double,3> disp(size_t globalIdx,bool with_fracture = false) const{
+            if (!this->hasMech(globalIdx)) {
+                return Dune::FieldVector<double,3>(0.0);
+            }
             auto disp =  celldisplacement_[this->mechIdx(globalIdx)];
             if(fracHost_.includeFractureContributions() && with_fracture){
                 for(auto& elem: Dune::elements(simulator_.vanguard().grid().leafGridView())){
@@ -690,6 +698,9 @@ namespace Opm{
         }
 
         const SymTensor linstress(size_t globalIdx) const{
+	  if (!this->hasMech(globalIdx)) {
+	    return SymTensor(0.0);
+	  }
 	  return linstress_[this->mechIdx(globalIdx)];
         }
 
@@ -699,10 +710,16 @@ namespace Opm{
 
         const SymTensor effstress(size_t globalIdx) const{
 	  // make stress in with positive with compression
+	         if (!this->hasMech(globalIdx)) {
+	           return SymTensor(0.0);
+	         }
 	         return -1.0*linstress_[this->mechIdx(globalIdx)];
         }
 
         const SymTensor strain(size_t globalIdx,bool with_fracture = false) const{
+            if (!this->hasMech(globalIdx)) {
+                return SymTensor(0.0);
+            }
             auto strain = strain_[this->mechIdx(globalIdx)];
             if(fracHost_.includeFractureContributions() && with_fracture){
                 for(auto& elem: Dune::elements(simulator_.vanguard().grid().leafGridView())){

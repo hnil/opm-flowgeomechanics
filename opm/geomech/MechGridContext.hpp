@@ -1293,7 +1293,12 @@ private:
                 }
             }
         }
-        if (unmappedInterior > 0) {
+        if (unmappedInterior > 0 && sector_) {
+            // A mechanics sector may be smaller than the flow grid, e.g. around one
+            // well of a full-field run.
+            OpmLog::info("Mechanics sector: " + std::to_string(unmappedInterior)
+                         + " flow cells lie outside it and take no part in the mechanics");
+        } else if (unmappedInterior > 0) {
             // In parallel this means the partitions disagree: an interior flow
             // cell must always be on the rank that owns its mechanics cell.
             OPM_THROW(std::runtime_error,
