@@ -46,6 +46,7 @@
 #include <limits>
 #include <map>
 #include <numeric>
+#include <utility>
 #include <type_traits>
 #include <memory>
 #include <sstream>
@@ -374,11 +375,12 @@ public:
     /// the properties of the nearest box cell.
     template <class FlowGrid, class CartesianMapper>
     MechGridContext(Sector, const RetainedCornerPointInput* processed,
-                    const MechSector::Spec& spec,
+                    const MechSector::Spec& given,
                     const FlowGrid& flowGrid,
                     const CartesianMapper& flowCartesianMapper)
         : sector_(true)
     {
+        auto spec = given;
         if (flowGrid.comm().size() > 1) {
             OPM_THROW(std::runtime_error, "A mechanics sector runs in serial only so far");
         }
@@ -388,6 +390,23 @@ public:
         }
         const auto size = flowGrid.logicalCartesianSize();
         const std::array<int,3> dd{size[0], size[1], size[2]};
+        if (spec.boxFromFlow) {
+            std::array<int,6> bb{dd[0], 0, dd[1], 0, dd[2], 0};
+            const auto& view = flowGrid.leafGridView();
+            for (const auto& cell : elements(view)) {
+                int c = flowCartesianMapper.cartesianIndex(view.indexSet().index(cell));
+                for (int a = 0; a < 3; ++a) {
+                    const int x = c % dd[a];
+                    c /= dd[a];
+                    bb[2*a] = std::min(bb[2*a], x);
+                    bb[2*a + 1] = std::max(bb[2*a + 1], x + 1);
+                }
+            }
+            for (int a = 0; a < 3; ++a) {
+                spec.box[2*a] = std::max(0, bb[2*a] - spec.margin[a]);
+                spec.box[2*a + 1] = std::min(dd[a], bb[2*a + 1] + spec.margin[a]);
+            }
+        }
         const MechSector::Grdecl deck{dd, processed->coord, processed->zcorn};
         const auto built = MechSector::build(deck, spec);
         const auto& g = built.grid;
@@ -431,7 +450,28 @@ public:
            << " at (" << b[0] + 1 << "," << b[2] + 1 << "," << b[4] + 1 << "), padded to "
            << g.dims[0] << "x" << g.dims[1] << "x" << g.dims[2] << "; " << padding
            << " padding cells";
+        if (spec.straighten) {
+            os << "; pillars straightened, corners moved up to " << built.moved << " m";
+        }
         OpmLog::info(os.str());
+
+        if (!spec.dump.empty()) {
+            const std::size_t nc = static_cast<std::size_t>(g.dims[0])*g.dims[1]*g.dims[2];
+            std::vector<int> pad(nc, 1), flow(nc, 0);
+            for (int k = 0; k < g.dims[2]; ++k)
+            for (int j = 0; j < g.dims[1]; ++j)
+            for (int i = 0; i < g.dims[0]; ++i) {
+                const bool inBox = i >= o[0] && i < o[0] + b[1] - b[0]
+                                && j >= o[1] && j < o[1] + b[3] - b[2]
+                                && k >= o[2] && k < o[2] + b[5] - b[4];
+                pad[i + g.dims[0]*(j + g.dims[1]*k)] = inBox ? 0 : 1;
+            }
+            for (std::size_t m = 0; m < fine_of_mech_.size(); ++m) {
+                flow[mechMapper.cartesianIndex(static_cast<int>(m))] = map_.hasFlowCells(m) ? 1 : 0;
+            }
+            MechSector::writeGrdecl(spec.dump, g, actnum, {{"PADDING", pad}, {"FLOWCELL", flow}});
+            OpmLog::info("Mechanics sector: grid written to " + spec.dump);
+        }
     }
 
     bool isSector() const { return sector_; }
@@ -551,25 +591,85 @@ public:
     Dune::CpGrid& grid() { return *grid_; }
     const MechFlowMap& map() const { return map_; }
 
-    /// Give the mechanics cells without flow cells the mean of a deck array over
-    /// their own cells; `cartesian` is indexed like the deck's grid. Returns how
-    /// many cells were filled.
+    /// Mechanics cells without flow cells take the mean deck values of their own
+    /// cells. Deck cells without values (YMODULE <= 0, i.e. inactive in the deck)
+    /// are skipped, and cells left with none take the mean of their neighbours.
+    /// Returns {cells filled from the deck, cells filled from neighbours}.
     template <class Vector>
-    std::size_t fillWithoutFlow(const std::vector<double>& cartesian, Vector& mech) const
+    std::pair<std::size_t, std::size_t>
+    fillMaterial(const std::vector<double>& ymoduleCartesian,
+                 const std::vector<double>& pratioCartesian,
+                 Vector& ymodule, Vector& pratio) const
     {
-        std::size_t filled = 0;
-        for (std::size_t m = 0; m < fine_of_mech_.size(); ++m) {
-            if (map_.hasFlowCells(m) || fine_of_mech_[m].empty()) {
+        const std::size_t n = fine_of_mech_.size();
+        std::vector<char> missing(n, 0);
+        std::size_t fromDeck = 0;
+        for (std::size_t m = 0; m < n; ++m) {
+            if (map_.hasFlowCells(m)) {
                 continue;
             }
-            double sum = 0.0;
+            double e = 0.0, nu = 0.0;
+            int count = 0;
             for (const int f : fine_of_mech_[m]) {
-                sum += cartesian[f];
+                if (ymoduleCartesian[f] > 0.0) {
+                    e += ymoduleCartesian[f];
+                    nu += pratioCartesian[f];
+                    ++count;
+                }
             }
-            mech[m] = sum / fine_of_mech_[m].size();
-            ++filled;
+            if (count > 0) {
+                ymodule[m] = e / count;
+                pratio[m] = nu / count;
+                ++fromDeck;
+            } else {
+                missing[m] = 1;
+            }
         }
-        return filled;
+
+        std::size_t fromNeighbours = 0;
+        if (std::find(missing.begin(), missing.end(), 1) == missing.end()) {
+            return {fromDeck, fromNeighbours};
+        }
+        const auto& view = grid_->leafGridView();
+        std::vector<std::vector<int>> neighbours(n);
+        for (const auto& cell : elements(view)) {
+            const int m = view.indexSet().index(cell);
+            for (const auto& is : intersections(view, cell)) {
+                if (is.neighbor()) {
+                    neighbours[m].push_back(view.indexSet().index(is.outside()));
+                }
+            }
+        }
+        // One layer per sweep, so a value spreads at the same pace in every direction.
+        for (bool progress = true; progress;) {
+            progress = false;
+            std::vector<std::size_t> done;
+            for (std::size_t m = 0; m < n; ++m) {
+                if (!missing[m]) {
+                    continue;
+                }
+                double e = 0.0, nu = 0.0;
+                int count = 0;
+                for (const int o : neighbours[m]) {
+                    if (!missing[o]) {
+                        e += ymodule[o];
+                        nu += pratio[o];
+                        ++count;
+                    }
+                }
+                if (count > 0) {
+                    ymodule[m] = e / count;
+                    pratio[m] = nu / count;
+                    done.push_back(m);
+                }
+            }
+            for (const auto m : done) {
+                missing[m] = 0;
+            }
+            fromNeighbours += done.size();
+            progress = !done.empty();
+        }
+        return {fromDeck, fromNeighbours};
     }
 
     /// Fill the overlap cells of a mechanics-cell vector from their owners.

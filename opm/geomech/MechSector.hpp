@@ -25,6 +25,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <fstream>
+#include <utility>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -56,14 +58,47 @@ struct Padding
 struct Spec
 {
     std::array<int,6> box{};    // I1 I2 J1 J2 K1 K2, zero-based, end exclusive
+    bool boxFromFlow = false;   // box = the flow cells' bounding box plus `margin`
+    std::array<int,3> margin{};
     Padding lateral, top, bottom;
+    bool straighten = false;
+    std::string dump;           // GRDECL file of the generated grid, if set
 };
+
+/// Vertical pillars through each pillar's point at the box's mean depth; the
+/// depths stay. Returns the largest horizontal move of a corner.
+inline double straighten(Grdecl& g)
+{
+    double zref = 0.0;
+    for (const double z : g.zcorn) {
+        zref += z;
+    }
+    zref /= g.zcorn.size();
+    const auto [zmin, zmax] = std::minmax_element(g.zcorn.begin(), g.zcorn.end());
+    double moved = 0.0;
+    for (std::size_t p = 0; p < g.coord.size(); p += 6) {
+        double* c = &g.coord[p];
+        const double dz = c[5] - c[2];
+        if (std::abs(dz) < 1e-12) {
+            continue;
+        }
+        const auto at = [c, dz](double z, int a) { return c[a] + (z - c[2])/dz*(c[3 + a] - c[a]); };
+        const double x = at(zref, 0), y = at(zref, 1);
+        for (const double z : {*zmin, *zmax}) {
+            moved = std::max(moved, std::hypot(at(z, 0) - x, at(z, 1) - y));
+        }
+        c[0] = c[3] = x;
+        c[1] = c[4] = y;
+    }
+    return moved;
+}
 
 /// The box cell (I1,J1,K1) sits at `origin` in the result.
 struct Result
 {
     Grdecl grid;
     std::array<int,3> origin{};
+    double moved = 0.0;    // largest corner move by straightening
 };
 
 inline std::size_t zIndex(const std::array<int,3>& d, int i, int j, int k,
@@ -111,6 +146,31 @@ inline Grdecl extractBox(const Grdecl& in, const std::array<int,6>& b)
             in.zcorn[zIndex(in.dims, i + b[0], j + b[2], k + b[4], ci, cj, ck)];
     }
     return out;
+}
+
+/// The grid as GRDECL, with one extra integer array per entry of `ints`.
+inline void writeGrdecl(const std::string& file, const Grdecl& g, const std::vector<int>& actnum,
+                        const std::vector<std::pair<std::string, std::vector<int>>>& ints)
+{
+    std::ofstream os(file);
+    if (!os) {
+        OPM_THROW(std::runtime_error, "Cannot write " + file);
+    }
+    os.precision(10);
+    const auto write = [&os](const std::string& name, const auto& v) {
+        os << name << "\n";
+        for (std::size_t i = 0; i < v.size(); ++i) {
+            os << v[i] << ((i % 6 == 5) ? "\n" : " ");
+        }
+        os << "/\n\n";
+    };
+    os << "SPECGRID\n" << g.dims[0] << " " << g.dims[1] << " " << g.dims[2] << " 1 F /\n\n";
+    write("COORD", g.coord);
+    write("ZCORN", g.zcorn);
+    write("ACTNUM", actnum);
+    for (const auto& [name, v] : ints) {
+        write(name, v);
+    }
 }
 
 /// Pad along axis 0 (I) or 1 (J). New pillars are the boundary pillars moved
@@ -269,6 +329,9 @@ inline Result build(const Grdecl& deck, const Spec& spec)
 {
     Result r;
     r.grid = extractBox(deck, spec.box);
+    if (spec.straighten) {
+        r.moved = straighten(r.grid);
+    }
     if (spec.lateral.cells > 0) {
         r.grid = padLateral(r.grid, 0, spec.lateral);
         r.grid = padLateral(r.grid, 1, spec.lateral);
@@ -287,6 +350,15 @@ inline Spec readSpec(const std::string& file, const std::array<int,3>& deckDims)
     const PropertyTree tree(file);
     Spec spec;
     spec.box = {0, deckDims[0], 0, deckDims[1], 0, deckDims[2]};
+    spec.boxFromFlow = tree.get<bool>("box_from_flow", false);
+    if (const auto margin = tree.get_child_items_as_vector<int>("margin")) {
+        if (margin->size() != 3) {
+            OPM_THROW(std::runtime_error, "Mechanics sector: \"margin\" needs three numbers");
+        }
+        spec.margin = {(*margin)[0], (*margin)[1], (*margin)[2]};
+    }
+    spec.straighten = tree.get<bool>("straighten", false);
+    spec.dump = tree.get<std::string>("dump", "");
     if (const auto box = tree.get_child_items_as_vector<int>("box")) {
         if (box->size() != 6) {
             OPM_THROW(std::runtime_error, "Mechanics sector: \"box\" needs six numbers");

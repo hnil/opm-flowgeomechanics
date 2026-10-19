@@ -599,12 +599,14 @@ namespace Opm{
             mechMap_.restrict(ymodule, ymodule_mech);
             mechMap_.restrict(pratio, pratio_mech);
             if (ymoduleCartesian && pratioCartesian) {
-                const auto filled = mechCtx_->fillWithoutFlow(*ymoduleCartesian, ymodule_mech);
-                mechCtx_->fillWithoutFlow(*pratioCartesian, pratio_mech);
-                if (filled > 0) {
-                    OpmLog::info("Mechanics grid: " + std::to_string(filled)
-                                 + " cells outside the flow grid take YMODULE and PRATIO "
-                                 "from the deck");
+                const auto [fromDeck, fromNeighbours] =
+                    mechCtx_->fillMaterial(*ymoduleCartesian, *pratioCartesian,
+                                           ymodule_mech, pratio_mech);
+                if (fromDeck + fromNeighbours > 0) {
+                    OpmLog::info("Mechanics grid: cells outside the flow grid take YMODULE "
+                                 "and PRATIO from the deck (" + std::to_string(fromDeck)
+                                 + ") or, where the deck has none, from their neighbours ("
+                                 + std::to_string(fromNeighbours) + ")");
                 }
             }
             std::size_t noStiffness = 0;
