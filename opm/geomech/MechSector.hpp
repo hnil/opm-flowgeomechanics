@@ -53,6 +53,7 @@ struct Padding
     double size = 0.0;
     double growth = 1.0;
     double depth = std::numeric_limits<double>::quiet_NaN();
+    bool verticalPillars = false;    // lateral only
 };
 
 struct Spec
@@ -99,6 +100,7 @@ struct Result
     Grdecl grid;
     std::array<int,3> origin{};
     double moved = 0.0;    // largest corner move by straightening
+    int folded = 0;        // columns whose pillars cross or fold within the grid's depths
 };
 
 inline std::size_t zIndex(const std::array<int,3>& d, int i, int j, int k,
@@ -173,10 +175,19 @@ inline void writeGrdecl(const std::string& file, const Grdecl& g, const std::vec
     }
 }
 
+inline std::array<double,2> pillarAt(const double* c, double z)
+{
+    const double dz = c[5] - c[2];
+    const double t = std::abs(dz) < 1e-12 ? 0.0 : (z - c[2])/dz;
+    return {c[0] + t*(c[3] - c[0]), c[1] + t*(c[4] - c[1])};
+}
+
 /// Pad along axis 0 (I) or 1 (J). New pillars are the boundary pillars moved
 /// outward horizontally; the boundary layers continue flat, so the faces
-/// against the box keep their corners.
-inline Grdecl padLateral(const Grdecl& in, int axis, const Padding& pad)
+/// against the box keep their corners. With vertical pillars, the first one
+/// clears the boundary pillar by its full offset anywhere in [zlo, zhi].
+inline Grdecl padLateral(const Grdecl& in, int axis, const Padding& pad,
+                         double zlo, double zhi)
 {
     const auto frac = widths(pad);
     const int n = pad.cells;
@@ -190,6 +201,12 @@ inline Grdecl padLateral(const Grdecl& in, int axis, const Padding& pad)
     for (int m = 0; m < n; ++m) {
         dist[m + 1] = dist[m] + frac[m]*pad.size;
     }
+
+    double zref = 0.0;
+    for (const double z : in.zcorn) {
+        zref += z;
+    }
+    zref /= in.zcorn.size();
 
     const int pxIn = d[0] + 1, pxOut = out.dims[0] + 1;
     out.coord.resize(6*std::size_t(pxOut)*(out.dims[1] + 1));
@@ -214,15 +231,29 @@ inline Grdecl padLateral(const Grdecl& in, int axis, const Padding& pad)
         std::copy(src, src + 6, dst);
         if (shift > 0.0) {
             const double* nb = &in.coord[6*(inner[0] + pxIn*inner[1])];
-            double ux = src[0] - nb[0], uy = src[1] - nb[1];
+            const auto ps = pillarAt(src, zref), pn = pillarAt(nb, zref);
+            double ux = pad.verticalPillars ? ps[0] - pn[0] : src[0] - nb[0];
+            double uy = pad.verticalPillars ? ps[1] - pn[1] : src[1] - nb[1];
             const double len = std::hypot(ux, uy);
             if (!(len > 0.0)) {
                 OPM_THROW(std::runtime_error, "Mechanics padding: zero pillar spacing at the box edge");
             }
-            ux *= shift/len;
-            uy *= shift/len;
-            dst[0] += ux; dst[1] += uy;
-            dst[3] += ux; dst[4] += uy;
+            if (pad.verticalPillars) {
+                ux /= len;
+                uy /= len;
+                double drift = 0.0;
+                for (const double z : {zlo, zhi}) {
+                    const auto p = pillarAt(src, z);
+                    drift = std::max(drift, (p[0] - ps[0])*ux + (p[1] - ps[1])*uy);
+                }
+                dst[0] = dst[3] = ps[0] + (drift + shift)*ux;
+                dst[1] = dst[4] = ps[1] + (drift + shift)*uy;
+            } else {
+                ux *= shift/len;
+                uy *= shift/len;
+                dst[0] += ux; dst[1] += uy;
+                dst[3] += ux; dst[4] += uy;
+            }
         }
     }
 
@@ -353,6 +384,49 @@ inline Grdecl padVertical(const Grdecl& in, const Padding& top, const Padding& b
     return out;
 }
 
+/// Columns whose four pillars, taken at the column's own depths, do not keep
+/// the orientation they have at the column's mid-depth.
+inline int foldedColumns(const Grdecl& g)
+{
+    const auto& d = g.dims;
+    const int px = d[0] + 1;
+    int folded = 0;
+    for (int j = 0; j < d[1]; ++j)
+    for (int i = 0; i < d[0]; ++i) {
+        double zmin = std::numeric_limits<double>::max(), zmax = std::numeric_limits<double>::lowest();
+        for (int k = 0; k < d[2]; ++k)
+        for (int c = 0; c < 8; ++c) {
+            const double z = g.zcorn[zIndex(d, i, j, k, c & 1, (c >> 1) & 1, c >> 2)];
+            zmin = std::min(zmin, z);
+            zmax = std::max(zmax, z);
+        }
+        const std::array<int,4> ring{i + px*j, i + 1 + px*j, i + 1 + px*(j + 1), i + px*(j + 1)};
+        const auto corners = [&](double z, std::array<double,4>& cr) {
+            std::array<std::array<double,2>,4> p;
+            for (int a = 0; a < 4; ++a) {
+                p[a] = pillarAt(&g.coord[6*ring[a]], z);
+            }
+            for (int a = 0; a < 4; ++a) {
+                const auto& o = p[a];
+                const auto& n = p[(a + 1) % 4];
+                const auto& b = p[(a + 3) % 4];
+                cr[a] = (n[0] - o[0])*(b[1] - o[1]) - (n[1] - o[1])*(b[0] - o[0]);
+            }
+        };
+        std::array<double,4> mid, cr;
+        corners(0.5*(zmin + zmax), mid);
+        bool bad = false;
+        for (int s = 0; s <= 4 && !bad; ++s) {
+            corners(zmin + 0.25*s*(zmax - zmin), cr);
+            for (int a = 0; a < 4; ++a) {
+                bad = bad || cr[a]*mid[0] <= 0.0;
+            }
+        }
+        folded += bad;
+    }
+    return folded;
+}
+
 inline Result build(const Grdecl& deck, const Spec& spec)
 {
     Result r;
@@ -361,13 +435,20 @@ inline Result build(const Grdecl& deck, const Spec& spec)
         r.moved = straighten(r.grid);
     }
     if (spec.lateral.cells > 0) {
-        r.grid = padLateral(r.grid, 0, spec.lateral);
-        r.grid = padLateral(r.grid, 1, spec.lateral);
+        // Depth range of the finished grid, which the vertical pillars must clear.
+        const auto [bmin, bmax] = std::minmax_element(r.grid.zcorn.begin(), r.grid.zcorn.end());
+        const auto reach = [](const Padding& p, double z, double sign) {
+            return p.cells == 0 ? z : (std::isnan(p.depth) ? z + sign*p.size : p.depth);
+        };
+        const double zlo = reach(spec.top, *bmin, -1.0), zhi = reach(spec.bottom, *bmax, 1.0);
+        r.grid = padLateral(r.grid, 0, spec.lateral, zlo, zhi);
+        r.grid = padLateral(r.grid, 1, spec.lateral, zlo, zhi);
     }
     if (spec.top.cells > 0 || spec.bottom.cells > 0) {
         r.grid = padVertical(r.grid, spec.top, spec.bottom);
     }
     r.origin = {spec.lateral.cells, spec.lateral.cells, spec.top.cells};
+    r.folded = foldedColumns(r.grid);
     return r;
 }
 
@@ -410,6 +491,9 @@ inline Spec readSpec(const std::string& file, const std::array<int,3>& deckDims)
         p.growth = tree.get<double>(name + ".growth", 1.0);
         if (vertical && tree.get_child_optional(name + ".depth")) {
             p.depth = tree.get<double>(name + ".depth");
+        }
+        if (!vertical) {
+            p.verticalPillars = tree.get<bool>(name + ".vertical_pillars", false);
         }
         if (p.cells < 0 || !(p.growth > 0.0)
             || (p.cells > 0 && !(p.size > 0.0) && std::isnan(p.depth))) {

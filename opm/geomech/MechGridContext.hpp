@@ -456,6 +456,11 @@ public:
             os << "; pillars straightened, corners moved up to " << built.moved << " m";
         }
         OpmLog::info(os.str());
+        if (built.folded > 0) {
+            OpmLog::warning("Mechanics sector: " + std::to_string(built.folded) + " of "
+                            + std::to_string(g.dims[0]*g.dims[1]) + " columns have pillars that "
+                            "cross or fold within their depths");
+        }
 
         if (!spec.dump.empty()) {
             const std::size_t nc = static_cast<std::size_t>(g.dims[0])*g.dims[1]*g.dims[2];

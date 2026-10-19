@@ -71,6 +71,15 @@ if left out) and padded around it:
 - `"bottom"`: over `thickness`, or down to `depth`;
 - cell sizes grow by `growth` away from the box.
 
+With `"vertical_pillars": true` in `"lateral"`, the padding pillars are vertical instead of
+parallel to the box's boundary pillars. The first one clears the slanted boundary pillar by
+the first cell's width at every depth of the grid, so padding pillars never cross. Pillars
+above and below the box are the box's own and keep their slant. A coarsening that merges
+the first padding column with the next one is refused, because the dropped pillar is not on
+the line between the two it lies between.
+
+The run warns when a column's pillars cross or fold within its depths.
+
 Padding cells, and box cells outside the flow grid, take YMODULE and PRATIO from the
 nearest box cell and carry no load. The outer boundary takes `mech_grid_bc` (default
 `roller_free_top`).
