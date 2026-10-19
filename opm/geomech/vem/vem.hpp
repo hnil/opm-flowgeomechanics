@@ -21,7 +21,9 @@ namespace vem
                         // per coordinate direction d (anisotropic generalization of HARMONIC)
     FEM_BBAR = 10,  // as FEM, but Q1 with B-bar (mean dilatation) to reduce volumetric
                     // locking; VEM with ANISO_DIAG fallback on non-hex cells
-    TRACE = 14      // mu-scaled boundary (trace) term: robust to short edges and small faces
+    TRACE = 14,     // mu-scaled boundary (trace) term: robust to short edges and small faces
+    SMOOTH_HOURGLASS = 15 // hexes: energy of the smooth (Q1 + bubble) field, exact in bending/twist
+                          // at any aspect; TRACE on the extra nodes of polyhedra and as fallback
   };
   // Face integrals of the basis functions in the strain projection (3D).
   // KITE: per-face kite areas and one averaged normal; exact on planar faces only.
@@ -29,7 +31,7 @@ namespace vem
   enum class FaceQuadrature { KITE = 0, TRIANGULATED = 1 };
   void set_face_quadrature(FaceQuadrature q);
   FaceQuadrature face_quadrature();
-  constexpr int STABILITY_CHOICE_MAX = 14;
+  constexpr int STABILITY_CHOICE_MAX = 15;
   // true for choices that request Q1 FEM assembly on cells where it is applicable
   inline bool is_fem_choice(StabilityChoice c) { return c == FEM || c == FEM_BBAR; }
   

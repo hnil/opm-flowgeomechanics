@@ -160,6 +160,25 @@ controlled directly by the magnitude of S (or by parasitic shear for Q1) — the
 variants differ in that magnitude by factors of a few, which is exactly the
 spread seen at aspect 1.
 
+## Smooth-field hourglass stabilization (October 2026)
+
+`SMOOTH_HOURGLASS` (15), opt-in.  On a hex, `S` is the energy of the minimum-energy
+field in Q1 + the 9 Wilson bubbles `xi_d (1 - xi_d)` (per component, condensed) through
+the nodal values — an assumed-strain hourglass control in the sense of Belytschko–Bindeman.
+Every node-diagonal `S` (choices 1–13) gives the bending and twist hourglass modes the same
+energy although their true energies differ by ~aspect^2, so each of them either locks in
+bending or under-stabilizes twist.  The smooth field gets both right on boxes at any aspect.
+
+- Polyhedra that are hexes with extra nodes (faults, hanging LGR nodes): faces are merged
+  across dihedral angles < 30 deg to find the 8 corners; the corner part uses the smooth
+  energy without its linear part, the rest (`u` minus the trilinear interpolant of the
+  corners) gets the TRACE term.  Other cells (collapsed corners, wedges) use TRACE.
+- `lambda` is capped at its nu = 0.3 value, so `S` stays mu-scaled as nu -> 1/2.
+- Measured (`Test.AspectRatio`): cantilever 0.98 at aspect 1–50 (ANISO_HARMONIC 0.45,
+  Q1 0.016 at 25); 0.96 at nu = 0.4999; frame invariant; 6 zero modes.
+- Sheared cells (inclined pillars): 0.99 / 0.99 / 0.99 / 0.98 at 10 / 20 / 30 / 45 deg,
+  where every other choice locks (ANISO_HARMONIC already 0.034 at 10 deg).
+
 ## Load regularization for under-resolved fronts (June 2026)
 
 Sharp, cell-wise constant temperature/pressure fields (e.g. an early-time cold-water
