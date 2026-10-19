@@ -3,7 +3,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cstdio>
 #include <filesystem>
 #include <opm/common/ErrorMacros.hpp>
 #include <fmt/format.h>
@@ -16,7 +15,7 @@
 #include <opm/geomech/FlowGeoMechLinearSolverParameters.hpp>
 #include <opm/geomech/FlowProblemMech.hpp>
 #include <opm/geomech/FractureAuxCells.hpp>
-#include <opm/geomech/MechGridVtk.hpp>
+#include <opm/models/io/vtkmultiwriter.hh>
 #include <opm/simulators/flow/flux/FluxActivation.hpp>
 #include <opm/simulators/wells/PerforationData.hpp>
 #include <opm/geomech/BoundaryUtils.hpp>
@@ -1068,46 +1067,65 @@ namespace Opm{
                 }
             }
 
-            using MechGridVtk::Field;
-            std::vector<Field> cells{
-                {"stress[0]", 3, {}}, {"stress[1]", 3, {}}, {"stress[2]", 3, {}},
-                {"strain[0]", 3, {}}, {"strain[1]", 3, {}}, {"strain[2]", 3, {}},
-                {"delstress[0]", 3, {}}, {"delstress[1]", 3, {}}, {"delstress[2]", 3, {}},
-            };
-            for (int r = 0; r < 3; ++r) {
+            if (!mechVtkWriter_) {
+                const std::string dir = Parameters::Get<Parameters::OutputDir>() + "/mech";
+                std::filesystem::create_directories(dir);
+                mechVtkWriter_ = std::make_unique<MechVtkWriter>(
+                    /*asyncWriting=*/false, gv, dir,
+                    this->simulator().vanguard().eclState().getIOConfig().getBaseName());
+            }
+            mechVtkWriter_->beginWrite(time);
+
+            using Writer = MechVtkWriter;
+            const auto tensors = [nm](const std::vector<double>& rowMajor) {
+                typename Writer::TensorBuffer t(nm, typename Writer::Tensor(3, 3));
                 for (std::size_t m = 0; m < nm; ++m) {
-                    for (int k = 0; k < 3; ++k) {
-                        cells[r].values.push_back(stress[9*m + 3*r + k]);
-                        cells[3 + r].values.push_back(strain[9*m + 3*r + k]);
-                        cells[6 + r].values.push_back(delstress[9*m + 3*r + k]);
+                    for (int r = 0; r < 3; ++r) {
+                        for (int c = 0; c < 3; ++c) {
+                            t[m][r][c] = rowMajor[9*m + 3*r + c];
+                        }
                     }
                 }
-            }
-            cells.push_back({"pressure", 1, pres});
-            cells.push_back({"pressureDiff", 1, dp});
-            cells.push_back({"temperature", 1, temp});
-            cells.push_back({"saturation_water", 1, sw});
-            cells.push_back({"saturation_oil", 1, so});
-            cells.push_back({"saturation_gas", 1, sg});
-            cells.push_back({"porosity", 1, poro});
-            cells.push_back({"ymodule", 1, geoMechModel_.mechCellYModule()});
-            cells.push_back({"pratio", 1, geoMechModel_.mechCellPRatio()});
-            cells.push_back({"FLOWCELL", 1, flowcell});
-            cells.push_back({"PADDING", 1, padding});
-            cells.push_back({"ijk", 3, ijk});
-            const std::vector<Field> points{{"disp", 3, disp}, {"pressure", 1, por}};
+                return t;
+            };
+            const auto vectors = [](const std::vector<double>& flat) {
+                typename Writer::VectorBuffer v(flat.size() / 3, typename Writer::Vector(3));
+                for (std::size_t i = 0; i < v.size(); ++i) {
+                    for (int a = 0; a < 3; ++a) {
+                        v[i][a] = flat[3*i + a];
+                    }
+                }
+                return v;
+            };
+            // The writer reads these when endWrite() writes the file.
+            mechVtkTensors_ = {tensors(stress), tensors(strain), tensors(delstress)};
+            mechVtkVectors_ = {vectors(disp), vectors(ijk)};
+            mechVtkScalars_ = {por, pres, dp, temp, sw, so, sg, poro,
+                               geoMechModel_.mechCellYModule(), geoMechModel_.mechCellPRatio(),
+                               flowcell, padding};
 
-            const std::string dir = Parameters::Get<Parameters::OutputDir>() + "/mech";
-            std::filesystem::create_directories(dir);
-            const std::string base = this->simulator().vanguard().eclState().getIOConfig().getBaseName();
-            char step[16];
-            std::snprintf(step, sizeof(step), "-%05zu.vtu", mechVtkSteps_.size());
-            MechGridVtk::writeVtu(dir + "/" + base + step, ctx->grid(), cells, points);
-            mechVtkSteps_.emplace_back(time, base + step);
-            MechGridVtk::writePvd(dir + "/" + base + ".pvd", mechVtkSteps_);
+            // "disp" first among the point data: ResInsight takes the displacement from there.
+            mechVtkWriter_->attachVectorVertexData(mechVtkVectors_[0], "disp");
+            mechVtkWriter_->attachScalarVertexData(mechVtkScalars_[0], "pressure");
+            mechVtkWriter_->attachTensorElementData(mechVtkTensors_[0], "stress");
+            mechVtkWriter_->attachTensorElementData(mechVtkTensors_[1], "strain");
+            mechVtkWriter_->attachTensorElementData(mechVtkTensors_[2], "delstress");
+            const char* names[] = {"pressure", "pressureDiff", "temperature", "saturation_water",
+                                   "saturation_oil", "saturation_gas", "porosity", "ymodule",
+                                   "pratio", "FLOWCELL", "PADDING"};
+            for (int q = 0; q < 11; ++q) {
+                mechVtkWriter_->attachScalarElementData(mechVtkScalars_[q + 1], names[q]);
+            }
+            mechVtkWriter_->attachVectorElementData(mechVtkVectors_[1], "ijk");
+            mechVtkWriter_->endWrite(/*onlyDiscard=*/false);
         }
 
-        std::vector<std::pair<double, std::string>> mechVtkSteps_;
+        using MechVtkWriter = VtkMultiWriter<Dune::CpGrid::LeafGridView,
+                                             getPropValue<TypeTag, Properties::VtkOutputFormat>()>;
+        std::unique_ptr<MechVtkWriter> mechVtkWriter_;
+        std::vector<typename MechVtkWriter::TensorBuffer> mechVtkTensors_;
+        std::vector<typename MechVtkWriter::VectorBuffer> mechVtkVectors_;
+        std::vector<typename MechVtkWriter::ScalarBuffer> mechVtkScalars_;
 
     public:
 
