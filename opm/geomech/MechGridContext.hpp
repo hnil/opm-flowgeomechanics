@@ -430,6 +430,7 @@ public:
         buildMap(toMech, g.dims, flowGrid, flowCartesianMapper);
 
         const Dune::CartesianIndexMapper<Dune::CpGrid> mechMapper(*grid_);
+        padding_.assign(fine_of_mech_.size(), 0);
         std::size_t padding = 0;
         for (std::size_t m = 0; m < fine_of_mech_.size(); ++m) {
             if (!fine_of_mech_[m].empty()) {
@@ -443,6 +444,7 @@ public:
                 ijk[a] = std::clamp(ijk[a] - o[a], 0, b[2*a + 1] - b[2*a] - 1) + b[2*a];
             }
             fine_of_mech_[m].push_back(ijk[0] + dd[0]*(ijk[1] + dd[1]*ijk[2]));
+            padding_[m] = 1;
             ++padding;
         }
         std::ostringstream os;
@@ -475,6 +477,11 @@ public:
     }
 
     bool isSector() const { return sector_; }
+
+    //! Deck (Cartesian) cells a mechanics cell is made of; for padding, the box cell it copies.
+    const std::vector<int>& deckCells(std::size_t mechCell) const { return fine_of_mech_[mechCell]; }
+    bool isPadding(std::size_t mechCell) const
+    { return !padding_.empty() && padding_[mechCell] != 0; }
 
     const Dune::CpGrid& grid() const { return *grid_; }
     /// Built from the flow grid's corner points: BCCON boxes, in the flow
@@ -1323,6 +1330,7 @@ private:
     std::unique_ptr<Dune::CpGrid> grid_;
     MechFlowMap map_;
     std::vector<std::vector<int>> fine_of_mech_;
+    std::vector<char> padding_;
     bool sector_{false};
     bool merged_{false};
     bool fromCornerPoints_{false};

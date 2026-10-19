@@ -2,6 +2,9 @@
 #define OPM_FLOW_PROBLEM_GEOMECH_HPP
 
 #include <algorithm>
+#include <array>
+#include <cstdio>
+#include <filesystem>
 #include <opm/common/ErrorMacros.hpp>
 #include <fmt/format.h>
 
@@ -13,6 +16,7 @@
 #include <opm/geomech/FlowGeoMechLinearSolverParameters.hpp>
 #include <opm/geomech/FlowProblemMech.hpp>
 #include <opm/geomech/FractureAuxCells.hpp>
+#include <opm/geomech/MechGridVtk.hpp>
 #include <opm/simulators/flow/flux/FluxActivation.hpp>
 #include <opm/simulators/wells/PerforationData.hpp>
 #include <opm/geomech/BoundaryUtils.hpp>
@@ -785,12 +789,14 @@ namespace Opm{
             for (size_t i = 0; i < this->initstress_.size(); ++i) {
                 this->initstress_[i] = geoMechModel_.stress(i);
             }
+            this->writeMechGridVtk_(0.0);
             // stress in output on first step maybe wrong i.e. 2*stress;
             this->geoMechModel_.setFirstSolveTrue();// to do full rebuild next time step
         }
 
         void applyInitialOutputStress() override{
             this->geoMechModel_.setOutputPutStress(this->initstress_);
+            this->writeMechGridVtk_(0.0);
         }
 
         void timeIntegration()
@@ -917,6 +923,9 @@ namespace Opm{
             //     first_fracture_solve_ = false;
             //     geoMechModel_.writeFractureSolutionFirst();
             // }
+            if (this->simulator().episodeWillBeOver()) {
+                this->writeMechGridVtk_(this->simulator().time() + this->simulator().timeStepSize());
+            }
             if(Parameters::Get<Parameters::EnableWriteAllSolutions>()){
               //OPM_BEGIN_PARALLEL_TRY_CATCH();
                 geoMechModel_.writeFractureSolution();
@@ -929,6 +938,178 @@ namespace Opm{
 
         const GeoMechModel<TypeTag>& geoMechModel() const
         { return geoMechModel_; }
+
+    private:
+        //! The mechanics grid as a geomechanical VTK case: total stress (compression positive,
+        //! as on the flow grid), strain, displacement, and the flow quantities.
+        void writeMechGridVtk_(double time)
+        {
+            const auto* ctx = geoMechModel_.mechContext();
+            if (ctx == nullptr || !Parameters::Get<Parameters::VtkWriteMechGrid>()) {
+                return;
+            }
+            if (this->gridView().comm().size() > 1) {
+                OpmLog::warning("VTK on the mechanics grid is written in serial runs only");
+                return;
+            }
+            const auto& map = geoMechModel_.mechFlowMap();
+            const auto& gv = ctx->grid().leafGridView();
+            const std::size_t nm = gv.size(0), nf = this->model().numGridDof();
+
+            // Flow cell values, restricted onto the mechanics cells.
+            enum { P, T, SW, SO, SG, PORO, P0, T0, NF };
+            std::vector<std::vector<double>> flow(NF, std::vector<double>(nf, 0.0));
+            std::array<std::vector<double>, 6> s0;
+            s0.fill(std::vector<double>(nf, 0.0));
+            std::vector<double> fdepth(nf);
+            for (std::size_t f = 0; f < nf; ++f) {
+                const auto& fs = this->model().intensiveQuantities(f, 0).fluidState();
+                flow[P][f] = geoMechModel_.pressure(f);
+                flow[T][f] = getValue(fs.temperature(0));
+                using FS = GetPropType<TypeTag, Properties::FluidSystem>;
+                if (FS::phaseIsActive(FS::waterPhaseIdx)) flow[SW][f] = getValue(fs.saturation(FS::waterPhaseIdx));
+                if (FS::phaseIsActive(FS::oilPhaseIdx))   flow[SO][f] = getValue(fs.saturation(FS::oilPhaseIdx));
+                if (FS::phaseIsActive(FS::gasPhaseIdx))   flow[SG][f] = getValue(fs.saturation(FS::gasPhaseIdx));
+                flow[PORO][f] = this->porosity(f, 0);
+                flow[P0][f] = this->initPressure(f);
+                flow[T0][f] = this->initTemperature(f);
+                fdepth[f] = this->dofCenterDepth(f);
+                for (int c = 0; c < 6; ++c) {
+                    s0[c][f] = this->initStress(f)[c];
+                }
+            }
+            std::vector<std::vector<double>> mech(NF);
+            for (int q = 0; q < NF; ++q) {
+                map.restrict(flow[q], mech[q]);
+            }
+            std::array<std::vector<double>, 6> s0m;
+            for (int c = 0; c < 6; ++c) {
+                map.restrict(s0[c], s0m[c]);
+            }
+            // Outside the flow cells the state is the initial one: pressure and temperature
+            // follow the depth trend of the flow cells' initial values.
+            const auto trend = [&](const std::vector<double>& v) {
+                double sz = 0, sv = 0, szz = 0, szv = 0;
+                for (std::size_t f = 0; f < nf; ++f) {
+                    sz += fdepth[f]; sv += v[f]; szz += fdepth[f]*fdepth[f]; szv += fdepth[f]*v[f];
+                }
+                const double den = nf*szz - sz*sz;
+                const double b = (den != 0.0) ? (nf*szv - sz*sv)/den : 0.0;
+                return std::pair{(sv - b*sz)/nf, b};
+            };
+            const auto [pa, pb] = trend(flow[P0]);
+            const auto [ta, tb] = trend(flow[T0]);
+
+            const auto& lin = geoMechModel_.mechCellLinStress();
+            const auto& eps = geoMechModel_.mechCellStrain();
+            const auto& load = geoMechModel_.mechLoad();
+            const Dune::CartesianIndexMapper<Dune::CpGrid> mapper(ctx->grid());
+            const auto rows = [](std::vector<double>& out, std::size_t m, const Dune::FieldVector<double,6>& s) {
+                const double t[9] = {s[0], s[5], s[4], s[5], s[1], s[3], s[4], s[3], s[2]};
+                for (int k = 0; k < 9; ++k) {
+                    out[9*m + k] = t[k];
+                }
+            };
+            std::vector<double> stress(9*nm), delstress(9*nm), strain(9*nm), ijk(3*nm);
+            std::vector<double> pres(nm), temp(nm), sw(nm), so(nm), sg(nm), poro(nm), dp(nm);
+            std::vector<double> flowcell(nm), padding(nm);
+            for (const auto& e : elements(gv)) {
+                const std::size_t m = gv.indexSet().index(e);
+                const double z = e.geometry().center()[2];
+                const bool has = map.hasFlowCells(m);
+                Dune::FieldVector<double,6> d(0.0);
+                for (int c = 0; c < 6; ++c) {
+                    d[c] = -lin[m][c];
+                }
+                for (int c = 0; c < 3; ++c) {
+                    d[c] += load[m][0];
+                }
+                Dune::FieldVector<double,6> s = d;
+                if (has) {
+                    for (int c = 0; c < 6; ++c) {
+                        s[c] += s0m[c][m];
+                    }
+                } else {
+                    s += this->stressEquilAt(z, 1);
+                }
+                rows(stress, m, s);
+                rows(delstress, m, d);
+                rows(strain, m, eps[m]);
+                pres[m] = has ? mech[P][m] : pa + pb*z;
+                temp[m] = has ? mech[T][m] : ta + tb*z;
+                sw[m] = mech[SW][m]; so[m] = mech[SO][m]; sg[m] = mech[SG][m];
+                poro[m] = mech[PORO][m];
+                dp[m] = has ? mech[P][m] - mech[P0][m] : 0.0;
+                flowcell[m] = has ? 1.0 : 0.0;
+                padding[m] = ctx->isPadding(m) ? 1.0 : 0.0;
+                std::array<int,3> c3;
+                mapper.cartesianCoordinate(static_cast<int>(m), c3);
+                for (int a = 0; a < 3; ++a) {
+                    ijk[3*m + a] = c3[a];
+                }
+            }
+
+            // Node pore pressure, the mean of the cells around each node: POR in ResInsight.
+            const std::size_t nv = gv.size(3);
+            std::vector<double> por(nv, 0.0), count(nv, 0.0), disp(3*nv);
+            for (const auto& e : elements(gv)) {
+                const std::size_t m = gv.indexSet().index(e);
+                for (int c = 0; c < 8; ++c) {
+                    const auto v = gv.indexSet().index(e.template subEntity<3>(c));
+                    por[v] += pres[m];
+                    count[v] += 1.0;
+                }
+            }
+            const auto& u = geoMechModel_.mechVertexDisplacement();
+            for (std::size_t v = 0; v < nv; ++v) {
+                por[v] /= std::max(count[v], 1.0);
+                for (int a = 0; a < 3; ++a) {
+                    disp[3*v + a] = u[v][a];
+                }
+            }
+
+            using MechGridVtk::Field;
+            std::vector<Field> cells{
+                {"stress[0]", 3, {}}, {"stress[1]", 3, {}}, {"stress[2]", 3, {}},
+                {"strain[0]", 3, {}}, {"strain[1]", 3, {}}, {"strain[2]", 3, {}},
+                {"delstress[0]", 3, {}}, {"delstress[1]", 3, {}}, {"delstress[2]", 3, {}},
+            };
+            for (int r = 0; r < 3; ++r) {
+                for (std::size_t m = 0; m < nm; ++m) {
+                    for (int k = 0; k < 3; ++k) {
+                        cells[r].values.push_back(stress[9*m + 3*r + k]);
+                        cells[3 + r].values.push_back(strain[9*m + 3*r + k]);
+                        cells[6 + r].values.push_back(delstress[9*m + 3*r + k]);
+                    }
+                }
+            }
+            cells.push_back({"pressure", 1, pres});
+            cells.push_back({"pressureDiff", 1, dp});
+            cells.push_back({"temperature", 1, temp});
+            cells.push_back({"saturation_water", 1, sw});
+            cells.push_back({"saturation_oil", 1, so});
+            cells.push_back({"saturation_gas", 1, sg});
+            cells.push_back({"porosity", 1, poro});
+            cells.push_back({"ymodule", 1, geoMechModel_.mechCellYModule()});
+            cells.push_back({"pratio", 1, geoMechModel_.mechCellPRatio()});
+            cells.push_back({"FLOWCELL", 1, flowcell});
+            cells.push_back({"PADDING", 1, padding});
+            cells.push_back({"ijk", 3, ijk});
+            const std::vector<Field> points{{"disp", 3, disp}, {"pressure", 1, por}};
+
+            const std::string dir = Parameters::Get<Parameters::OutputDir>() + "/mech";
+            std::filesystem::create_directories(dir);
+            const std::string base = this->simulator().vanguard().eclState().getIOConfig().getBaseName();
+            char step[16];
+            std::snprintf(step, sizeof(step), "-%05zu.vtu", mechVtkSteps_.size());
+            MechGridVtk::writeVtu(dir + "/" + base + step, ctx->grid(), cells, points);
+            mechVtkSteps_.emplace_back(time, base + step);
+            MechGridVtk::writePvd(dir + "/" + base + ".pvd", mechVtkSteps_);
+        }
+
+        std::vector<std::pair<double, std::string>> mechVtkSteps_;
+
+    public:
 
         //! The fracture-driving host used by the shared problem layer and
         //! the coupling loop (for the VEM backend this is the GeoMechModel).

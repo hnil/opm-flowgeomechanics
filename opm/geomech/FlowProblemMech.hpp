@@ -86,6 +86,9 @@ namespace Opm::Parameters {
     struct MechSectorFile {
         inline static std::string value{"none"};
     };
+    struct VtkWriteMechGrid {
+        static constexpr bool value = false;
+    };
 }
 
 namespace Opm{
@@ -181,6 +184,7 @@ namespace Opm{
             Base::registerParameters();
 	    Parameters::Register<Parameters::FractureParamFile>("json file defining fracture setting or alias: standard, sequential_implicit");
 	    Parameters::Register<Parameters::MechCoarsenFile>("file of COARSEN records (I1 I2 J1 J2 K1 K2 NX NY NZ, one per line) giving a mechanics grid coarser than the flow grid");
+	    Parameters::Register<Parameters::VtkWriteMechGrid>("write VTK on a mechanics grid of its own (mech/ under the output directory), with the flow quantities where flow cells exist");
 	    Parameters::Register<Parameters::MechSectorFile>("json file giving the mechanics grid as a box of the deck's grid with padding around it");
 	    Parameters::Register<Parameters::MechGridCheck>("check that the mechanics grid is a geometric body (no voids, cracks or hanging nodes): error, warn or off");
 	    Parameters::Register<Parameters::MechGrid>("mechanics grid: flow (the flow grid itself) or separate (rebuilt edge-conformal from the same corner points, so flow may be processed without --edge-conformal)");
@@ -817,6 +821,30 @@ namespace Opm{
         // ///
         // Accessors
         // ///
+        //! STREQUIL evaluated at a depth, for cells without a flow cell; zero without STREQUIL.
+        SymTensor stressEquilAt(double depth, int region) const
+        {
+            SymTensor s(0.0);
+            const auto& initconfig = this->simulator().vanguard().eclState().getInitConfig();
+            if (!initconfig.hasStressEquil()) {
+                return s;
+            }
+            int recnum = 1;
+            for (const auto& r : initconfig.getStressEquil()) {
+                if (recnum++ != region) {
+                    continue;
+                }
+                const double dz = depth - r.datumDepth();
+                s[0] = r.stressXX() + r.stressXX_grad()*dz;
+                s[1] = r.stressYY() + r.stressYY_grad()*dz;
+                s[2] = r.stressZZ() + r.stressZZ_grad()*dz;
+                s[3] = r.stressYZ() + r.stressYZ_grad()*dz;
+                s[4] = r.stressXZ() + r.stressXZ_grad()*dz;
+                s[5] = r.stressXY() + r.stressXY_grad()*dz;
+            }
+            return s;
+        }
+
         double initPressure(unsigned dofIdx) const{
             return initpressure_[dofIdx];
         }

@@ -303,6 +303,15 @@ namespace Opm{
             return mechMap_.isIdentity() ? mechPotentialForce_ : mechPotentialForceMech_;
         }
 
+        //! Fields on the mechanics grid's own cells and vertices (output of a separate grid).
+        const MechGridContext* mechContext() const { return mechCtx_; }
+        const MechFlowMap& mechFlowMap() const { return mechMap_; }
+        const Dune::BlockVector<Dune::FieldVector<double,6>>& mechCellLinStress() const { return linstress_; }
+        const Dune::BlockVector<Dune::FieldVector<double,6>>& mechCellStrain() const { return strain_; }
+        const Dune::BlockVector<Dune::FieldVector<double,3>>& mechVertexDisplacement() const { return displacement_; }
+        const std::vector<double>& mechCellYModule() const { return ymoduleMech_; }
+        const std::vector<double>& mechCellPRatio() const { return pratioMech_; }
+
         //! Mechanics index of a flow cell; the identity while the grids agree.
         std::size_t mechIdx(std::size_t globalIdx) const {
             return static_cast<std::size_t>(mechMap_.mechCell(globalIdx));
@@ -624,6 +633,8 @@ namespace Opm{
             }
             mechCtx_->communicate(ymodule_mech);
             mechCtx_->communicate(pratio_mech);
+            ymoduleMech_ = ymodule_mech;
+            pratioMech_ = pratio_mech;
             elacticitysolver_->setMaterial(ymodule_mech,pratio_mech);
         }
         /// Displacement of a flow grid vertex.
@@ -1030,6 +1041,7 @@ namespace Opm{
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialTempForce_;
         //Dune::BlockVector<Dune::FieldVector<double,1> > solution_;
         Dune::BlockVector<Dune::FieldVector<double,3> > celldisplacement_;
+        std::vector<double> ymoduleMech_, pratioMech_;
         Dune::BlockVector<Dune::FieldVector<double,3> > displacement_;
         // Flow vertices, when the mechanics grid is coarser: each takes the
         // weighted displacement of up to eight mechanics vertices.
