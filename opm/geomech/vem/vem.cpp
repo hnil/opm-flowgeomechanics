@@ -702,6 +702,8 @@ std::vector<double> getStabilityMatrix(vem::StabilityChoice stability_choice,con
     if(is_fem_choice(stability_choice)){
         stability_choice = ANISO_DIAG;
     }
+    if (stability_choice == TRACE)
+        throw logic_error("TRACE stabilization needs the face data (compute_S_trace_*)");
     if(stability_choice == ANISO_DIAG){
         S = compute_S_aniso(EWcDWct, D, corners, num_nodes, volume, dim, true);
     } else if(stability_choice == ANISO_HARMONIC){
@@ -757,6 +759,109 @@ std::vector<double> getStabilityMatrix(vem::StabilityChoice stability_choice,con
 }
 
 // ----------------------------------------------------------------------------
+// Trace stabilization  kappa * mu * sum_F |E|/|F| int_F |grad_F w|^2, w piecewise linear on the
+// face fan around the vertex mean.  Scales with the face, not the cell, so short edges and small
+// faces keep their stiffness; mu only, so no volumetric locking from S.
+constexpr double trace_stab_factor = 0.25;
+
+vector<double>
+compute_S_trace_3D(const double* const corners,
+                   const int num_corners,
+                   const int* const faces,
+                   const int* const num_face_edges,
+                   const int num_faces,
+                   const double volume,
+                   const double young,
+                   const double poisson)
+// ----------------------------------------------------------------------------
+{
+    const int n = 3 * num_corners;
+    const double mu = young / (2 * (1 + poisson));
+    vector<double> S(n * n, 0.0);
+    for (int f = 0, pos = 0; f != num_faces; pos += num_face_edges[f++]) {
+        const int m = num_face_edges[f];
+        const int* const fv = &faces[pos];
+        array<double, 3> c {0, 0, 0};
+        for (int k = 0; k != m; ++k)
+            for (int d = 0; d != 3; ++d)
+                c[d] += corners[3 * fv[k] + d] / m;
+        double area = 0;
+        vector<array<double, 9>> kloc(m); // per fan triangle (centre, a, b)
+        for (int i = 0; i != m; ++i) {
+            const double* pa = &corners[3 * fv[i]];
+            const double* pb = &corners[3 * fv[(i + 1) % m]];
+            const double* P[3] = {&c[0], pa, pb};
+            const array<double, 3> u {pa[0] - c[0], pa[1] - c[1], pa[2] - c[2]};
+            const array<double, 3> v {pb[0] - c[0], pb[1] - c[1], pb[2] - c[2]};
+            const double A = 0.5 * norm<3>(array<double, 3> {u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]});
+            area += A;
+            for (int a = 0; a != 3; ++a)
+                for (int b = 0; b != 3; ++b) {
+                    // P1 stiffness: (e_a . e_b) / (4A), e_a the edge opposite vertex a
+                    double ea[3], eb[3];
+                    for (int d = 0; d != 3; ++d) {
+                        ea[d] = P[(a + 2) % 3][d] - P[(a + 1) % 3][d];
+                        eb[d] = P[(b + 2) % 3][d] - P[(b + 1) % 3][d];
+                    }
+                    kloc[i][3 * a + b] = A > 0 ? (ea[0] * eb[0] + ea[1] * eb[1] + ea[2] * eb[2]) / (4 * A) : 0.0;
+                }
+        }
+        if (area <= 0)
+            continue;
+        const double coef = trace_stab_factor * mu * volume / area;
+        // scalar face matrix on the face vertices, the centre eliminated as the vertex mean
+        vector<double> Kf(m * m, 0.0);
+        for (int i = 0; i != m; ++i) {
+            const int loc[3] = {-1, i, (i + 1) % m};
+            for (int a = 0; a != 3; ++a)
+                for (int b = 0; b != 3; ++b) {
+                    const double k = coef * kloc[i][3 * a + b];
+                    for (int r = 0; r != m; ++r) {
+                        const double wa = loc[a] < 0 ? 1.0 / m : (r == loc[a] ? 1.0 : 0.0);
+                        if (wa == 0.0)
+                            continue;
+                        for (int s2 = 0; s2 != m; ++s2) {
+                            const double wb = loc[b] < 0 ? 1.0 / m : (s2 == loc[b] ? 1.0 : 0.0);
+                            Kf[r * m + s2] += k * wa * wb;
+                        }
+                    }
+                }
+        }
+        for (int r = 0; r != m; ++r)
+            for (int s2 = 0; s2 != m; ++s2)
+                for (int d = 0; d != 3; ++d)
+                    S[(3 * fv[r] + d) * n + 3 * fv[s2] + d] += Kf[r * m + s2];
+    }
+    return S;
+}
+
+// ----------------------------------------------------------------------------
+// 2D version: kappa * mu * sum_e |E|/|e| int_e |d_t w|^2
+vector<double>
+compute_S_trace_2D(const double* const corners, const int num_corners, const double area,
+                   const double young, const double poisson)
+// ----------------------------------------------------------------------------
+{
+    const int n = 2 * num_corners;
+    const double mu = young / (2 * (1 + poisson));
+    vector<double> S(n * n, 0.0);
+    for (int i = 0; i != num_corners; ++i) {
+        const int j = (i + 1) % num_corners;
+        const double le = hypot(corners[2 * j] - corners[2 * i], corners[2 * j + 1] - corners[2 * i + 1]);
+        if (le <= 0)
+            continue;
+        const double k = trace_stab_factor * mu * area / (le * le);
+        for (int d = 0; d != 2; ++d) {
+            S[(2 * i + d) * n + 2 * i + d] += k;
+            S[(2 * j + d) * n + 2 * j + d] += k;
+            S[(2 * i + d) * n + 2 * j + d] -= k;
+            S[(2 * j + d) * n + 2 * i + d] -= k;
+        }
+    }
+    return S;
+}
+
+// ----------------------------------------------------------------------------
 // Assemble the VEM stiffness matrix for a single element, based on a number
 // of intermediary matrices and values, as defined in (Gain, 2014)
 // DOI:10.1016/j.cma.2014.05.005
@@ -770,18 +875,20 @@ final_assembly(const vector<double>& Wc,
                const double volume,
                const double num_nodes,
                const double dim,
-               double* target)
+               double* target,
+               const vector<double>* S_given = nullptr)
 // ----------------------------------------------------------------------------
 {
     assert(dim == 2 || dim == 3);
-    const int lsdim = (dim == 2) ? 3 : 6; // dimension of "linear strain space"
+    const int lsdim = (dim == 2) ? 3 : 6; // dimension of "linear strain space""
     const int totdim = dim * num_nodes; // total number of unknowns
 
     // compute stiffness matrix components
     const auto DWct = matmul(&D[0], lsdim, lsdim, false, &Wc[0], totdim, lsdim, true);
     const auto EWcDWct = matmul(&Wc[0], totdim, lsdim, false, &DWct[0], lsdim, totdim, false, volume);
 
-    std::vector<double> S = getStabilityMatrix(stability_choice, EWcDWct, Nc, D, corners, num_nodes, volume, dim, totdim);
+    std::vector<double> S = S_given ? *S_given
+        : getStabilityMatrix(stability_choice, EWcDWct, Nc, D, corners, num_nodes, volume, dim, totdim);
     
     // const auto S = stability_choice == D_RECIPE
     //     ? compute_S_D_recipe(EWcDWct, totdim, volume)
@@ -2663,6 +2770,11 @@ assemble_stiffness_matrix_2D(const double* const points,
 
     // do the final assembly of matrices, and write result to target
     target.resize(pow(2 * num_corners, 2));
+    if (stability_choice == TRACE) {
+        const auto S = compute_S_trace_2D(&corners[0], num_corners, area, young, poisson);
+        final_assembly(Wc, D, Nc, ImP, corners, stability_choice, area, num_corners, 2, &target[0], &S);
+        return;
+    }
     final_assembly(Wc, D, Nc, ImP, corners, stability_choice, area, num_corners, 2, &target[0]);
 }
 
@@ -2753,6 +2865,12 @@ assemble_stiffness_matrix_3D(const double* const points,
 
     // // do the final assembly of matrices, and write result to target
     target.resize(pow(3 * num_corners, 2));
+    if (stability_choice == TRACE) {
+        const auto S = compute_S_trace_3D(&corners_loc[0], num_corners, &faces_loc[0], num_face_edges, num_faces,
+                                          volume, young, poisson);
+        final_assembly(Wc, D, Nc, ImP, corners_loc, stability_choice, volume, num_corners, 3, &target[0], &S);
+        return;
+    }
     final_assembly(Wc, D, Nc, ImP, corners_loc, stability_choice, volume, num_corners, 3, &target[0]);
 }
 
