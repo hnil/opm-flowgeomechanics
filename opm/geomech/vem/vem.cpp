@@ -702,8 +702,8 @@ std::vector<double> getStabilityMatrix(vem::StabilityChoice stability_choice,con
     if(is_fem_choice(stability_choice)){
         stability_choice = ANISO_DIAG;
     }
-    if (stability_choice == TRACE)
-        throw logic_error("TRACE stabilization needs the face data (compute_S_trace_*)");
+    if (stability_choice == TRACE || stability_choice == SMOOTH_HOURGLASS)
+        throw logic_error("TRACE/SMOOTH_HOURGLASS stabilization needs the face data");
     if(stability_choice == ANISO_DIAG){
         S = compute_S_aniso(EWcDWct, D, corners, num_nodes, volume, dim, true);
     } else if(stability_choice == ANISO_HARMONIC){
@@ -880,7 +880,7 @@ final_assembly(const vector<double>& Wc,
 // ----------------------------------------------------------------------------
 {
     assert(dim == 2 || dim == 3);
-    const int lsdim = (dim == 2) ? 3 : 6; // dimension of "linear strain space""
+    const int lsdim = (dim == 2) ? 3 : 6; // dimension of "linear strain space"
     const int totdim = dim * num_nodes; // total number of unknowns
 
     // compute stiffness matrix components
@@ -2719,6 +2719,584 @@ compute_stress_3D(const double* const points,
 
 
 
+// ============================================================================
+// ===== SMOOTH_HOURGLASS: smooth-field (assumed-strain) hourglass control =====
+// ============================================================================
+
+namespace {
+
+// S is computed with lambda capped at this Poisson ratio, so it stays mu-scaled as nu -> 1/2.
+constexpr double smooth_hg_nu_cap = 0.3;
+// Numerical-degeneracy guard only: the energy stays bounded on near-pyramids (ratio 1e-3).
+constexpr double smooth_hg_min_jac_ratio = 1e-8;
+
+double
+capped_lambda(const double young, const double poisson)
+{
+    const double mu = young / (2 * (1 + poisson));
+    const double nu = min(poisson, smooth_hg_nu_cap);
+    return min(young * poisson / ((1 + poisson) * (1 - 2 * poisson)), 2 * mu * nu / (1 - 2 * nu));
+}
+
+// Cholesky in place (lower), n x n row-major; false if not positive definite.
+bool
+small_cholesky(vector<double>& A, const int n)
+{
+    for (int j = 0; j != n; ++j) {
+        double d = A[j * n + j];
+        for (int k = 0; k != j; ++k)
+            d -= A[j * n + k] * A[j * n + k];
+        if (!(d > 0))
+            return false;
+        A[j * n + j] = sqrt(d);
+        for (int i = j + 1; i != n; ++i) {
+            double s = A[i * n + j];
+            for (int k = 0; k != j; ++k)
+                s -= A[i * n + k] * A[j * n + k];
+            A[i * n + j] = s / A[j * n + j];
+        }
+    }
+    return true;
+}
+
+// Energy of the minimum-energy field in Q1 + span{xi_d (1 - xi_d)} (Wilson bubbles, per
+// component) through the 8 nodal values; hc in Dune corner order. Exact in bending and twist on boxes.
+// remove_linear: drop the energy of linear fields, which the consistency term already carries.
+bool
+smooth_hex_energy(const double* const hc, const double lambda, const double mu, const bool remove_linear,
+                  double* Ks)
+{
+    constexpr int nq = 24, nb = 9, nt = nq + nb;
+    const double gp[3] = {0.5 - 0.5 * sqrt(0.6), 0.5, 0.5 + 0.5 * sqrt(0.6)};
+    const double gw[3] = {5.0 / 18, 8.0 / 18, 5.0 / 18};
+    vector<double> A(nt * nt, 0.0);
+    double jmin = 1e300, jmax = 0;
+    for (int a = 0; a != 3; ++a)
+        for (int b = 0; b != 3; ++b)
+            for (int c = 0; c != 3; ++c) {
+                const double xi[3] = {gp[a], gp[b], gp[c]};
+                double gref[8][3];
+                hex_shape_gradients(xi, gref);
+                double J[3][3] = {{0}};
+                for (int k = 0; k != 8; ++k)
+                    for (int i = 0; i != 3; ++i)
+                        for (int j = 0; j != 3; ++j)
+                            J[i][j] += hc[3 * k + i] * gref[k][j];
+                const double det = J[0][0] * (J[1][1] * J[2][2] - J[1][2] * J[2][1])
+                    - J[0][1] * (J[1][0] * J[2][2] - J[1][2] * J[2][0])
+                    + J[0][2] * (J[1][0] * J[2][1] - J[1][1] * J[2][0]);
+                jmin = min(jmin, det);
+                jmax = max(jmax, det);
+                if (!(det > 0))
+                    return false;
+                double Ji[3][3]; // J^{-1}
+                Ji[0][0] = (J[1][1] * J[2][2] - J[1][2] * J[2][1]) / det;
+                Ji[0][1] = (J[0][2] * J[2][1] - J[0][1] * J[2][2]) / det;
+                Ji[0][2] = (J[0][1] * J[1][2] - J[0][2] * J[1][1]) / det;
+                Ji[1][0] = (J[1][2] * J[2][0] - J[1][0] * J[2][2]) / det;
+                Ji[1][1] = (J[0][0] * J[2][2] - J[0][2] * J[2][0]) / det;
+                Ji[1][2] = (J[0][2] * J[1][0] - J[0][0] * J[1][2]) / det;
+                Ji[2][0] = (J[1][0] * J[2][1] - J[1][1] * J[2][0]) / det;
+                Ji[2][1] = (J[0][1] * J[2][0] - J[0][0] * J[2][1]) / det;
+                Ji[2][2] = (J[0][0] * J[1][1] - J[0][1] * J[1][0]) / det;
+                // physical gradients of the 8 shape functions and the 3 bubbles 4 xi_d (1 - xi_d)
+                double g[11][3];
+                for (int m = 0; m != 11; ++m) {
+                    double r[3] = {0, 0, 0};
+                    if (m < 8)
+                        for (int e = 0; e != 3; ++e)
+                            r[e] = gref[m][e];
+                    else
+                        r[m - 8] = 4 * (1 - 2 * xi[m - 8]);
+                    for (int i = 0; i != 3; ++i)
+                        g[m][i] = Ji[0][i] * r[0] + Ji[1][i] * r[1] + Ji[2][i] * r[2];
+                }
+                // dof I: function m = I / 3 (bubbles after the nodes), component I % 3
+                double B[6][nt];
+                for (int I = 0; I != nt; ++I) {
+                    const int m = I < nq ? I / 3 : 8 + (I - nq) / 3, d = I % 3;
+                    for (int r = 0; r != 6; ++r)
+                        B[r][I] = 0;
+                    B[d][I] = g[m][d];
+                    // engineering shear rows xy, yz, zx
+                    if (d == 0) { B[3][I] = g[m][1]; B[5][I] = g[m][2]; }
+                    if (d == 1) { B[3][I] = g[m][0]; B[4][I] = g[m][2]; }
+                    if (d == 2) { B[4][I] = g[m][1]; B[5][I] = g[m][0]; }
+                }
+                const double w = gw[a] * gw[b] * gw[c] * det;
+                for (int I = 0; I != nt; ++I) {
+                    const double trI = B[0][I] + B[1][I] + B[2][I];
+                    double CB[6];
+                    for (int r = 0; r != 3; ++r)
+                        CB[r] = lambda * trI + 2 * mu * B[r][I];
+                    for (int r = 3; r != 6; ++r)
+                        CB[r] = mu * B[r][I];
+                    for (int Jx = 0; Jx != nt; ++Jx) {
+                        double s = 0;
+                        for (int r = 0; r != 6; ++r)
+                            s += CB[r] * B[r][Jx];
+                        A[I * nt + Jx] += w * s;
+                    }
+                }
+            }
+    if (jmin < smooth_hg_min_jac_ratio * jmax)
+        return false;
+    // condense the bubbles: Ks = Aqq - Aqb Abb^-1 Abq
+    vector<double> L(nb * nb);
+    for (int i = 0; i != nb; ++i)
+        for (int j = 0; j != nb; ++j)
+            L[i * nb + j] = A[(nq + i) * nt + nq + j];
+    if (!small_cholesky(L, nb))
+        return false;
+    vector<double> X(nb * nq); // Abb^-1 Abq
+    for (int col = 0; col != nq; ++col) {
+        double y[nb];
+        for (int i = 0; i != nb; ++i) {
+            double s = A[(nq + i) * nt + col];
+            for (int k = 0; k != i; ++k)
+                s -= L[i * nb + k] * y[k];
+            y[i] = s / L[i * nb + i];
+        }
+        for (int i = nb - 1; i >= 0; --i) {
+            double s = y[i];
+            for (int k = i + 1; k != nb; ++k)
+                s -= L[k * nb + i] * y[k];
+            y[i] = s / L[i * nb + i];
+        }
+        for (int i = 0; i != nb; ++i)
+            X[i * nq + col] = y[i];
+    }
+    for (int i = 0; i != nq; ++i)
+        for (int j = 0; j != nq; ++j) {
+            double s = A[i * nt + j];
+            for (int k = 0; k != nb; ++k)
+                s -= A[i * nt + nq + k] * X[k * nq + j];
+            Ks[i * nq + j] = s;
+        }
+    if (!remove_linear)
+        return true;
+    // Ks <- Ks - Ks L (L^T Ks L)^-1 L^T Ks, L the 6 linear strain modes at the corners
+    double xc[3] = {0, 0, 0}, h = 0;
+    for (int k = 0; k != 8; ++k)
+        for (int d = 0; d != 3; ++d)
+            xc[d] += hc[3 * k + d] / 8;
+    for (int k = 0; k != 8; ++k)
+        for (int d = 0; d != 3; ++d)
+            h = max(h, fabs(hc[3 * k + d] - xc[d]));
+    const int sym[6][2] = {{0, 0}, {1, 1}, {2, 2}, {0, 1}, {1, 2}, {0, 2}};
+    vector<double> Lm(nq * 6, 0.0);
+    for (int k = 0; k != 8; ++k)
+        for (int m = 0; m != 6; ++m) {
+            const int a = sym[m][0], b = sym[m][1];
+            Lm[(3 * k + a) * 6 + m] += (hc[3 * k + b] - xc[b]) / h;
+            if (a != b)
+                Lm[(3 * k + b) * 6 + m] += (hc[3 * k + a] - xc[a]) / h;
+        }
+    vector<double> KL(nq * 6, 0.0), M(36, 0.0);
+    for (int i = 0; i != nq; ++i)
+        for (int j = 0; j != nq; ++j)
+            for (int m = 0; m != 6; ++m)
+                KL[i * 6 + m] += Ks[i * nq + j] * Lm[j * 6 + m];
+    for (int i = 0; i != nq; ++i)
+        for (int m = 0; m != 6; ++m)
+            for (int l = 0; l != 6; ++l)
+                M[m * 6 + l] += Lm[i * 6 + m] * KL[i * 6 + l];
+    if (!small_cholesky(M, 6))
+        return false;
+    for (int i = 0; i != nq; ++i) {
+        double y[6]; // M^-1 (KL)^T column i
+        for (int r = 0; r != 6; ++r) {
+            double s = KL[i * 6 + r];
+            for (int k = 0; k != r; ++k)
+                s -= M[r * 6 + k] * y[k];
+            y[r] = s / M[r * 6 + r];
+        }
+        for (int r = 5; r >= 0; --r) {
+            double s = y[r];
+            for (int k = r + 1; k != 6; ++k)
+                s -= M[k * 6 + r] * y[k];
+            y[r] = s / M[r * 6 + r];
+        }
+        for (int j = 0; j != nq; ++j) {
+            double s = 0;
+            for (int r = 0; r != 6; ++r)
+                s += KL[j * 6 + r] * y[r];
+            Ks[j * nq + i] -= s;
+        }
+    }
+    return true;
+}
+
+// 2D analogue on a quad (Dune corner order): Q4 + 2 bubbles per component, plane strain.
+bool
+smooth_quad_energy(const double* const qc, const double lambda, const double mu, double* Ks)
+{
+    constexpr int nq = 8, nb = 4, nt = nq + nb;
+    const double gp[3] = {0.5 - 0.5 * sqrt(0.6), 0.5, 0.5 + 0.5 * sqrt(0.6)};
+    const double gw[3] = {5.0 / 18, 8.0 / 18, 5.0 / 18};
+    vector<double> A(nt * nt, 0.0);
+    double jmin = 1e300, jmax = 0;
+    for (int a = 0; a != 3; ++a)
+        for (int b = 0; b != 3; ++b) {
+            const double xi[2] = {gp[a], gp[b]};
+            double gref[4][2];
+            for (int k = 0; k != 4; ++k) {
+                const int c[2] = {k & 1, (k >> 1) & 1};
+                gref[k][0] = (c[0] ? 1.0 : -1.0) * (c[1] ? xi[1] : 1.0 - xi[1]);
+                gref[k][1] = (c[1] ? 1.0 : -1.0) * (c[0] ? xi[0] : 1.0 - xi[0]);
+            }
+            double J[2][2] = {{0, 0}, {0, 0}};
+            for (int k = 0; k != 4; ++k)
+                for (int i = 0; i != 2; ++i)
+                    for (int j = 0; j != 2; ++j)
+                        J[i][j] += qc[2 * k + i] * gref[k][j];
+            const double det = J[0][0] * J[1][1] - J[0][1] * J[1][0];
+            jmin = min(jmin, det);
+            jmax = max(jmax, det);
+            if (!(det > 0))
+                return false;
+            const double Ji[2][2] = {{J[1][1] / det, -J[0][1] / det}, {-J[1][0] / det, J[0][0] / det}};
+            double g[6][2];
+            for (int m = 0; m != 6; ++m) {
+                double r[2] = {0, 0};
+                if (m < 4) { r[0] = gref[m][0]; r[1] = gref[m][1]; }
+                else r[m - 4] = 4 * (1 - 2 * xi[m - 4]);
+                for (int i = 0; i != 2; ++i)
+                    g[m][i] = Ji[0][i] * r[0] + Ji[1][i] * r[1];
+            }
+            double B[3][nt];
+            for (int I = 0; I != nt; ++I) {
+                const int m = I < nq ? I / 2 : 4 + (I - nq) / 2, d = I % 2;
+                B[0][I] = d == 0 ? g[m][0] : 0;
+                B[1][I] = d == 1 ? g[m][1] : 0;
+                B[2][I] = g[m][1 - d];
+            }
+            const double w = gw[a] * gw[b] * det;
+            for (int I = 0; I != nt; ++I)
+                for (int Jx = 0; Jx != nt; ++Jx) {
+                    const double tI = B[0][I] + B[1][I], tJ = B[0][Jx] + B[1][Jx];
+                    A[I * nt + Jx] += w * (lambda * tI * tJ + 2 * mu * (B[0][I] * B[0][Jx] + B[1][I] * B[1][Jx])
+                                           + mu * B[2][I] * B[2][Jx]);
+                }
+        }
+    if (jmin < smooth_hg_min_jac_ratio * jmax)
+        return false;
+    vector<double> L(nb * nb);
+    for (int i = 0; i != nb; ++i)
+        for (int j = 0; j != nb; ++j)
+            L[i * nb + j] = A[(nq + i) * nt + nq + j];
+    if (!small_cholesky(L, nb))
+        return false;
+    for (int i = 0; i != nq; ++i)
+        for (int j = 0; j != nq; ++j) {
+            // Abb^-1 Abq column j by forward/back substitution
+            double y[nb];
+            for (int r = 0; r != nb; ++r) {
+                double s = A[(nq + r) * nt + j];
+                for (int k = 0; k != r; ++k)
+                    s -= L[r * nb + k] * y[k];
+                y[r] = s / L[r * nb + r];
+            }
+            for (int r = nb - 1; r >= 0; --r) {
+                double s = y[r];
+                for (int k = r + 1; k != nb; ++k)
+                    s -= L[k * nb + r] * y[k];
+                y[r] = s / L[r * nb + r];
+            }
+            double s = A[i * nt + j];
+            for (int k = 0; k != nb; ++k)
+                s -= A[i * nt + nq + k] * y[k];
+            Ks[i * nq + j] = s;
+        }
+    return true;
+}
+
+double
+hex_shape_value(const int k, const double* const xi)
+{
+    double v = 1;
+    for (int e = 0; e != 3; ++e)
+        v *= ((k >> e) & 1) ? xi[e] : 1 - xi[e];
+    return v;
+}
+
+// Recognise a polyhedron as a hexahedron with extra nodes on its edges/faces (faults, hanging
+// nodes): faces are merged across edges with dihedral angle < 30 degrees. On success, order holds
+// the 8 corners in Dune order and xi the reference coordinates of every node.
+bool
+logical_hex(const double* const corners,
+            const int num_corners,
+            const int* const faces,
+            const int* const num_face_edges,
+            const int num_faces,
+            array<int, 8>& order,
+            vector<array<double, 3>>& xi)
+{
+    vector<array<double, 3>> nrm(num_faces);
+    vector<int> start(num_faces + 1, 0);
+    for (int f = 0; f != num_faces; ++f)
+        start[f + 1] = start[f] + num_face_edges[f];
+    map<pair<int, int>, vector<int>> edge_faces;
+    for (int f = 0; f != num_faces; ++f) {
+        array<double, 3> nn {0, 0, 0}; // Newell normal
+        const int m = num_face_edges[f];
+        for (int i = 0; i != m; ++i) {
+            const double* p = &corners[3 * faces[start[f] + i]];
+            const double* q = &corners[3 * faces[start[f] + (i + 1) % m]];
+            nn[0] += (p[1] - q[1]) * (p[2] + q[2]);
+            nn[1] += (p[2] - q[2]) * (p[0] + q[0]);
+            nn[2] += (p[0] - q[0]) * (p[1] + q[1]);
+            const int u = faces[start[f] + i], v = faces[start[f] + (i + 1) % m];
+            if (u != v)
+                edge_faces[{min(u, v), max(u, v)}].push_back(f);
+        }
+        const double l = norm<3>(nn);
+        if (!(l > 0))
+            return false;
+        for (auto& x : nn)
+            x /= l;
+        nrm[f] = nn;
+    }
+    vector<int> root(num_faces);
+    iota(root.begin(), root.end(), 0);
+    const auto find = [&](int f) { while (root[f] != f) f = root[f] = root[root[f]]; return f; };
+    const double cos_tol = cos(M_PI / 6);
+    for (const auto& [e, fs] : edge_faces) {
+        if (fs.size() != 2)
+            return false;
+        const auto& a = nrm[fs[0]];
+        const auto& b = nrm[fs[1]];
+        if (a[0] * b[0] + a[1] * b[1] + a[2] * b[2] > cos_tol)
+            root[find(fs[0])] = find(fs[1]);
+    }
+    map<int, int> lface; // root -> logical face id
+    for (int f = 0; f != num_faces; ++f)
+        lface.emplace(find(f), int(lface.size()));
+    if (lface.size() != 6)
+        return false;
+    vector<set<int>> node_lf(num_corners);
+    for (int f = 0; f != num_faces; ++f)
+        for (int i = 0; i != num_face_edges[f]; ++i)
+            node_lf[faces[start[f] + i]].insert(lface[find(f)]);
+    vector<int> cid(num_corners, -1), cnode;
+    for (int v = 0; v != num_corners; ++v) {
+        if (node_lf[v].size() > 3)
+            return false;
+        if (node_lf[v].size() == 3) {
+            cid[v] = int(cnode.size());
+            cnode.push_back(v);
+        }
+    }
+    if (cnode.size() != 8)
+        return false;
+    // corners of each logical face, in boundary order
+    vector<int> quads;
+    for (const auto& [r, id] : lface) {
+        map<int, int> next;
+        int nbnd = 0;
+        for (int f = 0; f != num_faces; ++f) {
+            if (find(f) != r)
+                continue;
+            const int m = num_face_edges[f];
+            for (int i = 0; i != m; ++i) {
+                const int u = faces[start[f] + i], v = faces[start[f] + (i + 1) % m];
+                if (u == v)
+                    continue;
+                const auto& fs = edge_faces[{min(u, v), max(u, v)}];
+                const int other = fs[0] == f ? fs[1] : fs[0];
+                if (find(other) == r)
+                    continue;
+                if (!next.emplace(u, v).second)
+                    return false;
+                ++nbnd;
+            }
+        }
+        int v0 = -1;
+        for (const auto& [u, v] : next)
+            if (cid[u] >= 0) { v0 = u; break; }
+        if (v0 < 0)
+            return false;
+        vector<int> qc;
+        int v = v0, steps = 0;
+        do {
+            if (cid[v] >= 0)
+                qc.push_back(cid[v]);
+            const auto it = next.find(v);
+            if (it == next.end())
+                return false;
+            v = it->second;
+        } while (v != v0 && ++steps <= nbnd);
+        if (v != v0 || steps + 1 != nbnd || qc.size() != 4)
+            return false;
+        quads.insert(quads.end(), qc.begin(), qc.end());
+    }
+    vector<double> cc(24);
+    for (int k = 0; k != 8; ++k)
+        for (int d = 0; d != 3; ++d)
+            cc[3 * k + d] = corners[3 * cnode[k] + d];
+    const int nfe4[6] = {4, 4, 4, 4, 4, 4};
+    array<int, 8> ord;
+    if (!hex_corner_ordering(&cc[0], 8, &quads[0], nfe4, 6, ord))
+        return false;
+    array<double, 24> hc;
+    for (int k = 0; k != 8; ++k) {
+        order[k] = cnode[ord[k]];
+        for (int d = 0; d != 3; ++d)
+            hc[3 * k + d] = corners[3 * order[k] + d];
+    }
+    // reference coordinates of the extra nodes by Newton on the trilinear map
+    double h = 0;
+    for (int k = 1; k != 8; ++k)
+        h = max(h, hypot(hc[3 * k] - hc[0], hc[3 * k + 1] - hc[1], hc[3 * k + 2] - hc[2]));
+    xi.assign(num_corners, {0.5, 0.5, 0.5});
+    for (int k = 0; k != 8; ++k)
+        xi[order[k]] = {double(k & 1), double((k >> 1) & 1), double((k >> 2) & 1)};
+    for (int v = 0; v != num_corners; ++v) {
+        if (cid[v] >= 0)
+            continue;
+        auto& r = xi[v];
+        double res = 1e300;
+        for (int it = 0; it != 30 && res > 1e-10 * h; ++it) {
+            double x[3] = {0, 0, 0}, gref[8][3], J[3][3] = {{0}};
+            hex_shape_gradients(&r[0], gref);
+            for (int k = 0; k != 8; ++k) {
+                const double N = hex_shape_value(k, &r[0]);
+                for (int i = 0; i != 3; ++i) {
+                    x[i] += hc[3 * k + i] * N;
+                    for (int j = 0; j != 3; ++j)
+                        J[i][j] += hc[3 * k + i] * gref[k][j];
+                }
+            }
+            double f[3];
+            for (int i = 0; i != 3; ++i)
+                f[i] = corners[3 * v + i] - x[i];
+            res = norm<3>(array<double, 3> {f[0], f[1], f[2]});
+            const double det = J[0][0] * (J[1][1] * J[2][2] - J[1][2] * J[2][1])
+                - J[0][1] * (J[1][0] * J[2][2] - J[1][2] * J[2][0])
+                + J[0][2] * (J[1][0] * J[2][1] - J[1][1] * J[2][0]);
+            if (!(fabs(det) > 0))
+                return false;
+            // Cramer's rule for J dxi = f
+            for (int c = 0; c != 3; ++c) {
+                double M[3][3];
+                for (int i = 0; i != 3; ++i)
+                    for (int j = 0; j != 3; ++j)
+                        M[i][j] = j == c ? f[i] : J[i][j];
+                r[c] += (M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1])
+                         - M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0])
+                         + M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0])) / det;
+            }
+        }
+        if (res > 1e-6 * h)
+            return false;
+        for (auto& c : r) {
+            if (c < -0.05 || c > 1.05)
+                return false;
+            c = min(1.0, max(0.0, c));
+        }
+    }
+    return true;
+}
+
+// S = C^T K_smooth C + R^T S_trace R, C the corner selection and R = I - (trilinear interpolation
+// of the corners); R = 0 on plain hexes. Pure TRACE when no well-conditioned corner hex exists.
+vector<double>
+compute_S_smooth_hg_3D(const double* const corners,
+                       const int num_corners,
+                       const int* const faces,
+                       const int* const num_face_edges,
+                       const int num_faces,
+                       const double volume,
+                       const double young,
+                       const double poisson)
+{
+    const auto trace = [&] {
+        return compute_S_trace_3D(corners, num_corners, faces, num_face_edges, num_faces, volume, young, poisson);
+    };
+    array<int, 8> order;
+    vector<array<double, 3>> xi;
+    const bool plain = hex_corner_ordering(corners, num_corners, faces, num_face_edges, num_faces, order);
+    if (!plain && !logical_hex(corners, num_corners, faces, num_face_edges, num_faces, order, xi))
+        return trace();
+    array<double, 24> hc;
+    for (int k = 0; k != 8; ++k)
+        for (int d = 0; d != 3; ++d)
+            hc[3 * k + d] = corners[3 * order[k] + d];
+    const double mu = young / (2 * (1 + poisson));
+    vector<double> Ks(24 * 24);
+    // with extra nodes, P mixes them into the corner values: keep S off the linear part
+    if (!smooth_hex_energy(&hc[0], capped_lambda(young, poisson), mu, !plain, &Ks[0]))
+        return trace();
+    const int n = 3 * num_corners;
+    vector<double> S(n * n, 0.0);
+    for (int a = 0; a != 24; ++a)
+        for (int b = 0; b != 24; ++b)
+            S[(3 * order[a / 3] + a % 3) * n + 3 * order[b / 3] + b % 3] = Ks[a * 24 + b];
+    if (plain)
+        return S;
+    // scalar R (num_corners^2); S_trace acts identically on each component
+    const int m = num_corners;
+    vector<double> R(m * m, 0.0);
+    vector<bool> is_corner(m, false);
+    for (int k = 0; k != 8; ++k)
+        is_corner[order[k]] = true;
+    for (int v = 0; v != m; ++v) {
+        if (is_corner[v])
+            continue;
+        R[v * m + v] = 1;
+        for (int k = 0; k != 8; ++k)
+            R[v * m + order[k]] -= hex_shape_value(k, &xi[v][0]);
+    }
+    const auto St = trace();
+    vector<double> Ts(m * m, 0.0), TR(m * m, 0.0);
+    for (int i = 0; i != m; ++i)
+        for (int j = 0; j != m; ++j)
+            Ts[i * m + j] = St[(3 * i) * n + 3 * j];
+    for (int i = 0; i != m; ++i)
+        for (int k = 0; k != m; ++k)
+            if (Ts[i * m + k] != 0)
+                for (int j = 0; j != m; ++j)
+                    TR[i * m + j] += Ts[i * m + k] * R[k * m + j];
+    for (int i = 0; i != m; ++i)
+        for (int k = 0; k != m; ++k)
+            if (R[k * m + i] != 0)
+                for (int j = 0; j != m; ++j) {
+                    const double v = R[k * m + i] * TR[k * m + j];
+                    for (int d = 0; d != 3; ++d)
+                        S[(3 * i + d) * n + 3 * j + d] += v;
+                }
+    return S;
+}
+
+// 2D: smooth quad energy on quadrilaterals (perimeter order), TRACE on other polygons.
+vector<double>
+compute_S_smooth_hg_2D(const double* const corners, const int num_corners, const double area,
+                       const double young, const double poisson)
+{
+    if (num_corners == 4) {
+        // Dune corner order, mirrored for clockwise input so the Jacobian is positive
+        const double* c = corners;
+        const bool ccw = (c[2] - c[0]) * (c[7] - c[1]) - (c[3] - c[1]) * (c[6] - c[0]) > 0;
+        const int p[4] = {ccw ? 0 : 1, ccw ? 1 : 0, ccw ? 3 : 2, ccw ? 2 : 3};
+        array<double, 8> qc;
+        for (int k = 0; k != 4; ++k)
+            for (int d = 0; d != 2; ++d)
+                qc[2 * k + d] = corners[2 * p[k] + d];
+        const double mu = young / (2 * (1 + poisson));
+        vector<double> Ks(64);
+        if (smooth_quad_energy(&qc[0], capped_lambda(young, poisson), mu, &Ks[0])) {
+            vector<double> S(64);
+            for (int a = 0; a != 8; ++a)
+                for (int b = 0; b != 8; ++b)
+                    S[(2 * p[a / 2] + a % 2) * 8 + 2 * p[b / 2] + b % 2] = Ks[a * 8 + b];
+            return S;
+        }
+    }
+    return compute_S_trace_2D(corners, num_corners, area, young, poisson);
+}
+
+} // anonymous namespace
+
 // ----------------------------------------------------------------------------
 void
 assemble_stiffness_matrix_2D(const double* const points,
@@ -2770,8 +3348,10 @@ assemble_stiffness_matrix_2D(const double* const points,
 
     // do the final assembly of matrices, and write result to target
     target.resize(pow(2 * num_corners, 2));
-    if (stability_choice == TRACE) {
-        const auto S = compute_S_trace_2D(&corners[0], num_corners, area, young, poisson);
+    if (stability_choice == TRACE || stability_choice == SMOOTH_HOURGLASS) {
+        const auto S = stability_choice == TRACE
+            ? compute_S_trace_2D(&corners[0], num_corners, area, young, poisson)
+            : compute_S_smooth_hg_2D(&corners[0], num_corners, area, young, poisson);
         final_assembly(Wc, D, Nc, ImP, corners, stability_choice, area, num_corners, 2, &target[0], &S);
         return;
     }
@@ -2865,9 +3445,12 @@ assemble_stiffness_matrix_3D(const double* const points,
 
     // // do the final assembly of matrices, and write result to target
     target.resize(pow(3 * num_corners, 2));
-    if (stability_choice == TRACE) {
-        const auto S = compute_S_trace_3D(&corners_loc[0], num_corners, &faces_loc[0], num_face_edges, num_faces,
-                                          volume, young, poisson);
+    if (stability_choice == TRACE || stability_choice == SMOOTH_HOURGLASS) {
+        const auto S = stability_choice == TRACE
+            ? compute_S_trace_3D(&corners_loc[0], num_corners, &faces_loc[0], num_face_edges, num_faces,
+                                 volume, young, poisson)
+            : compute_S_smooth_hg_3D(&corners_loc[0], num_corners, &faces_loc[0], num_face_edges, num_faces,
+                                     volume, young, poisson);
         final_assembly(Wc, D, Nc, ImP, corners_loc, stability_choice, volume, num_corners, 3, &target[0], &S);
         return;
     }
