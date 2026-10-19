@@ -347,7 +347,6 @@ namespace Opm {
                     const auto& wellmodel = simulator.problem().wellModel();
                     const auto& wellstate = wellmodel.wellState().well(*well_index);
                     //const auto& reportStepIndex = simulator.episodeIndex();
-                    const auto& wellstate_nupcol = wellmodel.nupcolWellState().well(*well_index);
                     // get cell index from well perforation data
                     // check if well is open
                     if(wellstate.status == ::Opm::WellStatus::OPEN) {
