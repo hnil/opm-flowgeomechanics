@@ -1,0 +1,5 @@
+{
+  "lateral": { "cells": 5, "width": 6000, "growth": 1.5 },
+  "top":     { "cells": 5, "depth": 0, "growth": 1.3 },
+  "bottom":  { "cells": 5, "thickness": 3000, "growth": 1.5 }
+}
