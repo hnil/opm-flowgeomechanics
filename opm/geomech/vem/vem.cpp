@@ -3121,6 +3121,72 @@ hex_shape_value(const int k, const double* const xi)
     return v;
 }
 
+// Reference coordinates of every node of a hex with extra nodes, by Newton on the trilinear map of
+// its 8 corners (Dune order); false if a node falls outside the hex.
+bool
+extra_node_xi(const double* const corners,
+              const int num_corners,
+              const array<int, 8>& order,
+              vector<array<double, 3>>& xi)
+{
+    array<double, 24> hc;
+    for (int k = 0; k != 8; ++k)
+        for (int d = 0; d != 3; ++d)
+            hc[3 * k + d] = corners[3 * order[k] + d];
+    // reference coordinates of the extra nodes by Newton on the trilinear map
+    double h = 0;
+    for (int k = 1; k != 8; ++k)
+        h = max(h, hypot(hc[3 * k] - hc[0], hc[3 * k + 1] - hc[1], hc[3 * k + 2] - hc[2]));
+    xi.assign(num_corners, {0.5, 0.5, 0.5});
+    for (int k = 0; k != 8; ++k)
+        xi[order[k]] = {double(k & 1), double((k >> 1) & 1), double((k >> 2) & 1)};
+    for (int v = 0; v != num_corners; ++v) {
+        if (find(order.begin(), order.end(), v) != order.end())
+            continue;
+        auto& r = xi[v];
+        double res = 1e300;
+        for (int it = 0; it != 30 && res > 1e-10 * h; ++it) {
+            double x[3] = {0, 0, 0}, gref[8][3], J[3][3] = {{0}};
+            hex_shape_gradients(&r[0], gref);
+            for (int k = 0; k != 8; ++k) {
+                const double N = hex_shape_value(k, &r[0]);
+                for (int i = 0; i != 3; ++i) {
+                    x[i] += hc[3 * k + i] * N;
+                    for (int j = 0; j != 3; ++j)
+                        J[i][j] += hc[3 * k + i] * gref[k][j];
+                }
+            }
+            double f[3];
+            for (int i = 0; i != 3; ++i)
+                f[i] = corners[3 * v + i] - x[i];
+            res = norm<3>(array<double, 3> {f[0], f[1], f[2]});
+            const double det = J[0][0] * (J[1][1] * J[2][2] - J[1][2] * J[2][1])
+                - J[0][1] * (J[1][0] * J[2][2] - J[1][2] * J[2][0])
+                + J[0][2] * (J[1][0] * J[2][1] - J[1][1] * J[2][0]);
+            if (!(fabs(det) > 0))
+                return false;
+            // Cramer's rule for J dxi = f
+            for (int c = 0; c != 3; ++c) {
+                double M[3][3];
+                for (int i = 0; i != 3; ++i)
+                    for (int j = 0; j != 3; ++j)
+                        M[i][j] = j == c ? f[i] : J[i][j];
+                r[c] += (M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1])
+                         - M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0])
+                         + M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0])) / det;
+            }
+        }
+        if (res > 1e-6 * h)
+            return false;
+        for (auto& c : r) {
+            if (c < -0.05 || c > 1.05)
+                return false;
+            c = min(1.0, max(0.0, c));
+        }
+    }
+    return true;
+}
+
 // Recognise a polyhedron as a hexahedron with extra nodes on its edges/faces (faults, hanging
 // nodes): faces are merged across edges with dihedral angle < 30 degrees. On success, order holds
 // the 8 corners in Dune order and xi the reference coordinates of every node.
@@ -3239,68 +3305,14 @@ logical_hex(const double* const corners,
     array<int, 8> ord;
     if (!hex_corner_ordering(&cc[0], 8, &quads[0], nfe4, 6, ord))
         return false;
-    array<double, 24> hc;
-    for (int k = 0; k != 8; ++k) {
-        order[k] = cnode[ord[k]];
-        for (int d = 0; d != 3; ++d)
-            hc[3 * k + d] = corners[3 * order[k] + d];
-    }
-    // reference coordinates of the extra nodes by Newton on the trilinear map
-    double h = 0;
-    for (int k = 1; k != 8; ++k)
-        h = max(h, hypot(hc[3 * k] - hc[0], hc[3 * k + 1] - hc[1], hc[3 * k + 2] - hc[2]));
-    xi.assign(num_corners, {0.5, 0.5, 0.5});
     for (int k = 0; k != 8; ++k)
-        xi[order[k]] = {double(k & 1), double((k >> 1) & 1), double((k >> 2) & 1)};
-    for (int v = 0; v != num_corners; ++v) {
-        if (cid[v] >= 0)
-            continue;
-        auto& r = xi[v];
-        double res = 1e300;
-        for (int it = 0; it != 30 && res > 1e-10 * h; ++it) {
-            double x[3] = {0, 0, 0}, gref[8][3], J[3][3] = {{0}};
-            hex_shape_gradients(&r[0], gref);
-            for (int k = 0; k != 8; ++k) {
-                const double N = hex_shape_value(k, &r[0]);
-                for (int i = 0; i != 3; ++i) {
-                    x[i] += hc[3 * k + i] * N;
-                    for (int j = 0; j != 3; ++j)
-                        J[i][j] += hc[3 * k + i] * gref[k][j];
-                }
-            }
-            double f[3];
-            for (int i = 0; i != 3; ++i)
-                f[i] = corners[3 * v + i] - x[i];
-            res = norm<3>(array<double, 3> {f[0], f[1], f[2]});
-            const double det = J[0][0] * (J[1][1] * J[2][2] - J[1][2] * J[2][1])
-                - J[0][1] * (J[1][0] * J[2][2] - J[1][2] * J[2][0])
-                + J[0][2] * (J[1][0] * J[2][1] - J[1][1] * J[2][0]);
-            if (!(fabs(det) > 0))
-                return false;
-            // Cramer's rule for J dxi = f
-            for (int c = 0; c != 3; ++c) {
-                double M[3][3];
-                for (int i = 0; i != 3; ++i)
-                    for (int j = 0; j != 3; ++j)
-                        M[i][j] = j == c ? f[i] : J[i][j];
-                r[c] += (M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1])
-                         - M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0])
-                         + M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0])) / det;
-            }
-        }
-        if (res > 1e-6 * h)
-            return false;
-        for (auto& c : r) {
-            if (c < -0.05 || c > 1.05)
-                return false;
-            c = min(1.0, max(0.0, c));
-        }
-    }
-    return true;
+        order[k] = cnode[ord[k]];
+    return extra_node_xi(corners, num_corners, order, xi);
 }
 
 // S = C^T K_smooth C + R^T S_trace R, C the corner selection and R = I - (trilinear interpolation
 // of the corners); R = 0 on plain hexes. Pure TRACE when no well-conditioned corner hex exists.
+// hex_corners: the cell's 8 corners (local node ids, Dune order) if the grid knows them.
 vector<double>
 compute_S_smooth_hg_3D(const double* const corners,
                        const int num_corners,
@@ -3309,16 +3321,36 @@ compute_S_smooth_hg_3D(const double* const corners,
                        const int num_faces,
                        const double volume,
                        const double young,
-                       const double poisson)
+                       const double poisson,
+                       const int* const hex_corners)
 {
     const auto trace = [&] {
         return compute_S_trace_3D(corners, num_corners, faces, num_face_edges, num_faces, volume, young, poisson);
     };
     array<int, 8> order;
     vector<array<double, 3>> xi;
-    const bool plain = hex_corner_ordering(corners, num_corners, faces, num_face_edges, num_faces, order);
-    if (!plain && !logical_hex(corners, num_corners, faces, num_face_edges, num_faces, order, xi))
-        return trace();
+    bool plain = false;
+    if (hex_corners) {
+        copy(hex_corners, hex_corners + 8, order.begin());
+        if (set<int>(order.begin(), order.end()).size() != 8) // collapsed corners
+            return trace();
+        array<double, 24> hc;
+        for (int k = 0; k != 8; ++k)
+            for (int d = 0; d != 3; ++d)
+                hc[3 * k + d] = corners[3 * order[k] + d];
+        double g[8][3];
+        const double centre[3] = {0.5, 0.5, 0.5};
+        if (hex_physical_gradients(&hc[0], centre, g) < 0) // left-handed: mirror in x
+            for (int k = 0; k != 8; k += 2)
+                swap(order[k], order[k + 1]);
+        plain = num_corners == 8;
+        if (!plain && !extra_node_xi(corners, num_corners, order, xi))
+            return trace();
+    } else {
+        plain = hex_corner_ordering(corners, num_corners, faces, num_face_edges, num_faces, order);
+        if (!plain && !logical_hex(corners, num_corners, faces, num_face_edges, num_faces, order, xi))
+            return trace();
+    }
     array<double, 24> hc;
     for (int k = 0; k != 8; ++k)
         for (int d = 0; d != 3; ++d)
@@ -3470,7 +3502,8 @@ assemble_stiffness_matrix_3D(const double* const points,
                              const StabilityChoice stability_choice,
                              array<double, 3>& centroid,
                              vector<int>& indexing,
-                             vector<double>& target)
+                             vector<double>& target,
+                             const int* const hex_corners)
 // ----------------------------------------------------------------------------
 {
     // compute mapping between local vertex indices (0, 1, ... Ne) to
@@ -3478,6 +3511,16 @@ assemble_stiffness_matrix_3D(const double* const points,
     const auto reindex = global_to_local_indexing(faces, num_face_edges, num_faces, indexing);
     const int num_corners = int(indexing.size());
     const int num_face_entries = accumulate(num_face_edges, num_face_edges + num_faces, 0);
+
+    // the given corners are used only if all of them are nodes of the cell
+    array<int, 8> hex_loc;
+    bool have_hex = hex_corners != nullptr;
+    for (int k = 0; have_hex && k != 8; ++k) {
+        const auto it = reindex.find(hex_corners[k]);
+        have_hex = it != reindex.end();
+        if (have_hex)
+            hex_loc[k] = it->second;
+    }
 
     // make local list of corner coordinates, and a locally indexed version of
     // 'faces'
@@ -3551,7 +3594,7 @@ assemble_stiffness_matrix_3D(const double* const points,
             ? compute_S_trace_3D(&corners_loc[0], num_corners, &faces_loc[0], num_face_edges, num_faces,
                                  volume, young, poisson)
             : compute_S_smooth_hg_3D(&corners_loc[0], num_corners, &faces_loc[0], num_face_edges, num_faces,
-                                     volume, young, poisson);
+                                     volume, young, poisson, have_hex ? &hex_loc[0] : nullptr);
         final_assembly(Wc, D, Nc, ImP, corners_loc, stability_choice, volume, num_corners, 3, &target[0], &S);
         return;
     }
