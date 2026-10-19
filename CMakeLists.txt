@@ -386,6 +386,14 @@ target_link_libraries(test_leaf_orientation
 		opmflowgeomechanics
 )
 
+add_executable(mech_standalone
+	examples/mech_standalone.cpp
+)
+target_link_libraries(mech_standalone
+	PUBLIC
+		opmflowgeomechanics
+)
+
 add_executable(test_partition_of_unity
 	examples/test_partition_of_unity.cpp
 )
