@@ -2134,6 +2134,7 @@ compute_cell_geometry(const double* points,
     // assert(face_centroids.size() == static_cast<std::size_t>(num_faces*3));
 
     // identify a star point (usually, mean_point qualifies, but not necessarily)
+    bool signed_tets = false;
     try {
         star_point = identify_star_point(point_average<3>(points, num_points),
                                          outward_normals, face_centroids);
@@ -2150,8 +2151,21 @@ compute_cell_geometry(const double* points,
         try {
             star_point = identify_star_point(mid, outward_normals, face_centroids);
         } catch (const runtime_error&) {
-            // the projection iteration can cycle when the kernel is a thin sliver
-            star_point = chebyshev_star_point(outward_normals, face_centroids);
+            try {
+                // the projection iteration can cycle when the kernel is a thin sliver
+                star_point = chebyshev_star_point(outward_normals, face_centroids);
+            } catch (const runtime_error&) {
+                // Warped faces can leave no point behind every face plane. Any apex
+                // gives the exact volume and centroid with signed tetrahedra.
+                star_point = mid;
+                signed_tets = true;
+                static bool warned = false;
+                if (!warned) {
+                    warned = true;
+                    std::cerr << "VEM: cell without a star point (warped faces); "
+                                 "using signed tetrahedra from the face-centroid mean\n";
+                }
+            }
         }
     }
 
@@ -2165,7 +2179,16 @@ compute_cell_geometry(const double* points,
         for (auto tri : tessellate_face<3>(pick_points<3>(points, &faces[fpos], num_face_edges[f]), true, nullptr,
                                            corner_mask ? corner_mask + fpos : nullptr)) {
             tri.insert(tri.end(), &star_point[0], &star_point[0] + 3);
-            const double tvol = tetrahedron_volume(&tri[0], &tri[3], &tri[6], &tri[9]);
+            double tvol = tetrahedron_volume(&tri[0], &tri[3], &tri[6], &tri[9]);
+            if (signed_tets) {
+                // Positive when the apex is behind the face, by the outward normal.
+                const double* n = &outward_normals[3 * f];
+                double side = 0.0;
+                for (int d = 0; d != 3; ++d)
+                    side += n[d] * ((tri[d] + tri[3 + d] + tri[6 + d]) / 3.0 - star_point[d]);
+                if (side < 0)
+                    tvol = -tvol;
+            }
             const auto tet_centroid = point_average<3>(&tri[0], 4);
             volume += tvol;
             for (int d = 0; d != 3; ++d)
