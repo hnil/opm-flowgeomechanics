@@ -406,6 +406,11 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
         }
 
         if(vem_type){
+          // the corner-point cell's 8 corners, so SMOOTH_HOURGLASS need not guess them from the faces
+          std::array<int, 8> hex_corners;
+          const bool hex = elem.subEntities(3) == 8;
+          for (int k = 0; hex && k != 8; ++k)
+              hex_corners[k] = gv.indexSet().subIndex(elem, k, 3);
           assemble_stiffness_matrix_3D(points,
                                      &face_corners[fcorners_start],
                                      &num_face_corners[cf_ix],
@@ -415,7 +420,8 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
                                      loc_stability_choice,
                                      centroid,
                                      loc_indexing,
-                                     loc);
+                                     loc,
+                                     hex ? &hex_corners[0] : nullptr);
           const int ncv = int(loc_indexing.size()); // number of cell vertices
           for (int i = 0; i != 3 * ncv; ++i) {
             for (int j = 0; j != 3 * ncv; ++j) {

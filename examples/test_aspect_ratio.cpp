@@ -368,6 +368,52 @@ fault_node_energy(const vem::StabilityChoice sc, const double s)
 }
 
 // ----------------------------------------------------------------------------
+// Flat fault cell (a x a x 1, fault nodes at s = 1/2 on the two x+ pillars), top face twisted by
+// twist_deg about the vertical axis. Returns the stiffness and the bending mode
+// u_x = (2xi-1)(2zeta-1) (extra nodes interpolated); hex_corners = Dune-ordered corners or none.
+std::vector<double>
+fault_cell_K(const vem::StabilityChoice sc, const double a, const double twist_deg, const bool corners,
+             std::vector<double>& ubend)
+{
+    std::vector<double> pts;
+    const double t = twist_deg * M_PI / 180.0;
+    for (int k = 0; k < 8; ++k) {
+        double x = a * ((k & 1) - 0.5), y = a * (((k >> 1) & 1) - 0.5);
+        const double z = (k >> 2) & 1;
+        if (z > 0) {
+            const double xr = std::cos(t) * x - std::sin(t) * y, yr = std::sin(t) * x + std::cos(t) * y;
+            x = xr;
+            y = yr;
+        }
+        pts.insert(pts.end(), {x, y, z});
+    }
+    for (const int c : {1, 3}) // nodes 8, 9: mid-points of the x+ pillars
+        for (int d = 0; d < 3; ++d)
+            pts.push_back(0.5 * (pts[3 * c + d] + pts[3 * (c + 4) + d]));
+    const std::vector<std::vector<int>> faces = {{0, 4, 6, 2},     {0, 1, 8, 5, 4}, {2, 6, 7, 9, 3},
+                                                 {0, 2, 3, 1},     {4, 5, 7, 6},    {1, 3, 9, 8},
+                                                 {8, 9, 7, 5}};
+    std::vector<int> fc, nfc;
+    for (const auto& f : faces) {
+        nfc.push_back(int(f.size()));
+        fc.insert(fc.end(), f.begin(), f.end());
+    }
+    const int hc[8] = {0, 1, 2, 3, 4, 5, 6, 7};
+    std::array<double, 3> centroid;
+    std::vector<int> indexing;
+    std::vector<double> K;
+    vem::assemble_stiffness_matrix_3D(&pts[0], &fc[0], &nfc[0], int(faces.size()), 1e9, 0.3, sc, centroid,
+                                      indexing, K, corners ? hc : nullptr);
+    ubend.assign(3 * indexing.size(), 0.0);
+    for (std::size_t i = 0; i < indexing.size(); ++i) {
+        const int v = indexing[i];
+        const double xi = v < 8 ? (v & 1) : 1.0, zeta = v < 8 ? ((v >> 2) & 1) : 0.5;
+        ubend[3 * i] = (2 * xi - 1) * (2 * zeta - 1);
+    }
+    return K;
+}
+
+// ----------------------------------------------------------------------------
 // 2D patch test on stretched quads
 double
 patch_test_2D(const vem::StabilityChoice sc, const double aspect)
@@ -672,6 +718,50 @@ main()
                                    : sc == vem::D_RECIPE ? "D_RECIPE" : sc == vem::ANISO_HARMONIC ? "ANISO_HARM"
                                    : "SMOOTH_HG", r);
         if ((sc == vem::TRACE || sc == vem::SMOOTH_HOURGLASS) && r < 4.0) {
+            ++failures;
+            std::printf(" (FAIL)");
+        }
+        std::printf("\n");
+    }
+
+    // the grid's corner-point corners replace the face-merge guess; it must agree where the guess
+    // works and keep the smooth-field term where it fails (strongly bent faces)
+    std::printf("\n=== SMOOTH_HG with given cell corners: flat fault cell 9x9x1 ===\n");
+    {
+        std::vector<double> u;
+        const auto energy = [&u](const std::vector<double>& K) {
+            const std::size_t n = u.size();
+            double e = 0;
+            for (std::size_t i = 0; i < n; ++i)
+                for (std::size_t j = 0; j < n; ++j)
+                    e += u[i] * K[i * n + j] * u[j];
+            return e;
+        };
+        const auto Kg = fault_cell_K(vem::SMOOTH_HOURGLASS, 9.0, 0.0, true, u);
+        const auto Km = fault_cell_K(vem::SMOOTH_HOURGLASS, 9.0, 0.0, false, u);
+        double dmax = 0, kmax = 0;
+        for (std::size_t i = 0; i < Kg.size(); ++i) {
+            dmax = std::max(dmax, std::fabs(Kg[i] - Km[i]));
+            kmax = std::max(kmax, std::fabs(Kg[i]));
+        }
+        std::printf("untwisted: given vs merged corners, max |dK|/max|K| = %.2e", dmax / kmax);
+        if (!(dmax < 1e-10 * kmax)) {
+            ++failures;
+            std::printf(" (FAIL)");
+        }
+        const auto Kt = fault_cell_K(vem::TRACE, 9.0, 30.0, false, u);
+        const auto Kn = fault_cell_K(vem::SMOOTH_HOURGLASS, 9.0, 30.0, false, u);
+        const auto Kc = fault_cell_K(vem::SMOOTH_HOURGLASS, 9.0, 30.0, true, u);
+        const int nzero = [&] {
+            const auto eig = sym_eigenvalues(Kc, int(u.size()));
+            int z = 0;
+            for (const double e : eig)
+                z += std::fabs(e) < 1e-9 * eig.back();
+            return z;
+        }();
+        std::printf("\ntwisted 30 deg (faces bent past the merge angle): bending energy / TRACE: merged %.3f, given corners %.4f; zero modes %d",
+                    energy(Kn) / energy(Kt), energy(Kc) / energy(Kt), nzero);
+        if (!(std::fabs(energy(Kn) / energy(Kt) - 1) < 1e-12 && energy(Kc) < 0.75 * energy(Kt) && nzero == 6)) {
             ++failures;
             std::printf(" (FAIL)");
         }

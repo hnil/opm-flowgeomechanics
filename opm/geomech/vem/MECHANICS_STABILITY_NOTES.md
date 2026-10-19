@@ -169,8 +169,9 @@ Every node-diagonal `S` (choices 1–13) gives the bending and twist hourglass m
 energy although their true energies differ by ~aspect^2, so each of them either locks in
 bending or under-stabilizes twist.  The smooth field gets both right on boxes at any aspect.
 
-- Polyhedra that are hexes with extra nodes (faults, hanging LGR nodes): faces are merged
-  across dihedral angles < 30 deg to find the 8 corners; the corner part uses the smooth
+- Polyhedra that are hexes with extra nodes (faults, hanging LGR nodes): the 8 corners come from
+  the corner-point grid (`assemble_mech_system_3D_dune`); the array API, which has no grid,
+  finds them by merging faces across dihedral angles < 30 deg; the corner part uses the smooth
   energy without its linear part, the rest (`u` minus the trilinear interpolant of the
   corners) gets the TRACE term.  Other cells (collapsed corners, wedges) use TRACE.
 - `lambda` is capped at its nu = 0.3 value, so `S` stays mu-scaled as nu -> 1/2.

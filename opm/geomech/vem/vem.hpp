@@ -247,7 +247,9 @@ void assemble_stiffness_matrix_3D(const double* const points,
                                   const StabilityChoice stability_choice,
                                   std::array<double, 3>& centroid,
                                   std::vector<int>& indexing,
-                                  std::vector<double>& target);
+                                  std::vector<double>& target,
+                                  const int* hex_corners = nullptr);
+// hex_corners: optional 8 corner point ids of the cell (Dune order), used by SMOOTH_HOURGLASS.
 // -----------------------------------------------------------------------------------------------
 
 
