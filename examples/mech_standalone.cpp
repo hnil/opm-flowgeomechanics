@@ -23,6 +23,9 @@
 //   case=flex_x|flex_y : plane-strain cantilever (Airy a x z^3 + b x z): moment varies along x (y),
 //                        with shear; exact displacement on every boundary node.
 //   case=linear        : a linear displacement field (patch test).
+//   case=gauss         : isotropic eigenstrain e0*exp(-sum x_i^2/a_i^2) centred at cell src=i,j,k (1-based),
+//                        widths ax, ay, az; exact infinite-space displacement on every boundary node.
+//                        srcavg=1 loads each cell with its cell average instead of the centroid value.
 //   case=load load=<f> : per-cell potential load (lines "global_cell value", Pa), deck boundary
 //                        conditions (rollers on the sides, bottom fixed in z, top free).
 // out=<f> writes "global_cell cx cy cz s0..s5" with the simulator's delstress (compression > 0).
@@ -52,10 +55,87 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <stdexcept>
 #include <set>
 #include <string>
 #include <tuple>
 #include <vector>
+
+namespace
+{
+// phi with lap(phi) = exp(-sum x_i^2/a_i^2): gradient and Hessian (xx, yy, zz, xy, yz, xz) by the
+// heat-kernel integral phi = -int_0^inf (e^{t lap} g) dt, trapezoid in log t.
+void
+gauss_potential(const double x[3], const double a[3], double grad[3], double hess[6])
+{
+    const double amin = std::min({a[0], a[1], a[2]}), amax = std::max({a[0], a[1], a[2]});
+    const double s0 = std::log(1e-8 * amin * amin), s1 = std::log(1e9 * amax * amax);
+    const int n = 600;
+    const double ds = (s1 - s0) / n;
+    for (int k = 0; k < 3; ++k)
+        grad[k] = 0;
+    for (int k = 0; k < 6; ++k)
+        hess[k] = 0;
+    for (int i = 0; i <= n; ++i) {
+        const double t = std::exp(s0 + i * ds), w = (i == 0 || i == n ? 0.5 : 1.0) * ds * t;
+        double d[3], ex = 0, pre = 1;
+        for (int k = 0; k < 3; ++k) {
+            d[k] = a[k] * a[k] + 4 * t;
+            pre *= a[k] / std::sqrt(d[k]);
+            ex += x[k] * x[k] / d[k];
+        }
+        if (ex > 700)
+            continue;
+        const double P = w * pre * std::exp(-ex);
+        for (int k = 0; k < 3; ++k) {
+            grad[k] += P * 2 * x[k] / d[k];
+            hess[k] += P * (2 / d[k] - 4 * x[k] * x[k] / (d[k] * d[k]));
+        }
+        hess[3] -= P * 4 * x[0] * x[1] / (d[0] * d[1]);
+        hess[4] -= P * 4 * x[1] * x[2] / (d[1] * d[2]);
+        hess[5] -= P * 4 * x[0] * x[2] / (d[0] * d[2]);
+    }
+}
+
+// 27-point Gauss rule on the trilinear map of a hex (Dune corner order): points and weights (|J| included)
+void
+hex_quadrature(const std::array<Dune::FieldVector<double, 3>, 8>& X, std::vector<std::array<double, 3>>& pts,
+               std::vector<double>& wts)
+{
+    const double gp[3] = {0.5 - 0.5 * std::sqrt(0.6), 0.5, 0.5 + 0.5 * std::sqrt(0.6)};
+    const double gw[3] = {5.0 / 18, 8.0 / 18, 5.0 / 18};
+    pts.clear();
+    wts.clear();
+    for (int a = 0; a < 3; ++a)
+        for (int b = 0; b < 3; ++b)
+            for (int c = 0; c < 3; ++c) {
+                const double r[3] = {gp[a], gp[b], gp[c]};
+                std::array<double, 3> p {0, 0, 0};
+                double J[3][3] = {{0}};
+                for (int k = 0; k < 8; ++k) {
+                    double N = 1, dN[3];
+                    for (int e = 0; e < 3; ++e)
+                        N *= ((k >> e) & 1) ? r[e] : 1 - r[e];
+                    for (int e = 0; e < 3; ++e) {
+                        dN[e] = ((k >> e) & 1) ? 1.0 : -1.0;
+                        for (int f = 0; f < 3; ++f)
+                            if (f != e)
+                                dN[e] *= ((k >> f) & 1) ? r[f] : 1 - r[f];
+                    }
+                    for (int i = 0; i < 3; ++i) {
+                        p[i] += N * X[k][i];
+                        for (int j = 0; j < 3; ++j)
+                            J[i][j] += X[k][i] * dN[j];
+                    }
+                }
+                const double det = J[0][0] * (J[1][1] * J[2][2] - J[1][2] * J[2][1])
+                    - J[0][1] * (J[1][0] * J[2][2] - J[1][2] * J[2][0])
+                    + J[0][2] * (J[1][0] * J[2][1] - J[1][1] * J[2][0]);
+                pts.push_back(p);
+                wts.push_back(gw[a] * gw[b] * gw[c] * std::abs(det));
+            }
+}
+} // namespace
 
 int
 main(int argc, char** argv)
@@ -153,6 +233,61 @@ main(int argc, char** argv)
             return 0;
     }
     std::vector<double> young(nc, E), poisson(nc, nu), body(3 * nc, 0.0), field(nc, 0.0);
+    // gauss: source centre, widths, exact cell-average stress
+    const bool gauss = cs == "gauss";
+    std::array<double, 3> src {0, 0, 0}, aw {std::stod(arg.count("ax") ? arg["ax"] : "200"),
+                                             std::stod(arg.count("ay") ? arg["ay"] : "200"),
+                                             std::stod(arg.count("az") ? arg["az"] : "20")};
+    const double e0 = std::stod(arg.count("e0") ? arg["e0"] : "1e-3");
+    const double mu = E / (2 * (1 + nu)), Kb = E / (3 * (1 - 2 * nu)), Af = (1 + nu) / (1 - nu) * e0;
+    std::vector<std::array<double, 6>> exact_stress(nc, {0, 0, 0, 0, 0, 0});
+    if (gauss) {
+        int si = 0, sj = 0, sk = 0;
+        std::sscanf(arg["src"].c_str(), "%d,%d,%d", &si, &sj, &sk);
+        const auto dims = grid.logicalCartesianSize();
+        const int gsrc = (si - 1) + dims[0] * ((sj - 1) + dims[1] * (sk - 1));
+        bool found = false;
+        for (int c = 0; c < nc; ++c)
+            if (grid.globalCell()[c] == gsrc) {
+                const auto cc = grid.cellCentroid(c);
+                src = {cc[0], cc[1], cc[2]};
+                found = true;
+            }
+        if (!found)
+            throw std::runtime_error("src cell is not active");
+        const bool avg = arg.count("srcavg") && arg["srcavg"] == "1";
+        std::vector<std::array<double, 3>> qp;
+        std::vector<double> qw;
+        for (const auto& e : elements(gv)) {
+            const int c = gv.indexSet().index(e);
+            std::array<Dune::FieldVector<double, 3>, 8> X;
+            for (int k = 0; k < 8; ++k)
+                X[k] = grid.vertexPosition(gv.indexSet().subIndex(e, k, 3));
+            hex_quadrature(X, qp, qw);
+            double vol = 0, gavg = 0;
+            std::array<double, 6> sav {0, 0, 0, 0, 0, 0};
+            for (std::size_t q = 0; q < qp.size(); ++q) {
+                double x[3], gr[3], h[6];
+                for (int d = 0; d < 3; ++d)
+                    x[d] = qp[q][d] - src[d];
+                const double g = std::exp(-(x[0] * x[0] / (aw[0] * aw[0]) + x[1] * x[1] / (aw[1] * aw[1])
+                                            + x[2] * x[2] / (aw[2] * aw[2])));
+                gauss_potential(x, aw.data(), gr, h);
+                vol += qw[q];
+                gavg += qw[q] * g;
+                // total stress 2 mu (grad grad psi - lap psi I), psi = Af phi, lap phi = g
+                for (int k = 0; k < 6; ++k)
+                    sav[k] += qw[q] * 2 * mu * Af * (h[k] - (k < 3 ? g : 0.0));
+            }
+            for (int k = 0; k < 6; ++k)
+                exact_stress[c][k] = sav[k] / vol;
+            const auto cc = grid.cellCentroid(c);
+            const double xc[3] = {cc[0] - src[0], cc[1] - src[1], cc[2] - src[2]};
+            const double gc = std::exp(-(xc[0] * xc[0] / (aw[0] * aw[0]) + xc[1] * xc[1] / (aw[1] * aw[1])
+                                         + xc[2] * xc[2] / (aw[2] * aw[2])));
+            field[c] = 3 * Kb * e0 * (avg ? gavg / vol : gc);
+        }
+    }
     if (cs == "load") {
         std::map<int, double> load;
         std::ifstream in(arg["load"]);
@@ -180,7 +315,13 @@ main(int argc, char** argv)
     const double Ep = E / (1 - nu * nu), nup = nu / (1 - nu), G2 = 2 * (1 + nu) / E, bb = -3 * a * half * half;
     const auto exact = [&](const double* p, double u[3]) {
         const double X = p[0] - x0[0], Y = p[1] - x0[1], Z = p[2] - x0[2];
-        if (cs == "flex_x" || cs == "flex_y") {
+        if (cs == "gauss") {
+            const double x[3] = {p[0] - src[0], p[1] - src[1], p[2] - src[2]};
+            double gr[3], h[6];
+            gauss_potential(x, aw.data(), gr, h);
+            for (int d = 0; d < 3; ++d)
+                u[d] = Af * gr[d];
+        } else if (cs == "flex_x" || cs == "flex_y") {
             const double L = l == 0 ? X : Y;
             const double ul = 3 * a * L * L * Z / Ep + nup * a * Z * Z * Z / Ep - G2 * (a * Z * Z * Z + bb * Z);
             u[l] = ul, u[1 - l] = 0, u[2] = -3 * nup * a * L * Z * Z / Ep - a * L * L * L / Ep;
@@ -225,7 +366,7 @@ main(int argc, char** argv)
         for (int i = 0; i < m; ++i) {
             auto& fx = fix[grid.faceVertex(f, i)];
             if (cs != "load")
-                fx = {true, true, true};
+                fx = {true, true, true}; // analytic cases: exact displacement everywhere on the boundary
             else if (dmax < 2)
                 fx[dmax] = true; // rollers on the sides
             else if (nrm[2] > 0)
@@ -283,7 +424,7 @@ main(int argc, char** argv)
         else
             free_dofs.push_back(i);
     }
-    if (cs == "load") {
+    if (cs == "load" || gauss) {
         std::vector<double> fgrad;
         std::vector<std::tuple<int, int, double>> div;
         vem::potential_gradient_force_3D(&coords[0], nc, &ncf[0], &nfc[0], &fc[0], &field[0], fgrad, div, false);
@@ -413,7 +554,35 @@ main(int argc, char** argv)
     vem::compute_stress_3D(&coords[0], nc, &ncf[0], &nfc[0], &fc[0], &young[0], &poisson[0], disp, stress, smat,
                            false, true, sc, false);
 
-    if (cs != "load") {
+    if (gauss) {
+        // total stress sigma(u) - field I against the exact cell average; split near / far from the source
+        double num = 0, den = 0, numn = 0, denn = 0, emax = 0, smax = 0;
+        for (int c = 0; c < nc; ++c)
+            for (int k = 0; k < 6; ++k)
+                smax = std::max(smax, std::abs(exact_stress[c][k]));
+        for (int c = 0; c < nc; ++c) {
+            const auto cc = grid.cellCentroid(c);
+            double r2 = 0;
+            for (int d = 0; d < 3; ++d)
+                r2 += (cc[d] - src[d]) * (cc[d] - src[d]) / (aw[d] * aw[d]);
+            const double vol = grid.cellVolume(c);
+            for (int k = 0; k < 6; ++k) {
+                const double d = stress[c][k] - (k < 3 ? field[c] : 0.0) - exact_stress[c][k];
+                num += vol * d * d;
+                den += vol * exact_stress[c][k] * exact_stress[c][k];
+                if (r2 < 4) {
+                    numn += vol * d * d;
+                    denn += vol * exact_stress[c][k] * exact_stress[c][k];
+                }
+                emax = std::max(emax, std::abs(d));
+            }
+        }
+        std::printf("case gauss choice %d a %g %g %g srcavg %s: stress rel L2 %.4e (within 2a: %.4e), "
+                    "max err / max stress %.4e (max stress %.4g MPa)\n",
+                    int(sc), aw[0], aw[1], aw[2], arg.count("srcavg") ? arg["srcavg"].c_str() : "0",
+                    std::sqrt(num / den), std::sqrt(numn / denn), emax / smax, smax / 1e6);
+    }
+    if (cs != "load" && !gauss) {
         // analytic: the bending stress is the only nonzero component, linear in z (exact at the centroid)
         double num = 0, den = 0, emax = 0, umax = 0, uref = 0, smax = std::stod(arg["sigma"]);
         std::vector<std::pair<double, int>> cellerr;
