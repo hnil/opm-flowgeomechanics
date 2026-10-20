@@ -25,7 +25,8 @@
 //   case=linear        : a linear displacement field (patch test).
 //   case=gauss         : isotropic eigenstrain e0*exp(-sum x_i^2/a_i^2) centred at cell src=i,j,k (1-based),
 //                        widths ax, ay, az; exact infinite-space displacement on every boundary node.
-//                        srcavg=1 loads each cell with its cell average instead of the centroid value.
+//                        srcavg=1 loads each cell with its cell average instead of the centroid value;
+//                        srcxyz=x,y,z gives the centre directly.
 //   case=load load=<f> : per-cell potential load (lines "global_cell value", Pa), deck boundary
 //                        conditions (rollers on the sides, bottom fixed in z, top free).
 // out=<f> writes "global_cell cx cy cz s0..s5" with the simulator's delstress (compression > 0).
@@ -276,9 +277,16 @@ main(int argc, char** argv)
         int open = 0, nonpos = 0, mism = 0, shortedge = 0;
         std::FILE* bad = arg.count("badcells") ? std::fopen(arg["badcells"].c_str(), "w") : nullptr;
         std::FILE* q = arg.count("cellq") ? std::fopen(arg["cellq"].c_str(), "w") : nullptr;
+        std::vector<int> ncorner(nc, 8); // distinct corner points: < 8 for collapsed (pinched) cells
+        for (const auto& e : elements(gv)) {
+            std::set<int> cs8;
+            for (int kk = 0; kk < 8; ++kk)
+                cs8.insert(gv.indexSet().subIndex(e, kk, 3));
+            ncorner[gv.indexSet().index(e)] = int(cs8.size());
+        }
         for (int c2 = 0, f = 0, k = 0; c2 < nc; ++c2) {
             std::map<std::pair<int, int>, int> dir;
-            double vol6 = 0, emin = 1e300;
+            double vol6 = 0, emin = 1e300, emax = 0, warp = 0, amax = 0;
             const auto cc = grid.cellCentroid(c2);
             for (int ff = 0; ff < ncf[c2]; ++ff, k += nfc[f], ++f) {
                 const int m = nfc[f];
@@ -286,12 +294,35 @@ main(int argc, char** argv)
                 for (int i = 0; i < m; ++i)
                     for (int d = 0; d < 3; ++d)
                         cen[d] += coords[3 * fc[k + i] + d] / m;
+                // face warp: largest angle between a fan triangle and the face's mean normal
+                double fn[3] = {0, 0, 0};
+                std::vector<std::array<double, 3>> tn;
+                for (int i = 0; i < m; ++i) {
+                    const double* pu = &coords[3 * fc[k + i]];
+                    const double* pv = &coords[3 * fc[k + (i + 1) % m]];
+                    const double e1[3] = {pu[0] - cen[0], pu[1] - cen[1], pu[2] - cen[2]};
+                    const double e2[3] = {pv[0] - cen[0], pv[1] - cen[1], pv[2] - cen[2]};
+                    tn.push_back({e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2],
+                                  e1[0] * e2[1] - e1[1] * e2[0]});
+                    for (int d = 0; d < 3; ++d)
+                        fn[d] += tn.back()[d];
+                }
+                const double fl = std::hypot(fn[0], fn[1], fn[2]);
+                amax = std::max(amax, 0.5 * fl);
+                for (const auto& t : tn) {
+                    const double tl = std::hypot(t[0], t[1], t[2]);
+                    if (fl > 0 && tl > 1e-6 * fl)
+                        warp = std::max(warp, std::acos(std::clamp((t[0] * fn[0] + t[1] * fn[1] + t[2] * fn[2])
+                                                                   / (tl * fl), -1.0, 1.0)));
+                }
                 for (int i = 0; i < m; ++i) {
                     const int u = fc[k + i], v = fc[k + (i + 1) % m];
                     dir[{u, v}] += 1;
                     const double* pu = &coords[3 * u];
                     const double* pv = &coords[3 * v];
-                    emin = std::min(emin, std::hypot(pu[0] - pv[0], pu[1] - pv[1], pu[2] - pv[2]));
+                    const double el = std::hypot(pu[0] - pv[0], pu[1] - pv[1], pu[2] - pv[2]);
+                    emin = std::min(emin, el);
+                    emax = std::max(emax, el);
                     double a[3], bq[3], cq[3];
                     for (int d = 0; d < 3; ++d)
                         a[d] = cen[d] - cc[d], bq[d] = pu[d] - cc[d], cq[d] = pv[d] - cc[d];
@@ -311,17 +342,55 @@ main(int argc, char** argv)
             open += is_open, nonpos += is_neg, mism += is_mism, shortedge += emin < 0.01;
             if (bad && (is_open || is_neg))
                 std::fprintf(bad, "%d\n", grid.globalCell()[c2]);
-            if (q) // global cell, shortest edge, volume, faces, directed edges, divergence volume, unpaired
-                std::fprintf(q, "%d %.4g %.4g %d %zu %.4g %d\n", grid.globalCell()[c2], emin, vol, ncf[c2],
-                             dir.size(), vol6 / 6, unpaired);
+            if (q) // global cell, shortest edge, volume, faces, directed edges, divergence volume, unpaired,
+                   // longest edge, face warp (deg), thickness = volume / largest face, distinct corners
+                std::fprintf(q, "%d %.4g %.4g %d %zu %.4g %d %.4g %.3g %.4g %d\n", grid.globalCell()[c2], emin, vol,
+                             ncf[c2], dir.size(), vol6 / 6, unpaired, emax, warp * 180 / M_PI,
+                             std::abs(vol6 / 6) / std::max(amax, 1e-300), ncorner[c2]);
         }
-        if (bad)
-            std::fclose(bad);
         if (q)
             std::fclose(q);
+        // cells the VEM element itself rejects (e.g. no star point on a folded cell)
+        int rejected = 0;
+        for (int c2 = 0, f = 0, k = 0; c2 < nc; ++c2) {
+            std::array<double, 3> cen;
+            std::vector<int> idx;
+            std::vector<double> Ke;
+            try {
+                vem::assemble_stiffness_matrix_3D(&coords[0], &fc[k], &nfc[f], ncf[c2], 1.0, 0.25, vem::TRACE, cen,
+                                                  idx, Ke);
+            } catch (const std::exception& ex) {
+                ++rejected;
+                const int g = grid.globalCell()[c2];
+                const auto dims = grid.logicalCartesianSize();
+                std::printf("element rejects cell %d (ijk %d %d %d, %d faces): %s\n", g, g % dims[0] + 1,
+                            (g / dims[0]) % dims[1] + 1, g / (dims[0] * dims[1]) + 1, ncf[c2], ex.what());
+                if (bad)
+                    std::fprintf(bad, "%d\n", g);
+            }
+            for (int ff = 0; ff < ncf[c2]; ++ff)
+                k += nfc[f++];
+        }
+        std::printf("element check: %d cells rejected\n", rejected);
+        // internal cracks: boundary faces that coincide with another boundary face
+        std::map<std::tuple<long, long, long>, int> bfc;
+        int nbf = 0;
+        for (int f2 = 0; f2 < grid.numFaces(); ++f2) {
+            if ((grid.faceCell(f2, 0) >= 0 && grid.faceCell(f2, 1) >= 0) || grid.numFaceVertices(f2) < 3)
+                continue;
+            const auto c = grid.faceCentroid(f2);
+            ++bfc[{std::lround(c[0] * 100), std::lround(c[1] * 100), std::lround(c[2] * 100)}];
+            ++nbf;
+        }
+        int cracks = 0;
+        for (const auto& [key, n] : bfc)
+            cracks += n > 1;
+        std::printf("boundary faces %d, coinciding pairs (internal cracks) %d\n", nbf, cracks);
         std::printf("grid check: %d cells, %d invalid (%d open surfaces, %d non-positive volume); "
                     "%d differ > 5%% from cellVolume, %d with an edge < 1 cm\n",
                     nc, open + nonpos, open, nonpos, mism, shortedge);
+        if (bad)
+            std::fclose(bad);
         if (arg.count("checkonly"))
             return 0;
     }
@@ -336,11 +405,14 @@ main(int argc, char** argv)
     std::vector<std::array<double, 6>> exact_stress(nc, {0, 0, 0, 0, 0, 0});
     if (gauss) {
         int si = 0, sj = 0, sk = 0;
-        std::sscanf(arg["src"].c_str(), "%d,%d,%d", &si, &sj, &sk);
+        if (arg.count("srcxyz")) // explicit centre instead of a cell
+            std::sscanf(arg["srcxyz"].c_str(), "%lf,%lf,%lf", &src[0], &src[1], &src[2]);
+        else
+            std::sscanf(arg["src"].c_str(), "%d,%d,%d", &si, &sj, &sk);
         const auto dims = grid.logicalCartesianSize();
         const int gsrc = (si - 1) + dims[0] * ((sj - 1) + dims[1] * (sk - 1));
-        bool found = false;
-        for (int c = 0; c < nc; ++c)
+        bool found = arg.count("srcxyz") > 0;
+        for (int c = 0; c < nc && !found; ++c)
             if (grid.globalCell()[c] == gsrc) {
                 const auto cc = grid.cellCentroid(c);
                 src = {cc[0], cc[1], cc[2]};
@@ -669,6 +741,16 @@ main(int argc, char** argv)
                 }
                 emax = std::max(emax, std::abs(d));
             }
+        }
+        if (arg.count("errout")) { // global cell, max |stress error| / max |exact stress|
+            std::FILE* fe = std::fopen(arg["errout"].c_str(), "w");
+            for (int c = 0; c < nc; ++c) {
+                double ce = 0;
+                for (int k = 0; k < 6; ++k)
+                    ce = std::max(ce, std::abs(stress[c][k] - (k < 3 ? field[c] : 0.0) - exact_stress[c][k]));
+                std::fprintf(fe, "%d %.6g\n", grid.globalCell()[c], ce / smax);
+            }
+            std::fclose(fe);
         }
         std::printf("case gauss choice %d a %g %g %g srcavg %s: stress rel L2 %.4e (within 2a: %.4e), "
                     "max err / max stress %.4e (max stress %.4g MPa)\n",
