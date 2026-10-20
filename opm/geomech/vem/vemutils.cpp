@@ -155,7 +155,7 @@ getGridVectors(const Dune::CpGrid& grid,
     }
     // const auto& faces = grid.getFaceToPoint();
     // const auto& facePos = grid.getFacePos();
-    std::size_t skipped_degenerate_faces = 0;
+    std::size_t skipped_degenerate_faces = 0, misoriented_faces = 0;
     for (const auto& cell : elements(gv)) {
         int cellIdx = gv.indexSet().index(cell);
         int nf = grid.numCellFaces(cellIdx);
@@ -183,11 +183,11 @@ getGridVectors(const Dune::CpGrid& grid,
             // assert(faceSize == 4);
             // auto numface_cells = grid.numCellFaces();
             // assert(numface_cells == 2);
-            // VEM needs each face's corners wound outward. Take that from the
-            // geometry, not from the grid's node order convention.
+            // The grid's corners wind around the face normal, which points out of faceCell(face, 0).
+            const bool first = grid.faceCell(face, 0) == cellIdx;
+            const auto& face_normal = grid.faceNormal(face);
             const auto& face_centre = grid.faceCentroid(face);
-            const auto& cell_centre = grid.cellCentroid(cellIdx);
-            std::array<double, 3> normal {0.0, 0.0, 0.0};
+            double along = 0.0;
             for (int v = 0; v < faceSize; ++v) {
                 const auto& a = grid.vertexPosition(grid.faceVertex(face, v));
                 const auto& b = grid.vertexPosition(grid.faceVertex(face, (v + 1) % faceSize));
@@ -195,15 +195,11 @@ getGridVectors(const Dune::CpGrid& grid,
                                                a[2] - face_centre[2]};
                 const std::array<double, 3> w {b[0] - face_centre[0], b[1] - face_centre[1],
                                                b[2] - face_centre[2]};
-                normal[0] += u[1]*w[2] - u[2]*w[1];
-                normal[1] += u[2]*w[0] - u[0]*w[2];
-                normal[2] += u[0]*w[1] - u[1]*w[0];
+                along += (u[1]*w[2] - u[2]*w[1])*face_normal[0] + (u[2]*w[0] - u[0]*w[2])*face_normal[1]
+                    + (u[0]*w[1] - u[1]*w[0])*face_normal[2];
             }
-            double outward = 0.0;
-            for (int d = 0; d < 3; ++d) {
-                outward += normal[d]*(face_centre[d] - cell_centre[d]);
-            }
-            if (outward >= 0.0) {
+            misoriented_faces += !(along > 0.0);
+            if (first) {
                 for (int v = 0; v < faceSize; ++v) {
                     face_corners.push_back(grid.faceVertex(face, v));
                 }
@@ -213,6 +209,10 @@ getGridVectors(const Dune::CpGrid& grid,
                 }
             }
         }
+    }
+    if (misoriented_faces > 0) {
+        std::cout << "VEM topology: " << misoriented_faces
+                  << " cell-face entries whose corners do not wind around the grid's face normal" << std::endl;
     }
     if (skipped_degenerate_faces > 0) {
         std::cout << "VEM topology: skipped " << skipped_degenerate_faces
