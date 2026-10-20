@@ -12,6 +12,7 @@
 #include <opm/geomech/MechGridContext.hpp>
 #include <opm/geomech/FractureModel.hpp>
 #include <opm/simulators/linalg/WriteSystemMatrixHelper.hpp>
+#include <opm/simulators/utils/DeferredLoggingErrorHelpers.hpp>
 
 #include <opm/input/eclipse/Schedule/Schedule.hpp>
 
@@ -345,8 +346,11 @@ namespace Opm{
                 
                 elacticitysolver_->fixNodes(problem.bcNodes());
                 //
+                // a cell that fails to assemble throws on its owner only; the solver setup below is collective
+                OPM_BEGIN_PARALLEL_TRY_CATCH();
                 elacticitysolver_->initForAssembly();
                 elacticitysolver_->assemble(this->mechLoad(), do_matrix, do_vector,reduce_boundary_);
+                OPM_END_PARALLEL_TRY_CATCH("Mechanics assembly failed: ", simulator_.vanguard().grid().comm());
                 //elacticitysolver_->assemble_fem(mechPotentialForce_, do_matrix, do_vector,reduce_boundary_);
                 FlowLinearSolverParametersGeoMech p;
                 p.init<TypeTag>();
