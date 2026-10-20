@@ -42,6 +42,7 @@ struct Grdecl
     std::array<int,3> dims{};
     std::vector<double> coord;
     std::vector<double> zcorn;
+    std::vector<double> bend;    // per pillar: vertical above bend[2p], below bend[2p+1]; empty: straight
 };
 
 /// `cells` cells over `size` metres, each `growth` times the one before, the
@@ -63,6 +64,7 @@ struct Spec
     std::array<int,3> margin{};
     Padding lateral, top, bottom;
     bool straighten = false;
+    bool bendPillars = false;   // box pillars vertical above and below the box
     std::string dump;           // GRDECL file of the generated grid, if set
 };
 
@@ -175,8 +177,16 @@ inline void writeGrdecl(const std::string& file, const Grdecl& g, const std::vec
     }
 }
 
-inline std::array<double,2> pillarAt(const double* c, double z)
+inline std::array<double,2> pillarAt(const double* c, double z, const double* bend = nullptr)
 {
+    if (bend != nullptr) {
+        if (bend[0] == bend[0]) {
+            z = std::max(z, bend[0]);
+        }
+        if (bend[1] == bend[1]) {
+            z = std::min(z, bend[1]);
+        }
+    }
     const double dz = c[5] - c[2];
     const double t = std::abs(dz) < 1e-12 ? 0.0 : (z - c[2])/dz;
     return {c[0] + t*(c[3] - c[0]), c[1] + t*(c[4] - c[1])};
@@ -209,7 +219,12 @@ inline Grdecl padLateral(const Grdecl& in, int axis, const Padding& pad,
     zref /= in.zcorn.size();
 
     const int pxIn = d[0] + 1, pxOut = out.dims[0] + 1;
+    const auto bendOf = [&in](int p) { return in.bend.empty() ? nullptr : &in.bend[2*p]; };
     out.coord.resize(6*std::size_t(pxOut)*(out.dims[1] + 1));
+    if (!in.bend.empty()) {
+        out.bend.assign(2*std::size_t(pxOut)*(out.dims[1] + 1),
+                        std::numeric_limits<double>::quiet_NaN());
+    }
     for (int pj = 0; pj <= out.dims[1]; ++pj)
     for (int pi = 0; pi <= out.dims[0]; ++pi) {
         std::array<int,2> q{pi, pj};
@@ -226,12 +241,17 @@ inline Grdecl padLateral(const Grdecl& in, int axis, const Padding& pad,
             s[axis] = d[axis];
             inner = s; inner[axis] = d[axis] - 1;
         }
-        const double* src = &in.coord[6*(s[0] + pxIn*s[1])];
+        const int ps_ = s[0] + pxIn*s[1];
+        const double* src = &in.coord[6*ps_];
         double* dst = &out.coord[6*(q[0] + pxOut*q[1])];
         std::copy(src, src + 6, dst);
+        if (!in.bend.empty() && !(shift > 0.0 && pad.verticalPillars)) {
+            std::copy_n(&in.bend[2*ps_], 2, &out.bend[2*(q[0] + pxOut*q[1])]);
+        }
         if (shift > 0.0) {
             const double* nb = &in.coord[6*(inner[0] + pxIn*inner[1])];
-            const auto ps = pillarAt(src, zref), pn = pillarAt(nb, zref);
+            const int pn_ = inner[0] + pxIn*inner[1];
+            const auto ps = pillarAt(src, zref, bendOf(ps_)), pn = pillarAt(nb, zref, bendOf(pn_));
             double ux = pad.verticalPillars ? ps[0] - pn[0] : src[0] - nb[0];
             double uy = pad.verticalPillars ? ps[1] - pn[1] : src[1] - nb[1];
             const double len = std::hypot(ux, uy);
@@ -243,7 +263,7 @@ inline Grdecl padLateral(const Grdecl& in, int axis, const Padding& pad,
                 uy /= len;
                 double drift = 0.0;
                 for (const double z : {zlo, zhi}) {
-                    const auto p = pillarAt(src, z);
+                    const auto p = pillarAt(src, z, bendOf(ps_));
                     drift = std::max(drift, (p[0] - ps[0])*ux + (p[1] - ps[1])*uy);
                 }
                 dst[0] = dst[3] = ps[0] + (drift + shift)*ux;
@@ -367,6 +387,7 @@ inline Grdecl padVertical(const Grdecl& in, const Padding& top, const Padding& b
     // Pillars must span the new depths.
     const auto [zmin, zmax] = std::minmax_element(out.zcorn.begin(), out.zcorn.end());
     out.coord = in.coord;
+    out.bend = in.bend;
     for (std::size_t p = 0; p < out.coord.size(); p += 6) {
         double* c = &out.coord[p];
         const double dz = c[5] - c[2];
@@ -382,6 +403,28 @@ inline Grdecl padVertical(const Grdecl& in, const Padding& top, const Padding& b
         }
     }
     return out;
+}
+
+/// Per pillar, the shallowest top and deepest bottom of the columns around it:
+/// where padVertical's first layer ends, so the pillars bend on a fault-free surface.
+inline std::vector<double> boxBends(const Grdecl& g)
+{
+    const auto& d = g.dims;
+    const int px = d[0] + 1, py = d[1] + 1;
+    std::vector<double> b(2*std::size_t(px)*py);
+    for (int p = 0; p < px*py; ++p) {
+        b[2*p] = std::numeric_limits<double>::max();
+        b[2*p + 1] = std::numeric_limits<double>::lowest();
+    }
+    for (int j = 0; j < d[1]; ++j)
+    for (int i = 0; i < d[0]; ++i)
+    for (int ci = 0; ci < 2; ++ci)
+    for (int cj = 0; cj < 2; ++cj) {
+        const int p = (i + ci) + px*(j + cj);
+        b[2*p] = std::min(b[2*p], g.zcorn[zIndex(d, i, j, 0, ci, cj, 0)]);
+        b[2*p + 1] = std::max(b[2*p + 1], g.zcorn[zIndex(d, i, j, d[2] - 1, ci, cj, 1)]);
+    }
+    return b;
 }
 
 /// Columns whose four pillars, taken at the column's own depths, do not keep
@@ -404,7 +447,8 @@ inline int foldedColumns(const Grdecl& g)
         const auto corners = [&](double z, std::array<double,4>& cr) {
             std::array<std::array<double,2>,4> p;
             for (int a = 0; a < 4; ++a) {
-                p[a] = pillarAt(&g.coord[6*ring[a]], z);
+                p[a] = pillarAt(&g.coord[6*ring[a]], z,
+                                g.bend.empty() ? nullptr : &g.bend[2*ring[a]]);
             }
             for (int a = 0; a < 4; ++a) {
                 const auto& o = p[a];
@@ -433,6 +477,9 @@ inline Result build(const Grdecl& deck, const Spec& spec)
     r.grid = extractBox(deck, spec.box);
     if (spec.straighten) {
         r.moved = straighten(r.grid);
+    }
+    if (spec.bendPillars) {
+        r.grid.bend = boxBends(r.grid);
     }
     if (spec.lateral.cells > 0) {
         // Depth range of the finished grid, which the vertical pillars must clear.
@@ -467,6 +514,7 @@ inline Spec readSpec(const std::string& file, const std::array<int,3>& deckDims)
         spec.margin = {(*margin)[0], (*margin)[1], (*margin)[2]};
     }
     spec.straighten = tree.get<bool>("straighten", false);
+    spec.bendPillars = tree.get<bool>("bend_pillars", false);
     spec.dump = tree.get<std::string>("dump", "");
     if (const auto box = tree.get_child_items_as_vector<int>("box")) {
         if (box->size() != 6) {

@@ -80,6 +80,12 @@ the line between the two it lies between.
 
 The run warns when a column's pillars cross or fold within its depths.
 
+With `"bend_pillars": true` (top level), each box pillar continues vertically above the
+shallowest and below the deepest box corner on it, where the fault-healing padding layer
+ends. The top and bottom padding then hangs on vertical pillars too. The dumped GRDECL
+keeps straight pillars, since the format cannot hold the bend; look at the grid through
+`--vtk-write-mech-grid` instead.
+
 Padding cells, and box cells outside the flow grid, take YMODULE and PRATIO from the
 nearest box cell and carry no load. The outer boundary takes `mech_grid_bc` (default
 `roller_free_top`).

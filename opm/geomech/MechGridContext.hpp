@@ -416,7 +416,7 @@ public:
         grid_->processEclipseFormat(&mechInput, /*ecl_state*/ nullptr,
                                     /*periodic_extension*/ false, /*turn_normals*/ false,
                                     /*clip_z*/ false, /*pinchActive*/ false,
-                                    /*edge_conformal*/ true);
+                                    /*edge_conformal*/ true, /*merge_tolerance*/ 0.0, g.bend);
 
         const auto& b = spec.box;
         const auto& o = built.origin;
@@ -477,7 +477,8 @@ public:
                 flow[mechMapper.cartesianIndex(static_cast<int>(m))] = map_.hasFlowCells(m) ? 1 : 0;
             }
             MechSector::writeGrdecl(spec.dump, g, actnum, {{"PADDING", pad}, {"FLOWCELL", flow}});
-            OpmLog::info("Mechanics sector: grid written to " + spec.dump);
+            OpmLog::info("Mechanics sector: grid written to " + spec.dump
+                         + (g.bend.empty() ? "" : " (straight pillars; GRDECL cannot hold the bends)"));
         }
     }
 
