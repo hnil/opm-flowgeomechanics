@@ -6,6 +6,7 @@
 #include <iomanip>
 #include <iostream>
 #include <iterator> //@@ only for debugging
+#include <limits>
 #include <map>
 #include <numeric>
 #include <set>
@@ -1526,6 +1527,101 @@ identify_star_point(const array<double, 3>& point,
 }
 
 // ----------------------------------------------------------------------------
+// Point deepest behind all face planes (Chebyshev centre): max t subject to
+// n_f.(x - c_f) + t <= 0, solved exactly by enumerating the LP's vertices.
+array<double, 3>
+chebyshev_star_point(const vector<double>& face_normals,
+                     const vector<double>& face_centroids)
+// ----------------------------------------------------------------------------
+{
+    const int N = (int)face_normals.size() / 3;
+    array<double, 3> lo {face_centroids[0], face_centroids[1], face_centroids[2]};
+    array<double, 3> hi = lo;
+    for (int f = 1; f != N; ++f)
+        for (int d = 0; d != 3; ++d) {
+            lo[d] = min(lo[d], face_centroids[3 * f + d]);
+            hi[d] = max(hi[d], face_centroids[3 * f + d]);
+        }
+    const array<double, 3> mid {(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2};
+    const double scale = max({hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], 1e-300});
+
+    // rows a.(x - mid, t) <= b in units of scale; faces first, then a bounding box
+    vector<array<double, 5>> rows;
+    for (int f = 0; f != N; ++f) {
+        const double* n = &face_normals[3 * f];
+        double b = 0;
+        for (int d = 0; d != 3; ++d)
+            b += n[d] * (face_centroids[3 * f + d] - mid[d]) / scale;
+        rows.push_back({n[0], n[1], n[2], 1.0, b});
+    }
+    for (int d = 0; d != 3; ++d) {
+        array<double, 5> r {0, 0, 0, 0, 1.0};
+        r[d] = 1;
+        rows.push_back(r);
+        r[d] = -1;
+        rows.push_back(r);
+    }
+
+    const int M = (int)rows.size();
+    double best_t = -numeric_limits<double>::infinity();
+    array<double, 4> best {0, 0, 0, 0};
+    for (int i = 0; i < M; ++i)
+        for (int j = i + 1; j < M; ++j)
+            for (int k = j + 1; k < M; ++k)
+                for (int l = k + 1; l < M; ++l) {
+                    // solve the 4x4 system of the active rows by partial pivoting
+                    double A[4][5];
+                    const int act[4] = {i, j, k, l};
+                    for (int r = 0; r != 4; ++r)
+                        for (int c = 0; c != 5; ++c)
+                            A[r][c] = rows[act[r]][c];
+                    bool singular = false;
+                    for (int c = 0; c != 4 && !singular; ++c) {
+                        int p = c;
+                        for (int r = c + 1; r != 4; ++r)
+                            if (abs(A[r][c]) > abs(A[p][c]))
+                                p = r;
+                        if (abs(A[p][c]) < 1e-12) {
+                            singular = true;
+                            break;
+                        }
+                        swap(A[c], A[p]);
+                        for (int r = 0; r != 4; ++r)
+                            if (r != c) {
+                                const double fac = A[r][c] / A[c][c];
+                                for (int cc = c; cc != 5; ++cc)
+                                    A[r][cc] -= fac * A[c][cc];
+                            }
+                    }
+                    if (singular)
+                        continue;
+                    array<double, 4> x;
+                    for (int r = 0; r != 4; ++r)
+                        x[r] = A[r][4] / A[r][r];
+                    if (x[3] <= best_t)
+                        continue;
+                    bool feasible = true;
+                    for (const auto& row : rows)
+                        if (row[0] * x[0] + row[1] * x[1] + row[2] * x[2] + row[3] * x[3] > row[4] + 1e-10) {
+                            feasible = false;
+                            break;
+                        }
+                    if (feasible) {
+                        best_t = x[3];
+                        best = x;
+                    }
+                }
+
+    const array<double, 3> result {mid[0] + scale * best[0], mid[1] + scale * best[1], mid[2] + scale * best[2]};
+    if (!(best_t > 1e-9) || !is_star_point(result, face_normals, face_centroids)) {
+        std::ostringstream os;
+        os << "Cell is not star-shaped: faces=" << N << " depth=" << best_t * scale;
+        throw runtime_error(os.str());
+    }
+    return result;
+}
+
+// ----------------------------------------------------------------------------
 void
 compute_face_geometry(const vector<double>& points, double* normal, double* centroid)
 // ----------------------------------------------------------------------------
@@ -1750,7 +1846,12 @@ compute_cell_geometry(const double* points,
         for (int f = 0; f != nf; ++f)
             for (int d = 0; d != 3; ++d)
                 mid[d] += face_centroids[3*f + d]/nf;
-        star_point = identify_star_point(mid, outward_normals, face_centroids);
+        try {
+            star_point = identify_star_point(mid, outward_normals, face_centroids);
+        } catch (const runtime_error&) {
+            // the projection iteration can cycle when the kernel is a thin sliver
+            star_point = chebyshev_star_point(outward_normals, face_centroids);
+        }
     }
 
     // compute cell centroid and volume
