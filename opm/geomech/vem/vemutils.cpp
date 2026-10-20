@@ -9,6 +9,10 @@
 #include <dune/istl/preconditioners.hh>
 #include <dune/istl/solvers.hh>
 #include <dune/grid/common/mcmgmapper.hh>
+#include <opm/grid/cpgrid/GridHelpers.hpp>
+
+#include <algorithm>
+#include <array>
 
 #include <cmath>
 #include <deque>
@@ -126,7 +130,8 @@ getGridVectors(const Dune::CpGrid& grid,
                std::vector<double>& coords,
                std::vector<int>& num_cell_faces,
                std::vector<int>& num_face_corners,
-               std::vector<int>& face_corners)
+               std::vector<int>& face_corners,
+               std::vector<char>* corner_mask)
 {
     // assert(false);
     //  std::vector<double> coords_tmp;
@@ -156,9 +161,29 @@ getGridVectors(const Dune::CpGrid& grid,
     // const auto& faces = grid.getFaceToPoint();
     // const auto& facePos = grid.getFacePos();
     std::size_t skipped_degenerate_faces = 0, misoriented_faces = 0;
+    const auto cell2faces = Opm::UgGridHelpers::cell2Faces(grid);
     for (const auto& cell : elements(gv)) {
         int cellIdx = gv.indexSet().index(cell);
         int nf = grid.numCellFaces(cellIdx);
+        // edge conformity inserts nodes on top/bottom faces only; an unsplit one has the cell's
+        // corners as its own
+        std::array<int, 8> cell_corners;
+        cell_corners.fill(-1);
+        std::array<int, 6> faces_per_side {};
+        if (corner_mask) {
+            if (cell.subEntities(3) == 8) {
+                for (int k = 0; k != 8; ++k) {
+                    cell_corners[k] = gv.indexSet().subIndex(cell, k, 3);
+                }
+            }
+            for (auto it = cell2faces[cellIdx].begin(); it != cell2faces[cellIdx].end(); ++it) {
+                const int tag = grid.faceTag(it);
+                if (tag >= 0 && tag < 6 && grid.numFaceVertices(*it) >= 3) {
+                    ++faces_per_side[tag];
+                }
+            }
+        }
+        auto cf = cell2faces[cellIdx].begin();
         // assert(nf==6);
         // Count only geometric faces: NNC connections (explicit NNC/EDITNNC,
         // numerical-aquifer AQUCON) appear in the raw CpGrid cell-face
@@ -172,7 +197,7 @@ getGridVectors(const Dune::CpGrid& grid,
             }
         }
         num_cell_faces.push_back(nf_geom);
-        for (int f = 0; f < nf; ++f) {
+        for (int f = 0; f < nf; ++f, ++cf) {
             auto face = grid.cellFace(cellIdx, f);
             auto faceSize = grid.numFaceVertices(face);
             if (faceSize < 3) {
@@ -199,6 +224,15 @@ getGridVectors(const Dune::CpGrid& grid,
                     + (u[0]*w[1] - u[1]*w[0])*face_normal[2];
             }
             misoriented_faces += !(along > 0.0);
+            if (corner_mask) {
+                const int tag = grid.faceTag(cf);
+                const bool kface = tag >= 4 && tag < 6 && faces_per_side[tag] == 1 && cell_corners[0] >= 0;
+                for (int v = 0; v < faceSize; ++v) {
+                    const int node = grid.faceVertex(face, first ? v : faceSize - 1 - v);
+                    corner_mask->push_back(!kface
+                        || std::find(cell_corners.begin(), cell_corners.end(), node) != cell_corners.end());
+                }
+            }
             if (first) {
                 for (int v = 0; v < faceSize; ++v) {
                     face_corners.push_back(grid.faceVertex(face, v));
@@ -303,7 +337,8 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
                         std::vector<std::tuple<int, int, double>>& A_entries,
                         std::vector<double>& b,
                         const vem::StabilityChoice stability_choice,
-                        bool reduce_boundary)
+                        bool reduce_boundary,
+                        const char* const corner_mask)
 // ----------------------------------------------------------------------------
 {
     // preliminary computations
@@ -421,7 +456,8 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
                                      centroid,
                                      loc_indexing,
                                      loc,
-                                     hex ? &hex_corners[0] : nullptr);
+                                     hex ? &hex_corners[0] : nullptr,
+                                     corner_mask ? corner_mask + fcorners_start : nullptr);
           const int ncv = int(loc_indexing.size()); // number of cell vertices
           for (int i = 0; i != 3 * ncv; ++i) {
             for (int j = 0; j != 3 * ncv; ++j) {
@@ -530,7 +566,8 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
                              num_cell_faces[c],
                              &centroid[0],
                              &body_force[3 * c],
-                             &b[0]);
+                             &b[0],
+                             corner_mask ? corner_mask + fcorners_start : nullptr);
         // increment local indexing
         fcorners_start
           += std::accumulate(&num_face_corners[cf_ix], &num_face_corners[cf_ix + num_cell_faces[c]], 0);
@@ -541,7 +578,8 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
     // add contribution to right hand side from applied forces.  Values are written
     // directly into the global right-hand-side vector
     vem::compute_applied_forces_3D(
-        points, num_face_corners, face_corners, num_neumann_faces, neumann_faces, neumann_forces, &b[0]);
+        points, num_face_corners, face_corners, num_neumann_faces, neumann_faces, neumann_forces, &b[0],
+        corner_mask);
 
     if (reduce_boundary) {
         // cout << "Set boundary conditions: Reducing system" << endl;
@@ -565,7 +603,8 @@ potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const p
                             const double* const field,
                                  std::vector<double>& fgrad,
                                  std::vector<std::tuple<int, int, double>>& div,
-                            bool get_matrix)
+                            bool get_matrix,
+                            const char* const corner_mask)
 // ----------------------------------------------------------------------------
 {
     // initializing result vector
@@ -625,7 +664,8 @@ potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const p
                               face_centroids,
                               cell_centroid,
                               star_point,
-                              volume);
+                              volume,
+                              corner_mask ? corner_mask + cur_fcor_start : nullptr);
 
         // Since computing q involves dividing by volume, we are really computing q * volume
         // in the below call, by passing the value '1' for volume.  In other words, we are computing
@@ -636,7 +676,8 @@ potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const p
                                      &num_face_corners[cur_cface_start],
                                      num_cell_faces[cell],
                                      1,
-                                     outward_normals);
+                                     outward_normals,
+                                     corner_mask ? corner_mask + cur_fcor_start : nullptr);
         
         if (vem_method) {
             // fill in entries in global fgrad vector

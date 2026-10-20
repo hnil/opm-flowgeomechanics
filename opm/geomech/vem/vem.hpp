@@ -187,7 +187,8 @@ int assemble_mech_system_3D(const double* const points,
                             std::vector<std::tuple<int, int, double>>& A_entries,
                             std::vector<double>& b,
                             const StabilityChoice stability_choice,
-                            bool reduce_system);
+                            bool reduce_system,
+                            const char* const corner_mask = nullptr); // per face_corners entry: a grid corner
 // -----------------------------------------------------------------------------------------------
 
 
@@ -254,7 +255,8 @@ void assemble_stiffness_matrix_3D(const double* const points,
                                   std::array<double, 3>& centroid,
                                   std::vector<int>& indexing,
                                   std::vector<double>& target,
-                                  const int* hex_corners = nullptr);
+                                  const int* hex_corners = nullptr,
+                                  const char* corner_mask = nullptr);
 // hex_corners: optional 8 corner point ids of the cell (Dune order), used by SMOOTH_HOURGLASS.
 // -----------------------------------------------------------------------------------------------
 
@@ -295,7 +297,8 @@ void potential_gradient_force_3D(const double* const points,
                                  const double* const field,
                                  std::vector<double>& fgrad,
                                  std::vector<std::tuple<int, int, double>>& div,
-                                 bool get_matrix);    
+                                 bool get_matrix,
+                                 const char* const corner_mask = nullptr);
 
 void
 compute_stress_3D(const double* const points,
@@ -318,7 +321,8 @@ compute_stress_3D(const double* const points,
                   bool do_matrix,
                   bool do_stress,
                   vem::StabilityChoice stability_choice,
-                  bool stab_on_stress
+                  bool stab_on_stress,
+                  const char* const corner_mask = nullptr
     );    
 
 
@@ -334,7 +338,8 @@ calculate_stress_3D_local(const double* const points,
                           std::array<double,6>& stress,
                           std::vector<std::tuple<int, int, double>>& stressmat,
                           bool do_matrix,
-                          bool do_stress
+                          bool do_stress,
+                          const char* const corner_mask = nullptr
     );    
 // -----------------------------------------------------------------------------------------------
 // Computes the standard isoparametric Q1 (trilinear) FEM stiffness matrix for a single
@@ -422,7 +427,8 @@ void diagonal_scale_system(std::vector<std::tuple<int, int, double>>& A_entries,
 double face_integral(const double* const corners,
                      const int num_corners,
                      const int dim,
-                     const double* const corner_values = nullptr);
+                     const double* const corner_values = nullptr,
+                     const char* const corner_mask = nullptr);
 // -----------------------------------------------------------------------------------------------
 
 
@@ -611,7 +617,8 @@ void set_boundary_conditions(std::vector<std::tuple<int, int, double>>& A,
                      const int num_faces,
                      const double* const centroid,
                      const double* const bforce, // 3D body force
-                     double* b_global);
+                     double* b_global,
+                     const char* const corner_mask = nullptr);
 
 void
 compute_applied_forces_3D(const double* const points,
@@ -620,7 +627,8 @@ compute_applied_forces_3D(const double* const points,
                           const int num_neumann_faces,
                           const int* neumann_faces,
                           const double* const neumann_forces,
-                          double* b_global);
+                          double* b_global,
+                          const char* const corner_mask = nullptr);
 std::map<int, int>
 global_to_local_indexing(const int* const faces,
                          const int* const num_face_edges,
@@ -641,7 +649,8 @@ compute_cell_geometry(const double* points,
                       std::vector<double>& face_centroids,
                       std::array<double, 3>& cell_centroid,
                       std::array<double, 3>& star_point,
-                      double& volume);
+                      double& volume,
+                      const char* const corner_mask = nullptr);
 
 std::vector<double> 
 compute_q_3D(const double* const corners,
@@ -650,7 +659,8 @@ compute_q_3D(const double* const corners,
              const int* const num_face_edges,
              const int num_faces,
              const double volume,
-             const std::vector<double>& outward_normals);        
+             const std::vector<double>& outward_normals,
+             const char* const corner_mask = nullptr);
 }; // end namespace vem
 
 

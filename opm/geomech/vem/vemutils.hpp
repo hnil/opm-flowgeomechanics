@@ -58,10 +58,13 @@ namespace vem
 }
 
 
+// corner_mask (optional): per face_corners entry, whether the node is one of the face's grid
+// corners rather than a node inserted on an edge for edge conformity
 void getGridVectors(const Dune::CpGrid& grid, std::vector<double>& coords,
                        std::vector<int>& num_cell_faces,
                        std::vector<int>& num_face_corners,
-                       std::vector<int>& face_corners);
+                       std::vector<int>& face_corners,
+                       std::vector<char>* corner_mask = nullptr);
   int assemble_mech_system_3D_dune(const Dune::CpGrid& grid, const double* const points,
                         const int num_cells,
                         const int* const num_cell_faces, // cell faces per cell
@@ -79,7 +82,8 @@ void getGridVectors(const Dune::CpGrid& grid, std::vector<double>& coords,
                         std::vector<std::tuple<int, int, double>>& A_entries,
                         std::vector<double>& b,
                              const vem::StabilityChoice stability_choice,
-                             bool reduce_boundary);
+                             bool reduce_boundary,
+                             const char* const corner_mask = nullptr);
 
 void
 potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const points,
@@ -90,7 +94,8 @@ potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const p
                             const double* const field,
                                  std::vector<double>& fgrad,
                                  std::vector<std::tuple<int, int, double>>& div,
-                                 bool get_matrix);
+                                 bool get_matrix,
+                                 const char* const corner_mask = nullptr);
 
 Dune::BlockVector<Dune::FieldVector<double,1>> smoothCellVector(const Dune::CpGrid& grid,const Dune::BlockVector<Dune::FieldVector<double,1>>& cell_vector);
 

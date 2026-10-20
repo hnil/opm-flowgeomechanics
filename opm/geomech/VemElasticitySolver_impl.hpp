@@ -152,7 +152,7 @@ namespace Elasticity {
                                    false,
                                    true,
                                    stability_choice_,
-                                   stab_on_stress_
+                                   stab_on_stress_, corner_mask_.data()
                 );
             // copy to dune definitions
             stress_.resize(num_cells_);
@@ -205,7 +205,7 @@ namespace Elasticity {
                                    false,
                                    false,
                                    stability_choice_,
-                                   stab_on_stress_
+                                   stab_on_stress_, corner_mask_.data()
                                    
                 );
             // copy to dune definitions
@@ -228,7 +228,8 @@ namespace Elasticity {
         vem::getGridVectors(grid_,coords_,
                             num_cell_faces_,
                             num_face_corners_,
-                            face_corners_);
+                            face_corners_,
+                            &corner_mask_);
 
         const int num_fixed_dofs = get<0>(dirichlet_);
         const vector<int>& fixed_dof_ixs = std::get<1>(dirichlet_);
@@ -248,13 +249,13 @@ namespace Elasticity {
                        &face_corners_[0], &ymodule_[0], &pratio_[0], &body_force_[0],
                        num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0],
                        num_neumann_faces, nullptr, nullptr,
-                       A_entries, rhs_force_, stability_choice_,reduce_boundary);
+                       A_entries, rhs_force_, stability_choice_,reduce_boundary, corner_mask_.data());
         }else{
           vem::assemble_mech_system_3D_dune(grid_, &coords_[0], num_cells_, &num_cell_faces_[0], &num_face_corners_[0],
                        &face_corners_[0], &ymodule_[0], &pratio_[0], &body_force_[0],
                        num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0],
                        num_neumann_faces, nullptr, nullptr,
-                       A_entries, rhs_force_, stability_choice_,reduce_boundary);
+                       A_entries, rhs_force_, stability_choice_,reduce_boundary, corner_mask_.data());
         }
 
 
@@ -287,7 +288,7 @@ namespace Elasticity {
                                          &pressure_tmp[0],
                                          rhs_tmp,
                                          divmat,
-                                         true);
+                                         true, corner_mask_.data());
         }else{          
           vem::potential_gradient_force_3D_dune(grid_,&coords_[0],
                                              num_cells_,
@@ -297,7 +298,7 @@ namespace Elasticity {
                                              &pressure_tmp[0],
                                              rhs_tmp,
                                              divmat,
-                                             true);
+                                             true, corner_mask_.data());
         }       
         // sort(divmat_.begin(),
         //      divmat_.end(),
@@ -350,7 +351,7 @@ namespace Elasticity {
                                true,
                                true,
                                stability_choice_,
-                               stab_on_stress_
+                               stab_on_stress_, corner_mask_.data()
         );
         stressmat_.setBuildMode(Matrix::implicit);
         stressmat_.setImplicitBuildModeParameters(
@@ -373,7 +374,7 @@ namespace Elasticity {
                                true,
                                false,
                                stability_choice_,
-                               stab_on_stress_
+                               stab_on_stress_, corner_mask_.data()
         );
         strainmat_.setBuildMode(Matrix::implicit);
         strainmat_.setImplicitBuildModeParameters(
@@ -399,7 +400,7 @@ namespace Elasticity {
                                          &std_pressure[0],
                                          rhs_pressure,
                                          divmat,
-                                         false);
+                                         false, corner_mask_.data());
 
         //Sign is added here  i.e \div \sigma =
         vector<double> rhs(rhs_force_);

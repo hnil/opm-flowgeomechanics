@@ -184,7 +184,16 @@ main(int argc, char** argv)
 
     std::vector<double> coords;
     std::vector<int> ncf, nfc, fc;
-    vem::getGridVectors(grid, coords, ncf, nfc, fc);
+    std::vector<char> cmask;
+    vem::getGridVectors(grid, coords, ncf, nfc, fc, &cmask);
+    const char* const corner_mask = arg.count("nomask") ? nullptr : cmask.data();
+    {
+        int hanging = 0;
+        for (std::size_t f = 0, k = 0; f < nfc.size(); k += nfc[f++])
+            hanging += std::count(&cmask[k], &cmask[k] + nfc[f], 0) > 0
+                && std::count(&cmask[k], &cmask[k] + nfc[f], 1) > 0;
+        std::printf("faces with hanging nodes: %d of %zu\n", hanging, nfc.size());
+    }
     const int nn = int(coords.size() / 3), nc = grid.size(0);
     if (arg.count("orientdiff")) { // the grid's winding against the old centroid test and the face normal
         int ndiff = 0, ntot = 0, nwind = 0;
@@ -291,9 +300,15 @@ main(int argc, char** argv)
             for (int ff = 0; ff < ncf[c2]; ++ff, k += nfc[f], ++f) {
                 const int m = nfc[f];
                 double cen[3] = {0, 0, 0};
-                for (int i = 0; i < m; ++i)
-                    for (int d = 0; d < 3; ++d)
-                        cen[d] += coords[3 * fc[k + i] + d] / m;
+                int ncen = 0;
+                for (int i = 0; i < m; ++i) // fan centre: the face's grid corners
+                    if (!corner_mask || corner_mask[k + i]) {
+                        for (int d = 0; d < 3; ++d)
+                            cen[d] += coords[3 * fc[k + i] + d];
+                        ++ncen;
+                    }
+                for (int d = 0; d < 3; ++d)
+                    cen[d] /= ncen;
                 // face warp: largest angle between a fan triangle and the face's mean normal
                 double fn[3] = {0, 0, 0};
                 std::vector<std::array<double, 3>> tn;
@@ -581,7 +596,7 @@ main(int argc, char** argv)
     std::vector<double> b;
     const int nfree = vem::assemble_mech_system_3D_dune(grid, &coords[0], nc, &ncf[0], &nfc[0], &fc[0], &young[0],
                                                         &poisson[0], &body[0], int(fixed.size()), &fixed[0],
-                                                        &fixval[0], 0, nullptr, nullptr, A, b, sc, true);
+                                                        &fixval[0], 0, nullptr, nullptr, A, b, sc, true, corner_mask);
     std::vector<int> free_dofs;
     for (int i = 0, k = 0; i < 3 * nn; ++i) {
         if (k < int(fixed.size()) && fixed[k] == i)
@@ -592,7 +607,7 @@ main(int argc, char** argv)
     if (cs == "load" || gauss) {
         std::vector<double> fgrad;
         std::vector<std::tuple<int, int, double>> div;
-        vem::potential_gradient_force_3D(&coords[0], nc, &ncf[0], &nfc[0], &fc[0], &field[0], fgrad, div, false);
+        vem::potential_gradient_force_3D(&coords[0], nc, &ncf[0], &nfc[0], &fc[0], &field[0], fgrad, div, false, corner_mask);
         for (int i = 0; i < nfree; ++i)
             b[i] += fgrad[free_dofs[i]];
     }
@@ -717,7 +732,7 @@ main(int argc, char** argv)
     std::vector<std::array<double, 6>> stress(nc);
     std::vector<std::tuple<int, int, double>> smat;
     vem::compute_stress_3D(&coords[0], nc, &ncf[0], &nfc[0], &fc[0], &young[0], &poisson[0], disp, stress, smat,
-                           false, true, sc, false);
+                           false, true, sc, false, corner_mask);
 
     if (gauss) {
         // total stress sigma(u) - field I against the exact cell average; split near / far from the source

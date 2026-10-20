@@ -253,6 +253,30 @@ trinormal(const double* const c1, const double* const c2, const double* const c3
         v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0]};
 }
 
+// corner_mask flags the face nodes that are grid corners; null, or none flagged, means all are
+bool
+has_hanging_nodes(const char* const corner_mask, const int n)
+{
+    return corner_mask && std::find(corner_mask, corner_mask + n, 0) != corner_mask + n
+        && std::find(corner_mask, corner_mask + n, 1) != corner_mask + n;
+}
+
+// Mean of a face's corners, the fan centre; fv indexes corners.
+array<double, 3>
+fan_centre(const double* const corners, const int* const fv, const int m, const char* const corner_mask)
+{
+    const char* const mask = has_hanging_nodes(corner_mask, m) ? corner_mask : nullptr;
+    int nc = 0;
+    for (int k = 0; k != m; ++k)
+        nc += !mask || mask[k];
+    array<double, 3> c {0, 0, 0};
+    for (int k = 0; k != m; ++k)
+        if (!mask || mask[k])
+            for (int d = 0; d != 3; ++d)
+                c[d] += corners[3 * fv[k] + d] / nc;
+    return c;
+}
+
 // ----------------------------------------------------------------------------
 // Tessellates a face defined by a set of corner points into triangles.
 //
@@ -275,15 +299,23 @@ vector<vector<double>>
 tessellate_face(const double* const corners,
                 const int num_corners,
                 bool skip_if_tri = true,
-                double* centroid = nullptr)
+                double* centroid = nullptr,
+                const char* const corner_mask = nullptr)
 // ----------------------------------------------------------------------------
 {
     if (skip_if_tri && num_corners == 3)
         // the face is already a triangle - no need to split it up
         return {vector<double>(corners, corners + Dim * num_corners)};
 
-    // compute face centroid
-    const array<double, Dim> center = face_centroid<Dim>(corners, num_corners);
+    // the centre comes from the face's grid corners, not its hanging nodes
+    vector<double> cpts;
+    if (has_hanging_nodes(corner_mask, num_corners))
+        for (int c = 0; c != num_corners; ++c)
+            if (corner_mask[c])
+                cpts.insert(cpts.end(), &corners[Dim * c], &corners[Dim * (c + 1)]);
+    const array<double, Dim> center = cpts.empty()
+        ? face_centroid<Dim>(corners, num_corners)
+        : face_centroid<Dim>(cpts.data(), int(cpts.size()) / Dim);
 
     if (centroid != nullptr)
         copy(center.begin(), center.end(), centroid);
@@ -324,19 +356,25 @@ tessellate_face(const double* const corners,
 //         listed in counterclockwise order.
 template <int Dim>
 vector<vector<double>>
-tessellate_face(const vector<double>& corners, bool skip_if_tri = true)
+tessellate_face(const vector<double>& corners,
+                bool skip_if_tri = true,
+                double* centroid = nullptr,
+                const char* const corner_mask = nullptr)
 // ----------------------------------------------------------------------------
 {
-    return tessellate_face<Dim>(&corners[0], corners.size() / Dim, skip_if_tri);
+    return tessellate_face<Dim>(&corners[0], corners.size() / Dim, skip_if_tri, centroid, corner_mask);
 }
 
 // ----------------------------------------------------------------------------
 template <int Dim>
 double
-face_integral_impl(const double* const corners, const int num_corners, const double* corner_values)
+face_integral_impl(const double* const corners,
+                   const int num_corners,
+                   const double* corner_values,
+                   const char* const corner_mask = nullptr)
 // ----------------------------------------------------------------------------
 {
-    const auto tris = tessellate_face<Dim>(&corners[0], num_corners, false);
+    const auto tris = tessellate_face<Dim>(&corners[0], num_corners, false, nullptr, corner_mask);
 
     assert(int(tris.size()) == 2 * num_corners);
 
@@ -796,7 +834,8 @@ compute_S_trace_3D(const double* const corners,
                    const int num_faces,
                    const double volume,
                    const double young,
-                   const double poisson)
+                   const double poisson,
+                   const char* const corner_mask)
 // ----------------------------------------------------------------------------
 {
     const int n = 3 * num_corners;
@@ -805,10 +844,11 @@ compute_S_trace_3D(const double* const corners,
     for (int f = 0, pos = 0; f != num_faces; pos += num_face_edges[f++]) {
         const int m = num_face_edges[f];
         const int* const fv = &faces[pos];
-        array<double, 3> c {0, 0, 0};
+        const char* const fmask = corner_mask && has_hanging_nodes(corner_mask + pos, m) ? corner_mask + pos : nullptr;
+        const array<double, 3> c = fan_centre(corners, fv, m, fmask);
+        int nc = 0;
         for (int k = 0; k != m; ++k)
-            for (int d = 0; d != 3; ++d)
-                c[d] += corners[3 * fv[k] + d] / m;
+            nc += !fmask || fmask[k];
         double area = 0;
         vector<array<double, 9>> kloc(m); // per fan triangle (centre, a, b)
         for (int i = 0; i != m; ++i) {
@@ -841,11 +881,13 @@ compute_S_trace_3D(const double* const corners,
                 for (int b = 0; b != 3; ++b) {
                     const double k = coef * kloc[i][3 * a + b];
                     for (int r = 0; r != m; ++r) {
-                        const double wa = loc[a] < 0 ? 1.0 / m : (r == loc[a] ? 1.0 : 0.0);
+                        const double wa = loc[a] < 0 ? (!fmask || fmask[r] ? 1.0 / nc : 0.0)
+                                                     : (r == loc[a] ? 1.0 : 0.0);
                         if (wa == 0.0)
                             continue;
                         for (int s2 = 0; s2 != m; ++s2) {
-                            const double wb = loc[b] < 0 ? 1.0 / m : (s2 == loc[b] ? 1.0 : 0.0);
+                            const double wb = loc[b] < 0 ? (!fmask || fmask[s2] ? 1.0 / nc : 0.0)
+                                                         : (s2 == loc[b] ? 1.0 : 0.0);
                             Kf[r * m + s2] += k * wa * wb;
                         }
                     }
@@ -1026,14 +1068,16 @@ compute_applied_forces_3D(const double* const points,
                           const int num_neumann_faces,
                           const int* neumann_faces,
                           const double* const neumann_forces,
-                          double* b_global)
+                          double* b_global,
+                          const char* const corner_mask)
 // ----------------------------------------------------------------------------
 {
     for (int nf = 0; nf != num_neumann_faces; ++nf) {
         const int nfc = num_face_corners[neumann_faces[nf]];
         const int ix_start = accumulate(num_face_corners, num_face_corners + neumann_faces[nf], 0);
         const auto face_corners_loc = pick_points<3>(points, &face_corners[ix_start], nfc);
-        const auto tris = tessellate_face<3>(&face_corners_loc[0], nfc, false);
+        const auto tris = tessellate_face<3>(&face_corners_loc[0], nfc, false, nullptr,
+                                             corner_mask ? corner_mask + ix_start : nullptr);
         for (int c = 0; c != 2 * nfc; ++c) { // two relevant triangles per corner
             const double area = triarea<3>(&tris[c][0], &tris[c][3], &tris[c][6]);
             const int corner = (c / 2 + c % 2) % nfc;
@@ -1060,14 +1104,15 @@ compute_bodyforce_3D(const double* const points,
                      const int num_faces,
                      const double* const centroid,
                      const double* const bforce, // 3D body force
-                     double* b_global) // global right-hand side
+                     double* b_global, // global right-hand side
+                     const char* const corner_mask)
 // ----------------------------------------------------------------------------
 {
     int fcorner_start = 0;
     for (int f = 0; f != num_faces; ++f) {
         const int nfc = num_face_corners[f];
-        const auto tris
-            = tessellate_face<3>(pick_points<3>(points, face_corners + fcorner_start, nfc), false);
+        const auto tris = tessellate_face<3>(pick_points<3>(points, face_corners + fcorner_start, nfc), false,
+                                             nullptr, corner_mask ? corner_mask + fcorner_start : nullptr);
         assert(int(tris.size()) == nfc * 2);
         for (int c = 0; c != nfc; ++c) {
             // the following two triangles in the tesselation pertain to corner 'c'.
@@ -1290,13 +1335,14 @@ compute_q_2D(const double* const corners, const int num_corners)
 // Vector areas of the fan triangles (vertex mean, p_i, p_i+1) of a face, oriented
 // along the given outward normal; 3*m values.
 vector<double>
-fan_vector_areas(const double* const corners, const int* const fcorners, const int m, const double* const normal)
+fan_vector_areas(const double* const corners,
+                 const int* const fcorners,
+                 const int m,
+                 const double* const normal,
+                 const char* const corner_mask)
 // ----------------------------------------------------------------------------
 {
-    array<double, 3> c {0, 0, 0};
-    for (int i = 0; i != m; ++i)
-        for (int d = 0; d != 3; ++d)
-            c[d] += corners[3 * fcorners[i] + d] / m;
+    const array<double, 3> c = fan_centre(corners, fcorners, m, corner_mask);
     vector<double> res(3 * m);
     double dot = 0;
     for (int i = 0; i != m; ++i) {
@@ -1324,18 +1370,17 @@ fan_volume(const double* const corners,
            const int* const faces,
            const int* const num_face_edges,
            const int num_faces,
-           const vector<double>& outward_normals)
+           const vector<double>& outward_normals,
+           const char* const corner_mask)
 // ----------------------------------------------------------------------------
 {
     const array<double, 3> o = point_average<3>(corners, num_corners);
     double vol = 0;
     for (int f = 0, pos = 0; f != num_faces; pos += num_face_edges[f++]) {
         const int m = num_face_edges[f];
-        const auto tris = fan_vector_areas(corners, &faces[pos], m, &outward_normals[3 * f]);
-        array<double, 3> c {0, 0, 0};
-        for (int i = 0; i != m; ++i)
-            for (int d = 0; d != 3; ++d)
-                c[d] += corners[3 * faces[pos + i] + d] / m;
+        const char* const fmask = corner_mask && has_hanging_nodes(corner_mask + pos, m) ? corner_mask + pos : nullptr;
+        const auto tris = fan_vector_areas(corners, &faces[pos], m, &outward_normals[3 * f], fmask);
+        const array<double, 3> c = fan_centre(corners, &faces[pos], m, fmask);
         for (int i = 0; i != m; ++i) {
             const double* p = &corners[3 * faces[pos + i]];
             const double* q = &corners[3 * faces[pos + (i + 1) % m]];
@@ -1385,7 +1430,8 @@ compute_q_3D(const double* const corners,
              const int* const num_face_edges,
              const int num_faces,
              const double volume,
-             const vector<double>& outward_normals)
+             const vector<double>& outward_normals,
+             const char* const corner_mask)
 // ----------------------------------------------------------------------------
 {
     vector<double> result(num_corners * 3, 0); // the vector of q
@@ -1394,12 +1440,16 @@ compute_q_3D(const double* const corners,
     const double fac = 1.0 / (2 * volume);
 
     if (face_quadrature_ == FaceQuadrature::TRIANGULATED) {
-        // P1 on the fan (vertex mean, p_i, p_i+1): int_tri phi n = A n / 3 per triangle vertex,
-        // the centre carrying 1/m of each face vertex
+        // P1 on the fan (corner mean, p_i, p_i+1): int_tri phi n = A n / 3 per triangle vertex,
+        // the centre carrying 1/nc of each face corner
         int pos = 0;
         for (int f = 0; f != num_faces; pos += num_face_edges[f++]) {
             const int m = num_face_edges[f];
-            const auto tris = fan_vector_areas(corners, &faces[pos], m, &outward_normals[3 * f]);
+            const char* const fmask = corner_mask && has_hanging_nodes(corner_mask + pos, m) ? corner_mask + pos : nullptr;
+            const auto tris = fan_vector_areas(corners, &faces[pos], m, &outward_normals[3 * f], fmask);
+            int nc = 0;
+            for (int k = 0; k != m; ++k)
+                nc += !fmask || fmask[k];
             for (int i = 0; i != m; ++i) {
                 const int a = faces[pos + i], b = faces[pos + (i + 1) % m];
                 for (int d = 0; d != 3; ++d) {
@@ -1407,7 +1457,8 @@ compute_q_3D(const double* const corners,
                     result[3 * a + d] += w;
                     result[3 * b + d] += w;
                     for (int k = 0; k != m; ++k)
-                        result[3 * faces[pos + k] + d] += w / m;
+                        if (!fmask || fmask[k])
+                            result[3 * faces[pos + k] + d] += w / nc;
                 }
             }
         }
@@ -1424,7 +1475,8 @@ compute_q_3D(const double* const corners,
             fill(cvals.begin(), cvals.end(), 0);
             cvals[e] = 1; // indicate which basis function we are integrating
 
-            const double phi = face_integral(&facecorners[0], num_face_edges[f], 3, &cvals[0]);
+            const double phi = face_integral(&facecorners[0], num_face_edges[f], 3, &cvals[0],
+                                             corner_mask ? corner_mask + cur_vertex_ix - e : nullptr);
             for (int d = 0; d != 3; ++d) {
                 result[3 * faces[cur_vertex_ix] + d] += fac * phi * normal[d];
             }
@@ -1773,12 +1825,13 @@ identify_star_point(const array<double, 3>& point,
 
 // ----------------------------------------------------------------------------
 void
-compute_face_geometry(const vector<double>& points, double* normal, double* centroid)
+compute_face_geometry(const vector<double>& points, double* normal, double* centroid,
+                      const char* const corner_mask = nullptr)
 // ----------------------------------------------------------------------------
 {
     // compute tessellation and face centroid
     const auto face_tessellation
-        = tessellate_face<3>(&points[0], (int)points.size() / 3, false, centroid);
+        = tessellate_face<3>(&points[0], (int)points.size() / 3, false, centroid, corner_mask);
 
     // compute (normalized) face normal
     fill(normal, normal + 3, 0);
@@ -1954,7 +2007,8 @@ compute_cell_geometry(const double* points,
                       vector<double>& face_centroids,
                       array<double, 3>& cell_centroid,
                       array<double, 3>& star_point,
-                      double& volume)
+                      double& volume,
+                      const char* const corner_mask)
 // ----------------------------------------------------------------------------
 {
     // ensure faces are consistently oriented so that normals all point outwards
@@ -1966,7 +2020,8 @@ compute_cell_geometry(const double* points,
     for (int f = 0, faces_offset = 0; f != num_faces; faces_offset += num_face_edges[f++])
         compute_face_geometry(pick_points<3>(points, &faces2[faces_offset], num_face_edges[f]),
                               &outward_normals[f * 3],
-                              &face_centroids[f * 3]);
+                              &face_centroids[f * 3],
+                              corner_mask ? corner_mask + faces_offset : nullptr);
     assert(face_centroids.size() == static_cast<std::size_t>(num_faces * 3));
 
 
@@ -2006,7 +2061,8 @@ compute_cell_geometry(const double* points,
     // loop over faces, split each face into triangles, and accumulate the volumes
     // defined by these triangles and the inside point
     for (int f = 0, fpos = 0; f != num_faces; fpos += num_face_edges[f++]) {
-        for (auto tri : tessellate_face<3>(pick_points<3>(points, &faces[fpos], num_face_edges[f]))) {
+        for (auto tri : tessellate_face<3>(pick_points<3>(points, &faces[fpos], num_face_edges[f]), true, nullptr,
+                                           corner_mask ? corner_mask + fpos : nullptr)) {
             tri.insert(tri.end(), &star_point[0], &star_point[0] + 3);
             const double tvol = tetrahedron_volume(&tri[0], &tri[3], &tri[6], &tri[9]);
             const auto tet_centroid = point_average<3>(&tri[0], 4);
@@ -2021,7 +2077,7 @@ compute_cell_geometry(const double* points,
 
     // the strain projection divides by the volume its own face triangulation encloses
     if (face_quadrature_ == FaceQuadrature::TRIANGULATED)
-        volume = fan_volume(points, num_points, faces, num_face_edges, num_faces, outward_normals);
+        volume = fan_volume(points, num_points, faces, num_face_edges, num_faces, outward_normals, corner_mask);
 
     // if cell_centroid is also a star_point, use that as star_point instead
     if (is_star_point(cell_centroid, outward_normals, face_centroids))
@@ -2048,7 +2104,8 @@ potential_gradient_force_3D(const double* const points,
                             const double* const field,
                             vector<double>& fgrad,
                             vector<tuple<int, int, double>>& div,
-                            bool get_matrix)
+                            bool get_matrix,
+                            const char* const corner_mask)
 // ----------------------------------------------------------------------------
 {
     // initializing result vector
@@ -2101,7 +2158,8 @@ potential_gradient_force_3D(const double* const points,
                               face_centroids,
                               cell_centroid,
                               star_point,
-                              volume);
+                              volume,
+                              corner_mask ? corner_mask + cur_fcor_start : nullptr);
 
         // Since computing q involves dividing by volume, we are really computing q * volume
         // in the below call, by passing the value '1' for volume.  In other words, we are computing
@@ -2112,7 +2170,8 @@ potential_gradient_force_3D(const double* const points,
                                      &num_face_corners[cur_cface_start],
                                      num_cell_faces[cell],
                                      1,
-                                     outward_normals);
+                                     outward_normals,
+                                     corner_mask ? corner_mask + cur_fcor_start : nullptr);
 
         // fill in entries in global fgrad vector
         for (int c = 0; c != num_corners; ++c) {
@@ -2627,7 +2686,8 @@ assemble_mech_system_3D(const double* const points,
                         std::vector<std::tuple<int, int, double>>& A_entries,
                         std::vector<double>& b,
                         const StabilityChoice stability_choice,
-                        bool reduce_boundary)
+                        bool reduce_boundary,
+                        const char* const corner_mask)
 // ----------------------------------------------------------------------------
 {
     // preliminary computations
@@ -2660,7 +2720,9 @@ assemble_mech_system_3D(const double* const points,
                                      stability_choice,
                                      centroid,
                                      loc_indexing,
-                                     loc);
+                                     loc,
+                                     nullptr,
+                                     corner_mask ? corner_mask + fcorners_start : nullptr);
         const int ncv = int(loc_indexing.size()); // number of cell vertices
         for (int i = 0; i != 3 * ncv; ++i) {
             for (int j = 0; j != 3 * ncv; ++j) {
@@ -2683,7 +2745,8 @@ assemble_mech_system_3D(const double* const points,
                              num_cell_faces[c],
                              &centroid[0],
                              &body_force[3 * c],
-                             &b[0]);
+                             &b[0],
+                             corner_mask ? corner_mask + fcorners_start : nullptr);
         // increment local indexing
         fcorners_start
             += accumulate(&num_face_corners[cf_ix], &num_face_corners[cf_ix + num_cell_faces[c]], 0);
@@ -2694,7 +2757,8 @@ assemble_mech_system_3D(const double* const points,
     // add contribution to right hand side from applied forces.  Values are written
     // directly into the global right-hand-side vector
     compute_applied_forces_3D(
-        points, num_face_corners, face_corners, num_neumann_faces, neumann_faces, neumann_forces, &b[0]);
+        points, num_face_corners, face_corners, num_neumann_faces, neumann_faces, neumann_forces, &b[0],
+        corner_mask);
 
     if (reduce_boundary) {
         // cout << "Set boundary conditions: Reducing system" << endl;
@@ -2730,8 +2794,8 @@ compute_stress_3D(const double* const points,
                   bool do_matrix,
                   bool do_stress,
                   vem::StabilityChoice stability_choice,
-                  bool stab_on_stress
-                )
+                  bool stab_on_stress,
+                  const char* const corner_mask)
 // ----------------------------------------------------------------------------
 {
     // preliminary computations
@@ -2762,7 +2826,8 @@ compute_stress_3D(const double* const points,
                                   stress[c],
                                   stressmat,
                                   do_matrix,
-                                  do_stress);
+                                  do_stress,
+                                  corner_mask ? corner_mask + fcorners_start : nullptr);
         fcorners_start
             += accumulate(&num_face_corners[cf_ix], &num_face_corners[cf_ix + num_cell_faces[c]], 0);
         cf_ix += num_cell_faces[c];
@@ -3273,10 +3338,12 @@ compute_S_smooth_hg_3D(const double* const corners,
                        const double volume,
                        const double young,
                        const double poisson,
-                       const int* const hex_corners)
+                       const int* const hex_corners,
+                       const char* const corner_mask)
 {
     const auto trace = [&] {
-        return compute_S_trace_3D(corners, num_corners, faces, num_face_edges, num_faces, volume, young, poisson);
+        return compute_S_trace_3D(corners, num_corners, faces, num_face_edges, num_faces, volume, young, poisson,
+                                  corner_mask);
     };
     array<int, 8> order;
     vector<array<double, 3>> xi;
@@ -3456,7 +3523,8 @@ assemble_stiffness_matrix_3D(const double* const points,
                              array<double, 3>& centroid,
                              vector<int>& indexing,
                              vector<double>& target,
-                             const int* const hex_corners)
+                             const int* const hex_corners,
+                             const char* const corner_mask)
 // ----------------------------------------------------------------------------
 {
     // compute mapping between local vertex indices (0, 1, ... Ne) to
@@ -3506,7 +3574,8 @@ assemble_stiffness_matrix_3D(const double* const points,
                           face_centroids,
                           centroid,
                           star_point,
-                          volume);
+                          volume,
+                          corner_mask);
 
     // Q1 FEM requested: applicable whenever the cell is a topological hexahedron.
     // Non-hex cells fall through to VEM (with ANISO_DIAG stabilization, see
@@ -3542,7 +3611,8 @@ assemble_stiffness_matrix_3D(const double* const points,
                                 num_face_edges,
                                 num_faces,
                                 volume,
-                                outward_normals);
+                                outward_normals,
+                                corner_mask);
     const auto Nr = compute_Nr_3D(&corners_loc[0], num_corners);
     const auto Nc = compute_Nc_3D(&corners_loc[0], num_corners);
     const auto Wr = compute_Wr_3D(q);
@@ -3556,9 +3626,9 @@ assemble_stiffness_matrix_3D(const double* const points,
     if (stability_choice == TRACE || stability_choice == SMOOTH_HOURGLASS) {
         const auto S = stability_choice == TRACE
             ? compute_S_trace_3D(&corners_loc[0], num_corners, &faces_loc[0], num_face_edges, num_faces,
-                                 volume, young, poisson)
+                                 volume, young, poisson, corner_mask)
             : compute_S_smooth_hg_3D(&corners_loc[0], num_corners, &faces_loc[0], num_face_edges, num_faces,
-                                     volume, young, poisson, have_hex ? &hex_loc[0] : nullptr);
+                                     volume, young, poisson, have_hex ? &hex_loc[0] : nullptr, corner_mask);
         final_assembly(Wc, D, Nc, ImP, corners_loc, stability_choice, volume, num_corners, 3, &target[0], &S);
         return;
     }
@@ -3581,7 +3651,8 @@ calculate_stress_3D_local(const double* const points,
                           std::array<double, 6>& stress,
                           vector<tuple<int, int, double>>& stressmat,
                           bool do_matrix,
-                          bool do_stress)
+                          bool do_stress,
+                          const char* const corner_mask)
 // ----------------------------------------------------------------------------
 {
     array<double, 3> centroid;
@@ -3613,7 +3684,8 @@ calculate_stress_3D_local(const double* const points,
                           face_centroids,
                           centroid,
                           star_point,
-                          volume);
+                          volume,
+                          corner_mask);
 
     // // compute all intermediary matrices
     const auto q = compute_q_3D(&corners_loc[0],
@@ -3622,7 +3694,8 @@ calculate_stress_3D_local(const double* const points,
                                 num_face_edges,
                                 num_faces,
                                 volume,
-                                outward_normals);
+                                outward_normals,
+                                corner_mask);
     // const auto Nr = compute_Nr_3D(&corners_loc[0], num_corners);
     // const auto Nc = compute_Nc_3D(&corners_loc[0], num_corners);
     // const auto Wr = compute_Wr_3D(q);
@@ -3788,13 +3861,14 @@ double
 face_integral(const double* const corners,
               const int num_corners,
               const int dim,
-              const double* const corner_values)
+              const double* const corner_values,
+              const char* const corner_mask)
 // ----------------------------------------------------------------------------
 {
     assert(dim == 2 || dim == 3);
 
-    return dim == 2 ? face_integral_impl<2>(corners, num_corners, corner_values)
-                    : face_integral_impl<3>(corners, num_corners, corner_values);
+    return dim == 2 ? face_integral_impl<2>(corners, num_corners, corner_values, corner_mask)
+                    : face_integral_impl<3>(corners, num_corners, corner_values, corner_mask);
 }
 
 // ----------------------------------------------------------------------------

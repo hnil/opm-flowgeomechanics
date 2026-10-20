@@ -435,6 +435,7 @@ private:
     int num_cells_;
     std::vector<double> coords_;
     std::vector<int> num_cell_faces_, num_face_corners_,face_corners_;
+    std::vector<char> corner_mask_; // per face_corners_ entry: a grid corner of its face
     std::vector<int> idx_free_;
 
     std::vector<double> rhs_force_;
