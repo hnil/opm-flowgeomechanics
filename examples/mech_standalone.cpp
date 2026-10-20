@@ -161,13 +161,103 @@ main(int argc, char** argv)
     const auto deck = parser.parseFile(arg["grid"], ctx, guard);
     Opm::EclipseState state(deck);
     Dune::CpGrid grid;
-    grid.processEclipseFormat(&state.getInputGrid(), &state, false, false, false, /*edge_conformal*/ true);
+    if (state.getLgrs().size() > 0)
+        grid.setLgrBackend(Opm::Refinement::Backend::Conforming);
+    grid.processEclipseFormat(&state.getInputGrid(), &state, false, false, false, /*edge_conformal*/ true,
+                              arg.count("merge") ? std::stod(arg["merge"]) : 0.0);
+    if (const auto& lgrs = state.getLgrs(); lgrs.size() > 0) { // CARFIN boxes, uniform only
+        std::vector<std::array<int, 3>> cpd, start, end;
+        std::vector<std::string> names;
+        for (std::size_t i = 0; i < lgrs.size(); ++i) {
+            const auto l = lgrs.getLgr(i);
+            cpd.push_back({l.NX() / (l.I2() + 1 - l.I1()), l.NY() / (l.J2() + 1 - l.J1()),
+                           l.NZ() / (l.K2() + 1 - l.K1())});
+            start.push_back({l.I1(), l.J1(), l.K1()});
+            end.push_back({l.I2() + 1, l.J2() + 1, l.K2() + 1});
+            names.push_back(l.NAME());
+        }
+        grid.addLgrsUpdateLeafView(cpd, start, end, names);
+        std::printf("LGR: leaf has %d cells\n", grid.size(0));
+    }
     const auto& gv = grid.leafGridView();
 
     std::vector<double> coords;
     std::vector<int> ncf, nfc, fc;
     vem::getGridVectors(grid, coords, ncf, nfc, fc);
     const int nn = int(coords.size() / 3), nc = grid.size(0);
+    if (arg.count("orientdiff")) { // the grid's winding against the old centroid test and the face normal
+        int ndiff = 0, ntot = 0, nwind = 0;
+        for (int c = 0; c < grid.size(0); ++c)
+            for (int f = 0; f < grid.numCellFaces(c); ++f) {
+                const int face = grid.cellFace(c, f), m = grid.numFaceVertices(face);
+                if (m < 3)
+                    continue;
+                const auto fcen = grid.faceCentroid(face), cc = grid.cellCentroid(c), nrm = grid.faceNormal(face);
+                double nn[3] = {0, 0, 0}, old_out = 0, along = 0;
+                for (int v = 0; v < m; ++v) {
+                    const auto a = grid.vertexPosition(grid.faceVertex(face, v));
+                    const auto b = grid.vertexPosition(grid.faceVertex(face, (v + 1) % m));
+                    const double u[3] = {a[0] - fcen[0], a[1] - fcen[1], a[2] - fcen[2]};
+                    const double w[3] = {b[0] - fcen[0], b[1] - fcen[1], b[2] - fcen[2]};
+                    nn[0] += u[1] * w[2] - u[2] * w[1], nn[1] += u[2] * w[0] - u[0] * w[2],
+                        nn[2] += u[0] * w[1] - u[1] * w[0];
+                }
+                for (int d = 0; d < 3; ++d)
+                    old_out += nn[d] * (fcen[d] - cc[d]), along += nn[d] * nrm[d];
+                ndiff += (old_out >= 0) != (grid.faceCell(face, 0) == c), ++ntot;
+                nwind += !(along > 0);
+            }
+        std::printf("orientation: %d of %d cell-faces wound differently from the centroid test, "
+                    "%d not wound around the face normal\n", ndiff, ntot, nwind);
+    }
+    if (arg.count("dump")) {
+        // raw CpGrid faces of the listed global cells and the winding getGridVectors gives them
+        std::set<int> want;
+        for (std::size_t p = 0, e; p < arg["dump"].size(); p = e + 1) {
+            e = arg["dump"].find(',', p);
+            if (e == std::string::npos)
+                e = arg["dump"].size();
+            want.insert(std::stoi(arg["dump"].substr(p, e - p)));
+        }
+        for (int c = 0; c < grid.size(0); ++c) {
+            const int g = grid.globalCell()[c];
+            if (!want.count(g))
+                continue;
+            const auto cc = grid.cellCentroid(c);
+            std::printf("cell %d (global %d, ijk %d %d %d) vol %.4g centroid %.3f %.3f %.3f\n", c, g, g % 46,
+                        (g / 46) % 112, g / (46 * 112), grid.cellVolume(c), cc[0], cc[1], cc[2]);
+            const auto row = grid.cellFaceRow(c);
+            for (int f = 0; f < grid.numCellFaces(c); ++f) {
+                const int face = grid.cellFace(c, f);
+                const int m = grid.numFaceVertices(face);
+                const auto fcen = grid.faceCentroid(face);
+                const auto nrm = grid.faceNormal(face);
+                double out = 0, nn[3] = {0, 0, 0}, ndotn = 0;
+                for (int d = 0; d < 3; ++d)
+                    out += nrm[d] * (fcen[d] - cc[d]);
+                for (int v = 0; v < m; ++v) {
+                    const auto a = grid.vertexPosition(grid.faceVertex(face, v));
+                    const auto b = grid.vertexPosition(grid.faceVertex(face, (v + 1) % m));
+                    const double u[3] = {a[0] - fcen[0], a[1] - fcen[1], a[2] - fcen[2]};
+                    const double w[3] = {b[0] - fcen[0], b[1] - fcen[1], b[2] - fcen[2]};
+                    nn[0] += u[1] * w[2] - u[2] * w[1], nn[1] += u[2] * w[0] - u[0] * w[2],
+                        nn[2] += u[0] * w[1] - u[1] * w[0];
+                }
+                for (int d = 0; d < 3; ++d)
+                    ndotn += nn[d] * nrm[d];
+                std::printf("  -> polygon.n %.4g  forward %d\n", ndotn, grid.faceCell(face, 0) == c);
+                std::printf("  face %d orient %d cells %d %d area %.4g n.(xf-xc) %.4g nodes:", face,
+                            int(row[f].orientation()), grid.faceCell(face, 0),
+                            grid.faceCell(face, 1), grid.faceArea(face), out);
+                for (int v = 0; v < m; ++v) {
+                    const int n = grid.faceVertex(face, v);
+                    const auto x = grid.vertexPosition(n);
+                    std::printf(" %d(%.3f,%.3f,%.4f)", n, x[0], x[1], x[2]);
+                }
+                std::printf("\n");
+            }
+        }
+    }
     {
         int mism = 0;
         double dmax = 0;
@@ -182,7 +272,7 @@ main(int argc, char** argv)
             std::printf("coords vs vertexPosition: %d mismatches (max %.3g)\n", mism, dmax);
     }
     {
-        // grid check: every cell must be a closed polyhedron whose divergence volume matches
+        // grid check: every cell must be a closed polyhedron with positive divergence volume
         int open = 0, nonpos = 0, mism = 0, shortedge = 0;
         std::FILE* bad = arg.count("badcells") ? std::fopen(arg["badcells"].c_str(), "w") : nullptr;
         std::FILE* q = arg.count("cellq") ? std::fopen(arg["cellq"].c_str(), "w") : nullptr;
@@ -216,19 +306,22 @@ main(int argc, char** argv)
             }
             const double vol = grid.cellVolume(c2);
             const bool is_open = unpaired > 0, is_neg = !(vol6 > 0);
+            // not a validity test: cellVolume sums |tet| volumes, too large on thin warped wedges
             const bool is_mism = std::abs(vol6 / 6 - vol) > 0.05 * std::abs(vol);
             open += is_open, nonpos += is_neg, mism += is_mism, shortedge += emin < 0.01;
-            if (bad && (is_open || is_neg || is_mism))
+            if (bad && (is_open || is_neg))
                 std::fprintf(bad, "%d\n", grid.globalCell()[c2]);
-            if (q) // global cell, shortest edge, volume, faces, nodes
-                std::fprintf(q, "%d %.4g %.4g %d %zu\n", grid.globalCell()[c2], emin, vol, ncf[c2], dir.size());
+            if (q) // global cell, shortest edge, volume, faces, directed edges, divergence volume, unpaired
+                std::fprintf(q, "%d %.4g %.4g %d %zu %.4g %d\n", grid.globalCell()[c2], emin, vol, ncf[c2],
+                             dir.size(), vol6 / 6, unpaired);
         }
         if (bad)
             std::fclose(bad);
         if (q)
             std::fclose(q);
-        std::printf("grid check: %d cells, %d open surfaces, %d non-positive volume, %d volume mismatch > 5%%, "
-                    "%d with an edge < 1 cm\n", nc, open, nonpos, mism, shortedge);
+        std::printf("grid check: %d cells, %d invalid (%d open surfaces, %d non-positive volume); "
+                    "%d differ > 5%% from cellVolume, %d with an edge < 1 cm\n",
+                    nc, open + nonpos, open, nonpos, mism, shortedge);
         if (arg.count("checkonly"))
             return 0;
     }
