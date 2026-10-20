@@ -103,6 +103,7 @@ struct Result
     std::array<int,3> origin{};
     double moved = 0.0;    // largest corner move by straightening
     int folded = 0;        // columns whose pillars cross or fold within the grid's depths
+    int evened = 0;        // pillars whose bend moved to keep a column unfolded
 };
 
 inline std::size_t zIndex(const std::array<int,3>& d, int i, int j, int k,
@@ -225,6 +226,48 @@ inline Grdecl padLateral(const Grdecl& in, int axis, const Padding& pad,
         out.bend.assign(2*std::size_t(pxOut)*(out.dims[1] + 1),
                         std::numeric_limits<double>::quiet_NaN());
     }
+
+    // Vertical pillars move out along one direction per side, by the side's
+    // largest drift, so each padding row is a translate of the box edge.
+    std::array<std::array<double,2>,2> sideDir{};
+    std::array<double,2> sideDrift{};
+    if (pad.verticalPillars && n > 0) {
+        const int other = 1 - axis;
+        for (int side = 0; side < 2; ++side) {
+            const auto pillarOf = [&](int t, int a) {
+                std::array<int,2> c{};
+                c[axis] = a;
+                c[other] = t;
+                return c[0] + pxIn*c[1];
+            };
+            const int edge = side == 0 ? 0 : d[axis], inner = side == 0 ? 1 : d[axis] - 1;
+            double ux = 0.0, uy = 0.0;
+            for (int t = 0; t <= d[other]; ++t) {
+                const int pe = pillarOf(t, edge), pi = pillarOf(t, inner);
+                const auto a = pillarAt(&in.coord[6*pe], zref, bendOf(pe));
+                const auto b = pillarAt(&in.coord[6*pi], zref, bendOf(pi));
+                const double len = std::hypot(a[0] - b[0], a[1] - b[1]);
+                if (len > 0.0) {
+                    ux += (a[0] - b[0])/len;
+                    uy += (a[1] - b[1])/len;
+                }
+            }
+            const double len = std::hypot(ux, uy);
+            if (!(len > 0.0)) {
+                OPM_THROW(std::runtime_error, "Mechanics padding: no outward direction at the box edge");
+            }
+            sideDir[side] = {ux/len, uy/len};
+            for (int t = 0; t <= d[other]; ++t) {
+                const int pe = pillarOf(t, edge);
+                const auto a = pillarAt(&in.coord[6*pe], zref, bendOf(pe));
+                for (const double z : {zlo, zhi}) {
+                    const auto p = pillarAt(&in.coord[6*pe], z, bendOf(pe));
+                    sideDrift[side] = std::max(sideDrift[side], (p[0] - a[0])*sideDir[side][0]
+                                                              + (p[1] - a[1])*sideDir[side][1]);
+                }
+            }
+        }
+    }
     for (int pj = 0; pj <= out.dims[1]; ++pj)
     for (int pi = 0; pi <= out.dims[0]; ++pi) {
         std::array<int,2> q{pi, pj};
@@ -259,15 +302,10 @@ inline Grdecl padLateral(const Grdecl& in, int axis, const Padding& pad,
                 OPM_THROW(std::runtime_error, "Mechanics padding: zero pillar spacing at the box edge");
             }
             if (pad.verticalPillars) {
-                ux /= len;
-                uy /= len;
-                double drift = 0.0;
-                for (const double z : {zlo, zhi}) {
-                    const auto p = pillarAt(src, z, bendOf(ps_));
-                    drift = std::max(drift, (p[0] - ps[0])*ux + (p[1] - ps[1])*uy);
-                }
-                dst[0] = dst[3] = ps[0] + (drift + shift)*ux;
-                dst[1] = dst[4] = ps[1] + (drift + shift)*uy;
+                const int side = s[axis] == 0 ? 0 : 1;
+                const auto& u = sideDir[side];
+                dst[0] = dst[3] = ps[0] + (sideDrift[side] + shift)*u[0];
+                dst[1] = dst[4] = ps[1] + (sideDrift[side] + shift)*u[1];
             } else {
                 ux *= shift/len;
                 uy *= shift/len;
@@ -427,12 +465,86 @@ inline std::vector<double> boxBends(const Grdecl& g)
     return b;
 }
 
+/// Whether column (i, j)'s pillars, between depths z0 and z1, lose the
+/// orientation they have at depth zr.
+inline bool columnFolds(const Grdecl& g, int i, int j, double z0, double z1, double zr)
+{
+    const int px = g.dims[0] + 1;
+    const std::array<int,4> ring{i + px*j, i + 1 + px*j, i + 1 + px*(j + 1), i + px*(j + 1)};
+    const auto corners = [&](double z, std::array<double,4>& cr) {
+        std::array<std::array<double,2>,4> p;
+        for (int a = 0; a < 4; ++a) {
+            p[a] = pillarAt(&g.coord[6*ring[a]], z, g.bend.empty() ? nullptr : &g.bend[2*ring[a]]);
+        }
+        for (int a = 0; a < 4; ++a) {
+            const auto& o = p[a];
+            const auto& n = p[(a + 1) % 4];
+            const auto& b = p[(a + 3) % 4];
+            cr[a] = (n[0] - o[0])*(b[1] - o[1]) - (n[1] - o[1])*(b[0] - o[0]);
+        }
+    };
+    std::array<double,4> ref, cr;
+    corners(zr, ref);
+    for (int s = 0; s <= 8; ++s) {
+        corners(z0 + s*(z1 - z0)/8, cr);
+        for (int a = 0; a < 4; ++a) {
+            if (cr[a]*ref[0] <= 0.0) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/// Where a column folds above (below) the box because its pillars bend at
+/// different depths, bend all four at the shallowest (deepest) of them.
+inline int evenBends(Grdecl& g)
+{
+    const auto& d = g.dims;
+    const int px = d[0] + 1;
+    std::vector<char> moved(g.bend.size()/2, 0);
+    for (bool changed = true; changed;) {
+        changed = false;
+        for (int j = 0; j < d[1]; ++j)
+        for (int i = 0; i < d[0]; ++i) {
+            const std::array<int,4> ring{i + px*j, i + 1 + px*j, i + 1 + px*(j + 1), i + px*(j + 1)};
+            double top = std::numeric_limits<double>::max(), bot = std::numeric_limits<double>::lowest();
+            double hi = top, lo = bot, topMax = bot, botMin = top;
+            for (int c = 0; c < 4; ++c) {
+                top = std::min(top, g.zcorn[zIndex(d, i, j, 0, c & 1, c >> 1, 0)]);
+                bot = std::max(bot, g.zcorn[zIndex(d, i, j, d[2] - 1, c & 1, c >> 1, 1)]);
+            }
+            for (const int p : ring) {
+                hi = std::min(hi, g.bend[2*p]);
+                topMax = std::max(topMax, g.bend[2*p]);
+                lo = std::max(lo, g.bend[2*p + 1]);
+                botMin = std::min(botMin, g.bend[2*p + 1]);
+            }
+            const double mid = 0.5*(top + bot);
+            if (topMax > hi && columnFolds(g, i, j, hi - 1.0, top, mid)) {
+                for (const int p : ring) {
+                    moved[p] |= g.bend[2*p] != hi;
+                    g.bend[2*p] = hi;
+                }
+                changed = true;
+            }
+            if (botMin < lo && columnFolds(g, i, j, bot, lo + 1.0, mid)) {
+                for (const int p : ring) {
+                    moved[p] |= g.bend[2*p + 1] != lo;
+                    g.bend[2*p + 1] = lo;
+                }
+                changed = true;
+            }
+        }
+    }
+    return std::count(moved.begin(), moved.end(), 1);
+}
+
 /// Columns whose four pillars, taken at the column's own depths, do not keep
 /// the orientation they have at the column's mid-depth.
 inline int foldedColumns(const Grdecl& g)
 {
     const auto& d = g.dims;
-    const int px = d[0] + 1;
     int folded = 0;
     for (int j = 0; j < d[1]; ++j)
     for (int i = 0; i < d[0]; ++i) {
@@ -443,30 +555,7 @@ inline int foldedColumns(const Grdecl& g)
             zmin = std::min(zmin, z);
             zmax = std::max(zmax, z);
         }
-        const std::array<int,4> ring{i + px*j, i + 1 + px*j, i + 1 + px*(j + 1), i + px*(j + 1)};
-        const auto corners = [&](double z, std::array<double,4>& cr) {
-            std::array<std::array<double,2>,4> p;
-            for (int a = 0; a < 4; ++a) {
-                p[a] = pillarAt(&g.coord[6*ring[a]], z,
-                                g.bend.empty() ? nullptr : &g.bend[2*ring[a]]);
-            }
-            for (int a = 0; a < 4; ++a) {
-                const auto& o = p[a];
-                const auto& n = p[(a + 1) % 4];
-                const auto& b = p[(a + 3) % 4];
-                cr[a] = (n[0] - o[0])*(b[1] - o[1]) - (n[1] - o[1])*(b[0] - o[0]);
-            }
-        };
-        std::array<double,4> mid, cr;
-        corners(0.5*(zmin + zmax), mid);
-        bool bad = false;
-        for (int s = 0; s <= 4 && !bad; ++s) {
-            corners(zmin + 0.25*s*(zmax - zmin), cr);
-            for (int a = 0; a < 4; ++a) {
-                bad = bad || cr[a]*mid[0] <= 0.0;
-            }
-        }
-        folded += bad;
+        folded += columnFolds(g, i, j, zmin, zmax, 0.5*(zmin + zmax));
     }
     return folded;
 }
@@ -480,6 +569,7 @@ inline Result build(const Grdecl& deck, const Spec& spec)
     }
     if (spec.bendPillars) {
         r.grid.bend = boxBends(r.grid);
+        r.evened = evenBends(r.grid);
     }
     if (spec.lateral.cells > 0) {
         // Depth range of the finished grid, which the vertical pillars must clear.

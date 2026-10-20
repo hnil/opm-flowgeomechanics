@@ -455,6 +455,10 @@ public:
         if (spec.straighten) {
             os << "; pillars straightened, corners moved up to " << built.moved << " m";
         }
+        if (spec.bendPillars) {
+            os << "; pillars bent at the box top and bottom (" << built.evened
+               << " moved to unfold a column)";
+        }
         OpmLog::info(os.str());
         if (built.folded > 0) {
             OpmLog::warning("Mechanics sector: " + std::to_string(built.folded) + " of "
