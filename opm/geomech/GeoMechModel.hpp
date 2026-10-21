@@ -394,6 +394,17 @@ namespace Opm{
                                                 fixed,
                                                 "fixed_values_",
                                                 elacticitysolver_->comm());
+                        // node coordinates in dof order, for offline solver studies
+                        Dune::BlockVector<Dune::FieldVector<double,1>> xyz(3*num_points);
+                        const auto& gv = this->mechGrid().leafGridView();
+                        for (const auto& v : vertices(gv)) {
+                            const auto idx = gv.indexSet().index(v);
+                            const auto c = v.geometry().center();
+                            for (int i = 0; i < 3; ++i) {
+                                xyz[3*idx+i][0] = c[i];
+                            }
+                        }
+                        Opm::Helper::writeVector(simulator_, xyz, "coords_", elacticitysolver_->comm());
                     }
         }
       void setOutputPutStress(const Dune::BlockVector<Dune::FieldVector<double,6> >& initstress){
