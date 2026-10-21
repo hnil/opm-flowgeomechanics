@@ -73,6 +73,9 @@ namespace Opm::Parameters {
     struct MechGrid {
         inline static std::string value{"flow"};
     };
+    struct MechGridVtu {
+        inline static std::string value{""};
+    };
     struct MechFillHoles {
         inline static bool value{true};
     };
@@ -176,6 +179,7 @@ namespace Opm{
 	    Parameters::Register<Parameters::MechCoarsenFile>("file of COARSEN records (I1 I2 J1 J2 K1 K2 NX NY NZ, one per line) giving a mechanics grid coarser than the flow grid");
 	    Parameters::Register<Parameters::MechGridCheck>("check that the mechanics grid is a geometric body (no voids, cracks or hanging nodes): error, warn or off");
 	    Parameters::Register<Parameters::MechGrid>("mechanics grid: flow (the flow grid itself) or separate (rebuilt edge-conformal from the same corner points, so flow may be processed without --edge-conformal)");
+	    Parameters::Register<Parameters::MechGridVtu>("with --mech-grid=separate: write the mechanics grid to this .vtu file");
 	    Parameters::Register<Parameters::MechFillHoles>("with --mech-grid=separate: inactive cells with volume (MINPV, ACTNUM) become rock of the touching active cell below or above");
 	    Parameters::Register<Parameters::MechThinCellThickness>("collapse cells thinner than this (m) in the mechanics grid only, keeping the deck's LGRs; 0 is off; implies --mech-grid=separate");
 	    Parameters::Register<Parameters::MechCoarsenMethod>("how to build the mechanics grid: auto (collapse, with the corner-point checks where they apply), collapse (merge cells of the flow grid, one face between coarse cells), grdecl (corner-point description) or merge (keep every fine face)");

@@ -683,6 +683,9 @@ namespace Opm{
                                                : std::vector<Coarsening::CoarsenRequest>{},
                         eclState.getLgrs(), flowGrid,
                         simulator.vanguard().cartesianIndexMapper());
+                    if (const std::string vtu = Parameters::Get<Parameters::MechGridVtu>(); !vtu.empty()) {
+                        mechGridContext_->writeVtu(vtu);
+                    }
                     geoMechModel_.setMechGrid(*mechGridContext_);
                 }
                 geoMechModel_.init(initconfig.restartRequested());

@@ -350,6 +350,73 @@ public:
     bool fromCornerPoints() const { return fromCornerPoints_; }
     const std::array<int,3>& fineDims() const { return fineDims_; }
 
+    /// The leaf grid as VTK hexahedra (8 corners per cell, unshared), with
+    /// each cell's level and number of flow cells; for looking at the grid.
+    void writeVtu(const std::string& filename) const
+    {
+        const auto& gv = grid_->leafGridView();
+        std::vector<int> flowCells(gv.size(0), 0);
+        for (std::size_t f = 0; f < map_.numFlowCells(); ++f) {
+            if (const int m = map_.mechCell(f); m >= 0) {
+                ++flowCells[m];
+            }
+        }
+        std::ofstream os(filename);
+        os.precision(12);
+        const auto n = gv.size(0);
+        os << "<?xml version=\"1.0\"?>\n<VTKFile type=\"UnstructuredGrid\" version=\"0.1\""
+           << " byte_order=\"LittleEndian\">\n"
+           << "<UnstructuredGrid><Piece NumberOfPoints=\"" << 8*n << "\" NumberOfCells=\"" << n
+           << "\">\n";
+        // ResInsight's reader needs a displacement field.
+        os << "<PointData Vectors=\"disp\">\n<DataArray type=\"Float32\" Name=\"disp\" "
+           << "NumberOfComponents=\"3\" format=\"ascii\">\n";
+        for (std::size_t p = 0; p < 8*n; ++p) {
+            os << "0 0 0\n";
+        }
+        os << "</DataArray>\n</PointData>\n<Points><DataArray type=\"Float64\" Name=\"Coordinates\" NumberOfComponents=\"3\" format=\"ascii\">\n";
+        // Dune's corner order to VTK's hexahedron order.
+        constexpr int toVtk[8] = {0, 1, 3, 2, 4, 5, 7, 6};
+        std::vector<int> level(n), index(n);
+        for (const auto& cell : elements(gv)) {
+            const int c = gv.indexSet().index(cell);
+            level[c] = cell.level();
+            for (const int k : toVtk) {
+                os << cell.geometry().corner(k) << "\n";
+            }
+        }
+        os << "</DataArray></Points>\n<Cells><DataArray type=\"Int64\" Name=\"connectivity\" format=\"ascii\">\n";
+        for (std::size_t p = 0; p < 8*n; ++p) {
+            os << p << ((p % 8 == 7) ? "\n" : " ");
+        }
+        os << "</DataArray><DataArray type=\"Int64\" Name=\"offsets\" format=\"ascii\">\n";
+        for (std::size_t c = 1; c <= n; ++c) {
+            os << 8*c << "\n";
+        }
+        os << "</DataArray><DataArray type=\"UInt8\" Name=\"types\" format=\"ascii\">\n";
+        for (std::size_t c = 0; c < n; ++c) {
+            os << "12\n";
+        }
+        os << "</DataArray></Cells>\n<CellData>\n<DataArray type=\"Float32\" Name=\"LEVEL\" format=\"ascii\">\n";
+        for (const int v : level) {
+            os << v << "\n";
+        }
+        os << "</DataArray>\n<DataArray type=\"Float32\" Name=\"FLOWCELLS\" format=\"ascii\">\n";
+        for (const int v : flowCells) {
+            os << v << "\n";
+        }
+        // Logical (parent) IJK, for slicing in ResInsight.
+        os << "</DataArray>\n<DataArray type=\"Float32\" Name=\"ijk\" NumberOfComponents=\"3\" "
+           << "format=\"ascii\">\n";
+        const Dune::CartesianIndexMapper<Dune::CpGrid> mapper(*grid_);
+        for (std::size_t c = 0; c < n; ++c) {
+            std::array<int,3> ijk{};
+            mapper.cartesianCoordinate(static_cast<int>(c), ijk);
+            os << ijk[0] << " " << ijk[1] << " " << ijk[2] << "\n";
+        }
+        os << "</DataArray>\n</CellData>\n</Piece></UnstructuredGrid>\n</VTKFile>\n";
+    }
+
     /// The unrefined mechanics cell whose face carries the given face of flow
     /// Cartesian cell `fineCart`, or -1 if that face is inside a coarse cell.
     int cellOfFineFace(const int fineCart, const FaceDir::DirEnum dir) const
