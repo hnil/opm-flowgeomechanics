@@ -681,6 +681,7 @@ namespace Opm{
                         thin, Parameters::Get<Parameters::MechFillHoles>(),
                         coarsen_file != "none" ? MechGridContext::readRecords(coarsen_file)
                                                : std::vector<Coarsening::CoarsenRequest>{},
+                        Parameters::Get<Parameters::MechCoarsenMethod>() == "merge",
                         eclState.getLgrs(), flowGrid,
                         simulator.vanguard().cartesianIndexMapper());
                     if (const std::string vtu = Parameters::Get<Parameters::MechGridVtu>(); !vtu.empty()) {

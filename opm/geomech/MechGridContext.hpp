@@ -271,13 +271,15 @@ public:
     /// The flow grid's corner points processed edge-conformal, with cells
     /// thinner than `thickness` (0: none) collapsed into the cell below (above
     /// at the bottom), inactive cells with volume filled the same way when
-    /// `fillHoles`, coarsened by `requests` as a corner-point grid, and the
-    /// deck's LGRs refined again. Flow is untouched. Serial only.
+    /// `fillHoles`, coarsened by `requests` (each block one polyhedral cell
+    /// with `merge`, else a corner-point coarsening), and the deck's LGRs
+    /// refined again. Flow is untouched. Serial only.
     template <class FlowGrid, class CartesianMapper>
     MechGridContext(const RetainedCornerPointInput* processed,
                     const double thickness,
                     const bool fillHoles,
                     const std::vector<Coarsening::CoarsenRequest>& requests,
+                    const bool merge,
                     const LgrCollection& lgrs,
                     const FlowGrid& flowGrid,
                     const CartesianMapper& flowCartesianMapper)
@@ -295,51 +297,66 @@ public:
             closeVerticalGaps_(*input);
             input->edgeConformal = true;
         }
-        const auto absorber = collapseThinCells_(*input, thickness, fillHoles, lgrs);
+        Coarsening::BlockLayout layout;
+        std::vector<char> merged;
+        if (merge && !requests.empty()) {
+            layout = mergeLayout_(*input, requests, lgrs, thickness);
+            merged.resize(layout.blockOfCartesian.size());
+            for (std::size_t c = 0; c < merged.size(); ++c) {
+                const auto& box = layout.boxes[layout.blockOfCartesian[c]];
+                merged[c] = box[0] != box[3] || box[1] != box[4] || box[2] != box[5];
+            }
+        }
+        // A sliver inside a merged block is part of one cell anyway.
+        const auto absorber = collapseThinCells_(*input, thickness, fillHoles, lgrs, merged);
         fineDims_ = input->dims;
         fromCornerPoints_ = true;
 
-        auto mechInput = input;
-        std::vector<int> fineToCoarse(absorber.size());
-        std::iota(fineToCoarse.begin(), fineToCoarse.end(), 0);
-        if (!requests.empty()) {
-            Coarsening::Grdecl fine{input->dims, input->coord, input->zcorn, input->actnum};
-            Coarsening::Options options;
-            options.activity = Coarsening::Activity::FillHoles;
-            options.allowVerticalGaps = true;
-            auto result = Coarsening::coarsenCornerPoint(fine, requests, options);
-            for (const auto& note : result.report.notes) {
-                OpmLog::info("Mechanics grid: " + note);
+        if (merge && !requests.empty()) {
+            buildMerged_(input, layout, absorber, lgrs, flowGrid.comm());
+        } else {
+            auto mechInput = input;
+            std::vector<int> fineToCoarse(absorber.size());
+            std::iota(fineToCoarse.begin(), fineToCoarse.end(), 0);
+            if (!requests.empty()) {
+                Coarsening::Grdecl fine{input->dims, input->coord, input->zcorn, input->actnum};
+                Coarsening::Options options;
+                options.activity = Coarsening::Activity::FillHoles;
+                options.allowVerticalGaps = true;
+                auto result = Coarsening::coarsenCornerPoint(fine, requests, options);
+                for (const auto& note : result.report.notes) {
+                    OpmLog::info("Mechanics grid: " + note);
+                }
+                mechInput = std::make_shared<RetainedCornerPointInput>();
+                mechInput->dims = result.grid.dims;
+                mechInput->coord = std::move(result.grid.coord);
+                mechInput->zcorn = std::move(result.grid.zcorn);
+                mechInput->actnum = std::move(result.grid.actnum);
+                mechInput->edgeConformal = true;
+                mechInput->pinchActive = true;
+                fineToCoarse = std::move(result.fineToCoarse);
+                blocks_ = std::move(result.blocks);
             }
-            mechInput = std::make_shared<RetainedCornerPointInput>();
-            mechInput->dims = result.grid.dims;
-            mechInput->coord = std::move(result.grid.coord);
-            mechInput->zcorn = std::move(result.grid.zcorn);
-            mechInput->actnum = std::move(result.grid.actnum);
-            mechInput->edgeConformal = true;
-            mechInput->pinchActive = true;
-            fineToCoarse = std::move(result.fineToCoarse);
-            blocks_ = std::move(result.blocks);
-        }
 
-        grid_ = std::make_unique<Dune::CpGrid>(flowGrid.comm());
-        grid_->setLgrBackend(Refinement::Backend::Conforming);
-        const grdecl raw{ { mechInput->dims[0], mechInput->dims[1], mechInput->dims[2] },
-                          mechInput->coord.data(), mechInput->zcorn.data(),
-                          mechInput->actnum.empty() ? nullptr : mechInput->actnum.data() };
-        // Edge-conformal processing joins cells across zero-thickness ones as
-        // a pinch would; the retained flag is the deck's.
-        grid_->processEclipseFormat(raw, mechInput->pinchNnc, /*pinchActive*/ true,
-                                    /*edge_conformal*/ true);
-        Refinement::GridStateWriter::setRetainedCornerPointInput(*grid_->currentData().front(),
-                                                                 mechInput);
-        if (lgrs.size() > 0) {
-            grid_->addLgrsUpdateLeafView(lgrRequests_(lgrs, input->dims, mechInput->dims,
-                                                      fineToCoarse));
-        }
-        fineToMech_.resize(absorber.size());
-        for (std::size_t f = 0; f < absorber.size(); ++f) {
-            fineToMech_[f] = fineToCoarse[absorber[f]];
+            grid_ = std::make_unique<Dune::CpGrid>(flowGrid.comm());
+            grid_->setLgrBackend(Refinement::Backend::Conforming);
+            const grdecl raw{ { mechInput->dims[0], mechInput->dims[1], mechInput->dims[2] },
+                              mechInput->coord.data(), mechInput->zcorn.data(),
+                              mechInput->actnum.empty() ? nullptr : mechInput->actnum.data() };
+            // Edge-conformal processing joins cells across zero-thickness ones as
+            // a pinch would; the retained flag is the deck's.
+            grid_->processEclipseFormat(raw, mechInput->pinchNnc, /*pinchActive*/ true,
+                                        /*edge_conformal*/ true);
+            Refinement::GridStateWriter::setRetainedCornerPointInput(*grid_->currentData().front(),
+                                                                     mechInput);
+            if (lgrs.size() > 0) {
+                grid_->addLgrsUpdateLeafView(lgrRequests_(lgrs, input->dims, mechInput->dims,
+                                                          fineToCoarse));
+            }
+            fineToMech_.resize(absorber.size());
+            for (std::size_t f = 0; f < absorber.size(); ++f) {
+                fineToMech_[f] = fineToCoarse[absorber[f]];
+            }
         }
         buildLeafMap_(fineToMech_, flowGrid, flowCartesianMapper);
     }
@@ -496,6 +513,193 @@ private:
         const IndexSet& index_set_;
     };
 
+    /// Each block of `requests` one cell, the union of its fine cells with all
+    /// their outer faces: a local coarsening, the inverse of an LGR. Keeps the
+    /// fine Cartesian space; a block is known by its first cell.
+    /// The blocks of `requests`, less those that cannot be merged: a corner
+    /// column without a cell (no eight corners), touching an LGR box (which
+    /// needs fine neighbours to refine against), or holding a cell thinner
+    /// than `thickness` (merging a sliver leaves hanging edges; it is
+    /// collapsed instead), or crossed by a fault.
+    static Coarsening::BlockLayout mergeLayout_(const RetainedCornerPointInput& input,
+                                                const std::vector<Coarsening::CoarsenRequest>& requests,
+                                                const LgrCollection& lgrs,
+                                                const double thickness)
+    {
+        const auto& d = input.dims;
+        auto layout = Coarsening::blockLayout(d, requests);
+        const auto cart = [&d](int i, int j, int k) { return i + d[0]*(j + d[1]*k); };
+        const auto present = [&](int i, int j, int k) {
+            if (!input.actnum.empty() && input.actnum[cart(i, j, k)] == 0) {
+                return false;
+            }
+            for (int c = 0; c < 4; ++c) {
+                const std::size_t top = 2*i + (c & 1) + 2*d[0]*(2*j + (c >> 1))
+                    + 4*static_cast<std::size_t>(d[0])*d[1]*(2*k);
+                if (input.zcorn[top + 4*static_cast<std::size_t>(d[0])*d[1]] != input.zcorn[top]) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        const auto touchesLgr = [&lgrs](const std::array<int,6>& box) {
+            for (std::size_t l = 0; l < lgrs.size(); ++l) {
+                const auto& b = lgrs.getLgr(l);
+                if (box[0] <= b.I2() + 1 && box[3] >= b.I1() - 1 && box[1] <= b.J2() + 1
+                    && box[4] >= b.J1() - 1 && box[2] <= b.K2() + 1 && box[5] >= b.K1() - 1) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        const auto thin = [&](int i, int j, int k) {
+            double mean = 0.0;
+            for (int c = 0; c < 4; ++c) {
+                const std::size_t top = 2*i + (c & 1) + 2*d[0]*(2*j + (c >> 1))
+                    + 4*static_cast<std::size_t>(d[0])*d[1]*(2*k);
+                mean += 0.25*(input.zcorn[top + 4*static_cast<std::size_t>(d[0])*d[1]] - input.zcorn[top]);
+            }
+            return mean > 0.0 && mean < thickness;
+        };
+        const auto zc = [&](int i, int j, int k, int di, int dj, int dk) {
+            return input.zcorn[2*i + di + 2*d[0]*(2*j + dj)
+                               + 4*static_cast<std::size_t>(d[0])*d[1]*(2*k + dk)];
+        };
+        // A throw between two columns of the block.
+        const auto faulted = [&](const std::array<int,6>& box) {
+            for (int k = box[2]; k <= box[5]; ++k) {
+                for (int j = box[1]; j <= box[4]; ++j) {
+                    for (int i = box[0]; i <= box[3]; ++i) {
+                        for (int a = 0; a < 2; ++a) {
+                            for (int dk = 0; dk < 2; ++dk) {
+                                if (i < box[3] && zc(i, j, k, 1, a, dk) != zc(i + 1, j, k, 0, a, dk)) {
+                                    return true;
+                                }
+                                if (j < box[4] && zc(i, j, k, a, 1, dk) != zc(i, j + 1, k, a, 0, dk)) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return false;
+        };
+        int noCorner = 0, nearLgr = 0, sliver = 0, fault = 0;
+        const std::size_t numBoxes = layout.boxes.size();
+        std::vector<char> broken(numBoxes, 0);
+        for (std::size_t b = 0; b < numBoxes; ++b) {
+            const auto box = layout.boxes[b];
+            if (box[0] == box[3] && box[1] == box[4] && box[2] == box[5]) {
+                continue;
+            }
+            if (touchesLgr(box)) {
+                broken[b] = 1;
+                ++nearLgr;
+                continue;
+            }
+            for (int k = box[2]; k <= box[5] && !broken[b]; ++k) {
+                for (int j = box[1]; j <= box[4] && !broken[b]; ++j) {
+                    for (int i = box[0]; i <= box[3] && !broken[b]; ++i) {
+                        broken[b] = thin(i, j, k);
+                    }
+                }
+            }
+            if (broken[b]) {
+                ++sliver;
+                continue;
+            }
+            if (faulted(box)) {
+                broken[b] = 1;
+                ++fault;
+                continue;
+            }
+            for (int corner = 0; corner < 4 && !broken[b]; ++corner) {
+                const int i = (corner & 1) ? box[3] : box[0];
+                const int j = (corner & 2) ? box[4] : box[1];
+                bool any = false;
+                for (int k = box[2]; k <= box[5] && !any; ++k) {
+                    any = present(i, j, k);
+                }
+                broken[b] = !any;
+            }
+            noCorner += broken[b];
+        }
+        for (std::size_t c = 0; c < layout.blockOfCartesian.size(); ++c) {
+            if (broken[layout.blockOfCartesian[c]]) {
+                const int i = c % d[0], j = (c/d[0]) % d[1], k = c/(d[0]*d[1]);
+                layout.blockOfCartesian[c] = static_cast<int>(layout.boxes.size());
+                layout.boxes.push_back({i, j, k, i, j, k});
+            }
+        }
+        if (noCorner + nearLgr + sliver + fault > 0) {
+            OpmLog::info("Mechanics grid: left blocks unmerged: " + std::to_string(nearLgr)
+                         + " next to an LGR, " + std::to_string(sliver) + " with a thin cell, "
+                         + std::to_string(fault) + " crossed by a fault, "
+                         + std::to_string(noCorner) + " with an empty corner column");
+        }
+        return layout;
+    }
+
+    /// Each block of `layout` one cell, the union of its fine cells with all
+    /// their outer faces: a local coarsening, the inverse of an LGR. Keeps the
+    /// fine Cartesian space; a block is known by its first cell.
+    template <class Comm>
+    void buildMerged_(const std::shared_ptr<RetainedCornerPointInput>& input,
+                      const Coarsening::BlockLayout& layout,
+                      const std::vector<int>& absorber, const LgrCollection& lgrs,
+                      const Comm& comm)
+    {
+        const auto& d = input->dims;
+        const auto cart = [&d](int i, int j, int k) { return i + d[0]*(j + d[1]*k); };
+        blocks_.assign(layout.blockOfCartesian.size(), Coarsening::Block{});
+        std::vector<int> anchor(layout.blockOfCartesian.size());
+        for (std::size_t c = 0; c < anchor.size(); ++c) {
+            const auto& box = layout.boxes[layout.blockOfCartesian[c]];
+            anchor[c] = cart(box[0], box[1], box[2]);
+            blocks_[anchor[c]] = { {box[0], box[1], box[2]}, {box[3] + 1, box[4] + 1, box[5] + 1},
+                                   anchor[c] };
+        }
+        for (std::size_t l = 0; l < lgrs.size(); ++l) {
+            const auto& b = lgrs.getLgr(l);
+            for (int k = b.K1(); k <= b.K2(); ++k) {
+                for (int j = b.J1(); j <= b.J2(); ++j) {
+                    for (int i = b.I1(); i <= b.I2(); ++i) {
+                        if (anchor[cart(i, j, k)] != cart(i, j, k)
+                            || blocks_[cart(i, j, k)].endIJK[0] - i != 1
+                            || blocks_[cart(i, j, k)].endIJK[1] - j != 1
+                            || blocks_[cart(i, j, k)].endIJK[2] - k != 1) {
+                            OPM_THROW(std::runtime_error, "Mechanics coarsening merges cells of LGR "
+                                      + b.NAME() + "; keep the records out of the box");
+                        }
+                    }
+                }
+            }
+        }
+        grid_ = std::make_unique<Dune::CpGrid>(comm);
+        grid_->setLgrBackend(Refinement::Backend::Conforming);
+        const grdecl raw{ { d[0], d[1], d[2] }, input->coord.data(), input->zcorn.data(),
+                          input->actnum.empty() ? nullptr : input->actnum.data() };
+        grid_->processEclipseFormatCoarsened(raw, layout.blockOfCartesian, layout.boxes,
+                                             /*edge_conformal*/ true,
+                                             /*collapse_coarse_faces*/ false);
+        Refinement::GridStateWriter::setRetainedCornerPointInput(*grid_->currentData().front(),
+                                                                 input);
+        std::ostringstream os;
+        os << "Mechanics grid: merged " << anchor.size() << " cells into "
+           << layout.boxes.size() << " blocks";
+        OpmLog::info(os.str());
+        if (lgrs.size() > 0) {
+            std::vector<int> identity(anchor.size());
+            std::iota(identity.begin(), identity.end(), 0);
+            grid_->addLgrsUpdateLeafView(lgrRequests_(lgrs, d, d, identity));
+        }
+        fineToMech_.resize(absorber.size());
+        for (std::size_t f = 0; f < absorber.size(); ++f) {
+            fineToMech_[f] = anchor[absorber[f]];
+        }
+    }
+
     /// Without edge-conformal processing MINPV leaves its removed cells'
     /// volume as a gap in the column; the next cell below takes it as rock.
     static void closeVerticalGaps_(RetainedCornerPointInput& input)
@@ -563,7 +767,8 @@ private:
     static std::vector<int> collapseThinCells_(RetainedCornerPointInput& input,
                                                const double thickness,
                                                const bool fillHoles,
-                                               const LgrCollection& lgrs)
+                                               const LgrCollection& lgrs,
+                                               const std::vector<char>& keep = {})
     {
         const int nx = input.dims[0], ny = input.dims[1], nz = input.dims[2];
         auto& z = input.zcorn;
@@ -614,6 +819,9 @@ private:
                         continue;
                     }
                     const int self = i + nx*(j + ny*k);
+                    if (!keep.empty() && keep[self]) {
+                        continue;
+                    }
                     if (!inLgr(i, j, k)) {
                         // Down, also into a hole that is absorbed in its turn.
                         if (k + 1 < nz && meanThickness(i, j, k + 1) > 0.0
