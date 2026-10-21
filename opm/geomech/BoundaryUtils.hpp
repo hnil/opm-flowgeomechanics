@@ -211,17 +211,34 @@ namespace Opm{
                              const GvType& gv,
                              const CartMapperType& cartesianIndexMapper
             ){
+            if (bcprops.size() == 0) {
+                return;
+            }
+            size_t numCartDof = cartesianIndexMapper.cartesianSize();
+            unsigned numElems = gv.size(/*codim=*/0);
+            std::vector<int> cartesianToCompressedElemIdx(numCartDof, -1);
+            for (unsigned elemIdx = 0; elemIdx < numElems; ++elemIdx){
+                cartesianToCompressedElemIdx[cartesianIndexMapper.cartesianIndex(elemIdx)] = elemIdx;
+            }
+            nodesAtBoundary(bc_nodes, bcconfigs, bcprops, gv,
+                            cartesianIndexMapper.cartesianDimensions(),
+                            [&cartesianToCompressedElemIdx](int cartindex, Opm::FaceDir::DirEnum) {
+                                return cartesianToCompressedElemIdx[cartindex];
+                            });
+        }
+
+        //! BCCON boxes in a Cartesian space of `cartdim`; `cellOfFace` gives the
+        //! grid cell carrying that cell's face in the BC direction, or -1.
+        template<class BCConfig, class GvType, class CellOfFace>
+        void nodesAtBoundary(std::vector<std::tuple<size_t,MechBCValue>>& bc_nodes,
+                             const BCConfig& bcconfigs,
+                             const BCState& bcprops,
+                             const GvType& gv,
+                             const std::array<int, 3>& cartdim,
+                             const CellOfFace& cellOfFace
+            ){
             static const int dim = 3;
             if (bcprops.size() > 0) {
-                //nonTrivialBoundaryConditions_ = true;
-                //auto gv = grid.leafGridView();
-                size_t numCartDof = cartesianIndexMapper.cartesianSize();
-                unsigned numElems = gv.size(/*codim=*/0);
-                std::vector<int> cartesianToCompressedElemIdx(numCartDof, -1);
-                for (unsigned elemIdx = 0; elemIdx < numElems; ++elemIdx){
-                    cartesianToCompressedElemIdx[cartesianIndexMapper.cartesianIndex(elemIdx)] = elemIdx;
-                }
-                std::array<int, 3> cartdim = cartesianIndexMapper.cartesianDimensions();
                 for (const auto& bcconfig : bcconfigs) {
                     for (const auto& bcprop : bcprops) {
 
@@ -250,7 +267,7 @@ namespace Opm{
                                             std::array<int, 3> tmp = {i,j,k};
                                             int cartindex =
                                                 cartesianIndex<3>(tmp,cartdim);
-                                            auto elemIdx = cartesianToCompressedElemIdx[cartindex];
+                                            auto elemIdx = cellOfFace(cartindex, bcface.dir);
                                             if (elemIdx>-1){
                                                 effected_cells.insert(elemIdx);
                                             }

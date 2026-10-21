@@ -661,7 +661,7 @@ namespace Opm{
                 }
                 const auto& initconfig = eclState.getInitConfig();
                 const std::string coarsen_file = Parameters::Get<Parameters::MechCoarsenFile>();
-                if(coarsen_file != "none"){
+                if(coarsen_file != "none" && !separate){
                     // What the flow grid was built from; rank 0 only.
                     mechGridContext_ = std::make_unique<MechGridContext>(
                         RetainCornerPointInput::get(),
@@ -679,6 +679,8 @@ namespace Opm{
                     mechGridContext_ = std::make_unique<MechGridContext>(
                         retained ? retained.get() : RetainCornerPointInput::get(),
                         thin, Parameters::Get<Parameters::MechFillHoles>(),
+                        coarsen_file != "none" ? MechGridContext::readRecords(coarsen_file)
+                                               : std::vector<Coarsening::CoarsenRequest>{},
                         eclState.getLgrs(), flowGrid,
                         simulator.vanguard().cartesianIndexMapper());
                     geoMechModel_.setMechGrid(*mechGridContext_);
@@ -694,13 +696,16 @@ namespace Opm{
                 const auto& bcprops = this->simulator().vanguard().schedule()[this->episodeIndex()].bcstate;
                 const auto& gv = this->gridView();
                 const auto& cartesianIndexMapper = vanguard.cartesianIndexMapper();
-                if(mechGridContext_ && mechGridContext_->keepsCartesian()){
-                    const Dune::CartesianIndexMapper<Dune::CpGrid> mechMapper(mechGridContext_->grid());
+                if(mechGridContext_ && mechGridContext_->fromCornerPoints()){
+                    const auto& ctx = *mechGridContext_;
                     Opm::Elasticity::nodesAtBoundary(bc_nodes_,
                                                      bcconfigs,
                                                      bcprops,
-                                                     mechGridContext_->grid().leafGridView(),
-                                                     mechMapper);
+                                                     ctx.grid().leafGridView(),
+                                                     ctx.fineDims(),
+                                                     [&ctx](int cart, Opm::FaceDir::DirEnum dir) {
+                                                         return ctx.cellOfFineFace(cart, dir);
+                                                     });
                 } else if(mechGridContext_){
                     // BCCON describes the flow grid's boundary, not this one:
                     // constrain the mechanics grid's own outer boundary.

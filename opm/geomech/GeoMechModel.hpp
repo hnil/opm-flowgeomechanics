@@ -20,6 +20,7 @@
 #include <dune/common/timer.hh>
 
 #include <algorithm>
+#include <limits>
 #include <array>
 #include <cmath>
 #include <iomanip>
@@ -847,32 +848,49 @@ namespace Opm{
         static Dune::FieldVector<double,3>
         localInCell_(const Geometry& geo, const Dune::FieldVector<double,3>& x)
         {
-            Dune::FieldVector<double,3> u(0.5);
-            for (int it = 0; it < 30; ++it) {
-                auto r = geo.global(u);
-                r -= x;
-                const auto jt = geo.jacobianTransposed(u);
-                Dune::FieldMatrix<double,3,3> j;
-                for (int a = 0; a < 3; ++a) {
-                    for (int b = 0; b < 3; ++b) {
-                        j[a][b] = jt[b][a];
+            // Newton from the centre can stall in strongly distorted cells; the
+            // corners are tried too and the best fit is kept.
+            Dune::FieldVector<double,3> best(0.5);
+            double bestMisfit = std::numeric_limits<double>::max();
+            for (int start = -1; start < 8 && bestMisfit > 1e-8; ++start) {
+                Dune::FieldVector<double,3> u(0.5);
+                if (start >= 0) {
+                    for (int a = 0; a < 3; ++a) {
+                        u[a] = (start >> a) & 1;
                     }
                 }
-                Dune::FieldVector<double,3> du;
-                try {
-                    j.solve(du, r);
-                } catch (const Dune::FMatrixError&) {
-                    break;
+                for (int it = 0; it < 30; ++it) {
+                    auto r = geo.global(u);
+                    r -= x;
+                    const auto jt = geo.jacobianTransposed(u);
+                    Dune::FieldMatrix<double,3,3> j;
+                    for (int a = 0; a < 3; ++a) {
+                        for (int b = 0; b < 3; ++b) {
+                            j[a][b] = jt[b][a];
+                        }
+                    }
+                    Dune::FieldVector<double,3> du;
+                    try {
+                        j.solve(du, r);
+                    } catch (const Dune::FMatrixError&) {
+                        break;
+                    }
+                    u -= du;
+                    if (du.two_norm() < 1e-10) {
+                        break;
+                    }
                 }
-                u -= du;
-                if (du.two_norm() < 1e-10) {
-                    break;
+                for (auto& c : u) {
+                    c = std::clamp(c, 0.0, 1.0);
+                }
+                auto r = geo.global(u);
+                r -= x;
+                if (r.two_norm() < bestMisfit) {
+                    bestMisfit = r.two_norm();
+                    best = u;
                 }
             }
-            for (auto& c : u) {
-                c = std::clamp(c, 0.0, 1.0);
-            }
-            return u;
+            return best;
         }
 
         void prolongDisplacement_()

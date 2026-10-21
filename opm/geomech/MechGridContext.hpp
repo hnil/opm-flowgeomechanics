@@ -33,6 +33,7 @@
 #include <opm/grid/cpgpreprocess/preprocess.h>
 
 #include <opm/input/eclipse/EclipseState/Grid/EclipseGrid.hpp>
+#include <opm/input/eclipse/EclipseState/Grid/FaceDir.hpp>
 #include <opm/input/eclipse/EclipseState/Grid/LgrCollection.hpp>
 #include <opm/common/OpmLog/OpmLog.hpp>
 #include <opm/common/ErrorMacros.hpp>
@@ -270,18 +271,19 @@ public:
     /// The flow grid's corner points processed edge-conformal, with cells
     /// thinner than `thickness` (0: none) collapsed into the cell below (above
     /// at the bottom), inactive cells with volume filled the same way when
-    /// `fillHoles`, and the deck's LGRs refined again. Flow is untouched.
-    /// Serial only.
+    /// `fillHoles`, coarsened by `requests` as a corner-point grid, and the
+    /// deck's LGRs refined again. Flow is untouched. Serial only.
     template <class FlowGrid, class CartesianMapper>
     MechGridContext(const RetainedCornerPointInput* processed,
                     const double thickness,
                     const bool fillHoles,
+                    const std::vector<Coarsening::CoarsenRequest>& requests,
                     const LgrCollection& lgrs,
                     const FlowGrid& flowGrid,
                     const CartesianMapper& flowCartesianMapper)
     {
         if (flowGrid.comm().size() > 1) {
-            OPM_THROW(std::runtime_error, "--mech-thin-cell-thickness runs serially only");
+            OPM_THROW(std::runtime_error, "--mech-grid=separate runs serially only");
         }
         if (processed == nullptr) {
             OPM_THROW(std::runtime_error,
@@ -294,29 +296,81 @@ public:
             input->edgeConformal = true;
         }
         const auto absorber = collapseThinCells_(*input, thickness, fillHoles, lgrs);
-        keepsCartesian_ = true;
+        fineDims_ = input->dims;
+        fromCornerPoints_ = true;
+
+        auto mechInput = input;
+        std::vector<int> fineToCoarse(absorber.size());
+        std::iota(fineToCoarse.begin(), fineToCoarse.end(), 0);
+        if (!requests.empty()) {
+            Coarsening::Grdecl fine{input->dims, input->coord, input->zcorn, input->actnum};
+            Coarsening::Options options;
+            options.activity = Coarsening::Activity::FillHoles;
+            options.allowVerticalGaps = true;
+            auto result = Coarsening::coarsenCornerPoint(fine, requests, options);
+            for (const auto& note : result.report.notes) {
+                OpmLog::info("Mechanics grid: " + note);
+            }
+            mechInput = std::make_shared<RetainedCornerPointInput>();
+            mechInput->dims = result.grid.dims;
+            mechInput->coord = std::move(result.grid.coord);
+            mechInput->zcorn = std::move(result.grid.zcorn);
+            mechInput->actnum = std::move(result.grid.actnum);
+            mechInput->edgeConformal = true;
+            mechInput->pinchActive = true;
+            fineToCoarse = std::move(result.fineToCoarse);
+            blocks_ = std::move(result.blocks);
+        }
 
         grid_ = std::make_unique<Dune::CpGrid>(flowGrid.comm());
         grid_->setLgrBackend(Refinement::Backend::Conforming);
-        const grdecl raw{ { input->dims[0], input->dims[1], input->dims[2] },
-                          input->coord.data(), input->zcorn.data(),
-                          input->actnum.empty() ? nullptr : input->actnum.data() };
+        const grdecl raw{ { mechInput->dims[0], mechInput->dims[1], mechInput->dims[2] },
+                          mechInput->coord.data(), mechInput->zcorn.data(),
+                          mechInput->actnum.empty() ? nullptr : mechInput->actnum.data() };
         // Edge-conformal processing joins cells across zero-thickness ones as
         // a pinch would; the retained flag is the deck's.
-        grid_->processEclipseFormat(raw, input->pinchNnc,
-                                    input->pinchActive || input->edgeConformal,
-                                    input->edgeConformal);
+        grid_->processEclipseFormat(raw, mechInput->pinchNnc, /*pinchActive*/ true,
+                                    /*edge_conformal*/ true);
         Refinement::GridStateWriter::setRetainedCornerPointInput(*grid_->currentData().front(),
-                                                                 input);
+                                                                 mechInput);
         if (lgrs.size() > 0) {
-            grid_->addLgrsUpdateLeafView(lgrRequests_(lgrs));
+            grid_->addLgrsUpdateLeafView(lgrRequests_(lgrs, input->dims, mechInput->dims,
+                                                      fineToCoarse));
         }
-        buildLeafMap_(absorber, flowGrid, flowCartesianMapper);
+        fineToMech_.resize(absorber.size());
+        for (std::size_t f = 0; f < absorber.size(); ++f) {
+            fineToMech_[f] = fineToCoarse[absorber[f]];
+        }
+        buildLeafMap_(fineToMech_, flowGrid, flowCartesianMapper);
     }
 
     const Dune::CpGrid& grid() const { return *grid_; }
-    /// Same Cartesian space as flow, so the deck's BCCON applies.
-    bool keepsCartesian() const { return keepsCartesian_; }
+    /// Built from the flow grid's corner points: BCCON boxes, in the flow
+    /// grid's Cartesian space, are found with cellOfFineFace().
+    bool fromCornerPoints() const { return fromCornerPoints_; }
+    const std::array<int,3>& fineDims() const { return fineDims_; }
+
+    /// The unrefined mechanics cell whose face carries the given face of flow
+    /// Cartesian cell `fineCart`, or -1 if that face is inside a coarse cell.
+    int cellOfFineFace(const int fineCart, const FaceDir::DirEnum dir) const
+    {
+        const int m = mechCellOfMechCart_[fineToMech_[fineCart]];
+        if (m < 0 || blocks_.empty()) {
+            return m;
+        }
+        const int nx = fineDims_[0], ny = fineDims_[1];
+        const std::array<int,3> ijk{fineCart % nx, (fineCart/nx) % ny, fineCart/(nx*ny)};
+        const auto& block = blocks_[fineToMech_[fineCart]];
+        switch (dir) {
+        case FaceDir::XMinus: return ijk[0] == block.startIJK[0] ? m : -1;
+        case FaceDir::XPlus:  return ijk[0] == block.endIJK[0] - 1 ? m : -1;
+        case FaceDir::YMinus: return ijk[1] == block.startIJK[1] ? m : -1;
+        case FaceDir::YPlus:  return ijk[1] == block.endIJK[1] - 1 ? m : -1;
+        case FaceDir::ZMinus: return ijk[2] == block.startIJK[2] ? m : -1;
+        case FaceDir::ZPlus:  return ijk[2] == block.endIJK[2] - 1 ? m : -1;
+        default: return -1;
+        }
+    }
     Dune::CpGrid& grid() { return *grid_; }
     const MechFlowMap& map() const { return map_; }
 
@@ -549,7 +603,9 @@ private:
     }
 
     /// The deck's CARFIN boxes, as the flow grid's vanguard requests them.
-    static std::vector<Refinement::BlockRefinement> lgrRequests_(const LgrCollection& lgrs)
+    static std::vector<Refinement::BlockRefinement>
+    lgrRequests_(const LgrCollection& lgrs, const std::array<int,3>& fineDims,
+                 const std::array<int,3>& mechDims, const std::vector<int>& fineToMech)
     {
         std::vector<Refinement::BlockRefinement> requests;
         for (std::size_t l = 0; l < lgrs.size(); ++l) {
@@ -563,8 +619,30 @@ private:
             r.parentGridName = b.PARENT_NAME();
             r.cellsPerDim = { b.NX()/(b.I2() + 1 - b.I1()), b.NY()/(b.J2() + 1 - b.J1()),
                               b.NZ()/(b.K2() + 1 - b.K1()) };
-            r.startIJK = { b.I1(), b.J1(), b.K1() };
-            r.endIJK = { b.I2() + 1, b.J2() + 1, b.K2() + 1 };
+            // The box in the mechanics grid's index space; coarsening must
+            // leave its cells one to one.
+            const auto fine = [&fineDims](int i, int j, int k) {
+                return i + fineDims[0]*(j + fineDims[1]*k);
+            };
+            const int c0 = fineToMech[fine(b.I1(), b.J1(), b.K1())];
+            const std::array<int,3> m0{ c0 % mechDims[0], (c0/mechDims[0]) % mechDims[1],
+                                        c0/(mechDims[0]*mechDims[1]) };
+            for (int k = b.K1(); k <= b.K2(); ++k) {
+                for (int j = b.J1(); j <= b.J2(); ++j) {
+                    for (int i = b.I1(); i <= b.I2(); ++i) {
+                        const int want = (m0[0] + i - b.I1())
+                            + mechDims[0]*((m0[1] + j - b.J1()) + mechDims[1]*(m0[2] + k - b.K1()));
+                        if (fineToMech[fine(i, j, k)] != want) {
+                            OPM_THROW(std::runtime_error, "Mechanics coarsening merges cells of LGR "
+                                      + b.NAME() + " or shifts it unevenly; keep the box's pillar "
+                                      "lines and layers out of the coarsening records");
+                        }
+                    }
+                }
+            }
+            r.startIJK = m0;
+            r.endIJK = { m0[0] + b.I2() + 1 - b.I1(), m0[1] + b.J2() + 1 - b.J1(),
+                         m0[2] + b.K2() + 1 - b.K1() };
             if (b.isGraded()) {
                 for (std::size_t d = 0; d < 3; ++d) {
                     auto columns = b.refinedColumns(d);
@@ -618,7 +696,7 @@ private:
             }
             const auto centre = cell.geometry().center();
             double best = std::numeric_limits<double>::max();
-            const auto [first, last] = refinedMech.equal_range(cart);
+            const auto [first, last] = refinedMech.equal_range(absorber[cart]);
             for (auto it = first; it != last; ++it) {
                 const double d = (mechCentre[it->second] - centre).two_norm();
                 if (d < best) {
@@ -636,6 +714,7 @@ private:
                       + " flow cells have no cell in the thin-collapsed mechanics grid");
         }
         map_ = MechFlowMap(std::move(flowToMech), std::move(weight), mechView.size(0));
+        mechCellOfMechCart_ = std::move(coarseMech);
 
         std::ostringstream os;
         os << "Mechanics grid: " << mechView.size(0) << " cells for " << numFlowCells
@@ -743,7 +822,11 @@ private:
     std::unique_ptr<Dune::CpGrid> grid_;
     MechFlowMap map_;
     bool merged_{false};
-    bool keepsCartesian_{false};
+    bool fromCornerPoints_{false};
+    std::array<int,3> fineDims_{};
+    std::vector<int> fineToMech_;
+    std::vector<int> mechCellOfMechCart_;
+    std::vector<Coarsening::Block> blocks_;
 };
 
 } // namespace Opm
