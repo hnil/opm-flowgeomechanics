@@ -267,12 +267,15 @@ public:
         }
     }
 
-    /// The flow grid with cells thinner than `thickness` collapsed into the
-    /// cell below (above at the bottom), and the deck's LGRs applied again.
-    /// Flow is untouched; only the mechanics loses the slivers. Serial only.
+    /// The flow grid's corner points processed edge-conformal, with cells
+    /// thinner than `thickness` (0: none) collapsed into the cell below (above
+    /// at the bottom), inactive cells with volume filled the same way when
+    /// `fillHoles`, and the deck's LGRs refined again. Flow is untouched.
+    /// Serial only.
     template <class FlowGrid, class CartesianMapper>
     MechGridContext(const RetainedCornerPointInput* processed,
                     const double thickness,
+                    const bool fillHoles,
                     const LgrCollection& lgrs,
                     const FlowGrid& flowGrid,
                     const CartesianMapper& flowCartesianMapper)
@@ -286,7 +289,11 @@ public:
         }
         // A copy: processing a grid may replace what `processed` points to.
         auto input = std::make_shared<RetainedCornerPointInput>(*processed);
-        const auto absorber = collapseThinCells_(*input, thickness, lgrs);
+        if (!input->edgeConformal) {
+            closeVerticalGaps_(*input);
+            input->edgeConformal = true;
+        }
+        const auto absorber = collapseThinCells_(*input, thickness, fillHoles, lgrs);
         keepsCartesian_ = true;
 
         grid_ = std::make_unique<Dune::CpGrid>(flowGrid.comm());
@@ -368,10 +375,73 @@ private:
         const IndexSet& index_set_;
     };
 
-    /// Collapse thin active cells in `input`'s ZCORN; returns, for every
-    /// Cartesian cell, the cell that took it over (itself if none).
+    /// Without edge-conformal processing MINPV leaves its removed cells'
+    /// volume as a gap in the column; the next cell below takes it as rock.
+    static void closeVerticalGaps_(RetainedCornerPointInput& input)
+    {
+        const int nx = input.dims[0], ny = input.dims[1], nz = input.dims[2];
+        auto& z = input.zcorn;
+        const auto zi = [nx, ny](int i, int j, int k, int c, int dk) {
+            return static_cast<std::size_t>((2*k + dk)*4*nx*ny + (2*j + (c >> 1))*2*nx + 2*i + (c & 1));
+        };
+        const auto solid = [&](int i, int j, int k) {
+            if (!input.actnum.empty() && input.actnum[i + nx*(j + ny*k)] == 0) {
+                return false;
+            }
+            for (int c = 0; c < 4; ++c) {
+                if (z[zi(i, j, k, c, 1)] != z[zi(i, j, k, c, 0)]) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        double gapVolumeProxy = 0.0;
+        int closed = 0;
+        for (int j = 0; j < ny; ++j) {
+            for (int i = 0; i < nx; ++i) {
+                int above = -1;
+                for (int k = 0; k < nz; ++k) {
+                    if (!solid(i, j, k)) {
+                        continue;
+                    }
+                    // Only gaps with nothing of volume in between: active
+                    // cells with volume and ACTNUM=0 holes are left alone.
+                    bool empty = above >= 0;
+                    for (int kk = above + 1; empty && kk < k; ++kk) {
+                        for (int c = 0; c < 4; ++c) {
+                            empty = empty && z[zi(i, j, kk, c, 1)] == z[zi(i, j, kk, c, 0)];
+                        }
+                    }
+                    bool moved = false;
+                    for (int c = 0; empty && c < 4; ++c) {
+                        const double bottom = z[zi(i, j, above, c, 1)];
+                        if (z[zi(i, j, k, c, 0)] > bottom) {
+                            gapVolumeProxy += z[zi(i, j, k, c, 0)] - bottom;
+                            z[zi(i, j, k, c, 0)] = bottom;
+                            moved = true;
+                        }
+                        for (int kk = above + 1; kk < k; ++kk) {
+                            z[zi(i, j, kk, c, 0)] = z[zi(i, j, kk, c, 1)] = bottom;
+                        }
+                    }
+                    closed += moved;
+                    above = k;
+                }
+            }
+        }
+        if (closed > 0) {
+            OpmLog::info("Mechanics grid: closed " + std::to_string(closed)
+                         + " vertical gaps left by removed cells (sum of corner gaps "
+                         + std::to_string(gapVolumeProxy) + " m)");
+        }
+    }
+
+    /// Collapse thin active cells, and with `fillHoles` inactive cells that
+    /// have volume, into the touching active cell below (above if none);
+    /// returns, for every Cartesian cell, the cell that took it over.
     static std::vector<int> collapseThinCells_(RetainedCornerPointInput& input,
                                                const double thickness,
+                                               const bool fillHoles,
                                                const LgrCollection& lgrs)
     {
         const int nx = input.dims[0], ny = input.dims[1], nz = input.dims[2];
@@ -392,9 +462,17 @@ private:
             }
             return false;
         };
-        const auto touches = [&](int i, int j, int k, int dk, int other) {
+        const auto meanThickness = [&](int i, int j, int k) {
+            double mean = 0.0;
             for (int c = 0; c < 4; ++c) {
-                if (z[zi(i, j, k, c, dk)] != z[zi(i, j, other, c, 1 - dk)]) {
+                mean += 0.25*(z[zi(i, j, k, c, 1)] - z[zi(i, j, k, c, 0)]);
+            }
+            return mean;
+        };
+        // Bottom of `upper` on top of `lower` at all four corners.
+        const auto touches = [&](int i, int j, int upper, int lower) {
+            for (int c = 0; c < 4; ++c) {
+                if (z[zi(i, j, upper, c, 1)] != z[zi(i, j, lower, c, 0)]) {
                     return false;
                 }
             }
@@ -403,48 +481,66 @@ private:
 
         std::vector<int> absorber(static_cast<std::size_t>(nx)*ny*nz);
         std::iota(absorber.begin(), absorber.end(), 0);
-        int collapsed = 0, skipped = 0;
+        int thin = 0, holes = 0, skipped = 0;
         for (int j = 0; j < ny; ++j) {
             for (int i = 0; i < nx; ++i) {
+                const auto absorbable = [&](int k) {
+                    const double t = meanThickness(i, j, k);
+                    return t > 0.0 && (active(i, j, k) ? t < thickness : fillHoles);
+                };
                 for (int k = 0; k < nz; ++k) {
-                    double mean = 0.0;
-                    for (int c = 0; c < 4; ++c) {
-                        mean += 0.25*(z[zi(i, j, k, c, 1)] - z[zi(i, j, k, c, 0)]);
-                    }
-                    if (!(mean > 0.0 && mean < thickness) || !active(i, j, k)) {
+                    if (!absorbable(k)) {
                         continue;
                     }
-                    // Into the cell below, or the one above at the bottom of a column.
-                    int into = -1;
-                    if (k + 1 < nz && active(i, j, k + 1) && touches(i, j, k, 1, k + 1)) {
-                        into = k + 1;
-                    } else if (k > 0 && active(i, j, k - 1) && touches(i, j, k, 0, k - 1)) {
-                        into = k - 1;
+                    const int self = i + nx*(j + ny*k);
+                    if (!inLgr(i, j, k)) {
+                        // Down, also into a hole that is absorbed in its turn.
+                        if (k + 1 < nz && meanThickness(i, j, k + 1) > 0.0
+                            && (active(i, j, k + 1) || fillHoles)
+                            && !inLgr(i, j, k + 1) && touches(i, j, k, k + 1)) {
+                            for (int c = 0; c < 4; ++c) {
+                                const double top = z[zi(i, j, k, c, 0)];
+                                z[zi(i, j, k, c, 1)] = top;
+                                z[zi(i, j, k + 1, c, 0)] = top;
+                            }
+                            absorber[self] = self + nx*ny;
+                            (active(i, j, k) ? thin : holes) += 1;
+                            continue;
+                        }
+                        // Up, past cells already collapsed.
+                        int a = k - 1;
+                        while (a >= 0 && meanThickness(i, j, a) <= 0.0) {
+                            --a;
+                        }
+                        if (a >= 0 && active(i, j, a) && !inLgr(i, j, a) && touches(i, j, a, k)) {
+                            for (int c = 0; c < 4; ++c) {
+                                const double bottom = z[zi(i, j, k, c, 1)];
+                                for (int kk = a + 1; kk <= k; ++kk) {
+                                    z[zi(i, j, kk, c, 0)] = z[zi(i, j, kk, c, 1)] = bottom;
+                                }
+                                z[zi(i, j, a, c, 1)] = bottom;
+                            }
+                            absorber[self] = i + nx*(j + ny*a);
+                            (active(i, j, k) ? thin : holes) += 1;
+                            continue;
+                        }
                     }
-                    if (into < 0 || inLgr(i, j, k) || inLgr(i, j, into)) {
-                        ++skipped;
-                        continue;
-                    }
-                    const int moving = (into > k) ? 1 : 0;   // the face that moves
-                    for (int c = 0; c < 4; ++c) {
-                        const double to = z[zi(i, j, k, c, 1 - moving)];
-                        z[zi(i, j, k, c, moving)] = to;
-                        z[zi(i, j, into, c, 1 - moving)] = to;
-                    }
-                    absorber[i + nx*(j + ny*k)] = i + nx*(j + ny*into);
-                    ++collapsed;
+                    ++skipped;
                 }
             }
         }
-        // A run of thin cells ends in the last one's absorber.
+        // A run of collapsed cells ends in the last one's absorber.
         for (auto& a : absorber) {
             while (absorber[a] != a) {
                 a = absorber[a];
             }
         }
+        if (thin + holes + skipped == 0) {
+            return absorber;
+        }
         std::ostringstream os;
-        os << "Mechanics grid: collapsed " << collapsed << " cells thinner than " << thickness
-           << " m into a neighbour";
+        os << "Mechanics grid: merged " << thin << " cells thinner than " << thickness
+           << " m and " << holes << " inactive cells into a vertical neighbour";
         if (skipped > 0) {
             os << "; kept " << skipped << " (no touching active neighbour, or in an LGR box)";
         }

@@ -645,11 +645,19 @@ namespace Opm{
             const auto& simulator = this->simulator();
             const auto& eclState = simulator.vanguard().eclState();
             if(eclState.runspec().mech()){
-                if (!Parameters::Get<Parameters::EdgeConformal>() ||
-                    Parameters::Get<Parameters::LgrBackend>() != std::string("conforming")) {
+                const double thin = Parameters::Get<Parameters::MechThinCellThickness>();
+                const std::string mechGrid = Parameters::Get<Parameters::MechGrid>();
+                if (mechGrid != "flow" && mechGrid != "separate") {
+                    OPM_THROW(std::runtime_error, "--mech-grid must be flow or separate, not " + mechGrid);
+                }
+                const bool separate = mechGrid == "separate" || thin > 0.0;
+                // A separate mechanics grid is edge-conformal whatever flow is.
+                const bool flowOk = separate ? true : Parameters::Get<Parameters::EdgeConformal>();
+                if (!flowOk || (eclState.getLgrs().size() > 0 &&
+                                Parameters::Get<Parameters::LgrBackend>() != std::string("conforming"))) {
                     OPM_THROW(std::runtime_error,
-                              "Geomechanics runs only on edge-conformal grids refined by the "
-                              "conforming backend: use --edge-conformal=true --lgr-backend=conforming.");
+                              "Geomechanics on the flow grid needs --edge-conformal=true, and LGRs "
+                              "need --lgr-backend=conforming; --mech-grid=separate lifts the first.");
                 }
                 const auto& initconfig = eclState.getInitConfig();
                 const std::string coarsen_file = Parameters::Get<Parameters::MechCoarsenFile>();
@@ -663,15 +671,15 @@ namespace Opm{
                         MechGridContext::method(
                             Parameters::Get<Parameters::MechCoarsenMethod>()));
                     geoMechModel_.setMechGrid(*mechGridContext_);
-                } else if (const double thin = Parameters::Get<Parameters::MechThinCellThickness>();
-                           thin > 0.0) {
+                } else if (separate) {
                     const auto& flowGrid = simulator.vanguard().grid();
                     // An LGR deck keeps its own copy; otherwise argv asked for one.
                     auto retained = Opm::Refinement::GridStateWriter::retainedCornerPointInput(
                         *flowGrid.currentData().front());
                     mechGridContext_ = std::make_unique<MechGridContext>(
                         retained ? retained.get() : RetainCornerPointInput::get(),
-                        thin, eclState.getLgrs(), flowGrid,
+                        thin, Parameters::Get<Parameters::MechFillHoles>(),
+                        eclState.getLgrs(), flowGrid,
                         simulator.vanguard().cartesianIndexMapper());
                     geoMechModel_.setMechGrid(*mechGridContext_);
                 }
