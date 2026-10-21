@@ -27,15 +27,23 @@
 #include <opm/grid/cpgrid/coarsening/CornerPointCoarsening.hpp>
 #include <opm/grid/cpgrid/GeometricCheck.hpp>
 #include <opm/grid/cpgrid/RetainedCornerPointInput.hpp>
+#include <opm/grid/cpgrid/refinement/GridStateWriter.hpp>
+#include <opm/grid/cpgrid/refinement/RefinementBuilder.hpp>
+#include <opm/grid/cpgrid/refinement/RefinementRequest.hpp>
 #include <opm/grid/cpgpreprocess/preprocess.h>
 
 #include <opm/input/eclipse/EclipseState/Grid/EclipseGrid.hpp>
+#include <opm/input/eclipse/EclipseState/Grid/LgrCollection.hpp>
 #include <opm/common/OpmLog/OpmLog.hpp>
 #include <opm/common/ErrorMacros.hpp>
 
 #include <dune/grid/common/mcmgmapper.hh>
 
+#include <algorithm>
 #include <fstream>
+#include <limits>
+#include <map>
+#include <numeric>
 #include <type_traits>
 #include <memory>
 #include <sstream>
@@ -259,7 +267,49 @@ public:
         }
     }
 
+    /// The flow grid with cells thinner than `thickness` collapsed into the
+    /// cell below (above at the bottom), and the deck's LGRs applied again.
+    /// Flow is untouched; only the mechanics loses the slivers. Serial only.
+    template <class FlowGrid, class CartesianMapper>
+    MechGridContext(const RetainedCornerPointInput* processed,
+                    const double thickness,
+                    const LgrCollection& lgrs,
+                    const FlowGrid& flowGrid,
+                    const CartesianMapper& flowCartesianMapper)
+    {
+        if (flowGrid.comm().size() > 1) {
+            OPM_THROW(std::runtime_error, "--mech-thin-cell-thickness runs serially only");
+        }
+        if (processed == nullptr) {
+            OPM_THROW(std::runtime_error,
+                      "The mechanics grid needs the description the flow grid was built from.");
+        }
+        // A copy: processing a grid may replace what `processed` points to.
+        auto input = std::make_shared<RetainedCornerPointInput>(*processed);
+        const auto absorber = collapseThinCells_(*input, thickness, lgrs);
+        keepsCartesian_ = true;
+
+        grid_ = std::make_unique<Dune::CpGrid>(flowGrid.comm());
+        grid_->setLgrBackend(Refinement::Backend::Conforming);
+        const grdecl raw{ { input->dims[0], input->dims[1], input->dims[2] },
+                          input->coord.data(), input->zcorn.data(),
+                          input->actnum.empty() ? nullptr : input->actnum.data() };
+        // Edge-conformal processing joins cells across zero-thickness ones as
+        // a pinch would; the retained flag is the deck's.
+        grid_->processEclipseFormat(raw, input->pinchNnc,
+                                    input->pinchActive || input->edgeConformal,
+                                    input->edgeConformal);
+        Refinement::GridStateWriter::setRetainedCornerPointInput(*grid_->currentData().front(),
+                                                                 input);
+        if (lgrs.size() > 0) {
+            grid_->addLgrsUpdateLeafView(lgrRequests_(lgrs));
+        }
+        buildLeafMap_(absorber, flowGrid, flowCartesianMapper);
+    }
+
     const Dune::CpGrid& grid() const { return *grid_; }
+    /// Same Cartesian space as flow, so the deck's BCCON applies.
+    bool keepsCartesian() const { return keepsCartesian_; }
     Dune::CpGrid& grid() { return *grid_; }
     const MechFlowMap& map() const { return map_; }
 
@@ -317,6 +367,185 @@ private:
         Vector& data_;
         const IndexSet& index_set_;
     };
+
+    /// Collapse thin active cells in `input`'s ZCORN; returns, for every
+    /// Cartesian cell, the cell that took it over (itself if none).
+    static std::vector<int> collapseThinCells_(RetainedCornerPointInput& input,
+                                               const double thickness,
+                                               const LgrCollection& lgrs)
+    {
+        const int nx = input.dims[0], ny = input.dims[1], nz = input.dims[2];
+        auto& z = input.zcorn;
+        const auto zi = [nx, ny](int i, int j, int k, int c, int dk) {
+            return static_cast<std::size_t>((2*k + dk)*4*nx*ny + (2*j + (c >> 1))*2*nx + 2*i + (c & 1));
+        };
+        const auto active = [&input, nx, ny](int i, int j, int k) {
+            return input.actnum.empty() || input.actnum[i + nx*(j + ny*k)] != 0;
+        };
+        const auto inLgr = [&lgrs](int i, int j, int k) {
+            for (std::size_t l = 0; l < lgrs.size(); ++l) {
+                const auto& b = lgrs.getLgr(l);
+                if (i >= b.I1() && i <= b.I2() && j >= b.J1() && j <= b.J2()
+                    && k >= b.K1() && k <= b.K2()) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        const auto touches = [&](int i, int j, int k, int dk, int other) {
+            for (int c = 0; c < 4; ++c) {
+                if (z[zi(i, j, k, c, dk)] != z[zi(i, j, other, c, 1 - dk)]) {
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        std::vector<int> absorber(static_cast<std::size_t>(nx)*ny*nz);
+        std::iota(absorber.begin(), absorber.end(), 0);
+        int collapsed = 0, skipped = 0;
+        for (int j = 0; j < ny; ++j) {
+            for (int i = 0; i < nx; ++i) {
+                for (int k = 0; k < nz; ++k) {
+                    double mean = 0.0;
+                    for (int c = 0; c < 4; ++c) {
+                        mean += 0.25*(z[zi(i, j, k, c, 1)] - z[zi(i, j, k, c, 0)]);
+                    }
+                    if (!(mean > 0.0 && mean < thickness) || !active(i, j, k)) {
+                        continue;
+                    }
+                    // Into the cell below, or the one above at the bottom of a column.
+                    int into = -1;
+                    if (k + 1 < nz && active(i, j, k + 1) && touches(i, j, k, 1, k + 1)) {
+                        into = k + 1;
+                    } else if (k > 0 && active(i, j, k - 1) && touches(i, j, k, 0, k - 1)) {
+                        into = k - 1;
+                    }
+                    if (into < 0 || inLgr(i, j, k) || inLgr(i, j, into)) {
+                        ++skipped;
+                        continue;
+                    }
+                    const int moving = (into > k) ? 1 : 0;   // the face that moves
+                    for (int c = 0; c < 4; ++c) {
+                        const double to = z[zi(i, j, k, c, 1 - moving)];
+                        z[zi(i, j, k, c, moving)] = to;
+                        z[zi(i, j, into, c, 1 - moving)] = to;
+                    }
+                    absorber[i + nx*(j + ny*k)] = i + nx*(j + ny*into);
+                    ++collapsed;
+                }
+            }
+        }
+        // A run of thin cells ends in the last one's absorber.
+        for (auto& a : absorber) {
+            while (absorber[a] != a) {
+                a = absorber[a];
+            }
+        }
+        std::ostringstream os;
+        os << "Mechanics grid: collapsed " << collapsed << " cells thinner than " << thickness
+           << " m into a neighbour";
+        if (skipped > 0) {
+            os << "; kept " << skipped << " (no touching active neighbour, or in an LGR box)";
+        }
+        OpmLog::info(os.str());
+        return absorber;
+    }
+
+    /// The deck's CARFIN boxes, as the flow grid's vanguard requests them.
+    static std::vector<Refinement::BlockRefinement> lgrRequests_(const LgrCollection& lgrs)
+    {
+        std::vector<Refinement::BlockRefinement> requests;
+        for (std::size_t l = 0; l < lgrs.size(); ++l) {
+            const auto& b = lgrs.getLgr(l);
+            if (b.PARENT_NAME() != "GLOBAL") {
+                OPM_THROW(std::runtime_error,
+                          "--mech-thin-cell-thickness does not support nested LGRs");
+            }
+            Refinement::BlockRefinement r;
+            r.name = b.NAME();
+            r.parentGridName = b.PARENT_NAME();
+            r.cellsPerDim = { b.NX()/(b.I2() + 1 - b.I1()), b.NY()/(b.J2() + 1 - b.J1()),
+                              b.NZ()/(b.K2() + 1 - b.K1()) };
+            r.startIJK = { b.I1(), b.J1(), b.K1() };
+            r.endIJK = { b.I2() + 1, b.J2() + 1, b.K2() + 1 };
+            if (b.isGraded()) {
+                for (std::size_t d = 0; d < 3; ++d) {
+                    auto columns = b.refinedColumns(d);
+                    r.subdivision[d] = Refinement::AxisSubdivision{ std::move(columns.parentOffset),
+                                                                    std::move(columns.fracLo),
+                                                                    std::move(columns.fracHi) };
+                }
+            }
+            r.minpvRemoved = b.minpvRemoved();
+            r.pillarsFromBoxLayer = lgrs.pillarsFromBoxLayer();
+            requests.push_back(std::move(r));
+        }
+        return requests;
+    }
+
+    /// Flow leaf cell -> mechanics leaf cell. Unrefined cells go by Cartesian
+    /// index (through the absorber), refined ones to the nearest refined
+    /// mechanics cell of the same parent.
+    template <class FlowGrid, class CartesianMapper>
+    void buildLeafMap_(const std::vector<int>& absorber, const FlowGrid& flowGrid,
+                       const CartesianMapper& flowCartesianMapper)
+    {
+        const Dune::CartesianIndexMapper<Dune::CpGrid> mechMapper(*grid_);
+        const auto& mechView = grid_->leafGridView();
+        std::vector<int> coarseMech(absorber.size(), -1);
+        std::multimap<int, int> refinedMech;
+        std::vector<Dune::FieldVector<double,3>> mechCentre(mechView.size(0));
+        for (const auto& cell : elements(mechView)) {
+            const int m = mechView.indexSet().index(cell);
+            const int cart = mechMapper.cartesianIndex(m);
+            mechCentre[m] = cell.geometry().center();
+            if (cell.level() > 0) {
+                refinedMech.emplace(cart, m);
+            } else {
+                coarseMech[cart] = m;
+            }
+        }
+
+        const auto& flowView = flowGrid.leafGridView();
+        const std::size_t numFlowCells = flowView.size(0);
+        std::vector<int> flowToMech(numFlowCells, -1);
+        std::vector<double> weight(numFlowCells, 0.0);
+        double worstMiss = 0.0;
+        for (const auto& cell : elements(flowView)) {
+            const int f = flowView.indexSet().index(cell);
+            weight[f] = cell.geometry().volume();
+            const int cart = flowCartesianMapper.cartesianIndex(f);
+            if (cell.level() == 0) {
+                flowToMech[f] = coarseMech[absorber[cart]];
+                continue;
+            }
+            const auto centre = cell.geometry().center();
+            double best = std::numeric_limits<double>::max();
+            const auto [first, last] = refinedMech.equal_range(cart);
+            for (auto it = first; it != last; ++it) {
+                const double d = (mechCentre[it->second] - centre).two_norm();
+                if (d < best) {
+                    best = d;
+                    flowToMech[f] = it->second;
+                }
+            }
+            if (flowToMech[f] >= 0) {
+                worstMiss = std::max(worstMiss, best);
+            }
+        }
+        const auto unmapped = std::count(flowToMech.begin(), flowToMech.end(), -1);
+        if (unmapped > 0) {
+            OPM_THROW(std::runtime_error, std::to_string(unmapped)
+                      + " flow cells have no cell in the thin-collapsed mechanics grid");
+        }
+        map_ = MechFlowMap(std::move(flowToMech), std::move(weight), mechView.size(0));
+
+        std::ostringstream os;
+        os << "Mechanics grid: " << mechView.size(0) << " cells for " << numFlowCells
+           << " flow cells; refined cells matched within " << worstMiss << " m";
+        OpmLog::info(os.str());
+    }
 
     /// 1 for every cell whose top and bottom differ at some corner.
     static std::vector<int> withVolume(const std::array<int,3>& dims,
@@ -418,6 +647,7 @@ private:
     std::unique_ptr<Dune::CpGrid> grid_;
     MechFlowMap map_;
     bool merged_{false};
+    bool keepsCartesian_{false};
 };
 
 } // namespace Opm

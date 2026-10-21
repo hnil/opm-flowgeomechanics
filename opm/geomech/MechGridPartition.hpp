@@ -254,12 +254,10 @@ std::vector<int> flowPartition(const Grid& grid,
     return flowPart;
 }
 
-/// The value of --mech-coarsen-file on the command line, or empty. Read
-/// straight from argv because the partition has to be chosen before the
+/// The value of a command-line option, or empty. Read straight from argv because the partition has to be chosen before the
 /// parameter system is up and the grid is built.
-inline std::string coarsenFileFromArgs(int argc, char** argv)
+inline std::string argFromArgs(int argc, char** argv, const std::string& flag)
 {
-    const std::string flag = "--mech-coarsen-file";
     for (int a = 1; a < argc; ++a) {
         const std::string arg(argv[a]);
         if (arg.rfind(flag + "=", 0) == 0) {
@@ -277,8 +275,13 @@ inline std::string coarsenFileFromArgs(int argc, char** argv)
 template <class TypeTag>
 void installFlowPartition(int argc, char** argv)
 {
-    const auto file = coarsenFileFromArgs(argc, argv);
-    if (file.empty()) {
+    const auto thin = argFromArgs(argc, argv, "--mech-thin-cell-thickness");
+    if (!thin.empty() && std::stod(thin) > 0.0) {
+        // The mechanics grid is rebuilt from the corner-point input.
+        RetainCornerPointInput::enable();
+    }
+    const auto file = argFromArgs(argc, argv, "--mech-coarsen-file");
+    if (file.empty() || file == "none") {
         return;
     }
     const auto requests = readRecords(file);

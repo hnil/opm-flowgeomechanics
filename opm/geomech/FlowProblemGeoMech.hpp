@@ -663,6 +663,17 @@ namespace Opm{
                         MechGridContext::method(
                             Parameters::Get<Parameters::MechCoarsenMethod>()));
                     geoMechModel_.setMechGrid(*mechGridContext_);
+                } else if (const double thin = Parameters::Get<Parameters::MechThinCellThickness>();
+                           thin > 0.0) {
+                    const auto& flowGrid = simulator.vanguard().grid();
+                    // An LGR deck keeps its own copy; otherwise argv asked for one.
+                    auto retained = Opm::Refinement::GridStateWriter::retainedCornerPointInput(
+                        *flowGrid.currentData().front());
+                    mechGridContext_ = std::make_unique<MechGridContext>(
+                        retained ? retained.get() : RetainCornerPointInput::get(),
+                        thin, eclState.getLgrs(), flowGrid,
+                        simulator.vanguard().cartesianIndexMapper());
+                    geoMechModel_.setMechGrid(*mechGridContext_);
                 }
                 geoMechModel_.init(initconfig.restartRequested());
                 for(size_t i=0; i < this->ymodule_.size(); ++i){
@@ -675,7 +686,14 @@ namespace Opm{
                 const auto& bcprops = this->simulator().vanguard().schedule()[this->episodeIndex()].bcstate;
                 const auto& gv = this->gridView();
                 const auto& cartesianIndexMapper = vanguard.cartesianIndexMapper();
-                if(mechGridContext_){
+                if(mechGridContext_ && mechGridContext_->keepsCartesian()){
+                    const Dune::CartesianIndexMapper<Dune::CpGrid> mechMapper(mechGridContext_->grid());
+                    Opm::Elasticity::nodesAtBoundary(bc_nodes_,
+                                                     bcconfigs,
+                                                     bcprops,
+                                                     mechGridContext_->grid().leafGridView(),
+                                                     mechMapper);
+                } else if(mechGridContext_){
                     // BCCON describes the flow grid's boundary, not this one:
                     // constrain the mechanics grid's own outer boundary.
                     const std::string bc = this->getFractureParam()
