@@ -305,7 +305,7 @@ public:
         Coarsening::BlockLayout layout;
         std::vector<char> merged;
         if (merge && !requests.empty()) {
-            layout = mergeLayout_(*input, requests, lgrs, thickness);
+            layout = mergeLayout_(*input, requests, lgrs, thickness, collapse);
             merged.resize(layout.blockOfCartesian.size());
             for (std::size_t c = 0; c < merged.size(); ++c) {
                 const auto& box = layout.boxes[layout.blockOfCartesian[c]];
@@ -522,14 +522,15 @@ private:
     /// their outer faces: a local coarsening, the inverse of an LGR. Keeps the
     /// fine Cartesian space; a block is known by its first cell.
     /// The blocks of `requests`, less those that cannot be merged: a corner
-    /// column without a cell (no eight corners), touching an LGR box (which
-    /// needs fine neighbours to refine against), or holding a cell thinner
-    /// than `thickness` (merging a sliver leaves hanging edges; it is
-    /// collapsed instead), or crossed by a fault.
+    /// column without a cell (no eight corners) or crossed by a fault (the
+    /// block would not be the union of its cells). Without `collapse` also
+    /// those touching an LGR box or holding a cell thinner than `thickness`,
+    /// which leave hanging edges when every fine face is kept.
     static Coarsening::BlockLayout mergeLayout_(const RetainedCornerPointInput& input,
                                                 const std::vector<Coarsening::CoarsenRequest>& requests,
                                                 const LgrCollection& lgrs,
-                                                const double thickness)
+                                                const double thickness,
+                                                const bool collapse)
     {
         const auto& d = input.dims;
         auto layout = Coarsening::blockLayout(d, requests);
@@ -595,12 +596,12 @@ private:
             if (box[0] == box[3] && box[1] == box[4] && box[2] == box[5]) {
                 continue;
             }
-            if (touchesLgr(box)) {
+            if (!collapse && touchesLgr(box)) {
                 broken[b] = 1;
                 ++nearLgr;
                 continue;
             }
-            for (int k = box[2]; k <= box[5] && !broken[b]; ++k) {
+            for (int k = box[2]; k <= box[5] && !broken[b] && !collapse; ++k) {
                 for (int j = box[1]; j <= box[4] && !broken[b]; ++j) {
                     for (int i = box[0]; i <= box[3] && !broken[b]; ++i) {
                         broken[b] = thin(i, j, k);
