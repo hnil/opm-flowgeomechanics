@@ -124,14 +124,14 @@ namespace Opm{
         const MaterialLawParams& materialLawParams(unsigned globalDofIdx) const
         {
             const int proxy = embeddedSatProxy_(globalDofIdx);
-            return (proxy >= 0) ? this->materialLawManager()->materialLawParams(proxy)
+            return (proxy >= 0) ? this->materialLawManager().materialLawParams(proxy)
                                 : Parent::materialLawParams(globalDofIdx);
         }
 
         const MaterialLawParams& materialLawParams(unsigned globalDofIdx, FaceDir::DirEnum facedir) const
         {
             const int proxy = embeddedSatProxy_(globalDofIdx);
-            return (proxy >= 0) ? this->materialLawManager()->materialLawParams(proxy, facedir)
+            return (proxy >= 0) ? this->materialLawManager().materialLawParams(proxy, facedir)
                                 : Parent::materialLawParams(globalDofIdx, facedir);
         }
 
@@ -156,7 +156,7 @@ namespace Opm{
             }
             using ContainerT = std::array<GetPropType<TypeTag, Properties::Evaluation>, GetPropType<TypeTag, Properties::FluidSystem>::numPhases>;
             GetPropType<TypeTag, Properties::MaterialLaw>::template relativePermeabilities<ContainerT, FluidState, Args...>
-                (mobility, this->materialLawManager()->materialLawParams(proxy), fluidState);
+                (mobility, this->materialLawManager().materialLawParams(proxy), fluidState);
         }
 
         // The embedded fracture needs the well outside the matrix and a pressure

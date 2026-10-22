@@ -282,6 +282,10 @@ is_boundary_cell(const CellRef& cell, const RegularTrimesh& mesh)
 
 namespace Opm
 {
+// Opm declares operators of its own, which would hide the file-scope ones above.
+using ::operator+;
+using ::operator*;
+using ::operator/;
 // ----------------------------------------------------------------------------
 RegularTrimesh::RegularTrimesh(const int layers,
                                const array<double, 3>& origin,
