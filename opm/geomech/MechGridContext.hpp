@@ -279,7 +279,7 @@ public:
                     const double thickness,
                     const bool fillHoles,
                     const std::vector<Coarsening::CoarsenRequest>& requests,
-                    const bool merge,
+                    const Method coarsenMethod,
                     const LgrCollection& lgrs,
                     const FlowGrid& flowGrid,
                     const CartesianMapper& flowCartesianMapper)
@@ -297,6 +297,11 @@ public:
             closeVerticalGaps_(*input);
             input->edgeConformal = true;
         }
+        // grdecl: corner-point coarsening (pillar lines dropped grid-wide);
+        // otherwise blocks merged locally, collapse (default) giving one face
+        // between two coarse cells as in an LGR leaf, merge keeping fine faces.
+        const bool merge = coarsenMethod != Method::Grdecl;
+        const bool collapse = coarsenMethod == Method::Collapse || coarsenMethod == Method::Auto;
         Coarsening::BlockLayout layout;
         std::vector<char> merged;
         if (merge && !requests.empty()) {
@@ -313,7 +318,7 @@ public:
         fromCornerPoints_ = true;
 
         if (merge && !requests.empty()) {
-            buildMerged_(input, layout, absorber, lgrs, flowGrid.comm());
+            buildMerged_(input, layout, absorber, lgrs, collapse, flowGrid.comm());
         } else {
             auto mechInput = input;
             std::vector<int> fineToCoarse(absorber.size());
@@ -530,9 +535,6 @@ private:
         auto layout = Coarsening::blockLayout(d, requests);
         const auto cart = [&d](int i, int j, int k) { return i + d[0]*(j + d[1]*k); };
         const auto present = [&](int i, int j, int k) {
-            if (!input.actnum.empty() && input.actnum[cart(i, j, k)] == 0) {
-                return false;
-            }
             for (int c = 0; c < 4; ++c) {
                 const std::size_t top = 2*i + (c & 1) + 2*d[0]*(2*j + (c >> 1))
                     + 4*static_cast<std::size_t>(d[0])*d[1]*(2*k);
@@ -648,7 +650,7 @@ private:
     void buildMerged_(const std::shared_ptr<RetainedCornerPointInput>& input,
                       const Coarsening::BlockLayout& layout,
                       const std::vector<int>& absorber, const LgrCollection& lgrs,
-                      const Comm& comm)
+                      const bool collapse, const Comm& comm)
     {
         const auto& d = input->dims;
         const auto cart = [&d](int i, int j, int k) { return i + d[0]*(j + d[1]*k); };
@@ -678,11 +680,12 @@ private:
         }
         grid_ = std::make_unique<Dune::CpGrid>(comm);
         grid_->setLgrBackend(Refinement::Backend::Conforming);
+        // Rock wherever there is volume: an inactive cell left out would be a hole.
+        const auto withVol = withVolume(d, input->zcorn);
         const grdecl raw{ { d[0], d[1], d[2] }, input->coord.data(), input->zcorn.data(),
-                          input->actnum.empty() ? nullptr : input->actnum.data() };
+                          withVol.data() };
         grid_->processEclipseFormatCoarsened(raw, layout.blockOfCartesian, layout.boxes,
-                                             /*edge_conformal*/ true,
-                                             /*collapse_coarse_faces*/ false);
+                                             /*edge_conformal*/ true, collapse);
         Refinement::GridStateWriter::setRetainedCornerPointInput(*grid_->currentData().front(),
                                                                  input);
         std::ostringstream os;
