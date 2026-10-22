@@ -123,7 +123,7 @@ namespace Opm {
                 this->resizeTensorBuffer_(delstress_, ParentType::BufferType::Element);
                 this->resizeTensorBuffer_(strain_, ParentType::BufferType::Element);
 
-                
+
                 this->resizeScalarBuffer_(pressure_, ParentType::BufferType::Element);
                 this->resizeScalarBuffer_(biot_, ParentType::BufferType::Element);
                 this->resizeScalarBuffer_(ymodule_, ParentType::BufferType::Element);
@@ -138,8 +138,8 @@ namespace Opm {
                     this->resizeScalarBuffer_(cellTemperature_, ParentType::BufferType::Element);
                     this->resizeVectorBuffer_(cellIjk_, ParentType::BufferType::Element);
                 }
-                
-                
+
+
             }
 
         }
@@ -171,10 +171,10 @@ namespace Opm {
             if (!Parameters::Get<Parameters::EnableVtkOutput>())
                 return;
 
-            const auto& problem = elemCtx.problem();    
+            const auto& problem = elemCtx.problem();
             const auto& geoMechModel = problem.geoMechModel();
             for (unsigned dofIdx = 0; dofIdx < elemCtx.numPrimaryDof(/*timeIdx=*/0); ++dofIdx) {
-                // get the global index of the dof         
+                // get the global index of the dof
                 unsigned globalDofIdx = elemCtx.globalSpaceIndex(dofIdx, /*timeIdx=*/0);
                 pressDiff_[globalDofIdx] = geoMechModel.pressureDiff(globalDofIdx);
                 poro_[globalDofIdx] = problem.porosity(globalDofIdx, /*timeIdx=*/0);

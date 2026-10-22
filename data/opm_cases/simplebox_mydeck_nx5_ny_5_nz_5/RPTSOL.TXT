@@ -1,5 +1,4 @@
 RPTSOL
- RESTART=2 
-     FIP=1 
+ RESTART=2
+     FIP=1
 /
-

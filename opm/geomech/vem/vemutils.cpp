@@ -243,14 +243,14 @@ bool cellFemCell(const Dune::CpGrid& grid, int cellIdx,
         bool is_ok = true;
         int nf = grid.numCellFaces(cellIdx);
 
-        bool only_nice = true; // only take normal hex 
+        bool only_nice = true; // only take normal hex
         if (only_nice) {
             if (nf != 6) {
                 is_ok = false;
                 return false;
             }
         }
-        
+
         for (int f = 0; f < nf; ++f) {
             auto face = grid.cellFace(cellIdx, f);
             auto faceSize = grid.numFaceVertices(face);
@@ -283,7 +283,7 @@ bool cellFemCell(const Dune::CpGrid& grid, int cellIdx,
             }
         }
         assert(is_ok==true);
-        return true;    
+        return true;
     }
 
     int
@@ -331,7 +331,7 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
      static constexpr int comp = 3 + (dim - 2) * 3;
      static constexpr int bfunc = 4 + (dim - 2) * 4;
      static constexpr int esize = dim*bfunc;
- 
+
      using ctype = double;
       Dune::FieldMatrix<ctype,comp,comp> C;
       Dune::FieldMatrix<ctype,dim*bfunc,dim*bfunc> K;
@@ -356,14 +356,14 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
           cellcomm.copyOwnerToAll(cell_fem_type,cell_fem_type);
         }
       }
-      
-      
+
+
 
 
     for(const auto elem : elements(gv)){
-        int c = gv.indexSet().index(elem);  
+        int c = gv.indexSet().index(elem);
         // computing local stiffness matrix, writing its entries into the global matrix
-       
+
         auto loc_stability_choice =  stability_choice;
         bool vem_type = !use_fem_type;
         if(!vem_type){
@@ -416,7 +416,7 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
           Opm::Elasticity::Isotropic  material(id, young[cellIdx], poisson[cellIdx], rho);
           bool valid = material.getConstitutiveMatrix(C);
           if(!valid){
-            OPM_THROW(std::runtime_error,"Not valid C matrix"); 
+            OPM_THROW(std::runtime_error,"Not valid C matrix");
         }
           Dune::GeometryType gt = elem.type();
           const bool do_bbar = (stability_choice == StabilityChoice::FEM_BBAR);
@@ -488,9 +488,9 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
           }
 
         }
-        
 
-        
+
+
         // add contribution to right hand side from body forces.  These are
         // written directly into the global right-hand side vector
         vem::compute_bodyforce_3D(points,
@@ -556,12 +556,12 @@ potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const p
   std::vector<int> indexing;
     int cur_fcor_start = 0;
     int cur_cface_start = 0;
-    
+
     Opm::Elasticity::Elasticity elasticity(grid);
     const auto gv = grid.leafGridView();
     for(const auto elem : elements(gv)){
-        int cell = gv.indexSet().index(elem);  
-  
+        int cell = gv.indexSet().index(elem);
+
         const auto reindex = global_to_local_indexing(&face_corners[cur_fcor_start],
                                                       &num_face_corners[cur_cface_start],
                                                       num_cell_faces[cell],
@@ -606,7 +606,7 @@ potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const p
                                      1,
                                      outward_normals,
                                      corner_mask ? corner_mask + cur_fcor_start : nullptr);
-        
+
         if (vem_method) {
             // fill in entries in global fgrad vector
             for (int c = 0; c != num_corners; ++c) {
@@ -671,7 +671,7 @@ potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const p
     }
 }
 Dune::BlockVector<Dune::FieldVector<double,1>> smoothCellVector(const Dune::CpGrid& grid,const Dune::BlockVector<Dune::FieldVector<double,1>>& cell_vector){
-  
+
   const auto& gv = grid.leafGridView();
   Dune::BlockVector<Dune::FieldVector<double,1>> smoothed_cell_vector(cell_vector.size());
   for(const auto& elem : elements(gv)){
@@ -1173,7 +1173,7 @@ Dune::BlockVector<Dune::FieldVector<double,6>>  computeStressFem(const Dune::CpG
         Dune::FieldMatrix<ctype, comp, comp> C;
         Dune::FieldVector<ctype, comp> eps0;
         eps0 = 0;
-        Dune::BlockVector<Dune::FieldVector<double,6>> sigmacells(grid.numCells());                                                       
+        Dune::BlockVector<Dune::FieldVector<double,6>> sigmacells(grid.numCells());
         for (const auto& elem: elements(gv)){
             int cellIdx = gv.indexSet().index(elem);
             double rho = 0.0;
@@ -1190,7 +1190,7 @@ Dune::BlockVector<Dune::FieldVector<double,6>>  computeStressFem(const Dune::CpG
                     v[ldof1] = disp[node_index1*dim+ki][0];
                 }
             }
-            
+
             Dune::FieldVector<ctype, comp> sigma;
             sigma = 0;
             double volume = 0;
@@ -1215,11 +1215,11 @@ Dune::BlockVector<Dune::FieldVector<double,6>>  computeStressFem(const Dune::CpG
             sigma /= volume;
             // switch to voits notation
             std::swap(sigma[4],sigma[5]);
-            
+
             sigmacells[cellIdx] = sigma;
         }
         return sigmacells;
     }
-   
+
 
 } // namespace vem

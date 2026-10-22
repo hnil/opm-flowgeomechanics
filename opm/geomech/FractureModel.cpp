@@ -95,7 +95,7 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.solver.numcell_threshold", 100000);// probably 1200 should be ok
     fracture_param.put("fractureparam.solver.max_num_coarsening", 0);
     fracture_param.put("fractureparam.solver.max_iter_on_same_level", 100000000);
-    
+
     // used ??
     fracture_param.put("fractureparam.solver.efac", 0.5);
     fracture_param.put("fractureparam.solver.rfac", 0.1);
@@ -151,7 +151,7 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.mode_switch_coupling_threshold", 0.25);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.mech_press_coupling", true);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.update_mech_on_reuse", false);
-    fracture_param.put("fractureparam.solver.linsolver.preconditioner.verbosity", 0);  
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.verbosity", 0);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.solver","umfpack"s);
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.verbosity",0 );
     // not used if not solver is iterative
@@ -168,12 +168,12 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.solver.reopen_width_tolerance", 0.0);
     fracture_param.put("fractureparam.solver.max_closed_cell_toggle_count", 1000000000);
     fracture_param.put("fractureparam.solver.max_closed_cell_toggle_fraction", 1.0);
-    
+
     // reservoir fracture coupling
     fracture_param.put("fractureparam.reservoir.calculate_dist", true);
     // not used if calculate_dist is true
     fracture_param.put("fractureparam.reservoir.dist", 1e0);
-    
+
     // normally taken from resrevoir
     fracture_param.put("fractureparam.reservoir.mobility", 1.3e-3);
     fracture_param.put("fractureparam.reservoir.perm", 1e-13);
@@ -189,14 +189,14 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.control.WI", 1.0e-6); // calculated from well
 
     fracture_param.put("fractureparam.fractureWI", 1e-6);//NB to do need to be caluclated based on fracture properties
-    
-    
+
+
 
     fracture_param.put("fractureparam.extended_fractures", true);
 
     // nomrmally taken from reservoir
     fracture_param.put("fractureparam.KMax", 1e6); // in input file
-    
+
 
     fracture_param.put("fractureparam.write_pressure_system", false);
     fracture_param.put("fractureparam.write_fracture_system", false);

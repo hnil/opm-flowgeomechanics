@@ -125,21 +125,21 @@ namespace external{
                               std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& enity_seed,
                               const Dune::CpGrid& grid);
 
-    int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, 
+    int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
         const Dune::CpGrid& grid,
-        const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& enity_seed,    
+        const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& enity_seed,
         const cvf::Vec3d& point);
-        
+
     void cellsOfTri(std::vector<int>& cells,std::vector<double>& areas,
                     std::vector<Dune::FieldVector<double,3>>& centroids,
                   const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
                   const Dune::CpGrid& grid,
                 const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& entity_seed,
                 const std::vector<std::array<double,3>>& points);
-    
+
     template<class Grid, class CellSeed>
     void buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
-                              std::vector<CellSeed>& cell_seeds, 
+                              std::vector<CellSeed>& cell_seeds,
                               const Grid& grid){
         using GridView = typename Grid::LeafGridView;
         const auto& gv = grid.leafGridView();
@@ -160,7 +160,7 @@ namespace external{
             // dune 0 1 2 3 4 5 6 7 is resinsight 0 1 3 2 4 5 7 6 (i think)
             for (std::size_t l = 0; l < geom.corners(); l++) {
                 auto cornerPointArray = geom.corner(l);
-                cornerPoint = cvf::Vec3d(cornerPointArray[0], cornerPointArray[1], cornerPointArray[2]);     
+                cornerPoint = cvf::Vec3d(cornerPointArray[0], cornerPointArray[1], cornerPointArray[2]);
                 cellBB.add(cornerPoint);
             }
             cellIndicesForBoundingBoxes.emplace_back(index);

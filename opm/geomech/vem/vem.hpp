@@ -59,7 +59,7 @@ namespace vem
   // true for choices that request Q1 FEM assembly on cells where it is applicable
   inline bool is_fem_choice(StabilityChoice c) { return c == FEM || c == FEM_BBAR; }
   inline bool is_face_weighted_choice(StabilityChoice c) { return c >= FACE_D_RECIPE && c <= FACE_SIMPLE; }
-  
+
 // ============================================================================
 // == Main functions for computing element stiffness matrices and assembling ==
 // ==                      linear systems in 2D and 3D                       ==
@@ -335,7 +335,7 @@ compute_stress_3D(const double* const points,
                   vem::StabilityChoice stability_choice,
                   bool stab_on_stress,
                   const char* const corner_mask = nullptr
-    );    
+    );
 
 
 void
@@ -352,7 +352,7 @@ calculate_stress_3D_local(const double* const points,
                           bool do_matrix,
                           bool do_stress,
                           const char* const corner_mask = nullptr
-    );    
+    );
 // -----------------------------------------------------------------------------------------------
 // Computes the standard isoparametric Q1 (trilinear) FEM stiffness matrix for a single
 // hexahedral element, using 2x2x2 Gauss quadrature.  Optionally applies the B-bar
@@ -664,7 +664,7 @@ compute_cell_geometry(const double* points,
                       double& volume,
                       const char* const corner_mask = nullptr);
 
-std::vector<double> 
+std::vector<double>
 compute_q_3D(const double* const corners,
              const int num_corners,
              const int* const faces,

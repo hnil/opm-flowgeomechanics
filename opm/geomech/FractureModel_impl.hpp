@@ -335,14 +335,14 @@ namespace Opm {
                                         wellstate.name, cell_index_frac));
             return -1;
         }// skip if not found
-                            
+
         int perf_index = it - perf_data.cell_index.begin();
         return perf_index;
     }
 
     template <class TypeTag, class Simulator>
     void FractureModel::updateWellProperties(const Simulator& simulator)
-    {   
+    {
        int verbosity = prm_.get<int>("verbosity",0);
        using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
         for (size_t i=0; i < wells_.size(); ++i) {
@@ -397,7 +397,7 @@ namespace Opm {
                       if (well_it != wells.end()) {
                       const auto& well = *well_it;
 
-                      for (int perf_index=0; perf_index < wellstate.perf_data.cell_index.size(); ++perf_index) {    
+                      for (int perf_index=0; perf_index < wellstate.perf_data.cell_index.size(); ++perf_index) {
                             const int cell_idx = wellstate.perf_data.cell_index[perf_index];
                             // Auxiliary perforations are the embedded fracture cells.
                             // The fracture's own solve already carries that same
@@ -432,7 +432,7 @@ namespace Opm {
                             const auto effective_well_index_perf =
                                 well->wellIndex()[perf_index] * trans_mult * fc_mult;
 
-                                                 
+
                             double lambda = 0.0;
                             int numPhases = 3;
                             for (unsigned phaseIdx = 0; phaseIdx < numPhases; ++phaseIdx) {
@@ -441,11 +441,11 @@ namespace Opm {
                                             auto val = intQuants.mobility(phaseIdx);
                                             lambda += val.value();
                                     }
-                            }   
+                            }
                             const auto effective_well_index   =  effective_well_index_perf*lambda;
                             double density = intQuants.fluidState().density(FluidSystem::waterPhaseIdx).value();
                             total_wellindex += effective_well_index;
-                            double dzwell = (well->perfDepth()[perf_index]- well->refDepth());  
+                            double dzwell = (well->perfDepth()[perf_index]- well->refDepth());
                             wi_dz += effective_well_index*dzwell;
                             double pressure = intQuants.fluidState().pressure(FluidSystem::waterPhaseIdx).value();
                             wi_respress += effective_well_index*pressure;
@@ -469,7 +469,7 @@ namespace Opm {
                         << " auxiliary fracture perforations excluded, their CTF sum "
                         << aux_wellindex << ")" << std::endl;
                 OpmLog::info(os.str());
-              }  
+              }
               fracture.setTimeStep(simulator.timeStepSize());
               fracture.setWellControl(well_control_is_rate, well_bhp);
               // Consistency check: the fracture's duplicated well row should
@@ -529,7 +529,7 @@ namespace Opm {
                 int  perf_index =  findPerf(wellstate,cell_index_frac);
                 if(perf_index == -1) {
                     fracture.setActive(false);
-                    wells_[i].setPerfActive(perf_index_frac,false);          
+                    wells_[i].setPerfActive(perf_index_frac,false);
                     continue; // skip if not found
                 }
                 double perf_pressure = perf_data.pressure[perf_index];
@@ -548,6 +548,6 @@ namespace Opm {
             }
         }
     }
-    
+
 
 }

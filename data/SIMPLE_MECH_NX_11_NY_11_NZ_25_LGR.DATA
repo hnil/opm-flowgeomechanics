@@ -2,7 +2,7 @@
 RUNSPEC
 DIMENS
 -- 100 150 25 /
-  11 11 25 /    
+  11 11 25 /
 OIL
 WATER
 GAS
@@ -59,11 +59,11 @@ EQUALS
   PERMX 10 6* /
   PORO  0.1  6* /
 /
-    
+
 EQUALS
    PERMX 1000 4* 11 20 /
-   PORO  0.28 4* 11 20 / 
-/   
+   PORO  0.28 4* 11 20 /
+/
 --    EQUALS
 --  PERMX 1000 6* /
 --  PORO  0.28  6* /
@@ -85,17 +85,17 @@ EQUALS
   'YMODULE' 14.0 /
   'CSTRESS' 5.55e6 /
   'BIOTCOEF' 1.0 /
-  'THERMEXR' 1.5e-5 /      
+  'THERMEXR' 1.5e-5 /
 /
 
-    
+
 BCCON
-       1        1        1        2*        2*         X- / 
-       2       11       11        2*        2*         X+ / 
-       3        2*        1        1        2*         Y- / 
-       4        2*       11       11        2*         Y+ / 
-       5        2*        2*        1        1         Z- / 
-       6        2*        2*       25       25         Z+ / 
+       1        1        1        2*        2*         X- /
+       2       11       11        2*        2*         X+ /
+       3        2*        1        1        2*         Y- /
+       4        2*       11       11        2*         Y+ /
+       5        2*        2*        1        1         Z- /
+       6        2*        2*       25       25         Z+ /
 /
 
 CARFIN
@@ -112,7 +112,7 @@ NOECHO
 SPECROCK
  0   2146.1
  100 2146.1 /
- 
+
 SPECHEAT
  0   2.2190 4.1868 2.1353
  100 2.2190 4.1868 2.1353 /
@@ -153,7 +153,7 @@ SGOF
 REGIONS
 EQUALS
   EQLNUM 1 /
-  SATNUM 1 /  
+  SATNUM 1 /
 /
 
 SOLUTION
@@ -177,8 +177,8 @@ STREQUIL
   0.0000000e+00   0.0000000e+00   0.0000000e+00   0.0000000e+00   1.6700000e-01   0.0000000e+00   1.6700000e-01   0.0000000e+00   2.2000000e-01 0.0 0.0 0.0 0.0 0.0 0.0 /
 /
 
-    
-    
+
+
 SUMMARY
 ALL
 PERFORMA
@@ -191,9 +191,9 @@ WFCFFVIR
 
 WFCWFVIR
 /
-    
+
 WFCFVIR
-/    
+/
 
 CFCFFVIR
     *  /
@@ -203,11 +203,11 @@ CFCFFVIR
 CFCWFVIR
     *  /
 /
-    
+
 CFCFVIR
     *  /
-/    
-      
+/
+
 
 WFCFFVIT
 /
@@ -218,7 +218,7 @@ WFCWFVIT
 /
 
 WFCFVIR
-/    
+/
 
 WFCFVIT
 /
@@ -230,7 +230,7 @@ CWIR
 /
 CWIRFRAC
 *  /
-/        
+/
 
 CFCFFRAC
 'B-3H'*/
@@ -274,7 +274,7 @@ CFRINJPR
 CFRINJBH
     */
 /
-    
+
 CFRINJRA
 */
 /
@@ -298,10 +298,10 @@ CFRFLUX
 /
 CFRHEIGH
 'B-3H' */
-/            
+/
 CFRLENGT
 'B-3H' */
-/    
+/
 
 CFRFVOLU
 'B-3H'*/
@@ -314,7 +314,7 @@ CFRAVGW
 /
 CFRAVGFW
 'B-3H'*/
-/                                        
+/
 
 CPI
 'B-3H' /
@@ -334,8 +334,8 @@ BTEMP
 /
 BSTRSSXX
   6 6 16 /
-/    
-            
+/
+
 --
 
 SCHEDULE
@@ -345,8 +345,8 @@ TUNING
  2* 50 1* 20 /
 NUPCOL
  4 /
- 
---       5       NONE      WATER   1.0000000e+00   1.0000000e+00   1.0000000e+00      FIXED        0        0        1   0.0000000e+00   0.0000000e+00   0.0000000e+00   0.0000000e+00   0.0000000e+00   0.0000000e+00 / 
+
+--       5       NONE      WATER   1.0000000e+00   1.0000000e+00   1.0000000e+00      FIXED        0        0        1   0.0000000e+00   0.0000000e+00   0.0000000e+00   0.0000000e+00   0.0000000e+00   0.0000000e+00 /
 BCPROP
   1 FREE WATER 1.0000000e+00 1.0000000e+00 1.0000000e+00 /
   2 FREE WATER 1.0000000e+00 1.0000000e+00 1.0000000e+00 /
@@ -382,20 +382,20 @@ COMPDATL
 /
 
 -- WELTRAJ
--- -- WELL	BRANCH_NO	X		Y	 	TVD 		MD 
+-- -- WELL	BRANCH_NO	X		Y	 	TVD 		MD
 -- --'B-2H'	1*			327	    628	   0.0		0.0 /
 -- --'B-2H'	1*			327	    628	   2400		    2400 /
 -- 'B-3H' 	1*			1000    1000	0.0		0.0 /
 -- 'B-3H' 	1*			1000	1000	2400.0		2400.0/
 -- /
-    
--- COMPTRAJ 
--- -- WELL	 BRANCH  PERF	  PERF    PERF COMPL STATE SAT    CONN DIAM	KH	SKIN D_FACT 
--- -- NAME  NO      TOP      BOT     REF  NO    --    TABLE  FACT --   --  --   --     
+
+-- COMPTRAJ
+-- -- WELL	 BRANCH  PERF	  PERF    PERF COMPL STATE SAT    CONN DIAM	KH	SKIN D_FACT
+-- -- NAME  NO      TOP      BOT     REF  NO    --    TABLE  FACT --   --  --   --
 -- --  'B-2H' 1*	     2100.00     2220.0  1*   1*	 1*    1*     1*   0.216  1*  1*  1*   	/
 -- --  'B-3H' 1* 	 2180.001     2260.0  1*   1*	 1*    1*     1*   0.216  1*  1*  1*     /
 -- --      'B-3H' 1* 	 2180     2260.0  1*   1*	 1*    1*     1*   0.216  1*  1*  1*     /
---       'B-3H' 1* 	 2200     2220.0  1*   1*	 1*    1*     1*   0.216  1*  1*  1*     /    
+--       'B-3H' 1* 	 2200     2220.0  1*   1*	 1*    1*     1*   0.216  1*  1*  1*     /
 -- /
 
 -- WCONPROD
@@ -421,21 +421,21 @@ WTEMP
 TSTEP
  -- 18*5
  3*5
-/    
+/
 DATES
  31 'JAN' 2020 12:00:00 /
 /
-END    
+END
 DATES
  10 'FEB' 2021 12:00:00 /
 /
-END        
+END
 TSTEP
   10*36500
-/ 
+/
 
-    
-END    
+
+END
 DATES
  10 'FEB' 2020 12:00:00 /
 /

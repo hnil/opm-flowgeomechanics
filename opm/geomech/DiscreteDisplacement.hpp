@@ -102,7 +102,7 @@ TDStrainFS(const Dune::FieldVector<double, 3>& obs,
     return TDStrainFSTri(obs, tri,slip,nu);
 }
 
-  
+
 
 double traceSymTensor(const Dune::FieldVector<double,6> symtensor);
 
@@ -116,7 +116,7 @@ double
 tractionSymTensor(const Dune::FieldVector<double,6> symtensor, Dune::FieldVector<double,3> normal);
 
 void assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);
-void assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);  
+void assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);
 void applyMatrix_fast(Dune::DynamicVector<double>& result,
                       const Dune::DynamicVector<double>& x,
                       const double E,
@@ -139,5 +139,3 @@ disp(const Dune::FieldVector<double, 3>& obs,
 
 
 } // namespace ddm
-
-

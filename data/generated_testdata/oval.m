@@ -16,4 +16,3 @@ for t = 1:length(theta)
     points(t, 1) = major_axis * cos(theta(t));
     points(t, 2) = minor_axis * sin(theta(t));
 end
-

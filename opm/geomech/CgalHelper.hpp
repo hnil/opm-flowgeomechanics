@@ -28,7 +28,7 @@
 #include <CGAL/draw_polygon_with_holes_2.h>
 #include <vector>
 #include <iostream>
-#include <cmath> 
+#include <cmath>
 #include <cmath>
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K_inexact;
 typedef CGAL::Exact_predicates_exact_constructions_kernel K_exact;
@@ -40,7 +40,7 @@ typedef K_inexact::Segment_3 Segment_3;
 typedef K_inexact::Plane_3 Plane_3;
 
 typedef CGAL::Surface_mesh<Point_3> Mesh;
-typedef CGAL::Polygon_2<K_exact> Polygon_2; 
+typedef CGAL::Polygon_2<K_exact> Polygon_2;
 typedef K_exact::Point_2 Point_2;
 // -----------------------------------------------------------
 // Compute hex ∩ plane using segment-plane intersections

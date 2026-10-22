@@ -319,7 +319,7 @@ namespace Opm{
             auto last = std::unique(bc_nodes.begin(), bc_nodes.end(), isequal);
             // v now holds {1 2 3 4 5 x x}, where 'x' is indeterminate
             bc_nodes.erase(last, bc_nodes.end());
-            
+
             // make index
             auto max_elem = std::max_element(bc_nodes.begin(), bc_nodes.end(),
                                           [](const auto& a, const auto& b){
@@ -345,7 +345,7 @@ namespace Opm{
                         std::get<1>(bc_node).fixeddir[mdim] = true;
                         assert(std::get<1>(bc_nodes[index]).fixeddir[mdim] == true);
                     }
-                }                
+                }
             }
         }
     }

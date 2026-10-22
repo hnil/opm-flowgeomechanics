@@ -106,7 +106,7 @@ namespace Dune{
     using field_type = typename MultiTypeBlockMatrix<FirstRow&, Args&...>::field_type;
     using real_type  = typename FieldTraits<field_type>::real_type;
   };
-  
+
   /**
      @brief A reference-only MultiTypeBlockMatrix type
 
@@ -191,7 +191,7 @@ struct FractureProperties
   };
 };
 
-  
+
 struct WellInfo
 {
     std::string name;
@@ -278,9 +278,9 @@ public:
 
     template <class TypeTag, class Simulator>
     void updateReservoirProperties(const Simulator& simulator, bool init_constant_vals=false,bool update_filtercake=true);
-    
+
     void updateFilterCakeProps(const Opm::WellConnections& connections,
-                               const Opm::SingleWellState<double,IndexTraits>& wellstate,double dt);    
+                               const Opm::SingleWellState<double,IndexTraits>& wellstate,double dt);
     void initFracturePressureFromReservoir();
     void initFractureStates();
     void initFractureWidth();
@@ -521,11 +521,11 @@ private:
                                         const std::vector<std::vector<CellRef>>& map2,
                                         const int level,
                              bool point_wise);
-  
+
     using ResVector = ::Opm::Fracture::Vector;
     using VectorHP = Dune::MultiTypeBlockVector<ResVector, ResVector>;
 
-  
+
     using SMatrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>; // sparse matrix
     using FMatrix = Dune::DynamicMatrix<double>;                       // full matrix
 
@@ -562,8 +562,8 @@ private:
     std::vector<CellRef> well_source_cellref_prev_;
     std::vector<int> well_source_prev_;
     // copy of state variables
-  
-    
+
+
 
     Point3D origo_;
     std::array<Point3D, 3> axis_;
@@ -608,7 +608,7 @@ private:
     void assembleFractureMatrix() const;
     std::vector<double> stressIntensityK1() const;
     int numWellEquations() const;
-  
+
     std::vector<CellRef> well_source_cellref_; // references to well cells in the fully resolved TriMesh
     std::vector<int> well_source_; // indices to well cells
     // for reservoir
@@ -700,7 +700,7 @@ private:
     double perf_pressure_;
     std::vector<double> leakof_;
     std::vector<double> leakoff_mobility_;
-    
+
     PropertyTree prmpressure_;
     using PressureOperatorType = Dune::MatrixAdapter<Matrix, Vector, Vector>;
     using FlexibleSolverType = Dune::FlexibleSolver<PressureOperatorType>;
@@ -708,18 +708,18 @@ private:
     mutable std::unique_ptr<PressureOperatorType> pressure_operator_;
     mutable std::unique_ptr<FlexibleSolverType> pressure_solver_;
     mutable std::unique_ptr<Matrix> coupling_matrix_; // will be updated by `fullSystemIteration`
-  
+
     using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView>;
-    mutable std::unique_ptr<DynamicMatrix> fracture_matrix_; 
+    mutable std::unique_ptr<DynamicMatrix> fracture_matrix_;
 
     // function ensuring that the fracture matrix exists, and returning a reference to it
     DynamicMatrix& fractureMatrix() const;
-  
+
     double E_;
     double nu_;
     double min_width_; // minimum width of fracture, used for convergence criterion
     double gravity_{Opm::unit::gravity}; // gravity acceleration, used for leakoff calculations
-    std::vector<double> fracture_dgh_; // gravity contribution to fracture pressure, used for leakoff calculations  
+    std::vector<double> fracture_dgh_; // gravity contribution to fracture pressure, used for leakoff calculations
     PropertyTree prm_;
     double total_WI_well_{0.0}; // total well index for the well, used for leakoff calculations
     // for coupled solve
@@ -728,8 +728,8 @@ private:
     using SystemMatrixRef = Dune::MultiTypeBlockMatrixRef<Dune::MultiTypeBlockVectorRef<FMatrix, SMatrix>,
                                                      Dune::MultiTypeBlockVectorRef<SMatrix, SMatrix>>;
     std::unique_ptr<SystemMatrix> S_;
-    std::unique_ptr<FMatrix> A_; // system matrix without coupling terms    
-    std::unique_ptr<SMatrix> I_; // system matrix without coupling terms    
+    std::unique_ptr<FMatrix> A_; // system matrix without coupling terms
+    std::unique_ptr<SMatrix> I_; // system matrix without coupling terms
     std::vector<std::vector<RuntimePerforation>> well_indices_; // for each perf, the corresponding well index info
     double max_flow_time_step_{-1.0};
     double well_rate_;

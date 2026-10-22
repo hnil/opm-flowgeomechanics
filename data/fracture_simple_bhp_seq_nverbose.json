@@ -23,7 +23,7 @@
         "vem_stress":"true",
         "vem_force":"true",
         "stab_on_stress":"false",
-        "smooth_force": "false", 	
+        "smooth_force": "false",
         "addconnections": "true",
         "include_fracture_contributions": "false",
         "config": {

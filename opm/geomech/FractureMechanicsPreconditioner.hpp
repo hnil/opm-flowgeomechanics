@@ -94,7 +94,7 @@ using FractureSystemMatrix = Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVect
 using Dune::Indices::_0;
 using Dune::Indices::_1;
 
-  
+
 // Block preconditioner for the coupled fracture width / pressure linear system.
 //
 // The operator is assembled as
@@ -113,10 +113,10 @@ using Dune::Indices::_1;
 // The mechanics solve is either diagonal or dense-LU based. The flow solve is
 // either diagonal or delegated to FlexibleSolver, which makes it cheap to test
 // exact sparse-flow solves on difficult coupled cases.
-class FractureMechanicsPreconditioner : 
+class FractureMechanicsPreconditioner :
    public Dune::Preconditioner<VectorHP, VectorHP>
 {
-    
+
 public:
   // prm expects the fracture linsolver preconditioner subtree. The relevant
   // switches are diag_mech, diag_flow, mech_first, fixed_stress,
@@ -164,7 +164,7 @@ Vector diagvec(const Mat& M)
         assert(res.size() == M.M() && res.size() == M.N());
         for (size_t i = 0; i != res.size(); ++i)
       res[i] = Opm::diagScalar(M[i][i]);
-   } 
+   }
   // Assemble the fixed-stress flow operator M - C * diag(A)^{-1} * I using the
   // sparsity of M augmented with active C entries.
   void updateFixedStressFlowMatrix(const Opm::FractureSystemMatrix& S);

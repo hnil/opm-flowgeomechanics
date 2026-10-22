@@ -112,13 +112,13 @@ class ElasticitySolver
            color(gv_)
     {
     }
-    ElasticitySolver(const GridType& gv_, ctype tol_, ctype Escale_, 
+    ElasticitySolver(const GridType& gv_, ctype tol_, ctype Escale_,
                      bool verbose_)
         :  A(gv_), gv(gv_), tol(tol_), Escale(Escale_), E(gv_), verbose(verbose_),
            color(gv_)
     {
     }
-    
+
     void setMaterial(const std::vector<std::shared_ptr<Material>>& materials_){
         materials = materials_;
     }
@@ -135,7 +135,7 @@ class ElasticitySolver
     //! \brief Find boundary coordinates
     //! \param[out] min The miminum coordinates of the grid
     //! \param[out] max The maximum coordinates of the grid
-    
+
     void findBoundaries(double* min, double* max);
     void initForAssembly(){A.initForAssembly();};
     void fixNodes(const std::vector<size_t>& fixed_nodes);
@@ -144,7 +144,7 @@ class ElasticitySolver
     //! \param[in] loadcase The strain load case. Set to -1 to skip
     //! \param[in] matrix Whether or not to assemble the matrix
     void assemble(const Vector& pressure, bool matrix,bool vector);
-    
+
     //! \brief Solve Au = b for u
     //! \param[in] loadcase The load case to solve
     void solve();
@@ -164,10 +164,10 @@ class ElasticitySolver
     const Dune::BlockVector<Dune::FieldVector<ctype,comp>>& stress(){return stress_;};
 
     void calculateStress(){
-        stress_.resize(gv.leafGridView().size(0));        
+        stress_.resize(gv.leafGridView().size(0));
         this->averageStress(stress_, this->u);
     }
-    
+
     void setupSolver(const Opm::PropertyTree& prm){
             std::size_t pressureIndex;//Dummy
             const std::function<Vector()> weightsCalculator;//Dummy
@@ -221,7 +221,7 @@ class ElasticitySolver
             sigma /= volume;
             // switch to voits notation
             std::swap(sigma[4],sigma[5]);
-            
+
             sigmacells[m] = sigma;
             m++;
         }
@@ -229,7 +229,7 @@ class ElasticitySolver
 
   private:
     Dune::BlockVector<Dune::FieldVector<ctype,comp>> stress_;
-    
+
     using AbstractSolverType = Dune::InverseOperator<Vector, Vector>;
     using AbstractOperatorType = Dune::AssembledLinearOperator<Matrix, Vector, Vector>;
     using AbstractPreconditionerType = Dune::PreconditionerWithUpdate<Vector, Vector>;
@@ -241,7 +241,7 @@ class ElasticitySolver
     typedef std::unique_ptr<Dune::InverseOperator<Vector, Vector> > SolverPtr;
     SolverPtr tsolver_;
 
-    
+
     //! \brief An iterator over grid vertices
     typedef typename GridType::LeafGridView::template Codim<dim>::Iterator LeafVertexIterator;
 
@@ -304,7 +304,7 @@ class ElasticitySolver
     //! \param[in] value The values to fix the given DOFs to
     void fixLine(Direction dir, ctype x, ctype y,
                  const NodeValue& value = NodeValue(0));
-    
+
 
     //! \brief Elasticity helper class
     Elasticity<GridType> E;
@@ -314,7 +314,7 @@ class ElasticitySolver
 
     //! \brief Mesh colorizer used with multithreaded assembly
     MeshColorizer<GridType> color;
-    
+
 };
 
 }} // namespace Opm, Elasticity

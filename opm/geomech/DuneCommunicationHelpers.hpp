@@ -65,7 +65,7 @@ namespace Opm {
     cell_indexset.endResize();
     remote_indices.rebuild<false>();
     std::vector<int> myrank(gv.size(0), world_comm.rank());
-        
+
 
     Dune::Interface cominterface;
     using OwnerSet = Dune::OwnerOverlapCopyCommunication<int, int>::OwnerSet;
@@ -103,20 +103,20 @@ namespace Opm {
     cell_cell_comm.free();
 
     world_comm.barrier();
-        
+
     for (int rank = 0; rank < mpihelper.size(); ++rank) {
       if (rank == mpihelper.rank()) {
-	std::cout << "Grid size: " << gv.size(0) << " on rank " << mpihelper.rank() << std::endl;  
+	std::cout << "Grid size: " << gv.size(0) << " on rank " << mpihelper.rank() << std::endl;
 	for (auto& elem : Dune::elements(gv)) {
 	  auto lindex = elem.index();
 	  auto gid = gidSet.id(elem);
 	  std::cout << "Element global: id " << gid << " local " << lindex << " type " << elem.partitionType()
-		    << " owner rank " << myrank[lindex] 
-		    << " num pros " << numpros[lindex] 
+		    << " owner rank " << myrank[lindex]
+		    << " num pros " << numpros[lindex]
 		    << " all ranks ";
 	  for(auto& r:allranks[lindex]){
 	    std::cout << r << " ";
-	  } 
+	  }
 	  std::cout << std::endl;
 	}
       }
@@ -155,7 +155,7 @@ namespace Opm {
     vertex_indexset.endResize();
     remote_indices.rebuild<false>();
     std::vector<int> myrank(gv.size(3), world_comm.rank());
-        
+
 
     Dune::Interface cominterface;
     using OwnerSet = Dune::OwnerOverlapCopyCommunication<int, int>::OwnerSet;
@@ -193,20 +193,20 @@ namespace Opm {
     vertex_vertex_comm.free();
 
     world_comm.barrier();
-        
+
     for (int rank = 0; rank < mpihelper.size(); ++rank) {
       if (rank == mpihelper.rank()) {
-	std::cout << "Grid size: " << gv.size(0) << " on rank " << mpihelper.rank() << std::endl;  
+	std::cout << "Grid size: " << gv.size(0) << " on rank " << mpihelper.rank() << std::endl;
 	for (auto& elem : Dune::vertices(gv)) {
 	  auto lindex = elem.index();
 	  auto gid = gidSet.id(elem);
 	  std::cout << "Vertex global: id " << gid << " local " << lindex << " type " << elem.partitionType()
-		    << " owner rank " << myrank[lindex] 
-		    << " num pros " << numpros[lindex] 
+		    << " owner rank " << myrank[lindex]
+		    << " num pros " << numpros[lindex]
 		    << " all ranks ";
 	  for(auto& r:allranks[lindex]){
 	    std::cout << r << " ";
-	  } 
+	  }
 	  std::cout << std::endl;
 	}
       }
@@ -338,7 +338,7 @@ namespace Opm {
     const auto& gv = grid.leafGridView();
     auto indexset = gv.indexSet();
     auto gidSet = gv.grid().globalIdSet();
-      
+
     Vector maxranks_tmp_ib(gv.size(codim), world_comm.rank());
     using GridType = Dune::CpGrid;
     using GridView =  typename GridType::LeafGridView;
@@ -348,7 +348,7 @@ namespace Opm {
     int myrank = world_comm.rank();
     std::vector<int> maxrank_ib(gv.size(codim), myrank);
     for(size_t j=0; j<allranks_ib.size(); ++j){
-         const auto& all = allranks_ib[j];  
+         const auto& all = allranks_ib[j];
         for(size_t i=0; i<all.size(); ++i){
             maxrank_ib[j] = std::max(maxrank_ib[j], all[i]);
         }
@@ -360,7 +360,7 @@ namespace Opm {
 
 
     world_comm.barrier();
-      
+
       using AttributeSet = Dune::OwnerOverlapCopyAttributeSet;
       using ParallelIndexSet = Dune::OwnerOverlapCopyCommunication<int, int>::ParallelIndexSet;
       using RemoteIndices = Dune::OwnerOverlapCopyCommunication<int, int>::RemoteIndices;
@@ -394,7 +394,7 @@ namespace Opm {
       // check if unique owner and that all indices has an owner
       using AllSet = Dune::OwnerOverlapCopyCommunication<int, int>::AllSet;
       AllSet allSet;
-      
+
       using Vector = std::vector<int>;
       Vector numpros(gv.size(codim), 0);
       for(const auto& ind:entity_indexset){
@@ -523,11 +523,11 @@ namespace Opm {
       }
       return entity_indexset;
   }
-  
+
   Dune::OwnerOverlapCopyCommunication<int, int>::ParallelIndexSet
   entityToDofIndexSet(const Dune::OwnerOverlapCopyCommunication<int, int>::ParallelIndexSet& entity_indexset, int ndof, bool verbose = false)
   {
-    
+
     using ParallelIndexSet = Dune::OwnerOverlapCopyCommunication<int, int>::ParallelIndexSet;
     ParallelIndexSet dof_indexset;
     dof_indexset.beginResize();

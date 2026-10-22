@@ -40,7 +40,7 @@ namespace Opm{
   // remain in place.
   void redistribute_2D(const std::vector<double>& points,
                        std::vector<double>& result);
-  
+
   // parametrize a set of points in terms of the points on the boundary of a 2D
   // polygon
   void parametrize_interior_2D(const std::vector<double>& bpoints,

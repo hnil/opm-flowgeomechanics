@@ -151,7 +151,7 @@ Dune::BlockVector<Dune::FieldVector<double,6>>  computeStressFem(const Dune::CpG
                                                                 const Dune::BlockVector<Dune::FieldVector<double,1>>& disp,
                                                                 const std::vector <double>& young,
                                                                 const std::vector <double>& poisson);
-                 
-  
+
+
 }
 #endif

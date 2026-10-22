@@ -41,7 +41,7 @@ std::vector<Point_3> intersect_hex_with_plane(const Mesh& mesh, const Plane_3& p
         if (result)
         {
 	  // old cgal
-#ifdef __APPLE__// modern/mac branch 
+#ifdef __APPLE__// modern/mac branch
       const auto& vresult = result.value();
 	  if (std::holds_alternative<Point_3>(vresult))
 	    pts.push_back(std::get<Point_3>(vresult));
@@ -54,14 +54,14 @@ std::vector<Point_3> intersect_hex_with_plane(const Mesh& mesh, const Plane_3& p
 	    pts.push_back(s.target());
 	  }
 #else //old version
-      	  if (const Point_3* ip = boost::get<Point_3>(&*result))
+	  if (const Point_3* ip = boost::get<Point_3>(&*result))
 	         pts.push_back(*ip);
 	  else if (const Segment_3* is = boost::get<Segment_3>(&*result)) {
 	    // see the comment in the branch above: in-plane edge
 	    pts.push_back(is->source());
 	    pts.push_back(is->target());
 	  }
-#endif      
+#endif
         }
     }
 
@@ -178,7 +178,7 @@ Point_2 project(const Point_3& p, const PlaneBasis& B)
     return Point_2(d * B.u, d * B.v);
 }
 
-void sortPoints(Polygon_2& pts){    
+void sortPoints(Polygon_2& pts){
     double cx=0, cy=0;
     for (auto& p : pts) {
       cx += CGAL::to_double(p.x()); cy += CGAL::to_double(p.y());

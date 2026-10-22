@@ -139,7 +139,7 @@ class VemElasticitySolver
                 }
             }
         }
-        // ensure unique 
+        // ensure unique
 
         const int num_fixed_dofs = (int)fixed_dof_ixs.size();
 
@@ -218,19 +218,19 @@ class VemElasticitySolver
 // comm_ here is the entity communication
 
             comm_.reset( new CommunicationType( grid_.comm(), Dune::SolverCategory::overlapping,/*free*/false) );
-#endif       
+#endif
         bool parallel= comm_->communicator().size() > 1;
         if(parallel){
 	  vertexParallelIndexSet_.reset( new CommunicationType::ParallelIndexSet(Opm::makeEntityEntityCommunication<3>(grid_)));
         assert(grid_.size(3) == vertexParallelIndexSet_->size());
       dofParallelIndexSet_.reset( new CommunicationType::ParallelIndexSet(Opm::entityToDofIndexSet(*vertexParallelIndexSet_, 3)));
-            comm_->indexSet() = *dofParallelIndexSet_;   
+            comm_->indexSet() = *dofParallelIndexSet_;
             assert(grid_.size(3)*3 == dofParallelIndexSet_->size());
             comm_->remoteIndices().rebuild<false>();
             const std::function<Vector()> weightsCalculator;
             std::size_t pressureIndex = 0;
             //NB NB ! need other operator in parallel
-            setCopyRowsToZero();    
+            setCopyRowsToZero();
             comm_->communicator().barrier();
             auto pop = std::make_unique<ParOperatorType>(this->getOperator(), *comm_);
             using FlexibleSolverType = Dune::FlexibleSolver<ParOperatorType>;
@@ -416,8 +416,8 @@ private:
     using ParOperatorType = Dune::OverlappingSchwarzOperator<Matrix, Vector, Vector, CommunicationType>;
     std::unique_ptr<ParOperatorType> pop_;
 
-  
-  
+
+
         //! \brief Linear solver
     typedef std::unique_ptr<Dune::InverseOperator<Vector, Vector> > SolverPtr;
     SolverPtr tsolver_;

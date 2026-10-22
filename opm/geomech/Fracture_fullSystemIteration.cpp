@@ -614,7 +614,7 @@ updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
         if(aperture[i][0] <= min_width) dh1 = 0.0;
         if(aperture[j][0] <= min_width) dh2 = 0.0;
         assert(aperture[i][0]>=0.0);
-        assert(aperture[j][0]>=0.0);        
+        assert(aperture[j][0]>=0.0);
         const double h1 = std::max(aperture[i][0],min_width);
         const double h2 = std::max(aperture[j][0],min_width);
         const double p1 = pressure[i];
@@ -851,7 +851,7 @@ std::vector<int>
 Fracture::identify_closed(const FMatrix& A, const VectorHP& x, const ResVector& rhs, const int nwells)
 // ----------------------------------------------------------------------------
 {
-    
+
     OPM_TIMEFUNCTION();
     std::string closing_type = prm_.get<std::string>("solver.closing_type", "org");
     const std::string closed_cell_policy = prm_.get<std::string>("solver.closed_cell_policy", "sticky");
@@ -966,7 +966,7 @@ Fracture::identify_closed(const FMatrix& A, const VectorHP& x, const ResVector& 
         ss << "Unknown closing type: " << closing_type;
         OPM_THROW(std::runtime_error, ss.str());
     }
-        
+
     return result;
 }
 
@@ -1079,7 +1079,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         assemblePressure(); // update pressure matrix (original method)
     }
     addSource(); // update right-hand side of pressure system;
-    
+
 
     //  initialize vector of unknown, and vector represnting direction in tangent space
     VectorHP x {fracture_width_, fracture_pressure_};
@@ -1310,7 +1310,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     }
     const auto& M = *pressure_matrix_;
     const auto& C = *coupling_matrix_;
-    
+
     // Fischer-Burmeister already built I_ with its smooth -db_i weights above.
     if (!is_fb) {
         if (first_iteration) {
@@ -1320,18 +1320,18 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         }
     }
     const auto& I = *I_;
-#if EXP_REF    
+#if EXP_REF
     const auto& row1 = Dune::makeMultiTypeBlockVectorRef(A, I);
     const auto& row2 = Dune::makeMultiTypeBlockVectorRef(C, M);
     const auto& SS = Dune::makeMultiTypeBlockMatrixRef(row1, row2);
 #endif
-  
+
 
     if(first_iteration){
-#if EXP_REF           
+#if EXP_REF
         S_ = std::make_unique<SystemMatrix>(SS); // copy to make sure we have a contiguous storage for the preconditioner
 #else
-        S_.reset(new SystemMatrix({{A, I},                       
+        S_.reset(new SystemMatrix({{A, I},
                                    {C, M}}));
 
 #endif
@@ -1347,8 +1347,8 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         copyMatrixValuesWithSameSparsity(S[_0][_1], I);
         copyMatrixValuesWithSameSparsity(S[_1][_0], C);
         copyMatrixValuesWithSameSparsity(S[_1][_1], M);
-    }  
-    
+    }
+
 
     auto& S = *S_;
 
@@ -1361,7 +1361,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     VectorHP rhs {x};
     rhs[_0] = mech_rhs;
     rhs[_1] = rhs_pressure_;
-    
+
     {
         // A block whose column count disagrees with the vector it multiplies
         // reads past the end of that vector: silent garbage in the residual and
@@ -1522,7 +1522,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     const double linsolve_tol = prm_.get<double>("solver.linsolver.tol");
     const double linsolve_atol = prm_.get<double>("solver.linsolver.atol");
     double lintol = std::max(linsolve_tol, linsolve_atol / res);
-    
+
     const int max_iter = prm_.get<double>("solver.linsolver.max_iter");
     const int verbosity = prm_.get<double>("solver.linsolver.verbosity", 0);
     if (nlin_verbosity > 1) {
@@ -1756,7 +1756,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
 
 
     }
-    
+
     // the following is a heuristic way to limit stepsize to stay within convergence radius
     const double damping = prm_.get<double>("solver.damping");
     double step_fac = damping;
@@ -1856,7 +1856,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     }
     fracture_pressure_ = x[_1];
 
-    
+
     return false;
 }
 

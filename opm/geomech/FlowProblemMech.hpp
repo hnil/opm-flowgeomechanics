@@ -508,7 +508,7 @@ namespace Opm{
             }
             return all_indices;
         }
-      
+
         void addConnectionsToWell(){
             auto& wellcontainer = this->wellModel().localNonshutWells();
             for (auto& wellPtr : wellcontainer) {
@@ -689,7 +689,7 @@ namespace Opm{
                                       /* defaut sattable */ true,
                                       /* lgr grid number */ lgrNumber);
 
-                    //only add zero value 
+                    //only add zero value
                     // connection need to be modified later.
                     connection.setCF(wellconn.ctf * 0.0);
 

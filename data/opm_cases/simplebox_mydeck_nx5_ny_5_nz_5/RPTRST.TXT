@@ -1,4 +1,3 @@
 RPTRST
-   BASIC=2 
+   BASIC=2
 /
-

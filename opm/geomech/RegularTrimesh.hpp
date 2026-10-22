@@ -91,7 +91,7 @@ public:
                    const std::array<double, 3>& axis1 = {1, 0, 0},
                    const std::array<double, 3>& axis2 = {0.5, std::sqrt(3) / 2, 0},
                    const std::array<double, 2>& edgelen = {1, 1});
-    
+
     // --------------------- Functions for inspecting the grid ---------------------
     size_t numCells() const
     {
@@ -188,7 +188,7 @@ public:
     createGridToGridMap(const std::vector<std::vector<CellRef>>& map1,
                         const std::vector<std::vector<CellRef>>& map2,
                         const int level);
-    
+
 private:
     // helper functions
     std::vector<EdgeRef> all_half_edges_() const; // internal edges are duplicated
@@ -196,7 +196,7 @@ private:
     std::vector<unsigned int> noderefs_to_indices_(const std::vector<NodeRef>& noderefs) const;
     std::vector<unsigned int> cellrefs_to_indices_(const std::vector<CellRef>& cellrefs) const;
     std::vector<std::array<unsigned int, 3>> ref2index_(const std::vector<std::array<NodeRef, 3>>& vec) const;
-    
+
     std::vector<std::pair<std::array<unsigned int, 3>,
                           std::array<CellRef, 2>>> boundary_smoothing_triangles_() const;
 
@@ -210,7 +210,7 @@ private:
                          (v1[1] - v2[1]) * (v1[1] - v2[1]) +
                          (v1[2] - v2[2]) * (v1[2] - v2[2]));
     }
-        
+
     static Coord3D normalize(const Coord3D& v)
     {
         const double n = norm(v);
@@ -231,14 +231,14 @@ private:
 
     static NodeRef edge2node(const EdgeRef& edge) // convert edge to corner node
     {
-        return { edge[0], edge[1] }; 
+        return { edge[0], edge[1] };
     }
 
     static CellRef node2cell(const NodeRef& node, bool second) // make cell from corner node and orientation
     {
         return { node[0], node[1], int(second) };
     }
-    
+
     // data members
     std::map<CellRef, CellAttributes> cellinfo_;
     Coord3D origin_;

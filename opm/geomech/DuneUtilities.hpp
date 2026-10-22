@@ -59,7 +59,7 @@ public:
   template<class BufferType, class EntityType>
   void gather(BufferType& buffer, const EntityType& e) const
   {
- 
+
       buffer.write(data_[gridView_.indexSet().index(e)]);
   }
 
@@ -116,7 +116,7 @@ public:
   template<class BufferType, class EntityType>
   void gather(BufferType& buffer, const EntityType& e) const
   {
- 
+
       buffer.write(data_[gridView_.indexSet().index(e)]);
   }
 

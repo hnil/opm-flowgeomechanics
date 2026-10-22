@@ -51,7 +51,7 @@ struct LinearSolverMechPrintJsonDefinition {
     static constexpr auto value = true;
 };
 
-} 
+}
 
 namespace Opm {
 
@@ -66,7 +66,7 @@ namespace Opm {
             linear_solver_maxiter_ = Parameters::Get< Parameters::LinearSolverMechMaxIter>();
             linear_solver_verbosity_ = Parameters::Get< Parameters::LinearSolverMechVerbosity>();
             linsolver_ = Parameters::Get< Parameters::LinearSolverMech>();
-            linear_solver_print_json_definition_ = Parameters::Get< Parameters::LinearSolverMechPrintJsonDefinition>();            
+            linear_solver_print_json_definition_ = Parameters::Get< Parameters::LinearSolverMechPrintJsonDefinition>();
             linsolver_ = Parameters::Get< Parameters::LinearSolverMech>();
         }
 

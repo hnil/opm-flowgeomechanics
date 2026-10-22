@@ -239,10 +239,10 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
     std::map<int, double> WI_fluxes;
     int water_index = 0;
     int np = 3;
-    
+
     double qw_sum = 0.0;
     double qwpos_sum = 0.0;
-    // should we do this based on fracture cross flow?        
+    // should we do this based on fracture cross flow?
     for (size_t i = 0; i < perfdata.cell_index.size(); ++i) {
         int cell_index = perfdata.cell_index[i];
         // similar as in WellFilterCake.cpp:148
@@ -273,7 +273,7 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
         //NB maybe we should only use posive fluxes (cross flow problems)
         if(frac_flux > 1.0e-12){
             scale_factor = std::max(0.0,sim_frac_flux) / frac_flux;
-        }   
+        }
     }
     const auto& connection = connections.getFromGlobalIndex(wellinfo_.global_index); // probably wrong
     double filtrate_conn = wellstate.filtrate_conc*xfact;
@@ -289,7 +289,7 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
         std::map<int, double> reservoir_flux;
         if ((leakof_.size()
              > 0)) { // should be first step with seed fracture is clean could have used rates from solve
-            std::vector<double> leakof_rate = leakOfRate();        
+            std::vector<double> leakof_rate = leakOfRate();
             assert(leakof_.size() == fracture_pressure_.size()-numWellEquations());
             ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
             for (auto& element : Dune::elements(grid_->leafGridView())) {
@@ -607,7 +607,7 @@ Fracture::summary_of_solve(){
   }
 }
 
-  
+
 void
 Fracture::write(int reportStep) const
 {
@@ -652,7 +652,7 @@ Fracture::write(int reportStep) const
     vtkwriter_->write(filename.c_str());
 };
 
-double Fracture::reservoirTraction(int i) const{  
+double Fracture::reservoirTraction(int i) const{
    return ddm::tractionSymTensor(reservoir_stress_[i], cell_normals_[i]);
 }
 double Fracture::fractureForce(int i) const{
@@ -731,7 +731,7 @@ Fracture::writemulti(double time) const
             << numFractureCells() << std::endl;
     OpmLog::info(message.str());
     //  need to have copies in case of async outout (and interface to functions)
-    
+
     std::vector<double> K1 = this->stressIntensityK1();
     std::vector<double> fracture_pressure(numFractureCells(), 0.0);
     std::vector<double> leakof_dp(numFractureCells(), 0.0);
@@ -776,12 +776,12 @@ Fracture::writemulti(double time) const
                 - (injectionPressure() - (perf_ref_depth_ * gravity_ * density_perf_));
             assert(filtercake_thikness[i] >= 0.0);
         }
-    if (!first) {    
+    if (!first) {
         for (size_t i = 0; i < numFractureCells(); ++i) {
                 // maybe slow
                 well_index[i] = wellIndMap[reservoir_cells_[i]];
         }
-       
+
     }
     vtkmultiwriter_->beginWrite(time);
 
@@ -1535,7 +1535,7 @@ Fracture::wellIndicesAvrg(const std::vector<std::vector<RuntimePerforation>>& we
     cell_pind[cell] = count;
     count += 1;
   }
- 
+
   std::vector<RuntimePerforation> wellindices(cells.size());
   std::vector<double> weight_ctf(well_indices.size(),0.0);
   double damping_factor_wi = prm_.get<double>("solver.damping_factor_wi",2.0);
@@ -1549,7 +1549,7 @@ Fracture::wellIndicesAvrg(const std::vector<std::vector<RuntimePerforation>>& we
       wellindices[ind].ctf = 0.0;
     }
   }
-  for(size_t tind=0; tind < well_indices.size(); ++tind){ 
+  for(size_t tind=0; tind < well_indices.size(); ++tind){
     for (const auto& wind : well_indices[tind]){
       int ind = cell_pind[wind.cell];
       wellindices[ind].ctf += weight_ctf[tind]*wind.ctf;
@@ -1590,7 +1590,7 @@ Fracture::wellIndices_() const
         }
     }
 
-    
+
     std::sort(res_cells.begin(), res_cells.end());
     auto last = std::unique(res_cells.begin(), res_cells.end());
     res_cells.erase(last, res_cells.end());
@@ -1614,13 +1614,13 @@ Fracture::wellIndices_() const
         int eIdx = mapper.index(element);
         auto geom = element.geometry();
         double q = leakofrate[eIdx]*geom.volume(); // just to avoid warning
-        
+
         std::vector<int> local_res_cells;
         if(only_to_one){
             local_res_cells.push_back(reservoir_cells_[eIdx]);
         }else{
             local_res_cells = all_reservoir_cells_[eIdx];
-        }    
+        }
         // just to search
         for(int lind=0; lind < int(local_res_cells.size()); ++lind){
             int res_cell = local_res_cells[lind];
@@ -1663,7 +1663,7 @@ Fracture::wellIndices_() const
               p_cells[ind_wellIdx] = getFromMap(map_reservoir_pressure_,res_cell); // is set multiple times
               mob_cells[ind_wellIdx] = getFromMap(map_reservoir_mobility_,res_cell); // is set multiple time
               dens_cells[ind_wellIdx] = getFromMap(map_reservoir_density_,res_cell); // is set multiple time
-              z_cells[ind_wellIdx] = getFromMap(map_reservoir_cell_z_,res_cell); // 
+              z_cells[ind_wellIdx] = getFromMap(map_reservoir_cell_z_,res_cell); //
                 // need to collect this values if no cell has centroid nearest to this
                 // reservoir cell
             }
@@ -1827,7 +1827,7 @@ Fracture::assignGeoMechWellState(PerfData<Scalar>& perfData) const
 
         stats.addSamplePoint(samplePoint);
     }
-    // 
+    //
     ConnFractureData<Scalar>& frac_prop = perfData.fracture_data;
     FractureProperties fprop = calculateFractureProperties();
     // set properties of fracture to structure used in output
@@ -2073,7 +2073,7 @@ Fracture::updateLeakoff()
                }
             }
         }
-    } 
+    }
     // find all cells with  aboundary node
     std::vector<bool> elementHasBoundaryNode(gv.size(codimCell), false);
     for (const auto& element : elements(gv)) {
@@ -2452,9 +2452,9 @@ Fracture::calculateFractureProperties() const
     double surface_factor = 1.0; //NB to do convert to surface volume
     double inj_wellrate = well_rate_*surface_factor;//only copy of wellrate from wells
     double solid_filter_volume = filter_volume*(1 - filtercake_poro_);// return the solid volume
-    FractureProperties fracprop(height, 
-                                length, 
-                                total_flux, 
+    FractureProperties fracprop(height,
+                                length,
+                                total_flux,
                                 area,
                                 WI,
                                 volume,
@@ -2591,7 +2591,7 @@ Fracture::initPressureMatrix()
     }
     // add in case a cell have only no internal boundaries
     for(int i=0; i < nc; ++i){
-        matrix.entry(i, i) = 0.0; 
+        matrix.entry(i, i) = 0.0;
     }
 
     if (numWellEquations() > 0) {

@@ -28,7 +28,7 @@
 #include <opm/material/fluidstates/BlackOilFluidState.hpp>
 #include <dune/common/fmatrix.hh> // Dune::FieldMatrix
 #include <dune/istl/bcrsmatrix.hh> // Dune::BCRSMatrix
-#include <dune/istl/bvector.hh> 
+#include <dune/istl/bvector.hh>
 #include <fmt/format.h>
 namespace Opm
 {
@@ -276,7 +276,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         if (init_constant_vals) {
             initReservoirProperties<TypeTag, Simulator>(simulator);
         }
-      
+
         using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
         using ScalarFluidState = Opm::BlackOilFluidState<double, FluidSystem>;
         const auto& problem = simulator.problem();
@@ -285,7 +285,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         const auto value_of = [](const auto& value) { return Opm::scalarValue(value); };
         // NB reservoir dist not calculated
         size_t ncf = reservoir_cells_.size();
-        assert(ncf > 0); 
+        assert(ncf > 0);
         reservoir_pressure_.resize(ncf);
         reservoir_stress_.resize(ncf);
         reservoir_mobility_.resize(ncf);
@@ -304,7 +304,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         std::vector<ScalarFluidState> fracture_scalar_fluid_states(ncf);
         std::vector<bool> fracture_scalar_fluid_state_valid(ncf, false);
         {
-        // well cell properties 
+        // well cell properties
         const auto& intQuants = simulator.model().intensiveQuantities(wellinfo_.well_cell, /*timeIdx*/ 0);
         const auto& fs = intQuants.fluidState();
         density_perf_ = fs.density(FluidSystem::waterPhaseIdx).value();
@@ -345,7 +345,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         std::sort(unique_reservoir_cells_.begin(),unique_reservoir_cells_.end());
         auto last = std::unique (unique_reservoir_cells_.begin(), unique_reservoir_cells_.end());
         unique_reservoir_cells_.erase(last,unique_reservoir_cells_.end());
-        
+
 
         for (size_t i = 0; i < unique_reservoir_cells_.size(); ++i) {
             int cell = unique_reservoir_cells_[i];
@@ -432,7 +432,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 const auto& cstress =  problem.cStress(cell);
                 auto pn = normal;
                 perm.mv(normal, pn);
-                double npn = pn.dot(normal); 
+                double npn = pn.dot(normal);
                 reservoir_perm_[i] = npn;
                 reservoir_cstress_[i] = cstress;
                 const auto& currentData = grid.currentData();
@@ -451,8 +451,8 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                   reservoir_dist_[i] = 2.0*dist*dist_factor;
                 }
                 reservoir_cell_z_[i] = cell_center[2];
-                   
-                
+
+
             } else {
                 // probably outside reservoir set all to zero
                 double stressval = 300*300e5;// large value to keep it closed
@@ -515,7 +515,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
             fracture_dgh_[i] = gravity_ * reservoir_density_[i] * z;
         }
         int reportStepIdx = simulator.episodeIndex();
-        
+
         const auto& schedule =  simulator.vanguard().schedule();
         // get properties from well connections in case of filter cake
         if(schedule[reportStepIdx].wells.has(wellinfo_.name) == false){
@@ -562,7 +562,7 @@ void Fracture::updateFilterCakePropertiesPost(const Simulator& simulator)
         }
         const auto& well = schedule[reportStepIdx].wells(wellinfo_.name);
         const auto& connections = well.getConnections();
-        
+
         if(connections.hasGlobalIndex(wellinfo_.global_index) == false){
             OpmLog::warning(fmt::format("Well connection with global index {} not found in schedule step {}", wellinfo_.global_index, reportStepIdx));
             return;
@@ -579,7 +579,7 @@ void Fracture::updateFilterCakePropertiesPost(const Simulator& simulator)
         double dt = simulator.timeStepSize();
         updateFilterCakeProps(connections, wellstate, dt);
 
-    }   
+    }
 
 // ----------------------------------------------------------------------------
 template <class TypeTag, class Simulator>
@@ -731,32 +731,32 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
             }
         }
-        
+
 
         // save original grid and filtercake, to allow us to map it onto evolved grids
         const auto filtercake_thickness_0 = filtercake_thikness_; // copy
-        const auto grid_mesh_map_0 = grid_mesh_map_; 
+        const auto grid_mesh_map_0 = grid_mesh_map_;
         double total_filtercake_0 = filterCakeVolume();
         // local function taking a trimesh, updates the Fracture object with it and
         // runs a simulation.  Its return value should be a vector of doubles:
-        
+
         auto score_function = [&](const RegularTrimesh& trimesh, const int level) -> std::vector<double> {
             const int max_iter = prm_.get<int>("solver.max_iter");
             const double tol = prm_.get<double>("solver.tolerance");
             const int nlin_verbosity = prm_.get<double>("solver.verbosity");
             *trimesh_ = trimesh;
             // save well sources before grid change
-            std::vector<CellRef> wsources = well_source_cellref_; 
-            for (auto& cell : wsources) 
+            std::vector<CellRef> wsources = well_source_cellref_;
+            for (auto& cell : wsources)
                 cell = RegularTrimesh::fine_to_coarse(cell, level);
-            
+
             // setup fracture with new grid
             const int MAX_NUM_COARSENING = prm_.get<int>("solver.max_num_coarsening"); // should be enough for all practical purposes
             const int numcell_threshold = prm_.get<int>("solver.numcell_threshold");
             bool smooth_boundary = prm_.get<bool>("solver.smooth_boundary",false);
             auto [grid, fsmap, bmap] =
             trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources,/* smoothed triangels */ smooth_boundary, numcell_threshold); // well cells kept intact!
-            auto org_map = grid_mesh_map_; 
+            auto org_map = grid_mesh_map_;
             grid_mesh_map_ = fsmap;
             composeFlowStateDonor(org_map, fsmap, level);
             setFractureGrid(std::move(grid)); // true -> coarsen interior
@@ -768,7 +768,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
 
             // update indices for well sources to the correct cells in the new grid
             well_source_.clear();
-            for (const auto& cell : wsources) 
+            for (const auto& cell : wsources)
                 well_source_.push_back(fsmap_inv[cell]);
 
             // Update the rest of the fracture object to adapt to grid change
@@ -839,7 +839,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 initFracturePressureFromReservoir();
             }
 
-        
+
 
             filtercake_thikness_ = redistribute_values(filtercake_thickness_0,
                                                        grid_mesh_map_0,
@@ -994,7 +994,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
 
         const FractureProperties& fprop_before = calculateFractureProperties();
         auto stop_criterion= [&]() -> bool
-        { 
+        {
           const bool area_stop = expantionMax(fprop_before);
           if (vol_pacing && vol_budget_spent) {
               if (vol_verb > 0) OpmLog::debug("VolumePacing: stopping expansion (budget spent)");
@@ -1005,7 +1005,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
 
         const double threshold = 1.0;
         const std::vector<CellRef> fixed_cells = well_source_cellref_;
-        const int target_cellcount = prm_.get<int>("solver.target_cellcount"); 
+        const int target_cellcount = prm_.get<int>("solver.target_cellcount");
         const int cellcount_threshold = prm_.get<int>("solver.cellcount_threshold");
         const int max_iter_on_same_level = prm_.get<int>("solver.max_iter_on_same_level");
         const auto initial_mesh= *trimesh_;
@@ -1016,9 +1016,9 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                                 cellcount_threshold,
                                 max_iter_on_same_level, stop_criterion);
 
-                
 
-        
+
+
         bool any_removed = removeNewZeroWithCells(mesh,cur_level, initial_mesh);
         // this will set trimesh_,change dune grid  and solve
         if(any_removed){
@@ -1184,8 +1184,8 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         last_solve_stats_.solve_time_seconds = solve_timer.stop();
         // summary of solve
         summary_of_solve();
-        
-           
+
+
 }
 
 } // namespace Opm

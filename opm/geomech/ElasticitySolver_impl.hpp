@@ -48,7 +48,7 @@ namespace Elasticity {
 #define IMPL_FUNC(A,B) template<class GridType> \
                          A ElasticitySolver<GridType>::B
 
-IMPL_FUNC(std::vector<BoundaryGrid::Vertex>, 
+IMPL_FUNC(std::vector<BoundaryGrid::Vertex>,
           extractFace(Direction dir, ctype coord))
 {
   std::vector<BoundaryGrid::Vertex> result;
@@ -88,13 +88,13 @@ IMPL_FUNC(BoundaryGrid, extractMasterFace(Direction dir,
   int c = 0;
   int i = log2(float(dir));
   BoundaryGrid result;
-  // we first group nodes into this map through the coordinate of lower left 
+  // we first group nodes into this map through the coordinate of lower left
   // vertex. we then split this up into pillars for easy processing later
   std::map<double, std::vector<BoundaryGrid::Quad> > nodeMap;
-  for (LeafIterator cell  = gv.leafGridView().template begin<0>(); 
+  for (LeafIterator cell  = gv.leafGridView().template begin<0>();
                     cell != gv.leafGridView().template end<0>(); ++cell, ++c) {
     std::vector<BoundaryGrid::Vertex> verts;
-    int idx=0; 
+    int idx=0;
     if (side == LEFT)
      idx = set.subIndex(*cell,V1[i][0],dim);
     else if (side == RIGHT)
@@ -171,7 +171,7 @@ IMPL_FUNC(void, fixNodes(const std::vector<size_t>& fixed_nodes))
   typedef typename GridType::LeafGridView::template Codim<dim>::Iterator VertexLeafIterator;
   const VertexLeafIterator itend = gv.leafGridView().template end<dim>();
 
-  // make a mapper for codim 0 entities in the leaf grid 
+  // make a mapper for codim 0 entities in the leaf grid
   using LeafGridView = typename GridType::LeafGridView;
   Dune::MultipleCodimMultipleGeomTypeMapper<LeafGridView> mapper(gv.leafGridView(), Dune::mcmgVertexLayout());
 
@@ -189,7 +189,7 @@ IMPL_FUNC(void, fixNodes(const std::vector<size_t>& fixed_nodes))
   }
 }
 
-    
+
 IMPL_FUNC(void, fixPoint(Direction dir,
                          GlobalCoordinate coord,
                          const NodeValue& value))
@@ -197,7 +197,7 @@ IMPL_FUNC(void, fixPoint(Direction dir,
   typedef typename GridType::LeafGridView::template Codim<dim>::Iterator VertexLeafIterator;
   const VertexLeafIterator itend = gv.leafGridView().template end<dim>();
 
-  // make a mapper for codim 0 entities in the leaf grid 
+  // make a mapper for codim 0 entities in the leaf grid
   using LeafGridView = Dune::GridView<Dune::DefaultLeafGridViewTraits<GridType>>;
   Dune::MultipleCodimMultipleGeomTypeMapper<LeafGridView> mapper(gv.leafGridView(), Dune::mcmgVertexLayout());
 
@@ -219,7 +219,7 @@ IMPL_FUNC(void, fixPoint(Direction dir,
   if (do_matrix)
     A.getOperator() = 0;
 
-  
+
   for (int i=0;i<2;++i) {
     if (color[1].size() && do_matrix)
       OpmLog::debug(fmt::format("\tprocessing {}elements", i==0?"red ":"black "));
@@ -242,7 +242,7 @@ IMPL_FUNC(void, fixPoint(Direction dir,
         size_t cell_num = color[i][j][k];
         bool valid = materials[color[i][j][k]]->getConstitutiveMatrix(C);
         if(!valid){
-            OPM_THROW(std::runtime_error,"Not valid C matrix"); 
+            OPM_THROW(std::runtime_error,"Not valid C matrix");
         }
         // determine geometry type of the current element and get the matching reference element
         Dune::GeometryType gt = it->type();

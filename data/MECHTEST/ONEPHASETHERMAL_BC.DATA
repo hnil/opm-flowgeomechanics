@@ -17,15 +17,15 @@ TITLE
 waterthermal
 
 DIMENS
-      31       31       10 
+      31       31       10
 /
 
 TABDIMS
-       1        1       50       50       16       30 
+       1        1       50       50       16       30
 /
 
 WELLDIMS
-       1       10       10        1 
+       1       10       10        1
 /
 
 WATER
@@ -70,7 +70,7 @@ INCLUDE
 
 
 THCONR
-   9610*1        
+   9610*1
 /
 ---------------------------------------------------------
 EDIT
@@ -94,7 +94,7 @@ SPECROCK
 -- add fluid heat capacities
 SPECHEAT
 --T [C]   Cp [KJ/Rm3 C]  Cp [KJ/Rm3 C]  Cp [KJ/Rm3 C]
---          oil            water           gas 
+--          oil            water           gas
 0    2.1    3.9    2.1
 100    2.1    3.9    2.1
  /
@@ -135,7 +135,7 @@ INCLUDE
 'RPTSOL.TXT'
 /
 RPTRST
-BASIC=2 
+BASIC=2
 /
 
 ---------------------------------------------------------
@@ -156,6 +156,3 @@ BASIC=1
 
 INCLUDE
 SCHEDULE.TXT/
-
-
-

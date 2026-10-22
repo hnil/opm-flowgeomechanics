@@ -1471,7 +1471,7 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
         os << "---------- Starting propagation at level: " << cur_level << " --------";// << endl;
         Opm::FractureModel::fractureLogger.info(os.str());
     }
-    
+
     while (!stop_criterion()) { // keep looping as long as grid need expansion
 
         if (DEBUG_DUMP_GRIDS) {

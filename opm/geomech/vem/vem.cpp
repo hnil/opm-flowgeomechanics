@@ -582,10 +582,10 @@ compute_S(const std::vector<double>& Nc,
     const int c = dim == 2 ? 3 : 6;
     const auto NtN = matmul(&Nc[0], r, c, true, &Nc[0], r, c, false);
 
-    const double gamma = 1.0 / 9.0; // since trace is about 9 times E 
+    const double gamma = 1.0 / 9.0; // since trace is about 9 times E
     const double alpha = stability_choice == SIMPLE ? volume * trace(D) / trace(NtN)
                                                     : // from Gain et al. 2014
-        gamma*volume * trace(D) * invtrace(NtN); // Andersen et al. 2017                
+        gamma*volume * trace(D) * invtrace(NtN); // Andersen et al. 2017
 
     return identity_matrix(alpha, dim * num_corners);
 }
@@ -794,7 +794,7 @@ std::vector<double> getStabilityMatrix(vem::StabilityChoice stability_choice,con
         double val = trace(D)/9.0;
         val *= cbrt(volume);
         for (int i = 0; i != totdim; ++i){
-            int ind = i + totdim * i;    
+            int ind = i + totdim * i;
             S[ind]= max(val,S[ind]);
         }
     } else if((stability_choice == SIMPLE) || (stability_choice == HARMONIC)){
@@ -822,7 +822,7 @@ std::vector<double> getStabilityMatrix(vem::StabilityChoice stability_choice,con
         val *= 4.0;
         S = identity_matrix(val, totdim);
     }else{
-        throw invalid_argument("Unknown stability choice in final_assembly");  
+        throw invalid_argument("Unknown stability choice in final_assembly");
     }
     return S;
 }
@@ -963,7 +963,7 @@ final_assembly(const vector<double>& Wc,
 
     std::vector<double> S = S_given ? *S_given
         : getStabilityMatrix(stability_choice, EWcDWct, Nc, D, corners, num_nodes, volume, dim, totdim, node_weights);
-    
+
 
     const auto SImP = matmul(&S[0], totdim, totdim, false, &ImP[0], totdim, totdim, false);
     const auto ImpSImp = matmul(&ImP[0], totdim, totdim, true, &SImP[0], totdim, totdim, false);
@@ -3866,5 +3866,5 @@ pick_points_3D(const double* pts, const int* const p_ixs, int num_points)
     return pick_points<3>(pts, p_ixs, num_points);
 }
 
-  
+
 }; // end namespace vem

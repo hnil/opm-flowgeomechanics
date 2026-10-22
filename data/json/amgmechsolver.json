@@ -1,5 +1,5 @@
 {
-    
+
     "tol": "1e-6",
     "maxiter": "200",
     "verbosity": "3",

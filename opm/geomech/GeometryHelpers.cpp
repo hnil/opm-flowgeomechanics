@@ -72,7 +72,7 @@ buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, std::vect
         Vec3d point(vertex[0], vertex[1], vertex[2]);
         if (element.partitionType() == Dune::InteriorEntity){
             int cell = external::cellOfPoint(m_cellSearchTree, grid, entity_seeds, point);
-            assert(cell == index);  
+            assert(cell == index);
         }else{
             // may get the neares cell in partition
         }

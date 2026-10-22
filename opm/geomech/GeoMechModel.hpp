@@ -126,7 +126,7 @@ namespace Opm{
             this->solveGeomechanics();
             if(problem.hasFractures()){
                 this->solveFractures();
-            }   
+            }
         }
 
        //! Fracture driving is hosted by FractureMechHost (shared between
@@ -229,7 +229,7 @@ namespace Opm{
                 if(relative_solve){
                     diffpress -=  problem.initPressure(dofIdx);
                 }
-                
+
 		        const auto& pratio = problem.pRatio(dofIdx);
                 double fac = (1-pratio)/(1-2*pratio);
                 double pcoeff = poelCoef*fac;
@@ -252,7 +252,7 @@ namespace Opm{
                     if(relative_solve){
                         difftemp -= problem.initTemperature(dofIdx);
                     }
-                    
+
                     mechPotentialForce_[dofIdx] += difftemp*tcoeff;
                     mechPotentialTempForce_[dofIdx] = difftemp*tcoeff;
                 }
@@ -361,7 +361,7 @@ namespace Opm{
                 int nc = this->mechGrid().leafGridView().size(0);
                 std::vector<double> density(nc, 2000.0);
                 elacticitysolver_->setBodyForce(gravity, density);
-                
+
                 elacticitysolver_->fixNodes(problem.bcNodes());
                 // a cell that fails to assemble throws on its owner only; the solver setup below is collective
                 OPM_BEGIN_PARALLEL_TRY_CATCH();
@@ -402,7 +402,7 @@ namespace Opm{
                             int node_idx = std::get<0>(node);
                             auto bcnode = std::get<1>(node);
                             auto fixdir = bcnode.fixeddir;
-                            for(int i = 0; i < 3; ++i){ 
+                            for(int i = 0; i < 3; ++i){
                                 fixed[3*node_idx+i][0] = fixdir[i];
                             }
                         }
@@ -511,7 +511,7 @@ namespace Opm{
                 // need "static boundary conditions is changing"
                 // need precomputed divgrad operator
                 elacticitysolver_->updateRhsWithGrad(this->mechLoad());
-            }    
+            }
         }
         void solveGeomechanics(bool use_body_force = false, bool relative_solve = true){
             setupAndUpdateGemechanics(use_body_force , relative_solve);
@@ -680,9 +680,9 @@ namespace Opm{
 	  double effPress = this->mechPotentialForce(globalIdx);
 	  for(int i=0; i < 3; ++i){
 	    delStress[i] += effPress;
-	    
+
 	  }
-	  return delStress;  
+	  return delStress;
         }
 
         const SymTensor linstress(size_t globalIdx) const{
@@ -721,7 +721,7 @@ namespace Opm{
                 }
             }
             return strain_[this->mechIdx(globalIdx)];
-        }   
+        }
 
         const SymTensor stress(size_t globalIdx,bool with_fracture = false) const{
             Dune::FieldVector<double,6> effStress = this->effstress(globalIdx);
@@ -958,7 +958,7 @@ namespace Opm{
 
             return os.str();
         }
-        
+
         void setFirstSolveTrue(){
             elacticitysolver_->resetOperator();
             first_solve_ = true;

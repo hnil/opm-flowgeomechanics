@@ -28,7 +28,7 @@
         "control":{
             "type":"rate_well",
             "rate":2e3,
-            "WI":1.0e-11            
+            "WI":1.0e-11
         },
         "extended_fractures":false,
         "fractureWI":0.1,

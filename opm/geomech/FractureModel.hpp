@@ -89,8 +89,8 @@ public:
                       const LgrLookup* lgrs = nullptr);
 
      void updateFractureReservoirCells(const Dune::CpGrid& cpgrid);
-  
-  
+
+
 
     void addWell(const std::string& name,
                  const std::vector<FractureWell::Connection>& conns,

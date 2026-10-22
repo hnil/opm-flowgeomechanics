@@ -835,10 +835,10 @@ namespace Opm{
                     }
                     else {
                         this->wellModel().beginTimeStep();// just to be sure well conteiner is reinitialized
-                        this->addConnectionsToWell(); // modify wells WI wiht fracture well 
+                        this->addConnectionsToWell(); // modify wells WI wiht fracture well
                     }
                 }
-                
+
             }
             OPM_END_PARALLEL_TRY_CATCH("Begin time step geomech failed:",this->simulator().vanguard().grid().comm());
             this->emptyFractureLogger();
@@ -869,7 +869,7 @@ namespace Opm{
                             this->addConnectionsToSchedual();
                         }
                         this->gridView().comm().barrier();
-                
+
                     this->geoMechModel_.fractureModel().
                         assignGeoMechWellState(this->wellModel_.wellState());
                 }
@@ -1119,7 +1119,7 @@ namespace Opm{
         void advanceTimeLevel(){
             Parent::advanceTimeLevel();
         }
- 
+
     private:
         // Structural check (no coordinates): constraining rotation about an axis needs
         // fixed DOFs in both transverse directions on at least two distinct nodes.
@@ -1210,7 +1210,7 @@ namespace Opm{
                             "Mechanical BC configuration: no nodes are fixed in "
                             + dir_name[d]
                             + "-direction.  The system may is singular");
-                        return false;      
+                        return false;
                     };
                 }
             }

@@ -387,9 +387,9 @@ FractureMechanicsPreconditioner::applymech_last(Opm::VectorHP& v, const Opm::Vec
         A_[_0][_1].mmv(v[_1], rhs_mech); // rhs_mech -= A_[_0][_1] * v[_1]
     }
     solveMechanics(v[_0], rhs_mech);
-    
 
-    
+
+
 };
 
 void

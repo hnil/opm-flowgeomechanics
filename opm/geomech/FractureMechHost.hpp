@@ -98,7 +98,7 @@ namespace Opm{
             }
             if(!no_seeds && !fracturemodel_){
                     if(simulator_.gridView().comm().rank() == 0 && verbosity > 1){
-                        std::stringstream os;    
+                        std::stringstream os;
                         os << "Fracture model not initialized, initializing now. report step" <<  reportStepIdx << std::endl;
                         OpmLog::info(os.str());
                     }
@@ -114,7 +114,7 @@ namespace Opm{
                     std::string caseName  = simulator_.vanguard().caseName();
                     param.put("outputdir", outputDir);
                     param.put("casename", caseName);
-                    
+
 
                     // LGR-aware connection-to-cell resolution: COMPDATL
                     // connections carry LGR-local global indices which must
@@ -157,9 +157,9 @@ namespace Opm{
             }
             // get reservoir properties on fractures
             // simulator need
-            
+
             if(fracturemodel_ && !schedule[reportStepIdx].wseed().empty()){
-                const auto& current_wseed = schedule[reportStepIdx].wseed;    
+                const auto& current_wseed = schedule[reportStepIdx].wseed;
                 if(simulator_.gridView().comm().rank() == 0){
                     if(verbosity > 1){
                         std::ostringstream os;
@@ -201,9 +201,9 @@ namespace Opm{
                 }
             }
                 // copy from apply action
-            OPM_END_PARALLEL_TRY_CATCH("Solving fracture failed: ", simulator_.vanguard().grid().comm());  
+            OPM_END_PARALLEL_TRY_CATCH("Solving fracture failed: ", simulator_.vanguard().grid().comm());
        }
-       
+
 
         void writeFractureSolutionFirst(){
             const auto& problem = simulator_.problem();
@@ -214,7 +214,7 @@ namespace Opm{
                     fracturemodel_->writemulti(0.0);
             }
         }
-        
+
         void writeFractureSolution(){
             const auto& problem = simulator_.problem();
             if(problem.hasFractures() && fracturemodel_){
@@ -234,13 +234,13 @@ namespace Opm{
                 return std::vector<RuntimePerforation>();
             }
         }
-      
+
         bool fractureModelActive() const{
-            if(!fracturemodel_){                
+            if(!fracturemodel_){
                 return false;
             }else{
                 return true;
-            }           
+            }
         }
 
       void updateFilterCakePropertiesOnFractures(){

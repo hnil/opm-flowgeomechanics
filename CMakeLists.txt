@@ -180,7 +180,7 @@ add_executable(flow_geomech
 )
 target_link_libraries(flow_geomech
 	PUBLIC
-		opmflowgeomechanics  
+		opmflowgeomechanics
 	PRIVATE
 		moduleVersionGeoMech
 )
@@ -197,7 +197,7 @@ add_executable(flow_energy_geomech
 )
 target_link_libraries(flow_energy_geomech
 	PUBLIC
-		opmflowgeomechanics 
+		opmflowgeomechanics
 	PRIVATE
 		moduleVersionGeoMech
 )
@@ -207,7 +207,7 @@ add_executable(flow_energy_geomech_tpsa
 )
 target_link_libraries(flow_energy_geomech_tpsa
 	PUBLIC
-		opmflowgeomechanics 
+		opmflowgeomechanics
 	PRIVATE
 		moduleVersionGeoMech
 )
@@ -422,7 +422,7 @@ function(add_mechtest_compareECLFiles)
 	if(NOT PARAM_REFERENCE_CASENAME)
 	set(PARAM_REFERENCE_CASENAME ${PARAM_CASENAME})
 	endif()
-  
+
   set(RESULT_PATH ${PROJECT_BINARY_DIR}/tests/results/${PARAM_CASENAME})
   set(TEST_ARGS ${PARAM_TEST_ARGS})
   set(DRIVER_ARGS -i ${CMAKE_CURRENT_LIST_DIR}/data
@@ -672,7 +672,7 @@ opm_set_test_driver(${PROJECT_SOURCE_DIR}/tests/run-mechRegressionTest.sh "")
 
 # Set absolute tolerance to be used passed to the macros in the following tests
 set(abs_tol 2e-2)
-set(rel_tol 1e-5)	
+set(rel_tol 1e-5)
 add_mechtest_compareECLFiles(CASENAME REGTEST_geomech
                          FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25
                          SIMULATOR flow_energy_geomech
@@ -720,7 +720,7 @@ add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp
                          REL_TOL ${rel_tol}
                          DIR ${CMAKE_CURRENT_LIST_DIR}/data/
 						 PREFIX geomech_frac_seq_bhp
-						 TEST_ARGS --parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini 
+						 TEST_ARGS --parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
 						--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_bhp_seq_legacy_full.json
 						--enable-write-all-solutions=true
 						--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
@@ -766,8 +766,8 @@ add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_rate
                          REL_TOL ${rel_tol}
                          DIR ${CMAKE_CURRENT_LIST_DIR}/data/
 						 PREFIX geomech_frac_seq_rate
-						 TEST_ARGS --parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini 
-						--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_rate_seq_full.json 
+						 TEST_ARGS --parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
+						--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_rate_seq_full.json
 						--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
 						--threads-per-process=4)
 
@@ -846,7 +846,7 @@ add_test(NAME Run.SIMPLE_MECH_FRAC_RESET_SEQ.EnergyGeomech
 	--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_bhp_seq_nverbose.json
 	--add-corners=true
 	--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
-) 
+)
 
 set_tests_properties(Run.SIMPLE_MECH_FRAC_RESET.EnergyGeomech
 	PROPERTIES
