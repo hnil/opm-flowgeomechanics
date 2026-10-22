@@ -25,7 +25,6 @@
 
 list (APPEND MAIN_SOURCE_FILES
 	opm/geomech/BuiltinFractureParams.cpp
-	opm/geomech/CoupledSolver.cpp
 	opm/geomech/CutDe.cpp
 	opm/geomech/CgalHelper.cpp
 	opm/geomech/DiscreteDisplacement.cpp
@@ -54,7 +53,6 @@ list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/NonlinearSystemBlackOilReservoirGeoMech.hpp
 	opm/geomech/BoundaryUtils.hpp
 	opm/geomech/ConvexBoundary.hpp
-	opm/geomech/CoupledSolver.hpp
 	opm/geomech/CutDe.hpp
 	opm/geomech/CgalHelper.hpp
 	opm/geomech/DiscreteDisplacement.hpp
@@ -81,7 +79,6 @@ list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/RegularTrimesh.hpp
 	opm/geomech/VemElasticitySolver.hpp
 	opm/geomech/VemElasticitySolver_impl.hpp
-	opm/geomech/vem/topology.hpp
 	opm/geomech/vem/vem.hpp
 	opm/geomech/vem/vemutils.hpp
 	opm/geomech/VtkGeoMechModule.hpp

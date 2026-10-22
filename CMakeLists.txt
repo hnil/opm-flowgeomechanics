@@ -273,20 +273,6 @@ if(USE_TRACY_PROFILER AND Tracy_FOUND)
 	)
 endif()
 
-#add_executable(test_vem_assembly
-#	examples/test_vem_assembly.cpp
-#)
-#target_link_libraries(test_vem_assembly
-#	PUBLIC
-#		opmflowgeomechanics
-#)
-#if(USE_TRACY_PROFILER AND Tracy_FOUND)
-#	target_link_libraries(test_vem_assembly
-#		PRIVATE
-#			Tracy::TracyClient
-#	)
-#endif()
-
 add_executable(paramtest
 	examples/paramtest.cpp
 )
@@ -549,22 +535,6 @@ set_tests_properties(Run.Blackoil_Thermal_BC.Parallel
 	FIXTURES_SETUP Generate_SimResults
 )
 
-# add_test(NAME Compare.Blackoil_Thermal_BC.Parallel
-# 	COMMAND
-# 	$<SHELL_PATH:${COMPARE_ECL_COMMAND}>
-# 	-a
-# 	results/np-${Test_NumProc}/flow_energy_geomech/Blackoil_Thermal_BC/BLACKOILTHERMAL_BC
-# 	results/np-${Test_NumProc}/flow_energy_geomech/Blackoil_Thermal_BC/BLACKOILTHERMAL_BC
-# 	2.0e-2
-# 	1.0e-5
-# )
-
-# set_tests_properties(Compare.Blackoil_Thermal_BC.Parallel
-# 	PROPERTIES
-# 	PROCESSORS 1
-# 	FIXTURES_REQUIRED Generate_SimResults
-# )
-
 # ---------------------------------------------------------------------------
 # Regression test: simple full simulation with flow_geomech
 # ---------------------------------------------------------------------------
@@ -789,20 +759,6 @@ add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp_sequential_im
 						 --linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
 						 --threads-per-process=4)
 
-# Reference data not yet committed - disabled until reference is updated
-# add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp_default
-#                          FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ
-#                          SIMULATOR flow_energy_geomech
-#                          ABS_TOL ${abs_tol}
-#                          REL_TOL ${rel_tol}
-#                          DIR ${CMAKE_CURRENT_LIST_DIR}/data/
-# 						 PREFIX geomech_frac_seq_bhp_default
-# 						 TEST_ARGS --parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
-# 						--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_frac_seq_default_full.json
-# 						--enable-write-all-solutions=true
-# 						--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
-# 						--threads-per-process=4)
-
 add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_rate
                          FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ
                          SIMULATOR flow_energy_geomech
@@ -897,37 +853,6 @@ set_tests_properties(Run.SIMPLE_MECH_FRAC_RESET.EnergyGeomech
 	PROCESSORS 1
 )
 
-# add_test(NAME Run.SIMPLE_MECH_FRAC_SEQ_BHP.EnergyGeomech
-# 	COMMAND
-# 	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
-# 	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA
-# 	--parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
-# 	--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_bhp_seq_nverbose.json
-# 	--output-dir=test_bhp_seq
-# 	--enable-write-all-solutions=true
-# 	--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
-# )
-
-# set_tests_properties(Run.SIMPLE_MECH_FRAC_SEQ_BHP.EnergyGeomech
-# 	PROPERTIES
-# 	PROCESSORS 1
-# )
-
-# add_test(NAME Run.SIMPLE_MECH_FRAC_SEQ_RATE.EnergyGeomech
-# 	COMMAND
-# 	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
-# 	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA
-# 	--parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac.ini
-# 	--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_rate_seq_nverbose.json
-# 	--output-dir=test_rate_seq
-# 	--enable-write-all-solutions=true
-# 	--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
-# )
-
-# set_tests_properties(Run.SIMPLE_MECH_FRAC_SEQ_RATE.EnergyGeomech
-# 	PROPERTIES
-# 	PROCESSORS 1
-# )	
 # ---------------------------------------------------------------------------
 # Unit tests for individually testable components
 # ---------------------------------------------------------------------------
