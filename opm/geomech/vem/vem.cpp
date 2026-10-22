@@ -3282,8 +3282,10 @@ compute_S_smooth_hg_3D(const double* const corners,
     vector<array<double, 3>> xi;
     bool plain = false;
     if (hex_corners) {
+        // collapsed corners share a node: a degenerate hex whose tied corners add up below
         copy(hex_corners, hex_corners + 8, order.begin());
-        if (set<int>(order.begin(), order.end()).size() != 8) // collapsed corners
+        const int distinct = int(set<int>(order.begin(), order.end()).size());
+        if (distinct < 4)
             return trace();
         array<double, 24> hc;
         for (int k = 0; k != 8; ++k)
@@ -3294,7 +3296,7 @@ compute_S_smooth_hg_3D(const double* const corners,
         if (hex_physical_gradients(&hc[0], centre, g) < 0) // left-handed: mirror in x
             for (int k = 0; k != 8; k += 2)
                 swap(order[k], order[k + 1]);
-        plain = num_corners == 8;
+        plain = num_corners == distinct;
         if (!plain && !extra_node_xi(corners, num_corners, order, xi))
             return trace();
     } else {
@@ -3315,7 +3317,7 @@ compute_S_smooth_hg_3D(const double* const corners,
     vector<double> S(n * n, 0.0);
     for (int a = 0; a != 24; ++a)
         for (int b = 0; b != 24; ++b)
-            S[(3 * order[a / 3] + a % 3) * n + 3 * order[b / 3] + b % 3] = Ks[a * 24 + b];
+            S[(3 * order[a / 3] + a % 3) * n + 3 * order[b / 3] + b % 3] += Ks[a * 24 + b];
     if (plain)
         return S;
     // scalar R (num_corners^2); S_trace acts identically on each component
@@ -3468,9 +3470,20 @@ assemble_stiffness_matrix_3D(const double* const points,
     bool have_hex = hex_corners != nullptr;
     for (int k = 0; have_hex && k != 8; ++k) {
         const auto it = reindex.find(hex_corners[k]);
-        have_hex = it != reindex.end();
-        if (have_hex)
+        if (it != reindex.end()) {
             hex_loc[k] = it->second;
+            continue;
+        }
+        // a collapsed corner may be a separate point at the same place as a cell node
+        const double* p = &points[3 * hex_corners[k]];
+        have_hex = false;
+        for (int v = 0; v != num_corners && !have_hex; ++v) {
+            const double* q = &points[3 * indexing[v]];
+            if (fabs(p[0] - q[0]) + fabs(p[1] - q[1]) + fabs(p[2] - q[2]) <= 1e-9 * (1 + fabs(q[2]))) {
+                hex_loc[k] = v;
+                have_hex = true;
+            }
+        }
     }
 
     // make local list of corner coordinates, and a locally indexed version of

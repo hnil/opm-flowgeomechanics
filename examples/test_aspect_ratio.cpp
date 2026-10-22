@@ -417,6 +417,101 @@ fault_cell_K(const vem::StabilityChoice sc, const double a, const double twist_d
 }
 
 // ----------------------------------------------------------------------------
+// Cantilever (length L, 1 x 1 section, one cell through the thickness) made of nx columns, each
+// either one hex or two wedges given as collapsed hexes (corner ids repeat). Tip load as nodal
+// forces; returns tip deflection / Timoshenko.
+double
+wedge_cantilever_ratio(const vem::StabilityChoice sc, const double L, const int nx, const bool wedges,
+                       const bool corners, const int only_column = -1)
+{
+    const auto node = [](int i, int j, int k) { return 4 * i + 2 * k + j; };
+    std::vector<double> pts;
+    for (int i = 0; i <= nx; ++i)
+        for (int k = 0; k <= 1; ++k)
+            for (int j = 0; j <= 1; ++j)
+                pts.insert(pts.end(), {L * i / nx, double(j), double(k)});
+    std::vector<std::array<int, 8>> cells; // Dune-ordered corners, repeated where collapsed
+    for (int i = 0; i < nx; ++i) {
+        std::array<int, 8> h;
+        for (int c = 0; c < 8; ++c)
+            h[c] = node(i + (c & 1), (c >> 1) & 1, (c >> 2) & 1);
+        if (!wedges || (only_column >= 0 && i != only_column)) {
+            cells.push_back(h);
+            continue;
+        }
+        auto a = h, b = h;
+        a[5] = h[1], a[7] = h[3]; // x+ top edge down: triangle (0,0) (a,0) (0,1)
+        b[0] = h[4], b[2] = h[6]; // x- bottom edge up: triangle (a,0) (a,1) (0,1)
+        cells.push_back(a);
+        cells.push_back(b);
+    }
+    const int N = 3 * int(pts.size() / 3);
+    std::vector<double> K(std::size_t(N) * N, 0.0), f(N, 0.0);
+    for (const auto& h : cells) {
+        // hex faces from the corners, dropping collapsed edges and degenerate faces; outward winding
+        const int quad[6][4] = {{0, 4, 6, 2}, {1, 3, 7, 5}, {0, 1, 5, 4}, {2, 6, 7, 3}, {0, 2, 3, 1}, {4, 5, 7, 6}};
+        std::vector<int> fc, nfc;
+        double cc[3] = {0, 0, 0};
+        for (int c = 0; c < 8; ++c)
+            for (int d = 0; d < 3; ++d)
+                cc[d] += pts[3 * h[c] + d] / 8;
+        for (const auto& q : quad) {
+            std::vector<int> f2;
+            for (int v = 0; v < 4; ++v)
+                if (f2.empty() || (h[q[v]] != f2.back() && !(v == 3 && h[q[v]] == f2.front())))
+                    f2.push_back(h[q[v]]);
+            if (f2.size() < 3)
+                continue;
+            double nrm[3] = {0, 0, 0}, fcen[3] = {0, 0, 0};
+            for (std::size_t v = 0; v < f2.size(); ++v) {
+                const double* p = &pts[3 * f2[v]];
+                const double* r = &pts[3 * f2[(v + 1) % f2.size()]];
+                nrm[0] += (p[1] - r[1]) * (p[2] + r[2]);
+                nrm[1] += (p[2] - r[2]) * (p[0] + r[0]);
+                nrm[2] += (p[0] - r[0]) * (p[1] + r[1]);
+                for (int d = 0; d < 3; ++d)
+                    fcen[d] += p[d] / f2.size();
+            }
+            if (nrm[0] * (fcen[0] - cc[0]) + nrm[1] * (fcen[1] - cc[1]) + nrm[2] * (fcen[2] - cc[2]) < 0)
+                std::reverse(f2.begin(), f2.end());
+            nfc.push_back(int(f2.size()));
+            fc.insert(fc.end(), f2.begin(), f2.end());
+        }
+        std::array<double, 3> centroid;
+        std::vector<int> idx;
+        std::vector<double> Ke;
+        vem::assemble_stiffness_matrix_3D(&pts[0], &fc[0], &nfc[0], int(nfc.size()), 1e9, 0.25, sc, centroid,
+                                          idx, Ke, corners ? &h[0] : nullptr);
+        const int n = 3 * int(idx.size());
+        for (int a2 = 0; a2 < n; ++a2)
+            for (int b2 = 0; b2 < n; ++b2)
+                K[std::size_t(3 * idx[a2 / 3] + a2 % 3) * N + 3 * idx[b2 / 3] + b2 % 3] += Ke[a2 * n + b2];
+    }
+    const double P = 1e3;
+    for (int j = 0; j <= 1; ++j)
+        for (int k = 0; k <= 1; ++k)
+            f[3 * node(nx, j, k) + 2] = -P / 4;
+    std::vector<int> fixed;
+    for (int j = 0; j <= 1; ++j)
+        for (int k = 0; k <= 1; ++k)
+            for (int d = 0; d < 3; ++d)
+                fixed.push_back(3 * node(0, j, k) + d);
+    for (const int I : fixed) {
+        for (int J = 0; J < N; ++J)
+            K[std::size_t(I) * N + J] = K[std::size_t(J) * N + I] = 0.0;
+        K[std::size_t(I) * N + I] = 1.0;
+        f[I] = 0.0;
+    }
+    const auto u = dense_solve(K, f);
+    double tip = 0;
+    for (int j = 0; j <= 1; ++j)
+        for (int k = 0; k <= 1; ++k)
+            tip += u[3 * node(nx, j, k) + 2] / 4;
+    const double E = 1e9, nu = 0.25, I = 1.0 / 12, G = E / (2 * (1 + nu)), kap = 10 * (1 + nu) / (12 + 11 * nu);
+    return -tip / (P * L * L * L / (3 * E * I) + P * L / (kap * G));
+}
+
+// ----------------------------------------------------------------------------
 // 2D patch test on stretched quads
 double
 patch_test_2D(const vem::StabilityChoice sc, const double aspect)
@@ -767,6 +862,25 @@ main()
         if (!(std::fabs(energy(Kn) / energy(Kt) - 1) < 1e-12 && energy(Kc) < 0.75 * energy(Kt) && nzero == 6)) {
             ++failures;
             std::printf(" (FAIL)");
+        }
+        std::printf("\n");
+    }
+
+    // collapsed hexes (wedges) lock in their constant-strain consistency term whatever S is; the
+    // smooth-field term must keep the hexes around one wedge column accurate
+    std::printf("\n=== cantilever of wedges (collapsed hexes), aspect 1 / 5 / 25: all wedges; one wedge column ===\n");
+    for (const auto sc : {vem::TRACE, vem::SMOOTH_HOURGLASS}) {
+        std::printf("%-12s", sc == vem::TRACE ? "TRACE" : "SMOOTH_HG");
+        for (const double L : {10.0, 50.0, 250.0})
+            std::printf("  %-7.3f", wedge_cantilever_ratio(sc, L, 10, true, true));
+        std::printf(" |");
+        for (const double L : {10.0, 50.0, 250.0}) {
+            const double r = wedge_cantilever_ratio(sc, L, 10, true, true, 5);
+            std::printf("  %-7.3f", r);
+            if (sc == vem::SMOOTH_HOURGLASS && !(r > 0.85 && r < 1.1)) {
+                ++failures;
+                std::printf("(FAIL)");
+            }
         }
         std::printf("\n");
     }
