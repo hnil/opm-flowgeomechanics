@@ -46,6 +46,8 @@
      SMOOTH_HOURGLASS must stay near 1 at every aspect, also on sheared cells.
 */
 
+#include "config.h"
+
 #include <opm/geomech/vem/vem.hpp>
 
 #include <algorithm>

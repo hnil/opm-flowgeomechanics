@@ -80,6 +80,8 @@ Only the interface code is modified to easier call it from c++
 # USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+#include "config.h"
+
 #include <opm/geomech/CutDe.hpp>
 
 #include <array>

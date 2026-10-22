@@ -17,8 +17,9 @@
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <set>
 #include "config.h"
+
+#include <set>
 
 #include <iostream> // std::cout
 #include <sstream>

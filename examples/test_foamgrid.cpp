@@ -19,8 +19,9 @@
 
 /** construct a grid with vertices on the unit circle and element parametrization */
 
-#include <cmath>
 #include <config.h>
+
+#include <cmath>
 #include <functional>
 #include <iostream>
 #include <memory>

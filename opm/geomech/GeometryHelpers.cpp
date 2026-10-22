@@ -17,9 +17,10 @@
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "config.h"
+
 #include "GeometryHelpers.hpp"
 #include <opm/geomech/CgalHelper.hpp>
-#include "config.h"
 namespace external
 {
 std::vector<size_t>
