@@ -19,6 +19,7 @@
 
 #include "config.h"
 #include "vemutils.hpp"
+#include <opm/common/OpmLog/OpmLog.hpp>
 #include <opm/common/TimingMacros.hpp>
 #include <opm/elasticity/elasticity.hpp>
 #include <opm/elasticity/materials.hh>
@@ -29,6 +30,8 @@
 #include <dune/istl/solvers.hh>
 #include <dune/grid/common/mcmgmapper.hh>
 #include <opm/grid/cpgrid/GridHelpers.hpp>
+
+#include <fmt/format.h>
 
 #include <algorithm>
 #include <array>
@@ -264,12 +267,12 @@ getGridVectors(const Dune::CpGrid& grid,
         }
     }
     if (misoriented_faces > 0) {
-        std::cout << "VEM topology: " << misoriented_faces
-                  << " cell-face entries whose corners do not wind around the grid's face normal" << std::endl;
+        Opm::OpmLog::info(fmt::format("VEM topology: {} cell-face entries whose corners do not wind around the grid's face normal",
+                                      misoriented_faces));
     }
     if (skipped_degenerate_faces > 0) {
-        std::cout << "VEM topology: skipped " << skipped_degenerate_faces
-                  << " non-geometric (NNC) cell-face entries" << std::endl;
+        Opm::OpmLog::info(fmt::format("VEM topology: skipped {} non-geometric (NNC) cell-face entries",
+                                      skipped_degenerate_faces));
     }
 
 
@@ -525,7 +528,7 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
               double zdiff=0.0;
               for (int ii=0;ii<4;++ii)
                 zdiff = std::max(zdiff, elem.geometry().corner(ii+4)[2]-elem.geometry().corner(ii)[2]);
-              std::cout << " - Consider setting ctol larger than " << zdiff << std::endl;
+              Opm::OpmLog::warning(fmt::format("Consider setting ctol larger than {}", zdiff));
             }
 
             Dune::FieldMatrix<ctype,comp,dim*bfunc> lB;
@@ -642,7 +645,7 @@ potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const p
 
     // Below, we compute the contribution from all corners of all faces to the global 'fgrad' vector.
     bool vem_method = false;
-    std::cout << "Using FEM assembly of source term" << std::endl;
+    Opm::OpmLog::debug("Using FEM assembly of source term");
   std::vector<int> indexing;
     int cur_fcor_start = 0;
     int cur_cface_start = 0;
@@ -871,7 +874,7 @@ diffuseCellVector(const Dune::CpGrid& grid,
         Dune::InverseOperatorResult res;
         solver.apply(x, b, res);
         if (!res.converged)
-            std::cout << "Warning: diffuseCellVector CG did not fully converge" << std::endl;
+            Opm::OpmLog::warning("diffuseCellVector CG did not fully converge");
         return x;
     }
 
@@ -891,10 +894,8 @@ diffuseCellVector(const Dune::CpGrid& grid,
     const int max_steps = 1000;
     int nsteps = std::max(1, int(std::ceil(tau / dt)));
     if (nsteps > max_steps) {
-        std::cout << "Warning: diffuseCellVector capped at " << max_steps
-                  << " steps; effective smoothing length reduced to "
-                  << std::sqrt(2.0 * max_steps * dt) << " (requested " << length << ")"
-                  << std::endl;
+        Opm::OpmLog::warning(fmt::format("diffuseCellVector capped at {} steps; effective smoothing length reduced to {} (requested {})",
+                                         max_steps, std::sqrt(2.0 * max_steps * dt), length));
         nsteps = max_steps;
     }
     Vec u(cell_vector), unew(cell_vector);
@@ -1267,7 +1268,7 @@ Dune::BlockVector<Dune::FieldVector<double,6>>  computeStressFem(const Dune::CpG
                                                                 const Dune::BlockVector<Dune::FieldVector<double,1>>& disp,
                                                                 const std::vector <double>& young,
                                                                 const std::vector <double>& poisson){
-        std::cout << "Compute stress via FEM" <<std::endl;                                                          
+        Opm::OpmLog::debug("Compute stress via FEM");
         static constexpr int dim = 3; // GridType::dimension;
         static constexpr int comp = 3 + (dim - 2) * 3;
         static constexpr int bfunc = 4 + (dim - 2) * 4;

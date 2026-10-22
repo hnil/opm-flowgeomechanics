@@ -22,9 +22,11 @@
 //#include <StrumpackSparseSolver.hpp>
 
 #include <cmath>
+#include <sstream>
 #include <utility>
 
 #include <opm/common/ErrorMacros.hpp>
+#include <opm/common/OpmLog/OpmLog.hpp>
 
 namespace Opm
 {
@@ -117,12 +119,13 @@ FractureMechanicsPreconditioner::rebuildFlowSolver(const Opm::FractureSystemMatr
     }
 
     if (verbosity > 0) {
-        std::cout << "FractureMechanicsPreconditioner: active mode " << modeName(active_mode_);
+        std::ostringstream msg;
+        msg << "FractureMechanicsPreconditioner: active mode " << modeName(active_mode_);
         if (mode_policy_ == "coupling_auto") {
-            std::cout << " coupling indicator=" << last_coupling_indicator_
-                      << " threshold=" << mode_switch_coupling_threshold_;
+            msg << " coupling indicator=" << last_coupling_indicator_
+                << " threshold=" << mode_switch_coupling_threshold_;
         }
-        std::cout << std::endl;
+        OpmLog::debug(msg.str());
     }
 }
 
@@ -146,7 +149,7 @@ FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::Frac
     if (!diag_mech_) {
         OPM_TIMEBLOCK(SetupLuFactorization);
         if(verbosity>0){
-        std::cout << "FractureMechanicsPreconditioner: using full mechanics preconditioner" << std::endl;
+        OpmLog::debug("FractureMechanicsPreconditioner: using full mechanics preconditioner");
         }
         // luM_ = S[_0][_0];
         luM_ = S[_0][_0];
@@ -160,7 +163,7 @@ FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::Frac
     }
     active_mode_ = selectMode(S);
     if (verbosity > 0 && mode_policy_ == "manual") {
-        std::cout << "FractureMechanicsPreconditioner: configured mode " << modeName(active_mode_) << std::endl;
+        OpmLog::debug(std::string("FractureMechanicsPreconditioner: configured mode ") + modeName(active_mode_));
     }
     rebuildFlowSolver(S);
 }

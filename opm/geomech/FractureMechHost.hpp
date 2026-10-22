@@ -81,8 +81,6 @@ namespace Opm{
             if (simulator_.gridView().comm().rank() == 0) {
                 std::stringstream os;
                 if (!no_seeds) {
-                    // std::cout << "No fracture seeds found, on this step " << reportStepIdx <<
-                    // std::endl;
                     if(verbosity > 1){
                         os << "Fracture seeds found, on this step " << std::endl;
                     }
@@ -268,7 +266,7 @@ namespace Opm{
       }
       const FractureModel& fractureModel() const{
             if(!fracturemodel_){
-                std::cout << "Fracture model not initialized, returning nullptr" << std::endl;
+                OpmLog::error("Fracture model not initialized, returning nullptr");
                 throw std::runtime_error("Fracture model not initialized");
             }
             return *fracturemodel_;

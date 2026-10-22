@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <opm/common/OpmLog/OpmLog.hpp>
 #include <opm/material/common/MathToolbox.hpp>
 
 #include <opm/simulators/linalg/PropertyTree.hpp>
@@ -27,6 +28,8 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+
+#include <fmt/format.h>
 
 namespace Opm {
     inline void
@@ -81,7 +84,7 @@ namespace Opm {
                 }
 
                 if (conns.empty()) {
-                    std::cerr << "Warning: No connections found for well " << well.name() << std::endl;
+                    OpmLog::warning(fmt::format("No connections found for well {}", well.name()));
                     continue;
                 }
 
@@ -131,7 +134,7 @@ namespace Opm {
                     for (const auto& seedcell : well_wseed.seedCells()) {
                         if (seedcell == wellInfo.global_index) {
                             fracture.setActive(true);
-                            std::cout << "Activating fracture " << fracture.name() << std::endl;
+                            OpmLog::info(fmt::format("Activating fracture {}", fracture.name()));
                         }
                     }
                 }
@@ -153,7 +156,7 @@ namespace Opm {
             std::vector<Fracture>& fractures = well_fractures_[i];
             for (size_t j = 0; j < fractures.size(); ++j) {
                 if (fractures[j].isActive()) {
-                    std::cout << "Solving fracture " << fractures[j].name() << std::endl;
+                    OpmLog::debug(fmt::format("Solving fracture {}", fractures[j].name()));
                     if (warn_keep_state) {
                         try {
                             fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator);
@@ -332,8 +335,8 @@ namespace Opm {
                             cell_index_frac);
                             // check if perforation exists
         if(it == perf_data.cell_index.end()) {
-            std::cerr << "Warning: Could not find perforation for well " << wellstate.name
-                    << " in cell index " << cell_index_frac << std::endl;         
+            OpmLog::warning(fmt::format("Could not find perforation for well {} in cell index {}",
+                                        wellstate.name, cell_index_frac));
             return -1;
         }// skip if not found
                             
@@ -535,7 +538,7 @@ namespace Opm {
                 // check if well is open
                 if(wellstate.status != ::Opm::WellStatus::OPEN) {
                     wells_[i].setActive(false);
-                    std::cerr << "Warning: Well " << wellinfo.name << " is not open, skipping update." << std::endl;
+                    OpmLog::debug(fmt::format("Well {} is not open, skipping update.", wellinfo.name));
                     fracture.setActive(false);
                     continue; // skip if not open
                 }
@@ -556,9 +559,6 @@ namespace Opm {
                     os << "Perf index perf " << perf_index << " fracture " << perf_index_frac << " pressure " << perf_pressure << " rate " << perf_rate << std::endl;
                     OpmLog::info(os.str());
                 }
-                // std::cout << 
-                //std::cout << " Well " << perf_pressure << std::endl;
-                //std::cout << "Perf index åerf " << perf_index << " fracture " << perf_index_frac << " pressure " << perf_pressure << std::endl;
                 double perf_depth = perf_depths[perf_index];
                 fracture.setPerfProps(perf_pressure, perf_depth, perf_rate);
                 wells_[i].setPerfPressure(perf_index_frac, perf_pressure);

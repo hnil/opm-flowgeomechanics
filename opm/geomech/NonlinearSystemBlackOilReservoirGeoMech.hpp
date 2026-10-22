@@ -19,7 +19,6 @@
 
 #pragma once
 #include <cmath>
-#include <iostream>
 #include <limits>
 #include <opm/common/ErrorMacros.hpp>
 #include <fmt/format.h>
@@ -233,7 +232,6 @@ namespace Opm
             {
                 std::stringstream os;
                 os << "Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: " << iteration << std::endl;
-                //std::cout << "Nonlinear itration Flow Solve:" << std::endl;
                 report = Parent::nonlinearIteration(timer, nonlinear_solver);
                 os << "Flow solve report converged: " << report.converged;// << std::endl;
                 OpmLog::info(os.str());
@@ -296,10 +294,7 @@ namespace Opm
                     }
                 } else {
                     OpmLog::info("Solve Geomechanics:");
-                    this->traceGlobalStorage("outer_before_mech");
-                    this->simulator_.problem().wellModel().traceWellSources(); // accepted flow state
                     this->simulator_.problem().geoMechModel().solveGeomechanics();
-                    this->traceGlobalStorage("outer_after_mech");
                     ++this->mech_solves_performed_;
                     ++this->mech_solves_this_step_;
                 }
@@ -309,9 +304,7 @@ namespace Opm
             const bool have_fracture = this->simulator_.problem().hasFractures()
                 && this->simulator_.problem().fractureHost().fractureModelActive();
             if(do_fracture && this->simulator_.problem().hasFractures()){
-                this->traceGlobalStorage("outer_before_fracture");
                 this->fractureOuterBlock(report, timer, nonlinear_solver);
-                this->traceGlobalStorage("outer_after_fracture");
                 if (have_fracture)
                     this->simulator_.problem().geoMechModel().fractureModel()
                         .writeIterationSnapshots(timer.currentStepNum(), iteration, "outer");
@@ -355,7 +348,6 @@ namespace Opm
                         const SetupIterationContextGuard guard{this->simulator_.problem()};
                         const int max_flow_it =
                             prm.get<int>("solver.growth_flow_iterations", 12);
-                        this->traceGlobalStorage("growth_before_flow");
                         for (int fit = 0; fit < max_flow_it; ++fit) {
                             flow_report = Parent::nonlinearIteration(timer, nonlinear_solver);
                             report += flow_report;
@@ -365,7 +357,6 @@ namespace Opm
                             }
                         }
                     }
-                    this->traceGlobalStorage("growth_after_flow");
                     if (!flow_ok) {
                         // genuine flow trouble: hand back to the outer Newton loop
                         report.converged = false;
@@ -479,7 +470,7 @@ namespace Opm
             if(iteration < mech_max_it){
                 //simulator_.problem().geoMechModel().solveFracture();
                 this->simulator_.problem().geoMechModel().solveGeomechanics();
-                std::cout << "Geomech nonlinearIteration with mechanical solve:";// << iteration << std::endl;
+                OpmLog::debug("Geomech nonlinearIteration with mechanical solve:");
                 // TODO check convergence properly
                 report.converged = false;
             }

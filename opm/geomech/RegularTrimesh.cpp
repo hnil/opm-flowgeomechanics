@@ -30,7 +30,10 @@
 
 #include <dune/grid/io/file/vtk/vtkwriter.hh>
 #include <dune/grid/utility/structuredgridfactory.hh>
+#include <opm/common/OpmLog/OpmLog.hpp>
 #include <opm/common/TimingMacros.hpp>
+
+#include <fmt/format.h>
 using namespace Opm;
 using namespace std;
 
@@ -1068,7 +1071,7 @@ writeMeshBoundaryToVTK(const RegularTrimesh& mesh, const char* const filename)
 {
     ofstream file(filename);
     if (!file.is_open()) {
-        cerr << "Error opening file: " << filename << endl;
+        OpmLog::warning(fmt::format("Error opening file: {}", filename));
         return;
     }
 
@@ -1503,18 +1506,11 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
 
     auto fixed_on_level = [&fixed_cells](const int level) -> vector<CellRef> {
         if (level == 0) {
-            // for (const auto& cell : fixed_cells)
-            //     std::cout << "{" << cell[0] << ", " << cell[1] << ", " << cell[2] << "} ";
-            // std::cout << std::endl;
             return fixed_cells;
         } else {
             vector<CellRef> result;
             for (const auto& cell : fixed_cells)
                 result.push_back(RegularTrimesh::fine_to_coarse(cell, level));
-            // dump vector result to cout
-            // for (const auto& cell : result)
-            //     std::cout << "{" << cell[0] << ", " << cell[1] << ", " << cell[2] << "} ";
-            // std::cout << std::endl;
             return result;
         }
     };
@@ -1570,7 +1566,7 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
             working_mesh.removeSawtooths();
 
             roof = cur_level--;
-            cout << "** -------- Refining to level -------- " << cur_level << endl;
+            OpmLog::debug(fmt::format("** -------- Refining to level -------- {}", cur_level));
             iter_count = 0;
         } else if (iter_count >= max_iter && cur_level < roof - 1) {
             // expansion is going too slowly, move to coarser level
@@ -1580,7 +1576,7 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
             working_mesh.setCellFlags(fixed_on_level(cur_level), 1); // set fixed cells at this level
             working_mesh.removeSawtooths();
             cur_level++;
-            cout << "** -------- Coarsening to level ------- " << cur_level << endl;
+            OpmLog::debug(fmt::format("** -------- Coarsening to level ------- {}", cur_level));
             iter_count = 0;
         } else {
             // expanding grid at current level
@@ -1589,9 +1585,10 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
             iter_count++;
         }
     }
-    cout << "Solver converged with expantion iterations: " << iter_count << " at level: " << cur_level << endl;
-    cout << " ** ---------- FINAL MESH HAS " << working_mesh.numCells() << " CELLS ---------- **" << endl;
-    cout << " ** ---------- CONVERGED BOUNDARY MESH ---------- **" << endl;
+    OpmLog::debug(fmt::format("Solver converged with expantion iterations: {} at level: {}\n"
+                              " ** ---------- FINAL MESH HAS {} CELLS ---------- **\n"
+                              " ** ---------- CONVERGED BOUNDARY MESH ---------- **",
+                              iter_count, cur_level, working_mesh.numCells()));
 
     return {working_mesh, cur_level};
 }

@@ -21,6 +21,8 @@
 
 #include <opm/geomech/FractureModel.hpp>
 
+#include <opm/common/OpmLog/OpmLog.hpp>
+
 #include <dune/common/fmatrixev.hh>
 #include <opm/geomech/DiscreteDisplacement.hpp>
 
@@ -38,8 +40,8 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
-#include <iostream>
 #include <iterator>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <tuple>
@@ -243,8 +245,9 @@ FractureModel::addFractures(const ScheduleState& sched,
         OPM_THROW(std::runtime_error, "Fracture type '" + fracture_type + "' is not supported");
     }
 
-    std::cout << "Added fractures to " << wells_.size() << " wells\n"
-              << "Total number of fractures_wells: " << well_fractures_.size() << std::endl;
+    std::ostringstream msg;
+    msg << "Added fractures to " << wells_.size() << " wells\n"
+        << "Total number of fractures_wells: " << well_fractures_.size() << '\n';
 
     int count_frac = 0;
     for (auto i = 0 * well_fractures_.size(); i < well_fractures_.size(); ++i) {
@@ -253,10 +256,11 @@ FractureModel::addFractures(const ScheduleState& sched,
 
         count_frac += static_cast<int>(nfrac);
 
-        std::cout << "Well " << wells_[i].name() << " has " << nfrac << " fracture" << pl << '\n';
+        msg << "Well " << wells_[i].name() << " has " << nfrac << " fracture" << pl << '\n';
     }
 
-    std::cout << "Total number of fractures: " << count_frac << std::endl;
+    msg << "Total number of fractures: " << count_frac;
+    OpmLog::info(msg.str());
 }
 
 void
@@ -359,16 +363,11 @@ FractureModel::getExtraWellIndices(const std::string& wellname) const
     // for now just do a search
     bool addconnections = prm_.get<bool>("addconnections");
     if (addconnections) {
-        int well_idx = -1;
         for (size_t i = 0; i < wells_.size(); ++i) {
             if (!wells_[i].isActive()) {
-                if (wells_[i].name() == wellname) {
-                    well_idx = i;
-                }
                 continue;
             }
             if (wells_[i].name() == wellname) {
-                well_idx = i;
                 // collect all from a well
                 std::vector<RuntimePerforation> wellindices;
                 for (const auto& frac : well_fractures_[i]) {
@@ -380,21 +379,6 @@ FractureModel::getExtraWellIndices(const std::string& wellname) const
                     wellindices.insert(wellindices.end(), perfs.begin(), perfs.end());
                 }
                 return wellindices;
-            }
-        }
-        if (false) {
-            std::cout << "Well " << wellname << " not connections added" << std::endl;
-            if (well_idx < -1) {
-                std::cout << "Well not found " << wellname << std::endl;
-            } else {
-                std::cout << "Well " << wellname << " active " << wells_[well_idx].isActive()
-                          << " fractures " << well_fractures_[well_idx].size() << std::endl;
-                if (well_fractures_[well_idx].size() > 0) {
-                    for (const auto& frac : well_fractures_[well_idx]) {
-                        std::cout << "Fracture " << frac.name() << " active " << frac.isActive()
-                                  << std::endl;
-                    }
-                }
             }
         }
         // message += wellname;

@@ -763,7 +763,6 @@ void
 GridStretcher::dumpToVTK(const char* filename, const std::vector<std::vector<double>> data) const
 // ----------------------------------------------------------------------------
 {
-    // std::cout << "Hello" << std::endl;
     auto vtkwriter = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_.leafGridView(),
                                                                            Dune::VTK::nonconforming);
 

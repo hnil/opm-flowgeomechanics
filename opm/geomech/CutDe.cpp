@@ -519,7 +519,6 @@ setup_tde(ddm::Real3& transformed_obs,
           const ddm::Real& nu,
           const bool is_halfspace)
 {
-    // printf("is_halfspace: %s\n", ${is_halfspace} ? "true":"false");
     // Real3
     Vnorm = normalize3(cross3(sub3(tri_prefix[1], tri_prefix[0]), sub3(tri_prefix[2], tri_prefix[0])));
 

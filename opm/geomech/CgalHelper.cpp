@@ -178,7 +178,6 @@ double area_of_intersection(const std::vector<std::array<double,3>>& hex_org,
     double area = 0.0;
     for (auto& pp : intersection_polygons) {
         assert(pp.number_of_holes() == 0);
-        //std::cout << "Numholes " << pp.number_of_holes() << std::endl;
         auto outer = pp.outer_boundary();
         area += to_double(outer.area());
     }

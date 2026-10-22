@@ -31,7 +31,9 @@
 #ifndef OPM_VEM_ELASTICITY_SOLVER_IMPL_HPP
 #define OPM_VEM_ELASTICITY_SOLVER_IMPL_HPP
 
-#include <iostream>
+#include <opm/common/OpmLog/OpmLog.hpp>
+
+#include <fmt/format.h>
 
 #ifdef HAVE_OPENMP
 #include <omp.h>
@@ -489,7 +491,7 @@ IMPL_FUNC(void, assemble_fem(const Vector& /*pressure*/, bool do_matrix, bool do
               double zdiff=0.0;
               for (int ii=0;ii<4;++ii)
                 zdiff = std::max(zdiff, elem.geometry().corner(ii+4)[2]-elem.geometry().corner(ii)[2]);
-              std::cout << " - Consider setting ctol larger than " << zdiff << std::endl;
+              OpmLog::warning(fmt::format("Consider setting ctol larger than {}", zdiff));
             }
 
             Dune::FieldMatrix<ctype,comp,dim*bfunc> lB;
@@ -600,7 +602,7 @@ IMPL_FUNC(void, solve())
 
   } catch (Dune::ISTLError& e) {
     last_linear_solve_converged_ = false;
-    std::cerr << "exception thrown " << e << std::endl;
+    OpmLog::warning(fmt::format("exception thrown {}", e.what()));
   }
 }
 

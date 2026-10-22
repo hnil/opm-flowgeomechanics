@@ -90,17 +90,13 @@ namespace Opm{
         };
         //ax model things
         void postSolve(GlobalEqVector&) {
-            std::cout << "Geomech dummy PostSolve Aux" << std::endl;
         }
         void addNeighbors(std::vector<NeighborSet>&) const {
-            std::cout << "Geomech add neigbors" << std::endl;
         };
         void applyInitial(){
-            std::cout << "Geomech applyInitial" << std::endl;
          };
         unsigned numDofs() const{return 0;};
         void linearize(SparseMatrixAdapter&, GlobalEqVector&) {
-            std::cout << "Geomech Dummy Linearize" << std::endl;
         };
 
         // model things

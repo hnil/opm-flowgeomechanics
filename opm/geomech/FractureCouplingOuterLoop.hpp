@@ -27,9 +27,6 @@
 // iteration of its flow parent).
 
 #include <cmath>
-#include <cstdlib>
-#include <iomanip>
-#include <iostream>
 #include <limits>
 #include <sstream>
 #include <opm/common/OpmLog/OpmLog.hpp>
@@ -193,29 +190,6 @@ namespace Opm
             return derived().simulator_.model().solution(0);
         }
 
-        // Opt-in (OPM_GEOMECH_MASS_TRACE=1): total conserved mass at both time
-        // levels, to localise where a mid-step topology change loses it.
-        void traceGlobalStorage(const char* where) const
-        {
-            static const bool on = (std::getenv("OPM_GEOMECH_MASS_TRACE") != nullptr);
-            if (!on) {
-                return;
-            }
-            EqVector s0(0.0), s1(0.0);
-            derived().simulator_.model().globalStorage(s0, 0);
-            derived().simulator_.model().globalStorage(s1, 1);
-            std::stringstream os;
-            os << "MASSTRACE " << where << " t=" << derived().simulator_.time()
-               << " dt=" << derived().simulator_.timeStepSize();
-            for (unsigned i = 0; i < s0.size(); ++i) {
-                os << " s0[" << i << "]=" << std::setprecision(16) << s0[i];
-            }
-            for (unsigned i = 0; i < s1.size(); ++i) {
-                os << " s1[" << i << "]=" << std::setprecision(16) << s1[i];
-            }
-            OpmLog::info(os.str());
-        }
-
         void restoreSolution0(const SolutionVector& solution_backup)
         {
             auto& flow_model = derived().simulator_.model();
@@ -244,7 +218,7 @@ namespace Opm
             const SimulatorTimerInterface& timer,
             NonlinearSolverType& nonlinear_solver)
         {
-            std::cout << "Running parent first iteration to set up the system and caches, while preserving state for geomechanics solve" << std::endl;
+            OpmLog::debug("Running parent first iteration to set up the system and caches, while preserving state for geomechanics solve");
             // this is a hack to call all setup need for the system without changing states which matter for the calculations
             const auto storage_cache_backup = this->backupStorageCache();
             const auto solution_backup = this->backupSolution0();
@@ -263,7 +237,6 @@ namespace Opm
                 this->restoreSolution0(solution_backup);
                 this->restoreStorageCache(storage_cache_backup);
             };
-            this->traceGlobalStorage("before_parentSetupIteration");
             SimulatorReportSingle report;
             try {
                 report = this->runParentSetupIteration(timer, nonlinear_solver);
@@ -271,10 +244,8 @@ namespace Opm
                 restore_state();
                 throw;
             }
-            this->traceGlobalStorage("after_parentSetupIteration_beforeRestore");
             restore_state();
-            this->traceGlobalStorage("after_restore");
-            std::cout << "Finished parent first iteration" << std::endl;
+            OpmLog::debug("Finished parent first iteration");
             return report;
         }
 
@@ -283,9 +254,9 @@ namespace Opm
             const SimulatorTimerInterface& timer,
             NonlinearSolverType& nonlinear_solver)
         {
-            std::cout << "Running parent first iteration in legacy mode (no state restore)" << std::endl;
+            OpmLog::debug("Running parent first iteration in legacy mode (no state restore)");
             auto report = this->runParentSetupIteration(timer, nonlinear_solver);
-            std::cout << "Finished parent first iteration" << std::endl;
+            OpmLog::debug("Finished parent first iteration");
             return report;
         }
 
@@ -557,12 +528,9 @@ namespace Opm
                     OpmLog::info("Updating fracture CTFs in place (value_only_wi_update, no structure change)");
                     derived().simulator_.problem().addConnectionsToWell();
                 } else {
-                std::cout << "Add connections in iterations" << std::endl;
-                this->traceGlobalStorage("before_addConnectionsToSchedual");
+                OpmLog::debug("Add connections in iterations");
                 derived().simulator_.problem().addConnectionsToSchedual();// add new connections in the schedual
-                this->traceGlobalStorage("after_addConnectionsToSchedual");
                 derived().simulator_.problem().wellModel().beginTimeStep(); // reinitialize well structure
-                this->traceGlobalStorage("after_wellModel_beginTimeStep");
                 derived().simulator_.problem().addConnectionsToWell(); // set the new well indices
                 derived().simulator_.problem().emptyFractureLogger();
                 {
@@ -590,7 +558,7 @@ namespace Opm
                     legacy_parent_setup_iteration
                         ? this->runParentFirstIterationLegacy(timer, nonlinear_solver)
                         : this->runParentFirstIterationPreservingState(timer, nonlinear_solver);
-                std::cout << "End connections in iterations" << std::endl;
+                OpmLog::debug("End connections in iterations");
                 }
                 derived().onConnectionsUpdated();
             }
@@ -629,7 +597,7 @@ namespace Opm
                 }
             } else {
             const bool fracture_changed = coupling_metrics.changed();
-            std::cout << "Fracture changed: " << fracture_changed << std::endl;
+            OpmLog::debug("Fracture changed: " + std::to_string(fracture_changed));
             // TODO check convergence properly
             if((!legacy_coupling_change_logic && !fracture_converged_global) || fracture_changed){
                 if (!fracture_converged_global) {

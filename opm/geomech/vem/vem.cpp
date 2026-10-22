@@ -20,6 +20,7 @@
 #include "config.h"
 
 #include "vem.hpp"
+#include <opm/common/OpmLog/OpmLog.hpp>
 #include <algorithm>
 #include <array>
 #include <assert.h>
@@ -1822,7 +1823,6 @@ identify_star_point(const array<double, 3>& point,
         const int f_ix = i % N;
         if (!is_behind_face(result, &face_normals[3 * f_ix], &face_centroids[3 * f_ix])) {
             count = 0;
-            // std::cout << "Averga point not insize cell " << std::endl;
             //  projecting the point onto the plane defined by the normal and the centroid
             const double proj = (result[0] - face_centroids[3 * f_ix]) * face_normals[3 * f_ix]
                 + (result[1] - face_centroids[3 * f_ix + 1]) * face_normals[3 * f_ix + 1]
@@ -2144,7 +2144,7 @@ compute_cell_geometry(const double* points,
 
     // ensure normals are pointing out of, rather than into, polyhedron
     if (inward_pointing_normals(outward_normals, face_centroids)) {
-        std::cout << "Warning!: inward pointing normals try to fix them" << std::endl;
+        Opm::OpmLog::error("Inward pointing normals try to fix them");
         assert(false);
     }
 
@@ -2183,8 +2183,8 @@ compute_cell_geometry(const double* points,
                 static bool warned = false;
                 if (!warned) {
                     warned = true;
-                    std::cerr << "VEM: cell without a star point (warped faces); "
-                                 "using signed tetrahedra from the face-centroid mean\n";
+                    Opm::OpmLog::warning("VEM: cell without a star point (warped faces); "
+                                         "using signed tetrahedra from the face-centroid mean");
                 }
             }
         }

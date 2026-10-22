@@ -777,7 +777,7 @@ namespace Opm{
                 bool is_ok = mechGridContext_ ? true : checkBcConfig(bc_nodes_);
                 if(!is_ok){
                   // this need to be fixed for parallel runs
-                  std::cout << "Error in boundary condition specification not proper for mechanical problem" << std::endl;
+                  OpmLog::warning("Error in boundary condition specification not proper for mechanical problem");
                 }
             }
         }
@@ -820,8 +820,7 @@ namespace Opm{
         void timeIntegration()
         {
             if (this->gridView().comm().rank() == 0){
-                std::cout << "----------------------Start TimeIntegration-------------------\n"
-                << std::flush;
+                OpmLog::debug("----------------------Start TimeIntegration-------------------");
             }
             Parent::timeIntegration();
         }
@@ -840,8 +839,7 @@ namespace Opm{
 
         void beginTimeStep() override{
             if (this->gridView().comm().rank() == 0){
-                std::cout << "----------------------Start beginTimeStep-------------------\n"
-                << std::flush;
+                OpmLog::debug("----------------------Start beginTimeStep-------------------");
             }
             Parent::beginTimeStep();
             OPM_BEGIN_PARALLEL_TRY_CATCH();
@@ -897,12 +895,10 @@ namespace Opm{
             }
 
             if (this->gridView().comm().rank() == 0){
-                std::cout << "----------------------Start endTimeStep-------------------\n"
-                << std::flush;
+                OpmLog::debug("----------------------Start endTimeStep-------------------");
             }
             //Parent::FlowProblemType::endTimeStep();
             OPM_BEGIN_PARALLEL_TRY_CATCH();
-            this->wellModel().traceWellSources();
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 geoMechModel_.endTimeStep();
                 if(this->hasFractures() && this->geoMechModel().fractureModelActive()){

@@ -19,6 +19,8 @@
 
 #pragma once
 #include <dune/grid/common/datahandleif.hh>
+#include <opm/common/OpmLog/OpmLog.hpp>
+#include <sstream>
 namespace Dune{
     template<class GridView, class Vector>
     class EntityVectorVectorDataHandle
@@ -132,7 +134,6 @@ public:
     DataType value;
     value = 5;
     buffer.read(value);
-    //std::cout << "value " << value << std::endl;
     data_[gridView_.indexSet().index(e)] = std::max(data_[gridView_.indexSet().index(e)],value);
     all_data_[gridView_.indexSet().index(e)].push_back(value);
   }
@@ -194,16 +195,16 @@ private:
             tmp.insert(data);
             if(tmp_size != tmp.size()){
                 if(not(tmp.size() <= cont[i].size())){
-                    std::cout << " size error" << std::endl;
-                    std::cout << "tmp" << std::endl;
+                    std::ostringstream msg;
+                    msg << " size error\ntmp\n";
                     for(auto& t:tmp){
-                        std::cout << t << " ";
+                        msg << t << " ";
                     }
-                    std::cout << std::endl;
-                    std::cout << "cont" << std::endl;
+                    msg << "\ncont\n";
                     for(auto& t:cont[i]){
-                        std::cout << t << " ";
+                        msg << t << " ";
                     }
+                    Opm::OpmLog::error(msg.str());
 
                     /*std::stringstream ss;
                     ss << " tmp ";

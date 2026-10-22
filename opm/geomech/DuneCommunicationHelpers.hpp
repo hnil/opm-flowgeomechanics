@@ -27,8 +27,11 @@
 
 //#include <dune/grid/utility/globalindexset.hh>
 
+#include <opm/common/OpmLog/OpmLog.hpp>
+
 #include <cstring>
 #include <iostream>
+#include <sstream>
 #include <unistd.h>
 #include <unistd.h>
 
@@ -436,9 +439,7 @@ namespace Opm {
     const auto& allranks_all = datahandle_all.all_data();
 
 
-    //std::cout << "Getting max rank of node " << std::endl;
     world_comm.barrier();
-    //std::cout << "Finnish max rank of node " << std::endl;
       
       // Dune::PartitionType::AllPartition
       using AttributeSet = Dune::OwnerOverlapCopyAttributeSet;
@@ -488,7 +489,7 @@ namespace Opm {
               // entity_indexset.add(gidset.id(elem),
               //             ParallelIndexSet::LocalIndex(index, AttributeSet::ghost, true));
           } else {
-              std::cout << "Unknown partition type" << std::endl;
+              OpmLog::warning("Unknown partition type");
           }
       }
       entity_indexset.endResize();
@@ -528,21 +529,22 @@ namespace Opm {
           if(numpros[ind.local().local()] != 1) {
             ok = false;
            if(!verbose || true){
-              std::cout << "Num procs " << numpros[ind.local().local()]; 
-              std::cout << " Global " << ind.global(); 
-              std::cout << " Local " << ind.local().local() << " Attribute " << ind.local().attribute();// << std::endl;
-              std::cout << " rank " << world_comm.rank();
-              std::cout << " enity is " << entity.partitionType();
-              std::cout << " max_rank " << maxrank_ib[ind.local().local()];
-              std::cout << " all ranks ib ";
+              std::ostringstream msg;
+              msg << "Num procs " << numpros[ind.local().local()];
+              msg << " Global " << ind.global();
+              msg << " Local " << ind.local().local() << " Attribute " << ind.local().attribute();
+              msg << " rank " << world_comm.rank();
+              msg << " enity is " << entity.partitionType();
+              msg << " max_rank " << maxrank_ib[ind.local().local()];
+              msg << " all ranks ib ";
               for(auto other:allranks_ib[ind.local().local()]){
-                  std::cout << other << " ";
+                  msg << other << " ";
               }
-              std::cout << " all ranks all ";
+              msg << " all ranks all ";
               for(auto other:allranks_all[ind.local().local()]){
-                  std::cout << other << " ";
+                  msg << other << " ";
               }
-              std::cout << std::endl;
+              msg << '\n';
               {
                 Dune::Codim<0> cellcodim;
                 for (auto& cell : Dune::entities(gv, cellcodim)) {
@@ -564,23 +566,24 @@ namespace Opm {
                    // Cell/face/node dump using only the public grid interface;
                    // the internal partition-type indicators of faces and points
                    // are not accessible from here.
-                   std::cout << "Rank " << world_comm.rank() << " Cell global " << cgid  << " local " << cind << " partition " << cell.partitionType() << std::endl;
+                   msg << "Rank " << world_comm.rank() << " Cell global " << cgid  << " local " << cind << " partition " << cell.partitionType() << '\n';
                    for(int lface=0; lface < faces.size(); ++lface){
                     int face = faces[lface].index();
                     int nv = grid.numFaceVertices(face);
-                    std::cout << "Face " << face << ":" ;
+                    msg << "Face " << face << ":" ;
                     for(int lnode=0; lnode < nv; ++lnode){
                       auto node = grid.faceVertex(face, lnode);
                       auto gnode = local_global[node];
                       //assert(index == node );
-                      std::cout << "{" << gnode << "," << node << "}";
+                      msg << "{" << gnode << "," << node << "}";
                     }
-                    std::cout << std::endl;
+                    msg << '\n';
                   }
                   }
 
                 }
               }
+              OpmLog::debug(msg.str());
               ok = false;
               //assert(false);
               //DUNE_THROW(Dune::Exception, "Owner is not a partition of unity");
@@ -593,35 +596,36 @@ namespace Opm {
       int not_ok = !ok;
       not_ok = world_comm.sum(not_ok);
       if(not_ok > 0){
-          std::cout << "Owner is not a partition of unity" << std::endl;
+          OpmLog::error("Owner is not a partition of unity");
           DUNE_THROW(Dune::Exception, "Owner is not a partition of unity");
       }
       if(verbose){
       for (int rank = 0; rank < world_comm.size(); ++rank) {
           if (rank == world_comm.rank()) {
-             std::cout << "Grid size: " << gv.size(0) << " on rank " << world_comm.rank() << std::endl;
+             std::ostringstream msg;
+             msg << "Grid size: " << gv.size(0) << " on rank " << world_comm.rank() << '\n';
               for (const auto& ind : entity_indexset) {
-                std::cout << "Global " << ind.global(); 
-                std::cout << " Local " << ind.local().local() << " Attribute " << ind.local().attribute();// << std::endl;
-                std::cout << " rank " << world_comm.rank();
-                std::cout << " max_rank ib " << maxrank_ib[ind.local().local()];
-                //std::cout << " max_rank all " << maxrank_all[ind.local().local()];
+                msg << "Global " << ind.global();
+                msg << " Local " << ind.local().local() << " Attribute " << ind.local().attribute();
+                msg << " rank " << world_comm.rank();
+                msg << " max_rank ib " << maxrank_ib[ind.local().local()];
                   if (ind.local().attribute() == Dune::OwnerOverlapCopyAttributeSet::owner) {
                       if (numpros[ind.local().local()] != 1) {
                           //DUNE_THROW(Dune::Exception, "Owner entity has more than one owner");
-                          std::cout << " Owner entity  " << numpros[ind.local().local()] <<" owners "<< std::endl;
+                          msg << " Owner entity  " << numpros[ind.local().local()] <<" owners "<< '\n';
                       }else{
-                          std::cout << std::endl;
+                          msg << '\n';
                       }
                   } else {
                       if(numpros[ind.local().local()] != 1) {
                           //DUNE_THROW(Dune::Exception, " Owner is not unique");
-                          std::cout << " Owner is not unique " << numpros[ind.local().local()] << std::endl;
+                          msg << " Owner is not unique " << numpros[ind.local().local()] << '\n';
                       }else{
-                          std::cout << std::endl;
+                          msg << '\n';
                       }
                   }
               }
+              OpmLog::debug(msg.str());
           }
           usleep(100);
           world_comm.barrier();
@@ -647,10 +651,12 @@ namespace Opm {
     }
     dof_indexset.endResize();
     if(verbose){
-     for (const auto& ind : dof_indexset) { 
-          std::cout << " Global " << ind.global(); 
-          std::cout << " Local " << ind.local().local() << " Attribute " << ind.local().attribute();// << std::endl;
+     std::ostringstream msg;
+     for (const auto& ind : dof_indexset) {
+          msg << " Global " << ind.global();
+          msg << " Local " << ind.local().local() << " Attribute " << ind.local().attribute();
       }
+     OpmLog::debug(msg.str());
     }
     return dof_indexset;
   }

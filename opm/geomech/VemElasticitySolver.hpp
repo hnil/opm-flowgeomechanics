@@ -33,6 +33,7 @@
 
 
 #include <opm/common/utility/platform_dependent/disable_warnings.h>
+#include <opm/common/OpmLog/OpmLog.hpp>
 #include <opm/common/TimingMacros.hpp>
 #include <dune/common/fmatrix.hh>
 #include <opm/common/utility/parameters/ParameterGroup.hpp>
@@ -249,7 +250,6 @@ class VemElasticitySolver
             std::size_t pressureIndex = 0;
             //NB NB ! need other operator in parallel
             setCopyRowsToZero();    
-            //std::cout << "Make parallel solver" << std::endl;
             comm_->communicator().barrier();
             //using ParOperatorType = Dune::OverlappingSchwarzOperator<Matrix, Vector, Vector, CommunicationType>;
             auto pop = std::make_unique<ParOperatorType>(this->getOperator(), *comm_);
@@ -299,14 +299,16 @@ class VemElasticitySolver
                 mat.entry(i,j)=0;
             }
             Dune::CompressionStatistics<Matrix::size_type> stats = mat.compress();
-            std::cout << "Matrix compression statistics: " << std::endl;
-            std::cout << "avg" << stats.avg 
-                      << " maximum " << stats.maximum 
-                      << " overflow_total " << stats.overflow_total 
-                      << " mem_ratio " << stats.mem_ratio << std::endl;
-            std::cout << "Matrix has " << mat.N() << " rows and " << mat.M() << " columns" << std::endl;
-            std::cout << "Matrix has " << mat.nonzeroes() << " nonzeros" << std::endl;
-            std::cout << "Entries caluclated" << A_entries.size() << std::endl;
+            std::ostringstream msg;
+            msg << "Matrix compression statistics: \n";
+            msg << "avg" << stats.avg
+                << " maximum " << stats.maximum
+                << " overflow_total " << stats.overflow_total
+                << " mem_ratio " << stats.mem_ratio << '\n';
+            msg << "Matrix has " << mat.N() << " rows and " << mat.M() << " columns\n";
+            msg << "Matrix has " << mat.nonzeroes() << " nonzeros\n";
+            msg << "Entries caluclated" << A_entries.size();
+            OpmLog::debug(msg.str());
         }
         {
         OPM_TIMEBLOCK(setMatrixValues);

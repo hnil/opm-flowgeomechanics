@@ -146,8 +146,7 @@ namespace Opm{
         void beginTimeStep() override
         {
             if (this->gridView().comm().rank() == 0){
-                std::cout << "----------------------Start beginTimeStep (TPSA geomech)-------------------\n"
-                << std::flush;
+                OpmLog::debug("----------------------Start beginTimeStep (TPSA geomech)-------------------");
             }
             Parent::beginTimeStep();
             OPM_BEGIN_PARALLEL_TRY_CATCH();
@@ -170,8 +169,7 @@ namespace Opm{
         void endTimeStep() override
         {
             if (this->gridView().comm().rank() == 0){
-                std::cout << "----------------------Start endTimeStep (TPSA geomech)-------------------\n"
-                << std::flush;
+                OpmLog::debug("----------------------Start endTimeStep (TPSA geomech)-------------------");
             }
             OPM_BEGIN_PARALLEL_TRY_CATCH();
             if(this->simulator().vanguard().eclState().runspec().mech()){

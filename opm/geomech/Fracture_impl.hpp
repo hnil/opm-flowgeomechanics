@@ -20,6 +20,7 @@
 #pragma once
 
 #include "RegularTrimesh.hpp"
+#include <opm/common/OpmLog/OpmLog.hpp>
 #include <opm/common/TimingMacros.hpp>
 #include <opm/geomech/vem/vemutils.hpp>
 #include <opm/material/densead/Evaluation.hpp>
@@ -28,6 +29,7 @@
 #include <dune/common/fmatrix.hh> // Dune::FieldMatrix
 #include <dune/istl/bcrsmatrix.hh> // Dune::BCRSMatrix
 #include <dune/istl/bvector.hh> 
+#include <fmt/format.h>
 namespace Opm
 {
 
@@ -573,7 +575,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         //const std::vector<Opm::Well>& wells = problem.wellModel().getLocalWells(reportStepIdx);
         // get properties from well connections in case of filter cake
         if(schedule[reportStepIdx].wells.has(wellinfo_.name) == false){
-            std::cerr << "Warning: Well " << wellinfo_.name << " not found in schedule step " << reportStepIdx << std::endl;
+            OpmLog::warning(fmt::format("Well {} not found in schedule step {}", wellinfo_.name, reportStepIdx));
             return;
         }
         const auto& well = schedule[reportStepIdx].wells(wellinfo_.name);
@@ -589,13 +591,13 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         }
         //const auto& connection = connections[wellinfo_.perf];// probably wrong
         if(connections.hasGlobalIndex(wellinfo_.global_index) == false){
-            std::cerr << "Warning: Well connection with global index " << wellinfo_.global_index << " not found in schedule step " << reportStepIdx << std::endl;
+            OpmLog::warning(fmt::format("Well connection with global index {} not found in schedule step {}", wellinfo_.global_index, reportStepIdx));
             return;
         }
         const auto& wellstates = simulator.problem().wellModel().wellState();
         const auto& well_index = wellstates.index(wellinfo_.name);
         if (!well_index.has_value()) {
-            std::cerr << "Warning: Well " << wellinfo_.name << " not found in well state at step " << reportStepIdx << std::endl;
+            OpmLog::warning(fmt::format("Well {} not found in well state at step {}", wellinfo_.name, reportStepIdx));
             has_filtercake_ = false;// prevois state did not have this well
             return;
         }
@@ -627,7 +629,7 @@ void Fracture::updateFilterCakePropertiesPost(const Simulator& simulator)//, boo
         //const std::vector<Opm::Well>& wells = problem.wellModel().getLocalWells(reportStepIdx);
         // get properties from well connections in case of filter cake
         if(schedule[reportStepIdx].wells.has(wellinfo_.name) == false){
-            std::cerr << "Warning: Well " << wellinfo_.name << " not found in schedule step " << reportStepIdx << std::endl;
+            OpmLog::warning(fmt::format("Well {} not found in schedule step {}", wellinfo_.name, reportStepIdx));
             return;
         }
         const auto& well = schedule[reportStepIdx].wells(wellinfo_.name);
@@ -636,13 +638,13 @@ void Fracture::updateFilterCakePropertiesPost(const Simulator& simulator)//, boo
         
         //const auto& connection = connections[wellinfo_.perf];// probably wrong
         if(connections.hasGlobalIndex(wellinfo_.global_index) == false){
-            std::cerr << "Warning: Well connection with global index " << wellinfo_.global_index << " not found in schedule step " << reportStepIdx << std::endl;
+            OpmLog::warning(fmt::format("Well connection with global index {} not found in schedule step {}", wellinfo_.global_index, reportStepIdx));
             return;
         }
         const auto& wellstates = simulator.problem().wellModel().wellState();
         const auto& well_index = wellstates.index(wellinfo_.name);
         if (!well_index.has_value()) {
-            std::cerr << "Warning: Well " << wellinfo_.name << " not found in well state at step " << reportStepIdx << std::endl;
+            OpmLog::warning(fmt::format("Well {} not found in well state at step {}", wellinfo_.name, reportStepIdx));
             has_filtercake_ = false;// prevois state did not have this well
             return;
         }
@@ -664,7 +666,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
   const auto& cpgrid = simulator.vanguard().grid();
     if(!active_){
                 last_solve_stats_ = {};
-        std::cout << "Fracture " << this->name() << " is not active, skipping solve." << std::endl;
+        OpmLog::debug(fmt::format("Fracture {} is not active, skipping solve.", this->name()));
         return;
     }
         Dune::Timer solve_timer;
@@ -677,17 +679,16 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             // control switch changes one row's content only - no state resize
             const std::string ctrl_now = well_control_is_rate_ ? "rate_well" : "bhp_well";
             if (ctrl_now != effective_control_latched_) {
-                std::cout << "Fracture " << name() << ": well constraint "
-                          << (effective_control_latched_.empty()
-                                  ? std::string("initialized to ")
-                                  : effective_control_latched_ + " -> ")
-                          << ctrl_now << std::endl;
+                OpmLog::info(fmt::format("Fracture {}: well constraint {}{}", name(),
+                                         effective_control_latched_.empty()
+                                             ? std::string("initialized to ")
+                                             : effective_control_latched_ + " -> ",
+                                         ctrl_now));
                 effective_control_latched_ = ctrl_now;
             }
         }
         last_solve_stats_.fractures_solved = 1;
     OPM_TIMEBLOCK(SolveFracture);
-    //std::cout << "Solve Fracture Pressure" << std::endl;
     std::string method = prm_.get<std::string>("solver.method");
     if (method == "nothing") {
     } else if (method == "simple") {
@@ -725,7 +726,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
     } else if (method == "if") {
         // ----------------------------------------------------------------------------
         // iterate full nonlinear system until convergence
-        std::cout << "Solve Fracture Pressure using Iterative Fracture" << std::endl;
+        OpmLog::debug("Solve Fracture Pressure using Iterative Fracture");
         double min_width = prm_.get<double>("solver.min_width");
         for (auto& width : fracture_width_) {
             width[0] = std::max(width[0], min_width); // Ensure not completely closed
@@ -746,7 +747,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         const int nlin_verbosity = prm_.get<double>("solver.verbosity");
         while (!fullSystemIteration(tol,iter) && iter++ < max_iter) {
             if (nlin_verbosity > 1) {
-                std::cout << "Iteration: " << iter << std::endl;
+                OpmLog::debug(fmt::format("Iteration: {}", iter));
             }
         };
         if(iter >= max_iter){
@@ -755,7 +756,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             if(failure_on_convergence){
                 throw std::runtime_error("Fracture solver did not converge within " + std::to_string(max_iter) + " iterations.");
             }else{
-                std::cout << "Warning: Fracture solver did not converge within " << max_iter << " iterations." << std::endl;
+                OpmLog::warning(fmt::format("Fracture solver did not converge within {} iterations.", max_iter));
             }
         }
 
@@ -766,25 +767,22 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             if (!std::isnan(K1_not_nan[i]))
                 K1.push_back(K1_not_nan[i]);
 
-        std::cout << "K1: ";
-        std::cout << *std::min_element(K1.begin(), K1.end()) << ", " << *std::max_element(K1.begin(), K1.end())
-                  << std::endl;
-        std::cout << "Pressure: ";
-        std::cout << *std::min_element(fracture_pressure_.begin(), fracture_pressure_.end()) << ", "
-                  << *std::max_element(fracture_pressure_.begin(), fracture_pressure_.end()) << std::endl;
-        std::cout << "Normal traction: ";
         Dune::BlockVector<Dune::FieldVector<double, 1>> krull(fracture_width_);
         normalFractureTraction(krull, false);
-        std::cout << *std::min_element(krull.begin(), krull.end()) << ", "
-                  << *std::max_element(krull.begin(), krull.end()) << std::endl;
-        std::cout << "Aperture: ";
-        std::cout << *std::min_element(fracture_width_.begin(), fracture_width_.end()) << ", "
-                  << *std::max_element(fracture_width_.begin(), fracture_width_.end()) << std::endl;
+        OpmLog::debug(fmt::format("K1: {}, {}\nPressure: {}, {}\nNormal traction: {}, {}\nAperture: {}, {}",
+                                  *std::min_element(K1.begin(), K1.end()),
+                                  *std::max_element(K1.begin(), K1.end()),
+                                  (*std::min_element(fracture_pressure_.begin(), fracture_pressure_.end()))[0],
+                                  (*std::max_element(fracture_pressure_.begin(), fracture_pressure_.end()))[0],
+                                  (*std::min_element(krull.begin(), krull.end()))[0],
+                                  (*std::max_element(krull.begin(), krull.end()))[0],
+                                  (*std::min_element(fracture_width_.begin(), fracture_width_.end()))[0],
+                                  (*std::max_element(fracture_width_.begin(), fracture_width_.end()))[0]));
 
         // ----------------------------------------------------------------------------
     } else if (method == "if_propagate_trimesh") {
         // ----------------------------------------------------------------------------
-        std::cout << "Solve Fracture Pressure using Iterative Fracture with Trimesh Propagation" << std::endl;
+        OpmLog::debug("Solve Fracture Pressure using Iterative Fracture with Trimesh Propagation");
         // Volume-paced propagation (opt-in): see VOLUME_PACED_PROPAGATION.md.
         // V0 = fracture volume at the step checkpoint; V_avail = fluid the well
         // can deliver into new fracture volume during this step (eq. 1).
@@ -798,7 +796,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         bool vol_budget_spent = false;
         bool reinitialize= !(prm_.get<bool>("solver.remap_solution"));
         if(reinitialize){
-            std::cout << "Reinitializing fracture states before IF with trimesh propagation" << std::endl;
+            OpmLog::debug("Reinitializing fracture states before IF with trimesh propagation");
             //if(true){
                 fracture_width_ = 1e-3; // Ensure not completely closed
             //fracture_pressure_ = perf_pressure_;
@@ -934,8 +932,9 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                                                        fsmap, level, /*point_wise*/ true);
             double total_filtercake = filterCakeVolume();
             if(std::abs(total_filtercake - total_filtercake_0) > 1e-6 && (nlin_verbosity > 1)){
-                std::cout << "Total filtercake thickness before remapping: " << total_filtercake_0 << std::endl;
-                std::cout << "Total filtercake thickness after remapping: " << total_filtercake << std::endl;
+                OpmLog::debug(fmt::format("Total filtercake thickness before remapping: {}\n"
+                                          "Total filtercake thickness after remapping: {}",
+                                          total_filtercake_0, total_filtercake));
                 //assert(false);
             }
             int iter = 0;
@@ -957,10 +956,9 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 const double dV = fp.volume - vol_V0;
                 vol_budget_spent = dV > v_avail;
                 if (vol_verb > 0) {
-                    std::cout << "VolumePacing: V=" << fp.volume << " V0=" << vol_V0
-                              << " dV=" << dV << " q_perf=" << q_perf << " Q_leak=" << fp.flux
-                              << " V_avail=" << v_avail << (vol_budget_spent ? "  -> BUDGET SPENT" : "")
-                              << std::endl;
+                    OpmLog::debug(fmt::format("VolumePacing: V={} V0={} dV={} q_perf={} Q_leak={} V_avail={}{}",
+                                              fp.volume, vol_V0, dV, q_perf, fp.flux, v_avail,
+                                              vol_budget_spent ? "  -> BUDGET SPENT" : ""));
                 }
                 if (vol_pressure && dV > v_avail && fp.volume > 0.0) {
                     // eq. (3)-(4): draw the BC pressure down by the over-draw over the
@@ -972,8 +970,8 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                     const double c_eff = fp.volume / dp0;
                     const double p_new = std::max(vol_perf_p0 - (dV - v_avail) / c_eff, p_res);
                     if (vol_verb > 0) {
-                        std::cout << "VolumePacing: perf pressure " << perf_pressure_ / 1e5
-                                  << " -> " << p_new / 1e5 << " bar (C_eff=" << c_eff << ")" << std::endl;
+                        OpmLog::debug(fmt::format("VolumePacing: perf pressure {} -> {} bar (C_eff={})",
+                                                  perf_pressure_ / 1e5, p_new / 1e5, c_eff));
                     }
                     perf_pressure_ = p_new;
                 }
@@ -985,15 +983,14 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 if(failure_on_convergence){
                     throw std::runtime_error("Fracture solver did not converge within " + std::to_string(max_iter) + " iterations.");
                 }else{
-                    std::cout << "Warning: Fracture solver did not converge within " << max_iter << " iterations." << std::endl;
+                    OpmLog::warning(fmt::format("Fracture solver did not converge within {} iterations.", max_iter));
                 }
             }
             if(nlin_verbosity > 0){
                 int num_closed_cells = std::accumulate(closed_cells_.begin(), closed_cells_.end(), 0);
-                std::cout << "Nonlinear iterations needed with fixed expansion: " << iter << std::endl;
-                std::cout << " fracture cells: " << fracture_width_.size();
-                std::cout << " closed cells: " << num_closed_cells;
-                std::cout << std::endl;
+                OpmLog::debug(fmt::format("Nonlinear iterations needed with fixed expansion: {}\n"
+                                          " fracture cells: {} closed cells: {}",
+                                          iter, fracture_width_.size(), num_closed_cells));
              }
 
             // compute K1 stress intensity
@@ -1056,8 +1053,8 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                     }
                 }
                 if (vetoed > 0 && prm_.get<int>("verbosity", 0) > 1)
-                    std::cout << "Propagation veto: " << vetoed << "/" << result.size()
-                              << " front cells closed or unconverged" << std::endl;
+                    OpmLog::debug(fmt::format("Propagation veto: {}/{} front cells closed or unconverged",
+                                              vetoed, result.size()));
             }
 
             // Fixed-topology mode: freeze the mesh at the seed (Reveal comparison).
@@ -1087,7 +1084,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         { 
           const bool area_stop = expantionMax(fprop_before);
           if (vol_pacing && vol_budget_spent) {
-              if (vol_verb > 0) std::cout << "VolumePacing: stopping expansion (budget spent)" << std::endl;
+              if (vol_verb > 0) OpmLog::debug("VolumePacing: stopping expansion (budget spent)");
               return true;
           }
           return area_stop;
@@ -1181,7 +1178,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             int count = 0; // @@
             while (true && (count < max_expand_iter)) {
 
-                std::cout << "Iteration: " << ++count << std::endl;
+                ++count;
                 // solve flow-mechanical system
                 int iter = 0;
                 // open file "width" for appending data
@@ -1207,10 +1204,10 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                     if(failure_on_convergence){
                         throw std::runtime_error("Fracture solver did not converge within " + std::to_string(max_iter) + " iterations.");
                     }else{
-                        std::cout << "Warning: Fracture solver did not converge within " << max_iter << " iterations." << std::endl;
+                        OpmLog::warning(fmt::format("Fracture solver did not converge within {} iterations.", max_iter));
                     }
                 }
-                std::cout << "Iterations needed: " << iter << std::endl;
+                OpmLog::debug(fmt::format("Iterations needed: {}", iter));
 
 
                 // identify where max stress intensity is exceeded and propagation is needed
@@ -1282,7 +1279,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             }
             if (count >= max_expand_iter) {
                 last_solve_stats_.converged = false;
-                std::cout << "Fracture expansion did not converge within the maximum number of iterations" << std::endl;
+                OpmLog::warning("Fracture expansion did not converge within the maximum number of iterations");
             }
         }
         else

@@ -44,10 +44,13 @@
 
 
 #include <opm/common/ErrorMacros.hpp>
+#include <opm/common/OpmLog/OpmLog.hpp>
 #include <opm/common/TimingMacros.hpp>
 #include <opm/geomech/DiagonalScalar.hpp>
 #include <opm/geomech/Fracture.hpp>
 #include <opm/geomech/FractureMechanicsPreconditioner.hpp>
+
+#include <fmt/format.h>
 
 using namespace std;
 #define EXP_REF 0
@@ -748,21 +751,11 @@ inline bool
 convergence_test(const VectorHP& res, const double tol_flow, double tol_mech, int verbosity)
 // ----------------------------------------------------------------------------
 {
-    // std::cout << "Residual norm[0] is " << res[_0].infinity_norm()<<std::endl;
-    // std::cout << "Residual norm[1] is " << res[_1].infinity_norm()<<std::endl;
-
-    // std::cout << "tol mech is: " << tol_mech << std::endl;
-    // std::cout << "tol flow is: " << tol_flow << std::endl;
-
     bool converged = res[_0].infinity_norm() < tol_mech && res[_1].infinity_norm() < tol_flow;
     if(converged && verbosity > 0){
-      std::cout << "Converged with residual norm[0] is " << res[_0].infinity_norm()<<std::endl;
-      std::cout << "Converged with residual norm[1] is " << res[_1].infinity_norm()<<std::endl;
+      Opm::OpmLog::debug(fmt::format("Converged with residual norm[0] is {}\nConverged with residual norm[1] is {}",
+                                res[_0].infinity_norm(), res[_1].infinity_norm()));
     }
-    // else{
-    //   std::cout << "Not converged with residual norm[0] is " << res[_0].infinity_norm()<<std::endl;
-    //   std::cout << "Not converged with residual norm[1] is " << res[_1].infinity_norm()<<std::endl;
-    // }
     return converged;
     // return res.infinity_norm() < tol;
 }
@@ -1105,7 +1098,6 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
 
     // update pressure matrix with the current values of `fracture_width_` and
     // `fracture_pressure_`
-    // std::cout << "---- Assemble pressure" << std::endl;
     const bool use_ad = prm_.get<bool>("solver.use_ad_pressure_assembly", false);
     updateLeakoff();
     if (!use_ad) {
@@ -1114,7 +1106,6 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     addSource(); // update right-hand side of pressure system;
     
 
-    // std::cout << "---- Various " << std::endl;
     //  initialize vector of unknown, and vector represnting direction in tangent space
     VectorHP x {fracture_width_, fracture_pressure_};
     // dump_vector(x, "w", "p", true); // dump current state of fracture
@@ -1168,10 +1159,8 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
                 }
             }
             if (pinned > 0 && nlin_verbosity > 0) {
-                std::cout << "Chatter guard pinned " << pinned
-                          << " cells that changed contact state more than "
-                          << prm_.get<int>("solver.chatter_flip_limit", 3)
-                          << " times this solve" << std::endl;
+                OpmLog::debug(fmt::format("Chatter guard pinned {} cells that changed contact state more than {} times this solve",
+                                          pinned, prm_.get<int>("solver.chatter_flip_limit", 3)));
             }
         }
     } else if (!closed_cells_.empty() && closed_cells_.size() == closed_cells.size()) {
@@ -1191,8 +1180,8 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         const size_t allowed_toggles = std::min(max_toggle_count, std::max<size_t>(fraction_limit, 0));
         if (toggled_cells > allowed_toggles) {
             if (nlin_verbosity > 0) {
-                std::cout << "Keeping previous closed-cell state after " << toggled_cells
-                          << " re-openings exceeded guard limit " << allowed_toggles << std::endl;
+                OpmLog::debug(fmt::format("Keeping previous closed-cell state after {} re-openings exceeded guard limit {}",
+                                          toggled_cells, allowed_toggles));
             }
             closed_cells = closed_cells_;
         }
@@ -1570,11 +1559,10 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
             iores.iterations = 1;
             ++last_solve_stats_.linear_solves;
             if (!solved_direct && nlin_verbosity > 0)
-                std::cout << "Direct coupled solve failed (singular); will report non-convergence"
-                          << std::endl;
+                OpmLog::debug("Direct coupled solve failed (singular); will report non-convergence");
         } else if (nlin_verbosity > 0) {
-            std::cout << "Direct coupled solve skipped: " << ncoupled << " cells > direct_max_cells "
-                      << direct_max_cells << "; using iterative solver" << std::endl;
+            OpmLog::debug(fmt::format("Direct coupled solve skipped: {} cells > direct_max_cells {}; using iterative solver",
+                                      ncoupled, direct_max_cells));
         }
     }
 
@@ -1609,12 +1597,9 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     const int verbosity = prm_.get<double>("solver.linsolver.verbosity", 0);
     if (nlin_verbosity > 1) {
       int num_closed_cells = std::accumulate(closed_cells.begin(), closed_cells.end(), 0);
-      std::cout << "Nonlinear iteration: " << nlin_iteration;// << std::endl; 
-      std::cout << " rhs:  " << rhs[_0].infinity_norm() << " " << rhs[_1].infinity_norm();
-      std::cout <<  " closed_cells: " << num_closed_cells;
-      std::cout << " cells m: " << rhs[_0].size();
-      std::cout << " cells p: " << rhs[_1].size();
-      std::cout << std::endl;
+      OpmLog::debug(fmt::format("Nonlinear iteration: {} rhs:  {} {} closed_cells: {} cells m: {} cells p: {}",
+                                nlin_iteration, rhs[_0].infinity_norm(), rhs[_1].infinity_norm(),
+                                num_closed_cells, rhs[_0].size(), rhs[_1].size()));
     }
 
     //std::unique_ptr<LinearSolverBase> psolver;
@@ -1668,9 +1653,8 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
             for (size_t i = 0; i != out[_0].size(); ++i) hp(out[_0][i][0]);
             for (size_t i = 0; i != out[_1].size(); ++i) hp(out[_1][i][0]);
         }
-        std::cout << "linsys checksum nlin=" << nlin_iteration << " S=" << std::hex << hs.h
-                  << " rhs=" << hr.h << " prec=" << hp.h << std::dec << " nm=" << rhs[_0].size()
-                  << " np=" << rhs[_1].size() << std::endl;
+        OpmLog::debug(fmt::format("linsys checksum nlin={} S={:x} rhs={:x} prec={:x} nm={} np={}",
+                                  nlin_iteration, hs.h, hr.h, hp.h, rhs[_0].size(), rhs[_1].size()));
     }
 
     // Pristine copy of the (possibly scaled) rhs fed to the solver, so each retry
@@ -1704,13 +1688,11 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
                     if (!std::isfinite(vprobe[_0][i][0])) ++bad_m;
                 for (size_t i = 0; i < vprobe[_1].size(); ++i)
                     if (!std::isfinite(vprobe[_1][i][0])) ++bad_f;
-                std::cout << "Coupled solver abort (" << e1.what()
-                          << "); precond probe non-finite: mech " << bad_m << "/"
-                          << vprobe[_0].size() << ", flow " << bad_f << "/"
-                          << vprobe[_1].size() << std::endl;
+                OpmLog::warning(fmt::format("Coupled solver abort ({}); precond probe non-finite: mech {}/{}, flow {}/{}",
+                                            e1.what(), bad_m, vprobe[_0].size(), bad_f, vprobe[_1].size()));
             } catch (const std::exception& ep) {
-                std::cout << "Coupled solver abort (" << e1.what()
-                          << "); precond probe itself threw: " << ep.what() << std::endl;
+                OpmLog::warning(fmt::format("Coupled solver abort ({}); precond probe itself threw: {}",
+                                            e1.what(), ep.what()));
             }
             const bool allow_gmres_fallback = prm_.get<bool>(
                 "solver.linsolver.fallback_gmres_on_breakdown", true);
@@ -1784,8 +1766,8 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         if (iores.converged) {
             ++last_solve_stats_.ladder_rescues;
             if (nlin_verbosity > 0) {
-                std::cout << "Fracture coupled linear solve rescued by fallback ladder at nlin iter "
-                          << nlin_iteration << " (" << iores.iterations << " iters)" << std::endl;
+                OpmLog::debug(fmt::format("Fracture coupled linear solve rescued by fallback ladder at nlin iter {} ({} iters)",
+                                          nlin_iteration, iores.iterations));
             }
         }
     }
@@ -1808,8 +1790,8 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
                                         prm_,
                                         makePressureAssemblyInput(),
                                         &iores);
-            std::cerr << "Fracture coupled linear solver failed. Snapshot info written to "
-                      << dump_info_filename << std::endl;
+            OpmLog::error(fmt::format("Fracture coupled linear solver failed. Snapshot info written to {}",
+                                      dump_info_filename));
         }
 
         last_solve_stats_.converged = false;
@@ -1830,11 +1812,10 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     }
 
     if (nlin_verbosity > 2) {
-        std::cout << "x:  " << x[_0].infinity_norm() << " " << x[_1].infinity_norm() << std::endl;
-        std::cout << "dx: " << dx[_0].infinity_norm() << " " << dx[_1].infinity_norm() << std::endl;
-        std::cout << "rhs after linsolve:  " << rhs[_0].infinity_norm() <<
-          " " << rhs[_1].infinity_norm()
-                  << std::endl;
+        OpmLog::debug(fmt::format("x:  {} {}\ndx: {} {}\nrhs after linsolve:  {} {}",
+                                  x[_0].infinity_norm(), x[_1].infinity_norm(),
+                                  dx[_0].infinity_norm(), dx[_1].infinity_norm(),
+                                  rhs[_0].infinity_norm(), rhs[_1].infinity_norm()));
     }
     if (nlin_verbosity > 2 && !block_scaling.active()) {
       // Skipped when block scaling is active: S has been overwritten with D S D
@@ -1843,8 +1824,8 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
       //x_new += dx;
       auto rhs2_tmp(rhs_org);
       S.mmv(x_new, rhs2_tmp);
-      std::cout << "Check res : rhs after linsolve:  " << rhs2_tmp[_0].infinity_norm() <<
-        " " << rhs2_tmp[_1].infinity_norm() << std::endl;
+      OpmLog::debug(fmt::format("Check res : rhs after linsolve:  {} {}",
+                                rhs2_tmp[_0].infinity_norm(), rhs2_tmp[_1].infinity_norm()));
 
 
     }
@@ -1869,8 +1850,8 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
             const double lim = std::max(coupled_step_limit / fmax, 1e-3);
             step_fac *= lim;
             if (nlin_verbosity > 1)
-                std::cout << "Coupled step limited: rel-change " << fmax << " > "
-                          << coupled_step_limit << ", scaling step by " << lim << std::endl;
+                OpmLog::debug(fmt::format("Coupled step limited: rel-change {} > {}, scaling step by {}",
+                                          fmax, coupled_step_limit, lim));
         }
     }
     // FB backtracking line search (opt-in): far from the solution the full
@@ -1904,12 +1885,10 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         }
         step_fac *= best_s;
         if (nlin_verbosity > 1 && best_s < 1.0)
-            std::cout << "FB line search: step " << best_s
-                      << " merit " << merit0 << " -> " << best_merit << std::endl;
+            OpmLog::debug(fmt::format("FB line search: step {} merit {} -> {}", best_s, merit0, best_merit));
     }
-    // std::cout << "fac: " << step_fac << std::endl;
     if (nlin_verbosity > 2) {
-        std::cout << "fac: " << step_fac << std::endl;
+        OpmLog::debug(fmt::format("fac: {}", step_fac));
     }
     dx *= step_fac;
     auto& dx0 = dx[_0];
@@ -1930,8 +1909,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     // dump_vector(dx, "dx_w", "dx_p", true);
     x += dx;
     if (nlin_verbosity > 3) {
-        std::cout << "after: dx: " << dx[_0].infinity_norm() << " " << dx[_1].infinity_norm()
-                  << std::endl;
+        OpmLog::debug(fmt::format("after: dx: {} {}", dx[_0].infinity_norm(), dx[_1].infinity_norm()));
     }
     // copying modified variables back to member variables
     fracture_width_ = x[_0];

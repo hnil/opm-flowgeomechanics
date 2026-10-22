@@ -31,7 +31,9 @@
 #ifndef OPM_ELASTICITY_SOLVER_IMPL_HPP
 #define OPM_ELASTICITY_SOLVER_IMPL_HPP
 
-#include <iostream>
+#include <opm/common/OpmLog/OpmLog.hpp>
+
+#include <fmt/format.h>
 
 #ifdef HAVE_OPENMP
 #include <omp.h>
@@ -347,7 +349,7 @@ IMPL_FUNC(void, fixPoint(Direction dir,
   
   for (int i=0;i<2;++i) {
     if (color[1].size() && do_matrix)
-      std::cout << "\tprocessing " << (i==0?"red ":"black ") << "elements" << std::endl;
+      OpmLog::debug(fmt::format("\tprocessing {}elements", i==0?"red ":"black "));
 #pragma omp parallel for schedule(static)
     for (size_t j=0;j<color[i].size();++j) {
       Dune::FieldMatrix<ctype,comp,comp> C;
@@ -386,11 +388,12 @@ IMPL_FUNC(void, fixPoint(Direction dir,
 
           ctype detJ = it->geometry().integrationElement(r->position());
           if (detJ <= 1.e-5 && verbose) {
-            std::cout << "cell " << color[i][j][k] << " is (close to) degenerated, detJ " << detJ << std::endl;
             double zdiff=0.0;
             for (int ii=0;ii<4;++ii)
               zdiff = std::max(zdiff, it->geometry().corner(ii+4)[2]-it->geometry().corner(ii)[2]);
-            std::cout << " - Consider setting ctol larger than " << zdiff << std::endl;
+#pragma omp critical
+            OpmLog::debug(fmt::format("cell {} is (close to) degenerated, detJ {}\n - Consider setting ctol larger than {}",
+                                      color[i][j][k], detJ, zdiff));
           }
 
           Dune::FieldMatrix<ctype,comp,dim*bfunc> lB;
@@ -470,11 +473,10 @@ IMPL_FUNC(void, solve())
     last_linear_iterations_ = r.iterations;
     total_linear_iterations_ += r.iterations;
     last_linear_solve_converged_ = r.converged;
-    //std::cout << "\tsolution norm: " << u.two_norm() << std::endl;
   } catch (Dune::ISTLError& e) {
     last_linear_iterations_ = 0;
     last_linear_solve_converged_ = false;
-    std::cerr << "exception thrown " << e << std::endl;
+    OpmLog::warning(fmt::format("exception thrown {}", e.what()));
   }
 }
 

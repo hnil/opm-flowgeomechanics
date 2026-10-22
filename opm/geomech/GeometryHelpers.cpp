@@ -21,6 +21,7 @@
 
 #include "GeometryHelpers.hpp"
 #include <opm/geomech/CgalHelper.hpp>
+#include <opm/common/OpmLog/OpmLog.hpp>
 namespace external
 {
 std::vector<size_t>
@@ -145,13 +146,10 @@ int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
      if(outcell>=0){//} && count ==1){
         return outcell;
      }else{
-        // std::cout << "outcell" << outcell << std::endl;
-        // std::cout << "count" << count << std::endl;
-        // std::cout << "local" << local[0] << " " << local[1] << " " << local[2] << " " << std::endl;
         //assert(false);
         //assert(cells.size()==0);
         //std::stringstream os;
-        std::cout << "Point outside bounding box or overlap cells?" << std::endl;
+        Opm::OpmLog::debug("Point outside bounding box or overlap cells?");
         //OpmLog::info(os.str())
         return -1;
      }

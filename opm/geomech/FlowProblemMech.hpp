@@ -773,7 +773,6 @@ namespace Opm{
             else {
                 // add to schedule
                 // structure will be changed erase matrix, maybe only rebuilding of linear solver is neede
-                //std::cout << "Rebuilding linear solver for extra connections" << std::endl;
                 this->simulator().model().linearizer().eraseMatrix();
                 this->simulator().model().newtonMethod().linearSolver().eraseMatrix();
                 //if (this->gridView().comm().rank() == 0) {

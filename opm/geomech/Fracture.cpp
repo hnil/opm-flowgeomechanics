@@ -44,8 +44,11 @@
 
 #include <opm/grid/polyhedralgrid.hh>
 
+#include <opm/common/OpmLog/OpmLog.hpp>
 #include <opm/common/TimingMacros.hpp>
 #include <opm/geomech/RegularTrimesh.hpp>
+
+#include <fmt/format.h>
 
 #include <algorithm>
 #include <array>
@@ -125,9 +128,6 @@ Fracture::init(const std::string& well,
         naxis_[i] = axis_[i];
         axis_[i] *= init_scale;
     }
-    std::cout << "axis" << axis_[0][0] << "," << axis_[0][1] << "," << axis_[0][2] << " " << axis_[1][0]
-              << "," << axis_[1][1] << "," << axis_[1][2] << " " << axis_[2][0] << "," << axis_[2][1]
-              << "," << axis_[2][2] << std::endl;
     layers_ = 0;
     nlinear_ = 0;
 
@@ -145,9 +145,8 @@ Fracture::init(const std::string& well,
                                          0.5 * ax1[1] + fac * axis_[1][1],
                                          0.5 * ax1[2] + fac * axis_[1][2]};
 
-        std::cout << "Creating trimesh with radius: " << radius << ", edgelen: " << edgelen
-                  << ", ax1: " << ax1[0] << "," << ax1[1] << "," << ax1[2] << ", ax2: " << ax2[0] << ","
-                  << ax2[1] << "," << ax2[2] << std::endl;
+        OpmLog::info(fmt::format("Creating trimesh with radius: {}, edgelen: {}, ax1: {},{},{}, ax2: {},{},{}",
+                                 radius, edgelen, ax1[0], ax1[1], ax1[2], ax2[0], ax2[1], ax2[2]));
 
         trimesh_ = std::make_unique<RegularTrimesh>(radius, // trimeshlayers,
                                                     std::array {origo_[0], origo_[1], origo_[2]},
@@ -346,8 +345,8 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
                 reservoir_flux[res_cell] += flux;
                 if (flux < 0) {
                     if(prm_.get<bool>("verbose",false)){
-                        std::cout << "Negative flux " << flux << " for element index " << eIdx
-                                  << " with reservoir cell " << res_cell << std::endl;
+                        OpmLog::debug(fmt::format("Negative flux {} for element index {} with reservoir cell {}",
+                                                  flux, eIdx, res_cell));
                     }
                     flux = 0.0;
                 }
@@ -367,20 +366,18 @@ Fracture::updateFilterCakeProps(const Opm::WellConnections& connections,
             // int eIdx = mapper.index(element);
             // int res_cell = reservoir_cells_[eIdx];
             if (reservoir_areas.find(res_cell) == reservoir_areas.end()) {
-                std::cout << "Reservoir area not found for element index " << res_cell << std::endl;
+                OpmLog::warning(fmt::format("Reservoir area not found for element index {}", res_cell));
                 continue;
             }
             double frac_flux = reservoir_flux[res_cell];
             if (res_cell != wellinfo_.well_cell) {
                 if (std::abs(flux - WI_fluxes[res_cell]) > 0) {
-                    std::cout << "Fracture flux differs from flow flux " << res_cell << std::endl;
-                    std::cout << "Flux: frac " << frac_flux << " vs res " << WI_fluxes[res_cell]
-                              << std::endl;
+                    OpmLog::debug(fmt::format("Fracture flux differs from flow flux {}\nFlux: frac {} vs res {}",
+                                              res_cell, frac_flux, WI_fluxes[res_cell]));
                 }
             } else {
-                std::cout << "Total WI flux " << WI_fluxes[res_cell] << " for cell " << res_cell
-                          << " matches fracture flux " << frac_flux
-                          << std::endl; //" for element index " << eIdx << std::endl;
+                OpmLog::debug(fmt::format("Total WI flux {} for cell {} matches fracture flux {}",
+                                          WI_fluxes[res_cell], res_cell, frac_flux));
             }
             // double res_area = reservoir_areas[res_area];
             //  To do use multiphase flux
@@ -648,7 +645,6 @@ Fracture::summary_of_solve(){
     int nc = numFractureCells();
     assert( int(fracture_pressure_.size()) == nc + 1);
     double well_pressure = fracture_pressure_[nc];
-    std::cout << "Perf pressure " << well_pressure << std::endl;
     const int cell = std::get<0>(perfinj_[0]); // @@ will this be the correct index?
     const double pres = reservoir_pressure_[cell];
     const double dp = well_pressure - pres;
@@ -667,11 +663,15 @@ Fracture::summary_of_solve(){
     // frac_prop.inj_bhp[perfIx] = fprop.inj_bhp;
     // frac_prop.inj_wellrate[perfIx] = fprop.inj_wellrate;
     // fracture rate
-    std::cout << "Reservoir pressure at perf cell " << cell << " is " << pres << " dp " <<   dp << " frac flux " << fprop.flux << std::endl;
-    std::cout << "Fracture properties: " << std::endl;
-    std::cout << " Height: " << fprop.height << " Length: " << fprop.length << " Area: " << fprop.area << std::endl;
-    std::cout << " Volume: " << fprop.volume << " Avg width: " << fprop.avg_width << std::endl;
-    std::cout << " WI: " << fprop.WI << " Inj pressure: " << fprop.inj_pressure << " Inj bhp: " << fprop.inj_bhp << " Inj rate: " << fprop.inj_wellrate << std::endl;       
+    OpmLog::debug(fmt::format("Reservoir pressure at perf cell {} is {} dp {} frac flux {}\n"
+                              "Fracture properties:\n"
+                              " Height: {} Length: {} Area: {}\n"
+                              " Volume: {} Avg width: {}\n"
+                              " WI: {} Inj pressure: {} Inj bhp: {} Inj rate: {}",
+                              cell, pres, dp, fprop.flux,
+                              fprop.height, fprop.length, fprop.area,
+                              fprop.volume, fprop.avg_width,
+                              fprop.WI, fprop.inj_pressure, fprop.inj_bhp, fprop.inj_wellrate));
   }
 }
 
@@ -1065,13 +1065,13 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
     auto it = std::find(reservoir_cells_.begin(), reservoir_cells_.end(), -1);
     auto extended_fractures = prm_.get<bool>("extended_fractures");
     if (!(it == reservoir_cells_.end()) && !(extended_fractures)) {
-        std::cout << "Remove fracture outside of model" << std::endl;
+        OpmLog::warning("Remove fracture outside of model");
         // remove fracture outside of model
         this->removeCells();
         this->updateReservoirCells(cellSearchTree, grid, entity_seeds);
     }else{
       if(!(it == reservoir_cells_.end())){
-          std::cout << "Warning:: Fracture outside of model" << std::endl;
+          OpmLog::warning("Fracture outside of model");
       }
     }
 }
@@ -1841,7 +1841,7 @@ Fracture::wellIndices_() const
                 * std::max(dp_well, wi_dp_floor);
         } else {
         if(mob_cells[i] <= 0.0){
-            std::cout << "Warning zero mobility for perf cell: " << res_cells[i] << std::endl;
+            OpmLog::debug(fmt::format("Zero mobility for perf cell: {}", res_cells[i]));
             WI = 0.0;
         }else{
             WI = q_cells[i] / ((inj_press - dh_perf) - (p_cells[i] - dh_res));//NB d_perf def
@@ -1849,7 +1849,7 @@ Fracture::wellIndices_() const
         }
         if (WI < 0.0) {
           // keep but could maybe be removed
-            std::cout << "Negative WI: " << WI << " for cell: " << res_cells[i] << std::endl;
+            OpmLog::debug(fmt::format("Negative WI: {} for cell: {}", WI, res_cells[i]));
             WI = 0.0;
             ctf = 0.0;
         }
@@ -1891,7 +1891,7 @@ Fracture::wellIndices_() const
 
     // remove connections to outside of reservoir
     if(cells_outside){
-        std::cout << "Cells of fracture outside removed from perforation index" << std::endl;
+        OpmLog::warning("Cells of fracture outside removed from perforation index");
         wellIndices.erase(
                           std::remove_if(wellIndices.begin(),
                                          wellIndices.end(),
@@ -1959,7 +1959,7 @@ Fracture::expantionMax(const FractureProperties& fprop)
     const double area_change_fac = prm_.get<double>("solver.area_change_fac");
     const double dt_lim = prm_.get<double>("solver.dt_limit")*86400.0;
     if (fprop_current.area > area_change_fac * fprop.area) {
-        std::cout << "Fracture area doubled, stopping expansion" << std::endl;
+        OpmLog::debug("Fracture area doubled, stopping expansion");
         max_flow_time_step_  = dt_lim;
         return true;
     } else {
@@ -2014,7 +2014,7 @@ Fracture::solvePressure()
         last_solve_stats_.linear_iterations += r.iterations;
     } catch (Dune::ISTLError& e) {
         last_solve_stats_.converged = false;
-        std::cerr << "exception thrown " << e << std::endl;
+        OpmLog::warning(fmt::format("exception thrown {}", e.what()));
     }
 }
 
@@ -2030,11 +2030,11 @@ Fracture::solveFractureWidth()
     for (int i = 0; i < fracture_width_.size(); ++i) {
         assert(std::isfinite(fracture_width_[i]));
         if (fracture_width_[i] > max_width) {
-            std::cout << "Limit Fracture width" << std::endl;
+            OpmLog::debug("Limit Fracture width");
             fracture_width_[i] = max_width;
         }
         if (fracture_width_[i] < min_width) {
-            std::cout << "Remove small Fracture width" << std::endl;
+            OpmLog::debug("Remove small Fracture width");
             fracture_width_[i] = min_width;
         }
         assert(std::isfinite(fracture_width_[i]));
@@ -2568,7 +2568,6 @@ Fracture::calculateFractureProperties() const
         updateMaxMinVector(dhvec, dh);
         updateMaxMinVector(dwvec, dw);
         if(leak_of_rate.size() != numFractureCells()){
-            //std::cout << "Error in leak_of_rate size" << std::endl;
             continue;
         }
         total_flux += leak_of_rate[eIdx] * geom.volume();
@@ -2894,7 +2893,6 @@ Fracture::updateFractureRHS()
     assert(numWellEquations() == 0); // @@ not implemented/tested for rate-controlled systems
     rhs_width_ = fracture_pressure_;
     for (size_t i = 0; i < rhs_width_.size(); ++i) {
-        std::cout << i << " " << rhs_width_[i] << std::endl;
         rhs_width_[i] = rhs_width_[i] - normalFractureTraction(i);
         if (rhs_width_[i] < 0.0)
             rhs_width_[i] = 0.0; // @@ not entirely accurate, but will avoid
