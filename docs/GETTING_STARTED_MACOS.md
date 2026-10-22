@@ -89,9 +89,6 @@ Quick check (under a minute):
 cd build/opm-flowgeomechanics && ctest -R REGTEST_geomech -j 4; cd ../..
 ```
 
-The test driver rewrites a few files under `opm-flowgeomechanics/result/`; undo that with
-`git -C opm-flowgeomechanics checkout -- result/`.
-
 ## 2. Run the SIMPLE model
 
 An 11 x 11 x 25 box with one water injector (`B-3H`, 20 000 m³/day of 15 °C water into a

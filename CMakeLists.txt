@@ -437,7 +437,7 @@ function(add_mechtest_compareECLFiles)
 	set(PARAM_REFERENCE_CASENAME ${PARAM_CASENAME})
 	endif()
   
-  set(RESULT_PATH ${CMAKE_CURRENT_LIST_DIR}/result/${PARAM_CASENAME})
+  set(RESULT_PATH ${PROJECT_BINARY_DIR}/tests/results/${PARAM_CASENAME})
   set(TEST_ARGS ${PARAM_TEST_ARGS})
   set(DRIVER_ARGS -i ${CMAKE_CURRENT_LIST_DIR}/data
                   -r ${RESULT_PATH}
