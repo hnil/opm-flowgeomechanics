@@ -439,6 +439,24 @@ public:
         os << "</DataArray>\n</CellData>\n</Piece></UnstructuredGrid>\n</VTKFile>\n";
     }
 
+    /// MECHCOARSE: for every cell of the flow grid's Cartesian space, the
+    /// number of cells in its mechanics cell (1 untouched, 0 not in the grid),
+    /// as a GRDECL keyword to view on the flow grid.
+    void writeCoarseningGrdecl(const std::string& filename) const
+    {
+        std::vector<int> size(fineToMech_.size(), 0);
+        for (const int m : fineToMech_) {
+            ++size[m];
+        }
+        std::ofstream os(filename);
+        os << "MECHCOARSE\n";
+        for (std::size_t c = 0; c < fineToMech_.size(); ++c) {
+            const bool inGrid = mechCellOfMechCart_[fineToMech_[c]] >= 0;
+            os << (inGrid ? size[fineToMech_[c]] : 0) << ((c % 20 == 19) ? "\n" : " ");
+        }
+        os << "\n/\n";
+    }
+
     /// The unrefined mechanics cell whose face carries the given face of flow
     /// Cartesian cell `fineCart`, or -1 if that face is inside a coarse cell.
     int cellOfFineFace(const int fineCart, const FaceDir::DirEnum dir) const

@@ -686,6 +686,7 @@ namespace Opm{
                         simulator.vanguard().cartesianIndexMapper());
                     if (const std::string vtu = Parameters::Get<Parameters::MechGridVtu>(); !vtu.empty()) {
                         mechGridContext_->writeVtu(vtu);
+                        mechGridContext_->writeCoarseningGrdecl(vtu + ".MECHCOARSE.grdecl");
                     }
                     geoMechModel_.setMechGrid(*mechGridContext_);
                 }
