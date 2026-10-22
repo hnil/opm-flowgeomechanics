@@ -27,11 +27,7 @@ namespace external
 std::vector<size_t>
 findCloseCellIndices(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, cvf::BoundingBox& bb)
 {
-    // cvf::BoundingBox bb;
-    // bb.add( p1 );
-    // bb.add( p2 );
     std::vector<size_t> closeCells;
-    // this->findIntersectingCells( bb, &closeCells );
     m_cellSearchTree->findIntersections(bb, &closeCells);
     return closeCells;
 }
@@ -40,16 +36,10 @@ buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, std::vect
 {
     using GridView = Dune::CpGrid::LeafGridView;
     const auto& gv = grid.leafGridView();
-    // auto nx = m_grid.getNX();
-    // auto ny = m_grid.getNY();
-    // auto nz = m_grid.getNZ();
-    // auto gv = grid.leafGridView();
     size_t cellCount = gv.size(0);
     std::vector<size_t> cellIndicesForBoundingBoxes;
     std::vector<cvf::BoundingBox> cellBoundingBoxes;
 
-    //    std::array<double, 3> cornerPointArray;
-    //cvf::Vec3d cornerPoint;
     using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
     ElementMapper mapper(gv, Dune::mcmgElementLayout()); // used id sets interally
     entity_seeds.resize(cellCount);
@@ -77,17 +67,14 @@ buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, std::vect
     for (const auto& element : Dune::elements(gv)) {
          int index = mapper.index(element);
         auto geom = element.geometry();
-        //external::cvf::BoundingBox bb;
         using Vec3d = external::cvf::Vec3d;
         auto vertex = geom.center();
         Vec3d point(vertex[0], vertex[1], vertex[2]);
-        //bb.add(point);
         if (element.partitionType() == Dune::InteriorEntity){
             int cell = external::cellOfPoint(m_cellSearchTree, grid, entity_seeds, point);
             assert(cell == index);  
         }else{
             // may get the neares cell in partition
-            //assert(cell == -1);  
         }
     }
 }
@@ -99,7 +86,6 @@ int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
         external::cvf::BoundingBox bb;
         bb.add(point);
         std::vector<size_t> cells = external::findCloseCellIndices(m_cellSearchTree, bb);
-        //int count =0;
         int outcell = -1;
         double min_distance =1e99;
         Dune::FieldVector<double,3> local;
@@ -121,36 +107,11 @@ int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
                 outcell = cell;
             }
             //NB should probably point is inside model
-            // // consistent inside is difficult due to round off errors
-            // bool check_inside = false; 
-            // if (check_inside)
-            // {
-            //     local = geom.local(vec);
-            //     bool inside = true;
-            //     for (int i = 0; i < 3; ++i) {
-            //         if (local[i] < 0) {
-            //             inside = false;
-            //         }
-            //         if (local[i] > 1) {
-            //             inside = false;
-            //         }
-            //     }
-            //     auto refEl = Dune::ReferenceElements<double, 3>::cube();
-            //     assert(inside == refEl.checkInside(local));
-            //     if (inside) {
-            //         count += 1;
-            //         outcell = cell;
-            //     }
-            // }
      }
-     if(outcell>=0){//} && count ==1){
+     if(outcell>=0){
         return outcell;
      }else{
-        //assert(false);
-        //assert(cells.size()==0);
-        //std::stringstream os;
         Opm::OpmLog::debug("Point outside bounding box or overlap cells?");
-        //OpmLog::info(os.str())
         return -1;
      }
 }
@@ -172,7 +133,6 @@ cellsOfTri(std::vector<int>& cells,
     cells.resize(0);
     areas.resize(0);
     std::vector<size_t> cells_tmp = external::findCloseCellIndices(m_cellSearchTree, bb);
-    // int count =0;
     int outcell = -1;
     double min_distance = 1e99;
     Dune::FieldVector<double, 3> local;
@@ -217,8 +177,6 @@ buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, const Opm
     std::vector<size_t> cellIndicesForBoundingBoxes;
     std::vector<cvf::BoundingBox> cellBoundingBoxes;
 
-    // #pragma omp parallel
-    //         {
     size_t threadCellCount = cellCount;
 
     std::vector<size_t> threadIndicesForBoundingBoxes;
@@ -230,7 +188,6 @@ buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, const Opm
     std::array<double, 3> cornerPointArray;
     cvf::Vec3d cornerPoint;
 
-    // #pragma omp for
     for (int cIdx = 0; cIdx < (int)cellCount; ++cIdx) {
         const auto [i, j, k] = m_grid.getIJK(cIdx);
         cvf::BoundingBox cellBB;
@@ -248,16 +205,12 @@ buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, const Opm
 
     threadIndicesForBoundingBoxes.shrink_to_fit();
     threadBoundingBoxes.shrink_to_fit();
-    // #pragma omp critical
-    //          {
     cellIndicesForBoundingBoxes.insert(cellIndicesForBoundingBoxes.end(),
                                        threadIndicesForBoundingBoxes.begin(),
                                        threadIndicesForBoundingBoxes.end());
 
     cellBoundingBoxes.insert(
         cellBoundingBoxes.end(), threadBoundingBoxes.begin(), threadBoundingBoxes.end());
-    //  }
-    // } #pragma omp parallel
     m_cellSearchTree = new cvf::BoundingBoxTree;
     m_cellSearchTree->buildTreeFromBoundingBoxes(cellBoundingBoxes, &cellIndicesForBoundingBoxes);
 }

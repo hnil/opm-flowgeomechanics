@@ -41,7 +41,6 @@ public:
 
   using Grid = Dune::FoamGrid<2, 3>;
   using CellSeed = Grid::Codim<0>::EntitySeed;
-  //using NodeSeed = Grid::Codim<2>::EntitySeed;
   // cell index -> {cell seed, boundary node ix 1, boundary node ix 2}
   using CellBnodeMap = std::map<size_t,std::tuple<CellSeed, size_t, size_t>>;
   using CoordType = Dune::FieldVector<double, 3>;
@@ -113,7 +112,7 @@ private:
   static std::vector<CoordType> node_coordinates(const Grid& grid);
   static std::vector<size_t> boundary_node_indices_new(const Grid& grid);
   static std::vector<size_t> boundary_node_indices(const Grid& grid);
-  static std::vector<size_t> boundary_node_indices_old(const Grid& grid); // @@
+  static std::vector<size_t> boundary_node_indices_old(const Grid& grid);
   static std::vector<size_t> complement_of(const std::vector<size_t>& vec, const size_t N);
   static std::vector<double> interior_parametrization(const std::vector<size_t>& bix,
                                                       const std::vector<size_t>& iix,

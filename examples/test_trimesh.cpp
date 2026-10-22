@@ -157,7 +157,6 @@ irregular_grid_test()
     for (const auto& e : boundary_edges)
         outer_boundary_edges.push_back(mesh.edgeNodeCoords(e));
 
-    // dumpEdges(outer_boundary_edges, "outer_boundary_edges.vtk");
 
     Opm::writeMeshBoundaryToVTK(mesh, "boundary.vtu");
     return 0;

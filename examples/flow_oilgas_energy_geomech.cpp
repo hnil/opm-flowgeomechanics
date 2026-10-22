@@ -18,7 +18,6 @@
 */
 #include "config.h"
 #if USE_TRACY
-// #define DETAILED_PROFILING 1
 #endif
 
 #include <opm/simulators/flow/Main.hpp>

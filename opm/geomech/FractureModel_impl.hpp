@@ -49,10 +49,6 @@ namespace Opm {
                                  const ConnCellResolver&  connCellResolver)
         : prm_(param)
     {
-        //using CartesianIndexMapper = Dune::CartesianIndexMapper<Grid>;
-        //CartesianIndexMapper cartmapper(grid);
-        //const std::array<int, dimension>
-        //auto cartdims = cartmapper.cartesianDimensions();
         GeometryHelper geomhelp(grid);
 	// NB: need to be carefull in parallel
         vtkwritewells_= prm_.get<bool>("vtkwritewells", false);
@@ -60,7 +56,7 @@ namespace Opm {
         for (const auto& well : wells) {
             std::vector<Point3D> vertices;
 
-            if (true) {//well.isInjector()){// only look at injectors
+            if (true) {
                 auto conns = std::vector<FractureWell::Connection>{};
 
                 // should be done property with welltraj
@@ -349,7 +345,6 @@ namespace Opm {
     {   
        int verbosity = prm_.get<int>("verbosity",0);
        using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
-       //const int water_index = 0;//FluidSystem::waterPhaseIdx
         for (size_t i=0; i < wells_.size(); ++i) {
             // TO DO set wells to active even without fractures
             double injection_rate = 0.0;
@@ -362,13 +357,12 @@ namespace Opm {
             double aux_wellindex = 0.0;
             double wi_dz = 0.0;
             double wi_respress = 0.0;
-            std::vector<double> perf_depths;// well.perfDepth()[perf_index]; 
+            std::vector<double> perf_depths;
             {
               auto well_index = simulator.problem().wellModel().wellState().index(wells_[i].name());
                 if(well_index.has_value()){
                     const auto& wellmodel = simulator.problem().wellModel();
                     const auto& wellstate = wellmodel.wellState().well(*well_index);
-                    //const auto& reportStepIndex = simulator.episodeIndex();
                     // get cell index from well perforation data
                     // check if well is open
                     if(wellstate.status == ::Opm::WellStatus::OPEN) {
@@ -403,12 +397,7 @@ namespace Opm {
                       if (well_it != wells.end()) {
                       const auto& well = *well_it;
 
-                      //for (const auto& perf : wellstate.perf_data) {
                       for (int perf_index=0; perf_index < wellstate.perf_data.cell_index.size(); ++perf_index) {    
-                            //water_rate += perf.flux[TypeTag::FluidSystem    ::waterPhaseIdx];
-                            //total_wellindex += perf.well_index;// nead to multiply with formation damange
-                            //int  perf_index =  findPerf(wellstate, cell_idx);
-                            ///if(perf_index == -1) continue; // skip if not found
                             const int cell_idx = wellstate.perf_data.cell_index[perf_index];
                             // Auxiliary perforations are the embedded fracture cells.
                             // The fracture's own solve already carries that same
@@ -428,16 +417,10 @@ namespace Opm {
                             using Scalar = double;
                             auto obtain = [](const auto& value) { return getValue(value); };
                             const auto trans_mult = simulator.problem().template wellTransMultiplier<Scalar>(intQuants, cell_idx, obtain);
-                            // Matrix (non-fracture) connection factor; the
-                            // upstream getTw() would add the registered
-                            // fracture contribution, which must be excluded
-                            // when computing the reference well indices for
-                            // the fracture solve.
-                            // The WINJDAM filter-cake multiplier is applied to Tw
-                            // inside the well model, NOT via wellTransMultiplier -
-                            // without it the duplicated well row believes the caked
-                            // perfs are open and solves its well DOF near reservoir
-                            // pressure while the real well runs far above it.
+                            // Matrix-only connection factor: upstream getTw() would add the
+                            // fracture contribution. The WINJDAM cake multiplier is applied to
+                            // Tw in the well model, not via wellTransMultiplier; without it the
+                            // duplicated well row sees caked perfs as open.
                             double fc_mult = 1.0;
                             const auto& fc = well->filterCakeMultipliers();
                             if (!fc.empty() && static_cast<size_t>(perf_index) < fc.size()) {
@@ -450,14 +433,12 @@ namespace Opm {
                                 well->wellIndex()[perf_index] * trans_mult * fc_mult;
 
                                                  
-                            //const auto mobibility = well->getMobility(simulator, perf_index, mob);
                             double lambda = 0.0;
                             int numPhases = 3;
                             for (unsigned phaseIdx = 0; phaseIdx < numPhases; ++phaseIdx) {
                                     if (FluidSystem::phaseIsActive(phaseIdx)) {
                                             // assume sum should only be water;
                                             auto val = intQuants.mobility(phaseIdx);
-                                            //val*=intQuants.fluidState().invB(phaseIdx);
                                             lambda += val.value();
                                     }
                             }   
@@ -471,7 +452,6 @@ namespace Opm {
 
                         }
                         injection_rate = wellstate.reservoir_rates[FluidSystem::waterPhaseIdx];
-                        //injection_rate = wellstate.surface_rates[FluidSystem::waterPhaseIdx];
                         well_depth = well->refDepth();
                         perf_depths = well->perfDepth();
                       } // well found in localNonshutWells
@@ -553,7 +533,7 @@ namespace Opm {
                     continue; // skip if not found
                 }
                 double perf_pressure = perf_data.pressure[perf_index];
-                double perf_rate = perf_data.rates[perf_index];//[FluidSystem::waterPhaseIdx];
+                double perf_rate = perf_data.rates[perf_index];
                 if(verbosity > 1){
                     std::stringstream os;
                     os << "Perf index perf " << perf_index << " fracture " << perf_index_frac << " pressure " << perf_pressure << " rate " << perf_rate << std::endl;

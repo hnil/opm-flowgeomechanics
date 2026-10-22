@@ -26,11 +26,10 @@
 
 #include <dune/istl/matrixmarket.hh>
 
-//@@ there must be a more correct way to ensure UMFpack is included here
+// there must be a cleaner way to ensure UMFPack is included here
 #define HAVE_SUITESPARSE_UMFPACK 1
 #include <dune/istl/umfpack.hh>
 
-// #include "opm/geomech/Fracture.hpp"
 #include <dune/common/filledarray.hh> // needed for printSparseMatrix??
 #include <dune/foamgrid/foamgrid.hh>
 #include <dune/grid/common/mcmgmapper.hh> // mapper class
@@ -54,9 +53,7 @@ namespace
 {
 // definitions and constants
 using Matrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>;
-// using Matrix = Dune::BCRSMatrix<double>;
 using Vector = Dune::BlockVector<Dune::FieldVector<double, 1>>;
-// using Point3D = Dune::FieldVector<double, 3>;
 using Grid = Dune::FoamGrid<2, 3>;
 using Htrans = std::tuple<size_t, size_t, double, double>;
 using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView>;
@@ -204,10 +201,6 @@ solvePressure(const Vector& aperture,
 
     updateTrans(pmat, aperture, imposed_ixs);
 
-    // std::ofstream os("matrix.txt"); // @@@
-    // //Dune::printSparseMatrix(os, *std::get<0>(pmat), "matname", "");
-    // Dune::printmatrix(os, *std::get<0>(pmat), "matname", "", 10, 6);
-
     // prepare right-hand side
     Vector rhs(aperture.size());
     rhs = 0;
@@ -217,24 +210,14 @@ solvePressure(const Vector& aperture,
     // setup solver
     const auto prm = Opm::setupPropertyTree(Opm::FlowLinearSolverParameters(), true, true);
     auto op = PressureOperatorType(*std::get<0>(pmat));
-    // auto psolver_dummy = std::make_unique<FlexibleSolverType>(op, prm, std::function<Vector()>(),
-    // size_t(0));
     auto psolver_dummy = FlexibleSolverType(op, prm, std::function<Vector()>(), size_t(0));
 
-    // Dune::MatrixAdapter<Matrix, Vector, Vector> op(*std::get<0>(pmat));
-    // Dune::UMFPackMethodChooser<double> a;
     Dune::UMFPack psolver(*std::get<0>(pmat));
-
-    // std::ofstream os2("rhs.txt"); // @@@
-    // Dune::printvector(os2, rhs, "rhs", "");
 
     // solve pressure system
     Vector result(aperture.size());
     Dune::InverseOperatorResult r;
     psolver.apply(result, rhs, r);
-
-    // std::ofstream os3("result.txt"); // @@@
-    // Dune::printvector(os3, result, "result", "");
 
     return result;
 }
@@ -250,7 +233,6 @@ n_closest(const Grid& grid)
     std::vector<Elem> distances;
     const ElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
     for (const auto& element : Dune::elements(grid.leafGridView())) {
-      /*const int eIdx = mapper.index(element);*/
         const auto center = element.geometry().center();
         distances.push_back({distances.size(), center.two_norm()});
     }
@@ -289,8 +271,6 @@ main()
 
     frac_matrix->solve(frac_aperture, frac_press);
 
-    // std::cout << frac_aperture << std::endl;
-
     // determining well cells and prescribing fixed pressure at these
     const auto wellcells = n_closest<2>(*grid);
 
@@ -304,15 +284,10 @@ main()
     // prepare pressure matrix structure
     PressureMatrixInfo pmat = pressureMatrixStructure(grid);
 
-    // frac_aperture = 1.0; // @@@
-    //  solve pressure system
+    // solve pressure system
     frac_press = solvePressure(frac_aperture, pmat, fixed_pvals);
 
     std::cout << frac_press;
-
-    // std::ofstream os("dumped_matrix");
-    // Dune::printmatrix(os, *frac_matrix, "", "");
-    // os.close();
 
     return 0;
 };

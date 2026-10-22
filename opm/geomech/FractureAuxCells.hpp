@@ -45,23 +45,15 @@ class FractureModel;
 /*!
  * \brief Fracture cells as degrees of freedom of the reservoir flow problem.
  *
- * The alternative to upscaling the fracture to well indices.  In the upscaled form the
- * fracture is not part of the flow problem at all: its conductance is folded into a well
- * index, \f$WI = q/\Delta p\f$, which is sign-indefinite and has to be hard-zeroed when
- * it comes out negative.  Here the fracture cells carry the reservoir's own conservation
- * equations, and what used to be an upscaled index is an ordinary transmissibility on an
- * ordinary connection.
+ * The alternative to upscaling the fracture to well indices (\f$WI = q/\Delta p\f$,
+ * sign-indefinite): fracture cells carry the reservoir's own conservation equations and
+ * connect through ordinary transmissibilities.
  *
  * \section capacity Preallocation
  *
- * A fracture grows, and a degree of freedom cannot be added to a system that has already
- * been sized.  So a fixed number of them is claimed up front and handed out as cells
- * open.  A cell that has not been handed out is *dormant*: it has no volume and no
- * connections, so nothing in the ordinary assembly writes to its row, and this module
- * puts an identity there to keep the matrix non-singular.  Running out of capacity stops
- * the run rather than silently capping the fracture -- growing the allocation is a
- * follow-up, and a fracture quietly prevented from growing is exactly the failure this
- * whole line of work exists to avoid.
+ * A fixed number of DOFs is claimed up front and handed out as cells open. An unused
+ * (dormant) cell has no volume or connections and gets an identity row. Running out of
+ * capacity stops the run rather than silently capping the fracture.
  */
 template <class TypeTag>
 class FractureAuxCells : public FlowAuxCellModule<TypeTag>
@@ -240,65 +232,43 @@ public:
     bool bind(const FractureModel& fractures);
 
     /*!
-     * \brief Refresh what the flow is fed, without touching the shape.
+     * \brief Refresh apertures, pore volumes and transmissibilities over the existing
+     *        binding, without changing slots or sparsity.
      *
-     * Apertures, and with them pore volumes and cubic-law transmissibilities,
-     * move at every iteration of the coupled mechanics-pressure solve; the set
-     * of cells only changes when the fracture grows.  This recomputes the
-     * former over the binding that exists, leaving the slot map, the active
-     * set and the sparsity pattern alone, so it is cheap and needs no matrix
-     * rebuild.
-     *
-     * Requires the layout to still match the fracture: once the cell count
-     * changes the trimesh has been renumbered and a cell index no longer means
-     * the same cell, so there is nothing well defined to update.  Returns false
-     * in that case, and the caller must rebind instead.
+     * Returns false if a fracture's cell count changed (the trimesh was renumbered);
+     * the caller must then rebind.
      */
     bool updateValues(const FractureModel& fractures);
 
     /*!
      * \brief Global degrees of freedom the last bind() brought into existence.
      *
-     * A cell that has just appeared has no start-of-step state; one that was
-     * already there does, and it is the reference its accumulation term is
-     * measured against.  The two have to be told apart when a bind happens
-     * inside a step.
+     * New cells have no start-of-step state; existing ones do, so a mid-step bind
+     * must tell them apart.
      */
     const std::vector<unsigned>& newbornDofs() const
     { return this->newbornDofs_; }
 
     /*!
-     * \brief Whether the fractures still have the shape of the current binding.
+     * \brief Whether every fracture still has the cell count its slots were handed out for.
      *
-     * True when every fracture has the cell count its slots were handed out for.  Used
-     * to hold the topology fixed inside a time step: a fracture solve that grew or
-     * reset its grid mid-step changes the shape of the flow system, and re-describing
-     * that to a Newton iteration already under way gives it a moving target.  Such
-     * changes wait for the step boundary.
+     * Used to hold the topology fixed inside a time step.
      */
     bool layoutMatches(const FractureModel& fractures) const;
 
     /*!
      * \brief Log the leak-off cross-check between the two representations.
      *
-     * For the same fracture, per cell: the conductance the reservoir actually
-     * applies (bound transmissibility times the upwind water mobility) against the
-     * fracture solver's own leakof_ (transmissibility times the reservoir total
-     * mobility), and the two flux opinions -- the reservoir's, evaluated with the
-     * same local residual that assembled it, and the fracture's internal
-     * leakOfRate().  The aggregate ratio is the calibration number: it says whose
-     * conductance the pressure difference between the modes belongs to.
+     * Per cell: the reservoir's applied conductance and flux against the fracture
+     * solver's own leakof_ and leakOfRate(); the aggregate ratio is the calibration number.
      */
     void leakoffReport(const FractureModel& fractures) const;
 
     /*!
      * \brief Log what the well does at the fracture's degrees of freedom.
      *
-     * Per well: how many of the registered fracture perforations the well actually
-     * carries, their transmissibility factors, the bottom-hole and perforation
-     * pressures, and the share of the well's water that goes through them.  It reads
-     * the well state alone, so it says whether the fracture is connected regardless of
-     * whether the binding still describes the fracture's current shape.
+     * Per well: carried fracture perforations, their CTFs, BHP and perforation pressures,
+     * and the water share through them. Reads the well state alone.
      */
     void perforationReport() const;
     //! Diagnostic: per-cell state of the binding (pressure vs partner and vs the
@@ -310,12 +280,9 @@ public:
     /*!
      * \brief Relative change of the binding between the last two binds.
      *
-     * The maximum of the relative changes of total reservoir-connection
-     * transmissibility and total pore volume -- aggregates, so that contact chatter of
-     * individual cells cancels the way it does in the upscaled well index.  This is the
-     * coupling residual the outer loop watches in embedded mode: it measures what the
-     * flow is actually fed, where the well-index change list measures a quantity that
-     * is never applied.
+     * Max of the relative changes of total connection transmissibility and total pore
+     * volume; aggregates, so per-cell contact chatter cancels. The outer loop's coupling
+     * residual in embedded mode.
      */
     Scalar lastBindChange() const
     { return this->lastBindChange_; }
@@ -323,11 +290,8 @@ public:
     /*!
      * \brief The well's perforations of this fracture's cells.
      *
-     * Each is a degree of freedom of the flow problem and a well index, so the well model
-     * treats it exactly as it treats a perforation of a grid cell -- it reads intensive
-     * quantities by index, which an auxiliary cell answers as well as any other.  What it
-     * cannot do is arrive at one through a cartesian index, which is why these are handed
-     * over directly instead of going through the schedule.
+     * Handed over directly rather than through the schedule, since an auxiliary cell
+     * has no cartesian index.
      */
     std::vector<RuntimePerforation> wellPerforations(const std::string& wellName) const;
     //! Water pressure of the bound cells of one fracture (binding order), per
@@ -530,13 +494,10 @@ private:
 
     unsigned capacity_{};
     Scalar minWidth_{};
-    // Heat exchange between the fracture fluid and the wall rock, as geometric half
-    // transmissibilities (the flow multiplies in conductivity). Without it a fracture
-    // cell holds heat only by advection, and a cell with little net flow has an
-    // energy row with nothing to anchor it: on a small seed fed from the ring the
-    // energy residual oscillates and the Newton never converges.
-    // solver.embedded_wall_conduction (default true); the rock side uses the leak-off
-    // distance unless solver.embedded_thermal_distance (m) is given.
+    // Heat exchange between fracture fluid and wall rock (geometric half transmissibilities).
+    // Without it a cell with little net flow has an unanchored energy row and the Newton
+    // does not converge. solver.embedded_wall_conduction (default true); the rock side uses
+    // the leak-off distance unless solver.embedded_thermal_distance (m) is given.
     std::pair<Scalar, Scalar> wallConduction_(const auto& fracture, std::size_t cell,
                                               Scalar area, Scalar width) const
     {

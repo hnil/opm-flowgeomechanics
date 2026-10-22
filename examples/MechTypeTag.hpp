@@ -18,11 +18,9 @@
 */
 
 #include <opm/simulators/flow/FlowProblemBlackoil.hpp>
-//#include <opm/simulators/flow/Main.hpp>
 
 #include <opm/models/blackoil/blackoillocalresidualtpfa.hh>
 #include <opm/models/discretization/common/tpfalinearizer.hh>
-//#include <opm/flowexperimental/blackoilintensivequantitiessimple.hh>
 #include <opm/models/discretization/common/baseauxiliarymodule.hh>
 #include <opm/simulators/wells/BlackoilWellModel.hpp>
 #include <opm/models/blackoil/blackoilconvectivemixingmodule.hh>
@@ -53,27 +51,6 @@ namespace Opm
               using type = NonlinearSystemBlackOilReservoirGeoMech<TypeTag>;
         };
 
-
-        // template <class TypeTag>
-        // struct WellModel<TypeTag, TTag::FlowProblemMech> {
-        //     using type = BlackoilGeoMechWellModel<TypeTag>;
-        // };
-
-        // template<class TypeTag>
-        // struct Model<TypeTag, TTag::FlowProblemMech> {
-        //     using type = BlackOilModelFvLocal<TypeTag>;
-        // };
-
-
-        // template<class TypeTag>
-        // struct EclWellModel<TypeTag, TTag::FlowProblemMech> {
-        //     using type = BlackoilWellModelFvExtra<TypeTag>;
-        // };
-
-        // template<class TypeTag>
-        // struct NewtonMethod<TypeTag, TTag::FlowProblemMech> {
-        //     using type = EclNewtonMethodLinesearch<TypeTag>;
-        // };
         template <class TypeTag>
         struct EnableMech<TypeTag, TTag::FlowProblemMech> {
             static constexpr bool value = true;
@@ -88,33 +65,8 @@ namespace Opm
         struct EnergyModuleType<TypeTag, TTag::FlowProblemMech>
         { static constexpr EnergyModules value = EnergyModules::FullyImplicitThermal; };
 
-        // template <class TypeTag>
-        // struct VtkWriteMoleFractions<TypeTag, TTag::FlowProblemMech> {
-        //     static constexpr bool value = false;
-        // };
-
-
-        // template <class TypeTag>
-        // struct EnableOpmRstFile<TypeTag, TTag::FlowProblemMech> {
-        //     static constexpr bool value = true;
-        // };
-
-        // the default for the allowed volumetric error for oil per second
-
-        // template<class TypeTag>
-        // struct IntensiveQuantities<TypeTag, TTag::FlowProblemMech> {
-        //     //using type = EclBlackOilIntensiveQuantities<TypeTag>;
-        //     using type = BlackOilIntensiveQuantitiesSimple<TypeTag>;
-        //     //using type = BlackOilIntensiveQuantities<TypeTag>;
-        //     //using type = BlackOilIntensiveQuantitiesDryGas<TypeTag>;
-        // };
-
-        // Assemble per degree of freedom rather than per grid element, as every other
-        // black-oil target does.  Beyond being the mainstream path, it is what lets a
-        // degree of freedom that has no grid element -- a numerical aquifer or a fracture
-        // represented as auxiliary cells -- carry the flow equations at all: the
-        // element-driven linearizer walks straight past such a degree of freedom and
-        // leaves its row empty.
+        // Per-DOF assembly: the element-driven linearizer skips DOFs without a grid element
+        // (numerical aquifers, auxiliary fracture cells) and leaves their rows empty.
         template<class TypeTag>
         struct Linearizer<TypeTag, TTag::FlowProblemMech> { using type = TpfaLinearizer<TypeTag>; };
 
@@ -135,52 +87,16 @@ namespace Opm
         template <class TypeTag>
         struct WellModel<TypeTag, TTag::FlowProblemMech> {
             using type = BlackoilGeoMechWellModel<TypeTag>;
-          //using type = BlackoilWellModel<TypeTag>;
         };
-
-        // static constexpr bool has_disgas_in_water = getPropValue<TypeTag, Properties::EnableDisgasInWater>();
 
         template <class TypeTag>
         struct Simulator<TypeTag, TTag::FlowProblemMech> {
             using type = Opm::Simulator<TypeTag>;
         };
-        // simpler debugging
-
-        // template <class TypeTag>
-        // struct EnableAsyncEclOutput<TypeTag, TTag::FlowProblemMech> {
-        //     static constexpr bool value = false;
-        // };
 
     }
 }
 namespace Opm {
 namespace Parameters {
-    // template <class TypeTag>
-    //     struct EnableVtkOutput<TypeTag, Properties::TTag::FlowProblemMech> {
-    //         static constexpr bool value = true;
-    //     };
-    // template <class TypeTag>
-    // struct ThreadsPerProcess<TypeTag, Properties::TTag::FlowProblemMech> {
-    //     static constexpr int value = 1;
-    // };
-
-    // template <class TypeTag>
-    // struct NewtonTolerance<TypeTag, Properties::TTag::FlowProblemMech> {
-    //     using type = GetPropType<TypeTag, Properties::Scalar>;
-    //     static constexpr type value = 1e-2;
-    // };
-    // template <class TypeTag>
-    // struct EnableAsyncVtkOutput<TypeTag, Properties::TTag::FlowProblemMech> {
-    //     static constexpr bool value = false;
-    // };
 }
 }
-
-// template<>
-// class SupportsFaceTag<Dune::PolyhedralGrid<3, 3>>
-//     : public std::bool_constant<true>
-// {};
-// template<>
-// class SupportsFaceTag<Dune::ALUGrid<3, 3, Dune::cube, Dune::nonconforming>>
-//     : public std::bool_constant<true>
-// {};

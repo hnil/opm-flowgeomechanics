@@ -327,13 +327,6 @@ compute_stress_3D(const double* const points,
                   const int* const face_corners,
                   const double* const young,
                   const double* const poisson,
-                  // const double* const body_force, // 3 * number of cells
-                  // const int num_fixed_dofs, // dirichlet
-                  // const int* const fixed_dof_ixs, // indices must be sorted
-                  // const double* const fixed_dof_values,
-                  // const int num_neumann_faces,
-                  // const int* const neumann_faces,
-                  // const double* const neumann_forces, // 3 * number of neumann faces
                   const std::vector<double>& disp,
                   std::vector<std::array<double,6>>& stress,
                   std::vector<std::tuple<int, int, double>>& stressmat,

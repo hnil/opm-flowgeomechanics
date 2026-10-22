@@ -30,8 +30,6 @@
 #include <iostream>
 #include <cmath> 
 #include <cmath>
-// namespace Opm{
-//   namespace CGAL{
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K_inexact;
 typedef CGAL::Exact_predicates_exact_constructions_kernel K_exact;
 typedef K_inexact::Point_3 Point_3;
@@ -59,5 +57,3 @@ void sortPoints(Polygon_2& pts);
 Mesh make_hex(const std::vector<std::array<double,3>>& hex);
 double area_of_intersection(const std::vector<std::array<double,3>>& hex_org,
                             const std::vector<std::array<double,3>>& tri_org);
-//  }
-//}

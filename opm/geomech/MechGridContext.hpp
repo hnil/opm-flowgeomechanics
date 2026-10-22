@@ -744,9 +744,6 @@ private:
         const IndexSet& index_set_;
     };
 
-    /// Each block of `requests` one cell, the union of its fine cells with all
-    /// their outer faces: a local coarsening, the inverse of an LGR. Keeps the
-    /// fine Cartesian space; a block is known by its first cell.
     /// The blocks of `requests`, less those that cannot be merged: a corner
     /// column without a cell (no eight corners) or crossed by a fault (the
     /// block would not be the union of its cells). Without `collapse` also

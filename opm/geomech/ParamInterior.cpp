@@ -27,7 +27,6 @@
 #include <tuple>
 #include <vector>
 
-// #include <dune/common/densematrix.hh>
 #include <dune/common/dynmatrix.hh>
 #include <dune/common/dynvector.hh>
 

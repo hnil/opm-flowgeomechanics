@@ -25,17 +25,12 @@
 #define OPM_FLOW_GEOMECH_LINEARSOLVERPARAMETERS_HEADER_INCLUDED
 
 #include "opm/simulators/linalg/FlowLinearSolverParameters.hpp"
-//#include <opm/models/utils/basicproperties.hh>
-//#include <opm/models/utils/parametersystem.hh>
-//#include <opm/models/utils/propertysystem.hh>
 
 
 namespace Opm::Parameters {
 
 
-  //template<class TypeTag>
 struct LinearSolverMechReduction {
-  //using type = GetPropType<TypeTag, Scalar>;
   using type = double;
     static constexpr type value = 1e-6;
 };

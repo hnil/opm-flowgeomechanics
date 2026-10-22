@@ -40,7 +40,7 @@ using namespace std;
 namespace
 {
 const bool DEBUG_DUMP_GRIDS = false;
-static int DEBUG_CURRENT_GRID_ITERATION_COUNT = 0; // @@
+static int DEBUG_CURRENT_GRID_ITERATION_COUNT = 0;
 static int DEBUG_GRID_COUNT = 0;
 
 array<EdgeRef, 3>
@@ -434,11 +434,6 @@ RegularTrimesh::boundaryEdges() const
         else
             ++it; // skip the next one, which we already know is duplicated
 
-    // if (*it != *(it + 1))
-    //     result.push_back(*it);
-    // else
-    //     ++it; // skip the next one, which we already know is duplicated
-
     // sort entries
     sort(result.begin(), result.end());
 
@@ -491,11 +486,9 @@ RegularTrimesh::boundary_smoothing_triangles_() const
     // identify all 'internal' edges within boundary cells
     const auto bcells = boundaryCells();
     const auto bedges = boundaryEdges();
-    // set<EdgeRef> bedges_set(bedges.begin(), bedges.end()); // better for search?
     array<set<EdgeRef>, 3> internal_edges;
     for (const auto& cell : bcells)
         for (const auto& e : cell2edges(cell))
-            // if (bedges_set.find(e) == bedges_set.end())
             internal_edges[e[2]].insert(e);
 
     // identify internal edges that 'line up' along one of the three cardinal grid directions
@@ -1376,10 +1369,6 @@ RegularTrimesh::fine_to_coarse(const CellRef& cell, const int levels)
         k = (impairs > 1) ? 1 : 0;
     }
     return {i, j, k};
-
-    // const int i = cell[0] >= 0 ? cell[0] : cell[0] - 1;
-    // const int j = cell[1] >= 0 ? cell[1] : cell[1] - 1;
-    // return {i / 2, j / 2, cell[2] == 0 ? 1 : 0};
 }
 
 // ----------------------------------------------------------------------------
@@ -1391,7 +1380,6 @@ RegularTrimesh::coarse_to_fine(const NodeRef& node, const int levels)
         return {node[0] / (1 << std::abs(levels)), node[1] / (1 << std::abs(levels))};
     else
         return {node[0] * (1 << levels), node[1] * (1 << levels)};
-    // return {2*node[0], 2*node[1]};
 }
 
 // ----------------------------------------------------------------------------
@@ -1433,47 +1421,6 @@ RegularTrimesh::activeNeighborCells(const vector<CellRef>& cells) const
     return vector<CellRef>(result.begin(), result.end());
 }
 
-// // ----------------------------------------------------------------------------
-// RegularTrimesh
-// expand_to_criterion_old(const RegularTrimesh& mesh,
-//                     function<vector<double>(const RegularTrimesh&)> score_function,
-//                     double threshold)
-// // ----------------------------------------------------------------------------
-// {
-//     // @@ for the moment, an extremely simple expansion algorithm
-//     RegularTrimesh working_mesh = mesh; // make a working copy of the mesh;
-
-//     while (true) { // keep looping as long as grid still needs expansion
-//         const vector<double> bnd_scores = score_function(working_mesh);
-//         const vector<CellRef> bnd_cells = mesh.boundaryCells();
-
-//         assert(bnd_scores.size() == bnd_cells.size());
-
-//         vector<CellRef> expand_cells;
-//         for (size_t i = 0; i != bnd_scores.size(); ++i)
-//             if (bnd_scores[i] > threshold)
-//                 expand_cells.push_back(bnd_cells[i]);
-
-//         if (expand_cells.size() == 0)
-//             break;
-
-//         // @@ debugging info
-//         // working_mesh.setAllFlags(0);
-//         // working_mesh.setCellFlags(expand_cells, 1);
-//         // writeMeshToVTK(working_mesh, "before", false);
-
-//         working_mesh.expandGrid(expand_cells);
-//         working_mesh.removeSawtooths();
-
-//         // auto neighs = working_mesh.activeNeighborCells(expand_cells);
-//         // working_mesh.expandGrid(neighs);
-//         // working_mesh.removeSawtooths();
-
-//         // writeMeshToVTK(working_mesh, "after", false);
-//     }
-//     return working_mesh;
-// }
-
 // ----------------------------------------------------------------------------
 std::tuple<RegularTrimesh, int>
 expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed by score_function
@@ -1491,18 +1438,14 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
     vector<RegularTrimesh> last_meshes; // keep track of meshes at each level before coarsening
     int cur_level = 0; // start expanding mesh at finest level
     int iter_count = 0; // keep track of iterations on current level
-    // const int max_iter = 5; // 5; // maximum number of iterations on current level
     int roof = numeric_limits<int>::max();
 
-    ++DEBUG_GRID_COUNT; // @@ keeping track of grids to output for debugging/monitoring purposes
-    DEBUG_CURRENT_GRID_ITERATION_COUNT = 0; //@@ same
+    ++DEBUG_GRID_COUNT; // numbers the debug grid dumps
+    DEBUG_CURRENT_GRID_ITERATION_COUNT = 0;
 
 
 
     // determine starting level
-    // const int target_cellcount = 50; // target number of cells in the final mesh
-    // const int cellcount_threshold = 4*target_cellcount; // target number of cells in the initial mesh
-    //const int max_cellcount = 2000; // maximum number of cells in the final mesh
 
     auto fixed_on_level = [&fixed_cells](const int level) -> vector<CellRef> {
         if (level == 0) {
@@ -1541,11 +1484,6 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
         assert(bnd_scores.size() == bnd_cells.size());
 
         vector<CellRef> expand_cells;
-
-        // if(working_mesh.numCells() > max_cellcount) {
-        //     cout << " ** ----- MAXIMUM CELL COUNT REACHED, STOPPING EXPANSION ----- **" << endl;
-        //     break;
-        // }
 
         for (size_t i = 0; i != bnd_scores.size(); ++i)
             if (bnd_scores[i] > threshold)

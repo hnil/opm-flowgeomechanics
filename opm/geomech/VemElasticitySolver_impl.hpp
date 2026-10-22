@@ -53,33 +53,6 @@ namespace Elasticity {
 #define IMPL_FUNC(A,B) template<class GridType> \
                          A VemElasticitySolver<GridType>::B
 
-
-// IMPL_FUNC(void, fixNodes(const std::vector<size_t>& fixed_nodes))
-// {
-//     // makestructure for vem assembly
-//     this->fixNodesVem(fixed_nodes);
-
-//   typedef typename GridType::LeafGridView::template Codim<dim>::Iterator VertexLeafIterator;
-//   const VertexLeafIterator itend = grid_.leafGridView().template end<dim>();
-
-//   // make a mapper for codim 0 entities in the leaf grid
-//   using LeafGridView = typename GridType::LeafGridView;
-//   Dune::MultipleCodimMultipleGeomTypeMapper<LeafGridView> mapper(grid_.leafGridView(), Dune::mcmgVertexLayout());
-
-//   NodeValue zerovec;
-//   zerovec = 0.0;
-//   // iterate over vertices
-//   for (VertexLeafIterator it = grid_.leafGridView().template begin<dim>(); it != itend; ++it) {
-//       int indexi = mapper.index(*it);
-//       //assert(indexi == grid_.leafGridView().indexSet().index(it));
-//       bool exist = std::find(fixed_nodes.begin(), fixed_nodes.end(), indexi)
-//           !=
-//           fixed_nodes.end();
-//       if(exist){
-//           A.updateFixedNode(indexi,std::make_pair(XYZ,zerovec));
-//       }
-//   }
-// }
   IMPL_FUNC(void,assignToVoigt(Dune::BlockVector< Dune::FieldVector<double,6> >& voigt_stress, const Dune::BlockVector< Dune::FieldVector<double,1> >& vemstress)){
     // This is used in flow!!!
     for (size_t i = 0; i < voigt_stress.size(); ++i) {
@@ -109,10 +82,6 @@ namespace Elasticity {
         
             OPM_TIMEBLOCK(calculateStressPrecomputed);
             //NB stressmat is defined in linear indices not block linear indices
-            //Vector dispalldune;
-            //dispalldune.resize(3 * grid_.leafGridView().size(3));
-            //this->expandSolution(dispalldune, this->u);
-            // Dune::BlockVector< DuneFieldVector<double,1> >
             if(vem_stress_){
               Vector stress(6 * grid_.leafGridView().size(0));
               stressmat_.mv(dispalldune,stress);
@@ -127,22 +96,6 @@ namespace Elasticity {
             }
         
     }
-    // IMPL_FUNC(void, expandDisp(std::vector<double>& dispall,bool expand))
-    // {
-    //     dispall.resize(3 * grid_.leafGridView().size(3));
-    //         {
-    //             if (expand) {
-    //                 Vector dispalldune;
-    //                 dispalldune.resize(3 * grid_.leafGridView().size(3));
-    //                 this->expandSolution(dispalldune, this->u);
-    //                 for (size_t i = 0; i < dispall.size(); ++i) {
-    //                     dispall[i] = dispalldune[i]; // fieldvector<double,1> can be converted to double
-    //                 }
-    //             } else {
-    //                 dispall = this->u;
-    //             }
-    //         }
-    // }
     IMPL_FUNC(void, calculateStress())
     {
         bool expand = true;
@@ -150,10 +103,6 @@ namespace Elasticity {
             // assumes the grid structure is made
             num_cells_ = grid_.leafGridView().size(0); // entities of codim 0
             // assemble the mechanical system
-            // const int numdof =
-            //  const int tot_num_faces = accumulate(num_cell_faces_, num_cell_faces_ + num_cells_, 0);
-            //  const int tot_num_fcorners = accumulate(num_face_corners_, &num_face_corners_[0] + tot_num_faces, 0);
-            //  const int tot_num_nodes = *max_element(face_corners_, face_corners + tot_num_fcorners) + 1;
             stress_.resize(num_cells_);
             std::vector<std::array<double, 6>> stress;
             stress.resize(num_cells_);
@@ -186,10 +135,6 @@ namespace Elasticity {
         
             OPM_TIMEBLOCK(calculateStrainPrecomputed);
             //NB stressmat is defined in linear indices not block linear indices
-            //Vector dispalldune;
-            //dispalldune.resize(3 * grid_.leafGridView().size(3));
-            //this->expandSolution(dispalldune, this->u);
-            // Dune::BlockVector< DuneFieldVector<double,1> >
             Vector strain(6 * grid_.leafGridView().size(0));
             strainmat_.mv(dispalldune,strain);
             strain_.resize(num_cells_);
@@ -202,10 +147,6 @@ namespace Elasticity {
             // assumes the grid structure is made
             num_cells_ = grid_.leafGridView().size(0); // entities of codim 0
             // assemble the mechanical system
-            // const int numdof =
-            //  const int tot_num_faces = accumulate(num_cell_faces_, num_cell_faces_ + num_cells_, 0);
-            //  const int tot_num_fcorners = accumulate(num_face_corners_, &num_face_corners_[0] + tot_num_faces, 0);
-            //  const int tot_num_nodes = *max_element(face_corners_, face_corners + tot_num_fcorners) + 1;
             strain_.resize(num_cells_);
             std::vector<std::array<double, 6>> strain;
             strain.resize(num_cells_);
@@ -296,7 +237,6 @@ namespace Elasticity {
         std::iota(dof_idx.begin(), dof_idx.end(),0);
 
         std::set_difference(dof_idx.begin(), dof_idx.end(), fixed_dof_ixs.begin(), fixed_dof_ixs.end(),std::back_inserter(idx_free_));
-        //
         vector<double> rhs_tmp(pressure.size(),0);
         vector<double> pressure_tmp(pressure.size(),0);
         vector<tuple<int, int, double>> divmat; 
@@ -321,9 +261,6 @@ namespace Elasticity {
                                              divmat,
                                              true, corner_mask_.data());
         }       
-        // sort(divmat_.begin(),
-        //      divmat_.end(),
-        //      [](const auto& aa, const auto& bb) { return std::get<1>(aa) < std::get<1>(bb); });
         std::vector<int> global_to_dof(grid_.leafGridView().size(3)*3,-1);
         for(size_t i=0; i< idx_free_.size(); ++i){
             if(reduce_boundary){
@@ -449,24 +386,16 @@ namespace Elasticity {
 IMPL_FUNC(void, assemble_fem(const Vector& /*pressure*/, bool do_matrix, bool do_vector, bool reduce_boundary))
 {
   this->resetOperator();
-  //static constexpr int dim = 3;//GridType::dimension;
   static constexpr int comp = 3 + (dim - 2) * 3;
   static constexpr int bfunc = 4 + (dim - 2) * 4;
   static constexpr int esize = dim*bfunc;
-  //int loadcase = -1;
   Dune::FieldVector<ctype,comp> eps0 = {1, 1, 1, 0, 0, 0};
-  //eps0 = 0;
   const auto& gv =grid_.leafGridView();
-  //ASMHandler<GridType> A(grid_);//need to set this.
-  //A.getOperator() = 0;
  
   
       Dune::FieldMatrix<ctype,comp,comp> C;
       Dune::FieldMatrix<ctype,dim*bfunc,dim*bfunc> K;
       Dune::FieldMatrix<ctype,dim*bfunc,dim*bfunc> Aq;
-      //Dune::FieldMatrix<ctype,dim*bfunc,dim*bfunc>* KP=0;
-      //Dune::FieldVector<ctype,dim*bfunc> ES;
-      //Dune::FieldVector<ctype,dim*bfunc>* EP=0;
       Elasticity E(grid_);
       std::vector<std::tuple<int, int, double>> A_entries;
       for(const auto elem : elements(gv)){
@@ -500,7 +429,6 @@ IMPL_FUNC(void, assemble_fem(const Vector& /*pressure*/, bool do_matrix, bool do
             E.getStiffnessMatrix(Aq,lB,C,detJ*r->weight());
             K += Aq;
           }  
-          //A.addElement(KP,EP,it,&b); // NULL is no static forse based on the itegration point??
           for (int li =0;li<esize/dim;++li) {//nomber for nodes of reference element
             int node_index1 = gv.indexSet().subIndex(elem,li,dim);
             for (int ki=0;ki<dim;++ki) {
@@ -523,10 +451,8 @@ IMPL_FUNC(void, assemble_fem(const Vector& /*pressure*/, bool do_matrix, bool do
       int num_points = gv.size(3);
       std::vector<double> b(num_points * 3,0.0);
       if (reduce_boundary) {
-        // cout << "Set boundary conditions: Reducing system" << endl;
         vem::reduce_system(A_entries, b, num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0]);
       } else {
-        // cout << "Set boundary conditions: Set it directly in system" << endl;
         vem::set_boundary_conditions(A_entries, b, num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0]);
       }
       this->makeDuneSystemMatrix(A_entries);

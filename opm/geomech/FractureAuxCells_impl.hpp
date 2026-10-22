@@ -36,12 +36,9 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
     const auto previousConnections = this->connections_.size();
     const auto previousActive = this->numActive();
 
-    // The fracture's per-cell arrays are rebuilt at different points of its own solve,
-    // and part way through a propagation they need not agree with each other.  Binding
-    // against such a state attaches connections to the wrong degrees of freedom -- the
-    // half-transmissibility list of an older, smaller grid indexed into the new one --
-    // which is far worse than being one solve behind.  Keep the previous description
-    // and say so.
+    // The fracture's per-cell arrays need not agree mid-propagation; binding against
+    // such a state attaches connections to the wrong DOFs, which is worse than being
+    // one solve behind. Keep the previous description and say so.
     for (const auto& wellFractures : fractures.wellFractures()) {
         for (const auto& fracture : wellFractures) {
             const auto n = fracture.numCells();
@@ -71,10 +68,8 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
     // its way to; only a slot that has just been handed out needs one made up for it.
     const auto wasActive = this->active_;
 
-    // Every slot starts this round dormant.  A fracture's grid can come back smaller
-    // than it was -- the propagation rebuilds it -- and a slot the previous round
-    // activated would otherwise keep its flag and its volume with no connections left,
-    // an impossible cell that the convergence data and the volume refresh still count.
+    // Every slot starts dormant: a rebuilt grid can be smaller, and a stale active slot
+    // would keep its volume with no connections.
     std::fill(this->active_.begin(), this->active_.end(), false);
     std::fill(this->bulkVolume_.begin(), this->bulkVolume_.end(), 0.0);
 
@@ -149,25 +144,14 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
                                               trans, alphaFrac, alphaRock});
             }
 
-            // Fracture cell to fracture cell: the cubic law over the two half
-            // transmissibilities, the same combination the fracture's own pressure solve
-            // forms (FracturePressureAssemblerAD).  Computed fresh from the grid rather
-            // than read from the fracture's cache: the cache is rebuilt at particular
-            // points of the pressure solve and can lag a re-gridding with indices that
-            // are still in range -- a wrong topology no size check catches, and a cell
-            // it leaves disconnected has no storage and no path to the reservoir, which
-            // is a singular row the moment the ILU eliminates around it.
+            // Fracture-to-fracture: cubic law over the two half transmissibilities, as in
+            // FracturePressureAssemblerAD. Computed from the grid, not the fracture's cache,
+            // which can lag a regrid with in-range indices and leave a singular row.
             const auto freshHalfTrans = fracture.currentHalfTrans();
 
-            // The floor under the width in the cubic law is the fracture's own
-            // (config.min_width), NOT the volume floor above.  The volume floor exists
-            // so that a nearly closed cell still has storage -- a well-posedness matter
-            // -- but the transmissibility goes with the aperture *cubed*, and flooring
-            // it at the (much larger) volume floor short-circuits the fracture: every
-            // cell is lifted to the well's pressure, the internal pressure gradient the
-            // fracture's own solve computes disappears, and the leak-off is driven far
-            // too hard.  The two representations must apply the same law to the same
-            // apertures.
+            // Width floor in the cubic law is config.min_width, NOT the (larger) volume
+            // floor: flooring aperture^3 there short-circuits the fracture and over-drives
+            // the leak-off. Both representations must apply the same law to the same apertures.
             const auto cubicFloor = static_cast<Scalar>(fracture.cubicLawMinWidth());
 
             for (const auto& [i, j, t1, t2] : freshHalfTrans) {
@@ -185,12 +169,9 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
                                               static_cast<Scalar>(1.0 / invTrans), 0.0, 0.0});
             }
 
-            // Where the well meets the fracture.  perfinj_ is (fracture cell, well index)
-            // and is what the fracture's own pressure solve uses to drive itself; the same
-            // cells become perforations of the degrees of freedom they now own.  The well
-            // index either carries over as-is -- the current modelling, a constant factor
-            // on the cells around the wellbore -- or is estimated as radial flow through
-            // the fracture's aperture, with a fixed prescribed width for now.
+            // perfinj_ (fracture cell, well index) becomes perforations of the cells' DOFs.
+            // The WI either carries over as-is or is estimated as radial flow through a
+            // fixed prescribed aperture.
             auto& perfs = this->wellPerforations_[fracture.wellInfo().name];
             for (const auto& [cell, wellIndex] : fracture.wellPerforations()) {
                 const auto slot = firstSlot + static_cast<std::size_t>(cell);
@@ -222,14 +203,9 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
         }
     }
 
-    // A cell that has just been handed out has been holding a placeholder state; give it
-    // the state of the rock it cuts through, at its own depth.  A slot that was already
-    // carrying a cell keeps what it has: the binding is rebuilt at every step boundary,
-    // and re-initialising the whole fracture there would overwrite the pressure it has
-    // just solved for with the reservoir's, every step, so the fracture could never hold
-    // a pressure of its own at all.
-    // Both time levels: a newborn cell has no history, so its old-time state is
-    // its current one and the accumulation term starts from zero.
+    // A newly handed-out cell gets its partner rock's state at its own depth; an existing
+    // slot keeps its state, or the fracture could never hold a pressure of its own.
+    // Both time levels: a newborn cell has no history, so accumulation starts from zero.
     auto& solution = this->simulator_.model().solution(/*timeIdx=*/0);
     auto& solutionOld = this->simulator_.model().solution(/*timeIdx=*/1);
     this->newbornDofs_.clear();
@@ -481,10 +457,8 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
         return;
     }
     else {
-        // What the well actually does at the fracture's own degrees of freedom.  This
-        // reads only the well state, so it is reported whether or not the binding still
-        // describes the fracture -- it is the answer to "is the fracture connected at
-        // all", which must not depend on the fracture having stood still.
+        // Reads only the well state, so "is the fracture connected" does not depend on
+        // the binding still describing the fracture.
         this->perforationReport();
 
         if (!this->layoutMatches(fractures)) {
@@ -505,10 +479,8 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
         Scalar qFrac = 0.0;     // fracture solver's own leak-off opinion [m3/s]
         Scalar condEmb = 0.0;   // sum of trans * upwind water mobility
         Scalar condFrac = 0.0;  // sum of the fracture's leakof_ (trans * total mobility)
-        // The two conductances differ only by which mobility multiplies the same
-        // transmissibility: the flow upwinds the fracture cell's water mobility, and
-        // updateLeakoff() uses whatever solver.leakoff_mobility asks for. These two
-        // means say how far apart the conventions are on this case.
+        // The conductances differ only in the mobility on the same transmissibility:
+        // the flow upwinds the fracture cell's, updateLeakoff() uses solver.leakoff_mobility.
         Scalar mobFracSum = 0.0, mobResTotSum = 0.0;
         Scalar pFracSum = 0.0, pResSum = 0.0;
         Scalar dFracSum = 0.0, dResSum = 0.0, dZgSum = 0.0, dpotSum = 0.0;

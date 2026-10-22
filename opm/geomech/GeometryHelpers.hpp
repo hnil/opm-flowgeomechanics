@@ -43,35 +43,14 @@
 namespace Opm{
     // copy from base vangaurd
     class GeometryHelper{
-        //using CartesianIndexMapper = Dune::CartesianIndexMapper<Grid>;
-        // static const int dimension = Grid::dimension;
-        // static const int dimensionworld = Grid::dimensionworld;
-        // using Element = typename GridView::template Codim<0>::Entity;
-        // using CartesianIndexMapper = Dune::CartesianIndexMapper<Grid>;
-        //using type = Dune::MultipleCodimMultipleGeomTypeMapper<GetPropType<TypeTag, Properties::GridView>>;
     public:
         using Point3D = Dune::FieldVector<double,3>;
         template<class Grid>
         GeometryHelper(const Grid& grid){
-            //cartDim_ = cartdim;
             this->init(grid);
         }
-        // static constexpr int Dimension = 3;
-        // using Point3D = Dune::FieldVector<double,3>;
-        // unsigned cartesianIndex(const std::array<int, Dimension>& coords) const
-        // {
-        //     unsigned cartIndex = coords[0];
-        //     int factor = cartDim_[0];
-        //     for (unsigned i = 1; i < cartDim_.size(); ++i) {
-        //         cartIndex += coords[i]*factor;
-        //         factor *= cartDim_[i];
-        //     }
-
-        //     return cartIndex;
-        // }
         int compressedIndex(int cartesianCellIdx) const
         {
-            //using CartesianIndexMapper = Dune::CartesianIndexMapper<Grid>;
             auto index_pair = cartesianToCompressed_.find(cartesianCellIdx);
             if (index_pair!=cartesianToCompressed_.end())
                 return index_pair->second;
@@ -113,7 +92,6 @@ namespace Opm{
         std::unordered_map<int,int> cartesianToCompressed_;
         std::vector<Point3D> centroids_;
         std::vector<bool> is_interior_;
-        //std::array<int,3> cartDim_;
     };
 
     template<class Grid>
@@ -141,7 +119,7 @@ namespace external{
     findCloseCellIndices(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
                          cvf::BoundingBox& bb);
 
-    // copy from RigEclipseWellLogExtractor
+    // adapted from ResInsight's well-log extractor
     void buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, const Opm::EclipseGrid& m_grid);
     void buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
                               std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& enity_seed,

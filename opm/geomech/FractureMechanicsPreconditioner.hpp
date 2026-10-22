@@ -62,20 +62,15 @@ copyMatrixValuesWithSameSparsity(DstMatrix& dst, const SrcMatrix& src)
 }
 }
 namespace Opm{
-  using Vector = Dune::BlockVector<Dune::FieldVector<double, 1>>;//Opm::Fracture::Vector
+  using Vector = Dune::BlockVector<Dune::FieldVector<double, 1>>;
 using VectorHP = Dune::MultiTypeBlockVector<Vector, Vector>;
     using SMatrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>; // sparse matrix
-  // class MySwap{
-  // public:
-  //   void swap(int i, int j){}
-  // };
   template <class value_t>
   class MyDenseMatrix : public Dune::DynamicMatrix<value_t>{
   public:
     static void luDecomp(Dune::DynamicMatrix<value_t>& mat){
       Vector tmp(mat.N());
       typename Dune::DynamicMatrix<value_t>::template Elim<Vector> elim(tmp);
-      //AutonomousValue<MAT> A(asImp());
       Dune::Simd::Mask<double> nonsing(true);
       Dune::DynamicMatrix<value_t>::luDecomposition(mat,elim, nonsing, false, false);
     }
@@ -120,7 +115,6 @@ using Dune::Indices::_1;
 // exact sparse-flow solves on difficult coupled cases.
 class FractureMechanicsPreconditioner : 
    public Dune::Preconditioner<VectorHP, VectorHP>
-   //public Dune::PreconditionerWithUpdate<VectorHP, VectorHP>
 {
     
 public:
@@ -139,12 +133,6 @@ public:
     // new coupled system. new_lu_mech controls whether the dense mechanics LU is
     // rebuilt or only the flow-side data is refreshed.
     void update(const Opm::FractureSystemMatrix& S,bool new_lu_mech);
-    // void update(){
-    //     // default to recomputing the preconditioner, but in some cases (e.g. when only a few cells are closed) we can just update the existing preconditioner
-    //     assert(false);
-    //     update(A_);
-    // };
-    //bool hasPerfectUpdate() const override { return false; }
 private:
 enum class ApplyMode {
   MechLast,
@@ -197,7 +185,6 @@ Vector diagvec(const Mat& M)
     std::unique_ptr<SMatrix> fixed_stress_matrix_;
     std::unique_ptr<FlowOperatorType> fixed_stress_flowop_;
     std::unique_ptr<Dune::FlexibleSolver<FlowOperatorType>> fixed_stress_flow_solver_;
-  //
   bool diag_mech_{true};
   bool diag_flow_{true};
   bool mech_press_coupling_{false};

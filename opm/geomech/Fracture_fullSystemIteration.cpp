@@ -33,7 +33,6 @@
 #include <numeric>
 
 #include <dune/common/indices.hh> // needed for _0, _1, etc.
-//
 #include <dune/common/fmatrix.hh> // Dune::FieldMatrix
 #include <dune/istl/bcrsmatrix.hh> // Dune::BCRSMatrix
 #include <dune/istl/bvector.hh> // Dune::BlockVector
@@ -69,7 +68,6 @@ debug_filename(const string& prefix, const string& suffix = ".txt")
 using Dune::Indices::_0;
 using Dune::Indices::_1;
 
-// using ResVector = Dune::BlockVector<Dune::FieldVector<double, 1>>;
 using ResVector = Opm::Fracture::Vector;
 using VectorHP = Dune::MultiTypeBlockVector<ResVector, ResVector>;
 
@@ -311,7 +309,6 @@ count_reopened_cells(const std::vector<int>& previous, const std::vector<int>& c
 
 // ============================ Debugging functions ============================
 // ----------------------------------------------------------------------------
-// template<class MatrixType> void dump_matrix(const MatrixType& m, const char* const name)
 [[maybe_unused]] void
 dump_matrix(const FMatrix& m, const char* const name)
 // ----------------------------------------------------------------------------
@@ -326,7 +323,6 @@ dump_matrix(const FMatrix& m, const char* const name)
 }
 
 // ----------------------------------------------------------------------------
-// template<>
 [[maybe_unused]] void
 dump_matrix(const SMatrix& m, const char* const name)
 // ----------------------------------------------------------------------------
@@ -601,9 +597,8 @@ updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
     // create C if not done already
     if (!Cptr)
         Cptr = initCouplingMatrixSparsity(htrans, num_cells, num_wells);
-    // if (!Cptr) Cptr = std::make_unique<Opm::Fracture::Matrix>(*M); // copy sparsity of M
 
-    // @@ NB: If the implementation of the pressure matrix changes (i.e. `assemblePressure()`),
+    // NB: If the implementation of the pressure matrix changes (i.e. `assemblePressure()`),
     //        the code below might need to be updated accordingly as well.
     auto& C = *Cptr;
     C = 0;
@@ -620,28 +615,24 @@ updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
         if(aperture[j][0] <= min_width) dh2 = 0.0;
         assert(aperture[i][0]>=0.0);
         assert(aperture[j][0]>=0.0);        
-        const double h1 = std::max(aperture[i][0],min_width);//aperture[i] + min_width;
-        const double h2 = std::max(aperture[j][0],min_width);//aperture[j] + min_width;
-        const double p1 = pressure[i];//-fracture_dgh[i];
-        const double p2 = pressure[j];//-fracture_dgh[j];; pressure should already be head
+        const double h1 = std::max(aperture[i][0],min_width);
+        const double h2 = std::max(aperture[j][0],min_width);
+        const double p1 = pressure[i];
+        const double p2 = pressure[j]; // pressure is already head
 
         const double q = (h1 * h1 * h1) * (h2 * h2 * h2) * (t1 * t2); // numerator
         const double d1q = 3 * (h1 * h1) * (h2 * h2 * h2) * (t1 * t2)* dh1;
         const double d2q = 3 * (h1 * h1 * h1) * (h2 * h2) * (t1 * t2)* dh2;
 
-        //const double r = 12 * (h1 * h1 * t1 + h2 * h2 * t2); // denominator
         const double r = 12 * (h1 * h1 * h1 * t1 + h2 * h2* h2 * t2); // denominator
         const double d1r = 36 * (h1 * h1) * t1 *dh1;
         const double d2r = 36 * (h2 * h2) * t2 *dh2;
-        //const double d1r = 24 * (h1) * t1;
-        //const double d2r = 24 * (h2) * t2;
         assert(r >= 0.0);
         assert(q >= 0.0);
         const double dTdh1 = (r == 0) ? 0.0 : (d1q * r - q * d1r) / (r * r);
         const double dTdh2 = (r == 0) ? 0.0 : (d2q * r - q * d2r) / (r * r);
 
         const double mobility = 0.5 * (reservoir_mobility[i] + reservoir_mobility[j]);
-        //const double krull = 1; // 1e4; // @@ Not sure if this should be removed?
         // diagonal elements
         C[i][i] += dTdh1 * (p1 - p2) * mobility;
         C[j][j] += dTdh2 * (p2 - p1) * mobility;
@@ -757,7 +748,6 @@ convergence_test(const VectorHP& res, const double tol_flow, double tol_mech, in
                                 res[_0].infinity_norm(), res[_1].infinity_norm()));
     }
     return converged;
-    // return res.infinity_norm() < tol;
 }
 
 // ----------------------------------------------------------------------------
@@ -816,7 +806,7 @@ estimate_step_fac(const VectorHP& x, const VectorHP& dx)
     const double f2 = x1_norm == 0 ? 1 : dx[_1].infinity_norm() / x1_norm;
     const double fmax = std::max(f1, f2);
     const double threshold = 0.95;
-    const double fac_min = 1e-1; // @@ 1e-2;
+    const double fac_min = 1e-1;
     return (fmax < threshold) ? 1.0 : std::max(threshold / fmax, fac_min);
 }
 
@@ -839,7 +829,6 @@ void modified_fracture_matrix(FMatrix& Aold, const FMatrix& A, const std::vector
 // ----------------------------------------------------------------------------
 {
     OPM_TIMEFUNCTION();
-    //Dune::DynamicMatrix result(A);
     assert(Aold.N() == A.N());
     assert(Aold.M() == A.M());
     for(size_t i=0; i < A.N(); ++i){
@@ -956,12 +945,8 @@ Fracture::identify_closed(const FMatrix& A, const VectorHP& x, const ResVector& 
     } else if(closing_type == "simple"){
      // sum forces over faces
         result.resize(A.N(), 0);
-        //double sum_force = 0.0;
         for (auto element : Dune::elements(grid_->leafGridView())) {
-           // int i = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView,
-            // Dune::mcmgElementLayout>::index(element);
             int i = grid_->leafGridView().indexSet().index(element);
-            //double area = element.geometry().volume();
             double pressure = fracture_pressure_[i][0];
             //NB maybe use other pressure if closed
             if (legacy_closed_cells) {
@@ -982,7 +967,6 @@ Fracture::identify_closed(const FMatrix& A, const VectorHP& x, const ResVector& 
         OPM_THROW(std::runtime_error, ss.str());
     }
         
-    // std::fill(result.begin(), result.end(), 1); // @@@
     return result;
 }
 
@@ -1004,13 +988,6 @@ Fracture::assemblePressureAndCouplingAD(const std::vector<int>& closed_cells)
     // Store the coupling matrix
     coupling_matrix_ = std::move(result.coupling_matrix);
 
-    // Zero out coupling matrix columns for closed cells
-    // auto& C = *coupling_matrix_;
-    // for (size_t col = 0; col < closed_cells.size(); ++col)
-    //     if (closed_cells[col])
-    //         for (size_t row = 0; row < C.N(); ++row)
-    //             if (C.exists(row, col))
-    //                 C[row][col] = 0;
 }
 
 // ----------------------------------------------------------------------------
@@ -1093,8 +1070,6 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     ++last_solve_stats_.nonlinear_iterations;
 
     ++DEBUG_COUNT;
-    // min_width_ = prm_.get<double>("solver.min_width"); // min with only used for flow calculations
-    //const double max_width = prm_.get<double>("solver.max_width");
 
     // update pressure matrix with the current values of `fracture_width_` and
     // `fracture_pressure_`
@@ -1108,8 +1083,6 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
 
     //  initialize vector of unknown, and vector represnting direction in tangent space
     VectorHP x {fracture_width_, fracture_pressure_};
-    // dump_vector(x, "w", "p", true); // dump current state of fracture
-    // dump_vector(x, debug_filename("w_").c_str(), debug_filename("p_").c_str());
     validate_fracture_state(x, prm_);
     const int nlin_verbosity = prm_.get<int>("solver.verbosity", 0);
 
@@ -1133,15 +1106,10 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     }
     const std::string toggle_guard_mode = prm_.get<std::string>("solver.toggle_guard_mode", "count");
     if (toggle_guard_mode == "chatter") {
-        // Per-cell anti-chatter guard. Chatter is the *same* cell flipping its
-        // contact state repeatedly within one solve; en-masse first-time
-        // re-opening (fracture establishment under rising pressure) is
-        // legitimate physics. Instead of throttling the global re-opening count
-        // (which wholesale-rejects an opening fracture: observed ~100x area
-        // suppression on the refine decks), count state changes per cell within
-        // the current solve and pin only cells that exceeded chatter_flip_limit
-        // changes — first openings/closings always pass, chattering cells get
-        // frozen at their current state for the rest of the solve.
+        // Per-cell anti-chatter guard: chatter is the same cell flipping repeatedly
+        // within one solve, while en-masse first-time re-opening is legitimate. A
+        // global re-opening throttle suppresses an opening fracture, so pin only
+        // cells that exceeded chatter_flip_limit changes this solve.
         if (nlin_iteration == 0 || cell_flip_counts_.size() != closed_cells.size()) {
             cell_flip_counts_.assign(closed_cells.size(), 0);
         }
@@ -1198,21 +1166,15 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
         }
       }
     }
-    //closed_cells_changed = true; // @@@
     // Contact-chatter metric: count cells that flipped state vs the previous
     // nonlinear iteration (same grid only; size mismatch = grid change, skip).
     if (closed_cells_.size() == closed_cells.size()) {
         last_solve_stats_.closed_cell_toggles +=
             static_cast<int>(count_toggled_cells(closed_cells_, closed_cells));
-        // Per-cell toggle count: the binary-active-set analogue of the FB
-        // complementarity residual, so the per-cell propagation veto works for
-        // the sticky policy too - a front cell whose contact state was still
-        // flipping when the solve stopped is not a trustworthy place to grow.
-        // Record WHEN each cell last toggled, not how often: a policy that
-        // chatters by nature (sticky: ~1400 toggles/solve vs FB's 0) never has
-        // a cell with zero lifetime toggles, so a lifetime counter degenerates
-        // into vetoing every front cell. What matters is whether the cell had
-        // settled by the end of the solve.
+        // Per-cell toggle record for the propagation veto (binary-active-set
+        // analogue of the FB residual). Records WHEN each cell last toggled, not
+        // how often: sticky chatters by nature, so a lifetime count would veto
+        // every front cell; what matters is whether the cell settled.
         if (cell_last_toggle_iter_.size() != closed_cells.size())
             cell_last_toggle_iter_.assign(closed_cells.size(), -1000);
         for (size_t i = 0; i < closed_cells.size(); ++i)
@@ -1223,10 +1185,6 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     }
     current_solve_iter_ = nlin_iteration;
     closed_cells_ = closed_cells;
-    // dump_vector(closed_cells, debug_filename("closed_cells_").c_str());
-    // dump_vector(closed_cells, "closed_cells", true);
-    // const auto A = modified_fracture_matrix(fractureMatrix(), closed_cells);
-    //bool update_mech_matrix = nlin_iteration > 0 || closed_cells_changed;
     bool first_iteration = (nlin_iteration == 0);
     // Fischer-Burmeister contact (opt-in closed_cell_policy=fischer_burmeister):
     // replace the binary open/closed mech rows by a smooth complementarity row
@@ -1353,8 +1311,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     const auto& M = *pressure_matrix_;
     const auto& C = *coupling_matrix_;
     
-    // const auto I = makeIdentity(A.N(), numWellEquations(), 1, closed_cells);
-    // (Fischer-Burmeister already built I_ with its smooth -db_i weights above.)
+    // Fischer-Burmeister already built I_ with its smooth -db_i weights above.
     if (!is_fb) {
         if (first_iteration) {
             I_.reset(new SMatrix(makeIdentity(A.N(), numWellEquations(), 1, closed_cells)));
@@ -1369,21 +1326,11 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     const auto& SS = Dune::makeMultiTypeBlockMatrixRef(row1, row2);
 #endif
   
-    //const auto SS_ref = std::make_unique<SystemMatrixRef>(SS); // copy to make sure we have a contiguous storage for the preconditioner
-    // NB need to se how to modify this matrix as litle as possible and change only the part
-    // of preconditioner need
-    // system Jacobian (with cross term)  @@ should S be included as a member variable of Fracture?
-    //S_.reset(
-    //    new SystemMatrix({{A, I}, // mechanics system (since A is negative, we leave I positive here)
-    //                      {C, M}})); // flow system
-    // this make a copy of the A,I,C,M
 
     if(first_iteration){
 #if EXP_REF           
         S_ = std::make_unique<SystemMatrix>(SS); // copy to make sure we have a contiguous storage for the preconditioner
 #else
-        //S_ = std::make_unique<SystemMatrix>({{A, I}, // mechanics system (since A is negative, we leave I positive here)
-        //                                      {C, M}}); // flow system
         S_.reset(new SystemMatrix({{A, I},                       
                                    {C, M}}));
 
@@ -1403,18 +1350,9 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     }  
     
 
-    // SystemMatrix S = {{A, I},// mechanics system (since A is negative, we leave I positive here)
-    //                   {C, M}};
     auto& S = *S_;
 
     // system equations
-    //SystemMatrix S0 = S;
-    //S0[_1][_0] = 0; // the equations themselves have no cross term
-    // // dump_vector(rhs, debug_filename("rhs_w_").c_str(), debug_filename("rhs_p_").c_str());
-    // // dump_vector(rhs, "rhs_w", "rhs_p", true);
-    
-    //S0.mmv(x, rhs); // rhs = rhs - S0 * x;   (we are working in the tanget plane)
-    // write explicit using S
 
     VectorHP dx = x;
     dx = 0; // Newton update for the current nonlinear iterate
@@ -1447,11 +1385,9 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
                           + std::to_string(S[_1][_1].M()));
     }
 
-       // S[_1][_0].mmv(x[_0], rhs[_1]);
         S[_1][_1].mmv(x[_1], rhs[_1]);
         S[_0][_0].mmv(x[_0], rhs[_0]);
         S[_0][_1].mmv(x[_1], rhs[_0]);
-    //}
 
     // Fracture volume storage (opt-in solver.fracture_storage_term): the cell mass
     // balance carries an accumulation term A_i (w_i - w_i^n)/dt that the
@@ -1505,17 +1441,14 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     auto rhs_org(rhs);
 
 
-    // Verify that equations have been chosen correctly
-    // for (size_t i = 0; i != fracture_width_.size(); ++i)
-    //   assert( !(rhs[_0][i] >= 0.0 && x[_0][i] <= 0.0));
 
     // check if system is already at a converged state (in which case we return immediately)
     //
     // for convergence, we use 'tol' directly for the mechanics system (where
     // residuals are expected to scale with pressure), and 'tol * ||M||' for the
     // flow system (where residuals scale with M*p)
-    const double tol_flow = tol;//*std::max(A.infinity_norm(), M.infinity_norm()) * std::numeric_limits<double>::epsilon();
-    const double tol_mech = tol;// * M.infinity_norm();
+    const double tol_flow = tol;
+    const double tol_mech = tol;
     // FB scaled convergence (opt-in): phi mixes width*stiffness with force units,
     // and c_i varies with cell size/mesh level - test phi_i/(1+|a_i|+|b_i|) so the
     // tolerance means the same physical accuracy on every cell.
@@ -1568,13 +1501,10 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
 
     if (!solved_direct) {
     // solve system equations
-    //const Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP> S_linop(S);
     if(first_iteration){
         S_linop_ = std::make_unique<Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP>>(S); // store for use in preconditioner
     }
-    //TailoredPrecondDiag precond_old(S); // cannot be 'const' due to BiCGstabsolver interface
     Opm::PropertyTree lprm = prm_.get_child("solver.linsolver.preconditioner");
-    //Opm::FractureMechanicsPreconditioner precond(S, lprm);
     // When solver=="direct" but we fell back here (too large / singular), pick a
     // real Krylov type for the iterative path.
     const std::string iter_solver_type = (solver_type == "direct")
@@ -1602,9 +1532,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
                                 num_closed_cells, rhs[_0].size(), rhs[_1].size()));
     }
 
-    //std::unique_ptr<LinearSolverBase> psolver;
     auto& precond = *frac_flow_precond_;
-    //using LinearSolverBase = Dune::InverseOperator<VectorHP, VectorHP>;
     if (new_precond) {
         psolver_ = setupLinearSolver(iter_solver_type, *S_linop_, precond, prm_, lintol, max_iter, verbosity);
     }
@@ -1821,7 +1749,6 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
       // Skipped when block scaling is active: S has been overwritten with D S D
       // in place, so this unscaled residual check would be meaningless.
       auto x_new(dx);
-      //x_new += dx;
       auto rhs2_tmp(rhs_org);
       S.mmv(x_new, rhs2_tmp);
       OpmLog::debug(fmt::format("Check res : rhs after linsolve:  {} {}",
@@ -1832,7 +1759,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     
     // the following is a heuristic way to limit stepsize to stay within convergence radius
     const double damping = prm_.get<double>("solver.damping");
-    double step_fac = damping; // estimate_step_fac(x, dx) * damping;
+    double step_fac = damping;
     // Opt-in relative-step globalization (default 0 = off): cap the Newton step so
     // the per-block relative change ||dx||_inf/||x||_inf does not exceed
     // coupled_step_limit. The keep-C true-Newton step can have a huge erratic
@@ -1893,20 +1820,16 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     dx *= step_fac;
     auto& dx0 = dx[_0];
     double max_dwidth = prm_.get<double>("solver.max_dwidth");
-    // for(auto& dx0v: dx0){
     for (size_t i = 0; i != fracture_width_.size(); ++i) {
         dx0[i][0] = std::max(-max_dwidth, std::min(max_dwidth, dx0[i][0]));
     }
     auto& dx1 = dx[_1];
     double max_dp = prm_.get<double>("solver.max_dp");
-    // for(auto& dx1v: dx1){
     for (size_t i = 0; i != fracture_pressure_.size(); ++i) {
         dx1[i][0] = std::max(-max_dp, std::min(max_dp, dx1[i][0]));
     }
 
 
-    // dump_vector(dx, debug_filename("dx_w_").c_str(), debug_filename("dx_p_").c_str());
-    // dump_vector(dx, "dx_w", "dx_p", true);
     x += dx;
     if (nlin_verbosity > 3) {
         OpmLog::debug(fmt::format("after: dx: {} {}", dx[_0].infinity_norm(), dx[_1].infinity_norm()));
@@ -1929,21 +1852,9 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     if (!allow_negative_width) {
         for (size_t i = 0; i != fracture_width_.size(); ++i) {
             fracture_width_[i][0] = std::max(0.0, fracture_width_[i][0]); // ensure non-negativity
-            // fracture_width_[i][0] = std::min(max_width, fracture_width_[i][0]);
         }
     }
     fracture_pressure_ = x[_1];
-    // if (nlin_verbosity > 2) {
-    //   VectorHP rhs_tmp {x}; // same size as system, content set below
-    //   normalFractureTraction(rhs_tmp[_0], false); // right-hand side equals the normal fracture traction
-    //   rhs_tmp[_1] = rhs_pressure_;
-    //   for (size_t i = 0; i != closed_cells.size(); ++i)
-    //     if (closed_cells[i])
-    //         rhs_tmp[_0][i] = 0;
-    //   S0.mmv(x, rhs_tmp);
-    //   std::cout << "New: rhs after linsolve:  " << rhs_tmp[_0].infinity_norm() << 
-    //     " " << rhs_tmp[_1].infinity_norm() << std::endl;
-    // }
 
     
     return false;

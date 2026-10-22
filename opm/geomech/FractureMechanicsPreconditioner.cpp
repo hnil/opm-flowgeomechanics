@@ -19,7 +19,6 @@
 
 #include "config.h"
 #include "FractureMechanicsPreconditioner.hpp"
-//#include <StrumpackSparseSolver.hpp>
 
 #include <cmath>
 #include <sstream>
@@ -151,7 +150,6 @@ FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::Frac
         if(verbosity>0){
         OpmLog::debug("FractureMechanicsPreconditioner: using full mechanics preconditioner");
         }
-        // luM_ = S[_0][_0];
         luM_ = S[_0][_0];
         if (lu_pivoting_) {
             MyDenseMatrix<double>::luDecomp(luM_, lu_pivot_);
@@ -173,7 +171,6 @@ void FractureMechanicsPreconditioner::update(const Opm::FractureSystemMatrix& S,
 
     if (!diag_mech_ && new_lu_mech) {
         OPM_TIMEBLOCK(SetupLuFactorization);
-        //luM_ = S[_0][_0];
         //copy to dense matrix for lu factorization
         for(size_t i = 0; i != S[_0][_0].M(); ++i){
             for(size_t j = 0; j != S[_0][_0].N(); ++j){
@@ -210,10 +207,6 @@ void FractureMechanicsPreconditioner::update(const Opm::FractureSystemMatrix& S,
     } else if (!diag_flow_) {
          OPM_TIMEBLOCK(SetupFlowPreconditioner);
          flow_solver_->preconditioner().update();
-        //  using FlowSolverType = Dune::FlexibleSolver<FlowOperatorType>;
-        //  flow_solver_ = std::make_unique<FlowSolverType>(
-        //     *flowop_, prm_.get_child("flow_solver"), std::function<Vector()>(), 1);    
-        //flow_solver_->update(*flowop_);
     }else{
         // if we are using a diagonal flow preconditioner, we need to update the diagonal entries
         setDiagvec(M_diag_,S[_1][_1]);
@@ -223,7 +216,6 @@ void FractureMechanicsPreconditioner::update(const Opm::FractureSystemMatrix& S,
 void
 FractureMechanicsPreconditioner::apply(Opm::VectorHP& v, const Opm::VectorHP& d)
 {
-    //OPM_TIMEFUNCTION_LOCAL();
     OPM_TIMEFUNCTION();
     if (active_mode_ == ApplyMode::FixedStress) {
         applyfixed_stress(v, d);
@@ -364,7 +356,7 @@ FractureMechanicsPreconditioner::applymech_first(Opm::VectorHP& v, const Opm::Ve
     solveMechanics(v[_0], d[_0]);
     auto rhs_flow = d[_1];
     if (mech_press_coupling_) {
-        A_[_1][_0].mmv(v[_0], rhs_flow); // -1.0); // rhs_flow -= A_[_1][_0] * v[_0]
+        A_[_1][_0].mmv(v[_0], rhs_flow); // rhs_flow -= A_[_1][_0] * v[_0]
     }
     solveFlow(v[_1], rhs_flow);
 };
@@ -392,7 +384,7 @@ FractureMechanicsPreconditioner::applymech_last(Opm::VectorHP& v, const Opm::Vec
 
     auto rhs_mech = d[_0];
     if (mech_press_coupling_) {
-        A_[_0][_1].mmv(v[_1], rhs_mech); // -1.0); // rhs_flow -= A_[_1][_0] * v[_0]
+        A_[_0][_1].mmv(v[_1], rhs_mech); // rhs_mech -= A_[_0][_1] * v[_1]
     }
     solveMechanics(v[_0], rhs_mech);
     
@@ -427,7 +419,6 @@ FractureMechanicsPreconditioner::backSolve(Opm::Vector& x, const Opm::Vector& rh
         for (int j = 0; j < i; j++) {
             x[i] -= luM_[i][j] * x[j];
         }
-        // rhs[i] = rhs[i]/luM_[i][i];
     }
 
     for (int i = luM_.rows() - 1; i >= 0; i--) {

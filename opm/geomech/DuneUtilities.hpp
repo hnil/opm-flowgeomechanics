@@ -43,11 +43,8 @@ public:
     return codim == codim_;
   }
 
-  // NOTE: this must be spelled fixedSize (Dune >= 2.8).  The old
-  // DUNE_VERSION_LT guard silently selected the lowercase spelling when
-  // the version macros were not in scope, which made the CRTP dispatch in
-  // CommDataHandleIF::fixedSize call itself -- undefined behaviour that
-  // broke codim-3 communication.
+  // Must be spelled fixedSize (Dune >= 2.8): otherwise the CRTP dispatch in
+  // CommDataHandleIF::fixedSize calls itself (undefined behaviour).
   bool fixedSize(int /* dim */, int /* codim */) const
   {
     return true;
@@ -103,11 +100,8 @@ public:
     return codim == codim_;
   }
 
-  // NOTE: this must be spelled fixedSize (Dune >= 2.8).  The old
-  // DUNE_VERSION_LT guard silently selected the lowercase spelling when
-  // the version macros were not in scope, which made the CRTP dispatch in
-  // CommDataHandleIF::fixedSize call itself -- undefined behaviour that
-  // broke codim-3 communication.
+  // Must be spelled fixedSize (Dune >= 2.8): otherwise the CRTP dispatch in
+  // CommDataHandleIF::fixedSize calls itself (undefined behaviour).
   bool fixedSize(int /* dim */, int /* codim */) const
   {
     return true;
@@ -206,18 +200,10 @@ private:
                     }
                     Opm::OpmLog::error(msg.str());
 
-                    /*std::stringstream ss;
-                    ss << " tmp ";
-                    //print(ss,tmp);
-                    ss << std::endl;
-                    LOG_INFO(ss.str());
-                    LOG_INFO("i j data "<< i << " " << j << " " << data);
-                    LOG_INFO("size of precalculated set error " << int(tmp.size()) << " " << int(cont[i].size()));*/
                     assert(false);
                 }
                 std::copy(tmp.begin(),tmp.end(),cont[i].begin());
             }
-            //cont[i].push_back(data);                                                                                                                                                        
         }
 
     };

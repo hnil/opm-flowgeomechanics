@@ -22,8 +22,6 @@
 #include "CgalHelper.hpp"
 #include <variant>
 #include <optional>
-// namespace Opm{
-//   namespace CGAL{
 template <typename T> struct typeOf;
 std::vector<Point_3> intersect_hex_with_plane(const Mesh& mesh, const Plane_3& plane)
 {
@@ -39,7 +37,6 @@ std::vector<Point_3> intersect_hex_with_plane(const Mesh& mesh, const Plane_3& p
         Segment_3 seg(p, q);
         auto result = CGAL::intersection(seg, plane);
 
-	//typeOf<decltype(result)> typeOfResult;
 
         if (result)
         {
@@ -65,8 +62,6 @@ std::vector<Point_3> intersect_hex_with_plane(const Mesh& mesh, const Plane_3& p
 	    pts.push_back(is->target());
 	  }
 #endif      
-	  //if (const Point_3* ip = std::get<Point_3>(*result))
-	  //    pts.push_back(ip);
         }
     }
 
@@ -81,32 +76,6 @@ std::vector<Point_3> intersect_hex_with_plane(const Mesh& mesh, const Plane_3& p
         return CGAL::squared_distance(a,b) < 1e-14;
     }), pts.end());
 
-    // if (pts.size() < 3)
-    //     return pts;
-
-    // // Sort in a circular order
-    // // centroid
-    // K::FT cx=0, cy=0, cz=0;
-    // for (auto& p : pts) {
-    //     cx += p.x(); cy += p.y(); cz += p.z();
-    // }
-    // Point_3 C(cx / pts.size(), cy / pts.size(), cz / pts.size());
-
-    // Vector_3 n = plane.orthogonal_vector();
-    // n = n / sqrt(n.squared_length());
-
-    // Vector_3 u = std::abs(n.x()) > 0.9 ? Vector_3(0,1,0) : Vector_3(1,0,0);
-    // u = CGAL::cross_product(n, u);
-    // u = u / sqrt(u.squared_length());
-    // Vector_3 v = CGAL::cross_product(n, u);
-
-    // auto proj = [&](const Point_3& p){
-    //     Vector_3 d = p - C;
-    //     return std::atan2(d * v, d * u);
-    // };
-
-    // std::sort(pts.begin(), pts.end(),
-    //           [&](const Point_3& a, const Point_3& b){ return proj(a) < proj(b); });
 
     return pts;
 }
@@ -225,5 +194,3 @@ void sortPoints(Polygon_2& pts){
     std::sort(pts.begin(), pts.end(),
               [&](const Point_2& a, const Point_2& b){ return proj(a) < proj(b); });
 }
-//  }
-//}

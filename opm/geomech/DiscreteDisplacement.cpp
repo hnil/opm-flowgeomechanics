@@ -84,25 +84,9 @@ fractureK1(double dist, double width, double E, double nu)
     double K1;
     double mu = E / (2 * (1 + nu)); //??
     K1 = (mu * sqrt(M_PI) / (2 * std::sqrt(dist) * (1.0 - nu))) * width;
-    K1 /= 1.834; // factor found numerically //@@ Odd: changed this from '*' to '/'
+    K1 /= 1.834; // factor found numerically; TODO: the other two uses multiply, check which is right
     return K1;
 }
-/*
-//formulas for share ned rotation to find share in correct directions
-double fractureK2(double dist,double edist, double E, double nu){
-    double K1;
-    K1 = mu*sqrt(M_PI)/(2*sqrt(dist).*(1-nu))*emid;
-    K1 *= 1.834; //factor found numerically
-    return K1;
-}
-
-double fractureK3(double dist,double edist, double E, double nu){
-    double K1;
-    K1 = mu*sqrt(M_PI)/(2*sqrt(dist).*(1-nu))*edist*(1-nu);
-    K1 *= 1.834; //factor found numerically
-    return K1;
-}
-*/
 double
 traceSymTensor(const Dune::FieldVector<double, 6> symtensor)
 {
@@ -176,8 +160,6 @@ TDStrainFSTri(const Dune::FieldVector<double, 3>& obs,
     return strain;
 }
 void
-// assembleMatrix(Dune::DynamicMatrix<Dune::FieldMatrix<double,1,1>>& matrix, const double E, const
-// double nu, const Dune::FoamGrid<2, 3>& grid)
 assembleMatrix(Dune::DynamicMatrix<double>& matrix,
                const double E,
                const double nu,

@@ -150,17 +150,6 @@ IMPL_FUNC(BoundaryGrid, extractMasterFace(Direction dir,
   return result;
 }
 
-// IMPL_FUNC(void, determineSideFaces(const double* min, const double* max))
-// {
-//   master.push_back(extractMasterFace(X,min[0]));
-//   master.push_back(extractMasterFace(Y,min[1]));
-//   master.push_back(extractMasterFace(Z,min[2]));
-
-//   slave.push_back(extractFace(X,max[0]));
-//   slave.push_back(extractFace(Y,max[1]));
-//   slave.push_back(extractFace(Z,max[2]));
-// }
-
 IMPL_FUNC(void, findBoundaries(double* min, double* max))
 {
   max[0] = max[1] = max[2] = -1e5;
@@ -183,7 +172,7 @@ IMPL_FUNC(void, fixNodes(const std::vector<size_t>& fixed_nodes))
   const VertexLeafIterator itend = gv.leafGridView().template end<dim>();
 
   // make a mapper for codim 0 entities in the leaf grid 
-  using LeafGridView = typename GridType::LeafGridView;//Dune::GridView<Dune::DefaultLeafGridViewTraits<GridType>>;
+  using LeafGridView = typename GridType::LeafGridView;
   Dune::MultipleCodimMultipleGeomTypeMapper<LeafGridView> mapper(gv.leafGridView(), Dune::mcmgVertexLayout());
 
   NodeValue zerovec;
@@ -191,7 +180,6 @@ IMPL_FUNC(void, fixNodes(const std::vector<size_t>& fixed_nodes))
   // iterate over vertices
   for (VertexLeafIterator it = gv.leafGridView().template begin<dim>(); it != itend; ++it) {
       int indexi = mapper.index(*it);
-      //assert(indexi == gv.leafGridView().indexSet().index(it));
       bool exist = std::find(fixed_nodes.begin(), fixed_nodes.end(), indexi)
           !=
           fixed_nodes.end();
@@ -222,124 +210,9 @@ IMPL_FUNC(void, fixPoint(Direction dir,
   }
 }
 
-// IMPL_FUNC(template<int comp> void,
-//           averageStress(Dune::BlockVector<Dune::FieldVector<ctype,comp>>& sigmacells,
-//                         const Vector& uarg))
-// {
-  
-//   static const int bfunc = 4+(dim-2)*4;
-
-//   const LeafIterator itend = gv.leafGridView().template end<0>();
-
-//   Dune::FieldMatrix<ctype,comp,comp> C;
-//   Dune::FieldVector<ctype,comp> eps0;
-//   eps0 = 0;
-//   //eps0[loadcase] = 1; // NB do not understand
-//   int m=0;
-  
-//   for (LeafIterator it = gv.leafGridView().template begin<0>(); it != itend; ++it) {
-//     materials[m]->getConstitutiveMatrix(C);
-//     // determine geometry type of the current element and get the matching reference element
-//     Dune::GeometryType gt = it->type();
-
-//     Dune::FieldVector<ctype,bfunc*dim> v;
-//     A.extractValues(v,uarg,it);
-//     Dune::FieldVector<ctype,comp> sigma;
-//     sigma = 0;
-//     double volume=0;
-//     // get a quadrature rule of order two for the given geometry type
-//     const Dune::QuadratureRule<ctype,dim>& rule = Dune::QuadratureRules<ctype,dim>::rule(gt,2);
-//     for (typename Dune::QuadratureRule<ctype,dim>::const_iterator r = rule.begin();
-//         r != rule.end() ; ++r) {
-//       // compute the jacobian inverse transposed to transform the gradients
-//       Dune::FieldMatrix<ctype,dim,dim> jacInvTra =
-//         it->geometry().jacobianInverseTransposed(r->position());
-
-//       ctype detJ = it->geometry().integrationElement(r->position());
-
-//       volume += detJ*r->weight();
-
-//       Dune::FieldMatrix<ctype,comp,dim*bfunc> lB;
-//       E.getBmatrix(lB,r->position(),jacInvTra);
-
-//       Dune::FieldVector<ctype,comp> s;
-//       E.getStressVector(s,v,eps0,lB,C);
-//       s *= detJ*r->weight();
-//       sigma += s;
-//     }
-//     sigma /= volume;
-//     if (Escale > 0){
-//         sigma /= Escale/Emin;
-//     }
-//     sigmacells[m] = sigma;
-//     m++;
-//   }
-  
-  
-// }
-
-
-// IMPL_FUNC(bool, isOnPlane(Direction plane,
-//                           GlobalCoordinate coord,
-//                           ctype value))
-// {
-//   if (plane < X || plane > Z)
-//     return false;
-//   int p = log2(float(plane));
-//   ctype delta = fabs(value-coord[p]);
-//   return delta < tol;
-// }
-
-// IMPL_FUNC(void, fixLine(Direction dir,
-//                         ctype x, ctype y,
-//                         const NodeValue& value))
-// {
-//   typedef typename GridType::LeafGridView::template Codim<dim>::Iterator VertexLeafIterator;
-//   const VertexLeafIterator itend = gv.leafGridView().template end<dim>();
-
-//   // make a mapper for codim 0 entities in the leaf grid
-//   using LeafGridView = Dune::GridView<Dune::DefaultLeafGridViewTraits<GridType>>;
-//   Dune::MultipleCodimMultipleGeomTypeMapper<LeafGridView> mapper(gv, Dune::mcmgVertexLayout());
-
-//   // iterate over vertices
-//   for (VertexLeafIterator it = gv.leafGridView().template begin<dim>(); it != itend; ++it) {
-//     if (isOnLine(dir,it->geometry().corner(0),x,y)) {
-//       int indexi = mapper.index(*it);
-//       A.updateFixedNode(indexi,std::make_pair(XYZ,value));
-//     }
-//   }
-// }
-
-// IMPL_FUNC(bool, isOnLine(Direction dir,
-//                          GlobalCoordinate coord,
-//                          ctype x, ctype y))
-// {
-//   if (dir < X || dir > Z)
-//     return false;
-//   int ix = int(log2(float(dir))+1) % 3;
-//   int iy = int(log2(float(dir))+2) % 3;
-//   ctype delta = x-coord[ix];
-//   if (delta > tol || delta < -tol)
-//     return false;
-//   delta = y-coord[iy];
-//   if (delta > tol || delta < -tol)
-//     return false;
-
-//   return true;
-// }
-
-// IMPL_FUNC(bool, isOnPoint(GlobalCoordinate coord,
-//                           GlobalCoordinate point))
-// {
-//   GlobalCoordinate delta = point-coord;
-//   return delta.one_norm() < tol;
-// }
-
     IMPL_FUNC(void, assemble(const Vector& pressure, bool do_matrix, bool do_vector))
 {
-  //int loadcase = -1;
   Dune::FieldVector<ctype,comp> eps0 = {1, 1, 1, 0, 0, 0};
-  //eps0 = 0;
   Vector& b = A.getLoadVector();
   b = 0;
   A.getLoadVector() = 0;
@@ -424,7 +297,6 @@ IMPL_FUNC(void, fixPoint(Direction dir,
               // pressure force i.e. \div I*p
               {
                   Dune::FieldVector<ctype,dim*bfunc> temp;
-                  //temp = Dune::FMatrixHelp::multTransposed(lB,Dune::FMatrixHelp::mult(C,eps0));
                   auto Ipressure = Dune::FMatrixHelp::mult(C,eps0);
                   Ipressure = eps0*pressure[cell_num][0];
                   temp = Dune::FMatrixHelp::multTransposed(lB,Ipressure);
@@ -439,23 +311,6 @@ IMPL_FUNC(void, fixPoint(Direction dir,
   }
 }
 
-
-// IMPL_FUNC(void, fixCorners(const double* min, const double* max))
-// {
-//   ctype c[8][3] = {{min[0],min[1],min[2]},
-//                    {max[0],min[1],min[2]},
-//                    {min[0],max[1],min[2]},
-//                    {max[0],max[1],min[2]},
-//                    {min[0],min[1],max[2]},
-//                    {max[0],min[1],max[2]},
-//                    {min[0],max[1],max[2]},
-//                    {max[0],max[1],max[2]}};
-//   for (int i=0;i<8;++i) {
-//     GlobalCoordinate coord;
-//     coord[0] = c[i][0]; coord[1] = c[i][1]; coord[2] = c[i][2];
-//     fixPoint(XYZ,coord);
-//   }
-// }
 
 
 

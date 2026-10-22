@@ -30,9 +30,7 @@
 
 #include <dune/istl/matrixmarket.hh>
 #include <dune/istl/preconditioners.hh>
-// #include <dune/istl/paamg/amg.hh>
 #include <opm/geomech/FractureMechanicsPreconditioner.hpp>
-// #include "opm/geomech/Fracture.hpp"
 #include <dune/common/filledarray.hh> // needed for printSparseMatrix??
 #include <dune/common/indices.hh> // needed for _0, _1, etc.
 #include <dune/foamgrid/foamgrid.hh>
@@ -90,7 +88,6 @@ readgrid(const char* const name)
 }
 
 // ----------------------------------------------------------------------------
-// template<class MatrixType> void dump_matrix(const MatrixType& m, const char* const name)
 void
 dump_matrix(const FullMatrix& m, const char* const name)
 // ----------------------------------------------------------------------------
@@ -105,7 +102,6 @@ dump_matrix(const FullMatrix& m, const char* const name)
 }
 
 // ----------------------------------------------------------------------------
-// template<>
 void
 dump_matrix(const SparseMatrix& m, const char* const name)
 // ----------------------------------------------------------------------------
@@ -668,8 +664,6 @@ private:
                 C_[jr][i] += dTdh1 * (p2 - p1);
         }
 
-        // // add contribution to rhs
-        // C_.mmv(hp[0], rhs_); // rhs_ = rhs_ - C_ * hp[0]
     }
 
     SparseMatrix M_;
@@ -777,16 +771,12 @@ estimate_step_fac(const VectorHP& x, const VectorHP& dx)
 {
     // estimate what might be a safe step size to avoid exiting the convergence radius
 
-    // const double trivial_pressure = 1e5;
-
     const double f1 = dx[_0].infinity_norm() / x[_0].infinity_norm();
-    // const double f2 = dx[_1].infinity_norm() / std::max(x[_1].infinity_norm(), trivial_pressure);
     const double f2 = dx[_1].infinity_norm() / x[_1].infinity_norm();
     const double fmax = std::max(f1, f2);
     const double threshold = 0.95;
-    const double fac_min = 1e-2; // 1e-2;
+    const double fac_min = 1e-2;
     const double fac = (fmax < threshold) ? 1.0 : std::max(threshold / fmax, fac_min);
-    // const double fac = (fmax < threshold) ? 1.0 : threshold / fmax;
     return fac;
 }
 
@@ -805,15 +795,7 @@ nonlinearIteration(const FullMatrix& A,
     auto negI_rhs = reduceMatrix(negI, false, true, SFM.elim(), SFM.kept());
 
     SystemMatrix S {{A, negI}, {SFM.C(), SFM.M()}};
-    //  S[_1][_0] *= 0.0; //@@@
     VectorHP rhs;
-
-    // dump_matrix(A, "A");
-    // dump_matrix(negI, "negI");
-    // dump_matrix(SFM.C(), "C");
-    // dump_matrix(SFM.M(), "M");
-    // dump_vector(hp[_0], "hvec");
-    // dump_vector(hp[_1], "pvec");
 
     Vector tmp(SFM.elim().size());
     for (size_t i = 0; i != SFM.elim().size(); ++i)
@@ -826,9 +808,6 @@ nonlinearIteration(const FullMatrix& A,
 
     dhp = rhs; // ensure it has the right number of elements
 
-    // dump_vector(rhs[_0], "rhsh_before");
-    // dump_vector(rhs[_1], "rhsp_before");
-
     VectorHP hp_reduced = hp;
     hp_reduced[_1] = SFM.reduceP(hp[_1]);
 
@@ -836,22 +815,17 @@ nonlinearIteration(const FullMatrix& A,
     S0[_1][_0] = 0; // The C-matrix should be zero here
     S0.mmv(hp_reduced, rhs); // rhs = rhs - S0 * hp_reduced
 
-    // dump_vector(rhs[_0], "rhsh_after");
-    // dump_vector(rhs[_1], "rhsp_after");
-
     std::cout << "Residual norm is: " << rhs.infinity_norm() << std::endl;
     if (converged_pred(rhs))
         return true; // system converged
 
     // solve system equations
     Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP> S_linop(S);
-    // Dune::Richardson<VectorHP, VectorHP> precond(1); // "no" preconditioner
     TailoredPrecondDiag precond(S);
-    //  TailoredPrecondFull precond(S);
     Dune::InverseOperatorResult iores;
     auto psolver = Dune::BiCGSTABSolver<VectorHP>(S_linop,
                                                   precond,
-                                                  1e-20, // 1e-15, // desired rhs reduction factor
+                                                  1e-20, // desired rhs reduction factor
                                                   200, // max number of iterations
                                                   1); // verbose
     VectorHP res_copy = rhs; // we need to keep the original rhs unmodified
@@ -859,8 +833,6 @@ nonlinearIteration(const FullMatrix& A,
 
     dhp[_1] = SFM.expandP(dhp[_1], false);
 
-    // dump_vector(dhp[_0], "dh");
-    // dump_vector(dhp[_1], "dp");
     std::cout << "hp:  " << hp[_0].infinity_norm() << " " << hp[_1].infinity_norm() << std::endl;
     std::cout << "dhp: " << dhp[_0].infinity_norm() << " " << dhp[_1].infinity_norm() << std::endl;
 
@@ -868,8 +840,6 @@ nonlinearIteration(const FullMatrix& A,
     const double step_fac = estimate_step_fac(hp, dhp);
     std::cout << "fac: " << step_fac << std::endl;
     dhp *= step_fac;
-
-    //  dhp *= 0.5; //0.6; // @@ necessary to "cut timestep" for convergence..?
     return false; // system has not yet been shown to have converged
 }
 
@@ -960,8 +930,6 @@ solveCoupledSplit(Vector& p,
 {
     // NB: there should be no overlap between the cells in 'bhpcells' and 'ratecells'
     // reduce pressure system
-
-    // Dune::MatrixAdapter<FullMatrix, Vector, Vector> MA_h(*std::get<0>(eqsys));
     const FullMatrix& M_h = *std::get<0>(eqsys);
     SparseMatrix& M_p = *std::get<1>(eqsys);
     const std::vector<HTrans>& htransvec = std::get<2>(eqsys);
@@ -1020,23 +988,6 @@ solveCoupledSplit(Vector& p,
 
         // solve for pressure
         Dune::Richardson<Vector, Vector> precond(1); // "no" preconditioner
-        // Dune::SeqJac<SparseMatrix, Vector, Vector> precond(M_p, 3, 0.3);
-        //  using Smoother = Dune::SeqSSOR<SparseMatrix, Vector, Vector>;
-        //  Dune::Amg::SmootherTraits<Smoother>::Arguments smootherArgs;
-        //  smootherArgs.iterations = 3;
-        //  smootherArgs.relaxationFactor = 1;
-
-        // auto criterion =
-        //   Dune::Amg::CoarsenCriterion<Dune::Amg::UnSymmetricCriterion<SparseMatrix,
-        //                                                               Dune::Amg::FirstDiagonal>>(15,
-        //                                                               50);
-        // criterion.setDefaultValuesIsotropic(2);
-        // criterion.setAlpha(.67);
-        // criterion.setBeta(1.0e-4);
-        // criterion.setGamma(1);
-        // criterion.setDebugLevel(2);
-        // using AMG = Dune::Amg::AMG<RMAdapter, Vector, Smoother>;
-        // AMG precond(MA_p, criterion, smootherArgs);
 
         auto psolver = Dune::CGSolver<Vector>(MA_p,
                                               precond,
@@ -1055,7 +1006,6 @@ solveCoupledSplit(Vector& p,
         if (converged(h, htmp))
             break;
 
-        // h = htmp;
         h *= 0.0;
         htmp *= 1.0;
         h += htmp;
@@ -1087,7 +1037,6 @@ main(int varnum, char** vararg)
 
     // identify well cells
     const std::vector<size_t> wellcells {0, 1, 2, 3, 4, 5};
-    // const auto wellcells = n_closest<2>(*grid); @@
 
     std::cout << "Identified wellcells: ";
     std::copy(wellcells.begin(), wellcells.end(), std::ostream_iterator<size_t>(std::cout, " "));
@@ -1096,9 +1045,8 @@ main(int varnum, char** vararg)
     // compute equation system
     const double young = 1e9; // fYoung's modulus
     const double poisson = 0.25; // Poisson's ratio
-    // const double leakoff_fac = 1e-13;// this breaks for rate
     const double leakoff_fac
-        = 1e-7; // 1e-9; //1e-6; //1e-13; // a bit heuristic; conceptually rock perm divided by distance
+        = 1e-7; // a bit heuristic; conceptually rock perm divided by distance
     const auto eqsys = computeEquationSystem(*grid, young, poisson, leakoff_fac);
 
     // solve fixed pressure system
@@ -1109,24 +1057,9 @@ main(int varnum, char** vararg)
     const double bhp = 1e6; // in Pascal
     const double rate = 0.1 / wellcells.size(); // positive value is _injection_
 
-
-    // // solve fixed pressure system
-    // solveCoupledSplit(pressure, aperture, eqsys,
-    //                   std::vector<size_t>(wellcells.begin(), wellcells.end()), bhp,
-    //                   std::vector<size_t>(), rate);
-
-    // solve fixed pressure system
-    // solveCoupled(pressure, aperture, eqsys,
-    //              std::vector<size_t>(wellcells.begin(), wellcells.end()), bhp,
-    //              std::vector<size_t>(), rate);
-
     // solve fixed rate system
     const auto pressure_cells = std::vector<size_t>();
     const auto rate_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
-
-    // solve fixed pressure system
-    // const auto pressure_cells = std::vector<size_t>(wellcells.begin(), wellcells.end());
-    // const auto rate_cells = std::vector<size_t>();
 
     solveCoupledFull(pressure, aperture, eqsys, pressure_cells, bhp, rate_cells, rate, 1e-5, 1000);
 

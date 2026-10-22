@@ -46,16 +46,9 @@
     a crack in an elastic solid. Proc. R. Soc. London A, 187, 229-260.
     https://en.wikipedia.org/wiki/Stress_intensity_factor
 
-    Notes on method choice:
-        The current standalone benchmark uses the CutDe full-space triangular
-        dislocation kernel together with a cell-centered collocation DDM
-        discretization. This is a reasonable baseline for coupling to cell-based
-        flow models, where pressure is naturally represented per fracture cell.
-        If higher mechanical accuracy is needed, the next exact step is usually a
-        triangle-integrated or Galerkin DDM operator with dedicated self/near-cell
-        treatment. If larger problems dominate runtime, a near/far split with FMM
-        or hierarchical compression is the usual acceleration path while keeping
-        exact near interactions.
+  Method: CutDe full-space triangular dislocation kernel with cell-centred
+  collocation, matching cell-based flow. Higher accuracy would need a
+  triangle-integrated or Galerkin operator; larger problems an FMM far field.
 */
 
 #include <config.h>

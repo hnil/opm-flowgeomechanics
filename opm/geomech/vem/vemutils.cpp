@@ -66,11 +66,10 @@ getGridVectors(const PolyGrid& grid,
     }
     num_face_corners.resize(ungrid.cell_facepos[ungrid.number_of_cells]);
     int tot_num_face_corners = 0;
-    // for(int i=0; i< num_cellfaces; ++i){
     for (int cell = 0; cell < ungrid.number_of_cells; ++cell) {
         for (grid_size_t hface = ungrid.cell_facepos[cell]; hface < ungrid.cell_facepos[cell + 1];
              hface++) {
-            int face = ungrid.cell_faces[hface]; // ungrid.cell_facepos[i]];
+            int face = ungrid.cell_faces[hface];
             int num_local_corners = ungrid.face_nodepos[face + 1] - ungrid.face_nodepos[face];
             num_face_corners[hface] = num_local_corners;
             // NB maybe we should order with outwards normal
@@ -101,13 +100,9 @@ getGridVectorsDune(const PolyGrid& grid,
     using namespace std;
     using namespace Dune;
     const auto& gv = grid.leafGridView();
-    // int loadcase = -1;
-    // Dune::FieldVector<ctype,comp> eps0 = {1, 1, 1, 0, 0, 0};
-    // eps0 = 0;
 
     // start VEM assembly
     // make global point coordinate vector
-    // vector<double> coords;
     for (const auto& v : vertices(gv)) {
         const auto c = v.geometry().corner(0);
         coords.insert(coords.end(), c.begin(), c.end());
@@ -115,34 +110,21 @@ getGridVectorsDune(const PolyGrid& grid,
 
     const auto& ixset = gv.indexSet();
     // count cell faces
-    // vector<int> num_cell_faces;
     for (const auto& c : elements(gv))
         num_cell_faces.push_back(Dune::subEntities(c, Dune::Codim<1> {}).size());
     const int tot_num_cfaces = accumulate(num_cell_faces.begin(), num_cell_faces.end(), 0);
 
     // count face corners
-    // vector<int> num_face_corners;
     for (const auto& c : elements(gv))
         for (const auto& f : Dune::subEntities(c, Dune::Codim<1> {}))
             num_face_corners.push_back(f.geometry().corners());
 
     // establish all face corners
-    // vector<int> face_corners;
     for (const auto& c : elements(gv))
         for (const auto& f : Dune::subEntities(c, Dune::Codim<1> {}))
             for (int i = 0, f_ix = 0; f_ix != tot_num_cfaces && i != num_face_corners[f_ix];
                  ++i, f_ix += (i == num_face_corners[f_ix]))
                 face_corners.push_back(ixset.subIndex(f, i, 3));
-
-    // correct order of nodes in each face, to ensure they are mentioned in
-    // clockwise or counterclockwise order. @@ This is a hack that might only work
-    // for 4-faces!
-    // for (int i = 0, j = 0; i != (int)num_face_corners.size(); j += num_face_corners[i++])
-    //   swap(face_corners[j], face_corners[j+1]);
-
-    // body force
-
-    // dirichlet boundary conditions
 }
 
 
@@ -155,23 +137,6 @@ getGridVectors(const Dune::CpGrid& grid,
                std::vector<int>& face_corners,
                std::vector<char>* corner_mask)
 {
-    // assert(false);
-    //  std::vector<double> coords_tmp;
-    //  std::vector<int> num_cell_faces_tmp;
-    //  std::vector<int> num_face_corners_tmp;
-    //  std::vector<int> face_corners_tmp;
-    //  getGridVectors<Dune::CpGrid>(grid, coords,
-    //                                num_cell_faces,
-    //                                num_face_corners,
-    //                                face_corners);
-    //  return;
-    //  coords = coords_tmp;
-    //  num_cell_faces = num_cell_faces_tmp;
-    //  num_face_corners =  num_face_corners_tmp;
-    //  face_corners = face_corners_tmp;
-    // return;
-    // using GridType = Dune::CpGrid;
-    // static constexpr int dim = GridType::dimension;
     using namespace std;
     using namespace Dune;
     const auto& gv = grid.leafGridView();
@@ -180,8 +145,6 @@ getGridVectors(const Dune::CpGrid& grid,
         const auto c = v.geometry().corner(0);
         coords.insert(coords.end(), c.begin(), c.end());
     }
-    // const auto& faces = grid.getFaceToPoint();
-    // const auto& facePos = grid.getFacePos();
     std::size_t skipped_degenerate_faces = 0, misoriented_faces = 0;
     const auto cell2faces = Opm::UgGridHelpers::cell2Faces(grid);
     for (const auto& cell : elements(gv)) {
@@ -206,7 +169,6 @@ getGridVectors(const Dune::CpGrid& grid,
             }
         }
         auto cf = cell2faces[cellIdx].begin();
-        // assert(nf==6);
         // Count only geometric faces: NNC connections (explicit NNC/EDITNNC,
         // numerical-aquifer AQUCON) appear in the raw CpGrid cell-face
         // topology as degenerate faces with fewer than 3 vertices.  They are
@@ -227,9 +189,6 @@ getGridVectors(const Dune::CpGrid& grid,
                 continue;
             }
             num_face_corners.push_back(faceSize);
-            // assert(faceSize == 4);
-            // auto numface_cells = grid.numCellFaces();
-            // assert(numface_cells == 2);
             // The grid's corners wind around the face normal, which points out of faceCell(face, 0).
             const bool first = grid.faceCell(face, 0) == cellIdx;
             const auto& face_normal = grid.faceNormal(face);
@@ -277,14 +236,6 @@ getGridVectors(const Dune::CpGrid& grid,
 
 
 
-    // coords = coords_tmp;
-    // num_cell_faces = num_cell_faces_tmp;
-    // num_face_corners =  num_face_corners_tmp;
-    // face_corners = face_corners_tmp;
-    //  for(size_t i=0; i < face_corners.size(); ++i){
-    //    std::cout << face_corners[i] << " " << face_corners_tmp[i] << std::endl;
-    //  }
-    //     assert(false);
 }
 
 bool cellFemCell(const Dune::CpGrid& grid, int cellIdx,
@@ -295,14 +246,10 @@ bool cellFemCell(const Dune::CpGrid& grid, int cellIdx,
         bool only_nice = true; // only take normal hex 
         if (only_nice) {
             if (nf != 6) {
-                // not needed
                 is_ok = false;
                 return false;
             }
         }
-        //auto cartMapper = Dune::CartesianIndexMapper<Dune::CpGrid>(grid);
-        // using ElementMapper =   
-        //   Dune::MultipleCodimMultipleGeomTypeMapper<typename Dune::CpGrid::LeafGridView>;
         
         for (int f = 0; f < nf; ++f) {
             auto face = grid.cellFace(cellIdx, f);
@@ -318,8 +265,6 @@ bool cellFemCell(const Dune::CpGrid& grid, int cellIdx,
 
             if(in_cell<0 || out_cell <0){
               // assume boundary is ok
-                //is_ok = false;
-                //return false;
                 continue;
 
             }
@@ -381,26 +326,16 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
     int cf_ix = 0; // index to first cell face for the current cell
     int fcorners_start = 0; // index to first cell corner for current cell
 
-    // cout << "Starting assembly" << endl;
-    //for (int c = 0; c != num_cells; ++c) {
     // for FEM ---------------------------------
-     static constexpr int dim = 3;//GridType::dimension;
+     static constexpr int dim = 3;
      static constexpr int comp = 3 + (dim - 2) * 3;
      static constexpr int bfunc = 4 + (dim - 2) * 4;
      static constexpr int esize = dim*bfunc;
-     //int loadcase = -1;
-     //Dune::FieldVector<double,comp> eps0 = {1, 1, 1, 0, 0, 0};
-  //eps0 = 0;
-  //ASMHandler<GridType> A(grid_);//need to set this.
-  //A.getOperator() = 0;
  
      using ctype = double;
       Dune::FieldMatrix<ctype,comp,comp> C;
       Dune::FieldMatrix<ctype,dim*bfunc,dim*bfunc> K;
       Dune::FieldMatrix<ctype,dim*bfunc,dim*bfunc> Aq;
-      //Dune::FieldMatrix<ctype,dim*bfunc,dim*bfunc>* KP=0;
-      //Dune::FieldVector<ctype,dim*bfunc> ES;
-      //Dune::FieldVector<ctype,dim*bfunc>* EP=0;
       Opm::Elasticity::Elasticity E(grid);
 
     //----------------------------------------------
@@ -409,32 +344,14 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
       std::vector<bool> cell_fem_type(gv.size(0),false);
       bool use_fem_type = is_fem_choice(stability_choice);
       if(use_fem_type){
-        //const auto& idx  = grid.getCellIndexSet();
-        //const auto& rIdx = grid.getCellRemoteIndices();
-        // Dune::Interface cominterface;
-        // using OwnerSet = Dune::OwnerOverlapCopyCommunication<int, int>::OwnerSet;//Dune::EnumItem<AttributeSet,Dune::OwnerOverlapCopyAttributeSet::owner>;
-        // using AllSet =  Dune::OwnerOverlapCopyCommunication<int, int>::AllSet;//Dune::AllSet<AttributeSet>;
-        // OwnerSet soureFlags;
-        // //AllSet destFlags;
-        // AllSet destFlags;
-        // cominterface.build(rIdx, soureFlags, destFlags);
-        // Dune::BufferedCommunicator cell_cell_comm;
-        // using Vector = std::vector<bool>;
-        // cell_cell_comm.template build<Vector>(cominterface);
         auto cartMapper = Dune::CartesianIndexMapper<Dune::CpGrid>(grid);
         Dune::MultipleCodimMultipleGeomTypeMapper<typename Dune::CpGrid::LeafGridView> elementMapper(gv,Dune::mcmgElementLayout());
         for(const auto elem : elements(gv)){
           int c = elementMapper.index(elem);
-          //int c = gv.indexSet().index(elem);
           bool is_femcell = cellFemCell(grid,c, cartMapper);
           cell_fem_type[c] = is_femcell;
         }
-        //cell_cell_comm.template forward<Dune::CopyGatherScatter<Vector>>(cell_fem_type, cell_fem_type);
-        // couldhave used this from linear solver interfae
-        //cell_cell_comm.copyOwnerToAll(fem_type, fem_type);
         if(grid.comm().size()>1){
-           //grid.cellScatterGatherInterface() const;
-           //gridpointScatterGatherInterface()
           const auto& cellcomm = grid.cellCommunication();
           cellcomm.copyOwnerToAll(cell_fem_type,cell_fem_type);
         }
@@ -451,9 +368,7 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
         bool vem_type = !use_fem_type;
         if(!vem_type){
           // check if we can do vem on this cell
-          //auto cartMapper = Dune::CartesianIndexMapper<Dune::CpGrid>(grid);
-          // maybe move out the desition for parallel case
-          bool is_femcell = cell_fem_type[c];//cellFemCell(grid,c, cartMapper);
+          bool is_femcell = cell_fem_type[c];
           if(!is_femcell){
             // if fem and not a "normal" cell switch to vem with a stabilization
             // that remains robust for high-aspect cells
@@ -489,9 +404,6 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
               const int J = 3 * loc_indexing[j / 3] + j % 3;
               const double val = loc[i * 3 * ncv + j]; // local matrix entry
               A_entries.push_back(std::tuple<int, int, double> {I, J, val});
-              // const auto it = A_entrymap.find(make_pair(I, J));
-              // (it != A_entrymap.end()) ? it->second += val :
-                //                            A_entrymap[make_pair(I, J)] = val;
             }
           }
         }else{
@@ -559,7 +471,6 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
             E.getStiffnessMatrix(Aq,lB,C,qweights[qp]);
             K += Aq;
           }
-          //for (int li =0;li<esize/dim;++li) {//nomber for nodes of reference element
           for (int li =0;li<8;++li) {//nomber for nodes of reference element
             int node_index1 = gv.indexSet().subIndex(elem,li,dim);
             for (int ki=0;ki<dim;++ki) {
@@ -595,7 +506,6 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
           += std::accumulate(&num_face_corners[cf_ix], &num_face_corners[cf_ix + num_cell_faces[c]], 0);
         cf_ix += num_cell_faces[c];
     }
-    // cout << "Applying forces" << endl;
 
     // add contribution to right hand side from applied forces.  Values are written
     // directly into the global right-hand-side vector
@@ -604,14 +514,11 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
         corner_mask);
 
     if (reduce_boundary) {
-        // cout << "Set boundary conditions: Reducing system" << endl;
         vem::reduce_system(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
     } else {
-        // cout << "Set boundary conditions: Set it directly in system" << endl;
         vem::set_boundary_conditions(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
     }
 
-    // cout << "Finished assembly.  Returning." << endl;
 
     return b.size();
 }
@@ -649,7 +556,6 @@ potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const p
   std::vector<int> indexing;
     int cur_fcor_start = 0;
     int cur_cface_start = 0;
-    //    for (int cell = 0; cell != num_cells; ++cell) {
     
     Opm::Elasticity::Elasticity elasticity(grid);
     const auto gv = grid.leafGridView();
@@ -715,20 +621,14 @@ potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const p
                 }
             }
         } else {
-            static constexpr int dim = 3; // GridType::dimension;
+            static constexpr int dim = 3;
             static constexpr int comp = 3 + (dim - 2) * 3;
             static constexpr int bfunc = 4 + (dim - 2) * 4;
-            //static constexpr int esize = dim * bfunc;
             Dune::GeometryType gt = elem.type();
             using ctype = double;
             Dune::FieldVector<ctype, dim * bfunc> ES;
             Dune::FieldMatrix<ctype, comp, comp> dummyC;
             dummyC = 0;
-            // Opm::Elasticity::Isotropic  material(id, young[cellIdx], poisson[cellIdx], rho);
-            // bool valid = material.getConstitutiveMatrix(C);
-            // if(!valid){
-            //   OPM_THROW(std::runtime_error,"Not valid C matrix");
-            // }
 
             const Dune::QuadratureRule<ctype, dim>& rule
                 = Dune::QuadratureRules<ctype, dim>::rule(gt, 2);
@@ -746,10 +646,8 @@ potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const p
                 Dune::FieldVector<ctype, dim * bfunc> temp;
                 Dune::FieldVector<ctype, comp> eps0
                     = {1, 1, 1, 0, 0, 0}; // since pressure has one dof we can suse scalar
-                // temp = Dune::FMatrixHelp::multTransposed(lB,Dune::FMatrixHelp::mult(C,eps0));
                 auto Ipressure = Dune::FMatrixHelp::mult(dummyC, eps0); // just to get correct size??
-                // Dune::FieldMatrix<ctype,dim*bfunc,1> Ipressure = eps0;
-                Ipressure = eps0 * 1.0; //*pressure[cell_num][0];
+                Ipressure = eps0 * 1.0;
                 auto vec = Dune::FMatrixHelp::multTransposed(lB, Ipressure);
                 temp = vec;
                 temp *= detJ * r->weight();
@@ -792,9 +690,6 @@ Dune::BlockVector<Dune::FieldVector<double,1>> smoothCellVector(const Dune::CpGr
         sum += cell_vector[cell_outside][0]-value;
         count += 1;
     }
-    // include self
-    //sum += cell_vector[cellIdx][0];
-    //count += 1;
     smoothed_cell_vector[cellIdx][0] = (count > 0) ? value + sum / double(count) : value;
   }
   if (grid.comm().size() > 1) {
@@ -1269,17 +1164,15 @@ Dune::BlockVector<Dune::FieldVector<double,6>>  computeStressFem(const Dune::CpG
                                                                 const std::vector <double>& young,
                                                                 const std::vector <double>& poisson){
         Opm::OpmLog::debug("Compute stress via FEM");
-        static constexpr int dim = 3; // GridType::dimension;
+        static constexpr int dim = 3;
         static constexpr int comp = 3 + (dim - 2) * 3;
         static constexpr int bfunc = 4 + (dim - 2) * 4;
-        //        static constexpr int esize = dim * bfunc;
       Opm::Elasticity::Elasticity elasticity(grid);
        const auto& gv = grid.leafGridView();
         using ctype = double;
         Dune::FieldMatrix<ctype, comp, comp> C;
         Dune::FieldVector<ctype, comp> eps0;
         eps0 = 0;
-        // eps0[loadcase] = 1; // NB do not understand
         Dune::BlockVector<Dune::FieldVector<double,6>> sigmacells(grid.numCells());                                                       
         for (const auto& elem: elements(gv)){
             int cellIdx = gv.indexSet().index(elem);
@@ -1320,9 +1213,6 @@ Dune::BlockVector<Dune::FieldVector<double,6>>  computeStressFem(const Dune::CpG
                 sigma += s;
             }
             sigma /= volume;
-            // if (Escale > 0) {
-            //     sigma /= Escale / Emin;
-            // }
             // switch to voits notation
             std::swap(sigma[4],sigma[5]);
             

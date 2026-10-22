@@ -334,14 +334,9 @@ public:
                       "in the matrix (--matrix-add-well-contributions=true)");
         }
 
-        // local iteration context: the domain linearization then resets only
-        // the domain's rows, and the well skips its own inner iterations (the
-        // local Newton iterates it)
-        // The local-solve context is what turns the well's own inner nonlinear
-        // iterations off (assembleWellEq consults it). Leaving it uninstalled
-        // gives them back; the cost is that the domain linearization then resets
-        // the whole system rather than only the domain's rows, which is harmless
-        // here because the global Newton re-linearizes before it uses anything.
+        // The local-solve context turns the well's inner iterations off (assembleWellEq
+        // consults it). Without it the domain linearization resets the whole system,
+        // harmless here because the global Newton re-linearizes before using anything.
         std::optional<LocalContextGuard<std::remove_reference_t<decltype(problem)>>> guard;
         if (!settings.innerWellIterations) {
             guard.emplace(problem);

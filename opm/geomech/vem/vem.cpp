@@ -27,7 +27,7 @@
 #include <cmath>
 #include <iomanip>
 #include <iostream>
-#include <iterator> //@@ only for debugging
+#include <iterator>
 #include <limits>
 #include <map>
 #include <numeric>
@@ -567,7 +567,6 @@ identity_matrix(const double fac, const int N)
 // Compute the VEM stability term for a given 2D or 3D element.
 // This is a very simple term that is described in (Gain, 2014)
 // DOI:10.1016/j.cma.2014.05.005
-// @@TODO: find a better estimate for S
 vector<double>
 compute_S(const std::vector<double>& Nc,
           const std::vector<double>& D,
@@ -583,13 +582,10 @@ compute_S(const std::vector<double>& Nc,
     const int c = dim == 2 ? 3 : 6;
     const auto NtN = matmul(&Nc[0], r, c, true, &Nc[0], r, c, false);
 
-    // const double alpha = 1;  // @@ use this line for comparison with vemmech
-    //const double gamma = 1.0;
     const double gamma = 1.0 / 9.0; // since trace is about 9 times E 
     const double alpha = stability_choice == SIMPLE ? volume * trace(D) / trace(NtN)
                                                     : // from Gain et al. 2014
         gamma*volume * trace(D) * invtrace(NtN); // Andersen et al. 2017                
-        //(1 / 9.0) * volume * trace(D) * invtrace(NtN); // Andersen et al. 2017
 
     return identity_matrix(alpha, dim * num_corners);
 }
@@ -604,7 +600,6 @@ compute_S_D_recipe(const std::vector<double>& EWcDWct, const int dofs, const dou
     const double h = cbrt(volume); // diameter of cell scales with cube root of volume
     for (int i = 0; i != dofs; ++i)
         result[i + dofs * i] = EWcDWct[i + dofs * i]; // extract diagonal from matrix
-        //result[i + dofs * i] = max(h, EWcDWct[i + dofs * i]); // extract diagonal from matrix
 
     return result;
 }
@@ -824,19 +819,8 @@ std::vector<double> getStabilityMatrix(vem::StabilityChoice stability_choice,con
         }
     }else if( stability_choice == EXPERIMENTAL){
         double val = trace(D)/9.0;
-        val *= 4.0;//cbrt(volume);
+        val *= 4.0;
         S = identity_matrix(val, totdim);
-        // for(int node=0; node< num_nodes;++node){
-        //     for (int d=0;d< dim;++d){
-        //         int dof = node*dim + d;
-        //         int ind = dof + totdim * dof;
-        //         if(d ==2){    
-        //             S[ind]= val*4.0;
-        //         } else {
-        //             S[ind]= val*100.0;
-        //         }
-        //     }
-        // }
     }else{
         throw invalid_argument("Unknown stability choice in final_assembly");  
     }
@@ -980,9 +964,6 @@ final_assembly(const vector<double>& Wc,
     std::vector<double> S = S_given ? *S_given
         : getStabilityMatrix(stability_choice, EWcDWct, Nc, D, corners, num_nodes, volume, dim, totdim, node_weights);
     
-    // const auto S = stability_choice == D_RECIPE
-    //     ? compute_S_D_recipe(EWcDWct, totdim, volume)
-    //     : compute_S(Nc, D, num_nodes, volume, dim, stability_choice);
 
     const auto SImP = matmul(&S[0], totdim, totdim, false, &ImP[0], totdim, totdim, false);
     const auto ImpSImp = matmul(&ImP[0], totdim, totdim, true, &SImP[0], totdim, totdim, false);
@@ -1048,7 +1029,6 @@ compute_bodyforce_2D(const double* const points,
                      double* target)
 // ----------------------------------------------------------------------------
 {
-    // @@ for the time being, do nothing
     auto coords = pick_points<2>(points, cell_corners, number_cell_faces);
 
     const auto tris = tessellate_face<2>(&coords[0], number_cell_faces, false);
@@ -1168,7 +1148,6 @@ reduce_system(vector<tuple<int, int, double>>& A,
                                "provided in ascending order.");
 
     // sort entries of A into columns
-    // cout << "Reducing system: moving elements to right hand side" << endl;
 
     sort(A.begin(), A.end(), [](const auto& aa, const auto& bb) { return get<1>(aa) < get<1>(bb); });
 
@@ -1187,7 +1166,6 @@ reduce_system(vector<tuple<int, int, double>>& A,
     }
 
     // determine renumbering
-    // cout << "Reducing system: determining renumbering" << endl;
     vector<int> keep(b.size());
     iota(keep.begin(), keep.end(), 0);
     vector<int> renum;
@@ -1202,7 +1180,6 @@ reduce_system(vector<tuple<int, int, double>>& A,
         renum_inv[renum[i]] = i;
 
     // eliminate rows associated with fixed dofs and renumber
-    // cout << "Reducing system: eliminating entries" << endl;
     A.erase(remove_if(A.begin(),
                       A.end(),
                       [&discard_flag, &renum_inv](const tuple<int, int, double>& el) {
@@ -1218,7 +1195,6 @@ reduce_system(vector<tuple<int, int, double>>& A,
         b[i] = b[renum[i]];
 
     b.resize(renum.size());
-    // cout << "Reducing system: FINISHED" << endl;
 }
 
 void
@@ -1235,7 +1211,6 @@ set_boundary_conditions(vector<tuple<int, int, double>>& A,
                                "provided in ascending order.");
 
     // sort entries of A into columns
-    // cout << "Setboundary conditions: by trivial equations" << endl;
 
     sort(A.begin(), A.end(), [](const auto& aa, const auto& bb) { return get<1>(aa) < get<1>(bb); });
 
@@ -1258,7 +1233,6 @@ set_boundary_conditions(vector<tuple<int, int, double>>& A,
 
 
     // determine renumbering
-    // cout << "Sett boundary condititions in matrix and rhs" << endl;
     vector<int> keep(b.size());
     iota(keep.begin(), keep.end(), 0);
     vector<int> renum;
@@ -1289,7 +1263,6 @@ set_boundary_conditions(vector<tuple<int, int, double>>& A,
         b[dof] = fixed_dof_values[i];
     }
 
-    // cout << "Setting boudnary conditions in matrix and rhs: FINISHED" << endl;
 }
 
 // ----------------------------------------------------------------------------
@@ -1805,9 +1778,7 @@ is_star_point(const array<double, 3>& point,
 // NB, the face normals must be _unit_ normals (not scaled by face area)
 // in order for this algorithm to work as intended.
 //
-// @@ NB: The algorithm assumes planar faces, which is not always guaranteed in
-// reality.  If it proves that the obtained star point creates inconsistencies
-// in some settings, one might have to tessellate the faces into planar triangles first
+// Assumes planar faces; warped faces may need tessellating into triangles first.
 array<double, 3>
 identify_star_point(const array<double, 3>& point,
                     const vector<double>& face_normals,
@@ -1829,7 +1800,6 @@ identify_star_point(const array<double, 3>& point,
                 + (result[2] - face_centroids[3 * f_ix + 2]) * face_normals[3 * f_ix + 2];
             for (int ii = 0; ii != 3; ++ii)
                 result[ii] -= 1.1 * proj * face_normals[3 * f_ix + ii]; // move slightly past plane
-            // result[ii] -= proj * face_normals[3*f_ix+ii];
         }
         if (++count == N)
             break;
@@ -1974,120 +1944,13 @@ extract_local_faces(const int* const faces, const int* const num_face_edges, con
     vector<int> result(faces, faces + accumulate(num_face_edges, num_face_edges + num_faces, 0));
     return result;
 }
-//   vector<int> sorted_facenodes(result); // we need to sort the facenodes for quicker set operations
-//   for (int f = 0, fpos=0; f != num_faces; fpos += num_face_edges[f++])
-//     sort(&sorted_facenodes[fpos], &sorted_facenodes[fpos] + num_face_edges[f]);
-//   vector<int*> face_ptrs(1, &result[0]);
-//   vector<int*> sorted_fnode_ptrs(1, &sorted_facenodes[0]);
-//   for (int i = 1; i != num_faces; ++i) {
-//     face_ptrs.push_back(face_ptrs[i-1] + num_face_edges[i-1]);
-//     sorted_fnode_ptrs.push_back(sorted_fnode_ptrs[i-1] + num_face_edges[i-1]);
-//   }
-//   vector<int> ordered(num_faces, false), completed(num_faces, false);
-//   ordered[0] = true;
-
-//   while (!all_of(ordered.begin(), ordered.end(), [](auto x){return x;})) {
-//     // identfying the reference face to use this time
-//     int ref_face = -1;
-//     for (ref_face = 0; ref_face != num_faces; ++ref_face)
-//       if (ordered[ref_face] && !completed[ref_face])
-//         break;
-
-//     // check which faces that can be oriented based on the current reference face
-//     vector<int> isect;
-//     for (int i = 0; i != num_faces; ++i, isect.clear()) {
-//       if (!ordered[i]) {
-//         //std::cout << "Fix ordering of face" << std::endl;
-//         set_intersection(sorted_fnode_ptrs[ref_face], sorted_fnode_ptrs[ref_face] +
-//         num_face_edges[ref_face],
-//                          sorted_fnode_ptrs[i], sorted_fnode_ptrs[i] + num_face_edges[i],
-//                          back_inserter(isect));
-//         if (isect.size() == 2 ) {
-
-
-//           assert(isect.size() > 1); // should be at least two corners to a shared edge
-//           const auto ref1 = find(face_ptrs[ref_face], face_ptrs[ref_face] + num_face_edges[ref_face],
-//           isect[0]); const auto ref2 = find(face_ptrs[ref_face], face_ptrs[ref_face] +
-//           num_face_edges[ref_face], isect[1]); const auto i1 = find(face_ptrs[i], face_ptrs[i] +
-//           num_face_edges[i], isect[0]); const auto i2 = find(face_ptrs[i], face_ptrs[i] +
-//           num_face_edges[i], isect[1]); if(!((i1-i2) == 1)){
-//               bool is_ok = false;
-//               if( i1 == (face_ptrs[i]) ){
-//                   if( i2 == face_ptrs[i]+num_face_edges[i] ){
-//                       is_ok = true;
-//                   }
-//               }
-//               if( i2 == face_ptrs[i] ){
-//                   if( i1 == face_ptrs[i]+num_face_edges[i] ){
-//                       is_ok = true;
-//                   }
-//               }
-//               if(!is_ok){
-//                   std::cout << "strange intersection of faces" << std::endl;
-//                   assert(false);
-//               }
-//           }
-
-//           const bool orient1 = (ref2 == ref1+1 || ref2 == face_ptrs[ref_face]);  // order is ref1,
-//           ref2 if true const bool orient2 = (i2 == i1 + 1 || i2 == face_ptrs[i]);            // order
-//           is i1, i2 if true if (orient1 == orient2)
-//             // faces have the same orientation.  Flip the orientation of the non-reference face
-//             reverse(face_ptrs[i], face_ptrs[i] + num_face_edges[i]);
-
-//           // at this point, we should be assured that face 'i' is oriented consistently with face
-//           'ref' ordered[i] = true;
-//         }
-//         else if(!isect.empty()){
-//             std::cout << "Face-face intersection with not 2 nodes" << std::endl;
-//         }
-//       }
-//     }
-//     completed[ref_face] = true;
-//   }
-//   return result;
-// }
-
-// // ----------------------------------------------------------------------------
-// bool inward_pointing_normals(const vector<double>& normals,
-//                              const vector<double>& face_centroids)
-// // ----------------------------------------------------------------------------
-// {
-//   const int N = (int)normals.size()/3;
-//   const double tol = 1e-9;
-
-//   for (int d = 0; d != 3; ++d) {
-//     // usually, it should be enough to check for d==0, but there may be pathological
-//     // cases where we would have to resort to other coordinate directions
-//     int max_ix = 0, min_ix = 0;
-//     double max_val = face_centroids[d], min_val = max_val;
-//     for (int i = 0; i != N; ++i) {
-//       if (face_centroids[3*i+d] < min_val) {
-//         min_val = face_centroids[3*i+d];
-//         min_ix = i;
-//       } else if (face_centroids[3*i+d] > max_val) {
-//         max_val = face_centroids[3*i+d];
-//         max_ix = i;
-//       }
-//     }
-//     if (fabs(normals[3 * max_ix + d]) > tol)
-//       return normals[3 * max_ix + d] < 0;
-//     else if (fabs(normals[3 * min_ix + d]) > tol)
-//       return normals[3 * min_ix + d] > 0;
-//   }
-
-//   // if we got here, there is something peculiar about the input data
-//   throw runtime_error("Unable to determine orientation of normals in element.");
-// }
 
 // ----------------------------------------------------------------------------
 bool
 inward_pointing_normals(const vector<double>& normals, const vector<double>& face_centroids)
 // ----------------------------------------------------------------------------
 {
-    // This version of inward_pointing_normals is implemented to be a bit more
-    // robust than the previous one, by taking into account the possibility of
-    // non-planar faces.  It is still possible it may fail in some pathological
-    // cases.
+    // Allows for non-planar faces; may still fail in pathological cases.
 
     // compute the "centroid" of the polyhedron
     const int N = (int)normals.size() / 3;
@@ -2147,12 +2010,6 @@ compute_cell_geometry(const double* points,
         Opm::OpmLog::error("Inward pointing normals try to fix them");
         assert(false);
     }
-
-    // (deprecated, since we assume a consistent face corner ordering in 'faces')
-    //
-    // if (inward_pointing_normals(outward_normals, face_centroids))
-    //   for_each(outward_normals.begin(), outward_normals.end(), [](double& d) {d *= -1;});
-    // assert(face_centroids.size() == static_cast<std::size_t>(num_faces*3));
 
     // identify a star point (usually, mean_point qualifies, but not necessarily)
     bool signed_tets = false;
@@ -2603,15 +2460,9 @@ hex_corner_ordering(const double* const corners,
         if (num_face_edges[f] != 4)
             return false;
 
-    // Collect all edges (as unordered pairs) from the face descriptions, counting
-    // how many faces each edge appears in.  For the cell to be a combinatorial
-    // hexahedron we require a closed quad surface: 12 distinct edges, each shared
-    // by exactly 2 faces, and every vertex of degree 3.  Together with the
-    // bottom/top structure established below, this pins down the combinatorial
-    // cube uniquely (the cube is the only 3-regular quadrangulation of the sphere
-    // with 6 faces); 8 corners + 6 quads + 12 unique edges alone do NOT exclude
-    // degenerate non-manifold face complexes that can arise from corrupt or
-    // collapsed corner-point cells.
+    // A combinatorial hex needs a closed quad surface: 12 distinct edges, each in exactly 2
+    // faces, every vertex of degree 3. Counts of corners/quads/edges alone do not exclude
+    // degenerate non-manifold face complexes from collapsed corner-point cells.
     map<pair<int, int>, int> edge_count;
     for (int f = 0, pos = 0; f != 6; pos += num_face_edges[f++])
         for (int i = 0; i != 4; ++i) {
@@ -2803,10 +2654,8 @@ assemble_mech_system_2D(const double* const points,
 
     // reduce system by eliminating Dirichlet degrees of freedom, and returning
     if (reduce_boundary) {
-        // cout << "Reducing system" << endl;
         reduce_system(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
     } else {
-        // cout << "Set boundary conditions without reducing system" << endl;
         set_boundary_conditions(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
     }
     return b.size();
@@ -2853,7 +2702,6 @@ assemble_mech_system_3D(const double* const points,
     int cf_ix = 0; // index to first cell face for the current cell
     int fcorners_start = 0; // index to first cell corner for current cell
 
-    // cout << "Starting assembly" << endl;
     for (int c = 0; c != num_cells; ++c) {
         // computing local stiffness matrix, writing its entries into the global matrix
         assemble_stiffness_matrix_3D(points,
@@ -2877,9 +2725,6 @@ assemble_mech_system_3D(const double* const points,
                 const int J = 3 * loc_indexing[j / 3] + j % 3;
                 const double val = loc[i * 3 * ncv + j]; // local matrix entry
                 A_entries.push_back(tuple<int, int, double> {I, J, val});
-                // const auto it = A_entrymap.find(make_pair(I, J));
-                // (it != A_entrymap.end()) ? it->second += val :
-                //                            A_entrymap[make_pair(I, J)] = val;
             }
         }
         // add contribution to right hand side from body forces.  These are
@@ -2897,7 +2742,6 @@ assemble_mech_system_3D(const double* const points,
             += accumulate(&num_face_corners[cf_ix], &num_face_corners[cf_ix + num_cell_faces[c]], 0);
         cf_ix += num_cell_faces[c];
     }
-    // cout << "Applying forces" << endl;
 
     // add contribution to right hand side from applied forces.  Values are written
     // directly into the global right-hand-side vector
@@ -2906,14 +2750,11 @@ assemble_mech_system_3D(const double* const points,
         corner_mask);
 
     if (reduce_boundary) {
-        // cout << "Set boundary conditions: Reducing system" << endl;
         reduce_system(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
     } else {
-        // cout << "Set boundary conditions: Set it directly in system" << endl;
         set_boundary_conditions(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
     }
 
-    // cout << "Finished assembly.  Returning." << endl;
 
     return b.size();
 }
@@ -2926,13 +2767,6 @@ compute_stress_3D(const double* const points,
                   const int* const face_corners,
                   const double* const young,
                   const double* const poisson,
-                  // const double* const body_force, // 3 * number of cells
-                  // const int num_fixed_dofs, // dirichlet
-                  // const int* const fixed_dof_ixs, // indices must be sorted
-                  // const double* const fixed_dof_values,
-                  // const int num_neumann_faces,
-                  // const int* const neumann_faces,
-                  // const double* const neumann_forces, // 3 * number of neumann faces
                   const std::vector<double>& disp,
                   std::vector<std::array<double, 6>>& stress,
                   vector<tuple<int, int, double>>& stressmat,
@@ -2943,21 +2777,9 @@ compute_stress_3D(const double* const points,
                   const char* const corner_mask)
 // ----------------------------------------------------------------------------
 {
-    // preliminary computations
-    // const int tot_num_cell_faces = accumulate(num_cell_faces, num_cell_faces + num_cells, 0);
-    // const int tot_num_face_corners = accumulate(num_face_corners, num_face_corners +
-    // tot_num_cell_faces, 0); const int num_points = *max_element(face_corners, face_corners +
-    // tot_num_face_corners) + 1;
-
-    // assemble full system matrix
-    // loop over cells and assemble system matrix
-    // vector<int> loc_indexing;
-    // vector<double> loc; // use as local 'scratch' vector
-    // array<double, 3> centroid; // will contain the centroid for the currently treated cell
     int cf_ix = 0; // index to first cell face for the current cell
     int fcorners_start = 0; // index to first cell corner for current cell
 
-    // cout << "Starting assembly" << endl;
     for (int c = 0; c != num_cells; ++c) {
         // computing local stiffness matrix, writing its entries into the global matrix
         calculate_stress_3D_local(points,
@@ -3641,7 +3463,6 @@ assemble_stiffness_matrix_2D(const double* const points,
     const auto Wr = compute_Wr_2D(q);
     const auto Wc = compute_Wc_2D(q);
     const auto D = compute_D_2D(young, poisson);
-    // const auto S = compute_S(Nc, D, num_corners, area, 2);
     const auto ImP = compute_ImP(Nr, Nc, Wr, Wc, 2);
 
     // do the final assembly of matrices, and write result to target
@@ -3749,7 +3570,7 @@ assemble_stiffness_matrix_3D(const double* const points,
         }
     }
 
-    // // compute all intermediary matrices
+    // compute all intermediary matrices
     const auto q = compute_q_3D(&corners_loc[0],
                                 int(corners_loc.size() / 3),
                                 &faces_loc[0],
@@ -3763,10 +3584,9 @@ assemble_stiffness_matrix_3D(const double* const points,
     const auto Wr = compute_Wr_3D(q);
     const auto Wc = compute_Wc_3D(q);
     const auto D = compute_D_3D(young, poisson);
-    // const auto S = compute_S(Nc, D, num_corners, volume, 3);
     const auto ImP = compute_ImP(Nr, Nc, Wr, Wc, 3);
 
-    // // do the final assembly of matrices, and write result to target
+    // do the final assembly of matrices, and write result to target
     target.resize(pow(3 * num_corners, 2));
     if (stability_choice == TRACE || stability_choice == SMOOTH_HOURGLASS) {
         const auto S = stability_choice == TRACE
@@ -3832,7 +3652,7 @@ calculate_stress_3D_local(const double* const points,
                           volume,
                           corner_mask);
 
-    // // compute all intermediary matrices
+    // compute all intermediary matrices
     const auto q = compute_q_3D(&corners_loc[0],
                                 int(corners_loc.size() / 3),
                                 &faces_loc[0],
@@ -3841,12 +3661,8 @@ calculate_stress_3D_local(const double* const points,
                                 volume,
                                 outward_normals,
                                 corner_mask);
-    // const auto Nr = compute_Nr_3D(&corners_loc[0], num_corners);
-    // const auto Nc = compute_Nc_3D(&corners_loc[0], num_corners);
-    // const auto Wr = compute_Wr_3D(q);
 
     const int dim = 3;
-    // assert(dim == 2 || dim == 3);
     const int lsdim = (dim == 2) ? 3 : 6; // dimension of "linear strain space"
     const int totdim = dim * num_corners; // total number of unknowns
     const auto Wc = compute_Wc_3D(q);
@@ -3976,7 +3792,7 @@ centroid_2D(const double* const points, const int num_points)
 }
 
 // ---------------------------------------------------------------------------
-// @@ Might fail in case of strongly non-convex faces
+// May fail for strongly non-convex faces
 array<double, 3>
 centroid_2D_3D(const double* const points, const int num_points)
 // ----------------------------------------------------------------------------

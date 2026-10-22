@@ -20,16 +20,9 @@
 #ifndef OPM_FLOW_PROBLEM_MECH_HPP
 #define OPM_FLOW_PROBLEM_MECH_HPP
 
-// Shared problem layer for mechanics-enabled flow problems, extracted from
-// FlowProblemGeoMech so that both the VEM-based problem (over
-// FlowProblemBlackoil) and a TPSA-based problem (over FlowProblemTPSA) host
-// the same geomechanical field properties, initial-stress machinery
-// (STRESSEQUIL or backend equilibration solve) and fracture configuration.
-//
-// The layer deliberately stays free of opm-flowgeomechanics solver includes:
-// the STRESSEQUIL/initial-state block and the field-property handling only
-// need opm-common/opm-simulators facilities and are candidates for a future
-// home in FlowProblemBlackoil upstream.
+// Shared problem layer for mechanics-enabled flow problems (VEM over FlowProblemBlackoil,
+// TPSA over FlowProblemTPSA): field properties, initial stress, fracture configuration.
+// Kept free of opm-flowgeomechanics solver includes.
 //
 // Backend hooks (implemented by the derived problem):
 //   prepareMechForInit()            - backend setup before equilibration
@@ -162,7 +155,6 @@ namespace Opm{
             std::string filename = Parameters::Get<Parameters::FractureParamFile>();
             if (filename == "notafile") {
                 Opm::PropertyTree fracture_param = makeDefaultFractureParam(false);
-                // fracture_param.put("fractureparams.numfractures",1);
                 fracture_param_ = fracture_param;
             } else {
                 std::string fractureParamSource = filename;
@@ -181,9 +173,7 @@ namespace Opm{
                     std::stringstream ss;
                     ss << "No fracture parameter file or error reading it: " << fractureParamSource
                        << " : Simulation stopped: correct file or use default";
-                    // ss << e.what();
                     OpmLog::warning(ss.str());
-                    // stop simulation
                     OPM_THROW(std::runtime_error, ss.str());
                 }
             }
@@ -191,7 +181,7 @@ namespace Opm{
             fracture_param_.write_json(os, true);
             OpmLog::info(os.str());
 
-            hasFractures_ = this->simulator().vanguard().eclState().runspec().frac();//fracture_param_.get<bool>("hasfractures");
+            hasFractures_ = this->simulator().vanguard().eclState().runspec().frac();
                         const bool waterActive = this->simulator().vanguard().eclState().runspec().phases().active(Opm::Phase::WATER);
                         if (hasFractures_ && !waterActive) {
                                 OPM_THROW(std::runtime_error,
@@ -218,12 +208,8 @@ namespace Opm{
             const auto& simulator = this->simulator();
             const auto& eclState = simulator.vanguard().eclState();
             if(eclState.runspec().mech()){
-                // An NNC has no geometric face (CpGrid tags it face_tag::NNC_FACE,
-                // indexInInside() == -1), so the VEM assembly drops it silently --
-                // the mechanics would ignore a connection the deck intends, with no
-                // signal.  Accept one only when an endpoint is a flow-only cell
-                // (numerical aquifer): those carry no geometry or loads, so the NNC
-                // changes flow topology alone.  Between two mechanics cells, refuse.
+                // An NNC has no geometric face, so the VEM assembly would silently drop it.
+                // Accept one only if an endpoint is a flow-only cell (numerical aquifer).
                 if (eclState.hasInputNNC()) {
                     std::set<std::size_t> aqu_cells_cart;
                     if (eclState.aquifer().hasNumericalAquifer()) {
@@ -272,14 +258,9 @@ namespace Opm{
                         OPM_THROW(std::runtime_error, os.str());
                     }
                 }
-                // Mechanics-domain mask for artificial (flow-only) cells --
-                // FRACTURE_FLOW_GRID_ASSESSMENT.md section 5.  v1 semantics
-                // (deliberately conservative): masked cells STAY in the elastic
-                // stiffness as inert rock (no structural change, so no parallel
-                // node-ownership / partition-of-unity risk), but are excluded
-                // from every pore-pressure/temperature load, and the fracture
-                // must never complete into them.  Numerical-aquifer (AQUNUM)
-                // cells are masked automatically.
+                // Mechanics-domain mask for flow-only cells (numerical aquifers are masked
+                // automatically): they stay in the stiffness as inert rock, so no partition-
+                // of-unity risk, but get no pore-pressure/temperature load and no fracture completion.
                 mech_flow_only_cells_.assign(simulator.model().numGridDof(), false);
                 if (eclState.aquifer().hasNumericalAquifer()) {
                     const auto aqu_cell_ids =
@@ -547,26 +528,15 @@ namespace Opm{
                 os << "Adding connections to schedule" << std::endl;
                 FractureModel::fractureLogger.info(os.str());
             }
-            //return;
-        // add extra connections to schedule and use the action framework to handle it
-            //const auto& problem = simulator_.problem();
             auto& simulator = this->simulator();
             auto& schedule = simulator.vanguard().schedule();
             const int reportStep = this->episodeIndex();
 
-            // const auto sim_time = simulator_.time() + simulator_.timeStepSize();
-            //  const auto now = TimeStampUTC {schedule_.getStartTime()} + std::chrono::duration<double>(sim_time);
-            // const auto ts = formatActionDate(now, reportStep);
-
             std::map<std::string, std::vector<Connection>> extra_perfs;
 
-            // Fracture cells inside an LGR must enter the schedule as
-            // COMPDATL-style connections (LGR-local i,j,k + LGR-local global
-            // index + lgr grid number), consistent with the well's original
-            // COMPDATL completions; a level-zero connection addressing a
-            // refined-away parent cell cannot be resolved by the well model
-            // or the WBP machinery.  Build (once per call) the inverse
-            // mapping leaf-cell -> (lgr level, lgr-local cartesian).
+            // Fracture cells inside an LGR must enter the schedule as COMPDATL-style
+            // connections; a level-zero connection to a refined-away parent cannot be resolved.
+            // Build the inverse mapping leaf-cell -> (lgr level, lgr-local cartesian).
             std::unordered_map<std::size_t, std::pair<int, std::size_t>> leafToLgr;
             std::vector<int> levelToLgrNumber; // level -> deck lgr grid number
             {
@@ -598,9 +568,6 @@ namespace Opm{
                 }
             }
 
-            //auto mapper = simulator.vanguard().cartesianMapper();
-            //auto& wellcontainer = this->wellModel().localNonshutWells();
-            //for (auto& wellPtr : wellcontainer) {
             int new_conns = 0;
             int old_conns = 0;
             std::string outsideLgr;
@@ -627,11 +594,7 @@ namespace Opm{
                 }
 
                 for (const auto& wellconn : wellcons) {
-                    // Safeguard: a fracture must never complete into a
-                    // flow-only (mech-masked) cell -- e.g. a numerical-aquifer
-                    // cell.  That would inject through the fracture straight
-                    // into the aquifer bookkeeping volume with no mechanical
-                    // counterpart.
+                    // A fracture must never complete into a flow-only (mech-masked) cell.
                     if (this->mechFlowOnlyCell(wellconn.cell)) {
                         OPM_THROW(std::runtime_error,
                                   "Fracture-driven completion targets a flow-only "
@@ -711,13 +674,8 @@ namespace Opm{
                         FractureModel::fractureLogger.info(os.str());
                     }
 
-                    // Making preliminary connection to be added in schedule
-                    // with correct numbering
-                    // Dynamic fracturing completions enter the schedule as open
-                    // zero-CF well connections; the fracture WI/CTF is added later
-                    // through addFracturePerforations(). Even a zero-CF open
-                    // completion still changes the rebuilt well topology, perf
-                    // ordering, and first-perforation state initialization.
+                    // Fracturing completions enter the schedule as open zero-CF connections;
+                    // the CTF is added later through addFracturePerforations().
                     auto& connection = extra
                         .emplace_back(ijk[0], ijk[1], ijk[2], cartesianIdx,
                                       /*complnum*/ -1,
@@ -771,18 +729,15 @@ namespace Opm{
                 return;
             }
             else {
-                // add to schedule
                 // structure will be changed erase matrix, maybe only rebuilding of linear solver is neede
                 this->simulator().model().linearizer().eraseMatrix();
                 this->simulator().model().newtonMethod().linearSolver().eraseMatrix();
-                //if (this->gridView().comm().rank() == 0) {
                 if(verbosity > 0) {
                     std::stringstream os;
                     os << "Adding extra connections to schedule for report step: "
                    << reportStep << " old connections: " << old_conns << " new connections: " << new_conns;
                     FractureModel::fractureLogger.info(os.str());
                 }
-                //}
             }
 
             auto sim_update = schedule.modifyCompletions(reportStep, extra_perfs);

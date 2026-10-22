@@ -59,7 +59,6 @@ class EclipseGrid;
 namespace Opm{
     PropertyTree makeDefaultFractureParam(bool rate_control = false);
 class FractureModel{
-    //using CartesianIndexMapper = Dune::CartesianIndexMapper<Dune::CpGrid>;
 public:
     using Point3D = Dune::FieldVector<double,3>;
     using Segment = std::array<unsigned int,2>;
@@ -91,19 +90,7 @@ public:
 
      void updateFractureReservoirCells(const Dune::CpGrid& cpgrid);
   
-  //void updateFractureReservoirCells(const Dune::CpGrid& cpgrid);
   
-  // template<class Grid>
-  // void updateFractureReservoirCells(const Grid& cpgrid)
-  //   {
-  //       external::cvf::ref<external::cvf::BoundingBoxTree> cellSearchTree;
-  //       external::buildBoundingBoxTree(cellSearchTree, cpgrid);
-  //       for (auto& well_fracture : well_fractures_) {
-  //           for (auto& fracture : well_fracture) {
-  //               fracture.updateReservoirCells(cellSearchTree, cpgrid);
-  //           }
-  //       }
-  //   }
 
     void addWell(const std::string& name,
                  const std::vector<FractureWell::Connection>& conns,

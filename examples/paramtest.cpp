@@ -89,10 +89,8 @@ vector<int>
 boundary_node_indices(const Grid& g)
 // ----------------------------------------------------------------------------
 {
-    // set<int> bnodes;
     auto view = g.leafGridView();
 
-    // using FVec = Dune::FieldVector<double, 3>;
     using CoordType = Dune::FieldVector<double, 3>;
 
     // register all node coordinates
@@ -107,8 +105,8 @@ boundary_node_indices(const Grid& g)
         for (size_t i = 0; i != elem.subEntities(1); ++i)
             count[view.indexSet().index(elem.subEntity<1>(i))] += 1;
 
-    // @@ This is silly - there must be a better way to identify boundary nodes
-    // than by geometric comparison.
+    // there must be a better way to identify boundary nodes than by geometric
+    // comparison.
     int ix = 0;
     set<int> bix;
     const double TOL = 1e-3;
@@ -126,46 +124,6 @@ boundary_node_indices(const Grid& g)
 
     return vector(bix.begin(), bix.end());
 
-    // for (auto it = bix.begin(); it != bix.end(); ++it)
-    //   cout << *it << endl;
-
-    // for (int i = 0; i != boundary_ind.size(); ++i)
-    //   cout << boundary_ind[i] << endl;
-
-    // for (int i = 0; i != count.size(); ++i)
-    //   cout << count[i] << endl;
-
-
-    // vector<int> count(view.size(2), 0); // number of vertices (codim 2)
-
-    // for (const auto& elem : elements(view))
-    //   if (elem.hasBoundaryInter
-
-    //   for (int i = 0; i != elem.subEntities(2); ++i)
-    //     count[view.indexSet().index(elem.subEntity<2>(i))] += 1;
-
-
-    // cout << elem.subEntities(2) << endl;
-    // cout << view.indexSet().index(elem.subEntity<2>(0)) << endl;
-    // cout << view.indexSet().index(elem.subEntity<2>(0)) << endl;
-    // cout << view.indexSet().index(elem.subEntity<2>(0)) << endl;
-    // cout << elem.subEntity<2>(1);
-    // cout << elem.subEntity<2>(2);
-    //}
-
-    // for (const auto& elem : elements(view)) {
-    //   for (const auto& is : Dune::intersections(view, elem)) {
-    //     if (is.boundary()) {
-    //       const auto c1 = is.geometry().corner(0);
-    //       const auto c2 = is.geometry().corner(1);
-
-    //       //view.indexSet().index(c1);
-    //       //bnodes.insert(view.indexSet().index(c1));
-    //       //bnodes.insert(view.indexSet().index(c2));
-    //     }
-    //   }
-    // }
-    // return vector<int>(bnodes.begin(), bnodes.end());
     return vector<int>();
 }
 
@@ -183,9 +141,6 @@ meshtest(const string& fname)
 
     for (int i = 0; i != 3; ++i)
         cout << view.size(i) << endl;
-
-    // view.begin<0>();
-    // for (auto it = view.begin<0>(); it != view.end<0>(); ++it);
 
     // extract all node coordinates (2D only)
     vector<double> coords;
@@ -272,11 +227,6 @@ meshtest(const string& fname)
     for (auto& vertex : vertices(view))
         grid->setPosition(
             vertex, Dune::FieldVector<double, 3> {coords[2 * vcount], coords[2 * vcount++ + 1], 0});
-    //    const VertexHandle& vh = vertex.impl().hostEntity();
-    //    vertex.geometry().corner(0)[0] = 0;//coords[2*vcount];
-    //    vertex.geometry().corner(0)[1] = 0;//coords[2*vcount + 1];
-    //   vcount++;
-
 
     for (auto& vertex : vertices(view)) {
         cout << vertex.geometry().corner(0)[0] << ", ";
@@ -302,7 +252,7 @@ meshtest(const string& fname)
     for (int i = 0; i != Nb; ++i) {
         disp[i][0] += 6; // translate in x direction
         if (i < Nb / 3)
-            disp[i][1] = coords2[2 * i + 1]; // bcoords[2*i+1]/2; // stretch in y direction
+            disp[i][1] = coords2[2 * i + 1]; // stretch in y direction
     }
 
     gs.applyBoundaryNodeDisplacements(disp);

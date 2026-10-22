@@ -24,14 +24,9 @@
 //! \brief Standalone test that the node (vertex) degrees of freedom form a
 //!        partition of unity over the MPI ranks after load balancing a deck.
 //!
-//! For a partition of unity every shared node must be owned by exactly one
-//! rank. Opm::makeEntityEntityCommunication<3>() builds the owner/copy parallel
-//! index set for the vertices (codim 3) by selecting a unique owner per shared
-//! node and then verifies, through an All-All communication, that every node is
-//! owned exactly once. If the ownership is not a partition of unity it throws
-//! "Owner is not a partition of unity". Opm::entityToDofIndexSet() expands the
-//! node index set to the per-node block of mechanical degrees of freedom, so the
-//! same partition-of-unity property is exercised on the DOF level as well.
+//! Every shared node must be owned by exactly one rank: makeEntityEntityCommunication<3>()
+//! throws "Owner is not a partition of unity" otherwise; entityToDofIndexSet() repeats the
+//! check on the mechanical DOFs.
 //!
 //! The number of MPI processes is the input to the test: run it under mpirun and
 //! the communicator size determines how the deck is partitioned, e.g.

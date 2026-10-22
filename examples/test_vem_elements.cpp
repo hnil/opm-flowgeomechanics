@@ -102,7 +102,7 @@ main(int argc, char** argv)
 
 
         // correct order of nodes in each face, to ensure they are mentioned in
-        // clockwise or counterclockwise order. @@ This is a hack that might only work
+        // clockwise or counterclockwise order. This hack may only work
         // for 4-faces!
         for (int i = 0, j = 0; i != (int)num_face_corners.size(); j += num_face_corners[i++])
             swap(faces[j], faces[j + 1]);

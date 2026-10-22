@@ -27,7 +27,6 @@
 
 #include <opm/models/blackoil/blackoillocalresidualtpfa.hh>
 #include <opm/models/discretization/common/tpfalinearizer.hh>
-// #include <opm/flowexperimental/blackoilintensivequantitiessimple.hh>
 #include <opm/geomech/GeoMechModel.hpp>
 #include <opm/geomech/FlowProblemGeoMech.hpp>
 #include <opm/geomech/MechGridPartition.hpp>
@@ -43,11 +42,6 @@
 #include <opm/simulators/flow/PolyhedralGridVanguard.hpp>
 #include <opm/simulators/flow/equil/EquilibrationHelpers_impl.hpp>
 #include <opm/simulators/flow/equil/InitStateEquil_impl.hpp>
-// #include <ebos/eclpolyhedralgridvanguard.hh>
-//  adding linearshe sould be chaning the update_ function in the same class with condition that the
-//  error is reduced. the trick is to be able to recalculate the residual from here. unsure where the
-//  timestepping is done from suggestedtime?? suggestTimeStep is taken from newton solver in
-//  problem.limitTimestep
 #include "MechTypeTag.hpp"
 namespace Opm
 {
@@ -76,16 +70,10 @@ namespace Properties
 int
 main(int argc, char** argv)
 {
-    // Opm::Parameters::SetDefault<Opm::Parameters::EnableOpmRstFile>(true);
-    // Opm::Parameters::SetDefault<Opm::Parameters::EnableVtkOutput>(true);
-    // Opm::Parameters::SetDefault<Opm::Parameters::ThreadsPerProcess>(1);
-    // Opm::Parameters::SetDefault<Opm::Parameters::EnableAsyncVtkOutput>(false);
-    // Opm::Parameters::SetDefault<Opm::Parameters::EnableAsyncEclOutput>(false);
     OPM_TIMEBLOCK(fullSimulation);
     using TypeTag = Opm::Properties::TTag::FlowProblemMechNoTemp;
     // A mechanics grid of its own decides the flow partition too.
     Opm::MechPartition::installFlowPartition<TypeTag>(argc, argv);
     auto mainObject = Opm::Main(argc, argv);
     return mainObject.runStatic<TypeTag>();
-    // return Opm::start<TypeTag>(argc, argv);
 }

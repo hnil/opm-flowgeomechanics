@@ -38,8 +38,6 @@ typedef std::array<int, 3> EdgeRef; // (i, j, [0 | 1 | 2])
 typedef std::array<int, 2> NodeRef; // (i, j)
 typedef std::array<double, 3> Coord3D;
 using Grid = Dune::FoamGrid<2, 3>;
-// typedef Dune::FoamGrid<2, 3> Grid;
-// typedef int Grid; // @@ dummy
 
 
 struct CellAttributes {
@@ -178,8 +176,6 @@ public:
     std::pair<std::vector<std::array<NodeRef, 3>>, std::vector<std::vector<CellRef>>>
     getMultiresTriangles(const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(),
                         const int max_levels = 5, const int cellnum_threshold = 10) const;
-//                        const int max_levels, const int cellnum_threshold ) const;
-//                         
 
     // static functions
     static std::vector<CellRef> coarse_to_fine(const CellRef& cell, const int levels=1);
@@ -217,7 +213,7 @@ private:
         
     static Coord3D normalize(const Coord3D& v)
     {
-        const double n = norm(v); //std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+        const double n = norm(v);
         return {v[0] / n, v[1] / n, v[2] / n};
     }
 
@@ -253,7 +249,7 @@ private:
 
 void writeMeshToVTK(const RegularTrimesh& mesh, const char* const filename, const int coarsen_levels = 0,
                     const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(), const bool add_smoothing_triangles = true);
-// @@ just because debugger doesnt handle the default arg.    
+// Variant without fixed_cells: easier to call from a debugger.
 void writeMeshToVTKDebug(const RegularTrimesh& mesh, const char* const filename, const int coarsen_levels = 0, const bool add_smoothing_triangles = true);
 
 void writeMeshBoundaryToVTK(const RegularTrimesh& mesh, const char* const filename);

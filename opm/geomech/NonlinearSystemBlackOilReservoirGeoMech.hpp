@@ -233,7 +233,7 @@ namespace Opm
                 std::stringstream os;
                 os << "Geomech nonlinearIterationSeqMechFrac with mechanical and fracture solve: " << iteration << std::endl;
                 report = Parent::nonlinearIteration(timer, nonlinear_solver);
-                os << "Flow solve report converged: " << report.converged;// << std::endl;
+                os << "Flow solve report converged: " << report.converged;
                 OpmLog::info(os.str());
             }
             bool do_mech = true;
@@ -251,15 +251,10 @@ namespace Opm
                 }
             }
 
-            // Mech-skip lever (opt-in, default off): skip the mechanics solve when
-            // the previous outer iteration's fracture->well coupling change was below
-            // threshold, i.e. the well flow (the only path by which the fracture
-            // affects mechanics) is stable, so the mech solution would not move. The
-            // fracture then reuses the previous stress. Self-correcting: if a skip was
-            // wrong, the fracture changes the wells next iteration, the norm rises and
-            // skipping stops. NOTE: this is a fracture-coupling proxy; a purely
-            // thermal stress transient that does not move the wells is not detected,
-            // so keep the threshold conservative on strongly thermal cases.
+            // Mech-skip (opt-in): skip the mechanics solve when the previous outer
+            // iteration's fracture->well coupling change was below threshold; the well
+            // flow is the only path by which the fracture affects mechanics. A purely
+            // thermal stress transient is not detected: keep the threshold conservative.
             const double mech_skip_threshold =
                 prm.get<double>("solver.mech_skip_coupling_threshold", 0.0);
             // Opt-in per-step cap (default 0 = unlimited = legacy behavior): once this
@@ -465,10 +460,8 @@ namespace Opm
             }else{
                 report = Parent::nonlinearIteration(timer, nonlinear_solver);
             }
-            //const PropertyTree& prm_frac = this->simulator_.problem().getFractureParam();
             int mech_max_it = prm.get<int>("solver.max_mech_it");
             if(iteration < mech_max_it){
-                //simulator_.problem().geoMechModel().solveFracture();
                 this->simulator_.problem().geoMechModel().solveGeomechanics();
                 OpmLog::debug("Geomech nonlinearIteration with mechanical solve:");
                 // TODO check convergence properly

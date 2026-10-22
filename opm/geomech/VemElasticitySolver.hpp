@@ -68,7 +68,6 @@
 #include <opm/simulators/linalg/FlexibleSolver.hpp>
 #include <opm/geomech/DuneCommunicationHelpers.hpp>
 #include <opm/geomech/vem/vem.hpp>
-//#include <opm/simulators/linalg/FlexibleSolver_impl.hpp>
 namespace Opm {
 namespace Elasticity {
 
@@ -97,13 +96,6 @@ class VemElasticitySolver
     typedef typename GridType::LeafGridView::template Codim<0>::Iterator LeafIterator;
 
     typedef Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1> > Matrix;
-    //! \brief The linear operator
-    //ASMHandler<GridType> A;//NB NB names have to change
-    //Matrix stiffnessMatrix_;
-    //! \brief The solution vectors
-    //Vector u;//NB NB names have to change
-    //! \brief The load vectors
-    //Vector rhs;//NB NB names have to change
 #if HAVE_MPI
         using CommunicationType = Dune::OwnerOverlapCopyCommunication<int,int>;
 #else
@@ -118,7 +110,6 @@ class VemElasticitySolver
     //! \param[in] verbose If true, give verbose output
     VemElasticitySolver(const GridType& grid)
       : grid_(grid)
-        //: A(grid),grid_(grid)
     {
     }
 
@@ -134,7 +125,6 @@ class VemElasticitySolver
     //! \param[out] max The maximum coordinates of the grid
     void initForAssembly(){}
     void fixNodes(const std::vector<std::tuple<size_t,MechBCValue>>& bc_nodes){
-        //void fixNodesVem(const std::vector<size_t>& fixed_nodes){
         std::vector<int> fixed_dof_ixs;
         std::vector<double> fixed_dof_values;
         for (int i = 0; i < int(bc_nodes.size()); ++i){
@@ -147,7 +137,6 @@ class VemElasticitySolver
                     fixed_dof_ixs.insert(fixed_dof_ixs.end(), {3*node + m});
                     fixed_dof_values.insert(fixed_dof_values.end(),{disp[m]});
                 }
-                //fixed_dof_ixs.insert(fixed_dof_ixs.end(), {3*node, 3*node+1, 3*node+2});
             }
         }
         // ensure unique 
@@ -158,12 +147,9 @@ class VemElasticitySolver
         dirichlet_={num_fixed_dofs, fixed_dof_ixs, fixed_dof_values};
     }
     void expandSolution(Vector& result, const Vector& U){
-        //vector<double> displacements_full(prob.points.size(), nan("1"));
-         // cout << prob.fixed_dof_ixs.size() << endl;
         std::fill(result.begin(),result.end(),nan("1"));
         const auto& fixed_dof_values = std::get<2>(dirichlet_);
         const auto& fixed_dof_ixs = std::get<1>(dirichlet_);
-        //const auto& num_dof_dofs = std::get<0>(dirichlet_);
         for (int i = 0; i != int(fixed_dof_ixs.size()); ++i)
              result[fixed_dof_ixs[i]] = fixed_dof_values[i];
 
@@ -220,7 +206,6 @@ class VemElasticitySolver
             }
     }
 
-    // //! \param[in] params The linear solver parameters
     void setupSolver(const Opm::PropertyTree& prm){
         OPM_TIMEBLOCK(setupLinearSolver);
         tsolver_.reset();
@@ -239,19 +224,14 @@ class VemElasticitySolver
 	  vertexParallelIndexSet_.reset( new CommunicationType::ParallelIndexSet(Opm::makeEntityEntityCommunication<3>(grid_)));
         assert(grid_.size(3) == vertexParallelIndexSet_->size());
       dofParallelIndexSet_.reset( new CommunicationType::ParallelIndexSet(Opm::entityToDofIndexSet(*vertexParallelIndexSet_, 3)));
-            //vertexRemoteIndexSet_.new( RemotePallelIndexSet(vertex_parallindex,vertex_parallindex, grid_.comm()));
-            //vertexRemoteIndexSet_->rebuid<false>();
-	  //auto dofParallelIndexSet = Opm::entityToDofIndexSet(*vertexParallelIndexSet_, 3);
             comm_->indexSet() = *dofParallelIndexSet_;   
             assert(grid_.size(3)*3 == dofParallelIndexSet_->size());
-            comm_->remoteIndices().rebuild<false>();// = *vertexRemoteParallelIndexSet_;   
-            //OPM_THROW(std::runtime_error,"Parallel for mechanics not implemented");
+            comm_->remoteIndices().rebuild<false>();
             const std::function<Vector()> weightsCalculator;
             std::size_t pressureIndex = 0;
             //NB NB ! need other operator in parallel
             setCopyRowsToZero();    
             comm_->communicator().barrier();
-            //using ParOperatorType = Dune::OverlappingSchwarzOperator<Matrix, Vector, Vector, CommunicationType>;
             auto pop = std::make_unique<ParOperatorType>(this->getOperator(), *comm_);
             using FlexibleSolverType = Dune::FlexibleSolver<ParOperatorType>;
             auto tsolver = std::make_unique<FlexibleSolverType>(*pop, *comm_, prm,
@@ -269,9 +249,6 @@ class VemElasticitySolver
                                                                 pressureIndex);
             sop_ = std::move(sop);
             tsolver_ = std::move(tsolver);
-            //NB names have to change.
-            //b = A.getLoadVector();
-            //
         }
     }
     template<int comp>
@@ -292,7 +269,6 @@ class VemElasticitySolver
         {
             OPM_TIMEBLOCK(buildMatrixImplicite);
             //build mode need to be implicite and corredect matrix settings has to be done
-            //mat = 0;
             for (auto matel: A_entries) {
                 int i = std::get<0>(matel);
                 int j = std::get<1>(matel);
@@ -377,10 +353,9 @@ class VemElasticitySolver
     }
     void calculateStressPrecomputed(const Vector& dispalldune);
     void calculateStrainPrecomputed(const Vector& dispalldune);
-    void calculateStrain();// bool precalculated);
-    void calculateStress();// bool precalculated);
+    void calculateStrain();
+    void calculateStress();
 
-    //const std::vector<std::array<double,6>>& stress(){return stress_;}
     const Dune::BlockVector<Dune::FieldVector<ctype,6>>& stress() const{return stress_;}
     const Dune::BlockVector<Dune::FieldVector<ctype,6>>& strain() const{return strain_;}
   void setOptions(int stability_choice_int,
@@ -394,7 +369,6 @@ class VemElasticitySolver
      stab_on_stress_ = stab_on_stress;
      vem_stress_ = vem_stress;
      diagonal_scaling_ = diagonal_scaling;
-      //vem::StabilityChoice stability_choice_ = vem::D_RECIPE;
       std::stringstream os;
       os << "Setting stability choise to " << stability_choice_int
          << (diagonal_scaling_ ? " with diagonal scaling" : "");
@@ -464,8 +438,8 @@ private:
     std::vector< std::shared_ptr<Material> > materials;
     std::vector<double> ymodule_;
     std::vector<double> pratio_;
-    std::vector<double> body_force_;//= set_body_force(num_cells, bfcase);
-    std::tuple<int, std::vector<int>, std::vector<double>> dirichlet_; //set_dirichlet(coords, dircase);
+    std::vector<double> body_force_;
+    std::tuple<int, std::vector<int>, std::vector<double>> dirichlet_;
 
     Dune::BlockVector<Dune::FieldVector<ctype,6>> stress_;
     Dune::BlockVector<Dune::FieldVector<ctype,6>> strain_;
@@ -476,7 +450,6 @@ private:
     Dune::BlockVector<Dune::FieldVector<ctype,1>> rhs_;
     Dune::BlockVector<Dune::FieldVector<ctype,1>> sol_;
 
-    //std::vector<std::array<double,6>> stress_;
     std::shared_ptr< CommunicationType > comm_;
     std::shared_ptr< CommunicationType::ParallelIndexSet > vertexParallelIndexSet_;
     std::shared_ptr< CommunicationType::ParallelIndexSet > dofParallelIndexSet_;
@@ -493,7 +466,6 @@ private:
         int last_linear_iterations_ = 0;
         int total_linear_iterations_ = 0;
         bool last_linear_solve_converged_ = true;
-  //std::shared_ptr< CommunicationType::RemoteIndices> vertexRemoteIndexSet_;
 
 };
 

@@ -32,7 +32,6 @@
 #include <opm/models/io/baseoutputmodule.hh>
 
 #include <opm/models/utils/propertysystem.hh>
-//#include <opm/models/utils/parametersystem.hh>
 #include <opm/models/blackoil/blackoilproperties.hh>
 
 
@@ -50,8 +49,6 @@
 
 namespace Opm::Parameters {
 
-// create new type tag for the VTK tracer output
-// create the property tags needed for the tracer model
 // set default values for what quantities to output
 
 struct VtkWriteGeoMech {
@@ -120,7 +117,6 @@ namespace Opm {
         void allocBuffers()
         {
             if (geoMechOutput_()){
-                //pressDiff_.resize(geoMechModel.numCells);
                 this->resizeScalarBuffer_(pressDiff_, ParentType::BufferType::Element);
                 this->resizeVectorBuffer_(disp_, ParentType::BufferType::Vertex);
                 this->resizeTensorBuffer_(stress_, ParentType::BufferType::Element);
@@ -144,7 +140,6 @@ namespace Opm {
                 }
                 
                 
-                //this->resizeVectorBuffer_(symstress_,ParentType::BufferType::ElementBuffer, 6);
             }
 
         }
@@ -188,7 +183,6 @@ namespace Opm {
                 ymodule_[globalDofIdx] = problem.yModule(globalDofIdx);
                 // give the pressure for the geomech model
                 pressure_[globalDofIdx] = geoMechModel.pressure(globalDofIdx);
-                //
                 {
                     const SymTensor& symtensor = geoMechModel.stress(globalDofIdx);
                     Tensor& stress = stress_[globalDofIdx];

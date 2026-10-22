@@ -198,12 +198,9 @@ namespace Opm
         }
 
         // Run one parent nonlinear iteration as a pure setup pass after the well
-        // structure changed mid-step.  The pre-rebase code called
-        // Parent::nonlinearIteration(0, ...): the parent saw iteration 0 and
-        // redid its once-per-step initialization, and the outer iteration count
-        // was unaffected.  With the iteration state moved into the problem's
-        // NewtonIterationContext, reproduce that by resetting the context for
-        // the parent call and restoring it afterwards.
+        // structure changed mid-step: the parent must see iteration 0 to redo its
+        // once-per-step initialization, so the NewtonIterationContext is reset for
+        // the call and restored afterwards.
         template <class NonlinearSolverType>
         SimulatorReportSingle runParentSetupIteration(
             const SimulatorTimerInterface& timer,
@@ -542,18 +539,9 @@ namespace Opm
                     derived().simulator_.problem().wellModel().prepareTimeStep(group_state_helper.deferredLogger());
                 }
 
-                // Default is now the plain setup iteration: the state-preserving
-                // variant existed to hide the first-iteration storage recycling
-                // (fixed in FlowProblemGeoMech::recycleFirstIterationStorage), and
-                // its WGState restore desynchronises booked and residual well rates
-                // for free-rate wells (model5: +9 % unbooked water under a BHP cap).
-                // The parent setup iteration is REQUIRED when the well structure
-                // actually changed (new fracture connections): skipping it kills
-                // the well/fracture on fine grids (verified 2026-07-24 on
-                // CASE_REFINE_nx_21..._THERMAL_MSW).  It is redundant only for
-                // value-only CTF changes, which take the value_only path above.
-                // Keep it; runParentFirstIterationPreservingState is now
-                // state-neutral for the wells (WGState snapshot/restore).
+                // Required after a well-structure change (new fracture connections):
+                // skipping it kills the well/fracture on fine grids. Value-only CTF
+                // changes take the value_only path above instead.
                 [[maybe_unused]] auto tmp_report =
                     legacy_parent_setup_iteration
                         ? this->runParentFirstIterationLegacy(timer, nonlinear_solver)

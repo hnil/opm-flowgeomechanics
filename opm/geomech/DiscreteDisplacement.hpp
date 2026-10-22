@@ -32,8 +32,6 @@ namespace ddm
 template <class Element>
 Dune::FieldVector<double, 3>
 normalOfElement(const Element& elem){
-    // dim = Dune::Codim<Grid::dimension>{}
-    //int codim = 2;//vertices in this cases
     std::array<Dune::FieldVector<double, 3>, 3> tri;
     int i = 0;
     for (const auto& vertex : Dune::subEntities(elem, Dune::Codim<2>{})){
@@ -53,14 +51,10 @@ normalOfElement(const Element& elem){
 
 double fractureK1(double dist,double width, double E, double nu);
 
-//double fractureK2(double dist,double edist, double E, double nu);
-//double fractureK3(double dist,double edist, double E, double nu);
 
 template <class Element>
 std::array<Real3, 3>
 getTri(const Element& elem){
-    // dim = Dune::Codim<Grid::dimension>{}
-    //int codim = 2;//vertices in this cases
     std::array<Real3, 3> tri;
     int i = 0;
     for (const auto& vertex : Dune::subEntities(elem, Dune::Codim<2>{})){
@@ -121,7 +115,6 @@ strainToStress(const double E,const double nu,const Dune::FieldVector<double,6> 
 double
 tractionSymTensor(const Dune::FieldVector<double,6> symtensor, Dune::FieldVector<double,3> normal);
 
-//assembleMatrix(Dune::DynamicMatrix<Dune::FieldMatrix<double,1,1>>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid)
 void assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);
 void assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);  
 void applyMatrix_fast(Dune::DynamicVector<double>& result,

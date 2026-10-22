@@ -212,9 +212,9 @@ struct WellInfo
     bool converged = true;
     // Contact (open/close) chatter: number of cells that flipped open<->closed
     // state, summed over nonlinear iterations. High values indicate the contact
-    // set is oscillating and driving up the iteration count (Phase 2 signal).
+    // set is oscillating and driving up the iteration count.
     int closed_cell_toggles = 0;
-    // Robustness signals (Phase 1): coupled linear solves that did not converge,
+    // Robustness signals: coupled linear solves that did not converge,
     // and how many of those were recovered by the fallback ladder.
     int linear_solve_failures = 0;
     int ladder_rescues = 0;
@@ -289,7 +289,6 @@ public:
 
     template <class TypeTag, class Simulator>
     void solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& cell_search_tree,
-               //const Dune::CpGrid& grid,
                const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& entity_seeds,
                const Simulator& simulator);
     FractureProperties calculateFractureProperties() const;
@@ -384,7 +383,7 @@ public:
     //! Depth of each fracture cell's centre, positive downwards.
     std::vector<double> cellDepths() const;
     double injectionPressure() const;
-    double injectionBhp() const;// {return injectionPressure() - dp_perf_;};
+    double injectionBhp() const;
     //! true once fracture_pressure_ holds a solved state (injectionPressure/
     //! injectionBhp index into it and must not be called before)
     bool hasPressureState() const { return fracture_pressure_.size() > 0; }
@@ -392,7 +391,7 @@ public:
     //! signature of a lost well connection (e.g. CTFs zeroed by the legacy WI
     //! upscaling), which otherwise passes silently as a pressure transient.
     void warnIfOpenButNotConducting() const;
-    void setPerfProps(double perfpressure,double perf_depth, double perfrate);//{perf_pressure_ = perfpressure;}
+    void setPerfProps(double perfpressure,double perf_depth, double perfrate);
     //! resolved fracture-BC control: "control.type" verbatim, or picked from the
     //! well's active constraint when control.type == "well"
     std::string effectiveControlType() const;
@@ -405,7 +404,7 @@ public:
     // Reservoir cells the well perforates (all perforations, not just this
     // fracture's), used by solver.well_source_all_perfs to feed the fracture
     // wherever the well crosses it.
-    void setWellPerfCells(std::vector<int> cells) { well_perf_cells_ = std::move(cells); }//{well_rate_ = wellrate; total_wellindex_ = WI;}
+    void setWellPerfCells(std::vector<int> cells) { well_perf_cells_ = std::move(cells); }
     //! current flow timestep (s); needed by the opt-in fracture storage term
     void setTimeStep(double dt) { current_dt_ = dt; }
     //! External-pressure mode: the coupled iteration keeps the pressure fixed
@@ -526,9 +525,6 @@ private:
     using ResVector = ::Opm::Fracture::Vector;
     using VectorHP = Dune::MultiTypeBlockVector<ResVector, ResVector>;
 
-  // using Krull = Dune::MultiTypeBlockVector<Dune::BlockVector<double>>;
-  // Dune::MultiTypeBlockVector<Dune::BlockVector<double, std::allocator<double>>> dill;
-  // Krull tull(2);  
   
     using SMatrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>; // sparse matrix
     using FMatrix = Dune::DynamicMatrix<double>;                       // full matrix
@@ -549,18 +545,18 @@ private:
     void initFracture(); // create a new fracture grid from scratch
     Point3D surfaceMap(double x, double y);
 
-    std::unique_ptr<GridStretcher> grid_stretcher_; //@@ experimental, for stretching grids
-    std::unique_ptr<Opm::RegularTrimesh> trimesh_; // @@ experimental, implicitly defined grids
+    std::unique_ptr<GridStretcher> grid_stretcher_; // experimental, for stretching grids
+    std::unique_ptr<Opm::RegularTrimesh> trimesh_; // experimental, implicitly defined grids
 
-    std::vector<std::vector<CellRef>> grid_mesh_map_; // @@ index mapping from cells in grid_ to trimesh_.
-                                                      // @@ NB: in general many-to-many
+    std::vector<std::vector<CellRef>> grid_mesh_map_; // index mapping from cells in grid_ to trimesh_.
+                                                      // NB: in general many-to-many
     std::unique_ptr<Grid> grid_;
     // grid definition in case of step fails
     std::unique_ptr<Grid> grid_prev_;
-    std::unique_ptr<GridStretcher> grid_stretcher_prev_; //@@ experimental, for stretching grids
-    std::unique_ptr<Opm::RegularTrimesh> trimesh_prev_; // @@ experimental, implicitly defined grids
-    std::vector<std::vector<CellRef>> grid_mesh_map_prev_; // @@ index mapping from cells in grid_ to trimesh_.
-                                                      // @@ NB: in general many-to-many
+    std::unique_ptr<GridStretcher> grid_stretcher_prev_; // experimental, for stretching grids
+    std::unique_ptr<Opm::RegularTrimesh> trimesh_prev_; // experimental, implicitly defined grids
+    std::vector<std::vector<CellRef>> grid_mesh_map_prev_; // index mapping from cells in grid_ to trimesh_.
+                                                      // NB: in general many-to-many
     std::vector<double> filtercake_thikness_prev_; // properties of filter cake, if any
     // well source checkpoints (needed to rebuild the dune grid on reset)
     std::vector<CellRef> well_source_cellref_prev_;
@@ -613,7 +609,6 @@ private:
     std::vector<double> stressIntensityK1() const;
     int numWellEquations() const;
   
-    //double well_pressure_;// for now using prm object for definition
     std::vector<CellRef> well_source_cellref_; // references to well cells in the fully resolved TriMesh
     std::vector<int> well_source_; // indices to well cells
     // for reservoir
@@ -621,7 +616,6 @@ private:
     std::vector<std::vector<int>> all_reservoir_cells_;
     std::vector<std::vector<double>> all_reservoir_areas_;
     std::vector<std::vector<Dune::FieldVector<double,3>>> all_reservoir_centers_;
-    // std::vector< Dune::FieldMatrix<double, 3, 3> > reservoir_perm_;
     std::vector<double> reservoir_perm_;
     std::vector<double> reservoir_cstress_;
     std::vector<double> reservoir_mobility_;
@@ -630,13 +624,10 @@ private:
     std::vector<double> reservoir_cell_z_;
     using WaterPropertyEvaluator = std::function<std::pair<CellFluidProperty, CellFluidProperty>(size_t, double)>;
     WaterPropertyEvaluator fracture_water_property_evaluator_;
-    //
-    //std::vector<int> unique_reservoir_cells_;
     std::map<int,double> map_reservoir_mobility_;
     std::map<int,double> map_reservoir_density_;
     std::map<int,double> map_reservoir_cell_z_;
     std::map<int,double> map_reservoir_pressure_;
-    //
 
     std::vector<double> reservoir_dist_;
     std::vector<double> reservoir_pressure_;
@@ -719,9 +710,6 @@ private:
     mutable std::unique_ptr<Matrix> coupling_matrix_; // will be updated by `fullSystemIteration`
   
     using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView>;
-    // using DenseMatrix = Dune::DynamicMatrix<Dune::FieldMatrix<double,1,1>>;
-    // using DenseMatrix = Dune::DynamicMatrix<Dune::FieldMatrix<double,1,1>>;
-    // using DynamicMatrix = Dune::DynamicMatrix<Dune::FieldMatrix<double,1,1>>;
     mutable std::unique_ptr<DynamicMatrix> fracture_matrix_; 
 
     // function ensuring that the fracture matrix exists, and returning a reference to it
@@ -730,38 +718,26 @@ private:
     double E_;
     double nu_;
     double min_width_; // minimum width of fracture, used for convergence criterion
-    double gravity_{Opm::unit::gravity};//{9.81}; // gravity acceleration, used for leakoff calculations
+    double gravity_{Opm::unit::gravity}; // gravity acceleration, used for leakoff calculations
     std::vector<double> fracture_dgh_; // gravity contribution to fracture pressure, used for leakoff calculations  
     PropertyTree prm_;
     double total_WI_well_{0.0}; // total well index for the well, used for leakoff calculations
     // for coupled solve
-  // using SMatrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>; // sparse matrix
-  //using FMatrix = Dune::DynamicMatrix<double>; 
     using SystemMatrix = Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<FMatrix, SMatrix>,
                                                      Dune::MultiTypeBlockVector<SMatrix, SMatrix>>;
     using SystemMatrixRef = Dune::MultiTypeBlockMatrixRef<Dune::MultiTypeBlockVectorRef<FMatrix, SMatrix>,
                                                      Dune::MultiTypeBlockVectorRef<SMatrix, SMatrix>>;
-    //using SystemMatrix = Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<std::reference_wrapper<FMatrix>,std::reference_wrapper<SMatrix>>,
-    //                                                Dune::MultiTypeBlockVector<std::reference_wrapper<SMatrix>, std::reference_wrapper<SMatrix>>>;                                                 
     std::unique_ptr<SystemMatrix> S_;
     std::unique_ptr<FMatrix> A_; // system matrix without coupling terms    
-    //std::unique_ptr<SMatrix> C_; // system matrix without coupling terms    
     std::unique_ptr<SMatrix> I_; // system matrix without coupling terms    
-  //std::unique_ptr<SMatrix> M_; // system matrix without coupling terms
-    // using SystemOperator = Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP>;
-    // std::unique_ptr<SystemOperator> S_linop_;
-    // using CoupledFractureSolver = Dune::InverseOperator<VectorHP, VectorHP>;
-    // std::unique_ptr<CoupledFractureSolver> coupled_solver_;
     std::vector<std::vector<RuntimePerforation>> well_indices_; // for each perf, the corresponding well index info
     double max_flow_time_step_{-1.0};
     double well_rate_;
     double total_wellindex_;
-    //double dz_perf_{0.0};
     double wi_dz_{0.0};
     double wi_respress_{0.0};
     double well_ref_depth_{0.0};
     double perf_ref_depth_{0.0};
-  //double ref_depth_{0.0};
     double well_perf_rate_{0.0};
     CouplingMixState perf_pressure_mix_{};
     CouplingMixState well_rate_mix_{};
@@ -774,13 +750,13 @@ private:
     double mobility_water_perf_{1000.0};
 
     // handling preconditioner
-    std::vector<int> closed_cells_; // indices of cells that are closed (i.e.
+    std::vector<int> closed_cells_; // indices of cells that are closed (zero width) in the current iteration
     // per-cell contact state changes within the current solve, used by the
     // opt-in anti-chatter guard (solver.toggle_guard_mode = "chatter")
     std::vector<int> cell_flip_counts_;
     //using AbstractPreconditioner = Dune::PreconditionerWithUpdate<VectorHP, VectorHP>;
-    using AbstractPreconditioner = FractureMechanicsPreconditioner;//<VectorHP, VectorHP>;
-    std::unique_ptr<AbstractPreconditioner> frac_flow_precond_; // have zero width) in the current iteration, used for modifying the system matrix and convergence criterion
+    using AbstractPreconditioner = FractureMechanicsPreconditioner;
+    std::unique_ptr<AbstractPreconditioner> frac_flow_precond_;
     std::unique_ptr<Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP>> S_linop_;
     using LinearSolverBase = Dune::InverseOperator<VectorHP, VectorHP>;
     std::unique_ptr<LinearSolverBase> psolver_;

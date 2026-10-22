@@ -158,74 +158,21 @@ cross(const CoordType& v1, const CoordType& v2)
 }
 
 
-// // ----------------------------------------------------------------------------
-// const vector<CoordType> compute_bnode_displacements(const vector<double>& amounts,
-//                                                     const vector<size_t>& bcindices,
-//                                                     const Opm::GridStretcher::CellBnodeMap& c2bix,
-//                                                     const Opm::GridStretcher::Grid& grid,
-//                                                     const vector<CoordType>& nodecoords,
-//                                                     const BoundaryNormals& bnormals)
-// // ----------------------------------------------------------------------------
-// {
-//   const size_t N = size(bcindices);
-//   // map amounts to displacement vectors for each boundary point
-//   assert(amounts.size() == N); // one scalar per boundary cell
-//   vector<vector<tuple<double, CoordType>>> disp(N); // node displacements
-
-//   auto aiter = amounts.begin();
-//   for (size_t bc = 0; bc != amounts.size(); ++bc) {
-//     // compute directional vector
-//     const auto entry = c2bix.find(bcindices[bc])->second;
-//     const auto elem = grid.entity(get<0>(entry));
-//     const auto ccenter = elem.geometry().center();
-//     const auto ecenter = (nodecoords[get<1>(entry)] + nodecoords[get<2>(entry)]) / 2;
-//     const auto nvec = normalize(ecenter - ccenter);
-//     disp[get<1>(entry)].push_back({*aiter, nvec});
-//     disp[get<2>(entry)].push_back({*aiter++, nvec});
-//   }
-
-//   // check that every boundary node has got two displacements associated with it
-
-//   // combine displacement vectors
-//   vector<CoordType> result(N);
-//   for (size_t i = 0; i != N; ++i) {
-//     const auto& entry = disp[i];
-//     const double a1 = get<0>(entry[0]);
-//     const double a2 = get<0>(entry[1]);
-//     const auto& v1 = get<1>(entry[0]);
-//     const auto& v2 = get<1>(entry[1]);
-
-//     //const auto dir = normalize(v1 + v2);
-//     const auto& dir = bnnormals[i];
-
-//     assert(dir.dot(v1) >= 0);
-//     assert(dir.dot(v2) >= 0);
-//     result[i] = dir * max(dir.dot(v1) * a1, dir.dot(v2) * a2);
-
-//   }
-//   return result;
-// }
-
-
 }; // end anonymous namespace
 
 // ============================================================================
 namespace Opm
 // ============================================================================
-// #include <dune/geometry/referenceelements.hh>
 {
 vector<size_t>
 GridStretcher::boundary_node_indices(const Grid& grid)
 {
-    // typedef ReferenceElement< typename Grid::ctype, dimGrid > RefElement;
-    // typedef ReferenceElements< typename Grid::ctype, dimGrid > RefElements;
     vector<size_t> bix;
     auto gv = grid.leafGridView();
     for (const auto& el : Dune::elements(gv)) {
         if (!el.hasBoundaryIntersections())
             continue;
         const auto& refEl = Dune::referenceElement(el);
-        // const auto dimW = 2;
         for (auto& is : Dune::intersections(gv, el)) {
             if (is.boundary()) {
                 auto inside = is.indexInInside();
@@ -278,12 +225,10 @@ GridStretcher::boundary_node_indices_old(const Grid& grid)
         for (size_t i = 0; i != elem.subEntities(1); ++i)
             count[view.indexSet().index(elem.subEntity<1>(i))] += 1;
 
-    // @@ This is suboptimal and brittle - there must be a better way to identify
-    // boundary nodes than by geometric comparison!
+    // TODO: identifying boundary nodes by geometric comparison is brittle.
 
     set<size_t> bix;
     for (const auto& ep : Dune::edges(view)) {
-        // for (auto ep = view.begin<1>(); ep != view.end<1>(); ++ep, ++ix)
         int edge_index = view.indexSet().index(ep);
         if (count[edge_index] < 2) {
             for (int i = 0; i != 2; ++i) {
@@ -526,9 +471,7 @@ GridStretcher::compute_cell_2_bindices_mapping(const Grid& grid, const vector<si
     CellBnodeMap result;
     const auto gview = grid.leafGridView();
 
-    // coordinates of boundary indices @@ We really ought to be able to do this
-    // without resorting to geometric calculations!
-    // register all node coordinates
+    // TODO: boundary nodes are found by geometric comparison here as well.
     const vector<CoordType> ncoords(node_coordinates(grid));
     const vector<CoordType> bcoords(extract_elements(ncoords, bindices));
 
@@ -571,7 +514,7 @@ GridStretcher::computeBoundaryNodeDisplacements(const vector<double>& amounts,
         const double l1 = amounts[cur_bcell_ix] * enorm.dot(cnorm) / enorm.dot(bn1);
         const double l2 = amounts[cur_bcell_ix] * enorm.dot(cnorm) / enorm.dot(bn2);
 
-        node_amounts[bnodeix1] = max(node_amounts[bnodeix1], l1); // @@ correct for negative values?
+        node_amounts[bnodeix1] = max(node_amounts[bnodeix1], l1); // TODO: correct for negative values?
         node_amounts[bnodeix2] = max(node_amounts[bnodeix2], l2);
         cur_bcell_ix++;
     }
@@ -598,7 +541,7 @@ void
 GridStretcher::rebalanceBoundary()
 // ----------------------------------------------------------------------------
 {
-    // prepare vector with boundary node coordinates @@ are these always in right order?
+    // prepare vector with boundary node coordinates (TODO: are these always in the right order?)
     const vector<CoordType> ncoords(node_coordinates(grid_));
     vector<double> bnodes3D(bnindices_.size() * 3);
     for (size_t i = 0; i != bnindices_.size(); ++i)

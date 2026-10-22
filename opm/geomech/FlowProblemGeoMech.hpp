@@ -89,7 +89,6 @@ namespace Opm{
         using Toolbox = MathToolbox<Evaluation>;
         using SymTensor = Dune::FieldVector<double,6>;
 
-      //using CellSeedType = typename GridView::template Codim<0>::EntitySeed;
         FlowProblemGeoMech(Simulator& simulator):
             MechParent(simulator),
             geoMechModel_(simulator)
@@ -183,8 +182,7 @@ namespace Opm{
         }
 
         // The embedded fracture needs the well outside the matrix and a pressure
-        // stage solved to a tolerance (best_practice/fg_cprw.json); both measured on
-        // model2, see fixed_tests/EMBEDDED_M2S_STATUS_2026-09-25.md.
+        // stage solved to a tolerance (best_practice/fg_cprw.json).
         static void warnEmbeddedSolverSetup_()
         {
             if (Parameters::Get<Parameters::MatrixAddWellContributions>()) {
@@ -233,12 +231,8 @@ namespace Opm{
 
             const auto capacity = prm.get<int>("solver.embedded_capacity", 5000);
 
-            // How the well's perforations of the fracture cells get their well index.
-            // "fracture" carries over the factor the fracture's own pressure solve uses
-            // -- the current modelling, a constant factor on the cells around the
-            // wellbore -- and stays the default so the old behaviour is preserved.
-            // "estimate" forms a radial-flow index through a fixed prescribed aperture;
-            // making that width follow the solved aperture is the later, dynamic step.
+            // Well index of the fracture-cell perforations: "fracture" (default) reuses the
+            // fracture pressure solve's factor; "estimate" is radial flow through a fixed aperture.
             const auto perfWiModeName =
                 prm.get<std::string>("solver.embedded_perf_wi_mode", std::string {"fracture"});
             const auto perfWiMode = (perfWiModeName == "estimate")
@@ -247,29 +241,17 @@ namespace Opm{
             const auto perfWidth = prm.get<double>("solver.embedded_perf_width", 5e-3);
             const auto perfRw = prm.get<double>("solver.embedded_perf_rw", 0.1);
 
-            // The static gate: bind the fracture into the flow problem once, when it
-            // first appears, and hold that description for the rest of the run.  The
-            // fracture model itself keeps solving -- its state is simply no longer
-            // re-read -- so the flow sees a fixed, fully formed fracture.  This is the
-            // validation configuration: growth feedback cannot confound a comparison of
-            // the conductances themselves.
+            // Static gate: bind the fracture once, when it first appears, and keep that
+            // description; for validating conductances without growth feedback.
             embeddedStatic_ = prm.get<bool>("solver.embedded_static", false);
             embeddedSatnum_ = prm.get<int>("solver.embedded_satnum", 0);
             embeddedCellDump_ = prm.get<int>("solver.embedded_cell_dump", 0);
             embeddedLeakoffReport_ = prm.get<bool>("solver.embedded_leakoff_report", false);
 
-            // The floor under the aperture used for the cells' volume and cubic-law
-            // transmissibility.  Deliberately NOT config.min_width: the fracture's own
-            // solver may run with that at zero, handling closure through the contact
-            // machinery instead -- but a flow cell with zero volume has no storage and,
-            // when it holds no oil and sees no pressure difference, an identically zero
-            // oil row.  The floor keeps every open cell a well-posed, if small, volume.
-            //
-            // The default matches the fracture solver's own historical min_width.  Going
-            // much below it runs into the absolute singularity threshold of the block
-            // inverter (|det| < 1e-40, matrixblock.hh): a fracture row's entries scale
-            // with aperture^3 through the cubic law, and at 1e-4 the determinant of a
-            // perfectly well-conditioned block falls under the cutoff.
+            // Aperture floor for cell volume and cubic-law transmissibility; not
+            // config.min_width, which may be zero and would leave a zero oil row.
+            // Much below 1e-4 the block inverter's |det| < 1e-40 cutoff (matrixblock.hh)
+            // is hit, since a fracture row scales with aperture^3.
             const auto minWidth = prm.get<double>("solver.embedded_min_aperture", 1e-3);
 
             fractureAuxCells_ = &this->registerAuxCellModule_
@@ -356,25 +338,9 @@ namespace Opm{
                 this->geoMechModel().fractureModel().ensureFlowDescriptionCurrent();
             }
 
-            // Inside a time step the topology stays what it was: a fracture solve that
-            // grew or reset its grid changes the shape of the flow system, and a Newton
-            // iteration already under way cannot converge on a moving target.  Value
-            // changes -- apertures, transmissibilities -- pass through; shape changes
-            // wait for the step boundary, which is the sequentially implicit contract.
-            // Three distinct things can be asked of the binding, at very
-            // different cost:
-            //
-            //  - the shape is unchanged and only the apertures have moved, which
-            //    is every iteration of the coupled mechanics-pressure solve:
-            //    refresh the pore volumes, the cubic-law transmissibilities and
-            //    the connection factors over the binding that exists.  No
-            //    sparsity change and no matrix rebuild;
-            //  - the shape may change and restructuring is allowed -- a step
-            //    boundary, or right after a fracture solve that grew: rebind;
-            //  - the shape changed and restructuring is not allowed: nothing
-            //    per-cell is well defined, because a regrid renumbers the
-            //    trimesh and a cell index stops meaning the same cell, so the
-            //    old binding stands until someone may rebind.
+            // Inside a time step the topology stays fixed (sequentially implicit contract):
+            // unchanged shape -> refresh values only; shape change allowed -> rebind;
+            // shape change not allowed -> keep the old binding (a regrid renumbers cells).
             auto& fractureModel = this->geoMechModel().fractureModel();
 
             // What shape is the fracture asking for now, and is it the same one
@@ -418,14 +384,9 @@ namespace Opm{
                 return;
             }
 
-            // A topology change makes the flow problem copy the current state of
-            // every auxiliary degree of freedom into the previous-time state.
-            // That is right for a cell that has just appeared -- it has no
-            // history, so it has moved no mass by coming into existence -- and
-            // harmless at a step boundary, where the two are equal anyway.  In
-            // the middle of a step it would also erase the start-of-step state
-            // of every cell that was already there, which is the reference its
-            // accumulation term is measured against.  Keep theirs.
+            // A topology change copies current aux state into the previous-time state.
+            // Mid-step that would erase the start-of-step reference of existing cells,
+            // so keep theirs.
             auto& previous = this->model().solution(/*timeIdx=*/1);
             const auto firstAux = this->model().numGridDof();
             const auto numTotalDof = this->model().numTotalDof();
@@ -776,7 +737,7 @@ namespace Opm{
 
                 bool is_ok = mechGridContext_ ? true : checkBcConfig(bc_nodes_);
                 if(!is_ok){
-                  // this need to be fixed for parallel runs
+                  // TODO: not valid for parallel runs
                   OpmLog::warning("Error in boundary condition specification not proper for mechanical problem");
                 }
             }
@@ -897,14 +858,10 @@ namespace Opm{
             if (this->gridView().comm().rank() == 0){
                 OpmLog::debug("----------------------Start endTimeStep-------------------");
             }
-            //Parent::FlowProblemType::endTimeStep();
             OPM_BEGIN_PARALLEL_TRY_CATCH();
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 geoMechModel_.endTimeStep();
                 if(this->hasFractures() && this->geoMechModel().fractureModelActive()){
-                    // method for handling extra connections from fractures
-                    // it is options for not including them in fractures i.e. addconnections
-                    //if(addPerfsToSchedule_){
                         if (!this->fractureFlowIsEmbedded()) {
                             // In the embedded representation the schedule owns no fracture
                             // completions: the well perforates the fracture's degrees of
@@ -912,12 +869,6 @@ namespace Opm{
                             this->addConnectionsToSchedual();
                         }
                         this->gridView().comm().barrier();
-                    //}else{
-                    // not not working ... more work...
-                    // will only work if structure is ok
-                    //    assert(false);
-                    //    this->addConnectionsToWell();
-                    //}
                 
                     this->geoMechModel_.fractureModel().
                         assignGeoMechWellState(this->wellModel_.wellState());
@@ -928,26 +879,15 @@ namespace Opm{
             Parent::endTimeStep();
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 if(this->hasFractures() ){
-                    // need to be here ?? to have updated values
                     this->geoMechModel_.updateFilterCakePropertiesOnFractures();
                 }
             }
-            //
-            // if(first_fracture_solve_){
-            //     first_fracture_solve_ = false;
-            //     geoMechModel_.writeFractureSolutionFirst();
-            // }
             if (this->simulator().episodeWillBeOver()) {
                 this->writeMechGridVtk_(this->simulator().time() + this->simulator().timeStepSize());
             }
             if(Parameters::Get<Parameters::EnableWriteAllSolutions>()){
-              //OPM_BEGIN_PARALLEL_TRY_CATCH();
                 geoMechModel_.writeFractureSolution();
-                //  OPM_END_PARALLEL_TRY_CATCH("Writing fracture solution failed: ", this->simulator().vanguard().grid().comm());
             }
-            //
-            //Parent::FlowProblemType::endTimeStep();
-            //Parent::endStepApplyAction();
         }
 
         const GeoMechModel<TypeTag>& geoMechModel() const
@@ -1176,30 +1116,13 @@ namespace Opm{
         Dune::FieldVector<double,6> stress(size_t globalIdx) const{
             return geoMechModel_.stress(globalIdx);
         }
-        // double getFieldProps(const std::string& field, unsigned globalIdx) const{
-        //     const auto& eclState = this->simulator().vanguard().eclState();
-        //     const auto& fp = eclState.fieldProps();
-        //     const auto& myvec = fp.get_double(field);
-        //     return myvec[globalIdx];
-        // }
-      //const std::vector< GridView::Codim<0>::EntitySeed >& elementEntitySeed(){return entitity_seed_;}
-      //const std::vector< CellSeedType >& elementEntitySeed(){return entity_seed_;}
         void advanceTimeLevel(){
             Parent::advanceTimeLevel();
-            //this->simulator_.problem().geoMechModel().advanceTimeLevel();// this is done in begin timestep
-            //wellModel_.serialize(res);
-            //aquiferModel_.serialize(res);
         }
  
     private:
-        // ----------------------------------------------------------------------------
-        // Heuristic rotational constraint check based only on fixed-direction
-        // masks in bc_nodes.
-        //
-        // Since coordinates are not available here, this is a structural check:
-        // to constrain rotation around an axis, we require fixed DOFs in the two
-        // transverse directions on at least two distinct nodes.
-        // ----------------------------------------------------------------------------
+        // Structural check (no coordinates): constraining rotation about an axis needs
+        // fixed DOFs in both transverse directions on at least two distinct nodes.
         static bool checkRotationsConstrained(
             const std::vector<std::tuple<size_t, MechBCValue>>& bc_nodes)
         {
@@ -1248,15 +1171,8 @@ namespace Opm{
             return rx && ry && rz;
         }
 
-        // ----------------------------------------------------------------------------
-        // Check that the mechanical boundary conditions are self-consistent and
-        // cover enough DOFs to prevent rigid-body translations.
-        //
-        // Returns true if the configuration is valid, false otherwise.
-        // An empty bc_nodes list is accepted (e.g. stress-only BCs on all faces).
-        // A warning is emitted for any spatial direction that has no fixed node,
-        // since the resulting system may be singular.
-        // ----------------------------------------------------------------------------
+        // Check that the mechanical BCs are self-consistent and prevent rigid-body
+        // translations; warns about directions with no fixed node.
         static bool checkBcConfig(
             const std::vector<std::tuple<size_t, MechBCValue>>& bc_nodes)
         {
@@ -1277,7 +1193,6 @@ namespace Opm{
                     OpmLog::warning("BC node " + std::to_string(node_idx)
                         + " is listed in bc_nodes but does not fix any"
                           " displacement direction – check BCMECH input.");
-                    //return false;
                 }
             }
 
@@ -1297,11 +1212,6 @@ namespace Opm{
                             + "-direction.  The system may is singular");
                         return false;      
                     };
-                    //  else {
-                    //     OpmLog::info(
-                    //         "Mechanical BC: " + std::to_string(fixed_count[d])
-                    //         + " node(s) fixed in " + dir_name[d] + "-direction.");
-                    // }
                 }
             }
 
@@ -1319,11 +1229,7 @@ namespace Opm{
         std::vector<std::tuple<size_t,MechBCValue>> bc_nodes_;
         // Only set when the mechanics runs on a grid of its own.
         std::unique_ptr<MechGridContext> mechGridContext_;
-        //std::vector<Opm::Elasticity::Material> elasticparams_;
         std::vector<std::shared_ptr<Opm::Elasticity::Material>> elasticparams_;
-      //std::vector< CellSeedType > entity_seed_;
-        //private:
-        //std::unique_ptr<TimeStepper> adaptiveTimeStepping_;
     };
 }
 #endif

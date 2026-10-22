@@ -70,7 +70,7 @@ FractureWell::init(const std::vector<Point3D>& points, const std::vector<Segment
         std::vector<unsigned int> seg(2, 0);
         seg[0] = segments[i][0];
         seg[1] = segments[i][1];
-        factory.insertElement(Dune::GeometryTypes::line, seg); // std::move(mapping));
+        factory.insertElement(Dune::GeometryTypes::line, seg);
     }
     grid_ = factory.createGrid();
     this->resetWriters();
@@ -101,7 +101,6 @@ FractureWell::writemulti(double time) const
 {
     std::vector<double> reservoir_pressure = reservoir_pressure_;
     std::vector<double> reservoir_temperature = reservoir_temperature_;
-    // std::vector<double> reservoir_cells = reservoir_cells_;
     std::vector<double> perf_pressure = perf_pressure_;
     vtkmultiwriter_->beginWrite(time);
     if (perf_pressure.size() > 0) {

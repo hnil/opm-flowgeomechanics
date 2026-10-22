@@ -92,8 +92,6 @@ public:
         for (size_t i = 0; i < y.size(); i++)
             for (size_t j = 0; j < 3; j++)
                 y[j] += vertices_[i][j] * shapeFunctions[i];
-        // project it on the unit sphere
-        // y /= y.two_norm();
         return y;
     }
 
@@ -518,8 +516,6 @@ twoDimensionalTest()
     Dune::VTKWriter<Grid::LeafGridView> writer(grid->leafGridView(), Dune::VTK::nonconforming);
     writer.write("sphere_0");
 
-    // refine the grid
-    // grid->globalRefine(3);
     writer.write("sphere_1");
 
     // Solve the heat equation on the refined grid

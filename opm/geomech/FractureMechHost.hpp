@@ -107,20 +107,13 @@ namespace Opm{
                     // let fracture contain all wells
                     Opm::PropertyTree param = problem.getFractureParam();
                     include_fracture_contributions_ = param.get<bool>("include_fracture_contributions");
-                    //param.read("fractureparam.json");
-                    //const auto& schedule =  this->simulator_.vanguard().schedule();
-                    //int reportStepIdx = simulator_.episodeIndex();
                     // take all wells and perforations
-                    //int end_step = schedule.size() - 1;
                     const std::vector<Opm::Well>& wells = problem.wellModel().getLocalWells(end_step);
-                    //const std::vector<Opm::Well>& wells = schedule.getWells(reportStepIdx);
-                    //const Opm::EclipseGrid& eclgrid = simulator_.vanguard().eclState().getInputGrid();
                     const auto& grid = simulator_.vanguard().grid();
                     std::string outputDir = Parameters::Get<Parameters::OutputDir>();
                     std::string caseName  = simulator_.vanguard().caseName();
                     param.put("outputdir", outputDir);
                     param.put("casename", caseName);
-                    //
                     
 
                     // LGR-aware connection-to-cell resolution: COMPDATL
@@ -151,7 +144,6 @@ namespace Opm{
                     // most important stress
                     fracturemodel_->updateReservoirWellProperties<TypeTag,Simulator>(simulator_);
                     // add fractures along the wells
-                    //fracturemodel_->addFractures(schedule[reportStepIdx]);
                     fracturemodel_->addFractures(
                         schedule[end_step],
                         &lgrs);
@@ -171,7 +163,7 @@ namespace Opm{
                 if(simulator_.gridView().comm().rank() == 0){
                     if(verbosity > 1){
                         std::ostringstream os;
-                        os << "Frac modelfound, updating reservoir properties and solving fractures";// << std::endl;
+                        os << "Frac modelfound, updating reservoir properties and solving fractures";
                         OpmLog::info(os.str());
                     }
                 }
@@ -204,7 +196,7 @@ namespace Opm{
             }else{
                 if(simulator_.gridView().comm().rank() == 0){
                     std::ostringstream os;
-                    os << "Fracture model not initialized, not solving fractures";// << std::endl;
+                    os << "Fracture model not initialized, not solving fractures";
                     OpmLog::info(os.str());
                 }
             }
@@ -218,8 +210,6 @@ namespace Opm{
             if(problem.hasFractures() && fracturemodel_){
                 // write first solution in standard format
                 // this may ad some extra output of static variables
-                //int reportStepIdx = simulator_.episodeIndex();
-                    //fracturemodel_->write(reportStepIdx);
                     // hack to get correct number of fracture output
                     fracturemodel_->writemulti(0.0);
             }
@@ -230,7 +220,6 @@ namespace Opm{
             if(problem.hasFractures() && fracturemodel_){
                 // write first solution in standard format
                 // this may ad some extra output of static variables
-                //int reportStepIdx = simulator_.episodeIndex();
                 double time = simulator_.time();
                 fracturemodel_->writemulti(time);
             }

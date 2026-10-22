@@ -90,9 +90,6 @@ main(int varnum, char** vararg)
     for (auto b : bindices)
         bcoords.push_back(coords[b]);
 
-    // gs.bcentroid_param_mat();
-    // return 0;
-
     switch (choice) {
     case 1:
         // test boundary node displacements
@@ -101,11 +98,6 @@ main(int varnum, char** vararg)
             vector<CoordType> disp(bindices.size(), {0, 0, 0});
             translate(disp, {4, 0, 0});
             uniform_scale(disp, bcoords, 1.5);
-            // vector<CoordType> disp(bindices.size(), {0, 0, 0});
-            // disp[19] = {0.1, 0, 0};
-            // disp[20] = {0.2, 0, 0};
-            // disp[21] = {0.3, 0, 0};
-            // disp[22] = {0.4, 0, 0};
 
             gs.applyBoundaryNodeDisplacements(disp);
             break;
@@ -114,11 +106,6 @@ main(int varnum, char** vararg)
         // test expansion
         {
             cout << "Expanding test" << endl;
-            // std::vector<double> amounts(bindices.size(), 0.05);
-            // amounts[4] = 0.4;
-            // amounts[5] = 0.3;
-            // amounts[10] = -0.1;
-
             std::vector<double> amounts(bindices.size(), 0);
             amounts[0] = 0.05;
             amounts[1] = 0.1;
@@ -136,12 +123,8 @@ main(int varnum, char** vararg)
         // test gradient
         {
             vector<double> grad;
-            // vector<double> disp(gs.boundaryNodeIndices().size(), 1);
             vector<double> disp(gs.boundaryNodeIndices().size(), 0);
-            // disp[0] = 1;
-            // disp[10] = 2;
             vector<double> target(gs.centroidEdgeDist());
-            // target[0] *= 2;
             for (int i = 0; i != target.size(); ++i)
                 target[i] *= 2;
             const double obj = gs.objective(disp, target, grad, false);
@@ -159,7 +142,6 @@ main(int varnum, char** vararg)
                 double obj2 = gs.objective(dispDelta, target, grad_dummy, false);
                 cout << (obj2 - obj) / delta << " " << grad[i] << endl;
                 ;
-                // cout << i << " : " << (obj2-obj) / delta << endl;
             }
             cout << endl;
 
@@ -171,15 +153,11 @@ main(int varnum, char** vararg)
         bool fixed_centroids = true;
         const auto normals(gs.bnodenormals());
         vector<double> target(gs.centroidEdgeDist());
-        // for (size_t i = 0; i != target.size(); ++i) target[i] *= 1.1;
         const double dispfac = 3;
         target[0] *= dispfac;
         target[7] *= dispfac;
         target[17] *= dispfac;
         target[11] *= dispfac;
-        // target[5] *= dispfac;
-        // target[14] *= dispfac;
-        // target[4] *= dispfac;
 
         vector<double> disp(normals.size(), 0);
         vector<double> grad;

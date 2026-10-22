@@ -125,49 +125,6 @@ compute_target_expansion(const double K1_target,
 
 // ----------------------------------------------------------------------------
 
-
-  
- // template<class CoordType> inline void ensure_convexity(const CoordType& ipoint,
-//                                                        std::vector<CoordType>& pts) {
-//   while(true) {
-//     bool modified = false;
-//     for (int ix = 0; ix != pts.size(); ++ix) {
-//         const int ixp = (ix + 1) % pts.size();
-//         const int ixm = (ix + pts.size() - 1) % pts.size();
-
-//         CoordType& p = pts[ix];
-//         const CoordType& pp = pts[ixp];
-//         const CoordType& pm = pts[ixm];
-
-//         const CoordType v1 = pp - p;
-//         const CoordType v2 = pm - p;
-//         const CoordType vi = p - ipoint;
-
-//         const CoordType cross1 { v1[1] * v2[2] - v1[2] * v2[1],
-//                                  v1[2] * v2[0] - v1[0] * v2[2],
-//                                  v1[0] * v2[1] - v1[1] * v2[0] };
-
-//         const CoordType cross2 { v1[1] * vi[2] - v1[2] * vi[1],
-//                                  v1[2] * vi[0] - v1[0] * vi[2],
-//                                  v1[0] * vi[1] - v1[1] * vi[0] };
-
-//         const double sprod = cross1[0] * cross2[0] +
-//                              cross1[1] * cross2[1] +
-//                              cross1[2] * cross2[2];
-
-//         if (sprod < 0) {
-//           // concave corner
-//           p = 0.5 * (pp + pm);
-//           modified = true;
-//         }
-//     }
-//     if (!modified)
-//       break;
-//   }
-
-// };
-
-
 template <typename Vec>
 std::vector<double>
 make_vector(const Vec& data, size_t sz = 0)
@@ -326,7 +283,6 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         const auto& grid = simulator.vanguard().grid();
         GeometryHelper ghelper(grid);
         const auto value_of = [](const auto& value) { return Opm::scalarValue(value); };
-        // NB burde truleg interpolere
         // NB reservoir dist not calculated
         size_t ncf = reservoir_cells_.size();
         assert(ncf > 0); 
@@ -356,16 +312,12 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         }
 
 
-        //double numax = 0, Emax = 0;
-        //auto& enitity_seeds = problem.elementEntitySeeds();//used for radom axes better way?
-        // get properties from rservoir
 
 
         // optionally evaluate the reservoir stress at the fracture cell centroids by
         // trilinear interpolation of patch-recovered nodal stress, instead of the
         // piecewise-constant stress of the containing cell.  With large reservoir
         // cells the latter gives large jumps in the traction along the fracture.
-        // ("NB burde truleg interpolere" -- now optional via reservoir.interpolate_stress)
         const bool interpolate_stress = prm_.get<bool>("reservoir.interpolate_stress", false);
         std::vector<Dune::FieldVector<double,6>> nodal_stress;
         std::vector<Dune::FieldVector<double,3>> frac_centroids;
@@ -384,7 +336,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 frac_centroids[fracElemMapper.index(element)] = element.geometry().center();
         }
 
-        std::vector<int> unique_reservoir_cells_;//NB move to member?
+        std::vector<int> unique_reservoir_cells_;
         for(auto & cells : all_reservoir_cells_){
             for(auto & cell : cells){
                 unique_reservoir_cells_.push_back(cell);
@@ -411,7 +363,6 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 }
                 const auto& currentData = grid.currentData();
                 const auto& elem = Dune::cpgrid::Entity<0>(*currentData.back(), cell, true);
-                //const auto& geom = elem.geometry();
                 const auto& cell_center = elem.geometry().center();
                 map_reservoir_mobility_[cell] = reservoir_mobility;
                 map_reservoir_density_[cell] = fs.density(FluidSystem::waterPhaseIdx).value();
@@ -486,11 +437,9 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 reservoir_cstress_[i] = cstress;
                 const auto& currentData = grid.currentData();
                 const auto& elem = Dune::cpgrid::Entity<0>(*currentData.back(), cell, true);
-                //auto cell_center = ghelper.centroid(i);
                 const auto& geom = elem.geometry();
                 auto cell_center = geom.center();
                 if(calculate_dist){
-                  //assert(false);                  
                   double dist = 0;
                   int num_corners = geom.corners();
                   for(int li=0; li < geom.corners();++li){
@@ -511,7 +460,6 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 reservoir_stress_[i][0] = stressval;
                 reservoir_stress_[i][1] = stressval;
                 reservoir_stress_[i][2] = stressval; //???
-                //
                 reservoir_pressure_[i] = injectionPressure();
                 reservoir_mobility_[i] = 1000.0;
                 reservoir_water_mobility_[i] = 1000.0;
@@ -562,8 +510,6 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
 
         fracture_dgh_.resize(ncf);
         for (auto element : Dune::elements(grid_->leafGridView())) {
-           // int i = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView,
-            // Dune::mcmgElementLayout>::index(element);
             int i = grid_->leafGridView().indexSet().index(element);
             double z = element.geometry().center()[2];
             fracture_dgh_[i] = gravity_ * reservoir_density_[i] * z;
@@ -571,15 +517,12 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         int reportStepIdx = simulator.episodeIndex();
         
         const auto& schedule =  simulator.vanguard().schedule();
-        //const Opm::Well& well = wells[wellinfo_.name];
-        //const std::vector<Opm::Well>& wells = problem.wellModel().getLocalWells(reportStepIdx);
         // get properties from well connections in case of filter cake
         if(schedule[reportStepIdx].wells.has(wellinfo_.name) == false){
             OpmLog::warning(fmt::format("Well {} not found in schedule step {}", wellinfo_.name, reportStepIdx));
             return;
         }
         const auto& well = schedule[reportStepIdx].wells(wellinfo_.name);
-        //const auto& well = problem.wellModel().getWellEcl(wellinfo_.name);
         const auto& connections = well.getConnections();
         total_WI_well_ = 0.0;
         for(const auto& conn : connections){
@@ -589,7 +532,6 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
           assert(conn.CF() >= 0);
           total_WI_well_ += conn.CF();
         }
-        //const auto& connection = connections[wellinfo_.perf];// probably wrong
         if(connections.hasGlobalIndex(wellinfo_.global_index) == false){
             OpmLog::warning(fmt::format("Well connection with global index {} not found in schedule step {}", wellinfo_.global_index, reportStepIdx));
             return;
@@ -603,40 +545,24 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         }
         const auto& wellstate = wellstates[*well_index];
 
-        // if(update_filtercake){
-        //   double dt = simulator.timeStepSize();
-        //   updateFilterCakeProps(connections, wellstate, dt);
-        // } 
-        // else {
-        //   // remap
-        //   int ncf = reservoir_cells_.size();
-        //   filtercake_thikness_.resize(ncf, 0.0);
-        // }
     }
 
 
 
 template <class TypeTag, class Simulator>
-void Fracture::updateFilterCakePropertiesPost(const Simulator& simulator)//, bool init_constant_vals,bool update_filtercake)
+void Fracture::updateFilterCakePropertiesPost(const Simulator& simulator)
     {
-        // if `init_contant_vals` is true, the fields that should normally not
-        // change, i.e.  E_, nu_ and reservoir_perm_ will be updated. This should
-        // normally only be needed the first time.
 
         int reportStepIdx = simulator.episodeIndex();
         const auto& schedule =  simulator.vanguard().schedule();
-        //const Opm::Well& well = wells[wellinfo_.name];
-        //const std::vector<Opm::Well>& wells = problem.wellModel().getLocalWells(reportStepIdx);
         // get properties from well connections in case of filter cake
         if(schedule[reportStepIdx].wells.has(wellinfo_.name) == false){
             OpmLog::warning(fmt::format("Well {} not found in schedule step {}", wellinfo_.name, reportStepIdx));
             return;
         }
         const auto& well = schedule[reportStepIdx].wells(wellinfo_.name);
-        //const auto& well = problem.wellModel().getWellEcl(wellinfo_.name);
         const auto& connections = well.getConnections();
         
-        //const auto& connection = connections[wellinfo_.perf];// probably wrong
         if(connections.hasGlobalIndex(wellinfo_.global_index) == false){
             OpmLog::warning(fmt::format("Well connection with global index {} not found in schedule step {}", wellinfo_.global_index, reportStepIdx));
             return;
@@ -658,7 +584,6 @@ void Fracture::updateFilterCakePropertiesPost(const Simulator& simulator)//, boo
 // ----------------------------------------------------------------------------
 template <class TypeTag, class Simulator>
 void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& cell_search_tree,
-                     //const Dune::CpGrid& cpgrid,
                      const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& entity_seeds,
                      const Simulator& simulator)
 // ----------------------------------------------------------------------------
@@ -734,12 +659,10 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         // start by assuming pressure equal to confining stress (will also set
         // fracture_pressure_ to its correct size
         normalFractureTraction(fracture_pressure_);
-        if (numWellEquations() > 0) // @@ it is implicitly assumed for now that
-            // there is just one well equation.  We initializze
-            // it with an existing value.
+        if (numWellEquations() > 0) // assumes a single well equation
             fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
 
-        const double tol = prm_.get<int>("solver.tolerance"); // 1e-5; // @@
+        const double tol = prm_.get<int>("solver.tolerance");
         const int max_iter = prm_.get<int>("solver.max_iter");
         int iter = 0;
 
@@ -760,7 +683,6 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             }
         }
 
-        // @@ debug
         const std::vector<double> K1_not_nan = Fracture::stressIntensityK1();
         std::vector<double> K1;
         for (size_t i = 0; i != K1_not_nan.size(); ++i)
@@ -797,10 +719,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         bool reinitialize= !(prm_.get<bool>("solver.remap_solution"));
         if(reinitialize){
             OpmLog::debug("Reinitializing fracture states before IF with trimesh propagation");
-            //if(true){
                 fracture_width_ = 1e-3; // Ensure not completely closed
-            //fracture_pressure_ = perf_pressure_;
-            //}
             // start by assuming pressure equal to confining stress (will also set
             // fracture_pressure_ to its correct size
             auto traction = fracture_pressure_;
@@ -812,8 +731,6 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
             }
         }
-        // It is implicitly assumed for now that there is just one well equation.
-        // We initialize with an existing value. @@
         
 
         // save original grid and filtercake, to allow us to map it onto evolved grids
@@ -825,7 +742,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         
         auto score_function = [&](const RegularTrimesh& trimesh, const int level) -> std::vector<double> {
             const int max_iter = prm_.get<int>("solver.max_iter");
-            const double tol = prm_.get<double>("solver.tolerance");//,1e-8);
+            const double tol = prm_.get<double>("solver.tolerance");
             const int nlin_verbosity = prm_.get<double>("solver.verbosity");
             *trimesh_ = trimesh;
             // save well sources before grid change
@@ -858,8 +775,6 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             updateReservoirCells(cell_search_tree, cpgrid, entity_seeds);
             updateReservoirProperties<TypeTag, Simulator>(simulator, true, false);
             initPressureMatrix();
-            //initFractureWidth();
-            //initFracturePressureFromReservoir();
             rhs_pressure_.resize(0);
             coupling_matrix_ = nullptr;
 
@@ -924,7 +839,6 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 initFracturePressureFromReservoir();
             }
 
-            // total amount of filtercake be
         
 
             filtercake_thikness_ = redistribute_values(filtercake_thickness_0,
@@ -935,7 +849,6 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 OpmLog::debug(fmt::format("Total filtercake thickness before remapping: {}\n"
                                           "Total filtercake thickness after remapping: {}",
                                           total_filtercake_0, total_filtercake));
-                //assert(false);
             }
             int iter = 0;
             while (!fullSystemIteration(tol,iter) && iter++ < max_iter) {
@@ -1090,7 +1003,6 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
           return area_stop;
         };
 
-        //const double K1max = prm_.get<double>("KMax");
         const double threshold = 1.0;
         const std::vector<CellRef> fixed_cells = well_source_cellref_;
         const int target_cellcount = prm_.get<int>("solver.target_cellcount"); 
@@ -1155,48 +1067,29 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             // start by assuming pressure equal to confining stress (will also set
             // fracture_pressure_ to its correct size
             normalFractureTraction(fracture_pressure_);
-            if (numWellEquations() > 0) { // @@ it is implicitly assumed for now that
-                // there is just one well equation.  We initializze
-                // it with an existing value.
+            if (numWellEquations() > 0) { // assumes a single well equation
                 fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
             }
             const int max_iter = prm_.get<int>("solver.max_iter");
-            const double tol = prm_.get<double>("solver.tolerance"); //,1e-8);
+            const double tol = prm_.get<double>("solver.tolerance");
 
 
-            const double efac = prm_.get<double>("solver.efac"); // 2; // @@ heuristic
-            const double rfac = prm_.get<double>("solver.rfac"); // 2; // @@ heuristic
-            double K1max = prm_.get<double>("KMax"); // @@ for testing.  Should be added as a proper data member
+            const double efac = prm_.get<double>("solver.efac"); // heuristic
+            const double rfac = prm_.get<double>("solver.rfac"); // heuristic
+            double K1max = prm_.get<double>("KMax"); // should be a proper data member
             const std::vector<size_t> boundary_cells = grid_stretcher_->boundaryCellIndices();
             const size_t N = boundary_cells.size(); // number of boundary nodes and boundary cells
 
             std::vector<double> total_bnode_disp(N, 0), bnode_disp(N, 0), cell_disp(N, 0);
-            // const std::vector<GridStretcher::CoordType>
-            //   bnode_normals_orig = grid_stretcher_->bnodenormals();
             int max_expand_iter = prm_.get<int>("solver.max_expand_iter");
             std::vector<GridStretcher::CoordType> displacements(N, {0, 0, 0});
-            int count = 0; // @@
+            int count = 0;
             while (true && (count < max_expand_iter)) {
 
                 ++count;
                 // solve flow-mechanical system
                 int iter = 0;
-                // open file "width" for appending data
                 while (!fullSystemIteration(tol,iter) && iter++ < max_iter) {
-                    // @@@@
-                    // auto fw = make_vector(fracture_width_);
-                    // auto fp = make_vector(fracture_pressure_, fracture_pressure_.size()-1);
-                    // grid_stretcher_->dumpToVTK("stretchedgrid", { fw, fp });
-
-                    // if (iter > 20) {
-                    //   std::ofstream width_debug("width", std::ios::app);
-                    //   std::ofstream pressure_debug("pressure", std::ios::app);
-
-                    //   std::copy(fw.begin(), fw.end(), std::ostream_iterator<double>(width_debug, " "));
-                    //   std::copy(fp.begin(), fp.end(), std::ostream_iterator<double>(pressure_debug, " "));
-
-                    //   int krull=0;
-                    //}
                 };
                 if(iter >= max_iter){
                     last_solve_stats_.converged = false;
@@ -1238,31 +1131,20 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                     cell_disp[i] = std::max(std::min(cell_disp[i], maxgrow), -maxgrow);
                 }
 
-                bnode_disp = grid_stretcher_->computeBoundaryNodeDisplacements(cell_disp); //@@
-                // bnode_disp =
-                //   grid_stretcher_->computeBoundaryNodeDisplacements(cell_disp, bnode_normals_orig);
+                bnode_disp = grid_stretcher_->computeBoundaryNodeDisplacements(cell_disp);
                 for (size_t i = 0; i != N; ++i)
                     bnode_disp[i] = std::max(std::min(bnode_disp[i], maxgrow), -maxgrow);
 
-                // // ensure no boundary node moved inwards further than starting point
-                // for (size_t i = 0; i != N; ++i) {
-                //   bnode_disp[i] = std::max(bnode_disp[i], -total_bnode_disp[i]);
-                //   total_bnode_disp[i] += bnode_disp[i];
-                // } // @@@ no longer works after rebalanceBoundary introduced()
 
                 // ensure convexity
                 grid_stretcher_->adjustToConvex(bnode_disp, total_bnode_disp, grid_stretcher_->bnodenormals());
-                // bnode_normals_orig);
 
                 for (size_t i = 0; i != N; ++i)
                     displacements[i] = grid_stretcher_->bnodenormals()[i] * bnode_disp[i];
-                // displacements[i] = bnode_normals_orig[i] * bnode_disp[i];
 
                 grid_stretcher_->applyBoundaryNodeDisplacements(displacements);
                 grid_stretcher_->rebalanceBoundary();
 
-                // debug stuff
-                // grid_stretcher_->dumpToVTK("stretchedgrid");
 
                 // grid has changed its geometry, so we have to recompute discretizations
                 updateCellNormals();
@@ -1271,11 +1153,6 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 initPressureMatrix();
                 fracture_matrix_ = nullptr;
 
-                //const auto& pts = grid_stretcher_->nodecoords();
-                //const auto bix = grid_stretcher_->boundaryNodeIndices();
-                // for(auto i : bix)
-                //   os << pts[i][0] << " " << pts[i][1] << " " << pts[i][2] << "\n";
-                // os.close();
             }
             if (count >= max_expand_iter) {
                 last_solve_stats_.converged = false;
@@ -1290,13 +1167,12 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         if(first_solve){
             well_indices_.resize(2);
         }
-        auto well_indices_new = wellIndices_();//calculate wellindices
-        auto well_indices_old = wellIndices();// use the function used from simulator at prevois step
+        auto well_indices_new = wellIndices_();
+        auto well_indices_old = wellIndices(); // as used by the simulator at the previous step
         if(first_solve){
             well_indices_[0] = well_indices_new;
             well_indices_[1] = well_indices_new;
         }else{
-            //well_indices_[1] = well_indices_[0];
             well_indices_[1] = well_indices_old;
             well_indices_[0] = well_indices_new;
         }

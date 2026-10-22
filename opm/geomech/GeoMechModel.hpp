@@ -79,14 +79,12 @@ namespace Opm{
         }
     public:
         GeoMechModel(Simulator& simulator):
-            //           Parent(simulator)
             first_solve_(true),
             write_system_(false),
             reduce_boundary_(false),
             simulator_(simulator)
         {
 
-            //const auto& eclstate = simulator_.vanguard().eclState();
         };
         //ax model things
         void postSolve(GlobalEqVector&) {
@@ -101,19 +99,16 @@ namespace Opm{
 
         // model things
         void beginIteration(){
-            //Parent::beginIteration();
             if(simulator_.gridView().comm().rank() == 0){
                 OpmLog::info("Geomech begin iteration\n");
             }
         }
         void endIteration(){
-            //Parent::endIteration();
             if(simulator_.gridView().comm().rank() == 0){
                 OpmLog::info("Geomech end iteration\n");
             }
         }
         void beginTimeStep(){
-            //Parent::beginIteration();
             if(simulator_.gridView().comm().rank() == 0){
                 OpmLog::info("Geomech begin time step\n");
             }
@@ -127,7 +122,6 @@ namespace Opm{
             this->solveGeoMechAndFracture();
         }
         void solveGeoMechAndFracture(){
-            //Parent::endIteration();
             const auto& problem = simulator_.problem();
             this->solveGeomechanics();
             if(problem.hasFractures()){
@@ -228,9 +222,7 @@ namespace Opm{
                 const auto& fs = iq.fluidState();
                 const int phaseIdx = referencePhaseIdx(fs);
                 const auto& press = fs.pressure(phaseIdx);
-                // const auto& biotcoef = problem.biotCoef(dofIdx); //NB not used
                 //thermal part
-                //Properties::EnableTemperature
                 const auto& poelCoef = problem.poelCoef(dofIdx);
                 double pressure = Toolbox::value(press);
                 double diffpress = pressure;
@@ -253,7 +245,6 @@ namespace Opm{
                     OPM_TIMEBLOCK(addTermalParametersToMech);
                     const auto& temp = fs.temperature(phaseIdx);//NB all phases have equal temperature
                     const auto& thelcoef = problem.thelCoef(dofIdx);
-                    // const auto& termExpr = problem.termExpr(dofIdx); //NB not used
 		    // tcoeff = (youngs*tempExp/(1-pratio))*fac;
                     double tcoeff = thelcoef*fac;
                     // assume difftemp = 0 for non termal runs
@@ -281,12 +272,9 @@ namespace Opm{
             }
             Opm::PropertyTree param = problem.getFractureParam();
             bool smooth = param.get<bool>("smooth_force",false);
-            // smoothing length in meters: regularizes under-resolved (cell-wise sharp)
-            // temperature/pressure fronts over a fixed *physical* scale, so the
-            // resulting stress extrema are grid independent.  A natural choice is the
-            // physical front width, e.g. sqrt(thermal diffusivity * time) for a
-            // conductive thermal front.  Takes precedence over the legacy one-ring
-            // 'smooth_force' smoothing, whose radius is grid dependent.
+            // Smoothing length in meters: smooths under-resolved fronts over a fixed physical
+            // scale (e.g. sqrt(diffusivity*t)) so stress extrema are grid independent.
+            // Takes precedence over the grid-dependent one-ring 'smooth_force'.
             double smooth_length = param.get<double>("smooth_force_length",0.0);
             // Safeguard: force smoothing averages neighbor values, so the
             // zeroed loads of flow-only cells would bleed into the adjacent
@@ -375,13 +363,11 @@ namespace Opm{
                 elacticitysolver_->setBodyForce(gravity, density);
                 
                 elacticitysolver_->fixNodes(problem.bcNodes());
-                //
                 // a cell that fails to assemble throws on its owner only; the solver setup below is collective
                 OPM_BEGIN_PARALLEL_TRY_CATCH();
                 elacticitysolver_->initForAssembly();
                 elacticitysolver_->assemble(this->mechLoad(), do_matrix, do_vector,reduce_boundary_);
                 OPM_END_PARALLEL_TRY_CATCH("Mechanics assembly failed: ", simulator_.vanguard().grid().comm());
-                //elacticitysolver_->assemble_fem(mechPotentialForce_, do_matrix, do_vector,reduce_boundary_);
                 FlowLinearSolverParametersGeoMech p;
                 p.init<TypeTag>();
                 // Print parameters to PRT/DBG logs.
@@ -441,7 +427,7 @@ namespace Opm{
             // used at if initial stress not calculated
             outputstress_ = initstress;
       }
-      void calculateOutputQuantitiesMech(){//bool relative_solve = true){
+      void calculateOutputQuantitiesMech(){
             OPM_TIMEBLOCK(CalculateOutputQuantitesMech);
             Opm::Elasticity::Vector field;
             const auto& grid = this->mechGrid();
@@ -457,7 +443,6 @@ namespace Opm{
 
             this->makeDisplacement(field);
             // update variables used for output to resinsight
-            // NB TO DO
             {
             OPM_TIMEBLOCK(calculateStress);
             elacticitysolver_->calculateStressPrecomputed(field);
@@ -469,16 +454,11 @@ namespace Opm{
             for (const auto& cell: elements(gv)){
                 auto cellindex = gv.indexSet().index(cell);
                 // add initial stress
-                //auto cellindex2 = gv.indexSet().index(cell);
-                //stress_[cellindex] = linstress[cellindex];
                 strain_[cellindex] = linstrain[cellindex];
                 linstress_[cellindex] = linstress[cellindex];
             }
-            // optional: replace the raw cell-wise stress by its patch recovery
-            // (least-squares nodal fit averaged back to cells).  Reduces the
-            // grid-dependent cell-to-cell jumps of the stress, in particular at
-            // under-resolved temperature/pressure fronts, and thereby the
-            // tractions sampled by the fracture model via problem.stress().
+            // Optional patch recovery of the cell-wise stress: reduces grid-dependent
+            // jumps at under-resolved fronts, and so the tractions the fracture samples.
             {
                 Opm::PropertyTree param = simulator_.problem().getFractureParam();
                 const bool recover = param.get<bool>("patch_recovery_stress",false);
@@ -494,10 +474,6 @@ namespace Opm{
             for(size_t dofIdx = 0; dofIdx < simulator_.model().numGridDof(); ++dofIdx){
                 outputstress_[dofIdx] = this->stress(dofIdx);
             }
-            //size_t lsdim = 6;
-            //for(size_t i = 0; i < stress_.size(); ++i){
-            //         stress_[i] += problem.initStress(i);
-            //}
             //NB ssume initial strain is 0
 
             bool verbose = false;
@@ -517,7 +493,6 @@ namespace Opm{
             OPM_TIMEBLOCK(endTimeStepMech);
             this->updatePotentialForces(relative_solve);
             // for now assemble and set up solver her
-            //const auto& problem = simulator_.problem();
             if(first_solve_){
                 this->setupMechSolver(use_body_force);
             }else{
@@ -530,15 +505,10 @@ namespace Opm{
               std::vector<double> density(nc, 2000.0);
               elacticitysolver_->setBodyForce(gravity, density);
             }
-            //else
             {
                 // reset the rhs even in the first iteration maybe bug in rhs for reduce_boundary=false;
                 OPM_TIMEBLOCK(AssembleRhs);
                 // need "static boundary conditions is changing"
-                //bool do_matrix = false;//assemble matrix
-                //bool do_vector = true;//assemble matrix
-                //elacticitysolver_->A.initForAssembly();
-                //elacticitysolver_->assemble(mechPotentialForce_, do_matrix, do_vector);
                 // need precomputed divgrad operator
                 elacticitysolver_->updateRhsWithGrad(this->mechLoad());
             }    
@@ -570,8 +540,6 @@ namespace Opm{
         template<class Serializer>
         void serializeOp(Serializer&)
         {
-            //serializer(tracerConcentration_);
-            //serializer(wellTracerRate_);
          }
 
         // used in FlowProblemGeoMech
@@ -598,7 +566,6 @@ namespace Opm{
             const size_t numMech = mechMap_.numMechCells();
             celldisplacement_.resize(numMech);
             std::fill(celldisplacement_.begin(),celldisplacement_.end(),0.0);
-            //stress_.resize(numDof);
             linstress_.resize(numMech);
             std::fill(linstress_.begin(),linstress_.end(),0.0);
             outputstress_.resize(numDof);
@@ -674,12 +641,8 @@ namespace Opm{
             return mechPotentialPressForce_[globalDofIdx];
         }
 
-        // Output forms of the potential forces: the stored quantities carry
-        // the poroelastic amplification fac = (1-nu)/(1-2nu) used by the
-        // equations (pcoeff = poelCoef*fac, tcoeff = thelCoef*fac); for
-        // output/comparison the displacement potential without that factor
-        // is the more natural quantity.  Keeping this as separate accessors
-        // leaves the equations and the primary accessors untouched.
+        // Output forms of the potential forces, without the poroelastic factor
+        // fac = (1-nu)/(1-2nu) that the stored (equation) quantities carry.
         double mechPotentialPressForceOutput(unsigned globalDofIdx) const
         {
             const double pratio = simulator_.problem().pRatio(globalDofIdx);
@@ -700,7 +663,6 @@ namespace Opm{
             auto disp =  celldisplacement_[this->mechIdx(globalIdx)];
             if(fracHost_.includeFractureContributions() && with_fracture){
                 for(auto& elem: Dune::elements(simulator_.vanguard().grid().leafGridView())){
-                    //size_t locglobalIdx = simulator_.problem().elementMapper().index(elem);
                     auto geom = elem.geometry();
                     auto center = geom.center();
                     Dune::FieldVector<double,3> obs = {center[0],center[1],center[2]};
@@ -749,7 +711,6 @@ namespace Opm{
             auto strain = strain_[this->mechIdx(globalIdx)];
             if(fracHost_.includeFractureContributions() && with_fracture){
                 for(auto& elem: Dune::elements(simulator_.vanguard().grid().leafGridView())){
-                    //size_t locglobalIdx = simulator_.problem().elementMapper().index(elem);
                     auto geom = elem.geometry();
                     auto center = geom.center();
                     Dune::FieldVector<double,3> obs = {center[0],center[1],center[2]};
@@ -773,7 +734,6 @@ namespace Opm{
             if(fracHost_.includeFractureContributions() && with_fracture){
                 assert(false);
                 for(auto& elem: Dune::elements(simulator_.vanguard().grid().leafGridView())){
-                    //size_t loglobalIdx = simulator_.problem().elementMapper().index(elem);
                     auto geom = elem.geometry();
                     auto center = geom.center();
                     Dune::FieldVector<double,3> obs = {center[0],center[1],center[2]};
@@ -789,19 +749,10 @@ namespace Opm{
 
          const SymTensor fractureStress(size_t globalIdx) const{
             // need to know effect of absolute pressure
-	   // const auto& pratio = simulator_.problem.pRatio(globalIdx);
-	   // double fac = (1-pratio)/(1-2*pratio);
-	   // const auto& poelCoef = simulator_.problem.poelCoef(globalIdx);
-	   // double pcoeff = poelCoef*fac;
 	   const auto& iq = simulator_.model().intensiveQuantities(globalIdx,0);
 	   const auto& fs = iq.fluidState();
        const auto& press = Toolbox::value(fs.pressure(referencePhaseIdx(fs)));
-	   //
             Dune::FieldVector<double,6> fracStress = this->stress(globalIdx);
-            // effStress += simulator_.problem().initStress(globalIdx);
-            // double effPress = this->mechPotentialTempForce(globalIdx);
-            // effPress += mechPotentialPressForceFracture_[globalIdx];
-	    // effPress -= press;
             for(int i=0; i < 3; ++i){
                 fracStress[i] -= press;
             }
@@ -814,32 +765,6 @@ namespace Opm{
             return mechPotentialForce_[dofIx];
         }
 
-        // const double& disp(unsigned globalDofIdx, unsigned dim) const
-        // {
-        //     return celldisplacement_[globalDofIdx][dim];
-            
-        // }
-        // const double stress(unsigned globalDofIdx, unsigned dim) const
-        // {
-        //     // not efficient
-        //     auto stress = this->stress(globalDofIdx);
-        //     return stress[dim];
-        //     //return stress_[globalDofIdx][dim];
-        // }
-
-        // const double& delstress(unsigned globalDofIdx, unsigned dim) const
-        // {
-        //     return linstress_[globalDofIdx][dim];
-        // }
-        // const double& strain(unsigned globalDofIdx, unsigned dim) const
-        // {
-        //     return strain_[globalDofIdx][dim];
-        // }
-
-
-        // void setStress(const Dune::BlockVector<SymTensor >& stress){
-        //     stress_ = stress;
-        // }
         // A flow vertex that is a mechanics vertex copies it; any other is
         // trilinear in the corners of its flow cell's mechanics cell.
         void buildFlowVertexSource_()
@@ -1054,7 +979,6 @@ namespace Opm{
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialPressForce_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialPressForceFracture_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialTempForce_;
-        //Dune::BlockVector<Dune::FieldVector<double,1> > solution_;
         Dune::BlockVector<Dune::FieldVector<double,3> > celldisplacement_;
         std::vector<double> ymoduleMech_, pratioMech_;
         Dune::BlockVector<Dune::FieldVector<double,3> > displacement_;
@@ -1068,14 +992,11 @@ namespace Opm{
         };
         std::vector<FlowVertexSource> flowVertexSource_;
         Dune::BlockVector<Dune::FieldVector<double,3> > flowDisplacement_;
-        //Dune::BlockVector<Dune::FieldVector<double,6> > stress_;//NB is also stored in esolver
         Dune::BlockVector<Dune::FieldVector<double,6> > linstress_;//NB is also stored in esolver
         Dune::BlockVector<Dune::FieldVector<double,6> > outputstress_;// used in to avoid trouble with initialstress_
         Dune::BlockVector<Dune::FieldVector<double,6> > strain_;
-        //Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1> > A_;
         std::unique_ptr<Opm::Elasticity::VemElasticitySolver<Grid>> elacticitysolver_;
         const MechGridContext* mechCtx_{nullptr};
-        //
         FractureMechHost<TypeTag> fracHost_{simulator_};
     };
 }

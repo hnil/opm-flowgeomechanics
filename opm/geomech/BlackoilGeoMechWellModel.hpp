@@ -36,7 +36,6 @@ public:
     {
 
     };
-    //using BlackoilWellModel::BlackoilWellModel;
 
     using NeighborSet = typename Parent::NeighborSet;
     // Wells-in-matrix (--matrix-add-well-contributions): the parent adds the

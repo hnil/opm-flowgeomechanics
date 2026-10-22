@@ -206,10 +206,7 @@ Opm::FracturePressureInput makeSimpleTestInput()
 
     input.face_mobility = {1e4, 1e4, 1e4, 1e4};
 
-    // Density and viscosity per cell (with zero pressure derivatives for
-    // backward-compatible tests; mobility = density/viscosity = 1000/0.001 = 1e6).
-    // Using constant properties here: rho=1000 kg/m3, mu=1e-4 Pa.s
-    // gives mobility = 1e4 (same as the old reservoir_mobility values).
+    // Constant properties, zero pressure derivatives: density/viscosity = 1e4.
     input.density   = {{1000.0, 0.0}, {1000.0, 0.0}, {1000.0, 0.0}, {1000.0, 0.0}};
     input.viscosity = {{0.1, 0.0}, {0.1, 0.0}, {0.1, 0.0}, {0.1, 0.0}};
 

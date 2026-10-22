@@ -452,14 +452,11 @@ void extendBCCon(Opm::GRIDSection& gridSect,
             continue;
         }
 
-        //std::cout << "Extending BCCON" << std::endl;
-
         for (const auto& record : records) {
             int& K1 = const_cast<int&>(record.getItem("K1").getData<int>()[0]);
             int& K2 = const_cast<int&>(record.getItem("K2").getData<int>()[0]);
 
             const auto direction = record.getItem("DIRECTION").getTrimmedString(0);
-            //std::cout << direction << std::endl;
 
             if (direction == "Z+") {
                 const int shift = extend_param.nz_upper + extend_param.nz_lower;
@@ -905,8 +902,6 @@ extendSchedule(Opm::SCHEDULESection& schedule,
             continue;
         }
 
-        //std::cout << "Extending schedule record: " << records.name() << std::endl;
-
         if (records.name() == "WSEED") {
             for (const auto& record : records) {
                 int& K = const_cast<int&>(record.getItem("K").getData<int>()[0]);
@@ -967,7 +962,6 @@ manipulate_deck(std::string_view deck_file,
 
     const auto grid_size = getDimens(deck);
 
-    // int nz_new,upper_equilnum;
     auto gridsec = Opm::GRIDSection {deck}; // fixing CARTDIMS? + ZCORN + double valued arrays.
 
     {
