@@ -16,51 +16,60 @@
   You should have received a copy of the GNU General Public License
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 */
-
-#include <config.h>
-
+#include "config.h"
 #if USE_TRACY
 // #define DETAILED_PROFILING 1
 #endif
 
+#include <exception>
+#include <opm/simulators/flow/FlowProblem.hpp>
 #include <opm/simulators/flow/Main.hpp>
 
 #include <opm/models/blackoil/blackoillocalresidualtpfa.hh>
-#include <opm/models/discretization/common/baseauxiliarymodule.hh>
 #include <opm/models/discretization/common/tpfalinearizer.hh>
-
-#include <opm/simulators/flow/FlowProblem.hpp>
-#include <opm/simulators/wells/BlackoilWellModel.hpp>
-
-#include <opm/geomech/BlackoilGeomechWellModel.hpp>
-#include <opm/geomech/eclgeomechmodel.hh>
-#include <opm/geomech/eclproblemgeomech.hh>
-
+// #include <opm/flowexperimental/blackoilintensivequantitiessimple.hh>
 #include "MechTypeTag.hpp"
-
-#include <exception>
-
-// adding linearshe sould be chaning the update_ function in the same class
-// with condition that the error is reduced.  the trick is to be able to
-// recalculate the residual from here.  unsure where the timestepping is
-// done from suggestedtime??  suggestTimeStep is taken from newton solver in
+#include <opm/geomech/BlackoilGeoMechWellModel.hpp>
+#include <opm/geomech/GeoMechModel.hpp>
+#include <opm/geomech/FlowProblemGeoMech.hpp>
+#include <opm/geomech/MechGridPartition.hpp>
+#include <opm/simulators/flow/flux/FluxActivation.hpp>
+#include <opm/models/discretization/common/baseauxiliarymodule.hh>
+#include <opm/simulators/wells/BlackoilWellModel.hpp>
+// adding linearshe sould be chaning the update_ function in the same class with condition that the error
+// is reduced. the trick is to be able to recalculate the residual from here. unsure where the
+// timestepping is done from suggestedtime?? suggestTimeStep is taken from newton solver in
 // problem.limitTimestep
+namespace Opm
+{
+namespace Properties
+{
+    namespace TTag
+    {
+        struct FlowProblemMechTemp
+        {
+            using InheritsFrom = std::tuple<FlowProblemMech>;
+        };
+    } // namespace TTag
 
-namespace Opm::Properties::TTag
-{
-struct EclFlowProblemMechTemp
-{
-    using InheritsFrom = std::tuple<EclFlowProblemMech>;
-};
-} // namespace Opm::Properties::TTag
+    // template <class TypeTag>
+    // struct WellModel<TypeTag, TTag::FlowProblemMechTemp> {
+    //      using type = BlackoilGeoMechWellModel<TypeTag>;
+    // };
+} // namespace Properties
+} // namespace Opm
 
 int
 main(int argc, char** argv)
 {
+
     OPM_TIMEBLOCK(fullSimulation);
-
-    using TypeTag = Opm::Properties::TTag::EclFlowProblemMechTemp;
+    using TypeTag = Opm::Properties::TTag::FlowProblemMechTemp;
+    // A mechanics grid of its own decides the flow partition too.
+    Opm::MechPartition::installFlowPartition<TypeTag>(argc, argv);
+    // The mechanics grid may extend past a USEFLUX sector.
+    Opm::retainBeforeUseFlux({"YMODULE", "PRATIO"});
     auto mainObject = Opm::Main(argc, argv);
-
     return mainObject.runStatic<TypeTag>();
+    // return Opm::start<TypeTag>(argc, argv);
 }

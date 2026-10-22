@@ -1,123 +1,179 @@
-/*
-  Copyright 2025 Equinor ASA.
-
-  This file is part of the Open Porous Media project (OPM).
-
-  OPM is free software: you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  OPM is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
-
-  You should have received a copy of the GNU General Public License
-  along with OPM.  If not, see <http://www.gnu.org/licenses/>.
-*/
-
-#include <config.h>
-
+#include "config.h"
+#ifdef HAVE_OPENMP
+#include <omp.h>
+#endif
+#include <opm/common/TimingMacros.hpp>
 #include <opm/geomech/DiscreteDisplacement.hpp>
-
-#include <cmath>
-
 namespace ddm
 {
-double
-fractureK1(const double dist, const double width, const double E, const double nu)
+namespace
 {
-    const auto mu = E / (2 * (1 + nu)); //??
+using DDMGrid = Dune::FoamGrid<2, 3>;
+using DDMGridView = DDMGrid::LeafGridView;
+using DDMElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<DDMGridView>;
 
-    auto K1 = (mu * std::sqrt(M_PI) / (2 * std::sqrt(dist) * (1.0 - nu))) * width;
+struct GeometryCache
+{
+    std::vector<Dune::FieldVector<double, 3>> centers;
+    std::vector<Dune::FieldVector<double, 3>> normals;
+    std::vector<std::array<Real3, 3>> tris;
+};
+
+GeometryCache buildGeometryCache(const DDMGrid& grid)
+{
+    DDMElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
+    const int nc = grid.leafGridView().size(0);
+
+    GeometryCache cache;
+    cache.centers.resize(nc);
+    cache.normals.resize(nc);
+    cache.tris.resize(nc);
+
+    OPM_TIMEBLOCK(GeometryOFfoamgrid);
+    for (auto elem : elements(grid.leafGridView())) {
+        const int idx = mapper.index(elem);
+        cache.centers[idx] = elem.geometry().center();
+        cache.normals[idx] = normalOfElement(elem);
+        cache.tris[idx] = getTri(elem);
+    }
+
+    return cache;
+}
+
+double kernelNormalTraction(const Dune::FieldVector<double, 3>& center,
+                            const Dune::FieldVector<double, 3>& normal,
+                            const std::array<Real3, 3>& tri,
+                            const double slip_value,
+                            const double E,
+                            const double nu)
+{
+    Dune::FieldVector<double, 3> slip;
+    // The CutDe wrapper uses TDCS ordering with the normal-opening component first.
+    slip[0] = slip_value;
+    slip[1] = 0.0;
+    slip[2] = 0.0;
+
+    const Dune::FieldVector<double, 6> strain = TDStrainFSTri(center, tri, slip, nu);
+    const Dune::FieldVector<double, 6> stress = strainToStress(E, nu, strain);
+    return tractionSymTensor(stress, normal);
+}
+} // namespace
+
+double
+fractureK1(double dist, double width, double E, double nu)
+{
+    double K1;
+    double mu = E / (2 * (1 + nu)); //??
+    K1 = (mu * sqrt(M_PI) / (2 * std::sqrt(dist) * (1.0 - nu))) * width;
     K1 /= 1.834; // factor found numerically //@@ Odd: changed this from '*' to '/'
-
+    return K1;
+}
+/*
+//formulas for share ned rotation to find share in correct directions
+double fractureK2(double dist,double edist, double E, double nu){
+    double K1;
+    K1 = mu*sqrt(M_PI)/(2*sqrt(dist).*(1-nu))*emid;
+    K1 *= 1.834; //factor found numerically
     return K1;
 }
 
+double fractureK3(double dist,double edist, double E, double nu){
+    double K1;
+    K1 = mu*sqrt(M_PI)/(2*sqrt(dist).*(1-nu))*edist*(1-nu);
+    K1 *= 1.834; //factor found numerically
+    return K1;
+}
+*/
 double
-traceSymTensor(const Dune::FieldVector<double, 6>& symtensor)
+traceSymTensor(const Dune::FieldVector<double, 6> symtensor)
 {
     double trace = 0;
-
     for (int i = 0; i < 3; ++i) {
         trace += symtensor[i];
     }
-
     return trace;
 }
 
 Dune::FieldVector<double, 6>
-strainToStress(const double E, const double nu, const Dune::FieldVector<double, 6>& strain)
+strainToStress(const double E, const double nu, const Dune::FieldVector<double, 6> strain)
 {
     Dune::FieldVector<double, 6> stress;
-
-    const double volume_strain = traceSymTensor(strain);
-    const double mu = E / (2 * (1 + nu)); //??
-    const double lambda = 2 * mu * nu / (1 - 2 * nu);
-
+    double volume_strain = traceSymTensor(strain);
+    double mu = E / (2 * (1 + nu)); //??
+    double lambda = 2 * mu * nu / (1 - 2 * nu);
     for (int i = 0; i < 3; ++i) {
         stress[i] = 2 * mu * strain[i] + (lambda * volume_strain);
         stress[i + 3] += 2 * mu * strain[i + 3]; // [xy,xz,yz]
     }
-
     return stress;
 }
 
 Dune::FieldMatrix<double, 3, 3>
-symTensor2Matrix(const Dune::FieldVector<double, 6>& symtensor)
+symTensor2Matrix(const Dune::FieldVector<double, 6> symtensor)
 {
     Dune::FieldMatrix<double, 3, 3> mat;
-
     for (int i = 0; i < 3; ++i) {
         mat[i][i] = symtensor[i];
     }
-
-    mat[2][1] = mat[1][2] = symtensor[3];
-    mat[2][0] = mat[0][2] = symtensor[4];
-    mat[1][0] = mat[0][1] = symtensor[5];
-
+    mat[2][1] = symtensor[3];
+    mat[1][2] = mat[2][1];
+    mat[2][0] = symtensor[4];
+    mat[0][2] = mat[2][0];
+    mat[1][0] = symtensor[5];
+    mat[0][1] = mat[1][0];
     return mat;
 }
 
+
 double
-tractionSymTensor(const Dune::FieldVector<double, 6>& symtensor,
-                  const Dune::FieldVector<double, 3>& normal)
+tractionSymTensor(const Dune::FieldVector<double, 6> symtensor, Dune::FieldVector<double, 3> normal)
 {
     assert(std::abs(normal.two_norm() - 1) < 1e-13);
-
     double traction = 0.0;
     for (int i = 0; i < 3; ++i) {
         traction += symtensor[i] * normal[i] * normal[i];
     }
-
     traction += 2 * symtensor[3] * normal[0] * normal[1]; // xy*nx*ny;
     traction += 2 * symtensor[4] * normal[0] * normal[2]; // xz*nx*nz
     traction += 2 * symtensor[5] * normal[1] * normal[2]; // yz*ny*nz
-
     return traction;
 }
-
+const Dune::FieldVector<double, 6>
+TDStrainFSTri(const Dune::FieldVector<double, 3>& obs,
+              const std::array<Real3, 3>& tri,
+              const Dune::FieldVector<double, 3>& slip,
+              double nu)
+{
+    Real3 obs_tmp = make3(obs[0], obs[1], obs[2]);
+    Real3 slip_tmp = make3(slip[0], slip[1], slip[2]);
+    Real6 strain_tmp = strain_fs(obs_tmp, tri, slip_tmp, nu);
+    Dune::FieldVector<double, 6> strain;
+    strain[0] = strain_tmp.x;
+    strain[1] = strain_tmp.y;
+    strain[2] = strain_tmp.z;
+    strain[3] = strain_tmp.a;
+    strain[4] = strain_tmp.b;
+    strain[5] = strain_tmp.c;
+    return strain;
+}
 void
+// assembleMatrix(Dune::DynamicMatrix<Dune::FieldMatrix<double,1,1>>& matrix, const double E, const
+// double nu, const Dune::FoamGrid<2, 3>& grid)
 assembleMatrix(Dune::DynamicMatrix<double>& matrix,
                const double E,
                const double nu,
                const Dune::FoamGrid<2, 3>& grid)
+
 {
-    using Grid = Dune::FoamGrid<2, 3>;
-    using GridView = typename Grid::LeafGridView;
-    using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
-
-    const ElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
-
-    for (const auto& elem1 : elements(grid.leafGridView())) {
-        const int idx1 = mapper.index(elem1);
-        const auto center = elem1.geometry().center();
-        const auto normal = normalOfElement(elem1);
-
-        for (const auto& elem2 : elements(grid.leafGridView())) {
-            const int idx2 = mapper.index(elem2);
+    OPM_TIMEFUNCTION();
+    DDMElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
+    for (auto elem1 : elements(grid.leafGridView())) {
+        int idx1 = mapper.index(elem1);
+        auto geom = elem1.geometry();
+        auto center = geom.center();
+        auto normal = normalOfElement(elem1);
+        for (auto elem2 : elements(grid.leafGridView())) {
+            int idx2 = mapper.index(elem2);
             // check if this is defined in relative coordinates
             Dune::FieldVector<double, 3> slip; // = make3(1.0,0.0, 0.0);
             slip[0] = 1;
@@ -125,14 +181,74 @@ assembleMatrix(Dune::DynamicMatrix<double>& matrix,
             slip[2] = 0;
 
             // symmetric stress voit notation
-            const Dune::FieldVector<double, 6> strain = TDStrainFS(center, elem2, slip, nu);
-            const Dune::FieldVector<double, 6> stress = strainToStress(E, nu, strain);
+            Dune::FieldVector<double, 6> strain = TDStrainFS(center, elem2, slip, nu);
+            Dune::FieldVector<double, 6> stress = strainToStress(E, nu, strain);
 
+            double ntraction = tractionSymTensor(stress, normal);
             // matrix relate to pure traction not area weighted
-            matrix[idx1][idx2] = tractionSymTensor(stress, normal);
+            matrix[idx1][idx2] = ntraction;
         }
     }
 }
+
+void
+assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix,
+                    const double E,
+                    const double nu,
+                    const Dune::FoamGrid<2, 3>& grid)
+
+{
+    OPM_TIMEFUNCTION();
+    const int nc = grid.leafGridView().size(0);
+    const auto cache = buildGeometryCache(grid);
+    {
+        OPM_TIMEBLOCK(AssembleDDMMatrix);
+#pragma omp parallel for
+        for (int idx1 = 0; idx1 < nc; ++idx1) {
+            for (int idx2 = 0; idx2 < nc; ++idx2) {
+                matrix[idx1][idx2] = kernelNormalTraction(cache.centers[idx1],
+                                                          cache.normals[idx1],
+                                                          cache.tris[idx2],
+                                                          1.0,
+                                                          E,
+                                                          nu);
+            }
+        }
+    }
+}
+
+void
+applyMatrix_fast(Dune::DynamicVector<double>& result,
+                 const Dune::DynamicVector<double>& x,
+                 const double E,
+                 const double nu,
+                 const Dune::FoamGrid<2, 3>& grid)
+{
+    OPM_TIMEFUNCTION();
+    const int nc = grid.leafGridView().size(0);
+    assert(static_cast<int>(x.size()) == nc);
+
+    result.resize(nc);
+    const auto cache = buildGeometryCache(grid);
+
+    OPM_TIMEBLOCK(ApplyDDMMatrix);
+#pragma omp parallel for
+    for (int idx1 = 0; idx1 < nc; ++idx1) {
+        double value = 0.0;
+        for (int idx2 = 0; idx2 < nc; ++idx2) {
+            value += kernelNormalTraction(cache.centers[idx1],
+                                          cache.normals[idx1],
+                                          cache.tris[idx2],
+                                          x[idx2],
+                                          E,
+                                          nu);
+        }
+        result[idx1] = value;
+    }
+}
+
+
+
 
 Dune::FieldVector<double, 6>
 strain(const Dune::FieldVector<double, 3>& obs,
@@ -143,18 +259,14 @@ strain(const Dune::FieldVector<double, 3>& obs,
 {
     Dune::FieldVector<double, 6> strain;
     strain = 0.0;
-
     using Grid = Dune::FoamGrid<2, 3>;
     using GridView = typename Grid::LeafGridView;
     using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
-
-    const ElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
-
-    for (const auto& elem1 : elements(grid.leafGridView())) {
-        const int idx1 = mapper.index(elem1);
+    ElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
+    for (auto elem1 : elements(grid.leafGridView())) {
+        int idx1 = mapper.index(elem1);
         strain += TDStrainFS(obs, elem1, slips[idx1], nu);
     }
-
     return strain;
 }
 
@@ -167,19 +279,14 @@ disp(const Dune::FieldVector<double, 3>& obs,
 {
     Dune::FieldVector<double, 3> disp;
     disp = 0.0;
-
     using Grid = Dune::FoamGrid<2, 3>;
     using GridView = typename Grid::LeafGridView;
     using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
-
-    const ElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
-
-    for (const auto& elem1 : elements(grid.leafGridView())) {
-        const int idx1 = mapper.index(elem1);
+    ElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
+    for (auto elem1 : elements(grid.leafGridView())) {
+        int idx1 = mapper.index(elem1);
         disp += TDDispFS(obs, elem1, slips[idx1], nu);
     }
-
     return disp;
 }
-
 } // namespace ddm

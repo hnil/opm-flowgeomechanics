@@ -1,0 +1,54 @@
+{
+    "hasfractures":true,
+    "add_perfs_to_schedule":true,
+    "fractureparam":{
+	"reduce_boundary":true,
+        "addconnections":true,
+	"include_fracture_contributions":false,
+        "config":{
+            "type":"well_seed",
+	    "well": "P1",
+	    "cell_ijk": [6,6,10],
+	    "normal": [0,1,0],
+            "initial_fracture_width":0.3048e-4,
+            "axis_scale": 0.25,
+            "num_exp": 4,
+            "num_lin": 0
+        },
+        "solver":{
+            "method":"if_propagate_trimesh",
+            "max_iter":1,
+            "min_width":0, 
+            "max_width":5e+100,
+            "max_change":1e-3,
+            "efac": 0.1,
+            "rfac": 0.1,
+            "damping": 1.0,
+            "verbosity": 1,
+            "max_dwidth": 1e-3,
+            "max_dp": 1e9,
+            "linsolver":{
+                "tol": 1e-10,
+                "max_iter": 1500,
+                "verbosity": 1
+            }
+        },
+        "reservoir":{
+            "dist":10,
+            "mobility":1.3e-3,
+            "perm":1e-13
+        },
+        "control":{
+            "type":"rate_well",
+            "rate":1e2,
+            "WI":1.0e-11
+        },
+        "KMax": 1e6,
+        "extended_fractures":false,
+        "fractureWI":0.1,
+        "write_pressure_system":false,
+        "write_fracture_system":false,
+        "pressuresolver": "umfpack",
+        "fracturesolver": "notused"
+    }
+}

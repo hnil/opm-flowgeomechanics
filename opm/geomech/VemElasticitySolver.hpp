@@ -1,0 +1,484 @@
+//==============================================================================
+//!
+//! \file elasticity_upscale.hpp
+//!
+//! \date Nov 9 2011
+//!
+//! \author Arne Morten Kvarving / SINTEF
+//!
+//! \brief Elasticity upscale class
+//!
+//==============================================================================
+#ifndef OPM_VEM_ELASTICITY_SOLVER_HPP
+#define OPM_VEM_ELASTICITY_SOLVER_HPP
+
+
+#include <opm/common/utility/platform_dependent/disable_warnings.h>
+#include <opm/common/TimingMacros.hpp>
+#include <dune/common/fmatrix.hh>
+#include <opm/common/utility/parameters/ParameterGroup.hpp>
+#include <dune/grid/common/mcmgmapper.hh>
+#include <dune/geometry/quadraturerules.hh>
+#include <dune/istl/ilu.hh>
+#include <dune/istl/solvers.hh>
+#include <dune/istl/preconditioners.hh>
+#include <opm/grid/CpGrid.hpp>
+#include <opm/elasticity/shapefunctions.hpp>
+
+#include <opm/common/utility/platform_dependent/reenable_warnings.h>
+
+#include <opm/elasticity/asmhandler.hpp>
+#include <opm/elasticity/boundarygrid.hh>
+#include <opm/elasticity/elasticity.hpp>
+#include <opm/elasticity/elasticity_preconditioners.hpp>
+#include <opm/elasticity/logutils.hpp>
+#include <opm/elasticity/materials.hh>
+#include <opm/elasticity/matrixops.hpp>
+#include <opm/elasticity/meshcolorizer.hpp>
+#include <opm/elasticity/mpc.hh>
+#include <opm/elasticity/mortar_schur.hpp>
+#include <opm/elasticity/mortar_utils.hpp>
+#include <opm/elasticity/mortar_evaluator.hpp>
+#include <opm/elasticity/mortar_schur_precond.hpp>
+#include <opm/elasticity/uzawa_solver.hpp>
+
+#include <opm/input/eclipse/Parser/Parser.hpp>
+#include <opm/input/eclipse/Deck/Deck.hpp>
+#include <opm/input/eclipse/Schedule/BCState.hpp>
+#include <opm/simulators/linalg/FlexibleSolver.hpp>
+#include <opm/geomech/DuneCommunicationHelpers.hpp>
+#include <opm/geomech/vem/vem.hpp>
+//#include <opm/simulators/linalg/FlexibleSolver_impl.hpp>
+namespace Opm {
+namespace Elasticity {
+
+
+//! \brief The main driver class
+template<class GridType>
+class VemElasticitySolver
+{
+  public:
+    //! \brief Dimension of our grid
+    static const int dim = GridType::dimension;
+
+    //! \brief A basic number
+    typedef typename GridType::LeafGridView::ctype ctype;
+
+    //! \brief A vectorial node value
+    typedef Dune::FieldVector<double,dim> NodeValue;
+
+    //! \brief A global coordinate
+    typedef typename GridType::LeafGridView::template Codim<1>::Geometry::GlobalCoordinate GlobalCoordinate;
+
+    //! \brief A set of indices
+    typedef typename GridType::LeafGridView::IndexSet LeafIndexSet;
+
+    //! \brief An iterator over grid cells
+    typedef typename GridType::LeafGridView::template Codim<0>::Iterator LeafIterator;
+
+    typedef Dune::BCRSMatrix<Dune::FieldMatrix<double,1,1> > Matrix;
+    //! \brief The linear operator
+    //ASMHandler<GridType> A;//NB NB names have to change
+    //Matrix stiffnessMatrix_;
+    //! \brief The solution vectors
+    //Vector u;//NB NB names have to change
+    //! \brief The load vectors
+    //Vector rhs;//NB NB names have to change
+#if HAVE_MPI
+        using CommunicationType = Dune::OwnerOverlapCopyCommunication<int,int>;
+#else
+        using CommunicationType = Dune::Communication<int>;
+#endif
+    //! \brief Main constructor
+    //! \param[in] gv_ The grid to operate on
+    //! \param[in] tol_ The tolerance to use when deciding whether or not a coordinate falls on a plane/line/point. \sa tol
+    //! \param[in] Escale_ A scale value for E-moduluses to avoid numerical issues
+    //! \param[in] file The grid file
+    //! \param[in] rocklist If not blank, file is a rocklist
+    //! \param[in] verbose If true, give verbose output
+    VemElasticitySolver(const GridType& grid)
+      : grid_(grid)
+        //: A(grid),grid_(grid)
+    {
+    }
+
+    void setMaterial(const std::vector<std::shared_ptr<Material>>& materials_){
+        materials = materials_;
+    }
+    void setMaterial(const std::vector<double>& ymodule,const std::vector<double>& pratio){
+        ymodule_ = ymodule;
+        pratio_ = pratio;
+    }
+    //! \brief Find boundary coordinates
+    //! \param[out] min The miminum coordinates of the grid
+    //! \param[out] max The maximum coordinates of the grid
+    void initForAssembly(){}
+    void fixNodes(const std::vector<std::tuple<size_t,MechBCValue>>& bc_nodes){
+        //void fixNodesVem(const std::vector<size_t>& fixed_nodes){
+        std::vector<int> fixed_dof_ixs;
+        std::vector<double> fixed_dof_values;
+        for (int i = 0; i < int(bc_nodes.size()); ++i){
+            int node = std::get<0>(bc_nodes[i]);
+            const auto& mechbcvalue = std::get<1>(bc_nodes[i]);
+            const auto& mask = mechbcvalue.fixeddir;
+            const auto& disp = mechbcvalue.disp;
+            for(int m = 0; m < 3; ++m){
+                if(mask[m]){
+                    fixed_dof_ixs.insert(fixed_dof_ixs.end(), {3*node + m});
+                    fixed_dof_values.insert(fixed_dof_values.end(),{disp[m]});
+                }
+                //fixed_dof_ixs.insert(fixed_dof_ixs.end(), {3*node, 3*node+1, 3*node+2});
+            }
+        }
+        // ensure unique 
+
+        const int num_fixed_dofs = (int)fixed_dof_ixs.size();
+
+
+        dirichlet_={num_fixed_dofs, fixed_dof_ixs, fixed_dof_values};
+    }
+    void expandSolution(Vector& result, const Vector& U){
+        //vector<double> displacements_full(prob.points.size(), nan("1"));
+         // cout << prob.fixed_dof_ixs.size() << endl;
+        std::fill(result.begin(),result.end(),nan("1"));
+        const auto& fixed_dof_values = std::get<2>(dirichlet_);
+        const auto& fixed_dof_ixs = std::get<1>(dirichlet_);
+        //const auto& num_dof_dofs = std::get<0>(dirichlet_);
+        for (int i = 0; i != int(fixed_dof_ixs.size()); ++i)
+             result[fixed_dof_ixs[i]] = fixed_dof_values[i];
+
+         for (int i = 0, cur_ix = 0; i != int(result.size()); ++i){
+             if (std::isnan(result[i][0])) {
+                 result[i] = U[cur_ix++];
+             }
+         }
+    }
+    //! \brief Assemble (optionally) stiffness matrix A and load vector
+    //! \param[in] loadcase The strain load case. Set to -1 to skip
+    //! \param[in] matrix Whether or not to assemble the matrix
+    void assemble(const Vector& pressure, bool matrix,bool vector, bool reduce_system);
+    void assemble_fem(const Vector& pressure, bool matrix,bool vector, bool reduce_system);
+
+
+    //! \brief Solve Au = b for u
+    //! \param[in] loadcase The load case to solve
+    void solve();
+    int numSolves() const { return num_solves_; }
+    int lastLinearIterations() const { return last_linear_iterations_; }
+    int totalLinearIterations() const { return total_linear_iterations_; }
+    bool lastLinearSolveConverged() const { return last_linear_solve_converged_; }
+
+    const CommunicationType* comm() const { return comm_.get(); }
+
+    void resetOperator(){
+        if(systemmatrix_){
+            systemmatrix_.reset();
+        }
+    }
+
+    Matrix& getOperator(){
+        if(systemmatrix_){
+            return *systemmatrix_;
+        }else{
+            systemmatrix_.reset(new Matrix());
+            return *systemmatrix_;
+        }
+    }
+    Vector& getLoadVector(){return rhs_;}
+    const Vector& getSolutionVector(){return sol_;}
+    void setCopyRowsToZero(){
+      auto& matrix =  this->getOperator();
+        assert(matrix.N() == matrix.M());
+        assert(matrix.N() == dofParallelIndexSet_->size());
+            for(auto index: *dofParallelIndexSet_){
+                auto lind = index.local().local();
+                auto at = index.local().attribute();
+                if(at == Dune::OwnerOverlapCopyAttributeSet::copy){
+                    matrix[lind] = 0.0;// set full row to searo
+                    matrix[lind][lind] = 1.0; // set diagonal to 1 (a bit slow due to seach)
+                }
+            }
+    }
+
+    // //! \param[in] params The linear solver parameters
+    void setupSolver(const Opm::PropertyTree& prm){
+        OPM_TIMEBLOCK(setupLinearSolver);
+        tsolver_.reset();
+        // Opt-in: stop the warm-started solve when the residual of the full
+        // load is below tol, not when the correction's own residual is.
+        tol_relative_to_load_ = prm.get<bool>("tol_relative_to_load", false);
+        linear_tol_ = prm.get<double>("tol", 1e-5);
+#if HAVE_MPI
+// grid_.comm() is something like collective communication
+// comm_ here is the entity communication
+
+            comm_.reset( new CommunicationType( grid_.comm(), Dune::SolverCategory::overlapping,/*free*/false) );
+#endif       
+        bool parallel= comm_->communicator().size() > 1;
+        if(parallel){
+	  vertexParallelIndexSet_.reset( new CommunicationType::ParallelIndexSet(Opm::makeEntityEntityCommunication<3>(grid_)));
+        assert(grid_.size(3) == vertexParallelIndexSet_->size());
+      dofParallelIndexSet_.reset( new CommunicationType::ParallelIndexSet(Opm::entityToDofIndexSet(*vertexParallelIndexSet_, 3)));
+            //vertexRemoteIndexSet_.new( RemotePallelIndexSet(vertex_parallindex,vertex_parallindex, grid_.comm()));
+            //vertexRemoteIndexSet_->rebuid<false>();
+	  //auto dofParallelIndexSet = Opm::entityToDofIndexSet(*vertexParallelIndexSet_, 3);
+            comm_->indexSet() = *dofParallelIndexSet_;   
+            assert(grid_.size(3)*3 == dofParallelIndexSet_->size());
+            comm_->remoteIndices().rebuild<false>();// = *vertexRemoteParallelIndexSet_;   
+            //OPM_THROW(std::runtime_error,"Parallel for mechanics not implemented");
+            const std::function<Vector()> weightsCalculator;
+            std::size_t pressureIndex = 0;
+            //NB NB ! need other operator in parallel
+            setCopyRowsToZero();    
+            //std::cout << "Make parallel solver" << std::endl;
+            comm_->communicator().barrier();
+            //using ParOperatorType = Dune::OverlappingSchwarzOperator<Matrix, Vector, Vector, CommunicationType>;
+            auto pop = std::make_unique<ParOperatorType>(this->getOperator(), *comm_);
+            using FlexibleSolverType = Dune::FlexibleSolver<ParOperatorType>;
+            auto tsolver = std::make_unique<FlexibleSolverType>(*pop, *comm_, prm,
+                                                           weightsCalculator,
+                                                            pressureIndex);
+	    pop_ = std::move(pop);
+            tsolver_ = std::move(tsolver);
+        }else{
+            std::size_t pressureIndex = 0;//Dummy
+            const std::function<Vector()> weightsCalculator;//Dummy
+            auto sop = std::make_unique<SeqOperatorType>(this->getOperator());
+            using FlexibleSolverType = Dune::FlexibleSolver<SeqOperatorType>;
+            auto tsolver = std::make_unique<FlexibleSolverType>(*sop, prm,
+                                                                weightsCalculator,
+                                                                pressureIndex);
+            sop_ = std::move(sop);
+            tsolver_ = std::move(tsolver);
+            //NB names have to change.
+            //b = A.getLoadVector();
+            //
+        }
+    }
+    template<int comp>
+    void averageStress(Dune::BlockVector<Dune::FieldVector<ctype,comp>>& sigmacells,
+                       const Vector& uarg);
+    void setBodyForce(double gravity,std::vector<double>& density){
+        OPM_TIMEBLOCK(setBodyFrorce);
+        const int num_cells = grid_.leafGridView().size(0); // entities of codim 0
+        // assemble the mechanical system
+        body_force_.resize(3*num_cells, 0.0);
+        for(int i=0; i<num_cells; ++i){
+            body_force_[3*i+2] = density[i]*gravity;
+        }
+    }
+
+    static void makeDuneMatrixCompressed(const std::vector<std::tuple<int, int, double>>& A_entries, Matrix& mat){
+        OPM_TIMEBLOCK(makeDuneMatrixCompressed);
+        {
+            OPM_TIMEBLOCK(buildMatrixImplicite);
+            //build mode need to be implicite and corredect matrix settings has to be done
+            //mat = 0;
+            for (auto matel: A_entries) {
+                int i = std::get<0>(matel);
+                int j = std::get<1>(matel);
+                mat.entry(i,j)=0;
+            }
+            Dune::CompressionStatistics<Matrix::size_type> stats = mat.compress();
+            std::cout << "Matrix compression statistics: " << std::endl;
+            std::cout << "avg" << stats.avg 
+                      << " maximum " << stats.maximum 
+                      << " overflow_total " << stats.overflow_total 
+                      << " mem_ratio " << stats.mem_ratio << std::endl;
+            std::cout << "Matrix has " << mat.N() << " rows and " << mat.M() << " columns" << std::endl;
+            std::cout << "Matrix has " << mat.nonzeroes() << " nonzeros" << std::endl;
+            std::cout << "Entries caluclated" << A_entries.size() << std::endl;
+        }
+        {
+        OPM_TIMEBLOCK(setMatrixValues);
+        mat = 0;
+        for(auto matel:A_entries){
+            int i = std::get<0>(matel);
+            int j = std::get<1>(matel);
+            double val = std::get<2>(matel);
+            mat[i][j] += val;
+        }
+        }
+        // Matrix should be symmetric
+        for (auto row = mat.begin(), rowEnd = mat.end(); row != rowEnd; ++row) {
+            auto i = row.index();
+            for (auto col = row->begin(), colEnd = row->end(); col != colEnd; ++ col) {
+                auto j = col.index();
+                const auto& val = *col; // currently this is a scalar
+                assert(std::abs(mat[i][j] - val) < 1e-14);
+            }
+        }
+    }
+    void updateRhsWithGrad(const Vector& mechpot){
+        OPM_TIMEBLOCK(updateRhsWithGrad);
+         Vector& b = this->getLoadVector();
+         b = 0;
+         b.resize(rhs_force_.size());
+         divmat_.mv(mechpot,b);
+        // end initialization
+        for (std::size_t i = 0; i < rhs_force_.size(); ++i) {
+            b[i] += rhs_force_[i];
+        }
+    }
+
+
+    /// Entries per row to preallocate: a cell that meets finer neighbours has
+    /// more than a hexahedron's share, so a fixed guess is not enough.
+    template <class Entries>
+    static int entriesPerRow(const Entries& entries, int nrows, int fallback)
+    {
+        std::vector<int> count(nrows, 0);
+        for (const auto& entry : entries) {
+            ++count[std::get<0>(entry)];
+        }
+        const auto worst = std::max_element(count.begin(), count.end());
+        return std::max(fallback, (worst == count.end()) ? 0 : *worst);
+    }
+    void makeDuneSystemMatrix(const std::vector<std::tuple<int, int, double>>& A_entries)
+    {
+        OPM_TIMEBLOCK(makeDuneSystemMatrix);
+        int ncols = 0;
+        int nrows = 0;
+        for (auto matel : A_entries) {
+            int i = std::get<0>(matel);
+            int j = std::get<1>(matel);
+            nrows = std::max(nrows, i);
+            ncols = std::max(ncols, j);
+        }
+        nrows = nrows + 1;
+        ncols = ncols + 1;
+        Matrix& MAT = this->getOperator();
+        MAT = 0;
+        MAT.setBuildMode(Matrix::implicit);
+        MAT.setImplicitBuildModeParameters(entriesPerRow(A_entries, nrows, 81), 0.4);
+        MAT.setSize(nrows, ncols);
+        makeDuneMatrixCompressed(A_entries, MAT);
+    }
+    void calculateStressPrecomputed(const Vector& dispalldune);
+    void calculateStrainPrecomputed(const Vector& dispalldune);
+    void calculateStrain();// bool precalculated);
+    void calculateStress();// bool precalculated);
+
+    //const std::vector<std::array<double,6>>& stress(){return stress_;}
+    const Dune::BlockVector<Dune::FieldVector<ctype,6>>& stress() const{return stress_;}
+    const Dune::BlockVector<Dune::FieldVector<ctype,6>>& strain() const{return strain_;}
+  void setOptions(int stability_choice_int,
+                  bool vem_source,
+                  bool vem_force,
+                  bool stab_on_stress,
+                  bool vem_stress,
+                  bool diagonal_scaling = false){
+     vem_source_ = vem_source;
+     vem_force_ = vem_force;
+     stab_on_stress_ = stab_on_stress;
+     vem_stress_ = vem_stress;
+     diagonal_scaling_ = diagonal_scaling;
+      //vem::StabilityChoice stability_choice_ = vem::D_RECIPE;
+      std::stringstream os;
+      os << "Setting stability choise to " << stability_choice_int
+         << (diagonal_scaling_ ? " with diagonal scaling" : "");
+      OpmLog::info(os.str());
+      if(stability_choice_int< 1 || stability_choice_int>vem::STABILITY_CHOICE_MAX){
+          OPM_THROW(std::runtime_error,"This stability is not implmented");
+      }
+      stability_choice_ = static_cast<vem::StabilityChoice>(stability_choice_int);
+    }
+
+    // Symmetric Jacobi scaling of the assembled system: A -> S A S with
+    // S = diag(1/sqrt(A_ii)).  High-aspect-ratio cells produce widely varying
+    // diagonal magnitudes which hurt the conditioning seen by the iterative
+    // solver; the scaling equilibrates the diagonal.  The solution of the
+    // original system is recovered in solve() as x = S y.
+    void applyDiagonalScaling(){
+        auto& mat = this->getOperator();
+        const auto n = mat.N();
+        scale_.resize(n);
+        for (auto row = mat.begin(), rowEnd = mat.end(); row != rowEnd; ++row) {
+            const auto i = row.index();
+            double d = 0.0;
+            for (auto col = row->begin(), colEnd = row->end(); col != colEnd; ++col)
+                if (col.index() == i)
+                    d = (*col)[0][0];
+            scale_[i] = (d > 0.0) ? 1.0/std::sqrt(d) : 1.0;
+        }
+        for (auto row = mat.begin(), rowEnd = mat.end(); row != rowEnd; ++row) {
+            const auto i = row.index();
+            for (auto col = row->begin(), colEnd = row->end(); col != colEnd; ++col)
+                (*col) *= scale_[i][0]*scale_[col.index()][0];
+        }
+    }
+private:
+  void expandDisp(std::vector<double>& dispall,bool expand);
+  void assignToVoigt(Dune::BlockVector< Dune::FieldVector<double,6> >& voigt_stress, const Dune::BlockVector< Dune::FieldVector<double,1> >& vemstress);
+  void assignToVoigtSymMat(Dune::BlockVector< Dune::FieldVector<double,6> >& voigt_stress, const std::vector< std::array<double,6> >& vemstress);
+    using AbstractSolverType = Dune::InverseOperator<Vector, Vector>;
+    using AbstractOperatorType = Dune::AssembledLinearOperator<Matrix, Vector, Vector>;
+    using AbstractPreconditionerType = Dune::PreconditionerWithUpdate<Vector, Vector>;
+
+    using SeqOperatorType = Dune::MatrixAdapter<Matrix, Vector, Vector>;
+    std::unique_ptr<SeqOperatorType> sop_;
+
+    using ParOperatorType = Dune::OverlappingSchwarzOperator<Matrix, Vector, Vector, CommunicationType>;
+    std::unique_ptr<ParOperatorType> pop_;
+
+  
+  
+        //! \brief Linear solver
+    typedef std::unique_ptr<Dune::InverseOperator<Vector, Vector> > SolverPtr;
+    SolverPtr tsolver_;
+
+    //! \brief An iterator over grid vertices
+    typedef typename GridType::LeafGridView::template Codim<dim>::Iterator LeafVertexIterator;
+
+    //! \brief A reference to our grid
+    const GridType& grid_;
+    int num_cells_;
+    std::vector<double> coords_;
+    std::vector<int> num_cell_faces_, num_face_corners_,face_corners_;
+    std::vector<char> corner_mask_; // per face_corners_ entry: a grid corner of its face
+    std::vector<int> idx_free_;
+
+    std::vector<double> rhs_force_;
+    //! \brief Vector holding material parameters for each active grid cell
+    std::vector< std::shared_ptr<Material> > materials;
+    std::vector<double> ymodule_;
+    std::vector<double> pratio_;
+    std::vector<double> body_force_;//= set_body_force(num_cells, bfcase);
+    std::tuple<int, std::vector<int>, std::vector<double>> dirichlet_; //set_dirichlet(coords, dircase);
+
+    Dune::BlockVector<Dune::FieldVector<ctype,6>> stress_;
+    Dune::BlockVector<Dune::FieldVector<ctype,6>> strain_;
+    Matrix stressmat_; // from all dofs (not eliminating bc) to cell
+    Matrix strainmat_;
+    Matrix divmat_;   // from cell pressure to active dofs
+    std::unique_ptr<Matrix> systemmatrix_;
+    Dune::BlockVector<Dune::FieldVector<ctype,1>> rhs_;
+    Dune::BlockVector<Dune::FieldVector<ctype,1>> sol_;
+
+    //std::vector<std::array<double,6>> stress_;
+    std::shared_ptr< CommunicationType > comm_;
+    std::shared_ptr< CommunicationType::ParallelIndexSet > vertexParallelIndexSet_;
+    std::shared_ptr< CommunicationType::ParallelIndexSet > dofParallelIndexSet_;
+    vem::StabilityChoice stability_choice_ = vem::D_RECIPE;
+    bool vem_source_ = true;
+    bool vem_force_ = true;
+    bool stab_on_stress_ = false;
+    bool vem_stress_ = false;
+    bool diagonal_scaling_ = false;
+    bool tol_relative_to_load_ = false;
+    double linear_tol_ = 1e-5;
+    Dune::BlockVector<Dune::FieldVector<ctype,1>> scale_; // Jacobi scale factors (if diagonal_scaling_)
+        int num_solves_ = 0;
+        int last_linear_iterations_ = 0;
+        int total_linear_iterations_ = 0;
+        bool last_linear_solve_converged_ = true;
+  //std::shared_ptr< CommunicationType::RemoteIndices> vertexRemoteIndexSet_;
+
+};
+
+}
+} // namespace Opm, Elasticity
+
+#include "VemElasticitySolver_impl.hpp"
+
+#endif

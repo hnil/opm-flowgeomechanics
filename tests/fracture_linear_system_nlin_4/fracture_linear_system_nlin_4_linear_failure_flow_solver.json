@@ -1,0 +1,9 @@
+{
+    "solver": "umfpack",
+    "verbosity": "0",
+    "tol": "1",
+    "maxiter": "1",
+    "preconditioner": {
+        "type": "DILU"
+    }
+}

@@ -1,0 +1,27 @@
+{
+    
+    "tol": "1e-5",
+    "maxiter": "100",
+    "verbosity": "1",
+    "solver": "gmres",
+    "restart": "60",
+    "preconditioner": {
+        "type": "hypre",
+        "max_levels": 25,
+        "print_level": 0,
+        "coarsen_type":8,
+        "strong_threshold":0.7,
+        "agg_num_levels":0,
+        "agg_interp_levels":0,
+        "max_row_sum":0.8,
+        "interp_type":6,
+        "relax_type":6,
+        "relax_order":1,
+        "max_coarse_size":500,
+        "num_sweeps":2,
+        "nodal":1,
+        "interp_vec_variant":2,
+        "num_functions": 3,
+        "num_functions": 1
+    }
+}

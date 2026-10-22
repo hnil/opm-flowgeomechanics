@@ -1,0 +1,24 @@
+{
+    "tol": "1e-10",
+    "atol": "1e-20",
+    "max_iter": "100",
+    "verbosity": "2",
+    "solver": "bicgstab",
+    "preconditioner": {
+        "verbosity": "0",
+        "diag_mech": "false",
+        "diag_flow": "false",
+        "mech_first": "true",
+        "fixed_stress": "true",
+        "mech_press_coupling": "true",
+        "flow_solver": {
+            "solver": "umfpack",
+            "verbosity": "0",
+            "tol": "1",
+            "maxiter": "1",
+            "preconditioner": {
+                "type": "DILU"
+            }
+        }
+    }
+}

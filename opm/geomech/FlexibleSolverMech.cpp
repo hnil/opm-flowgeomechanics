@@ -17,20 +17,16 @@
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <config.h>
-
+#include "config.h"
 #include <opm/common/TimingMacros.hpp>
-
 #include <opm/simulators/linalg/FlexibleSolver_impl.hpp>
 #include <opm/simulators/linalg/PreconditionerFactory_impl.hpp>
-
 template <int N>
 using OBMMec = Dune::BCRSMatrix<Dune::FieldMatrix<double, N, N>>;
-
 template <int N>
 using BVMec = Dune::BlockVector<Dune::FieldVector<double, N>>;
+;
 using CommMec = Dune::OwnerOverlapCopyCommunication<int, int>;
-
 // Sequential operators.
 template <int N>
 using SeqOpMec = Dune::MatrixAdapter<OBMMec<N>, BVMec<N>, BVMec<N>>;

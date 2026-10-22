@@ -25,23 +25,23 @@
 namespace Opm
 {
 
-/// Return the version name of the module, for example "2015.10"
-/// (for a release branch) or "2016.04-pre" (for a master branch).
-std::string moduleVersionName();
+    /// Return the version name of the module, for example "2015.10"
+    /// (for a release branch) or "2016.04-pre" (for a master branch).
+    std::string moduleVersionName();
 
-/// Return a (short) git hash for the current version of the
-/// module if this is a Release build (as defined by CMake), or
-/// "debug" for Debug builds.
-std::string moduleVersionHash();
+    /// Return a (short) git hash for the current version of the
+    /// module if this is a Release build (as defined by CMake), or
+    /// "debug" for Debug builds.
+    std::string moduleVersionHash();
 
-/// Return a string containing both the name and hash, if N is the
-/// name and H is the hash it will be "N (H)". For example
-/// "2016.04-pre (f15be17)" or "2016.04-pre (debug)".
-std::string moduleVersion();
+    /// Return a string containing both the name and hash, if N is the
+    /// name and H is the hash it will be "N (H)". For example
+    /// "2016.04-pre (f15be17)" or "2016.04-pre (debug)".
+    std::string moduleVersion();
 
-/// Return a string "dd-mm-yyyy at HH::MM::SS hrs" which is the time
-/// the binary was compiled.
-std::string compileTimestamp();
+    /// Return a string "dd-mm-yyyy at HH::MM::SS hrs" which is the time
+    /// the binary was compiled.
+    std::string compileTimestamp();
 
 } // namespace Opm
 

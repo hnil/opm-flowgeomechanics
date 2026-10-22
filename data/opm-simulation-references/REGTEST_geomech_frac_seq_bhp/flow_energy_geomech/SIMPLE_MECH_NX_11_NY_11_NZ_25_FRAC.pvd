@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<VTKFile type="Collection"
+         version="0.1"
+         byte_order="LittleEndian"
+         compressor="vtkZLibDataCompressor">
+ <Collection>
+   <DataSet timestep="0" file="SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC-00000.vtu"/>
+   <DataSet timestep="432000" file="SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC-00001.vtu"/>
+   <DataSet timestep="864000" file="SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC-00002.vtu"/>
+   <DataSet timestep="1296000" file="SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC-00003.vtu"/>
+   <DataSet timestep="8683200" file="SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC-00004.vtu"/>
+ </Collection>
+</VTKFile>

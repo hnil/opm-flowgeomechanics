@@ -1,0 +1,354 @@
+// -*- mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+// vi: set et ts=4 sw=4 sts=4:
+/*
+  This file is part of the Open Porous Media project (OPM).
+
+  OPM is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 2 of the License, or
+  (at your option) any later version.
+
+  OPM is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with OPM.  If not, see <http://www.gnu.org/licenses/>.
+
+  Consult the COPYING file in the top-level source directory of this
+  module for the precise wording of the license and the list of
+  copyright holders.
+*/
+#ifndef OPM_BOUNDARY_UTILS_HPP
+#define OPM_BOUNDARY_UTILS_HPP
+#include <cstring>
+#include <iostream>
+#include <opm/input/eclipse/EclipseState/Grid/FaceDir.hpp>
+#include <opm/input/eclipse/Schedule/BCState.hpp>
+namespace Opm{
+    namespace Elasticity{
+        template<int dimension>
+        unsigned cartesianIndex(const std::array<int,dimension>& coords,
+                                const std::array<int, dimension>& cartesianDimensions
+            )
+        {
+            unsigned cartIndex = coords[0];
+            int factor = cartesianDimensions[0];
+            for (unsigned i = 1; i < dimension; ++i) {
+                cartIndex += coords[i]*factor;
+                factor *= cartesianDimensions[i];
+            }
+
+            return cartIndex;
+        }
+
+        inline Opm::FaceDir::DirEnum faceToFaceDir(int insideFaceIdx){
+            Opm::FaceDir::DirEnum faceDirection;
+            switch (insideFaceIdx) {
+            case 0:
+                faceDirection = FaceDir::XMinus;
+                break;
+            case 1:
+                faceDirection = FaceDir::XPlus;
+                break;
+            case 2:
+                faceDirection = FaceDir::YMinus;
+                break;
+            case 3:
+                faceDirection = FaceDir::YPlus;
+                break;
+            case 4:
+                faceDirection = FaceDir::ZMinus;
+                break;
+            case 5:
+                faceDirection = FaceDir::ZPlus;
+                break;
+            default:
+                OPM_THROW(std::logic_error,
+                          "Internal error in initialization of aquifer.");
+            }
+            return faceDirection;
+        }
+
+        inline int faceDirToFace(Opm::FaceDir::DirEnum faceDirection){
+            int face;
+            switch (faceDirection) {
+                case FaceDir::XMinus:
+                    face = 0;
+                    break;
+                case FaceDir::XPlus:
+                    face = 1;
+                    break;
+                case FaceDir::YMinus:
+                    face = 2;
+                    break;
+                case FaceDir::YPlus:
+                    face = 3;
+                    break;
+                case FaceDir::ZMinus:
+                    face = 4;
+                    break;
+                case FaceDir::ZPlus:
+                    face = 5;
+                    break;
+                default:
+                    OPM_THROW(std::logic_error,
+                        "Internal error in initialization of aquifer.");
+            }
+            return face;
+        }
+
+        inline std::array<int,4> faceDirToNodes(Opm::FaceDir::DirEnum faceDirection){
+            std::array<int,4> face;
+            switch (faceDirection) {
+                case FaceDir::XMinus:
+                    face = {0,4,6,2};
+                    break;
+                case FaceDir::XPlus:
+                    face = {1,3,7,5};
+                    break;
+                case FaceDir::YMinus:
+                    face = {0,1,5,4};
+                    break;
+                case FaceDir::YPlus:
+                    face = {3,2,6,7};
+                    break;
+                case FaceDir::ZMinus:
+                    face = {0,2,3,1};
+                    break;
+                case FaceDir::ZPlus:
+                    face = {4,5,7,6};
+                    break;
+                default:
+                    OPM_THROW(std::logic_error,
+                        "Internal error in initialization of aquifer.");
+            }
+            return face;
+        }
+
+
+        /// Constrain the nodes on the grid's outer boundary. Used for a
+        /// mechanics grid of its own, whose boundary is not the one BCCON
+        /// describes. Rollers still remove every rigid mode of a box, and
+        /// leaving the top free lets the overburden move vertically.
+        enum class OuterBoundary {
+            Fixed,          ///< all three components on every outer face
+            Roller,         ///< the normal component on every outer face
+            RollerFreeTop,  ///< as Roller, but the Z- face is left free
+        };
+
+        /// Every node of a boundary face, not just the cell's eight corners: a
+        /// cell merged from several others has faces with more nodes than
+        /// that, and leaving them free would make the boundary soft.
+        template<class Grid>
+        void nodesAtOuterBoundary(std::vector<std::tuple<size_t,MechBCValue>>& bc_nodes,
+                                  const Grid& grid,
+                                  const OuterBoundary mode)
+        {
+            const auto& gv = grid.leafGridView();
+            for (const auto& cell : elements(gv)) {
+                // In parallel the outermost overlap cells have faces to cells
+                // this rank does not hold, which look like domain boundary and
+                // would constrain the interior.
+                if (cell.partitionType() != Dune::InteriorEntity) {
+                    continue;
+                }
+                const int cellIdx = gv.indexSet().index(cell);
+                for (int f = 0; f < grid.numCellFaces(cellIdx); ++f) {
+                    const int face = grid.cellFace(cellIdx, f);
+                    const int other = (grid.faceCell(face, 0) == cellIdx)
+                        ? grid.faceCell(face, 1) : grid.faceCell(face, 0);
+                    if (other >= 0) {
+                        continue;                      // not the domain boundary
+                    }
+                    const auto normal = grid.faceAreaNormalEcl(face);
+                    int axis = 0;
+                    for (int d = 1; d < 3; ++d) {
+                        if (std::abs(normal[d]) > std::abs(normal[axis])) {
+                            axis = d;
+                        }
+                    }
+                    if (mode == OuterBoundary::RollerFreeTop && axis == 2
+                        && grid.faceCentroid(face)[2] < grid.cellCentroid(cellIdx)[2]) {
+                        continue;                      // the top of the model
+                    }
+                    MechBCValue bcval;
+                    if (mode == OuterBoundary::Fixed) {
+                        bcval.fixeddir = {true, true, true};
+                    } else {
+                        bcval.fixeddir[axis] = true;
+                    }
+                    for (int v = 0; v < grid.numFaceVertices(face); ++v) {
+                        bc_nodes.emplace_back(grid.faceVertex(face, v), bcval);
+                    }
+                }
+            }
+
+            std::sort(bc_nodes.begin(), bc_nodes.end(),
+                      [](const auto& a, const auto& b){ return std::get<0>(a) < std::get<0>(b); });
+            // A node on an edge or corner is met once per face: keep one entry
+            // with the union of the masks.
+            std::vector<std::tuple<size_t,MechBCValue>> unique_nodes;
+            for (const auto& node : bc_nodes) {
+                if (!unique_nodes.empty()
+                    && std::get<0>(unique_nodes.back()) == std::get<0>(node)) {
+                    auto& mask = std::get<1>(unique_nodes.back()).fixeddir;
+                    for (int d = 0; d < 3; ++d) {
+                        mask[d] = mask[d] || std::get<1>(node).fixeddir[d];
+                    }
+                } else {
+                    unique_nodes.push_back(node);
+                }
+            }
+            bc_nodes.swap(unique_nodes);
+        }
+
+        template<class BCConfig, class GvType, class CartMapperType>
+        void nodesAtBoundary(std::vector<std::tuple<size_t,MechBCValue>>& bc_nodes,
+                             const BCConfig& bcconfigs,
+                             const BCState& bcprops,
+                             const GvType& gv,
+                             const CartMapperType& cartesianIndexMapper
+            ){
+            if (bcprops.size() == 0) {
+                return;
+            }
+            size_t numCartDof = cartesianIndexMapper.cartesianSize();
+            unsigned numElems = gv.size(/*codim=*/0);
+            std::vector<int> cartesianToCompressedElemIdx(numCartDof, -1);
+            for (unsigned elemIdx = 0; elemIdx < numElems; ++elemIdx){
+                cartesianToCompressedElemIdx[cartesianIndexMapper.cartesianIndex(elemIdx)] = elemIdx;
+            }
+            nodesAtBoundary(bc_nodes, bcconfigs, bcprops, gv,
+                            cartesianIndexMapper.cartesianDimensions(),
+                            [&cartesianToCompressedElemIdx](int cartindex, Opm::FaceDir::DirEnum) {
+                                return cartesianToCompressedElemIdx[cartindex];
+                            });
+        }
+
+        //! BCCON boxes in a Cartesian space of `cartdim`; `cellOfFace` gives the
+        //! grid cell carrying that cell's face in the BC direction, or -1.
+        template<class BCConfig, class GvType, class CellOfFace>
+        void nodesAtBoundary(std::vector<std::tuple<size_t,MechBCValue>>& bc_nodes,
+                             const BCConfig& bcconfigs,
+                             const BCState& bcprops,
+                             const GvType& gv,
+                             const std::array<int, 3>& cartdim,
+                             const CellOfFace& cellOfFace
+            ){
+            static const int dim = 3;
+            if (bcprops.size() > 0) {
+                for (const auto& bcconfig : bcconfigs) {
+                    for (const auto& bcprop : bcprops) {
+
+
+                        if(bcprop.index == bcconfig.index){
+                            // double search since structure is strange
+                            const auto& bcface = bcconfig;
+
+                            if((bcface.i1 < 0) || (bcface.j1<0) || (bcface.k1<0)){
+                                throw std::logic_error("Lower range of BC wrong");
+                            }
+                            if( (bcface.i2 > cartdim[0]) || (bcface.j2> cartdim[1]) || (bcface.k2 > cartdim[2])){
+                                throw std::logic_error("Upper range of BC wrong");
+                            }
+
+                            const auto& type = bcprop.bcmechtype;
+                            if (type == Opm::BCMECHType::FREE) {
+                                // do nothing
+                            }else if (type == Opm::BCMECHType::FIXED) {
+                                std::set<size_t> effected_cells;
+                                for (int i = bcface.i1; i <= bcface.i2; ++i) {
+                                    for (int j = bcface.j1; j <= bcface.j2; ++j) {
+                                        for (int k = bcface.k1; k <= bcface.k2; ++k) {
+
+
+                                            std::array<int, 3> tmp = {i,j,k};
+                                            int cartindex =
+                                                cartesianIndex<3>(tmp,cartdim);
+                                            auto elemIdx = cellOfFace(cartindex, bcface.dir);
+                                            if (elemIdx>-1){
+                                                effected_cells.insert(elemIdx);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                MechBCValue bcval = bcprop.mechbcvalue;
+                                for(const auto& cell:elements(gv)){
+                                    auto index = gv.indexSet().index(cell);
+                                    auto it = effected_cells.find(index);
+                                    if(!(it == effected_cells.end())){
+                                        // fix all noted for now
+                                        std::array<int,4> nodes = faceDirToNodes(bcface.dir);
+                                        for(auto nind: nodes){
+                                            auto global_ind = gv.indexSet().subIndex(cell,nind,dim);
+                                            bc_nodes.push_back(
+                                                std::tuple<size_t,MechBCValue>(global_ind,bcval)
+                                                );
+                                        }
+                                    }
+                                }
+                            } else {
+                                throw std::logic_error("invalid mechanical type for BC. Use FREE or FIXED in BCMECH");
+                            }
+                        }
+                    }
+                }
+            }else{
+                return;
+            }
+            auto compare = [](std::tuple<size_t,MechBCValue> const &t1,
+                              std::tuple<size_t,MechBCValue> const &t2)
+            {
+                return std::get<0>(t1) < std::get<0>(t2);
+            };
+            auto isequal = [](std::tuple<size_t,MechBCValue> const &t1,
+                              std::tuple<size_t,MechBCValue> const &t2)
+            {
+                return std::get<0>(t1) == std::get<0>(t2);
+            };
+            if (bc_nodes.empty()) {
+                // In parallel a rank may hold no cell on a BCCON face.
+                return;
+            }
+            //TODO: make unique with masks removing boundary set on same dofs mayr romve masks
+            const std::vector<std::tuple<size_t,MechBCValue>> org_bc_nodes = bc_nodes;
+            std::sort(bc_nodes.begin(), bc_nodes.end(), compare); // {1 1 2 3 4 4 5}
+            auto last = std::unique(bc_nodes.begin(), bc_nodes.end(), isequal);
+            // v now holds {1 2 3 4 5 x x}, where 'x' is indeterminate
+            bc_nodes.erase(last, bc_nodes.end());
+            
+            // make index
+            auto max_elem = std::max_element(bc_nodes.begin(), bc_nodes.end(),
+                                          [](const auto& a, const auto& b){
+                                              return std::get<0>(a) < std::get<0>(b);
+                                          });
+            int maxnode = std::get<0>(*max_elem);
+            std::vector<int> mymap(maxnode+1,-1);
+            for(int i=0; i< int(bc_nodes.size()); ++i){
+                mymap[std::get<0>(bc_nodes[i])] = i;
+            }
+
+            for(int i=0; i< int(org_bc_nodes.size()); ++i){
+                auto node = std::get<0>(org_bc_nodes[i]);
+                assert(node<mymap.size());
+                int index = mymap[node];
+                assert(index>-1);
+                auto mask = std::get<1>(org_bc_nodes[i]).fixeddir;
+                for(int mdim=0; mdim<3; mdim++){
+                    if(mask[mdim]){
+                        assert(index < int(bc_nodes.size()));
+                        auto& bc_node = bc_nodes[index];
+                        assert(node == std::get<0>(bc_node));
+                        std::get<1>(bc_node).fixeddir[mdim] = true;
+                        assert(std::get<1>(bc_nodes[index]).fixeddir[mdim] == true);
+                    }
+                }                
+            }
+        }
+    }
+}
+
+#endif

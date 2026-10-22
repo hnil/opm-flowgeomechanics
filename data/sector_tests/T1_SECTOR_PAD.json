@@ -1,0 +1,6 @@
+{
+  "box": [2, 10, 2, 10, 1, 25],
+  "lateral": { "cells": 3, "width": 2000, "growth": 1.5 },
+  "top":     { "cells": 3, "depth": 0, "growth": 1.5 },
+  "bottom":  { "cells": 3, "thickness": 1000, "growth": 1.5 }
+}

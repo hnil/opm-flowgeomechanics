@@ -1,0 +1,11 @@
+{
+    "tol": "1e-10",
+    "maxiter": "200",
+    "verbosity": "120",
+    "solver": "bicgstab",
+    "preconditioner": {
+        "type": "ParOverILU0",
+        "relaxation": "0.90000000000000002",
+        "ilulevel": "0"
+    }
+}

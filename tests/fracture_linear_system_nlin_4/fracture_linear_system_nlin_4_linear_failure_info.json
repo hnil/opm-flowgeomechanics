@@ -1,0 +1,12 @@
+{
+    "use_ad_pressure_assembly": "true",
+    "active_pressure_matrix": "ad",
+    "mechanics_size": "222",
+    "pressure_size": "222",
+    "pressure_max_abs_diff_ad_vs_original": "1.0339757656912846e-25",
+    "coupling_max_abs_diff_ad_vs_original": "0",
+    "linear": {
+        "converged": "false",
+        "iterations": "100"
+    }
+}

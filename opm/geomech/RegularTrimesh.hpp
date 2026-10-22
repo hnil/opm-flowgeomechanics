@@ -1,60 +1,35 @@
-/*
-  Copyright 2025 Equinor ASA.
+#pragma once
 
-  This file is part of the Open Porous Media project (OPM).
-
-  OPM is free software: you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  OPM is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
-
-  You should have received a copy of the GNU General Public License
-  along with OPM.  If not, see <http://www.gnu.org/licenses/>.
-*/
-
-#ifndef REGULARTRIMESH_HPP_INCLUDED
-#define REGULARTRIMESH_HPP_INCLUDED
-
-#include <dune/common/exceptions.hh>
-
-#include <dune/foamgrid/foamgrid.hh>
-
-#include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstddef>
-#include <functional>
-#include <iosfwd>
+#include <iostream>
 #include <map>
 #include <memory>
-#include <tuple>
-#include <utility>
 #include <vector>
+#include <tuple>
+
+#include <dune/common/exceptions.hh>
+#include <dune/foamgrid/foamgrid.hh>
 
 namespace Opm
 {
 
-using CellRef = std::array<int, 3>; // (i, j, [0 | 1])
-using EdgeRef = std::array<int, 3>; // (i, j, [0 | 1 | 2])
-using NodeRef = std::array<int, 2>; // (i, j)
-using Coord3D = std::array<double, 3>;
-
+typedef std::array<int, 3> CellRef; // (i, j, [0 | 1])
+typedef std::array<int, 3> EdgeRef; // (i, j, [0 | 1 | 2])
+typedef std::array<int, 2> NodeRef; // (i, j)
+typedef std::array<double, 3> Coord3D;
 using Grid = Dune::FoamGrid<2, 3>;
+// typedef Dune::FoamGrid<2, 3> Grid;
+// typedef int Grid; // @@ dummy
 
-struct CellAttributes
-{
+
+struct CellAttributes {
     CellAttributes()
-        : flag(0)
-    {
-    }
-
-    int flag {};
+        : flag(0) {};
+    int flag;
 }; // fill this with contents as needed
+
+
 
 class RegularTrimesh
 {
@@ -71,9 +46,8 @@ public:
         , axis2_(RegularTrimesh::normalize(axis2))
         , edgelen_(edgelen)
     {
-        for (auto it = cells_begin; it != cells_end; ++it) {
-            cellinfo_[*it] = CellAttributes {};
-        }
+        for (auto it = cells_begin; it != cells_end; ++it)
+            cellinfo_[*it] = CellAttributes();
     }
 
     RegularTrimesh(const std::map<CellRef, CellAttributes>& cells,
@@ -100,13 +74,12 @@ public:
                    const std::array<double, 3>& axis1 = {1, 0, 0},
                    const std::array<double, 3>& axis2 = {0.5, std::sqrt(3) / 2, 0},
                    const std::array<double, 2>& edgelen = {1, 1});
-
+    
     // --------------------- Functions for inspecting the grid ---------------------
-    std::size_t numCells() const
+    size_t numCells() const
     {
         return cellinfo_.size();
     }
-
     std::vector<CellRef> cellIndices() const; // result is sorted
     std::vector<EdgeRef> edgeIndices() const; // result is sorted
     std::vector<NodeRef> nodeIndices() const; // result is sorted
@@ -124,17 +97,17 @@ public:
     std::vector<Coord3D> nodeCoords() const;
 
     static std::array<NodeRef, 3> cellNodes(const CellRef& cell);
-    std::vector<std::array<std::size_t, 3>> cellNodesLinear() const;
+    std::vector<std::array<size_t, 3>> cellNodesLinear() const;
 
     std::pair<NodeRef, NodeRef> edgeNodes(const EdgeRef& edge) const;
-    std::vector<std::pair<std::size_t, std::size_t>> edgeNodeIndices(bool only_boundary = false) const;
+    std::vector<std::pair<size_t, size_t>> edgeNodeIndices(bool only_boundary = false) const;
     std::pair<Coord3D, Coord3D> edgeNodeCoords(const EdgeRef& edge) const;
     std::vector<std::pair<Coord3D, Coord3D>> edgeNodeCoords() const;
 
     bool isActive(const CellRef& cell) const;
-    std::size_t numActive() const;
-    std::size_t linearCellIndex(const CellRef& cell) const;
-    CellRef cellIndex(const std::size_t idx) const;
+    size_t numActive() const;
+    size_t linearCellIndex(const CellRef& cell) const;
+    CellRef cellIndex(const size_t idx) const;
     int getCellFlag(const CellRef& cell) const;
     std::vector<int> getCellFlags() const;
     std::vector<CellRef> activeNeighborCells(const std::vector<CellRef>& cells) const;
@@ -162,7 +135,6 @@ public:
                    const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(),
                    const bool add_smoothing_triangles = true,
                    const int cellnum_threshold = 10) const;
-
     void writeMatlabTriangulation(std::ostream& out) const;
 
     // ------------- Functions for creating new RegularTrimesh objects -------------
@@ -175,7 +147,7 @@ public:
     // triangles in the Trimesh covered by each triangle (for
     // `getTriangles`, this is a trivial one-to-one mapping, but not for its
     // sister function `getMultiresTriangles`).
-    std::pair<std::vector<std::array<NodeRef, 3>>, std::vector<std::vector<CellRef>>>
+    std::pair<std::vector<std::array<NodeRef, 3>>,std::vector<std::vector<CellRef>>>
     getTriangles() const;
 
     // Returns a pair of vectors, first is the triangles, second is the set of
@@ -186,13 +158,14 @@ public:
     // triangle before splitting.
     std::pair<std::vector<std::array<NodeRef, 3>>, std::vector<std::vector<CellRef>>>
     getMultiresTriangles(const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(),
-                         const int max_levels = 5,
-                         const int cellnum_threshold = 10) const;
+                        const int max_levels = 5, const int cellnum_threshold = 10) const;
+//                        const int max_levels, const int cellnum_threshold ) const;
+//                         
 
     // static functions
-    static std::vector<CellRef> coarse_to_fine(const CellRef& cell, const int levels = 1);
-    static NodeRef coarse_to_fine(const NodeRef& node, const int levels = 1);
-    static CellRef fine_to_coarse(const CellRef& cell, const int levels = 1);
+    static std::vector<CellRef> coarse_to_fine(const CellRef& cell, const int levels=1);
+    static NodeRef coarse_to_fine(const NodeRef& node, const int levels=1);
+    static CellRef fine_to_coarse(const CellRef& cell, const int levels=1);
     static std::vector<CellRef> inner_ring_cells();
     static std::pair<RegularTrimesh, std::vector<CellRef>>
     coarsen_mesh(const RegularTrimesh& mesh, const std::vector<CellRef>& fixed_cells);
@@ -200,32 +173,32 @@ public:
     createGridToGridMap(const std::vector<std::vector<CellRef>>& map1,
                         const std::vector<std::vector<CellRef>>& map2,
                         const int level);
-
+    
 private:
     // helper functions
     std::vector<EdgeRef> all_half_edges_() const; // internal edges are duplicated
     std::vector<CellRef> interior_coarsegrid_() const; // all coarse cells fully covered by fine ones
     std::vector<unsigned int> noderefs_to_indices_(const std::vector<NodeRef>& noderefs) const;
     std::vector<unsigned int> cellrefs_to_indices_(const std::vector<CellRef>& cellrefs) const;
-    std::vector<std::array<unsigned int, 3>>
-    ref2index_(const std::vector<std::array<NodeRef, 3>>& vec) const;
-
-    std::vector<std::pair<std::array<unsigned int, 3>, std::array<CellRef, 2>>>
-    boundary_smoothing_triangles_() const;
+    std::vector<std::array<unsigned int, 3>> ref2index_(const std::vector<std::array<NodeRef, 3>>& vec) const;
+    
+    std::vector<std::pair<std::array<unsigned int, 3>,
+                          std::array<CellRef, 2>>> boundary_smoothing_triangles_() const;
 
     static double norm(const Coord3D& v)
     {
-        return std::hypot(v[0], v[1], v[2]);
+        return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
     }
 
-    static double dist(const Coord3D& v1, const Coord3D& v2)
-    {
-        return std::hypot(v1[0] - v2[0], v1[1] - v2[1], v1[2] - v2[2]);
+    static double dist(const Coord3D& v1, const Coord3D& v2) {
+        return std::sqrt((v1[0] - v2[0]) * (v1[0] - v2[0]) +
+                         (v1[1] - v2[1]) * (v1[1] - v2[1]) +
+                         (v1[2] - v2[2]) * (v1[2] - v2[2]));
     }
-
+        
     static Coord3D normalize(const Coord3D& v)
     {
-        const double n = norm(v); // std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+        const double n = norm(v); //std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
         return {v[0] / n, v[1] / n, v[2] / n};
     }
 
@@ -237,21 +210,20 @@ private:
 
     static void rotate60(CellRef& cell) // rotate cell 60 degrees clockwise
     {
-        CellRef tmp {cell[0] + cell[1] + cell[2], -cell[0] - 1, (cell[2] + 1) % 2};
+        CellRef tmp {cell[0] + cell[1] + cell[2], -cell[0]  - 1, (cell[2] + 1) % 2} ;
         std::swap(cell, tmp);
     }
 
     static NodeRef edge2node(const EdgeRef& edge) // convert edge to corner node
     {
-        return {edge[0], edge[1]};
+        return { edge[0], edge[1] }; 
     }
 
-    static CellRef node2cell(const NodeRef& node,
-                             bool second) // make cell from corner node and orientation
+    static CellRef node2cell(const NodeRef& node, bool second) // make cell from corner node and orientation
     {
-        return {node[0], node[1], int(second)};
+        return { node[0], node[1], int(second) };
     }
-
+    
     // data members
     std::map<CellRef, CellAttributes> cellinfo_;
     Coord3D origin_;
@@ -260,31 +232,22 @@ private:
     std::array<double, 2> edgelen_;
 };
 
-void writeMeshToVTK(const RegularTrimesh& mesh,
-                    const char* const filename,
-                    const int coarsen_levels = 0,
-                    const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(),
-                    const bool add_smoothing_triangles = true);
-
-// @@ just because debugger doesnt handle the default arg.
-void writeMeshToVTKDebug(const RegularTrimesh& mesh,
-                         const char* const filename,
-                         const int coarsen_levels = 0,
-                         const bool add_smoothing_triangles = true);
+void writeMeshToVTK(const RegularTrimesh& mesh, const char* const filename, const int coarsen_levels = 0,
+                    const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(), const bool add_smoothing_triangles = true);
+// @@ just because debugger doesnt handle the default arg.    
+void writeMeshToVTKDebug(const RegularTrimesh& mesh, const char* const filename, const int coarsen_levels = 0, const bool add_smoothing_triangles = true);
 
 void writeMeshBoundaryToVTK(const RegularTrimesh& mesh, const char* const filename);
 
 
-std::tuple<RegularTrimesh, int> expand_to_criterion(
-    const RegularTrimesh& mesh,
-    std::function<std::vector<double>(const RegularTrimesh&, const int level)> score_function,
-    double threshold,
-    const std::vector<CellRef>& fixed_cells,
-    const int target_cellcount, // target number of cells in final mesh
-    const int cellcount_threshold // target number of cells in initial mesh to expand
-                                  // (start level will be determined by this)
-);
-
+std::tuple<RegularTrimesh, int>
+expand_to_criterion(const RegularTrimesh& mesh,
+        std::function<std::vector<double>(const RegularTrimesh&,
+                                          const int level)> score_function,
+        double threshold, const std::vector<CellRef>& fixed_cells,
+        const int target_cellcount, // target number of cells in final mesh
+                    const int cellcount_threshold, // target number of cells in initial mesh to expand (start level will be determined by this)
+        const int max_iteration_on_coarse_level,
+        std::function<bool()> stop_criterion = []() { return false; }
+        );
 } // namespace Opm
-
-#endif // REGULARTRIMESH_HPP_INCLUDED

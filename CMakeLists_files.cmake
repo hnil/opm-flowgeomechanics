@@ -24,17 +24,20 @@
 #                       the library needs it.
 
 list (APPEND MAIN_SOURCE_FILES
-	opm/geomech/coupledsolver.cpp
+	opm/geomech/BuiltinFractureParams.cpp
+	opm/geomech/CoupledSolver.cpp
 	opm/geomech/CutDe.cpp
+	opm/geomech/CgalHelper.cpp
 	opm/geomech/DiscreteDisplacement.cpp
 	opm/geomech/FlexibleSolverMech.cpp
 	opm/geomech/Fracture_fullSystemIteration.cpp
+	opm/geomech/FractureMechanicsPreconditioner.cpp
 	opm/geomech/Fracture.cpp
 	opm/geomech/FractureModel.cpp
 	opm/geomech/FractureWell.cpp
 	opm/geomech/GeometryHelpers.cpp
 	opm/geomech/GridStretcher.cpp
-	opm/geomech/param_interior.cpp
+	opm/geomech/ParamInterior.cpp
 	opm/geomech/RegularTrimesh.cpp
 	opm/geomech/vem/vem.cpp
 	opm/geomech/vem/vemutils.cpp
@@ -47,34 +50,39 @@ list (APPEND PROGRAM_SOURCE_FILES
 )
 
 list (APPEND PUBLIC_HEADER_FILES
-	opm/geomech/BlackoilGeomechWellModel.hpp
-	opm/geomech/BlackoilModelGeomech.hpp
-	opm/geomech/boundaryutils.hh
-	opm/geomech/convex_boundary.hpp
-	opm/geomech/coupledsolver.hpp
+	opm/geomech/BlackoilGeoMechWellModel.hpp
+	opm/geomech/NonlinearSystemBlackOilReservoirGeoMech.hpp
+	opm/geomech/BoundaryUtils.hpp
+	opm/geomech/ConvexBoundary.hpp
+	opm/geomech/CoupledSolver.hpp
 	opm/geomech/CutDe.hpp
+	opm/geomech/CgalHelper.hpp
 	opm/geomech/DiscreteDisplacement.hpp
 	opm/geomech/DuneCommunicationHelpers.hpp
-	opm/geomech/dune_utilities.hpp
-	opm/geomech/eclgeomechmodel.hh
-	opm/geomech/eclproblemgeomech.hh
-	opm/geomech/elasticity_solver.hpp
-	opm/geomech/elasticity_solver_impl.hpp
-	opm/geomech/FlowGeomechLinearSolverParameters.hpp
+	opm/geomech/DuneUtilities.hpp
+	opm/geomech/GeoMechModel.hpp
+	opm/geomech/FlowProblemGeoMech.hpp
+	opm/geomech/ElasticitySolver.hpp
+	opm/geomech/ElasticitySolver_impl.hpp
+	opm/geomech/FlowGeoMechLinearSolverParameters.hpp
+	opm/geomech/FracturePressureAssemblerAD.hpp
 	opm/geomech/Fracture.hpp
 	opm/geomech/Fracture_impl.hpp
-	opm/geomech/FractureModel.hpp
+	opm/geomech/FractureAuxCells.hpp
+  opm/geomech/FractureAuxCells_impl.hpp
+  opm/geomech/FractureModel.hpp
+  opm/geomech/LgrLookup.hpp
 	opm/geomech/FractureModel_impl.hpp
 	opm/geomech/FractureWell.hpp
 	opm/geomech/GeometryHelpers.hpp
 	opm/geomech/GridStretcher.hpp
 	opm/geomech/Math.hpp
-	opm/geomech/param_interior.hpp
+	opm/geomech/ParamInterior.hpp
 	opm/geomech/RegularTrimesh.hpp
-	opm/geomech/vem_elasticity_solver.hpp
-	opm/geomech/vem_elasticity_solver_impl.hpp
+	opm/geomech/VemElasticitySolver.hpp
+	opm/geomech/VemElasticitySolver_impl.hpp
 	opm/geomech/vem/topology.hpp
 	opm/geomech/vem/vem.hpp
 	opm/geomech/vem/vemutils.hpp
-	opm/geomech/vtkgeomechmodule.hh
+	opm/geomech/VtkGeoMechModule.hpp
 )

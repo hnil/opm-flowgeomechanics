@@ -1,39 +1,46 @@
-/*
-  Copyright 2025 Equinor ASA.
-
-  This file is part of the Open Porous Media project (OPM).
-
-  OPM is free software: you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  OPM is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
-
-  You should have received a copy of the GNU General Public License
-  along with OPM.  If not, see <http://www.gnu.org/licenses/>.
-*/
-
-#ifndef OPM_GEOMECH_VEM_VEM_HPP
-#define OPM_GEOMECH_VEM_VEM_HPP
-
+#ifndef _VEM_HPP
+#define _VEM_HPP
+#include <map>
 #include <array>
 #include <tuple>
 #include <vector>
-
 namespace vem
 {
-
-enum class StabilityChoice {
-    SIMPLE = 1, // the basic stability term described in (Gain et al., 2014)
-    HARMONIC = 2, // modified stability term more robust for high aspect ratios (Andersen
-                  // et al., 2017)
-    D_RECIPE = 3, // another modified stability based on the diagonal of the consistency matrix
-};
-
+  enum StabilityChoice {
+    SIMPLE = 1,     // the basic stability term described in (Gain et al., 2014)
+    HARMONIC = 2,   // modified stability term more robust for high aspect ratios (Andersen et al., 2017)
+    D_RECIPE = 3,   // diagonal of consistency matrix, with isotropic floor tr(D)/9*cbrt(vol)
+    ALLMAX = 4,
+    ALLMIN = 5,
+    EXPERIMENTAL = 6,
+    FEM = 7,        // standard Q1 (bi-/trilinear) FEM on quad/hex cells; VEM with
+                    // ANISO_DIAG stabilization on cells where Q1 is not applicable
+    ANISO_DIAG = 8, // diagonal of consistency matrix with *anisotropic* floor based on
+                    // per-direction element length scales (robust for high aspect ratios)
+    ANISO_HARMONIC = 9, // purely geometric anisotropic diagonal: tr(D)/9 * vol / h_d^2
+                        // per coordinate direction d (anisotropic generalization of HARMONIC)
+    FEM_BBAR = 10,  // as FEM, but Q1 with B-bar (mean dilatation) to reduce volumetric
+                    // locking; VEM with ANISO_DIAG fallback on non-hex cells
+    // As D_RECIPE / ANISO_HARMONIC / SIMPLE, with each node's term scaled by its share of
+    // the cell boundary (1 on a regular hex): softer on hanging nodes of refined faces.
+    FACE_D_RECIPE = 11,
+    FACE_ANISO_HARMONIC = 12,
+    FACE_SIMPLE = 13,
+    TRACE = 14,     // mu-scaled boundary (trace) term: robust to short edges and small faces
+    SMOOTH_HOURGLASS = 15 // hexes: energy of the smooth (Q1 + bubble) field, exact in bending/twist
+                          // at any aspect; TRACE on the extra nodes of polyhedra and as fallback
+  };
+  // Face integrals of the basis functions in the strain projection (3D).
+  // KITE: per-face kite areas and one averaged normal; exact on planar faces only.
+  // TRIANGULATED: fan from the face vertex mean with per-triangle normals; exact on warped faces.
+  enum class FaceQuadrature { KITE = 0, TRIANGULATED = 1 };
+  void set_face_quadrature(FaceQuadrature q);
+  FaceQuadrature face_quadrature();
+  constexpr int STABILITY_CHOICE_MAX = 15;
+  // true for choices that request Q1 FEM assembly on cells where it is applicable
+  inline bool is_fem_choice(StabilityChoice c) { return c == FEM || c == FEM_BBAR; }
+  inline bool is_face_weighted_choice(StabilityChoice c) { return c >= FACE_D_RECIPE && c <= FACE_SIMPLE; }
+  
 // ============================================================================
 // == Main functions for computing element stiffness matrices and assembling ==
 // ==                      linear systems in 2D and 3D                       ==
@@ -44,35 +51,29 @@ enum class StabilityChoice {
 //  Dirichlet and Neumann boundary conditions. The resulting system is represented
 //  as the entries of a sparse matrix and a right-hand-side vector.
 //
-//  @param points             Pointer to an array of doubles, containing the
-//  x,y-coordinates
+//  @param points             Pointer to an array of doubles, containing the x,y-coordinates
 //                            of all points in the mesh.
 //  @param num_cells          The number of cells in the mesh.
-//  @param num_cell_faces     Pointer to an array of ints, containing the number of faces
-//  for
+//  @param num_cell_faces     Pointer to an array of ints, containing the number of faces for
 //                            each cell in the mesh.
 //  @param cell_corners       Pointer to an array of ints, containing the indices of the
 //                            corners of each cell in the `points` array. The corners for
-//                            cell i are located at indices
-//                            cell_corners[K],...,cell_corners[L]-1. where K is the sum of
-//                            `num_cell_faces[0]` through `num_cell_faces[i-1]` and L
-//                            equals `num_cell_faces[i]`.
-//  @param young              Pointer to an array of doubles, containing the Young's
-//  modulus
+//                            cell i are located at indices cell_corners[K],...,cell_corners[L]-1.
+//                            where K is the sum of `num_cell_faces[0]` through `num_cell_faces[i-1]`
+//                            and L equals `num_cell_faces[i]`.
+//  @param young              Pointer to an array of doubles, containing the Young's modulus
 //                            for each cell.
 //  @param poisson            Pointer to an array of doubles, containing the Poisson ratio
 //                            for each cell.
 //  @param body_force         Pointer to an array of doubles, containing the body force
 //                            (i.e., force per unit volume) for each cell in the mesh. The
 //                            force for cell i is located at indices 2*i and 2*i+1.
-//  @param num_fixed_dofs     The number of degrees of freedom restricted by Dirichlet
-//  conditions.
-//                            Note that each node in the mesh has 2 degrees of freedom (x
-//                            and y).
+//  @param num_fixed_dofs     The number of degrees of freedom restricted by Dirichlet conditions.
+//                            Note that each node in the mesh has 2 degrees of freedom (x and y).
 //  @param fixed_dof_ixs      Pointer to an array of ints, containing the indices of the
-//                            fixed degrees of freedom (i.e., nodes coordinate components
-//                            with Dirichlet boundary conditions) in the global system.
-//                            The indices must be sorted in ascending order.
+//                            fixed degrees of freedom (i.e., nodes coordinate components with
+//                            Dirichlet boundary conditions) in the global system. The indices
+//                            must be sorted in ascending order.
 //  @param fixed_dof_values   Pointer to an array of doubles, containing the prescribed
 //                            values for the fixed degrees of freedom.
 //  @param num_neumann_faces  The number of Neumann boundary conditions.
@@ -81,22 +82,18 @@ enum class StabilityChoice {
 //  @param neumann_forces     Pointer to an array of doubles, containing the force values
 //                            for the Neumann boundary conditions. The force for face i is
 //                            located at indices 2*i and 2*i+1.
-//  @param A_entries          A vector of tuples, each containing the (i,j) indices and
-//  value
-//                            for a non-zero entry in the sparse matrix.  There may be
-//                            multiple entries for a given (i,j) coordinate, in which case
-//                            these needs to be added up when constructing the actual,
-//                            sparse matrix. (E.g. using the Eigen package, this can be
-//                            achieved using the `setFromTriplet` member function of the
-//                            sparse matrix class).
+//  @param A_entries          A vector of tuples, each containing the (i,j) indices and value
+//                            for a non-zero entry in the sparse matrix.  There may be multiple
+//                            entries for a given (i,j) coordinate, in which case these needs to
+//                            be added up when constructing the actual, sparse matrix.
+//                            (E.g. using the Eigen package, this can be achieved using the
+//                            `setFromTriplet` member function of the sparse matrix class).
 //  @param b                  The right-hand side vector of the linear system.
 //
-//  @return                   The total number of unknowns, i.e. the number of rows and
-//  columns
-//                            in the final matrix (and the length of the right-hand side
-//                            vector `b`). This number is equal to 3 times the number of
-//                            points, minus the number of fixed degreees of freedom,
-//                            `num_fixed_dofs`.
+//  @return                   The total number of unknowns, i.e. the number of rows and columns
+//                            in the final matrix (and the length of the right-hand side vector `b`).
+//                            This number is equal to 3 times the number of points, minus the
+//                            number of fixed degreees of freedom, `num_fixed_dofs`.
 int assemble_mech_system_2D(const double* const points,
                             const int num_cells,
                             const int* const num_cell_faces,
@@ -116,47 +113,43 @@ int assemble_mech_system_2D(const double* const points,
                             bool reduce_system);
 // -----------------------------------------------------------------------------------------------
 
-// // -----------------------------------------------------------------------------------------------
-// // Assembles the global linear system for a 3D grid of virtual elements, with
-// // Dirichlet and Neumann boundary conditions. The resulting system is represented
-// // as the entries of a sparse matrix and a right-hand-side vector.
-// //
-// // @param points             Pointer to an array of doubles, containing the
-// // x,y,z-coordinates
+
+
+// -----------------------------------------------------------------------------------------------
+// Assembles the global linear system for a 3D grid of virtual elements, with
+// Dirichlet and Neumann boundary conditions. The resulting system is represented
+// as the entries of a sparse matrix and a right-hand-side vector.
+//
+// @param points             Pointer to an array of doubles, containing the x,y,z-coordinates
 //                           of all points in the mesh.
 // @param num_cells          The number of cells in the mesh.
-// @param num_cell_faces     Pointer to an array of ints, of length `num_cells`,
-// containing the
+// @param num_cell_faces     Pointer to an array of ints, of length `num_cells`, containing the
 //                           number of faces for each cell in the mesh.
 // @param num_face_corners   Pointer to an array of ints, containing the number of corners
 //                           for each face in the mesh.  The length of this array equals
 //                           the total number of cell-faces, i.e. the sum of
-//                           `num_cell_faces[0]...[num_cells-1]`.  The number of face
-//                           corners for the nth face of the kth cell is found at entry l,
-//                           where l = sum(num_cell_faces[0]...[k-1]) + n.
+//                           `num_cell_faces[0]...[num_cells-1]`.  The number of face corners
+//                           for the nth face of the kth cell is found at entry l, where
+//                           l = sum(num_cell_faces[0]...[k-1]) + n.
 // @param face_corners       Pointer to an array of ints, containing the indices of the
-//                           corners of each face for each cell in the grid in the
-//                           `points` array. The indices of corners for the nth face of
-//                           the kth cell is found in `face_corners[m+n... m+n+p-1]`,
-//                           where m = sum(num_face_corners[0 .. l-1]), and p =
-//                           num_face_corners[l]. Here, `l` is defined as above in the
-//                           documentation of `num_face_corners`.
-// @param young              Pointer to an array of doubles, containing the Young's
-// modulus
+//                           corners of each face for each cell in the grid in the `points` array.
+//                           The indices of corners for the nth face of the kth cell is found
+//                           in `face_corners[m+n... m+n+p-1]`, where
+//                           m = sum(num_face_corners[0 .. l-1]), and p = num_face_corners[l].
+//                           Here, `l` is defined as above in the documentation of `num_face_corners`.
+// @param young              Pointer to an array of doubles, containing the Young's modulus
 //                           for each cell.
 // @param poisson            Pointer to an array of doubles, containing the Poisson ratio
 //                           for each cell.
 // @param body_force         Pointer to an array of doubles, containing the body force
 //                           (i.e., force per unit volume) for each cell in the mesh. The
 //                           force for cell i is located at indices 3*i, 3*i+1 and 3*i+2.
-// @param num_fixed_dofs     The number of degrees of freedom restricted by Dirichlet
-// conditions.
-//                           Note that each node in the mesh has 3 degrees of freedom (x,
-//                           y and z).
+// @param num_fixed_dofs     The number of degrees of freedom restricted by Dirichlet conditions.
+//                           Note that each node in the mesh has 3 degrees of freedom (x, y and z).
 // @param fixed_dof_ixs      Pointer to an array of ints, containing the indices of the
-//                           fixed degrees of freedom (i.e., node coordinate components
-//                           with Dirichlet boundary conditions) in the global system. The
-//                           indices must be sorted in ascending order.
+//                           fixed degrees of freedom (i.e., node coordinate components with
+//                           Dirichlet boundary conditions) in the global system. The indices
+//                           must be sorted in ascending order.
 // @param fixed_dof_values   Pointer to an array of doubles, containing the prescribed
 //                           values for the fixed degrees of freedom.
 // @param num_neumann_faces  The number of Neumann boundary conditions.
@@ -165,22 +158,18 @@ int assemble_mech_system_2D(const double* const points,
 // @param neumann_forces     Pointer to an array of doubles, containing the force values
 //                           for the Neumann boundary conditions. The force for face i is
 //                           located at indices 3*i, 3*i+1 and 3*i+2.
-// @param A_entries          A vector of tuples, each containing the (i,j) indices and
-// value
-//                           for a non-zero entry in the sparse matrix.  There may be
-//                           multiple entries for a given (i,j) coordinate, in which case
-//                           these need to be added up when constructing the actual sparse
-//                           matrix. (E.g. using the Eigen package, this can be achieved
-//                           using the `setFromTriplets` member function of the sparse
-//                           matrix class).
+// @param A_entries          A vector of tuples, each containing the (i,j) indices and value
+//                           for a non-zero entry in the sparse matrix.  There may be multiple
+//                           entries for a given (i,j) coordinate, in which case these need to
+//                           be added up when constructing the actual sparse matrix.
+//                           (E.g. using the Eigen package, this can be achieved using the
+//                           `setFromTriplets` member function of the sparse matrix class).
 // @param b                  The right-hand side vector of the linear system.
 //
-// @return                   The total number of unknowns, i.e., the number of rows and
-// columns
-//                           in the final matrix (and the length of the right-hand side
-//                           vector `b`). This number is equal to 3 times the number of
-//                           points, minus the number of fixed degrees of freedom,
-//                           `num_fixed_dofs`.
+// @return                   The total number of unknowns, i.e., the number of rows and columns
+//                           in the final matrix (and the length of the right-hand side vector `b`).
+//                           This number is equal to 3 times the number of points, minus the
+//                           number of fixed degrees of freedom, `num_fixed_dofs`.
 int assemble_mech_system_3D(const double* const points,
                             const int num_cells,
                             const int* const num_cell_faces, // cell faces per cell
@@ -198,8 +187,10 @@ int assemble_mech_system_3D(const double* const points,
                             std::vector<std::tuple<int, int, double>>& A_entries,
                             std::vector<double>& b,
                             const StabilityChoice stability_choice,
-                            bool reduce_system);
+                            bool reduce_system,
+                            const char* const corner_mask = nullptr); // per face_corners entry: a grid corner
 // -----------------------------------------------------------------------------------------------
+
 
 // -----------------------------------------------------------------------------------------------
 // Assembles the stiffness matrix for a single 2D grid element, given the coordinates of
@@ -223,6 +214,9 @@ void assemble_stiffness_matrix_2D(const double* const points,
                                   const StabilityChoice stability_choice,
                                   std::vector<double>& target);
 // -----------------------------------------------------------------------------------------------
+
+
+
 
 // -----------------------------------------------------------------------------------------------
 // Assembles the stiffness matrix for a single 3D grid polyhedral element.
@@ -260,42 +254,41 @@ void assemble_stiffness_matrix_3D(const double* const points,
                                   const StabilityChoice stability_choice,
                                   std::array<double, 3>& centroid,
                                   std::vector<int>& indexing,
-                                  std::vector<double>& target);
+                                  std::vector<double>& target,
+                                  const int* hex_corners = nullptr,
+                                  const char* corner_mask = nullptr);
+// hex_corners: optional 8 corner point ids of the cell (Dune order), used by SMOOTH_HOURGLASS.
 // -----------------------------------------------------------------------------------------------
+
 
 // -----------------------------------------------------------------------------------------------
 // Computes the node-wise body force resulting from the gradient of a potential (e.g.
-// for poromechanics, this would be the gradient of pressure.  The computed value
-// represents the gradient of the potential in the node, scaled by the volumes of the
-// neighboring cells.
+// for poromechanics, this would be the gradient of pressure.  The computed value represents
+// the gradient of the potential in the node, scaled by the volumes of the neighboring cells.
 //
 // @param points Pointer to an array of size 3*N, where N is the number of
 //               points in the global mesh. The array stores the x, y, and z
 //               coordinates of each point.
 // @param num_cells          The number of cells in the mesh.
-// @param num_cell_faces     Pointer to an array of ints, of length `num_cells`,
-// containing the
+// @param num_cell_faces     Pointer to an array of ints, of length `num_cells`, containing the
 //                           number of faces for each cell in the mesh.
 // @param num_face_corners   Pointer to an array of ints, containing the number of corners
 //                           for each face in the mesh.  The length of this array equals
 //                           the total number of cell-faces, i.e. the sum of
-//                           `num_cell_faces[0]...[num_cells-1]`.  The number of face
-//                           corners for the nth face of the kth cell is found at entry l,
-//                           where l = sum(num_cell_faces[0]...[k-1]) + n.
+//                           `num_cell_faces[0]...[num_cells-1]`.  The number of face corners
+//                           for the nth face of the kth cell is found at entry l, where
+//                           l = sum(num_cell_faces[0]...[k-1]) + n.
 // @param face_corners       Pointer to an array of ints, containing the indices of the
-//                           corners of each face for each cell in the grid in the
-//                           `points` array. The indices of corners for the nth face of
-//                           the kth cell is found in `face_corners[m+n... m+n+p-1]`,
-//                           where m = sum(num_face_corners[0 .. l-1]), and p =
-//                           num_face_corners[l]. Here, `l` is defined as above in the
-//                           documentation of `num_face_corners`.
-// @param field              The field representing the potential from which we want to
-// compute the
+//                           corners of each face for each cell in the grid in the `points` array.
+//                           The indices of corners for the nth face of the kth cell is found
+//                           in `face_corners[m+n... m+n+p-1]`, where
+//                           m = sum(num_face_corners[0 .. l-1]), and p = num_face_corners[l].
+//                           Here, `l` is defined as above in the documentation of `num_face_corners`.
+// @param field              The field representing the potential from which we want to compute the
 //                           force.
-// @param fgrad              Output parameter that stores the resulting, node-wise force
-// field
-//                           defined in each node by the local gradient of the field,
-//                           scaled by the cell volumes of the cells neighboring the node.
+// @param fgrad              Output parameter that stores the resulting, node-wise force field
+//                           defined in each node by the local gradient of the field, scaled by
+//                           the cell volumes of the cells neighboring the node.
 void potential_gradient_force_3D(const double* const points,
                                  const int num_cells,
                                  const int* const num_cell_faces, // cell faces per cell
@@ -304,76 +297,153 @@ void potential_gradient_force_3D(const double* const points,
                                  const double* const field,
                                  std::vector<double>& fgrad,
                                  std::vector<std::tuple<int, int, double>>& div,
-                                 bool get_matrix);
+                                 bool get_matrix,
+                                 const char* const corner_mask = nullptr);
 
-void compute_stress_3D(const double* const points,
-                       const int num_cells,
-                       const int* const num_cell_faces, // cell faces per cell
-                       const int* const num_face_corners, // corners per face
-                       const int* const face_corners,
-                       const double* const young,
-                       const double* const poisson,
-                       const std::vector<double>& disp,
-                       std::vector<std::array<double, 6>>& stress,
-                       std::vector<std::tuple<int, int, double>>& stressmat,
-                       bool do_matrix,
-                       bool do_stress);
+void
+compute_stress_3D(const double* const points,
+                  const int num_cells,
+                  const int* const num_cell_faces, // cell faces per cell
+                  const int* const num_face_corners, // corners per face
+                  const int* const face_corners,
+                  const double* const young,
+                  const double* const poisson,
+                  // const double* const body_force, // 3 * number of cells
+                  // const int num_fixed_dofs, // dirichlet
+                  // const int* const fixed_dof_ixs, // indices must be sorted
+                  // const double* const fixed_dof_values,
+                  // const int num_neumann_faces,
+                  // const int* const neumann_faces,
+                  // const double* const neumann_forces, // 3 * number of neumann faces
+                  const std::vector<double>& disp,
+                  std::vector<std::array<double,6>>& stress,
+                  std::vector<std::tuple<int, int, double>>& stressmat,
+                  bool do_matrix,
+                  bool do_stress,
+                  vem::StabilityChoice stability_choice,
+                  bool stab_on_stress,
+                  const char* const corner_mask = nullptr
+    );    
 
-void calculate_stress_3D_local(const double* const points,
-                               const int* const faces,
-                               const int* const num_face_edges,
-                               const int num_faces,
-                               const double young,
-                               const double poisson,
-                               const std::vector<double>& disp,
-                               const int cell,
-                               std::array<double, 6>& stress,
-                               std::vector<std::tuple<int, int, double>>& stressmat,
-                               bool do_matrix,
-                               bool do_stress);
+
+void
+calculate_stress_3D_local(const double* const points,
+                          const int* const faces,
+                          const int* const num_face_edges,
+                          const int num_faces,
+                          const double young,
+                          const double poisson,
+                          const std::vector<double>& disp,
+                          const int cell,
+                          std::array<double,6>& stress,
+                          std::vector<std::tuple<int, int, double>>& stressmat,
+                          bool do_matrix,
+                          bool do_stress,
+                          const char* const corner_mask = nullptr
+    );    
+// -----------------------------------------------------------------------------------------------
+// Computes the standard isoparametric Q1 (trilinear) FEM stiffness matrix for a single
+// hexahedral element, using 2x2x2 Gauss quadrature.  Optionally applies the B-bar
+// (mean dilatation) modification to alleviate volumetric locking.
+//
+// @param corners  Pointer to an array of 24 doubles: the x,y,z coordinates of the 8
+//                 element corners in Dune reference-hexahedron ordering, i.e. corner k
+//                 sits at reference position ((k&1), (k>>1)&1, (k>>2)&1).
+// @param young    Young's modulus.
+// @param poisson  Poisson's ratio.
+// @param bbar     If true, apply the B-bar (mean dilatation) modification.
+// @param target   Output: 24x24 stiffness matrix in row-major order; dof ordering is
+//                 (node-major) [u0x u0y u0z u1x ... u7z].
+void stiffness_matrix_fem_hex_3D(const double* const corners,
+                                 const double young,
+                                 const double poisson,
+                                 const bool bbar,
+                                 double* target);
+// -----------------------------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------------------------
+// As stiffness_matrix_fem_hex_3D, but for a bilinear quadrilateral in 2D (plane strain),
+// using 2x2 Gauss quadrature.  `corners` holds 8 doubles (4 corners in Dune reference-
+// square ordering); `target` receives an 8x8 row-major matrix.
+void stiffness_matrix_fem_quad_2D(const double* const corners,
+                                  const double young,
+                                  const double poisson,
+                                  const bool bbar,
+                                  double* target);
+// -----------------------------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------------------------
+// Given the (locally indexed) faces of a polyhedral cell, determine whether the cell is
+// a topological hexahedron (6 quadrilateral faces, 8 corners).  If so, fill `order` with
+// the local corner indices arranged in Dune reference-hexahedron ordering such that the
+// resulting trilinear map has positive Jacobian, and return true.  Otherwise return false.
+//
+// @param corners        Pointer to the (local) corner coordinates (3 doubles per corner).
+// @param num_corners    Number of (unique, locally indexed) corners of the cell.
+// @param faces          Locally-indexed face corner list (as in assemble_stiffness_matrix_3D).
+// @param num_face_edges Number of corners for each face.
+// @param num_faces      Number of faces.
+// @param order          Output: order[k] = local corner index of reference vertex k.
+bool hex_corner_ordering(const double* const corners,
+                         const int num_corners,
+                         const int* const faces,
+                         const int* const num_face_edges,
+                         const int num_faces,
+                         std::array<int, 8>& order);
+// -----------------------------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------------------------
+// Applies symmetric (Jacobi) diagonal scaling to a linear system given as a list of
+// matrix entries and a right-hand side: A -> S A S, b -> S b, with S = diag(1/sqrt(A_ii)).
+// The scale factors are returned in `scale`; the solution of the original system is
+// recovered from the scaled one as x_i = scale[i] * y_i.
+void diagonal_scale_system(std::vector<std::tuple<int, int, double>>& A_entries,
+                           std::vector<double>& b,
+                           std::vector<double>& scale);
+// -----------------------------------------------------------------------------------------------
 
 // ============================================================================
 // ============ Various utility functions for geometry computations ===========
 // ============================================================================
 
+
+
 // -----------------------------------------------------------------------------------------------
 // Calculates the integral of a function over a face in 2D or 3D space, with an arbitrary
 // number of corners, using a quadrature rule with a fixed number of points.
 //
-// @param corners        Pointer to an array of doubles, containing the (x,y) or
-// (x,y,z)-coordinates
-//                       of the corners of the face. The corners must be ordered
-//                       consecutively around the perimeter of the face.
+// @param corners        Pointer to an array of doubles, containing the (x,y) or (x,y,z)-coordinates
+//                       of the corners of the face. The corners must be ordered consecutively
+//                       around the perimeter of the face.
 // @param num_corners    The number of corners of the face.
-// @param dim            The dimension of the space in which the face is embedded (2 or
-// 3).
-// @param corner_values  (optional) Pointer to an array of doubles, containing the value
-// of the
-//                       integrand at each corner point. If this argument is nullptr, the
-//                       integrand is assumed to be 1.
+// @param dim            The dimension of the space in which the face is embedded (2 or 3).
+// @param corner_values  (optional) Pointer to an array of doubles, containing the value of the
+//                       integrand at each corner point. If this argument is nullptr, the integrand
+//                       is assumed to be 1.
 //
-// @return               The integral of the integrand over the face, calculated using the
-// simple,
+// @return               The integral of the integrand over the face, calculated using the simple,
 //                       first order quadrature rule given by (Gain, 2014)
 //                       DOI:10.1016/j.cma.2014.05.005
 double face_integral(const double* const corners,
                      const int num_corners,
                      const int dim,
-                     const double* const corner_values = nullptr);
+                     const double* const corner_values = nullptr,
+                     const char* const corner_mask = nullptr);
 // -----------------------------------------------------------------------------------------------
+
+
 
 // -----------------------------------------------------------------------------------------------
 // Computes the volume of a 3D element defined by its vertices and faces.
 //
-// @param points           A pointer to an array of doubles containing the
-// x,y,z-coordinates
+// @param points           A pointer to an array of doubles containing the x,y,z-coordinates
 //                         of all points in the element.
 // @param num_points       The number of points in the element.
 // @param faces            A pointer to an array of ints containing the indices of the
 //                         corners that make up each face of the element. The corners of
 //                         face i are located at indices faces[K],...,faces[L]-1, where
-//                         K is the sum of `num_face_edges[0]` through
-//                         `num_face_edges[i-1]` and L equals `num_face_edges[i]`.
+//                         K is the sum of `num_face_edges[0]` through `num_face_edges[i-1]`
+//                         and L equals `num_face_edges[i]`.
 // @param num_face_edges   A pointer to an array of ints containing the number of edges
 //                         for each face in the element.
 // @param num_faces        The number of faces in the element.
@@ -385,6 +455,24 @@ double element_volume_3D(const double* const points,
                          const int* const num_face_edges,
                          const int num_faces);
 // -----------------------------------------------------------------------------------------------
+
+
+
+
+// -----------------------------------------------------------------------------------------------
+// Computes the volume of a 2D polygon, given the coordinates of its corner points. The points
+// should be ordered in counterclockwise order. The function assumes that the polygon is
+// non-self-intersecting and does not contain holes.
+//
+// @param corners Pointer to an array of doubles, containing the x,y-coordinates
+//                of the corner points of the polygon. The corners should be ordered
+//                in counterclockwise direction.
+// @param num_corners The number of corner points in the polygon.
+//
+// @return The area of the polygon
+double element_volume_2D(const double* const corners, const int num_faces);
+// -----------------------------------------------------------------------------------------------
+
 
 // -----------------------------------------------------------------------------------------------
 // Computes the geometric centroid of a polygon in 2D.
@@ -398,6 +486,8 @@ double element_volume_3D(const double* const points,
 std::array<double, 2> centroid_2D(const double* const points, const int num_points);
 // -----------------------------------------------------------------------------------------------
 
+
+
 // -----------------------------------------------------------------------------------------------
 // Computes the geometric centroid of a 2D planar polygon embedded in 3D space
 //
@@ -410,9 +500,10 @@ std::array<double, 2> centroid_2D(const double* const points, const int num_poin
 std::array<double, 3> centroid_2D_3D(const double* const points, const int num_points);
 // -----------------------------------------------------------------------------------------------
 
+
+
 // -----------------------------------------------------------------------------------------------
-// Computes the 3D geometic centroid of a polyhedral cell defined by the given points and
-// faces.
+// Computes the 3D geometic centroid of a polyhedral cell defined by the given points and faces.
 //
 // @param points The array of 3D coordinates of the cell vertices.
 // @param num_points The number of points in the array.
@@ -427,6 +518,8 @@ std::array<double, 3> centroid_3D(const double* const points,
                                   const int num_faces);
 // -----------------------------------------------------------------------------------------------
 
+
+
 // -----------------------------------------------------------------------------------------------
 // Calculates the volume of a tetrahedron with the given corner points.
 //
@@ -435,15 +528,16 @@ std::array<double, 3> centroid_3D(const double* const points,
 // @param p3 Pointer to the third corner point in 3D Cartesian space.
 // @param p4 Pointer to the fourth corner point in 3D Cartesian space.
 // @return The volume of the tetrahedron defined by the four corner points.
-double tetrahedron_volume(const double* const p1,
-                          const double* const p2,
-                          const double* const p3,
-                          const double* const p4);
+double
+tetrahedron_volume(const double* const p1, const double* const p2, const double* const p3, const double* const p4);
 // -----------------------------------------------------------------------------------------------
+
 
 // ============================================================================
 // ================== Other utility and diagnostic functions ==================
 // ============================================================================
+
+
 
 // -----------------------------------------------------------------------------------------------
 // Returns a vector of selected points in 2D space, given an array of all points
@@ -460,6 +554,8 @@ double tetrahedron_volume(const double* const p1,
 std::vector<double> pick_points_2D(const double* pts, const int* const p_ixs, int num_points);
 // -----------------------------------------------------------------------------------------------
 
+
+
 // -----------------------------------------------------------------------------------------------
 // Returns a vector of selected points in 3D space, given an array of all points
 // and an array of point indices.
@@ -475,6 +571,8 @@ std::vector<double> pick_points_2D(const double* pts, const int* const p_ixs, in
 std::vector<double> pick_points_3D(const double* pts, const int* const p_ixs, int num_points);
 // -----------------------------------------------------------------------------------------------
 
+
+
 // -----------------------------------------------------------------------------------------------
 // Print the contents of a matrix to the console.  Elements in matrix are
 // assumed to be stored in row-major order.
@@ -483,29 +581,90 @@ std::vector<double> pick_points_3D(const double* pts, const int* const p_ixs, in
 // @param r The number of rows in the matrix.
 // @param c The number of columns in the matrix.
 // @param transposed If true, the matrix is printed transposed.
-// @param ztreshold Values with absolute magnitude less than this value, will be rounded
-// to zero
-void
-matprint(const double* data, const int r, const int c, bool transposed, const double zthreshold = 0);
+// @param ztreshold Values with absolute magnitude less than this value, will be rounded to zero
+void matprint(const double* data, const int r, const int c, bool transposed, const double zthreshold=0);
 // -----------------------------------------------------------------------------------------------
+
 
 // -----------------------------------------------------------------------------------------------
 // Converts a sparse matrix represented as a vector of non-zero elements to a full matrix.
 //
-// @param nz A vector of tuples, where each tuple represents a non-zero element in the
-// sparse matrix.
-//           The first element of the tuple is the row index, the second element is the
-//           column index, and the third element is the value.
+// @param nz A vector of tuples, where each tuple represents a non-zero element in the sparse matrix.
+//           The first element of the tuple is the row index, the second element is the column index,
+//           and the third element is the value.
 // @param r The number of rows in the full matrix.
 // @param c The number of columns in the full matrix.
 //
-// @return A vector representing the full matrix. The vector contains the elements of the
-// matrix
+// @return A vector representing the full matrix. The vector contains the elements of the matrix
 //         in row-major order.
-std::vector<double>
-sparse2full(const std::vector<std::tuple<int, int, double>>& nz, const int r, const int c);
+std::vector<double> sparse2full(const std::vector<std::tuple<int, int, double>>& nz, const int r, const int c);
 // -----------------------------------------------------------------------------------------------
+void
+reduce_system(std::vector<std::tuple<int, int, double>>& A,
+              std::vector<double>& b,
+              const int num_fixed_dofs,
+              const int* const fixed_dof_ixs,
+              const double* const fixed_dof_values);
+void set_boundary_conditions(std::vector<std::tuple<int, int, double>>& A,
+                             std::vector<double>& b,
+                        const int num_fixed_dofs,
+                        const int* const fixed_dof_ixs,
+                        const double* const fixed_dof_values);
 
-} // end namespace vem
+  void compute_bodyforce_3D(const double* const points,
+                     const int* const face_corners,
+                     const int* const num_face_corners,
+                     const int num_faces,
+                     const double* const centroid,
+                     const double* const bforce, // 3D body force
+                     double* b_global,
+                     const char* const corner_mask = nullptr);
 
-#endif // OPM_GEOMECH_VEM_VEM_HPP
+void
+compute_applied_forces_3D(const double* const points,
+                          const int* const num_face_corners,
+                          const int* const face_corners,
+                          const int num_neumann_faces,
+                          const int* neumann_faces,
+                          const double* const neumann_forces,
+                          double* b_global,
+                          const char* const corner_mask = nullptr);
+std::map<int, int>
+global_to_local_indexing(const int* const faces,
+                         const int* const num_face_edges,
+                         const int num_faces,
+                         std::vector<int>& indexing);
+
+template <int Dim>
+std::vector<double>
+pick_points(const double* const pts, const int* const p_ixs, int num_points);
+
+void
+compute_cell_geometry(const double* points,
+                      const int num_points,
+                      const int* const faces,
+                      const int* const num_face_edges,
+                      const int num_faces,
+                      std::vector<double>& outward_normals,
+                      std::vector<double>& face_centroids,
+                      std::array<double, 3>& cell_centroid,
+                      std::array<double, 3>& star_point,
+                      double& volume,
+                      const char* const corner_mask = nullptr);
+
+std::vector<double> 
+compute_q_3D(const double* const corners,
+             const int num_corners,
+             const int* const faces,
+             const int* const num_face_edges,
+             const int num_faces,
+             const double volume,
+             const std::vector<double>& outward_normals,
+             const char* const corner_mask = nullptr);
+}; // end namespace vem
+
+
+
+
+
+#endif

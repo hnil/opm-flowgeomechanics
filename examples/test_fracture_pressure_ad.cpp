@@ -1,0 +1,853 @@
+/*
+  Unit tests for the AD-based fracture pressure assembly.
+
+  Tests verify that:
+  1. The pressure Jacobian (dR/dp) from the AD assembler matches the
+     original manually coded assembly.
+  2. The aperture coupling matrix (dR/dw) is correct by comparison with
+     finite differences.
+  3. Edge cases (width below min_width, different control types) are
+     handled correctly.
+*/
+
+#include <config.h>
+
+#include <array>
+#include <chrono>
+#include <cmath>
+#include <iostream>
+#include <vector>
+
+#include "reference_test_data.hpp"
+
+#include <opm/geomech/FracturePressureAssemblerAD.hpp>
+#include <opm/material/densead/Evaluation.hpp>
+
+namespace
+{
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+// Compare two BCRS matrices element-by-element (iterate over sparsity of 'a')
+bool compareMatrices(const Opm::BCRSMatrix1x1& a,
+                     const Opm::BCRSMatrix1x1& b,
+                     double tol)
+{
+    if (a.N() != b.N() || a.M() != b.M()) {
+        std::cerr << "  Matrix dimensions differ: "
+                  << a.N() << "x" << a.M() << " vs "
+                  << b.N() << "x" << b.M() << std::endl;
+        return false;
+    }
+
+    bool ok = true;
+    for (auto row_it = a.begin(); row_it != a.end(); ++row_it) {
+        for (auto col_it = row_it->begin(); col_it != row_it->end(); ++col_it) {
+            const size_t i = row_it.index();
+            const size_t j = col_it.index();
+            const double val_a = (*col_it)[0][0];
+
+            double val_b = 0.0;
+            auto b_row = b[i];
+            auto b_col = b_row.find(j);
+            if (b_col != b_row.end())
+                val_b = (*b_col)[0][0];
+
+            if (std::abs(val_a - val_b) > tol) {
+                std::cerr << "  Mismatch at (" << i << "," << j << "): "
+                          << val_a << " vs " << val_b
+                          << " (diff=" << std::abs(val_a - val_b) << ")"
+                          << std::endl;
+                ok = false;
+            }
+        }
+    }
+    return ok;
+}
+
+template <size_t N>
+bool compareSparseMatrixToReference(const Opm::BCRSMatrix1x1& matrix,
+                                    const std::array<std::array<double, N>, N>& reference,
+                                    double abs_tol,
+                                    double rel_tol)
+{
+    if (matrix.N() != N || matrix.M() != N) {
+        std::cerr << "  Matrix dimensions differ: "
+                  << matrix.N() << "x" << matrix.M() << " vs "
+                  << N << "x" << N << std::endl;
+        return false;
+    }
+
+    bool ok = true;
+    for (size_t i = 0; i < N; ++i) {
+        for (size_t j = 0; j < N; ++j) {
+            const double actual = matrix.exists(i, j) ? matrix[i][j][0][0] : 0.0;
+            const double expected = reference[i][j];
+            const double abs_err = std::abs(actual - expected);
+            const double scale = std::max(std::abs(actual), std::abs(expected));
+            const double rel_err = (scale > 1e-15) ? abs_err / scale : abs_err;
+            if (abs_err > abs_tol && rel_err > rel_tol) {
+                std::cerr << "  Reference mismatch at (" << i << "," << j << "): "
+                          << actual << " vs " << expected
+                          << " (abs_err=" << abs_err
+                          << ", rel_err=" << rel_err << ")" << std::endl;
+                ok = false;
+            }
+        }
+    }
+    return ok;
+}
+
+// Reproduce the legacy coupling-matrix calculation from
+// Fracture_fullSystemIteration.cpp:updateCouplingMatrix() for standalone tests.
+std::unique_ptr<Opm::BCRSMatrix1x1>
+assembleCouplingOriginal(const Opm::FracturePressureInput& input)
+{
+    const size_t nc = input.num_cells;
+    auto mat = Opm::buildMatrixStructure(input.htrans, nc);
+    auto& matrix = *mat;
+    matrix = 0;
+
+    for (const auto& ht : input.htrans) {
+        const size_t i = std::get<0>(ht);
+        const size_t j = std::get<1>(ht);
+        const double t1 = std::get<2>(ht);
+        const double t2 = std::get<3>(ht);
+
+        double dh1 = 1.0;
+        double dh2 = 1.0;
+        if (input.fracture_width[i] <= input.min_width)
+            dh1 = 0.0;
+        if (input.fracture_width[j] <= input.min_width)
+            dh2 = 0.0;
+
+        const double h1 = std::max(input.fracture_width[i], input.min_width);
+        const double h2 = std::max(input.fracture_width[j], input.min_width);
+        const double p1 = input.fracture_pressure[i];
+        const double p2 = input.fracture_pressure[j];
+
+        const double q = h1 * h1 * h1 * h2 * h2 * h2 * t1 * t2;
+        const double d1q = 3.0 * h1 * h1 * h2 * h2 * h2 * t1 * t2 * dh1;
+        const double d2q = 3.0 * h1 * h1 * h1 * h2 * h2 * t1 * t2 * dh2;
+
+        const double r = 12.0 * (h1 * h1 * h1 * t1 + h2 * h2 * h2 * t2);
+        const double d1r = 36.0 * h1 * h1 * t1 * dh1;
+        const double d2r = 36.0 * h2 * h2 * t2 * dh2;
+
+        const double dTdh1 = (r == 0.0) ? 0.0 : (d1q * r - q * d1r) / (r * r);
+        const double dTdh2 = (r == 0.0) ? 0.0 : (d2q * r - q * d2r) / (r * r);
+
+        const double mobility = Opm::faceMobilityValue(input, i, j);
+
+        matrix[i][i] += dTdh1 * (p1 - p2) * mobility;
+        matrix[j][j] += dTdh2 * (p2 - p1) * mobility;
+        matrix[i][j] += dTdh2 * (p1 - p2) * mobility;
+        matrix[j][i] += dTdh1 * (p2 - p1) * mobility;
+    }
+
+    return mat;
+}
+
+// Compute residual R = A*p  where A is the original pressure matrix
+Opm::BlockVector1 computeResidual(const Opm::FracturePressureInput& input)
+{
+    auto mat = Opm::assemblePressureOriginal(input);
+    const size_t n = input.num_cells + input.num_well_equations;
+    Opm::BlockVector1 p(n), res(n);
+    for (size_t i = 0; i < n; ++i)
+        p[i] = input.fracture_pressure[i];
+    res = 0;
+    mat->umv(p, res); // res += A * p
+    return res;
+}
+
+// Simple 4-cell linear chain for testing
+Opm::FracturePressureInput makeSimpleTestInput()
+{
+    Opm::FracturePressureInput input;
+    input.num_cells = 4;
+    input.min_width = 1e-4;
+
+    // Linear chain: 0 -- 1 -- 2 -- 3
+    // Htrans tuples follow the original convention: (nIdx, eIdx, geo_trans_e, geo_trans_n)
+    // where eIdx < nIdx to avoid double-counting faces.
+    input.htrans = {
+        Opm::Htrans{1, 0, 2.0, 2.0},
+        Opm::Htrans{2, 1, 1.5, 1.5},
+        Opm::Htrans{3, 2, 1.0, 1.0}
+    };
+
+    // Widths (some well above min_width)
+    input.fracture_width = {1e-3, 2e-3, 5e-4, 3e-3};
+
+    // Pressures
+    input.fracture_pressure = {1e6, 8e5, 1.2e6, 9e5};
+
+    input.face_mobility = {1e4, 1e4, 1e4, 1e4};
+
+    // Density and viscosity per cell (with zero pressure derivatives for
+    // backward-compatible tests; mobility = density/viscosity = 1000/0.001 = 1e6).
+    // Using constant properties here: rho=1000 kg/m3, mu=1e-4 Pa.s
+    // gives mobility = 1e4 (same as the old reservoir_mobility values).
+    input.density   = {{1000.0, 0.0}, {1000.0, 0.0}, {1000.0, 0.0}, {1000.0, 0.0}};
+    input.viscosity = {{0.1, 0.0}, {0.1, 0.0}, {0.1, 0.0}, {0.1, 0.0}};
+
+    // Leakoff
+    input.leakof = {10.0, 20.0, 15.0, 25.0};
+
+    // Default: rate control, no well equations
+    input.control_type = "rate";
+    input.num_well_equations = 0;
+
+    return input;
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+bool test_pressure_matrix_matches_original()
+{
+    std::cout << "Test 1: Comparing pressure matrices (AD vs original) ..."
+              << std::endl;
+    auto input = makeSimpleTestInput();
+
+    auto ad_result = Opm::assemblePressureAD(input);
+    auto orig_matrix = Opm::assemblePressureOriginal(input);
+
+    if (!compareMatrices(*ad_result.pressure_matrix, *orig_matrix, 1e-12)) {
+        std::cerr << "  FAILED" << std::endl;
+        return false;
+    }
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
+bool test_coupling_matrix_finite_differences()
+{
+    std::cout << "Test 2: Verifying coupling matrix via finite differences ..."
+              << std::endl;
+    auto input = makeSimpleTestInput();
+    auto ad_result = Opm::assemblePressureAD(input);
+
+    const double rel_tol = 5e-3;
+    const double abs_tol = 1e-2;
+    bool ok = true;
+
+    for (size_t k = 0; k < input.num_cells; ++k) {
+        // Use central differences with adaptive perturbation for better FD stability.
+        const double width_scale = std::max(std::abs(input.fracture_width[k]), 1.0);
+        const double eps = std::max(1e-8, 1e-6 * width_scale);
+        auto input_plus = input;
+        auto input_minus = input;
+        input_plus.fracture_width[k] += eps;
+        input_minus.fracture_width[k] -= eps;
+
+        auto res_plus = computeResidual(input_plus);
+        auto res_minus = computeResidual(input_minus);
+
+        // check column k of the coupling matrix
+        for (size_t i = 0; i < input.num_cells; ++i) {
+            const double fd = (res_plus[i][0] - res_minus[i][0]) / (2.0 * eps);
+
+            double cmat_val = 0.0;
+            auto row = (*ad_result.coupling_matrix)[i];
+            auto col_it = row.find(k);
+            if (col_it != row.end())
+                cmat_val = (*col_it)[0][0];
+
+            const double abs_err = std::abs(fd - cmat_val);
+            double rel_err = 0.0;
+            const double scale = std::max(std::abs(fd), std::abs(cmat_val));
+            if (scale > 1e-10)
+                rel_err = abs_err / scale;
+
+            if (abs_err > abs_tol && rel_err > rel_tol) {
+                std::cerr << "  FD mismatch at dR[" << i << "]/dw[" << k
+                          << "]: AD=" << cmat_val << " FD=" << fd
+                          << " abs_err=" << abs_err
+                          << " rel_err=" << rel_err << std::endl;
+                ok = false;
+            }
+        }
+    }
+
+    if (!ok) {
+        std::cerr << "  FAILED" << std::endl;
+        return false;
+    }
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
+bool test_coupling_matrix_matches_original()
+{
+    std::cout << "Test 3: Comparing coupling matrices (AD vs original) ..."
+              << std::endl;
+    auto input = makeSimpleTestInput();
+
+    auto ad_result = Opm::assemblePressureAD(input);
+    auto orig_coupling = assembleCouplingOriginal(input);
+
+    if (!compareMatrices(*ad_result.coupling_matrix, *orig_coupling, 1e-12)) {
+        std::cerr << "  FAILED" << std::endl;
+        return false;
+    }
+
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
+bool test_reference_pressure_and_coupling_case()
+{
+    std::cout << "Test 4: Reference pressure and coupling case is unchanged ..."
+              << std::endl;
+
+    auto input = makeSimpleTestInput();
+    auto ad_result = Opm::assemblePressureAD(input);
+
+    const bool pressure_ok = compareSparseMatrixToReference(*ad_result.pressure_matrix,
+                                                            Opm::ReferenceTestData::pressure_matrix_case,
+                                                            1e-12,
+                                                            1e-12);
+    const bool coupling_ok = compareSparseMatrixToReference(*ad_result.coupling_matrix,
+                                                            Opm::ReferenceTestData::coupling_matrix_case,
+                                                            1e-12,
+                                                            1e-12);
+
+    if (!pressure_ok || !coupling_ok) {
+        std::cerr << "  FAILED" << std::endl;
+        return false;
+    }
+
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
+bool test_coupling_zero_below_min_width()
+{
+    std::cout << "Test 5: Coupling matrix zero when all widths < min_width ..."
+              << std::endl;
+    auto input = makeSimpleTestInput();
+
+    // set all widths well below min_width
+    input.min_width = 1e-2;
+    input.fracture_width = {1e-4, 1e-4, 1e-4, 1e-4};
+
+    auto ad_result = Opm::assemblePressureAD(input);
+
+    bool ok = true;
+    auto& cmat = *ad_result.coupling_matrix;
+    for (auto row_it = cmat.begin(); row_it != cmat.end(); ++row_it) {
+        for (auto col_it = row_it->begin(); col_it != row_it->end(); ++col_it) {
+            if (std::abs((*col_it)[0][0]) > 1e-15) {
+                std::cerr << "  Non-zero coupling at ("
+                          << row_it.index() << "," << col_it.index()
+                          << "): " << (*col_it)[0][0] << std::endl;
+                ok = false;
+            }
+        }
+    }
+
+    if (!ok) {
+        std::cerr << "  FAILED" << std::endl;
+        return false;
+    }
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
+bool test_pressure_control()
+{
+    std::cout << "Test 6: Pressure matrix with pressure control ..."
+              << std::endl;
+    auto input = makeSimpleTestInput();
+    input.control_type = "pressure";
+    input.perfinj = {std::tuple<int,double>{0, 100.0}};
+
+    auto ad_result = Opm::assemblePressureAD(input);
+    auto orig_matrix = Opm::assemblePressureOriginal(input);
+
+    if (!compareMatrices(*ad_result.pressure_matrix, *orig_matrix, 1e-12)) {
+        std::cerr << "  FAILED" << std::endl;
+        return false;
+    }
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
+bool test_rate_well_control()
+{
+    std::cout << "Test 7: Pressure matrix with rate_well control ..."
+              << std::endl;
+    auto input = makeSimpleTestInput();
+    input.control_type = "rate_well";
+    input.num_well_equations = 1;
+    input.perfinj = {std::tuple<int,double>{0, 50.0}};
+    input.total_wellindex = 200.0;
+    input.mobility_water_perf = 1000.0;
+
+    // extra entry for well equation pressure
+    input.fracture_pressure.push_back(1e6);
+
+    auto ad_result = Opm::assemblePressureAD(input);
+    auto orig_matrix = Opm::assemblePressureOriginal(input);
+
+    if (!compareMatrices(*ad_result.pressure_matrix, *orig_matrix, 1e-12)) {
+        std::cerr << "  FAILED" << std::endl;
+        return false;
+    }
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
+bool test_residual_consistency()
+{
+    std::cout << "Test 8: Residual R = A*p consistency ..."
+              << std::endl;
+    auto input = makeSimpleTestInput();
+
+    auto ad_result = Opm::assemblePressureAD(input);
+
+    // compute A*p using the pressure matrix from the AD result
+    const size_t n = input.num_cells;
+    Opm::BlockVector1 p(n), Ap(n);
+    for (size_t i = 0; i < n; ++i)
+        p[i] = input.fracture_pressure[i];
+    Ap = 0;
+    ad_result.pressure_matrix->umv(p, Ap);
+
+    // compare with residual from the AD assembly
+    bool ok = true;
+    for (size_t i = 0; i < n; ++i) {
+        const double diff = std::abs(Ap[i][0] - ad_result.residual[i][0]);
+        if (diff > 1e-10) {
+            std::cerr << "  Residual mismatch at " << i << ": "
+                      << Ap[i][0] << " vs " << ad_result.residual[i][0]
+                      << " (diff=" << diff << ")" << std::endl;
+            ok = false;
+        }
+    }
+
+    if (!ok) {
+        std::cerr << "  FAILED" << std::endl;
+        return false;
+    }
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
+bool test_mobility_pressure_derivatives()
+{
+    std::cout << "Test 9: Mobility pressure derivatives via finite differences ..."
+              << std::endl;
+
+    // Use values where flow terms are dominant and well-resolved.
+    // Large widths make transmissibility O(1); moderate pressures keep
+    // the residual at a scale where FD perturbations are detectable.
+    Opm::FracturePressureInput input;
+    input.num_cells = 4;
+    input.min_width = 1e-6;
+
+    input.htrans = {
+        Opm::Htrans{1, 0, 2.0, 2.0},
+        Opm::Htrans{2, 1, 1.5, 1.5},
+        Opm::Htrans{3, 2, 1.0, 1.0}
+    };
+
+    input.fracture_width = {0.05, 0.08, 0.04, 0.06};
+    input.fracture_pressure = {2.0, 1.5, 2.5, 1.8};
+    input.leakof = {0.0, 0.0, 0.0, 0.0}; // no leakoff to focus on flow terms
+    input.control_type = "rate";
+    input.num_well_equations = 0;
+
+    // Density and viscosity with non-zero pressure derivatives
+    input.density   = {{1000.0, 0.5}, {1010.0, 0.6}, {1020.0, 0.4}, {1030.0, 0.7}};
+    input.viscosity = {{1e-3, -1e-7}, {1.1e-3, -1.2e-7}, {0.9e-3, -0.8e-7}, {1.2e-3, -1.1e-7}};
+    input.use_fluid_mobility_for_internal_faces = true;
+
+    auto ad_result = Opm::assemblePressureAD(input);
+    auto res_base = computeResidual(input);
+
+    const double eps = 1e-7;
+    bool ok = true;
+
+    for (size_t k = 0; k < input.num_cells; ++k) {
+        auto input_pert = input;
+        input_pert.fracture_pressure[k] += eps;
+        input_pert.density[k].value   += input.density[k].dval_dp * eps;
+        input_pert.viscosity[k].value += input.viscosity[k].dval_dp * eps;
+
+        auto res_pert = computeResidual(input_pert);
+
+        for (size_t i = 0; i < input.num_cells; ++i) {
+            const double fd = (res_pert[i][0] - res_base[i][0]) / eps;
+
+            double pmat_val = 0.0;
+            auto row = (*ad_result.pressure_matrix)[i];
+            auto col_it = row.find(k);
+            if (col_it != row.end())
+                pmat_val = (*col_it)[0][0];
+
+            double rel_err = 0.0;
+            const double scale = std::max(std::abs(fd), std::abs(pmat_val));
+            if (scale > 1e-10)
+                rel_err = std::abs(fd - pmat_val) / scale;
+
+            if (rel_err > 1e-4) {
+                std::cerr << "  FD mismatch at dR[" << i << "]/dp[" << k
+                          << "]: AD=" << pmat_val << " FD=" << fd
+                          << " rel_err=" << rel_err << std::endl;
+                ok = false;
+            }
+        }
+    }
+
+    if (!ok) {
+        std::cerr << "  FAILED" << std::endl;
+        return false;
+    }
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
+bool test_rate_well_mobility_pressure_derivatives()
+{
+    std::cout << "Test 13: rate_well fluid mobility pressure derivatives ..."
+              << std::endl;
+
+    Opm::FracturePressureInput input;
+    input.num_cells = 2;
+    input.min_width = 1e-6;
+    input.fracture_width = {0.05, 0.05};
+    input.fracture_pressure = {2.0, 1.5, 2.2};
+    input.leakof = {0.0, 0.0};
+    input.control_type = "rate_well";
+    input.num_well_equations = 1;
+    input.total_wellindex = 11.0;
+    input.perfinj = {std::tuple<int,double>{0, 5.0}, std::tuple<int,double>{1, 7.0}};
+    input.use_fluid_mobility_for_well_connections = true;
+    input.density = {{1000.0, 0.5}, {1010.0, 0.6}, {1.0, 0.0}};
+    input.viscosity = {{1.0e-3, -1.0e-7}, {1.1e-3, -1.2e-7}, {1.0, 0.0}};
+
+    auto ad_result = Opm::assemblePressureAD(input);
+    auto res_base = computeResidual(input);
+
+    const double eps = 1e-7;
+    const size_t total = input.num_cells + input.num_well_equations;
+    bool ok = true;
+
+    for (size_t k = 0; k < total; ++k) {
+        auto input_pert = input;
+        input_pert.fracture_pressure[k] += eps;
+        if (k < input.num_cells) {
+            input_pert.density[k].value += input.density[k].dval_dp * eps;
+            input_pert.viscosity[k].value += input.viscosity[k].dval_dp * eps;
+        }
+
+        auto res_pert = computeResidual(input_pert);
+
+        for (size_t i = 0; i < total; ++i) {
+            const double fd = (res_pert[i][0] - res_base[i][0]) / eps;
+
+            double pmat_val = 0.0;
+            auto row = (*ad_result.pressure_matrix)[i];
+            auto col_it = row.find(k);
+            if (col_it != row.end())
+                pmat_val = (*col_it)[0][0];
+
+            const double abs_err = std::abs(fd - pmat_val);
+            const double scale = std::max(std::abs(fd), std::abs(pmat_val));
+            const double rel_err = scale > 1e-10 ? abs_err / scale : abs_err;
+            if (abs_err > 1e-6 && rel_err > 1e-5) {
+                std::cerr << "  FD mismatch at dR[" << i << "]/dp[" << k
+                          << "]: AD=" << pmat_val << " FD=" << fd
+                          << " abs_err=" << abs_err
+                          << " rel_err=" << rel_err << std::endl;
+                ok = false;
+            }
+        }
+    }
+
+    if (!ok) {
+        std::cerr << "  FAILED" << std::endl;
+        return false;
+    }
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
+bool test_localad_vs_densead_static()
+{
+    std::cout << "Test 14: LocalAD vs DenseAd::Evaluation<double,4> on local face stencil ..."
+              << std::endl;
+
+    using Local = Opm::LocalAD<4>;
+    using Dense = Opm::DenseAd::Evaluation<double, 4>;
+
+    constexpr int P_I = 0;
+    constexpr int P_J = 1;
+    constexpr int W_I = 2;
+    constexpr int W_J = 3;
+
+    const double p_i = 2.2e6;
+    const double p_j = 2.0e6;
+    const double w_i = 1.4e-3;
+    const double w_j = 1.1e-3;
+    const double t1 = 1.8;
+    const double t2 = 2.1;
+    const double min_w = 1e-4;
+    const double mob = 8.0e3;
+
+    auto admax_local = [](const Local& a, const double thr) {
+        if (a.value >= thr)
+            return a;
+        return Local::constant(thr);
+    };
+
+    auto admax_dense = [](const Dense& a, const double thr) {
+        if (a.value() >= thr)
+            return a;
+        return Dense::createConstant(thr);
+    };
+
+    const auto eval_local = [&]() {
+        const Local pi = Local::variable(p_i, P_I);
+        const Local pj = Local::variable(p_j, P_J);
+        const Local wi = Local::variable(w_i, W_I);
+        const Local wj = Local::variable(w_j, W_J);
+
+        const Local h1 = admax_local(wi, min_w);
+        const Local h2 = admax_local(wj, min_w);
+        const Local h1c = h1 * h1 * h1;
+        const Local h2c = h2 * h2 * h2;
+        const Local invT = Local::constant(12.0) / (h1c * Local::constant(t1))
+                         + Local::constant(12.0) / (h2c * Local::constant(t2));
+        const Local T = Local::constant(mob) * (Local::constant(1.0) / invT);
+        return T * (pi - pj);
+    };
+
+    const auto eval_dense = [&]() {
+        const Dense pi = Dense::createVariable(p_i, P_I);
+        const Dense pj = Dense::createVariable(p_j, P_J);
+        const Dense wi = Dense::createVariable(w_i, W_I);
+        const Dense wj = Dense::createVariable(w_j, W_J);
+
+        const Dense h1 = admax_dense(wi, min_w);
+        const Dense h2 = admax_dense(wj, min_w);
+        const Dense h1c = h1 * h1 * h1;
+        const Dense h2c = h2 * h2 * h2;
+        const Dense invT = Dense::createConstant(12.0) / (h1c * Dense::createConstant(t1))
+                         + Dense::createConstant(12.0) / (h2c * Dense::createConstant(t2));
+        const Dense T = Dense::createConstant(mob) * (Dense::createConstant(1.0) / invT);
+        return T * (pi - pj);
+    };
+
+    const Local fl = eval_local();
+    const Dense fd = eval_dense();
+
+    bool ok = true;
+    const double val_diff = std::abs(fl.value - fd.value());
+    if (val_diff > 1e-12) {
+        std::cerr << "  Value mismatch: LocalAD=" << fl.value
+                  << " DenseAd=" << fd.value()
+                  << " diff=" << val_diff << std::endl;
+        ok = false;
+    }
+
+    for (int d = 0; d < 4; ++d) {
+        const double diff = std::abs(fl.derivatives[d] - fd.derivative(d));
+        if (diff > 1e-12) {
+            std::cerr << "  Derivative mismatch d=" << d
+                      << " LocalAD=" << fl.derivatives[d]
+                      << " DenseAd=" << fd.derivative(d)
+                      << " diff=" << diff << std::endl;
+            ok = false;
+        }
+    }
+
+    // Micro benchmark with enough work to produce stable timings.
+    // This is informational only and not pass/fail critical.
+    constexpr int warmup_loops = 200000;
+    constexpr int loops = 5000000;
+    volatile double sink = 0.0;
+
+    for (int i = 0; i < warmup_loops; ++i) {
+        sink += eval_local().value;
+        sink += eval_dense().value();
+    }
+
+    const auto t0 = std::chrono::steady_clock::now();
+    for (int i = 0; i < loops; ++i)
+        sink += eval_local().value;
+    const auto t1_local = std::chrono::steady_clock::now();
+
+    for (int i = 0; i < loops; ++i)
+        sink += eval_dense().value();
+    const auto t2_dense = std::chrono::steady_clock::now();
+
+    const auto dt_local_us = std::chrono::duration_cast<std::chrono::microseconds>(t1_local - t0).count();
+    const auto dt_dense_us = std::chrono::duration_cast<std::chrono::microseconds>(t2_dense - t1_local).count();
+    const double local_ns_per_eval = 1000.0 * static_cast<double>(dt_local_us) / static_cast<double>(loops);
+    const double dense_ns_per_eval = 1000.0 * static_cast<double>(dt_dense_us) / static_cast<double>(loops);
+
+    std::cout << "  Timing (" << loops << " evals): LocalAD=" << dt_local_us
+              << " us (" << local_ns_per_eval << " ns/eval), DenseAd="
+              << dt_dense_us << " us (" << dense_ns_per_eval << " ns/eval)"
+              << std::endl;
+    (void)sink;
+
+    if (!ok) {
+        std::cerr << "  FAILED" << std::endl;
+        return false;
+    }
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
+bool test_varying_fluid_properties()
+{
+    std::cout << "Test 10: Non-uniform density/viscosity across cells ..."
+              << std::endl;
+    auto input = makeSimpleTestInput();
+
+    // Set different density/viscosity per cell (no pressure derivatives)
+    input.density   = {{800.0, 0.0}, {900.0, 0.0}, {1000.0, 0.0}, {1100.0, 0.0}};
+    input.viscosity = {{1e-1, 0.0}, {2e-1, 0.0}, {5e-2, 0.0}, {1e-1, 0.0}};
+
+    auto ad_result = Opm::assemblePressureAD(input);
+    auto orig_matrix = Opm::assemblePressureOriginal(input);
+
+    if (!compareMatrices(*ad_result.pressure_matrix, *orig_matrix, 1e-12)) {
+        std::cerr << "  FAILED" << std::endl;
+        return false;
+    }
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
+bool test_standalone_pressure_and_coupling()
+{
+    std::cout << "Test 11: Standalone AD assembly produces both pressure and coupling matrices ..."
+              << std::endl;
+    auto input = makeSimpleTestInput();
+
+    // The AD assembler should produce both matrices from one call
+    auto ad_result = Opm::assemblePressureAD(input);
+
+    // Verify pressure matrix is non-null and has correct dimensions
+    if (!ad_result.pressure_matrix) {
+        std::cerr << "  FAILED (pressure_matrix is null)" << std::endl;
+        return false;
+    }
+    if (!ad_result.coupling_matrix) {
+        std::cerr << "  FAILED (coupling_matrix is null)" << std::endl;
+        return false;
+    }
+
+    const size_t n = input.num_cells;
+    if (ad_result.pressure_matrix->N() != n || ad_result.pressure_matrix->M() != n) {
+        std::cerr << "  FAILED (pressure_matrix wrong size)" << std::endl;
+        return false;
+    }
+    if (ad_result.coupling_matrix->N() != n || ad_result.coupling_matrix->M() != n) {
+        std::cerr << "  FAILED (coupling_matrix wrong size)" << std::endl;
+        return false;
+    }
+
+    // Verify that pressure matrix matches original
+    auto orig_matrix = Opm::assemblePressureOriginal(input);
+    if (!compareMatrices(*ad_result.pressure_matrix, *orig_matrix, 1e-12)) {
+        std::cerr << "  FAILED (pressure matrix mismatch)" << std::endl;
+        return false;
+    }
+
+    // Coupling matrix should be non-zero for widths above min_width
+    bool has_nonzero = false;
+    auto& cmat = *ad_result.coupling_matrix;
+    for (auto row_it = cmat.begin(); row_it != cmat.end(); ++row_it)
+        for (auto col_it = row_it->begin(); col_it != row_it->end(); ++col_it)
+            if (std::abs((*col_it)[0][0]) > 1e-15)
+                has_nonzero = true;
+
+    if (!has_nonzero) {
+        std::cerr << "  FAILED (coupling_matrix is all zeros despite widths > min_width)"
+                  << std::endl;
+        return false;
+    }
+
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
+bool test_standalone_with_well_equations()
+{
+    std::cout << "Test 12: Standalone AD assembly with well equations (rate_well) ..."
+              << std::endl;
+    auto input = makeSimpleTestInput();
+    input.control_type = "rate_well";
+    input.num_well_equations = 1;
+    input.perfinj = {std::tuple<int,double>{0, 50.0}, std::tuple<int,double>{2, 30.0}};
+    input.total_wellindex = 200.0;
+    input.mobility_water_perf = 1000.0;
+    input.fracture_pressure.push_back(1e6); // extra entry for well equation
+
+    auto ad_result = Opm::assemblePressureAD(input);
+
+    // Both matrices should have size (nc + nw) x (nc + nw)
+    const size_t total = input.num_cells + input.num_well_equations;
+    if (ad_result.pressure_matrix->N() != total) {
+        std::cerr << "  FAILED (pressure_matrix wrong size: "
+                  << ad_result.pressure_matrix->N() << " vs " << total << ")"
+                  << std::endl;
+        return false;
+    }
+    if (ad_result.coupling_matrix->N() != total) {
+        std::cerr << "  FAILED (coupling_matrix wrong size: "
+                  << ad_result.coupling_matrix->N() << " vs " << total << ")"
+                  << std::endl;
+        return false;
+    }
+
+    // Verify pressure matrix matches original
+    auto orig_matrix = Opm::assemblePressureOriginal(input);
+    if (!compareMatrices(*ad_result.pressure_matrix, *orig_matrix, 1e-12)) {
+        std::cerr << "  FAILED (pressure matrix mismatch with well equations)" << std::endl;
+        return false;
+    }
+
+    std::cout << "  PASSED" << std::endl;
+    return true;
+}
+
+} // anonymous namespace
+
+// ============================================================================
+int main()
+// ============================================================================
+{
+    int failures = 0;
+
+    if (!test_pressure_matrix_matches_original())  ++failures;
+    if (!test_coupling_matrix_finite_differences()) ++failures;
+    if (!test_coupling_matrix_matches_original())   ++failures;
+    if (!test_reference_pressure_and_coupling_case()) ++failures;
+    if (!test_coupling_zero_below_min_width())      ++failures;
+    if (!test_pressure_control())                   ++failures;
+    if (!test_rate_well_control())                  ++failures;
+    if (!test_residual_consistency())               ++failures;
+    if (!test_mobility_pressure_derivatives())      ++failures;
+    if (!test_varying_fluid_properties())           ++failures;
+    if (!test_standalone_pressure_and_coupling())   ++failures;
+    if (!test_standalone_with_well_equations())     ++failures;
+    if (!test_rate_well_mobility_pressure_derivatives()) ++failures;
+    if (!test_localad_vs_densead_static())          ++failures;
+
+    std::cout << "\n=== "
+              << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED")
+              << " ===" << std::endl;
+
+    return failures;
+}

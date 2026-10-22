@@ -1,6 +1,12 @@
 /** construct a grid with vertices on the unit circle and element parametrization */
 
+#include <cmath>
 #include <config.h>
+#include <functional>
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <string>
 
 #include <dune/common/exceptions.hh>
 #include <dune/grid/common/mcmgmapper.hh> // mapper class
@@ -14,28 +20,10 @@
 #include <dune/common/filledarray.hh>
 #include <dune/common/parallel/mpihelper.hh>
 #include <dune/grid/yaspgrid.hh>
-
 #define ALBERTA_DIM 2
 #include <dune/common/parallel/communication.hh>
 #include <dune/grid/yaspgrid/partitioning.hh>
 #include <dune/pdelab.hh>
-
-#include <algorithm>
-#include <array>
-#include <bitset>
-#include <cmath>
-#include <cstddef>
-#include <functional>
-#include <iostream>
-#include <limits>
-#include <memory>
-#include <sstream>
-#include <string>
-#include <vector>
-
-namespace
-{
-
 /**
  * \brief Mapping class mapping from a secant on the unit circle onto the circle
  */
@@ -65,6 +53,9 @@ public:
     }
 };
 
+
+
+
 template <typename ctype, int dimgrid, int dimworld>
 class IdentityMapping
 {
@@ -87,13 +78,11 @@ public:
         // calculate global coordinate
         Dune::FieldVector<double, 3> shapeFunctions = evaluateShapeFunctions_(x);
         Dune::FieldVector<ctype, dimworld> y {0, 0, 0};
-
-        for (std::size_t i = 0; i < y.size(); i++) {
-            for (std::size_t j = 0; j < 3; j++) {
+        for (size_t i = 0; i < y.size(); i++)
+            for (size_t j = 0; j < 3; j++)
                 y[j] += vertices_[i][j] * shapeFunctions[i];
-            }
-        }
-
+        // project it on the unit sphere
+        // y /= y.two_norm();
         return y;
     }
 
@@ -103,19 +92,16 @@ private:
     {
         Dune::FieldVector<double, 3> out;
         out[0] = 1.0;
-
-        for (std::size_t i = 0; i < 2; i++) {
+        for (size_t i = 0; i < 2; i++) {
             out[0] -= x[i];
             out[i + 1] = x[i];
         }
-
         return out;
     }
 };
-
 /**
- * \brief Mapping class mapping from a triangle with points on the unit sphere onto the
- * sphere with theta in [0, pi] and phi in [0, 2*pi)
+ * \brief Mapping class mapping from a triangle with points on the unit sphere onto the sphere
+ *       with theta in [0, pi] and phi in [0, 2*pi)
  */
 template <typename ctype, int dimgrid, int dimworld>
 class UnitSphereMapping
@@ -139,16 +125,11 @@ public:
         // calculate global coordinate
         Dune::FieldVector<double, 3> shapeFunctions = evaluateShapeFunctions_(x);
         Dune::FieldVector<ctype, dimworld> y {0, 0, 0};
-
-        for (std::size_t i = 0; i < y.size(); i++) {
-            for (std::size_t j = 0; j < 3; j++) {
+        for (size_t i = 0; i < y.size(); i++)
+            for (size_t j = 0; j < 3; j++)
                 y[j] += vertices_[i][j] * shapeFunctions[i];
-            }
-        }
-
         // project it on the unit sphere
         y /= y.two_norm();
-
         return y;
     }
 
@@ -158,12 +139,10 @@ private:
     {
         Dune::FieldVector<double, 3> out;
         out[0] = 1.0;
-
-        for (std::size_t i = 0; i < 2; i++) {
+        for (size_t i = 0; i < 2; i++) {
             out[0] -= x[i];
             out[i + 1] = x[i];
         }
-
         return out;
     }
 };
@@ -190,34 +169,31 @@ evolve(const GridView& gridView,
     for (auto&& element : elements(gridView)) {
         int eIdx = mapper.index(element);
         auto eCenter = element.geometry().center();
-
         // iterator over all intersections
         for (auto&& is : intersections(gridView, element)) {
             // index of the neighbour
-            if (is.boundary()) {
-                continue;
+            if (!is.boundary()) {
+                int nIdx = mapper.index(is.outside());
+
+
+                // calculate distance between the midpoints
+
+                auto nCenter = is.outside().geometry().center();
+                auto isCenter = is.geometry().center();
+                eCenter -= isCenter;
+                nCenter -= isCenter;
+                double dist = eCenter.two_norm() + nCenter.two_norm();
+
+                // approximate h as the distance to the neihgbour center
+                h = std::min(h, dist);
+
+                // approximate gradient
+                double gradTn = (temperature[nIdx] - temperature[eIdx]) / dist;
+
+                // add to update
+                update[eIdx] += lambda * gradTn;
             }
-
-            int nIdx = mapper.index(is.outside());
-
-            // calculate distance between the midpoints
-
-            auto nCenter = is.outside().geometry().center();
-            auto isCenter = is.geometry().center();
-            eCenter -= isCenter;
-            nCenter -= isCenter;
-            double dist = eCenter.two_norm() + nCenter.two_norm();
-
-            // approximate h as the distance to the neihgbour center
-            h = std::min(h, dist);
-
-            // approximate gradient
-            double gradTn = (temperature[nIdx] - temperature[eIdx]) / dist;
-
-            // add to update
-            update[eIdx] += lambda * gradTn;
         }
-
         if (eCenter.two_norm() < 3) {
             update[eIdx] += (10 - temperature[eIdx]);
         }
@@ -230,9 +206,8 @@ evolve(const GridView& gridView,
     dt *= 0.99;
 
     // update the concentration vector
-    for (unsigned int i = 0; i < temperature.size(); ++i) {
+    for (unsigned int i = 0; i < temperature.size(); ++i)
         temperature[i] += dt * update[i];
-    }
 }
 
 struct RestrictedValue
@@ -262,7 +237,6 @@ finitevolumeadapt(Grid& grid, Mapper& mapper, std::vector<double>& temperature, 
 
     // compute cell indicators
     std::vector<double> indicator(temperature.size(), std::numeric_limits<double>::lowest());
-
     double globalmax = std::numeric_limits<double>::lowest();
     double globalmin = std::numeric_limits<double>::max();
     for (auto&& element : elements(leafGridView)) {
@@ -313,10 +287,8 @@ finitevolumeadapt(Grid& grid, Mapper& mapper, std::vector<double>& temperature, 
             ++marked;
         }
     }
-
-    if (marked == 0) {
+    if (marked == 0)
         return false;
-    }
 
     grid.preAdapt();
 
@@ -381,6 +353,7 @@ finitevolumeadapt(Grid& grid, Mapper& mapper, std::vector<double>& temperature, 
     return refined;
 }
 
+
 void
 twoDimensionalTest()
 {
@@ -402,7 +375,6 @@ twoDimensionalTest()
         Dune::FieldVector<double, dimworld> vertex({0, 0, 0});
         vertices.push_back(Dune::FieldVector<double, dimworld>({0, 0, 0}));
     }
-
     std::vector<unsigned> inner_indices;
     for (unsigned i = 0; i < N; ++i) {
         inner_indices.push_back(i + 1);
@@ -414,24 +386,32 @@ twoDimensionalTest()
         vertices.push_back(vertex);
     }
 
+
+    // std::vector<Dune::FieldVector<double, dimworld> >
+    // vertices({{1,tao,0},{-1,tao,0},{1,-tao,0},{-1,-tao,0},
+    //                                                             {0,1,tao},{0,-1,tao},{0,1,-tao},{0,-1,-tao},
+    //                                                             {tao,0,1},{-tao,0,1},{tao,0,-1},{-tao,0,-1}});
+
     // Create the grid vertices
 
-    for (std::size_t i = 0; i < vertices.size(); i++) {
+    for (size_t i = 0; i < vertices.size(); i++) {
         // make vertices live on unit sphere
         // insert vertices
         factory.insertVertex(vertices[i]);
     }
-
     std::vector<std::vector<unsigned int>> cornerIDs;
     for (unsigned i = 0; i < N; ++i) {
         unsigned next = inner_indices[(i + 1) % N];
         std::vector<unsigned int> cornerID({0, inner_indices[i], next});
         cornerIDs.push_back(cornerID);
     }
-
     for (unsigned i = 0; i < unsigned(N); ++i) {
-        factory.insertElement(Dune::GeometryTypes::simplex(2),
-                              cornerIDs[i]); // std::move(mapping));
+        // std::vector<unsigned int> cornerID({0,i+1,i+2});
+        //  const auto mapping = IdentityMapping<ctype, dimgrid, dimworld>(
+        //     {vertices[cornerIDs[i][0]],vertices[cornerIDs[i][1]],vertices[cornerIDs[i][2]]});
+        //  const auto mapping = IdentityMapping<ctype, dimgrid, dimworld>(
+        //      {vertices[cornerID[0]],vertices[cornerID[1]],vertices[cornerID[2]]});
+        factory.insertElement(Dune::GeometryTypes::simplex(2), cornerIDs[i]); // std::move(mapping));
     }
 
     // create the grid
@@ -485,8 +465,14 @@ twoDimensionalTest()
             }
         } else {
             for (unsigned i = 0; i < N; ++i) {
+
                 double theta = (i * 2 * M_PI) / (N);
                 theta += (layers - nlinear) * 0.5 * (2 * M_PI / N);
+                // if((layers%2)==1){
+                //     theta+=0.5*(2*M_PI/N);
+                // }else{
+                //     theta-=0.5*(2*M_PI/N);
+                // }
                 double out_radius = radius + layers + 1;
                 double x = out_radius * cos(theta);
                 double y = out_radius * sin(theta);
@@ -495,7 +481,6 @@ twoDimensionalTest()
                 int new_ind = grid->insertVertex(vertex);
                 out_indices.push_back(new_ind);
             }
-
             for (unsigned i = 0; i < N; ++i) {
                 {
                     std::vector<unsigned int> cornerID(
@@ -511,12 +496,13 @@ twoDimensionalTest()
                 }
             }
         }
-
         ++layers;
         inner_indices = out_indices;
         grid->grow();
         grid->postGrow();
         std::string filename = "disk_" + std::to_string(layers);
+        // std::stringstream ss("disk_");
+        // ss << layers;
         std::cout << "Write file " << filename << std::endl;
         writer.write(filename.c_str());
     }
@@ -527,7 +513,6 @@ twoDimensionalTest()
         std::string filename = "disk_" + std::to_string(7);
         writer.write(filename.c_str());
     }
-
     // move grid
     for (const auto& vertex : Dune::vertices(grid->leafGridView())) {
         auto vgeo = vertex.geometry();
@@ -541,11 +526,11 @@ twoDimensionalTest()
         Dune::FieldVector<double, dimworld> vertexPos({x, y, z});
         grid->setPosition(vertex, vertexPos);
     }
-
     {
         std::string filename = "disk_" + std::to_string(8);
         writer.write(filename.c_str());
     }
+
 
     // start try/catch block to get error messages from dune
     try {
@@ -580,6 +565,9 @@ twoDimensionalTest()
         // do the time integration
         while (t <= tEnd) {
             // do adaptation
+            // int lmax = 4;
+            // for(int i = 0; i < lmax; i++)
+            //     finitevolumeadapt(*grid, mapper, temperature, 1, lmax);
 
             // apply finite volume scheme
             evolve(grid->leafGridView(), mapper, temperature, lambda, dt);
@@ -588,13 +576,11 @@ twoDimensionalTest()
             t += dt;
 
             // write a vtk
-            if (!(timestep % episode)) {
+            if (!(timestep % episode))
                 vtkWriter.write(t);
-            }
 
             // Output some infos
             std::cout << "Time step " << timestep << " done, t = " << t << ", dt = " << dt << std::endl;
-
             // Increment time step counter
             ++timestep;
         }
@@ -604,9 +590,13 @@ twoDimensionalTest()
             Dune::FieldVector<double, 3> L2(-10);
             std::array<int, 3> dims(Dune::filledArray<3, int>(2));
             using GRID3D = Dune::YaspGrid<3>;
-
+            // Dune::YLoadBalance< 3 >* part;
+            // Dune::Communication<MPI_Comm> comm;
+            // Dune::CollectiveCommunication comm()
+            // Dune::YLoadBalance<dim>* lb = Dune::defaultLoadbalancer()
             int overlap = 1;
             std::bitset<std::size_t {3}> periodic(0);
+            // GRID3D grid3D(L2,L,dims, periodic, overlap, comm, lb);// comm, part );
             GRID3D grid3D(L, dims); //, periodic, overlap, comm, lb);// comm, part );
             Dune::VTKSequenceWriter<GRID3D::LeafGridView> vtkWriter3D(
                 grid3D.leafGridView(), "grid3D", ".", "");
@@ -614,13 +604,17 @@ twoDimensionalTest()
             grid3D.globalRefine(2);
             vtkWriter3D.write(1);
         }
+
     } catch (std::exception& e) {
         std::cout << "Exception: " << e.what() << std::endl;
         throw;
     }
+    // catch (...) {
+    //   std::cout << "Unknown ERROR" << std::endl;
+    //   return 1;
+    // }
 }
 
-} // Anonymous namespace
 
 int
 main(int argc, char* argv[])
@@ -628,6 +622,7 @@ try {
     Dune::MPIHelper::instance(argc, argv);
     std::cout << std::endl << "Running example for FoamGrid<2, 3>" << std::endl;
     twoDimensionalTest();
+
 }
 // //////////////////////////////////
 //   Error handler

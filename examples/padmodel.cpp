@@ -17,8 +17,13 @@
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <opm/common/utility/FileSystem.hpp>
+
+#include <opm/input/eclipse/EclipseState/Grid/SatfuncPropertyInitializers.hpp>
 #include <opm/input/eclipse/EclipseState/IOConfig/IOConfig.hpp>
 #include <opm/input/eclipse/EclipseState/InitConfig/InitConfig.hpp>
+#include <opm/input/eclipse/EclipseState/Runspec.hpp>
+#include <opm/input/eclipse/EclipseState/Tables/TableManager.hpp>
 
 #include <opm/input/eclipse/Deck/Deck.hpp>
 #include <opm/input/eclipse/Deck/DeckSection.hpp>
@@ -31,12 +36,16 @@
 #include <opm/input/eclipse/Parser/Parser.hpp>
 
 #include <opm/input/eclipse/Parser/ParserKeywords/A.hpp>
+#include <opm/input/eclipse/Parser/ParserKeywords/B.hpp>
 #include <opm/input/eclipse/Parser/ParserKeywords/C.hpp>
 #include <opm/input/eclipse/Parser/ParserKeywords/D.hpp>
 #include <opm/input/eclipse/Parser/ParserKeywords/E.hpp>
+#include <opm/input/eclipse/Parser/ParserKeywords/F.hpp>
 #include <opm/input/eclipse/Parser/ParserKeywords/G.hpp>
 #include <opm/input/eclipse/Parser/ParserKeywords/I.hpp>
+#include <opm/input/eclipse/Parser/ParserKeywords/M.hpp>
 #include <opm/input/eclipse/Parser/ParserKeywords/N.hpp>
+#include <opm/input/eclipse/Parser/ParserKeywords/O.hpp>
 #include <opm/input/eclipse/Parser/ParserKeywords/P.hpp>
 #include <opm/input/eclipse/Parser/ParserKeywords/S.hpp>
 #include <opm/input/eclipse/Parser/ParserKeywords/Z.hpp>
@@ -45,12 +54,18 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
 #include <iostream>
+#include <regex>
+#include <stdexcept>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -63,85 +78,249 @@ namespace
 
 struct GridSize
 {
-    int nx;
-    int ny;
-    int nz;
+    int nx{};
+    int ny{};
+    int nz{};
 };
 
 struct ExtendParam
 {
-    int nz_upper;
-    double top_upper;
-    int nz_lower;
-    double bottom_lower;
-    double upper_poro;
-    double min_dist;
-    bool no_gap;
-    bool monotonic_zcorn;
-    bool vert_coord;
-    int upper_equilnum;
-    int nz_new;
+    int nz_upper{};
+    double top_upper{};
+    int nz_lower{};
+    double bottom_lower{};
+    double upper_poro{};
+    double min_dist{};
+    bool no_gap{};
+    bool monotonic_zcorn{};
+    bool vert_coord{};
+    int upper_equilnum{};
+    int nz_new{};
 };
 
-ExtendParam
-getExtendParam(const std::string& filename)
+class PropsSectionDefaultValue
 {
-    ExtendParam extend_param;
+public:
+    explicit PropsSectionDefaultValue(const Opm::Deck& deck);
+
+    double operator()(const std::string& keyword) const;
+
+private:
+    std::unordered_map<std::string, double> epsDfltValue_{};
+
+    static std::regex epsKwRegEx_;
+    static std::unordered_map<std::string, double> fallbackDefaultValue_;
+};
+
+std::regex PropsSectionDefaultValue::epsKwRegEx_ { R"(I?([SKP].+)([XYZ]-?)?)" };
+
+std::unordered_map<std::string, double>
+PropsSectionDefaultValue::fallbackDefaultValue_ {
+    std::pair { std::string { "SWATINIT" }, 1.0 },
+};
+
+PropsSectionDefaultValue::PropsSectionDefaultValue(const Opm::Deck& deck)
+{
+    using namespace std::string_literals;
+
+    const auto tables = Opm::TableManager { deck };
+    const auto rspec  = Opm::Runspec { deck };
+
+    const auto rtep = Opm::satfunc::getRawTableEndpoints
+        (tables, rspec.phases(),
+         rspec.saturationFunctionControls()
+         .minimumRelpermMobilityThreshold());
+
+    const auto rfunc = Opm::satfunc::getRawFunctionValues
+        (tables, rspec.phases(), rtep);
+
+    auto cvrtPress = [&usys = deck.getActiveUnitSystem()](const double p)
+    {
+        return usys.from_si(Opm::UnitSystem::measure::pressure, p);
+    };
+
+    // Default values from region 1.  Both for drainage and imbibition.
+    this->epsDfltValue_.insert({
+        // Horizontally scaled end-points for gas.
+        std::pair { "SGL"s  , rtep.connate.gas.front()  },
+        std::pair { "SGLPC"s, rtep.connate.gas.front()  },
+        std::pair { "SGCR"s , rtep.critical.gas.front() },
+        std::pair { "SGU"s  , rtep.maximum.gas.front()  },
+
+        // ------------------------------------------------------------
+        // Horizontally scaled end-points for oil.
+        std::pair { "SOGCR"s, rtep.critical.oil_in_gas  .front() },
+        std::pair { "SOWCR"s, rtep.critical.oil_in_water.front() },
+
+        // ------------------------------------------------------------
+        // Horizontally scaled end-points for water.
+        std::pair { "SWL"s  , rtep.connate.water.front()  },
+        std::pair { "SWLPC"s, rtep.connate.water.front()  },
+        std::pair { "SWCR"s , rtep.critical.water.front() },
+        std::pair { "SWU"s  , rtep.maximum.water.front()  },
+
+        // ============================================================
+
+        // Vertically scaled end-points for gas.
+        std::pair { "KRGR"s, rfunc.krg.r.front()           },
+        std::pair { "KRG"s , rfunc.krg.max.front()         },
+        std::pair { "PCG"s , cvrtPress(rfunc.pc.g.front()) },
+
+        // ------------------------------------------------------------
+        // Vertically scaled end-points for oil.
+        std::pair { "KRORG"s, rfunc.kro.rg.front()  },
+        std::pair { "KRORW"s, rfunc.kro.rw.front()  },
+        std::pair { "KRO"s  , rfunc.kro.max.front() },
+
+        // ------------------------------------------------------------
+        // Vertically scaled end-points for water.
+        std::pair { "KRWR"s, rfunc.krw.r.front()           },
+        std::pair { "KRW"s , rfunc.krw.max.front()         },
+        std::pair { "PCW"s , cvrtPress(rfunc.pc.w.front()) },
+    });
+}
+
+double PropsSectionDefaultValue::operator()(const std::string& keyword) const
+{
+    if (auto m = std::smatch{}; std::regex_match(keyword, m, epsKwRegEx_)) {
+        const auto valuePos = this->epsDfltValue_.find(m[1]);
+
+        if (valuePos != this->epsDfltValue_.end()) {
+            return valuePos->second;
+        }
+    }
+
+    const auto valuePos = fallbackDefaultValue_.find(keyword);
+    return (valuePos == fallbackDefaultValue_.end())
+        ? 0.0 : valuePos->second;
+}
+
+std::string defaultJson()
+{
+    return {
+        R"({
+    "nz_upper": 2,
+    "top_upper": 1000,
+    "nz_lower": 3,
+    "bottom_lower": 3600,
+    "upper_poro": 0.1,
+    "min_dist": 10,
+    "no_gap": true,
+    "vert_coord": true,
+    "monotonic_zcorn": true
+})" };
+}
+
+void populateExtendParameters(const Opm::PropertyTree& fracture_param,
+                              ExtendParam&             extend_param)
+{
+    fracture_param.write_json(std::cout, true);
+
+    extend_param.nz_upper = fracture_param.get<int>("nz_upper");
+    extend_param.top_upper = fracture_param.get<double>("top_upper");
+    extend_param.nz_lower = fracture_param.get<int>("nz_lower");
+    extend_param.bottom_lower = fracture_param.get<double>("bottom_lower");
+    extend_param.upper_poro = fracture_param.get<double>("upper_poro");
+    extend_param.min_dist = fracture_param.get<double>("min_dist");
+    extend_param.no_gap = fracture_param.get<bool>("no_gap");
+    extend_param.monotonic_zcorn = fracture_param.get<bool>("monotonic_zcorn");
+    extend_param.vert_coord = fracture_param.get<bool>("vert_coord");
+}
+
+void populateFallback(ExtendParam& extend_param)
+{
+    extend_param.nz_upper = 2;
+    extend_param.top_upper = 1000;
+    extend_param.nz_lower = 3;
+    extend_param.bottom_lower = 3600;
+    extend_param.upper_poro = 0.1;
+    extend_param.min_dist = 10;
+    extend_param.no_gap = true;
+    extend_param.vert_coord = true;
+    extend_param.monotonic_zcorn = true; // change results on norne?
+}
+
+void populateNoFracture(ExtendParam& extend_param)
+{
+    const auto dflt_json_fname = fs::temp_directory_path() /
+        Opm::unique_path("extend-dflt-%%%%.json");
+
+    std::ofstream dflt_json { dflt_json_fname };
+    if (! dflt_json) {
+        populateFallback(extend_param);
+    }
+    else {
+        dflt_json << defaultJson() << '\n';
+        dflt_json.close();
+
+        const auto fracture_param = Opm::PropertyTree {
+            dflt_json_fname.generic_string()
+        };
+
+        populateExtendParameters(fracture_param, extend_param);
+
+        fs::remove(dflt_json_fname);
+    }
+}
+
+void populateFromFile(std::string_view filename,
+                      ExtendParam& extend_param)
+{
+    const auto fracture_param = Opm::PropertyTree {
+        std::string { filename }
+    };
+
+    std::cout << "Fracture parameters from file '" << filename << "':\n";
+
+    // set seed values
+    populateExtendParameters(fracture_param, extend_param);
+}
+
+ExtendParam
+getExtendParam(std::string_view filename)
+{
+    auto extend_param = ExtendParam {};
 
     try {
-        Opm::PropertyTree fracture_param(filename);
-        // set seed values
-        extend_param.nz_upper = fracture_param.get<int>("nz_upper");
-        extend_param.top_upper = fracture_param.get<double>("top_upper");
-        extend_param.nz_lower = fracture_param.get<int>("nz_lower");
-        extend_param.bottom_lower = fracture_param.get<double>("bottom_lower");
-        extend_param.upper_poro = fracture_param.get<double>("upper_poro");
-        extend_param.min_dist = fracture_param.get<double>("min_dist");
-        extend_param.no_gap = fracture_param.get<bool>("no_gap");
-        extend_param.monotonic_zcorn = fracture_param.get<bool>("monotonic_zcorn");
-        extend_param.vert_coord = fracture_param.get<bool>("vert_coord");
-        return extend_param;
-    } catch (const std::exception& e) {
-        std::cout << "Error reading fracture parameter file: " << filename << '\n'
-                  << "Defaulting to no fractures." << std::endl;
-
-        extend_param.nz_upper = 2;
-        extend_param.top_upper = 1000;
-        extend_param.no_gap = true;
-        extend_param.vert_coord = true;
-        extend_param.monotonic_zcorn = true; // change results on norne?
-        extend_param.min_dist = 10;
-        extend_param.upper_poro = 0.1;
-        extend_param.nz_lower = 3;
-        extend_param.bottom_lower = 3600;
-
-        return extend_param;
+        populateFromFile(filename, extend_param);
     }
+    catch (const std::exception&) {
+        std::cerr << "Error reading fracture parameter file: '"
+                  << filename << "'\n"
+                  << "Defaulting to no fractures.\n";
+
+        populateNoFracture(extend_param);
+    }
+
+    return extend_param;
 }
 
 GridSize
 getDimens(const Opm::Deck& deck)
 {
-    int nx, ny, nz;
-    GridSize grid_size;
+    GridSize grid_size{};
+
     if (deck.hasKeyword<Opm::ParserKeywords::DIMENS>()) {
-        nx = deck[Opm::ParserKeywords::DIMENS::keywordName].back().getRecord(0).getItem("NX").get<int>(
-            0);
-        ny = deck[Opm::ParserKeywords::DIMENS::keywordName].back().getRecord(0).getItem("NY").get<int>(
-            0);
-        nz = deck[Opm::ParserKeywords::DIMENS::keywordName].back().getRecord(0).getItem("NZ").get<int>(
-            0);
-        grid_size.nx = nx;
-        grid_size.ny = ny;
-        grid_size.nz = nz;
-    } else {
-        std::cerr << "No DIMENS keyword found in the deck" << std::endl;
+        grid_size.nx = deck[Opm::ParserKeywords::DIMENS::keywordName]
+            .back().getRecord(0).getItem("NX").get<int>(0);
+
+        grid_size.ny = deck[Opm::ParserKeywords::DIMENS::keywordName]
+            .back().getRecord(0).getItem("NY").get<int>(0);
+
+        grid_size.nz = deck[Opm::ParserKeywords::DIMENS::keywordName]
+            .back().getRecord(0).getItem("NZ").get<int>(0);
     }
+    else {
+        std::cerr << "No DIMENS keyword found in the deck\n";
+    }
+
     return grid_size;
 }
 
 void
-extendDimens(const GridSize& grid_size, ExtendParam& extend_param, Opm::Deck& deck)
+extendDimens(const GridSize& grid_size,
+             ExtendParam& extend_param,
+             Opm::Deck& deck)
 {
     const int nz = grid_size.nz;
 
@@ -149,17 +328,16 @@ extendDimens(const GridSize& grid_size, ExtendParam& extend_param, Opm::Deck& de
 
         extend_param.nz_new = nz + extend_param.nz_upper + extend_param.nz_lower;
         {
-            auto& NZit = const_cast<Opm::DeckItem&>(
-                deck[Opm::ParserKeywords::DIMENS::keywordName].back().getRecord(0).getItem("NZ"));
+            auto& NZit = const_cast<Opm::DeckItem&>
+                (deck[Opm::ParserKeywords::DIMENS::keywordName].back().getRecord(0).getItem("NZ"));
 
             std::vector<int>& data = NZit.getData<int>();
             data[0] = extend_param.nz_new;
         }
 
-
         {
-            auto& eqldims = const_cast<Opm::DeckItem&>(
-                deck[Opm::ParserKeywords::EQLDIMS::keywordName].back().getRecord(0).getItem("NTEQUL"));
+            auto& eqldims = const_cast<Opm::DeckItem&>
+                (deck[Opm::ParserKeywords::EQLDIMS::keywordName].back().getRecord(0).getItem("NTEQUL"));
 
             std::vector<int>& data = eqldims.getData<int>();
 
@@ -168,7 +346,8 @@ extendDimens(const GridSize& grid_size, ExtendParam& extend_param, Opm::Deck& de
 
             if (value_status[0] == Opm::value::status::deck_value) {
                 data[0] += 1;
-            } else {
+            }
+            else {
                 value_status[0] = Opm::value::status::deck_value;
                 data[0] = 2;
             }
@@ -176,13 +355,14 @@ extendDimens(const GridSize& grid_size, ExtendParam& extend_param, Opm::Deck& de
             const int upper_equilnum = data[0];
             extend_param.upper_equilnum = upper_equilnum;
         }
-    } else {
+    }
+    else {
         std::cerr << "No DIMENS keyword found in the deck" << std::endl;
     }
 
     if (deck.hasKeyword<Opm::ParserKeywords::SPECGRID>()) {
-        auto& NZit = const_cast<Opm::DeckItem&>(
-            deck[Opm::ParserKeywords::SPECGRID::keywordName].back().getRecord(0).getItem("NZ"));
+        auto& NZit = const_cast<Opm::DeckItem&>
+            (deck[Opm::ParserKeywords::SPECGRID::keywordName].back().getRecord(0).getItem("NZ"));
 
         std::vector<int>& data = NZit.getData<int>();
 
@@ -191,79 +371,233 @@ extendDimens(const GridSize& grid_size, ExtendParam& extend_param, Opm::Deck& de
 }
 
 template <typename T>
+void extendPropertyArray(const GridSize&      grid_size,
+                         const ExtendParam&   extend_param,
+                         const Opm::type_tag  type,
+                         const T              default_value,
+                         const Opm::DeckItem& property)
+{
+    if (property.getType() != type) {
+        return;
+    }
+
+    const auto input_nc = static_cast<std::size_t>(grid_size.nx)
+        * static_cast<std::size_t>(grid_size.ny)
+        * static_cast<std::size_t>(grid_size.nz);
+
+    auto& value = const_cast<Opm::DeckItem&>(property).template getData<T>();
+    if (std::size(value) != input_nc) {
+        return;
+    }
+
+    auto& status = const_cast<std::vector<Opm::value::status>&>
+        (property.getValueStatus());
+
+    const auto output_nc = static_cast<std::size_t>(grid_size.nx)
+        * static_cast<std::size_t>(grid_size.ny)
+        * static_cast<std::size_t>(extend_param.nz_upper +
+                                   grid_size.nz          +
+                                   extend_param.nz_lower);
+
+    const auto value_offset = static_cast<std::size_t>(grid_size.nx)
+        * static_cast<std::size_t>(grid_size.ny)
+        * static_cast<std::size_t>(extend_param.nz_upper);
+
+    auto remapped_value  = std::vector<T>(output_nc, default_value);
+    auto remapped_status = std::vector<Opm::value::status>
+        (output_nc, Opm::value::status::deck_value);
+
+    std::copy(value .begin(), value .end(), remapped_value .begin() + value_offset);
+    std::copy(status.begin(), status.end(), remapped_status.begin() + value_offset);
+
+    value .swap(remapped_value);
+    status.swap(remapped_status);
+}
+
+template <typename T>
 void
-extendGridSection(Opm::DeckSection& gridsec,
+extendGridSection(Opm::GRIDSection& gridsec,
                   const GridSize& grid_size,
                   const ExtendParam& extend_param,
                   const Opm::type_tag type)
 {
-    const int nx = grid_size.nx;
-    const int ny = grid_size.ny;
-    const int nz = grid_size.nz;
-    const int nz_upper = extend_param.nz_upper;
-    const int nz_new = extend_param.nz_new;
-    const int nc_new = nx * ny * nz_new;
-    const int nc = nx * ny * nz;
-
-    for (const auto& records : gridsec) {
-        if (records.size() != 1) {
+    for (const auto& keyword : gridsec) {
+        if ((keyword.size() != 1) || !keyword.isDataKeyword()) {
             continue;
         }
 
-        const auto& record = records.getRecord(0);
-        if (record.size() != 1) {
-            continue;
-        }
-
-        const auto& item = record.getItem(0);
-        if (item.getType() != type) {
-            continue;
-        }
-
-        auto& val = const_cast<std::vector<T>&>(item.getData<T>());
-        if (static_cast<int>(val.size()) != nc) {
-            continue;
-        }
-
-        T default_value = 0;
-        if (records.name() == "PORO") {
+        T default_value {};
+        if (keyword.name() == "PORO") {
             default_value = extend_param.upper_poro;
-        } else if (records.name() == "NTG") {
-            default_value = T {1};
+        }
+        else if (keyword.name() == "NTG") {
+            default_value = T{1};
         }
 
-        std::cout << "Extend data_size: " << records.name() << std::endl;
+        extendPropertyArray(grid_size, extend_param,
+                            type, default_value,
+                            keyword.getRecord(0).getItem(0));
+    }
+}
 
-        auto& val_status = const_cast<std::vector<Opm::value::status>&>(item.getValueStatus());
+void extendBCCon(Opm::GRIDSection& gridSect,
+                 const ExtendParam& extend_param)
+{
+    // extend BCCON only downwards
 
-        std::vector<T> val_new(nc_new);
-        std::vector<Opm::value::status> val_status_new(nc_new, Opm::value::status::deck_value);
+    for (const auto& records : gridSect) {
+        if (records.name() != "BCCON") {
+            continue;
+        }
 
-        const int nz_bottom = nz_upper + nz;
-        for (int i = 0; i < nx; ++i) {
-            for (int j = 0; j < ny; ++j) {
-                for (int k = 0; k < nz_new; ++k) {
-                    const int ind_new = i + nx * j + nx * ny * k;
-                    const int ind_old = i + nx * j + nx * ny * (k - nz_upper);
+        //std::cout << "Extending BCCON" << std::endl;
 
-                    if ((k >= nz_upper) && (k < nz_bottom)) {
-                        val_new[ind_new] = val[ind_old];
-                        val_status_new[ind_new] = val_status[ind_old];
-                    } else {
-                        val_status_new[ind_new] = Opm::value::status::deck_value;
-                        val_new[ind_new] = default_value;
+        for (const auto& record : records) {
+            int& K1 = const_cast<int&>(record.getItem("K1").getData<int>()[0]);
+            int& K2 = const_cast<int&>(record.getItem("K2").getData<int>()[0]);
+
+            const auto direction = record.getItem("DIRECTION").getTrimmedString(0);
+            //std::cout << direction << std::endl;
+
+            if (direction == "Z+") {
+                const int shift = extend_param.nz_upper + extend_param.nz_lower;
+                K1 += shift;
+                K2 += shift;
+            }
+
+            if (direction == "Z-") {
+                assert(K1 == 1);
+                assert(K2 == 1);
+            }
+        }
+    }
+}
+
+void extendFaults(const ExtendParam& extend_param,
+                  Opm::GRIDSection&  gridSect)
+{
+    for (const auto* flt : gridSect.getKeywordList<Opm::ParserKeywords::FAULTS>()) {
+        for (const auto& face : *flt) {
+            const_cast<int&>(face.getItem<Opm::ParserKeywords::FAULTS::IZ1>()
+                             .getData<int>().front()) += extend_param.nz_upper;
+
+            const_cast<int&>(face.getItem<Opm::ParserKeywords::FAULTS::IZ2>()
+                             .getData<int>().front()) += extend_param.nz_upper;
+        }
+    }
+}
+
+void extendOperators(const ExtendParam& extend_param,
+                     Opm::Deck&         deck)
+{
+    for (const auto& opKw : {
+            Opm::ParserKeywords::ADD     ::keywordName,
+            Opm::ParserKeywords::BOX     ::keywordName,
+            Opm::ParserKeywords::EQUALS  ::keywordName,
+            Opm::ParserKeywords::MAXVALUE::keywordName,
+            Opm::ParserKeywords::MINVALUE::keywordName,
+            Opm::ParserKeywords::MULTIPLY::keywordName,
+            Opm::ParserKeywords::OPERATE ::keywordName,
+        })
+    {
+        for (const auto& operation : deck.getKeywordList(opKw)) {
+            for (const auto& record : *operation) {
+                for (const auto* kname : { "K1", "K2", }) {
+                    const auto& k = record.getItem(kname);
+                    if (! k.defaultApplied(0)) {
+                        const_cast<Opm::DeckItem&>(k)
+                            .getData<int>().front()
+                            += extend_param.nz_upper;
                     }
                 }
             }
         }
+    }
+}
 
-        val_status = val_status_new;
-        val = val_new;
+void extendSpecialGridProperties(Opm::GRIDSection& gridSect,
+                                 const ExtendParam& extend_param)
+{
+    if (! gridSect.hasKeyword<Opm::ParserKeywords::ACTNUM>()) {
+        // All cells active.
+        return;
+    }
+
+    auto& actnum = const_cast<std::vector<int>&>
+        (gridSect.get<Opm::ParserKeywords::ACTNUM>().back().getIntData());
+
+    auto* const poro = gridSect.hasKeyword<Opm::ParserKeywords::PORO>()
+        ? const_cast<std::vector<double>*>
+        (&gridSect.get<Opm::ParserKeywords::PORO>().back().getRawDoubleData())
+        : nullptr;
+
+    auto* const permx = gridSect.hasKeyword<Opm::ParserKeywords::PERMX>()
+        ? const_cast<std::vector<double>*>
+        (&gridSect.get<Opm::ParserKeywords::PERMX>().back().getRawDoubleData())
+        : nullptr;
+
+    auto* const permy = gridSect.hasKeyword<Opm::ParserKeywords::PERMY>()
+        ? const_cast<std::vector<double>*>
+        (&gridSect.get<Opm::ParserKeywords::PERMY>().back().getRawDoubleData())
+        : nullptr;
+
+    auto* const permz = gridSect.hasKeyword<Opm::ParserKeywords::PERMZ>()
+        ? const_cast<std::vector<double>*>
+        (&gridSect.get<Opm::ParserKeywords::PERMZ>().back().getRawDoubleData())
+        : nullptr;
+
+    auto* const ntg = gridSect.hasKeyword<Opm::ParserKeywords::NTG>()
+        ? const_cast<std::vector<double>*>
+        (&gridSect.get<Opm::ParserKeywords::NTG>().back().getRawDoubleData())
+        : nullptr;
+
+    {
+        auto& actnum_status = const_cast<std::vector<Opm::value::status>&>
+            (gridSect.get<Opm::ParserKeywords::ACTNUM>().back().getValueStatus());
+
+        actnum_status.assign(actnum.size(), Opm::value::status::deck_value);
+    }
+
+    for (auto i = 0*actnum.size(); i != actnum.size(); ++i) {
+        if (actnum[i] == 1) {
+            // Input cell is active.  Nothing to do.
+            continue;
+        }
+
+        // If we get here, the input cell is inactive.  Reset to active and
+        // set permeability to zero, NTG to one, while porosity gets the
+        // 'upper_poro' runtime parameter.
+
+        actnum[i] = 1;
+
+        // maybe one should have used values from deck if resonable and
+        // check if deck_value
+        if (poro != nullptr) {
+            (*poro)[i] = extend_param.upper_poro;
+        }
+
+        if (permx != nullptr) {
+            (*permx)[i] = 0.0;
+        }
+
+        if (permy != nullptr) {
+            (*permy)[i] = 0.0;
+        }
+
+        if (permz != nullptr) {
+            (*permz)[i] = 0.0;
+        }
+
+        if (ntg != nullptr) {
+            (*ntg)[i] = 1.0;
+        }
     }
 }
 
 void
-extendGRDECL(Opm::DeckSection& gridsec, const GridSize& grid_size, const ExtendParam& extend_param)
+extendGRDECL(Opm::GRIDSection& gridsec,
+             const GridSize& grid_size,
+             const ExtendParam& extend_param)
 {
     const int nx = grid_size.nx;
     const int ny = grid_size.ny;
@@ -276,14 +610,14 @@ extendGRDECL(Opm::DeckSection& gridsec, const GridSize& grid_size, const ExtendP
     const double no_gap = extend_param.no_gap;
     const int nz_new = extend_param.nz_new;
 
-    std::vector<double>& coord = const_cast<std::vector<double>&>(
-        gridsec.get<Opm::ParserKeywords::COORD>().back().getRawDoubleData());
+    std::vector<double>& coord = const_cast<std::vector<double>&>
+        (gridsec.get<Opm::ParserKeywords::COORD>().back().getRawDoubleData());
 
-    std::vector<double>& zcorn = const_cast<std::vector<double>&>(
-        gridsec.get<Opm::ParserKeywords::ZCORN>().back().getRawDoubleData());
+    std::vector<double>& zcorn = const_cast<std::vector<double>&>
+        (gridsec.get<Opm::ParserKeywords::ZCORN>().back().getRawDoubleData());
 
-    std::vector<Opm::value::status>& zcorn_status = const_cast<std::vector<Opm::value::status>&>(
-        gridsec.get<Opm::ParserKeywords::ZCORN>().back().getValueStatus());
+    std::vector<Opm::value::status>& zcorn_status = const_cast<std::vector<Opm::value::status>&>
+        (gridsec.get<Opm::ParserKeywords::ZCORN>().back().getValueStatus());
 
     // include all cells
 
@@ -385,7 +719,180 @@ extendGRDECL(Opm::DeckSection& gridsec, const GridSize& grid_size, const ExtendP
 }
 
 void
-extendSchedule(Opm::DeckSection& schedule, const ExtendParam& extend_param)
+extendProps(const GridSize&    grid_size,
+            const ExtendParam& extend_param,
+            Opm::Deck&         deck)
+{
+    const auto defaultValue = PropsSectionDefaultValue { deck };
+
+    for (const auto& keyword : Opm::PROPSSection { deck }) {
+        if ((keyword.size() != 1) || !keyword.isDataKeyword()) {
+            continue;
+        }
+
+        extendPropertyArray(grid_size, extend_param,
+                            Opm::type_tag::fdouble,
+                            defaultValue(keyword.name()),
+                            keyword.getRecord(0).getItem(0));
+    }
+}
+
+void
+extendRegions(Opm::REGIONSSection& regions,
+              const GridSize& grid_size,
+              const ExtendParam& extend_param,
+              const std::vector<int>& actnum_old)
+{
+    const auto input_nc = static_cast<std::size_t>(grid_size.nx)
+        * static_cast<std::size_t>(grid_size.ny)
+        * static_cast<std::size_t>(grid_size.nz);
+
+    const auto output_nc = static_cast<std::size_t>(grid_size.nx)
+        * static_cast<std::size_t>(grid_size.ny)
+        * static_cast<std::size_t>(extend_param.nz_upper +
+                                   grid_size.nz          +
+                                   extend_param.nz_lower);
+
+    const auto value_offset = static_cast<std::size_t>(grid_size.nx)
+        * static_cast<std::size_t>(grid_size.ny)
+        * static_cast<std::size_t>(extend_param.nz_upper);
+
+    if (regions.hasKeyword<Opm::ParserKeywords::EQLNUM>()) {
+        std::cout << "EQLNUM keyword found in the deck" << std::endl;
+    }
+    else {
+        std::cout << "No EQLNUM keyword found in the deck" << std::endl;
+    }
+
+    for (const auto& keyword : regions) {
+        if ((keyword.size() != 1) || !keyword.isDataKeyword()) {
+            continue;
+        }
+
+        const auto& record = keyword.getRecord(0);
+        if (record.size() != 1) {
+            continue;
+        }
+
+        const auto& item = record.getItem(0);
+        if ((item.getType() != Opm::type_tag::integer) ||
+            (item.data_size() != input_nc))
+        {
+            continue;
+        }
+
+        auto& value = const_cast<Opm::DeckItem&>(item).getData<int>();
+
+        const auto default_value =
+            [&value, &extend_param, is_eqlnum = keyword.name() == "EQLNUM"]()
+        {
+            if (is_eqlnum) { return extend_param.upper_equilnum; }
+
+            return std::max(1, *std::min_element(value.begin(), value.end()));
+        }();
+
+        auto& status = const_cast<std::vector<Opm::value::status>&>
+            (item.getValueStatus());
+
+        auto remapped_value  = std::vector<int>(output_nc, default_value);
+        auto remapped_status = std::vector<Opm::value::status>
+            (output_nc, Opm::value::status::deck_value);
+
+        for (auto i = 0*input_nc; i != input_nc; ++i) {
+            if (actnum_old[i] == 1) {
+                remapped_value [value_offset + i] = value [i];
+                remapped_status[value_offset + i] = status[i];
+            }
+        }
+
+        value .swap(remapped_value);
+        status.swap(remapped_status);
+    }
+}
+
+void extendEQUIL(Opm::DeckKeyword& equil)
+{
+    using Kw = Opm::ParserKeywords::EQUIL;
+
+    // copy first record
+    assert(! equil.empty());
+
+    // Equilibration data for extended region (above/below formation).
+    // Based on first equilibration region.
+    auto record = equil.getRecord(0);
+
+    double& goc = const_cast<double&>(record.getItem<Kw::GOC>().getData<double>()[0]);
+    double& woc = const_cast<double&>(record.getItem<Kw::OWC>().getData<double>()[0]);
+
+    goc = woc = 0.0;
+
+    equil.addRecord(std::move(record));
+}
+
+void extendDepthTable(const ExtendParam& extend_param,
+                      Opm::DeckKeyword&  propertyVD)
+{
+    assert(! propertyVD.empty());
+
+    auto newPropertyVD = propertyVD.emptyStructuralCopy();
+
+    for (const auto& table : propertyVD) {
+        auto i = std::vector { table.getItem(0).emptyStructuralCopy() };
+
+        const auto& values = table.getItem(0).getData<double>();
+
+        // Constant extrapolation above formation.
+        if (extend_param.top_upper < values.front()) {
+            i.front().push_back(extend_param.top_upper);
+            i.front().push_back(values[0 + 1]);
+        }
+
+        // Input table unchanged within formation's depth range.
+        for (const auto& value : values) {
+            i.front().push_back(value);
+        }
+
+        // Constant extrapolation below formation.
+        if (extend_param.bottom_lower > values[values.size() - 2]) {
+            i.front().push_back(extend_param.bottom_lower);
+            i.front().push_back(values.back());
+        }
+
+        newPropertyVD.addRecord(Opm::DeckRecord { std::move(i) });
+    }
+
+    // Add table corresponding to "extended" region (propertyVD.size() + 1).
+    {
+        auto first = newPropertyVD.getRecord(0);
+        newPropertyVD.addRecord(std::move(first));
+    }
+
+    propertyVD = newPropertyVD;
+}
+
+void
+extendSolution(const ExtendParam&    extend_param,
+               Opm::SOLUTIONSection& solution)
+{
+    for (const auto& keyword : solution) {
+        if (keyword.name() == "EQUIL") {
+            extendEQUIL(const_cast<Opm::DeckKeyword&>(keyword));
+        }
+        else if ((keyword.name() == "RSVD") ||
+                 (keyword.name() == "RVVD") ||
+                 (keyword.name() == "RTEMPVD") ||
+                 (keyword.name() == "PBVD") ||
+                 (keyword.name() == "PDVD"))
+        {
+            extendDepthTable(extend_param,
+                             const_cast<Opm::DeckKeyword&>(keyword));
+        }
+    }
+}
+
+void
+extendSchedule(Opm::SCHEDULESection& schedule,
+               const ExtendParam& extend_param)
 {
     // fix kz for schedule i.e. COMPDAT
     const int nz_upper = extend_param.nz_upper;
@@ -396,7 +903,7 @@ extendSchedule(Opm::DeckSection& schedule, const ExtendParam& extend_param)
             continue;
         }
 
-        std::cout << "Extending schedule record: " << records.name() << std::endl;
+        //std::cout << "Extending schedule record: " << records.name() << std::endl;
 
         if (records.name() == "WSEED") {
             for (const auto& record : records) {
@@ -426,298 +933,160 @@ extendSchedule(Opm::DeckSection& schedule, const ExtendParam& extend_param)
     }
 }
 
-void
-extendRegions(Opm::DeckSection& regions,
-              const GridSize grid_size,
-              const ExtendParam& extend_param,
-              const std::vector<int>& actnum_old)
-{
-    const int nx = grid_size.nx;
-    const int ny = grid_size.ny;
-    const int nz = grid_size.nz;
-    const int nz_upper = extend_param.nz_upper;
-    const int nz_new = extend_param.nz_new;
-    const int nc_new = nx * ny * nz_new;
-    const int nc = nx * ny * nz;
-    const int upper_equilnum = extend_param.upper_equilnum;
-
-    if (regions.hasKeyword<Opm::ParserKeywords::EQLNUM>()) {
-        std::cout << "EQLNUM keyword found in the deck" << std::endl;
-    } else {
-        std::cout << "No EQLNUM keyword found in the deck" << std::endl;
-    }
-
-    for (const auto& records : regions) {
-        if (records.size() != 1) {
-            continue;
-        }
-
-        const auto& record = records.getRecord(0);
-        if (record.size() != 1) {
-            continue;
-        }
-
-        const auto& item = record.getItem(0);
-        if (item.getType() != Opm::type_tag::integer) {
-            continue;
-        }
-
-        std::vector<int>& val = const_cast<std::vector<int>&>(item.getData<int>());
-        if (static_cast<int>(val.size()) != nc) {
-            continue;
-        }
-
-        const int min_val = *std::min_element(val.begin(), val.end());
-        int exteded_val = min_val;
-        if (records.name() == "EQLNUM") {
-            exteded_val = upper_equilnum;
-        }
-
-        std::cout << "Extend regions: " << records.name() << std::endl;
-        auto& val_status = const_cast<std::vector<Opm::value::status>&>(item.getValueStatus());
-
-        std::vector<int> val_new(nc_new);
-        std::vector<Opm::value::status> val_status_new(nc_new, Opm::value::status::deck_value);
-
-        const int nz_bottom = nz_upper + nz;
-        for (int i = 0; i < nx; ++i) {
-            for (int j = 0; j < ny; ++j) {
-                for (int k = 0; k < nz_new; ++k) {
-                    const int k_old = k - nz_upper;
-                    const int ind_new = i + nx * j + nx * ny * k;
-                    const int ind_old = i + nx * j + nx * ny * (k_old);
-
-                    if (k >= nz_upper && k < nz_bottom && actnum_old[ind_old] == 1) {
-                        val_new[ind_new] = val[ind_old];
-                        val_status_new[ind_new] = val_status[ind_old];
-                    } else {
-                        val_status_new[ind_new] = Opm::value::status::deck_value;
-                        val_new[ind_new] = exteded_val;
-                    }
-                }
-            }
-        }
-
-        val_status = val_status_new;
-        val = val_new;
-    }
-}
-
-void
-extendSolution(Opm::DeckSection& solution, const ExtendParam& /*extend_param*/)
-{
-    for (const auto& records : solution) {
-        if (records.name() == "EQUIL") {
-
-            // copy first record
-            auto& deckkeyword = const_cast<Opm::DeckKeyword&>(records);
-            assert(records.size() > 0);
-
-            auto record = records.getRecord(0);
-
-            double& datum_pressure
-                = const_cast<double&>(record.getItem("DATUM_PRESSURE").getData<double>()[0]);
-
-            double& datum_depth
-                = const_cast<double&>(record.getItem("DATUM_DEPTH").getData<double>()[0]);
-
-            datum_pressure = 1.0;
-            datum_depth = 0.0;
-
-            double& woc = const_cast<double&>(record.getItem("OWC").getData<double>()[0]);
-            double& goc = const_cast<double&>(record.getItem("GOC").getData<double>()[0]);
-            woc = 0.0;
-            goc = 0.0;
-
-            deckkeyword.addRecord(std::move(record));
-        }
-
-        if ((records.name() == "RSVD") || records.name() == "RTEMPVD") {
-            assert(records.size() > 0);
-
-            auto& deckkeyword = const_cast<Opm::DeckKeyword&>(records);
-            auto record = records.getRecord(0);
-
-            deckkeyword.addRecord(std::move(record));
-        }
-    }
-}
-
 Opm::Deck
-manipulate_deck(const char* deck_file, std::ostream& os)
+manipulate_deck(std::string_view deck_file,
+                std::string_view param_file,
+                std::ostream& os)
 {
     auto parseContext = Opm::ParseContext(Opm::InputErrorAction::WARN);
     Opm::ErrorGuard errors;
 
     // Pad vertically
-    auto deck = Opm::Parser {}.parseFile(deck_file, parseContext, errors);
-    ExtendParam extend_param = getExtendParam("fracture_param.json");
+    auto deck = Opm::Parser{}.parseFile(std::string {deck_file}, parseContext, errors);
+    auto extend_param = getExtendParam(param_file);
+
+    std::cout << "Reading deck file: " << deck_file << std::endl;
+
+
 
     // write out json file
-    std::cout << "Extend parameters: " << '\n'
-              << "nz_upper: " << extend_param.nz_upper << '\n'
-              << "top_upper: " << extend_param.top_upper << '\n'
-              << "nz_lower: " << extend_param.nz_lower << '\n'
-              << "bottom_lower: " << extend_param.bottom_lower << '\n'
-              << "upper_poro: " << extend_param.upper_poro << '\n'
-              << "min_dist: " << extend_param.min_dist << '\n'
-              << "no_gap: " << extend_param.no_gap << '\n'
-              << "monotonic_zcorn: " << extend_param.monotonic_zcorn << '\n'
-              << "vert_coord: " << extend_param.vert_coord << std::endl;
 
-    // GridSection gridsec(decDeckSection gridsec(deck,"GRID");
-    Opm::DeckSection gridsec(deck, "GRID"); // fixing CARTDIMS? + ZCORN + double valued arrays.
-    Opm::DeckSection runspec(deck, "RUNSPEC"); // fixing dimens
-    Opm::DeckSection schedule(deck, "SCHEDULE"); // fixing COMPDAT
-    Opm::DeckSection regions(deck, "REGIONS"); // extend and add for equilnum
-    Opm::DeckSection solution(deck, "SOLUTION"); // extend and add for equilnum
+    std::cout << "Extend parameters:\n"
+              << "nz_upper: "          << extend_param.nz_upper        << '\n'
+              << "top_upper: "         << extend_param.top_upper       << '\n'
+              << "nz_lower: "          << extend_param.nz_lower        << '\n'
+              << "bottom_lower: "      << extend_param.bottom_lower    << '\n'
+              << "upper_poro: "        << extend_param.upper_poro      << '\n'
+              << "min_dist: "          << extend_param.min_dist        << '\n'
+              << "no_gap: "            << extend_param.no_gap          << '\n'
+              << "monotonic_zcorn: "   << extend_param.monotonic_zcorn << '\n'
+              << "vert_coord: "        << extend_param.vert_coord
+              << std::endl;
+
+    const auto grid_size = getDimens(deck);
 
     // int nz_new,upper_equilnum;
-    const auto actnum_old
-        = const_cast<std::vector<int>&>(gridsec.get<Opm::ParserKeywords::ACTNUM>().back().getIntData());
+    auto gridsec = Opm::GRIDSection {deck}; // fixing CARTDIMS? + ZCORN + double valued arrays.
 
-    auto grid_size = getDimens(deck);
+    {
+        extendDimens(grid_size, extend_param, deck);
 
-    extendDimens(grid_size, extend_param, deck);
+        extendBCCon(gridsec, extend_param);
 
-    // extend BCCON only downwards
-    for (const auto& records : gridsec) {
-        if (records.name() == "BCCON") {
-            std::cout << "Extending BCCON" << std::endl;
+        extendGridSection<double>(gridsec, grid_size, extend_param, Opm::type_tag::fdouble);
+        extendGridSection<int>(gridsec, grid_size, extend_param, Opm::type_tag::integer);
 
-            for (const auto& record : records) {
-                int& K1 = const_cast<int&>(record.getItem("K1").getData<int>()[0]);
-                int& K2 = const_cast<int&>(record.getItem("K2").getData<int>()[0]);
+        extendSpecialGridProperties(gridsec, extend_param);
 
-                const std::string direction = record.getItem("DIRECTION").getTrimmedString(0);
-                std::cout << direction << std::endl;
+        extendFaults(extend_param, gridsec);
 
-                if (direction == "Z+") {
-                    const int shift = extend_param.nz_upper + extend_param.nz_lower;
-                    K1 += shift;
-                    K2 += shift;
-                }
-
-                if (direction == "Z-") {
-                    assert(K1 == 1);
-                    assert(K2 == 1);
-                }
-            }
-        }
+        extendGRDECL(gridsec, grid_size, extend_param);
     }
 
-    extendGridSection<double>(gridsec, grid_size, extend_param, Opm::type_tag::fdouble);
-    extendGridSection<int>(gridsec, grid_size, extend_param, Opm::type_tag::integer);
-
-    std::vector<int>& actnum
-        = const_cast<std::vector<int>&>(gridsec.get<Opm::ParserKeywords::ACTNUM>().back().getIntData());
-
-    // TODO need to handle cases where this is not given ..
-    std::vector<double>& ntg = const_cast<std::vector<double>&>(
-        gridsec.get<Opm::ParserKeywords::NTG>().back().getRawDoubleData());
-
-    std::vector<double>& poro = const_cast<std::vector<double>&>(
-        gridsec.get<Opm::ParserKeywords::PORO>().back().getRawDoubleData());
-
-    std::vector<double>& permx = const_cast<std::vector<double>&>(
-        gridsec.get<Opm::ParserKeywords::PERMX>().back().getRawDoubleData());
-
-    std::vector<double>& permy = const_cast<std::vector<double>&>(
-        gridsec.get<Opm::ParserKeywords::PERMY>().back().getRawDoubleData());
-
-    std::vector<double>& permz = const_cast<std::vector<double>&>(
-        gridsec.get<Opm::ParserKeywords::PERMZ>().back().getRawDoubleData());
-
-    std::vector<Opm::value::status>& actnum_status = const_cast<std::vector<Opm::value::status>&>(
-        gridsec.get<Opm::ParserKeywords::ACTNUM>().back().getValueStatus());
-
-    const int nc_new = actnum.size();
-    actnum_status.assign(nc_new, Opm::value::status::deck_value);
-
-    for (auto i = 0 * actnum.size(); i < actnum.size(); ++i) {
-        if (actnum[i] == 1) {
-            continue;
-        }
-
-        actnum[i] = 1;
-
-        // maybe one sould have used values from deck if resonable and check
-        // if deck_value
-        poro[i] = extend_param.upper_poro;
-        permx[i] = permy[i] = permz[i] = 0.0;
-
-        ntg[i] = 1.0;
+    if (Opm::DeckSection::hasPROPS(deck)) {
+        // Yes, we intentionally operate on the entire Deck here rather than
+        // just the PROPSSection.  We need the saturation function tables
+        // along with the run's active phases to properly remap scaled
+        // end-points for the saturation functions.
+        extendProps(grid_size, extend_param, deck);
     }
 
-    extendGRDECL(gridsec, grid_size, extend_param);
+    if (Opm::DeckSection::hasREGIONS(deck)) {
+        const auto actnum_old = gridsec.hasKeyword<Opm::ParserKeywords::ACTNUM>()
+            ? gridsec.get<Opm::ParserKeywords::ACTNUM>().back().getIntData()
+            : std::vector<int>(grid_size.nx * grid_size.ny * grid_size.nz, 1);
 
-    // NB NB need to always add EQUILNUM
-    extendRegions(regions, grid_size, extend_param, actnum_old);
-    extendSolution(solution, extend_param);
+        // NB NB need to always add EQUILNUM
+        auto regions = Opm::REGIONSSection {deck}; // extend and add for equilnum
 
-    extendSchedule(schedule, extend_param);
-
-    for (const auto& records : deck) {
-        // DeckView
-        if ((records.name() != "EQUALS") && (records.name() != "MULTIPLY") && (records.name() != "ADD")
-            && (records.name() != "COPY")) {
-            continue;
-        }
-
-        std::cout << "Exending" << records.name() << std::endl;
-
-        const int nz_upper = extend_param.nz_upper;
-
-        for (const auto& record : records) {
-            std::cout << "Record: " << record << std::endl;
-            int& K1 = const_cast<int&>(record.getItem("K1").getData<int>()[0]);
-            int& K2 = const_cast<int&>(record.getItem("K2").getData<int>()[0]);
-            K1 += nz_upper;
-            K2 += nz_upper;
-        }
+        extendRegions(regions, grid_size, extend_param, actnum_old);
     }
+
+    if (Opm::DeckSection::hasSOLUTION(deck)) {
+        auto solution = Opm::SOLUTIONSection {deck}; // extend and add for equilnum
+
+        extendSolution(extend_param, solution);
+    }
+
+    if (Opm::DeckSection::hasSCHEDULE(deck)) {
+        auto schedule = Opm::SCHEDULESection {deck}; // fixing COMPDAT
+
+        extendSchedule(schedule, extend_param);
+    }
+
+    extendOperators(extend_param, deck);
 
     if (deck.hasKeyword<Opm::ParserKeywords::EQLDIMS>()) {
         std::cout << "EQLDIMS keyword found in the deck" << std::endl;
-    } else {
+    }
+    else {
         std::cout << "No EQLDIMS keyword found in the deck" << std::endl;
     }
 
     os << deck;
+
     return deck;
 }
 
-void
-print_help_and_exit()
+void print_help()
 {
     std::cerr << R"(
-The manipulatedeck program will load a deck, resolve all include
-files and then print it out again on stdout. All comments
-will be stripped and the value types will be validated.
+The padmodel program will load a deck, resolve all include files and then
+print it out again on stdout. All comments will be stripped and the value
+types will be validated.
 
-By passing the option -o you can redirect the output to a file
-or a directory.
+By passing the option -o you can redirect the output to a file or a
+directory.
+
+It will also pad the grid vertically according to parameters specified in a
+JSON file (default "fracture_param.json").
 
 Print on stdout:
 
-   manipulatedeck  /path/to/case/CASE.DATA
-
+    padmodel -p fracture_param.json /path/to/case/CASE.DATA
 
 Print MY_CASE.DATA in /tmp:
 
-    manipulatedeck -o /tmp /path/to/MY_CASE.DATA
-
+    padmodel -p fracture_param.json -o /tmp /path/to/MY_CASE.DATA
 
 Print NEW_CASE in cwd:
 
-    opmpack -o NEW_CASE.DATA path/to/MY_CASE.DATA
+    padmodel -o NEW_CASE.DATA -p fracture_param.json path/to/MY_CASE.DATA
 
-As an alternative to the -o option you can use -c; that is equivalent to -o -
-but restart and import files referred to in the deck are also copied. The -o and
--c options are mutually exclusive.
+As an alternative to the -o option you can use -c. This flag is nominally
+equivalent to "-o -", but restart and import files referred to in the deck
+are also copied to the output stream. The -o and -c options are mutually
+exclusive.
 )";
+}
 
-    std::exit(EXIT_FAILURE);
+void print_example_json()
+{
+    const auto dflt_json_fname = fs::temp_directory_path() /
+        Opm::unique_path("extend-dflt-%%%%.json");
+
+    std::ofstream dflt_json { dflt_json_fname };
+
+    std::cerr << "\n============================================================"
+        "\n\nExample JSON parameters (tool's built-in defaults):\n\n";
+
+    if (! dflt_json) {
+        std::cerr << defaultJson() << '\n';
+    }
+    else {
+        dflt_json << defaultJson() << '\n';
+        dflt_json.close();
+
+        const auto fracture_param = Opm::PropertyTree {
+            dflt_json_fname.generic_string()
+        };
+
+        fs::remove(dflt_json_fname);
+
+        fracture_param.write_json(std::cerr, true);
+    }
+
+    std::cerr << "\n============================================================\n\n";
 }
 
 void
@@ -746,83 +1115,110 @@ copy_file(const fs::path& source_dir, fs::path fname, const fs::path& target_dir
 
 } // Anonymous namespace
 
-int
-main(int argc, char** argv)
+int main(int argc, char** argv)
 {
-    int arg_offset = 1;
     bool stdout_output = true;
     bool copy_binary = false;
-    const char* coutput_arg;
+    bool help = argc < 2;
+    auto coutput_arg = std::string_view{};
+    auto param_file_arg = std::string_view{"fracture_param.json"};
 
     while (true) {
-        int c;
-        c = getopt(argc, argv, "c:o:");
-        if (c == -1)
+        const auto c = getopt(argc, argv, "c:ho:p:");
+        if (c == -1) {
             break;
+        }
 
         switch (c) {
-        case 'o':
-            stdout_output = false;
-            coutput_arg = optarg;
-            break;
         case 'c':
             stdout_output = false;
             copy_binary = true;
             coutput_arg = optarg;
             break;
+
+        case 'h':
+            help = true;
+            break;
+
+        case 'o':
+            stdout_output = false;
+            coutput_arg = optarg;
+            break;
+
+        case 'p':
+            param_file_arg = optarg;
+            break;
         }
     }
 
-    arg_offset = optind;
-    if (arg_offset >= argc) {
-        print_help_and_exit();
+    const auto arg_offset = optind;
+    if (help || (arg_offset >= argc)) {
+        print_help();
+
+        if (help) {
+            print_example_json();
+            return EXIT_SUCCESS;
+        }
+
+        return EXIT_FAILURE;
     }
 
     if (stdout_output) {
-        manipulate_deck(argv[arg_offset], std::cout);
-    } else {
-        std::ofstream os;
-        fs::path input_arg(argv[arg_offset]);
-        fs::path output_arg(coutput_arg);
-        fs::path output_dir(coutput_arg);
+        manipulate_deck(argv[arg_offset], param_file_arg, std::cout);
+    }
+    else {
+        const auto input_arg = fs::path { argv[arg_offset] };
 
+        auto output_arg = fs::path { coutput_arg };
+        auto output_dir = fs::path { coutput_arg };
+
+        std::ofstream os{};
         if (fs::is_directory(output_arg)) {
-            fs::path output_path = output_arg / input_arg.filename();
-            os.open(output_path.string());
-        } else {
-            os.open(output_arg.string());
+            os.open(output_arg / input_arg.filename());
+        }
+        else {
+            os.open(output_arg);
             output_dir = output_arg.parent_path();
         }
 
-        const auto& deck = manipulate_deck(argv[arg_offset], os);
+        const auto deck = manipulate_deck(argv[arg_offset], param_file_arg, os);
+
         if (copy_binary) {
-            Opm::InitConfig init_config(deck);
-            if (init_config.restartRequested()) {
-                Opm::IOConfig io_config(deck);
-                fs::path restart_file(io_config.getRestartFileName(
-                    init_config.getRestartRootName(), init_config.getRestartStep(), false));
+            if (const auto init_config = Opm::InitConfig { deck, Opm::Runspec {deck}.phases(), /*compositional*/ false };
+                init_config.restartRequested())
+            {
+                const auto io_config = Opm::IOConfig { deck };
+
+                const auto restart_file = fs::path {
+                    io_config.getRestartFileName(init_config.getRestartRootName(),
+                                                 init_config.getRestartStep(), false)
+                };
+
                 copy_file(input_arg.parent_path(), restart_file, output_dir);
             }
 
             using IMPORT = Opm::ParserKeywords::IMPORT;
             for (const auto& import_keyword : deck.get<IMPORT>()) {
-                const auto& fname
-                    = import_keyword.getRecord(0).getItem<IMPORT::FILE>().get<std::string>(0);
+                const auto& fname = import_keyword.getRecord(0)
+                    .getItem<IMPORT::FILE>().get<std::string>(0);
+
                 copy_file(input_arg.parent_path(), fname, output_dir);
             }
 
             using PYACTION = Opm::ParserKeywords::PYACTION;
             for (const auto& pyaction_keyword : deck.get<PYACTION>()) {
-                const auto& fname
-                    = pyaction_keyword.getRecord(1).getItem<PYACTION::FILENAME>().get<std::string>(0);
+                const auto& fname = pyaction_keyword.getRecord(1)
+                    .getItem<PYACTION::FILENAME>().get<std::string>(0);
+
                 copy_file(input_arg.parent_path(), fname, output_dir);
             }
 
             using GDFILE = Opm::ParserKeywords::GDFILE;
             if (deck.hasKeyword<GDFILE>()) {
                 const auto& gdfile_keyword = deck.get<GDFILE>().back();
-                const auto& fname
-                    = gdfile_keyword.getRecord(0).getItem<GDFILE::filename>().get<std::string>(0);
+                const auto& fname = gdfile_keyword.getRecord(0)
+                    .getItem<GDFILE::filename>().get<std::string>(0);
+
                 copy_file(input_arg.parent_path(), fname, output_dir);
             }
         }

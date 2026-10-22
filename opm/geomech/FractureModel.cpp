@@ -1,39 +1,20 @@
-/*
-  Copyright 2025 Equinor ASA.
-
-  This file is part of the Open Porous Media project (OPM).
-
-  OPM is free software: you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  OPM is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
-
-  You should have received a copy of the GNU General Public License
-  along with OPM.  If not, see <http://www.gnu.org/licenses/>.
-*/
-
-#include <config.h>
+#include "config.h"
 
 #include <opm/geomech/FractureModel.hpp>
 
 #include <dune/common/fmatrixev.hh>
-
-#include <opm/input/eclipse/Schedule/ScheduleState.hpp>
-#include <opm/input/eclipse/Schedule/Well/Connection.hpp>
-#include <opm/input/eclipse/Schedule/Well/WellConnections.hpp>
-#include <opm/input/eclipse/Schedule/Well/WellFractureSeeds.hpp>
+#include <opm/geomech/DiscreteDisplacement.hpp>
 
 #include <opm/simulators/linalg/PropertyTree.hpp>
 #include <opm/simulators/wells/RuntimePerforation.hpp>
 #include <opm/simulators/wells/SingleWellState.hpp>
 #include <opm/simulators/wells/WellState.hpp>
 
-#include <opm/geomech/DiscreteDisplacement.hpp>
+#include <opm/input/eclipse/EclipseState/Grid/EclipseGrid.hpp>
+#include <opm/input/eclipse/Schedule/ScheduleState.hpp>
+#include <opm/input/eclipse/Schedule/Well/Connection.hpp>
+#include <opm/input/eclipse/Schedule/Well/WellConnections.hpp>
+#include <opm/input/eclipse/Schedule/Well/WellFractureSeeds.hpp>
 
 #include <algorithm>
 #include <cassert>
@@ -47,81 +28,162 @@
 #include <utility>
 #include <vector>
 
+#include <stddef.h>
+
 namespace Opm
 {
 PropertyTree
-makeDefaultFractureParam()
+makeDefaultFractureParam(bool rate_control)
 {
     using namespace std::string_literals;
-
     PropertyTree fracture_param;
-    fracture_param.put("hasfractures", false);
+    fracture_param.put("hasfractures", true); //used ??
+    fracture_param.put("verbosity", 1); //used ??
     fracture_param.put("add_perfs_to_schedule", true);
-    // solution method
+    // solution method method for coupled system only postsolve tested so far
     fracture_param.put("solver.method", "PostSolve"s);
     fracture_param.put("solver.implicit_flow", false);
     fracture_param.put("solver.max_mech_it", 2);
 
     // solve method for fracture
+    fracture_param.put("fractureparam.verbosity", 1);
     fracture_param.put("fractureparam.method.iterate", true);
     fracture_param.put("fractureparam.method.max_it", 3);
     fracture_param.put("fractureparam.method.tolerance", 1e-4);
 
     //
     fracture_param.put("fractureparam.reduce_boundary", false);
+    fracture_param.put("fractureparam.vem_stability_choice", 3);
+    fracture_param.put("fractureparam.smooth_force", false);
     fracture_param.put("fractureparam.addconnections", true);
-
     // very experimental to calculate stress contributions from fracture to cell values
     fracture_param.put("fractureparam.include_fracture_contributions", false);
 
     // seed to be in input file
-    fracture_param.put("fractureparam.config.type", "well_seed"s);
+    fracture_param.put("fractureparam.config.verbosity", 1);// well seed should not be used any more
+    fracture_param.put("fractureparam.config.type", "well_seed"s);// well seed should not be used any more
     fracture_param.put("fractureparam.config.initial_fracture_width", 1e-4);
-    fracture_param.put("fractureparam.config.min_width", 0.0);
-    fracture_param.put("fractureparam.config.trires", 10);
+    fracture_param.put("fractureparam.config.min_width", 0.0);// normaly taken from deck
+    fracture_param.put("fractureparam.config.trires", 5);
+    fracture_param.put("fractureparam.config.gravity_off", false);
+    fracture_param.put("fractureparam.config.scale_filtrate", true);
 
+    fracture_param.put("fractureparam.solver.verbosity", 1);
     fracture_param.put("fractureparam.solver.method", "if_propagate_trimesh"s);
-    fracture_param.put("fractureparam.solver.target_cellcount", 100);
-    fracture_param.put("fractureparam.solver.cellcount_threshold", 400);
-    fracture_param.put("fractureparam.solver.numcell_threshold", 50);
-    fracture_param.put("fractureparam.solver.max_num_coarsening", 200);
+    fracture_param.put("fractureparam.solver.target_cellcount", 300);
+    fracture_param.put("fractureparam.solver.cellcount_threshold", 300);
+    fracture_param.put("fractureparam.solver.numcell_threshold", 100000);// probably 1200 should be ok
+    fracture_param.put("fractureparam.solver.max_num_coarsening", 0);
+    fracture_param.put("fractureparam.solver.max_iter_on_same_level", 100000000);
+    
+    // used ??
     fracture_param.put("fractureparam.solver.efac", 0.5);
     fracture_param.put("fractureparam.solver.rfac", 0.1);
+    //fracture_param.put("fractureparam.solver.damping_w", 0.5);
+    //fracture_param.put("fractureparam.solver.damping_p", 0.5);
     fracture_param.put("fractureparam.solver.max_expand_iter", 20);
     fracture_param.put("fractureparam.solver.max_iter", 100);
     fracture_param.put("fractureparam.solver.tolerance", 1e-6);
     fracture_param.put("fractureparam.solver.damping", 1e0);
-    fracture_param.put("fractureparam.solver.min_width", 1e-3);
+    fracture_param.put("fractureparam.solver.min_width", 0.001);// NB should not be used
     fracture_param.put("fractureparam.solver.max_width", 0.5);
-    fracture_param.put("fractureparam.solver.max_dwidth", 5e-3);
-    fracture_param.put("fractureparam.solver.max_dp", 1e9);
     fracture_param.put("fractureparam.solver.max_change", 1e5);
-    fracture_param.put("fractureparam.solver.verbosity", 0);
+    // end used ??
+
+    fracture_param.put("fractureparam.solver.max_dwidth", 5e-3);
+    fracture_param.put("fractureparam.solver.max_dp", 1000000000);// NB probably better value 5e6
+    fracture_param.put("fractureparam.solver.verbosity", 2);
 
     // fracture linear solve
+    fracture_param.put("fractureparam.solver.remap_solution", false);
+    fracture_param.put("fractureparam.solver.linsolver.tol", 1e-8);
+    fracture_param.put("fractureparam.solver.area_change_fac", 3.0);
+    fracture_param.put("fractureparam.solver.dt_limit", 0.1);// in days
+    if(rate_control){
+        fracture_param.put("fractureparam.solver.damping_factor_perf", 0.0);// doesnot matter
+        fracture_param.put("fractureparam.solver.damping_factor_wi", 0.0);
+    }else{
+        fracture_param.put("fractureparam.solver.damping_factor_perf", 2.0);
+        fracture_param.put("fractureparam.solver.damping_factor_wi", 2.0);
+    }
+    fracture_param.put("fractureparam.solver.failure_on_nonconvergence", false);
+    fracture_param.put("fractureparam.solver.force_limit", 0.0);
+    fracture_param.put("fractureparam.solver.smooth_boundary", false);
+    fracture_param.put("fractureparam.solver.full_intersections", false);
+    fracture_param.put("fractureparam.solver.divide_wellidx", false);
+    fracture_param.put("fractureparam.solver.use_fluid_system_water_properties", false);
+    fracture_param.put("fractureparam.solver.use_water_phase_mobility_for_fracture_flow", false);
+    fracture_param.put("fractureparam.solver.use_water_phase_mobility_for_well_fracture_flow", false);
+    fracture_param.put("fractureparam.solver.no_leakof_outercells",false);
+    fracture_param.put("fractureparam.solver.write_coupled_linear_system", false);
+    fracture_param.put("fractureparam.solver.dump_linear_system_on_failure", true);
+    fracture_param.put("fractureparam.solver.linear_system_dump_prefix", "fracture_linear_system"s);
+    // linear solver
+    fracture_param.put("fractureparam.solver.linsolver.atol", 1e-20);
     fracture_param.put("fractureparam.solver.linsolver.tol", 1e-10);
     fracture_param.put("fractureparam.solver.linsolver.max_iter", 1000);
     fracture_param.put("fractureparam.solver.linsolver.verbosity", 0);
-
+    fracture_param.put("fractureparam.solver.linsolver.solver", "bicgstab"s);
+    // preconditioner
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.diag_mech", false);// for large systems seem sto better with better preconditioner
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.diag_flow", false);
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.mech_first", true);
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.fixed_stress", false);
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.mode_policy", "manual"s);
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.mode_switch_coupling_threshold", 0.25);
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.mech_press_coupling", true);
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.update_mech_on_reuse", false);
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.verbosity", 0);  
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.solver","umfpack"s);
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.verbosity",0 );
+    // not used if not solver is iterative
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.tol",1 );
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.maxiter",1 );
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.preconditioner.type","DILU"s);
+    fracture_param.put("fractureparam.solver.linsolver.preconditioner.flow_solver.preconditioner.verbosity",0);
+    fracture_param.put("fractureparam.solver.guard_state", true);
+    fracture_param.put("fractureparam.solver.guard_max_abs_width", 1e30);
+    fracture_param.put("fractureparam.solver.guard_max_abs_pressure", 1e30);
+    fracture_param.put("fractureparam.solver.closed_cell_policy", "sticky"s);
+    fracture_param.put("fractureparam.solver.close_force_tolerance", 0.0);
+    fracture_param.put("fractureparam.solver.reopen_force_tolerance", 0.0);
+    fracture_param.put("fractureparam.solver.reopen_width_tolerance", 0.0);
+    fracture_param.put("fractureparam.solver.max_closed_cell_toggle_count", 1000000000);
+    fracture_param.put("fractureparam.solver.max_closed_cell_toggle_fraction", 1.0);
+    
     // reservoir fracture coupling
+    fracture_param.put("fractureparam.reservoir.calculate_dist", true);
+    // not used if calculate_dist is true
     fracture_param.put("fractureparam.reservoir.dist", 1e0);
-    fracture_param.put("fractureparam.reservoir.calculate_dist", false);
+    
+    // normally taken from resrevoir
     fracture_param.put("fractureparam.reservoir.mobility", 1.3e-3);
     fracture_param.put("fractureparam.reservoir.perm", 1e-13);
 
     // well fracture coupling
-    fracture_param.put("fractureparam.control.type", "perf_pressure"s);
+    if(rate_control){
+        fracture_param.put("fractureparam.control.type", "perf_rate"s);
+    }else{
+        fracture_param.put("fractureparam.control.type", "perf_pressure"s);
+    }
+    // only used for some of the options
     fracture_param.put("fractureparam.control.rate", 2.9e-2);
-    fracture_param.put("fractureparam.control.WI", 1.0e-11);
+    fracture_param.put("fractureparam.control.WI", 1.0e-6); // calculated from well
 
-    fracture_param.put("fractureparam.KMax", 1e6); // in input file
+    fracture_param.put("fractureparam.fractureWI", 1e-6);//NB to do need to be caluclated based on fracture properties
+    
+    
+
     fracture_param.put("fractureparam.extended_fractures", true);
-    fracture_param.put("fractureparam.fractureWI", 0.1);
+
+    // nomrmally taken from reservoir
+    fracture_param.put("fractureparam.KMax", 1e6); // in input file
+    
+
     fracture_param.put("fractureparam.write_pressure_system", false);
     fracture_param.put("fractureparam.write_fracture_system", false);
     fracture_param.put("fractureparam.pressuresolver", "umfpack"s);
     fracture_param.put("fractureparam.fracturesolver", "notused"s);
-
     return fracture_param;
 }
 
@@ -140,7 +202,8 @@ FractureModel::addWell(const std::string& name,
 }
 
 void
-FractureModel::addFractures(const ScheduleState& sched)
+FractureModel::addFractures(const ScheduleState& sched,
+                            const LgrLookup* lgrs)
 {
     const auto fracture_type = this->prm_.get<std::string>("config.type", "well_seed");
 
@@ -148,8 +211,15 @@ FractureModel::addFractures(const ScheduleState& sched)
         this->addFracturesPerpWell();
     } else if (fracture_type == "tensile_fracture") {
         this->addFracturesTensile();
-    } else if (fracture_type == "well_seed") {
-        this->addFracturesWellSeed(sched);
+    }
+    // else if (fracture_type == "well_seed_json") {
+    //     // old method
+    //     Fracture fracture;
+    //     fracture.init(well.name(), perf, well_cell, origo, normal, prm_);
+    //     well_fractures_[i].push_back(std::move(fracture));
+    //}
+    else if (fracture_type == "well_seed") {
+        this->addFracturesWellSeed(sched, lgrs);
     } else {
         OPM_THROW(std::runtime_error, "Fracture type '" + fracture_type + "' is not supported");
     }
@@ -173,96 +243,93 @@ FractureModel::addFractures(const ScheduleState& sched)
 void
 FractureModel::initFractureStates()
 {
-    for (auto& fractures : this->well_fractures_) {
-        for (auto& fracture : fractures) {
-            fracture.initFractureStates();
+    for (size_t i = 0; i < wells_.size(); ++i) {
+        std::vector<Fracture>& fractures = well_fractures_[i];
+        for (size_t j = 0; j < fractures.size(); ++j) {
+            fractures[j].initFractureStates();
         }
     }
 }
-
 // probably this should be collected in one loop
 Dune::FieldVector<double, 6>
-FractureModel::stress(const Dune::FieldVector<double, 3>& obs) const
+FractureModel::stress(Dune::FieldVector<double, 3> obs) const
 {
-    Dune::FieldVector<double, 6> stress {};
-
-    for (const auto& fractures : this->well_fractures_) {
-        for (const auto& fracture : fractures) {
-            stress += fracture.stress(obs);
+    Dune::FieldVector<double, 6> stress;
+    for (size_t i = 0; i < wells_.size(); ++i) {
+        const std::vector<Fracture>& fractures = well_fractures_[i];
+        for (size_t j = 0; j < fractures.size(); ++j) {
+            Dune::FieldVector<double, 6> tmp = fractures[j].stress(obs);
+            stress += tmp;
         }
     }
-
     return stress;
 }
-
 Dune::FieldVector<double, 6>
-FractureModel::strain(const Dune::FieldVector<double, 3>& obs) const
+FractureModel::strain(Dune::FieldVector<double, 3> obs) const
 {
-    Dune::FieldVector<double, 6> strain {};
-
-    for (const auto& fractures : this->well_fractures_) {
-        for (const auto& fracture : fractures) {
-            strain += fracture.strain(obs);
+    Dune::FieldVector<double, 6> strain;
+    for (size_t i = 0; i < wells_.size(); ++i) {
+        const std::vector<Fracture>& fractures = well_fractures_[i];
+        for (size_t j = 0; j < fractures.size(); ++j) {
+            Dune::FieldVector<double, 6> tmp = fractures[j].strain(obs);
+            strain += tmp;
         }
     }
-
     return strain;
 }
-
 Dune::FieldVector<double, 3>
-FractureModel::disp(const Dune::FieldVector<double, 3>& obs) const
+FractureModel::disp(Dune::FieldVector<double, 3> obs) const
 {
-    Dune::FieldVector<double, 3> disp {};
-
-    for (const auto& fractures : this->well_fractures_) {
-        for (const auto& fracture : fractures) {
-            disp += fracture.disp(obs);
+    Dune::FieldVector<double, 3> disp;
+    for (size_t i = 0; i < wells_.size(); ++i) {
+        const std::vector<Fracture>& fractures = well_fractures_[i];
+        for (size_t j = 0; j < fractures.size(); ++j) {
+            Dune::FieldVector<double, 3> tmp = fractures[j].disp(obs);
+            disp += tmp;
         }
     }
-
     return disp;
 }
 
 void
-FractureModel::write(const int reportStep) const
+FractureModel::write(int reportStep) const
 {
-    auto i = std::size_t {0};
-
-    for (const auto& well : this->wells_) {
-        well.write();
-
-        for (const auto& fracture : this->well_fractures_[i]) {
-            fracture.write(reportStep);
+    for (size_t i = 0; i < wells_.size(); ++i) {
+        wells_[i].write();
+        const std::vector<Fracture>& fractures = well_fractures_[i];
+        for (size_t j = 0; j < fractures.size(); ++j) {
+            fractures[j].write(reportStep);
         }
-
-        ++i;
     }
 }
-
 void
-FractureModel::writemulti(const double time) const
+FractureModel::writemulti(double time) const
 {
-    auto i = std::size_t {0};
-
-    for (const auto& well : this->wells_) {
+    for (size_t i = 0; i < wells_.size(); ++i) {
         if (vtkwritewells_) {
-            well.writemulti(time);
+            wells_[i].writemulti(time);
         }
-
-        for (const auto& fracture : this->well_fractures_[i]) {
-            fracture.writemulti(time);
+        const std::vector<Fracture>& fractures = well_fractures_[i];
+        for (size_t j = 0; j < fractures.size(); ++j) {
+            fractures[j].writemulti(time);
         }
-
-        ++i;
     }
 }
-
+// void FractureModel::solve() {
+//     for(size_t i=0; i < wells_.size(); ++i){
+//         std::vector<Fracture>& fractures = well_fractures_[i];
+//         for(size_t j=0; j < fractures.size(); ++j){
+//             fractures[j].solve(cell_search_tree_);
+//         }
+//     }
+// }
 void
 FractureModel::updateReservoirProperties()
 {
-    for (auto& fractures : this->well_fractures_) {
-        for (auto& fracture : fractures) {
-            fracture.updateReservoirProperties();
+    for (size_t i = 0; i < wells_.size(); ++i) {
+        std::vector<Fracture>& fractures = well_fractures_[i];
+        for (size_t j = 0; j < fractures.size(); ++j) {
+            fractures[j].updateReservoirProperties();
         }
     }
 }
@@ -270,66 +337,62 @@ FractureModel::updateReservoirProperties()
 std::vector<RuntimePerforation>
 FractureModel::getExtraWellIndices(const std::string& wellname) const
 {
-    if (!prm_.get<bool>("addconnections")) {
-        return {};
-    }
-
     // for now just do a search
-    int well_idx = -1;
-    for (std::size_t i = 0; i < wells_.size(); ++i) {
-        if (!wells_[i].isActive()) {
+    bool addconnections = prm_.get<bool>("addconnections");
+    if (addconnections) {
+        int well_idx = -1;
+        for (size_t i = 0; i < wells_.size(); ++i) {
+            if (!wells_[i].isActive()) {
+                if (wells_[i].name() == wellname) {
+                    well_idx = i;
+                }
+                continue;
+            }
             if (wells_[i].name() == wellname) {
                 well_idx = i;
-            }
-            continue;
-        }
-
-        if (wells_[i].name() == wellname) {
-            well_idx = i;
-            // collect all from a well
-            std::vector<RuntimePerforation> wellindices;
-            for (const auto& frac : well_fractures_[i]) {
-                if (!frac.isActive()) {
-                    continue;
+                // collect all from a well
+                std::vector<RuntimePerforation> wellindices;
+                for (const auto& frac : well_fractures_[i]) {
+                    // assert(frac.isActive());
+                    if (!frac.isActive()) {
+                        continue;
+                    }
+                    auto perfs = frac.wellIndices();
+                    wellindices.insert(wellindices.end(), perfs.begin(), perfs.end());
                 }
-                const auto perfs = frac.wellIndices();
-                wellindices.insert(wellindices.end(), perfs.begin(), perfs.end());
+                return wellindices;
             }
-
-            return wellindices;
         }
-    }
-
-    if (false) {
-        std::cout << "Well " << wellname << " not connections added" << std::endl;
-        if (well_idx < -1) {
-            std::cout << "Well not found " << wellname << std::endl;
-        } else {
-            std::cout << "Well " << wellname << " active " << wells_[well_idx].isActive()
-                      << " fractures " << well_fractures_[well_idx].size() << std::endl;
-
-            if (well_fractures_[well_idx].size() > 0) {
-                for (const auto& frac : well_fractures_[well_idx]) {
-                    std::cout << "Fracture " << frac.name() << " active " << frac.isActive()
-                              << std::endl;
+        if (false) {
+            std::cout << "Well " << wellname << " not connections added" << std::endl;
+            if (well_idx < -1) {
+                std::cout << "Well not found " << wellname << std::endl;
+            } else {
+                std::cout << "Well " << wellname << " active " << wells_[well_idx].isActive()
+                          << " fractures " << well_fractures_[well_idx].size() << std::endl;
+                if (well_fractures_[well_idx].size() > 0) {
+                    for (const auto& frac : well_fractures_[well_idx]) {
+                        std::cout << "Fracture " << frac.name() << " active " << frac.isActive()
+                                  << std::endl;
+                    }
                 }
             }
         }
+        // message += wellname;
+        // OPM_THROW(std::runtime_error, message.c_str());
     }
-
     return {};
 }
 
-template <typename Scalar>
+template <typename Scalar,typename IndexTraits>
 void
-FractureModel::assignGeomechWellState(WellState<Scalar>& wellState) const
+FractureModel::assignGeoMechWellState(WellState<Scalar,IndexTraits>& wellState) const
 {
     const auto nWells = this->wells_.size();
     for (auto i = 0 * nWells; i < nWells; ++i) {
         if (!wells_[i].isActive()) {
             continue;
         }
-
         const auto wsIx = wellState.index(this->wells_[i].name());
         if (!wsIx.has_value()) {
             continue;
@@ -340,12 +403,15 @@ FractureModel::assignGeomechWellState(WellState<Scalar>& wellState) const
         if (perfData.connFracStatistics.size() != perfData.cell_index.size()) {
             perfData.connFracStatistics.resize(perfData.cell_index.size());
         }
+        // PerfData leaves fracture_data empty until a fracture model sizes it.
+        if (perfData.fracture_data.area.size() != perfData.cell_index.size()) {
+            perfData.fracture_data.resize(perfData.cell_index.size());
+        }
 
         for (const auto& fracture : this->well_fractures_[i]) {
             if (!fracture.isActive()) {
                 continue;
             }
-
             auto perfPos = std::find(
                 perfData.cell_index.begin(), perfData.cell_index.end(), fracture.wellInfo().well_cell);
             if (perfPos == perfData.cell_index.end()) {
@@ -353,12 +419,11 @@ FractureModel::assignGeomechWellState(WellState<Scalar>& wellState) const
             }
 
             // Possibly just "fracture.wellInfo().perf" instead.
-            const auto perfIx = std::distance(perfData.cell_index.begin(), perfPos);
-            fracture.assignGeomechWellState(perfData.connFracStatistics[perfIx]);
+            //const auto perfIx = std::distance(perfData.cell_index.begin(), perfPos);
+            fracture.assignGeoMechWellState(perfData);//.connFracStatistics[perfIx]);
         }
     }
 }
-
 } // namespace Opm
 
 // ===========================================================================
@@ -385,7 +450,7 @@ Opm::FractureModel::addFracturesPerpWell()
                 fracWell.name(),
                 /* connection index */ elemIdx,
                 /* reservoir cell */ fracWell.reservoirCell(elemIdx),
-                /* global_index */ -1, // dummy for now
+                /*global_index */ -1, // dummy for now
                 /* well segment */ fracWell.segment(elemIdx),
                 /* distance range */ fracWell.perfRange(elemIdx),
                 /* seed origin */ origin,
@@ -425,7 +490,7 @@ Opm::FractureModel::addFracturesTensile()
                 fracWell.name(),
                 /* connection index */ elemIdx,
                 /* reservoir cell */ fracWell.reservoirCell(elemIdx),
-                /* global_index */ -1, // dummy for now
+                /*global_index */ -1, // dummy for now
                 /* well segment */ fracWell.segment(elemIdx),
                 /* distance range */ fracWell.perfRange(elemIdx),
                 /* seed origin */ elem.geometry().corner(1),
@@ -440,14 +505,38 @@ namespace
 std::unordered_map<int, std::size_t>
 localSeedCells(const Opm::FractureWell& fracWell,
                const Opm::WellConnections& conns,
-               const Opm::WellFractureSeeds& seeds)
+               const Opm::WellFractureSeeds& seeds,
+               const Opm::LgrLookup* lgrs)
 {
     auto localSeedIxMap = std::unordered_map<int, std::size_t> {};
 
-    auto connIx = [&fracWell, &conns](const std::size_t seedCellGlobal) {
+    auto connIx = [&fracWell, &conns, lgrs](const std::size_t seedCellGlobal) {
         auto connPos = std::find_if(conns.begin(), conns.end(), [seedCellGlobal](const auto& conn) {
             return conn.global_index() == seedCellGlobal;
         });
+
+        if (connPos == conns.end() && (lgrs != nullptr)) {
+            // WSEED gives a level-zero (global-grid) cell, but connections
+            // completed inside an LGR (COMPDATL) carry LGR-local global
+            // indices, so the exact match above cannot fire.  Match such
+            // connections through their father (parent coarse) cell instead.
+            // Several sub-connections may share the parent; for now seed only
+            // ONE fracture per WSEED record: the middle of the matching
+            // connections (in connection order).
+            auto matches = std::vector<Opm::WellConnections::const_iterator> {};
+            for (auto it = conns.begin(); it != conns.end(); ++it) {
+                if (it->get_lgr_level() <= 0) {
+                    continue;
+                }
+                const auto father = lgrs->father(it->get_lgr_level(), it->global_index());
+                if (father >= 0 && static_cast<std::size_t>(father) == seedCellGlobal) {
+                    matches.push_back(it);
+                }
+            }
+            if (!matches.empty()) {
+                connPos = matches[matches.size() / 2];
+            }
+        }
 
         if (connPos == conns.end()) {
             return -1;
@@ -465,11 +554,11 @@ localSeedCells(const Opm::FractureWell& fracWell,
     }
     return localSeedIxMap;
 }
-
-} // Anonymous namespace
+} // namespace
 
 void
-Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched)
+Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched,
+                                         const LgrLookup* lgrs)
 {
     if (sched.wseed().empty()) {
         return;
@@ -486,7 +575,8 @@ Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched)
 
         const auto& wseed = sched.wseed(fracWell.name());
         const auto localSeeds
-            = localSeedCells(fracWell, sched.wells(fracWell.name()).getConnections(), wseed);
+            = localSeedCells(fracWell, sched.wells(fracWell.name()).getConnections(), wseed,
+                             lgrs);
 
         const auto emap = ElementMapper {fracWell.grid().leafGridView(), Dune::mcmgElementLayout()};
 
@@ -497,37 +587,49 @@ Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched)
                 continue;
             }
 
-            // hack
-            {
-                const auto& seedSize = wseed.getSize(WellFractureSeeds::SeedIndex {seedPos->second});
-
-                this->prm_.put("config.axis_scale", seedSize.verticalExtent());
-                this->prm_.put("config.min_width", seedSize.width());
-            }
-
             const auto& seedNormal = wseed.getNormal(WellFractureSeeds::SeedIndex {seedPos->second});
+
+            const auto& seedSize = wseed.getSize(WellFractureSeeds::SeedIndex {seedPos->second});
 
             const auto normal = Dune::FieldVector<double, 3> {
                 seedNormal[0],
                 seedNormal[1],
                 seedNormal[2],
             };
+            //const auto frac_size = Dune::FieldVector<double, 3> {seedSize[0], seedSize[1], seedSize[2]};
+            const auto frac_size = Dune::FieldVector<double, 3> {seedSize.verticalExtent(),
+                                                                 seedSize.horizontalExtent(),
+                                                                 seedSize.width()};
+            // The DECK is the source of these per-seed quantities: WSEED item 8
+            // (vertical size) sets the seed scale, and WSEED item 10 (WIDTH, the
+            // minimum flow width of the cubic law - default 1e-4 m) sets the
+            // flow-width floor, overriding any config.min_width in the JSON.
+            // config.min_width remains only for standalone/test setups without a
+            // deck WSEED. Note this is distinct from solver.min_width (a
+            // numerical clamp inside the width solve).
+            prm_.put("config.axis_scale", frac_size[0]); // vertical scale
+            prm_.put("config.min_width", frac_size[2]);
+            OpmLog::info("Fracture seed on " + fracWell.name()
+                         + ": flow-width floor (WSEED WIDTH) = "
+                         + std::to_string(frac_size[2]) + " m");
 
             assert(normal.two_norm() > 0.0);
-
-            const auto globalIndex = sched.wells(fracWell.name())
-                .getConnections()[elemIdx].global_index();
-
-            this->well_fractures_[wellIx].emplace_back()
-                .init(fracWell.name(),
-                      /* connection index */ elemIdx,
-                      /* reservoir cell */ seedPos->first,
-                      /* global_index */ static_cast<int>(globalIndex),
-                      /* well segment */ fracWell.segment(elemIdx),
-                      /* distance range */ fracWell.perfRange(elemIdx),
-                      /* seed origin */ elem.geometry().corner(1),
-                      /* fracturing plane's normal vector */ normal,
-                      this->prm_);
+            // Store the WSEED cell's level-zero global index (for non-LGR
+            // wells this equals the connection's own global index, which is
+            // how the seed matched); updateActive() compares against the
+            // WSEED cells, so this keeps activation working for connections
+            // completed inside an LGR too.
+            int globalIndex = static_cast<int>(wseed.seedCells()[seedPos->second]);
+            this->well_fractures_[wellIx].emplace_back().init(
+                fracWell.name(),
+                /* connection index */ elemIdx,
+                /* reservoir cell */ seedPos->first,
+                /*global_index */ globalIndex,
+                /* well segment */ fracWell.segment(elemIdx),
+                /* distance range */ fracWell.perfRange(elemIdx),
+                /* seed origin */ elem.geometry().corner(1),
+                /* fracturing plane's normal vector */ normal,
+                this->prm_);
         }
     }
 }
@@ -536,5 +638,8 @@ Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched)
 // Explicit specialisations.  No other code below separator.
 // ===========================================================================
 
-template void Opm::FractureModel::assignGeomechWellState(WellState<float>&) const;
-template void Opm::FractureModel::assignGeomechWellState(WellState<double>&) const;
+#if FLOW_INSTANTIATE_FLOAT
+template void Opm::FractureModel::assignGeoMechWellState(WellState<float,Fracture::IndexTraits>&) const;
+#endif
+template void Opm::FractureModel::assignGeoMechWellState(WellState<double,Fracture::IndexTraits>&) const;
+Opm::DeferredLogger Opm::FractureModel::fractureLogger = Opm::DeferredLogger();

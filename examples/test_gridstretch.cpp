@@ -1,117 +1,104 @@
-/*
-  Copyright 2025 Equinor ASA.
-
-  This file is part of the Open Porous Media project (OPM).
-
-  OPM is free software: you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  OPM is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
-
-  You should have received a copy of the GNU General Public License
-  along with OPM.  If not, see <http://www.gnu.org/licenses/>.
-*/
-
 #include <config.h>
 
-#include <opm/geomech/GridStretcher.hpp>
+#include "opm/geomech/GridStretcher.hpp"
 
-#include <dune/common/hybridutilities.hh>
-
-#include <dune/grid/common/grid.hh>
-#include <dune/grid/common/partitionset.hh>
+#include <dune/foamgrid/foamgrid.hh>
 #include <dune/grid/io/file/gmshreader.hh>
 #include <dune/grid/io/file/vtk/vtkwriter.hh>
 
+#include "opm/geomech/GridStretcher.hpp"
+#include "opm/geomech/ParamInterior.hpp"
+
+#include <dune/common/hybridutilities.hh>
 #include <dune/foamgrid/foamgrid.hh>
+#include <dune/grid/common/grid.hh>
+#include <dune/grid/common/partitionset.hh>
+#include <dune/grid/io/file/gmshreader.hh>
 #include <dune/istl/matrixmarket.hh>
 
-#include <opm/geomech/param_interior.hpp>
+#include <dune/grid/io/file/vtk/vtkwriter.hh>
 
-#include <algorithm>
-#include <cassert>
-#include <cmath>
-#include <cstddef>
 #include <iostream>
 #include <iterator>
-#include <memory>
-#include <numeric>
 #include <string>
 #include <vector>
 
+using namespace std;
+using namespace Opm;
+
 using Grid = Dune::FoamGrid<2, 3>;
-using CoordType = Opm::GridStretcher::CoordType;
+using CoordType = GridStretcher::CoordType;
+using Dune::VTKWriter;
+using Dune::VTK::nonconforming;
 
 namespace
 {
 
 void
-translate(std::vector<CoordType>& disp, const CoordType& c)
+translate(vector<CoordType>& disp, const CoordType& c)
 {
-    for (auto& e : disp) {
+    for (auto& e : disp)
         e += c;
-    }
 }
-
 void
-uniform_scale(std::vector<CoordType>& disp, const std::vector<CoordType>& bcoords, const double fac)
+uniform_scale(vector<CoordType>& disp, const vector<CoordType>& bcoords, const double fac)
 {
-    for (std::size_t i = 0; i != disp.size(); ++i) {
+    for (size_t i = 0; i != disp.size(); ++i)
         disp[i] += bcoords[i] * (fac - 1);
-    }
 }
 
-} // end anonymous namespace
+}; // end anonymous namespace
+
 
 int
-main([[maybe_unused]] int varnum, char** vararg)
+main(int varnum, char** vararg)
 {
     assert(varnum == 3);
-
-    const auto fname = std::string {vararg[1]};
-    const auto choice = std::stoi(vararg[2]);
+    const int choice = stoi(vararg[2]);
+    string fname(vararg[1]);
     auto grid = Dune::GmshReader<Grid>::read(fname); // unique_ptr
 
-    std::vector<CoordType> coords;
-    for (const auto& vertex : vertices(grid->leafGridView())) {
+    vector<CoordType> coords;
+    for (const auto& vertex : vertices(grid->leafGridView()))
         coords.push_back({vertex.geometry().corner(0)[0],
                           vertex.geometry().corner(0)[1],
                           vertex.geometry().corner(0)[2]});
-    }
 
-    Opm::GridStretcher gs {*grid};
+    GridStretcher gs(*grid);
+    const vector<size_t>& bindices = gs.boundaryNodeIndices();
 
-    const auto& bindices = gs.boundaryNodeIndices();
-
-    std::vector<CoordType> bcoords {};
-    for (const auto& b : bindices) {
+    vector<CoordType> bcoords;
+    for (auto b : bindices)
         bcoords.push_back(coords[b]);
-    }
+
+    // gs.bcentroid_param_mat();
+    // return 0;
 
     switch (choice) {
     case 1:
         // test boundary node displacements
         {
-            std::cout << "Displacement test\n";
-
-            std::vector<CoordType> disp(bindices.size(), {0, 0, 0});
-
+            cout << "Displacement test" << endl;
+            vector<CoordType> disp(bindices.size(), {0, 0, 0});
             translate(disp, {4, 0, 0});
             uniform_scale(disp, bcoords, 1.5);
+            // vector<CoordType> disp(bindices.size(), {0, 0, 0});
+            // disp[19] = {0.1, 0, 0};
+            // disp[20] = {0.2, 0, 0};
+            // disp[21] = {0.3, 0, 0};
+            // disp[22] = {0.4, 0, 0};
 
             gs.applyBoundaryNodeDisplacements(disp);
+            break;
         }
-        break;
-
     case 2:
         // test expansion
         {
-            std::cout << "Expanding test\n";
+            cout << "Expanding test" << endl;
+            // std::vector<double> amounts(bindices.size(), 0.05);
+            // amounts[4] = 0.4;
+            // amounts[5] = 0.3;
+            // amounts[10] = -0.1;
 
             std::vector<double> amounts(bindices.size(), 0);
             amounts[0] = 0.05;
@@ -124,39 +111,38 @@ main([[maybe_unused]] int varnum, char** vararg)
             amounts[22] = 0.2;
 
             gs.expandBoundaryCells(amounts);
+            break;
         }
-        break;
-
     case 3:
         // test gradient
         {
-            std::vector<double> grad {};
-            std::vector<double> disp(gs.boundaryNodeIndices().size(), 0);
-
-            auto target = gs.centroidEdgeDist();
-            std::transform(
-                target.begin(), target.end(), target.begin(), [](const double ti) { return ti * 2; });
-
+            vector<double> grad;
+            // vector<double> disp(gs.boundaryNodeIndices().size(), 1);
+            vector<double> disp(gs.boundaryNodeIndices().size(), 0);
+            // disp[0] = 1;
+            // disp[10] = 2;
+            vector<double> target(gs.centroidEdgeDist());
+            // target[0] *= 2;
+            for (int i = 0; i != target.size(); ++i)
+                target[i] *= 2;
             const double obj = gs.objective(disp, target, grad, false);
-
-            std::cout << "Objective value: " << obj << '\n';
-            std::cout << "Analytical gradient: ";
-            std::copy(grad.begin(), grad.end(), std::ostream_iterator<double>(std::cout, " "));
-            std::cout << '\n';
+            cout << "Objective value: " << obj << endl;
+            cout << "Analytical gradient: ";
+            copy(grad.begin(), grad.end(), ostream_iterator<double>(cout, " "));
+            cout << endl;
 
             // computing numerical gradient
-            const double delta = 1e-6;
-
-            std::vector<double> grad_dummy {};
-            for (auto i = 0 * disp.size(); i != disp.size(); ++i) {
-                auto dispDelta = disp;
+            double delta = 1e-6;
+            vector<double> grad_dummy;
+            for (int i = 0; i != disp.size(); ++i) {
+                vector<double> dispDelta = disp;
                 dispDelta[i] += delta;
-
-                const double obj2 = gs.objective(dispDelta, target, grad_dummy, false);
-                std::cout << (obj2 - obj) / delta << " " << grad[i] << '\n';
+                double obj2 = gs.objective(dispDelta, target, grad_dummy, false);
+                cout << (obj2 - obj) / delta << " " << grad[i] << endl;
+                ;
+                // cout << i << " : " << (obj2-obj) / delta << endl;
             }
-
-            std::cout << std::endl;
+            cout << endl;
 
             return 0;
         }
@@ -164,73 +150,71 @@ main([[maybe_unused]] int varnum, char** vararg)
     case 4: // test optimization
     {
         bool fixed_centroids = true;
-
-        const auto normals = gs.bnodenormals();
-        auto target = gs.centroidEdgeDist();
-
+        const auto normals(gs.bnodenormals());
+        vector<double> target(gs.centroidEdgeDist());
+        // for (size_t i = 0; i != target.size(); ++i) target[i] *= 1.1;
         const double dispfac = 3;
         target[0] *= dispfac;
         target[7] *= dispfac;
         target[17] *= dispfac;
         target[11] *= dispfac;
+        // target[5] *= dispfac;
+        // target[14] *= dispfac;
+        // target[4] *= dispfac;
 
-        std::vector<double> disp(normals.size(), 0);
-        std::vector<double> grad;
+        vector<double> disp(normals.size(), 0);
+        vector<double> grad;
 
         double delta = 1;
-        const double fac = 2;
+        double fac = 2;
 
-        auto objprev = gs.objective(disp, target, grad, fixed_centroids);
-
+        double objprev = gs.objective(disp, target, grad, fixed_centroids);
         const int MAX_ITER = 100;
         const double tol = 1e-5;
-        for (auto i = 0 * MAX_ITER; i != MAX_ITER; ++i) {
-            const auto disp_backup = disp;
-            const auto grad_backup = grad;
+        for (size_t i = 0; i != MAX_ITER; ++i) {
+
+            const auto disp_backup(disp);
+            const auto grad_backup(grad);
 
             // compute norm of gradient
-            auto gradnorm
-                = std::accumulate(grad.begin(), grad.end(), 0.0, [](const double acc, const double gi) {
-                      return acc + (gi * gi);
-                  });
-            gradnorm = std::sqrt(gradnorm);
+            double gradnorm = 0;
+            for (size_t j = 0; j != grad.size(); ++j)
+                gradnorm += grad[j] * grad[j];
+            gradnorm = sqrt(gradnorm);
 
             // compute steplength
-            const double alpha = delta / gradnorm;
+            double alpha = delta / gradnorm;
 
             // modify disp
 
-            for (auto j = 0 * disp.size(); j != disp.size(); ++j) {
+            for (size_t j = 0; j != disp.size(); ++j) {
                 disp[j] -= alpha * grad[j];
                 disp[j] = std::max(disp[j], 0.0);
             }
 
-            auto obj = gs.objective(disp, target, grad, fixed_centroids);
+            double obj = gs.objective(disp, target, grad, fixed_centroids);
 
-            if (std::abs(obj - objprev) / obj < tol) {
+            if (fabs(obj - objprev) / obj < tol)
                 break;
-            }
+
 
             if (obj < objprev) {
                 delta *= fac;
                 objprev = obj;
-                std::cout << i << " : " << obj << '\n';
+                cout << i << " : " << obj << endl;
             } else {
                 // reset disp and grad, retry with smaller delta
                 disp = disp_backup;
                 grad = grad_backup;
                 delta /= fac;
                 obj = objprev;
-                --i;
+                i--;
             }
         }
-
         // compute the deformed grid geometry
-        std::vector<CoordType> mov {};
-        mov.reserve(disp.size());
-        for (auto i = 0 * disp.size(); i != disp.size(); ++i) {
+        vector<CoordType> mov;
+        for (size_t i = 0; i != disp.size(); ++i)
             mov.push_back(normals[i] * disp[i]);
-        }
 
         gs.applyBoundaryNodeDisplacements(mov);
 
@@ -238,12 +222,12 @@ main([[maybe_unused]] int varnum, char** vararg)
     }
 
     default:
-        std::cout << "Choice was not provided.  Must be 1 (displacement) or 2 (expansion).\n";
+        cout << "Choice was not provided.  Must be 1 (displacement) or 2 (expansion).\n";
         return 1;
     }
 
-    auto vtkwriter = Dune::VTKWriter {grid->leafGridView(), Dune::VTK::nonconforming};
-    vtkwriter.write("transformed");
+    auto vtkwriter = make_unique<VTKWriter<Grid::LeafGridView>>(grid->leafGridView(), nonconforming);
+    vtkwriter->write("transformed");
 
     return 0;
-}
+};

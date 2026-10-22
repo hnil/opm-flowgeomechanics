@@ -1,95 +1,149 @@
-/*
-  Copyright 2025 Equinor ASA.
-
-  This file is part of the Open Porous Media project (OPM).
-
-  OPM is free software: you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  OPM is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
-
-  You should have received a copy of the GNU General Public License
-  along with OPM.  If not, see <http://www.gnu.org/licenses/>.
-*/
-
 #ifndef VEM_UTILS_HPP
 #define VEM_UTILS_HPP
 
-#include <opm/grid/CpGrid.hpp>
+#include <array>
+#include <tuple>
+#include <vector>
 #include <opm/grid/polyhedralgrid.hh>
-
+#include <opm/grid/CpGrid.hpp>
 #ifdef HAVE_ALUGRID
 #include <dune/alugrid/grid.hh>
 #endif
-
-#include <opm/geomech/boundaryutils.hh>
-
-#include <array>
-#include <vector>
-
+#include <opm/geomech/BoundaryUtils.hpp>
+#include <opm/geomech/vem/vem.hpp>
 namespace vem
 {
-using PolyGrid = Dune::PolyhedralGrid<3, 3>;
-
-#ifdef HAVE_ALUGRID
-using AluGrid3D = Dune::ALUGrid<3, 3, Dune::cube, Dune::nonconforming>;
-#endif
-
-void getGridVectors(const PolyGrid& grid,
-                    std::vector<double>& coords,
-                    std::vector<int>& num_cell_faces,
-                    std::vector<int>& num_face_corners,
-                    std::vector<int>& face_corners);
-
-void getGridVectorsDune(const PolyGrid& grid,
-                        std::vector<double>& coords,
+    using PolyGrid = Dune::PolyhedralGrid<3, 3>;
+    #ifdef HAVE_ALUGRID
+    using AluGrid3D = Dune::ALUGrid<3, 3, Dune::cube, Dune::nonconforming >;
+    #endif
+    void getGridVectors(const PolyGrid& grid, std::vector<double>& coords,
                         std::vector<int>& num_cell_faces,
                         std::vector<int>& num_face_corners,
                         std::vector<int>& face_corners);
 
-template <class GridType>
-void
-getGridVectors(const GridType& grid,
-               std::vector<double>& coords,
-               std::vector<int>& num_cell_faces,
-               std::vector<int>& num_face_corners,
-               std::vector<int>& face_corners)
+    void getGridVectorsDune(const PolyGrid& grid, std::vector<double>& coords,
+                            std::vector<int>& num_cell_faces,
+                            std::vector<int>& num_face_corners,
+                            std::vector<int>& face_corners);
+
+    template<class GridType>
+    void getGridVectors(const GridType& grid, std::vector<double>& coords,
+                std::vector<int>& num_cell_faces,
+                std::vector<int>& num_face_corners,
+                std::vector<int>& face_corners)
 {
-    static constexpr int dim = GridType::dimension;
+   static constexpr int dim = GridType::dimension;
+    using namespace std;
+    using namespace Dune;
     const auto& gv = grid.leafGridView();
 
-    for (const auto& v : vertices(gv)) {
-        const auto c = v.geometry().corner(0);
-        coords.insert(coords.end(), c.begin(), c.end());
-    }
+  for (const auto& v : vertices(gv)) {
+    const auto c = v.geometry().corner(0);
+    coords.insert(coords.end(), c.begin(), c.end());
+  }
 
-    for (const auto& cell : elements(gv)) {
-        num_cell_faces.push_back(6);
-
-        for (int i = 0; i < 6; ++i) {
-            const auto faceDir = Opm::Elasticity::faceToFaceDir(i);
-            const auto nodes = Opm::Elasticity::faceDirToNodes(faceDir);
-            num_face_corners.push_back(nodes.size());
-
-            for (const auto& nind : nodes) {
-                const auto global_ind = gv.indexSet().subIndex(cell, nind, dim);
-                face_corners.push_back(global_ind);
-            }
-        }
-    }
+  for (const auto& cell : elements(gv)){
+      num_cell_faces.push_back(6);
+      for(int i = 0; i < 6; ++i){
+          auto faceDir = Opm::Elasticity::faceToFaceDir(i);
+          std::array<int,4> nodes = Opm::Elasticity::faceDirToNodes(faceDir);
+          num_face_corners.push_back(nodes.size());
+          for(auto nind: nodes){
+              auto global_ind = gv.indexSet().subIndex(cell,nind,dim);
+              face_corners.push_back(global_ind);
+          }
+      }
+  }
 }
 
-void getGridVectors(const Dune::CpGrid& grid,
-                    std::vector<double>& coords,
-                    std::vector<int>& num_cell_faces,
-                    std::vector<int>& num_face_corners,
-                    std::vector<int>& face_corners);
 
-} // namespace vem
+// corner_mask (optional): per face_corners entry, whether the node is one of the face's grid
+// corners rather than a node inserted on an edge for edge conformity
+void getGridVectors(const Dune::CpGrid& grid, std::vector<double>& coords,
+                       std::vector<int>& num_cell_faces,
+                       std::vector<int>& num_face_corners,
+                       std::vector<int>& face_corners,
+                       std::vector<char>* corner_mask = nullptr);
+  int assemble_mech_system_3D_dune(const Dune::CpGrid& grid, const double* const points,
+                        const int num_cells,
+                        const int* const num_cell_faces, // cell faces per cell
+                        const int* const num_face_corners, // corners per face
+                        const int* const face_corners,
+                        const double* const young,
+                        const double* const poisson,
+                        const double* const body_force, // 3 * number of cells
+                        const int num_fixed_dofs, // dirichlet
+                        const int* const fixed_dof_ixs, // indices must be sorted
+                        const double* const fixed_dof_values,
+                        const int num_neumann_faces,
+                        const int* const neumann_faces,
+                        const double* const neumann_forces, // 3 * number of neumann faces
+                        std::vector<std::tuple<int, int, double>>& A_entries,
+                        std::vector<double>& b,
+                             const vem::StabilityChoice stability_choice,
+                             bool reduce_boundary,
+                             const char* const corner_mask = nullptr);
 
-#endif // VEM_UTILS_HPP
+void
+potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const points,
+                            const int num_cells,
+                            const int* const num_cell_faces, // cell faces per cell
+                            const int* const num_face_corners, // corners per cellface
+                            const int* const face_corners,
+                            const double* const field,
+                                 std::vector<double>& fgrad,
+                                 std::vector<std::tuple<int, int, double>>& div,
+                                 bool get_matrix,
+                                 const char* const corner_mask = nullptr);
+
+Dune::BlockVector<Dune::FieldVector<double,1>> smoothCellVector(const Dune::CpGrid& grid,const Dune::BlockVector<Dune::FieldVector<double,1>>& cell_vector);
+
+/// Smooth a cell field over a *physical* length scale (meters), independent of the
+/// grid resolution: solves the Helmholtz filter equation
+///     (V + length^2 * L) u = V * u0,
+/// where L is the TPFA Laplacian (face area / center distance) with no-flux
+/// boundaries.  The kernel decays exponentially with decay length `length`, and the
+/// volume integral of the field is conserved.  This is the appropriate
+/// regularization for under-resolved fronts (e.g. cell-wise constant temperature
+/// or pressure jumps), where one-ring smoothing (`smoothCellVector`) has a
+/// grid-dependent smoothing radius.  In parallel the equation is solved with
+/// explicit sub-steps and per-step owner-to-all communication.
+Dune::BlockVector<Dune::FieldVector<double,1>>
+diffuseCellVector(const Dune::CpGrid& grid,
+                  const Dune::BlockVector<Dune::FieldVector<double,1>>& cell_vector,
+                  double length);
+
+/// Patch recovery: given per-cell scalar values, perform least-squares
+/// approximation to nodes and then interpolate back to cells.
+/// A linear field (f = a + b*x + c*y + d*z) is reproduced exactly.
+Dune::BlockVector<Dune::FieldVector<double,1>>
+patchRecovery(const Dune::CpGrid& grid,
+              const Dune::BlockVector<Dune::FieldVector<double,1>>& cell_values);
+
+/// As patchRecovery, but for 6-component fields (e.g. Voigt stress) and returning
+/// the recovered *nodal* values (indexed by grid vertex index) instead of cell
+/// averages.  All components share the same least-squares fit (the normal matrix
+/// is factorized once per node).  Linear fields are reproduced exactly at the
+/// nodes, also for high-aspect-ratio cells.  Use together with trilinear
+/// interpolation to evaluate a continuous stress field at arbitrary points
+/// (e.g. fracture cell centroids), avoiding the cell-to-cell jumps of the raw
+/// piecewise-constant stress.
+std::vector<Dune::FieldVector<double,6>>
+patchRecoveryNodal6(const Dune::CpGrid& grid,
+                    const Dune::BlockVector<Dune::FieldVector<double,6>>& cell_values);
+
+/// Cell-averaged version of patchRecoveryNodal6: smoothed cell stress obtained by
+/// averaging the recovered nodal values over each cell's corners.
+Dune::BlockVector<Dune::FieldVector<double,6>>
+patchRecoveryCells6(const Dune::CpGrid& grid,
+                    const Dune::BlockVector<Dune::FieldVector<double,6>>& cell_values);
+
+Dune::BlockVector<Dune::FieldVector<double,6>>  computeStressFem(const Dune::CpGrid& grid,
+                                                                const Dune::BlockVector<Dune::FieldVector<double,1>>& disp,
+                                                                const std::vector <double>& young,
+                                                                const std::vector <double>& poisson);
+                 
+  
+}
+#endif

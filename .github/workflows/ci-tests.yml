@@ -1,0 +1,106 @@
+name: CI Tests
+
+on:
+  push:
+    branches: [master, geomech_hypre_cgal]
+  pull_request:
+    branches: [master, geomech_hypre_cgal]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+
+env:
+  # Allow MPI to run more processes than physical cores (required for
+  # parallel tests that request e.g. 8 MPI ranks on a 2-4 core runner).
+  OMPI_MCA_rmaps_base_oversubscribe: "1"
+  OMPI_ALLOW_RUN_AS_ROOT: "1"
+  OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: "1"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: ci-tests-${{ runner.os }}
+
+      - name: Install OPM build dependencies
+        uses: ./.github/actions/install-opm-dependencies
+
+      - name: Configure opm-flowgeomechanics
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DMPIEXEC_MAX_NUMPROCS=16
+
+      - name: Build opm-flowgeomechanics
+        run: cmake --build build -j $(nproc)
+
+      - name: Run tests
+        id: tests
+        working-directory: build
+        run: |
+          ctest \
+            --parallel $(nproc) \
+            --output-on-failure \
+            --output-junit test-results.xml \
+            --test-output-size-passed 65536 \
+            --test-output-size-failed 65536
+
+      - name: Publish test summary
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: build/test-results.xml
+          check_name: "CTest Results"
+          comment_mode: off
+
+      - name: Generate summary
+        if: always()
+        working-directory: build
+        run: |
+          echo "## Test Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f test-results.xml ]; then
+            TOTAL=$(grep -o 'tests="[0-9]*"' test-results.xml | head -1 | grep -o '[0-9]*' || echo "0")
+            FAILURES=$(grep -o 'failures="[0-9]*"' test-results.xml | head -1 | grep -o '[0-9]*' || echo "0")
+            DISABLED=$(grep -o 'disabled="[0-9]*"' test-results.xml | head -1 | grep -o '[0-9]*' || echo "0")
+            TOTAL=${TOTAL:-0}
+            FAILURES=${FAILURES:-0}
+            DISABLED=${DISABLED:-0}
+            PASSED=$((TOTAL - FAILURES - DISABLED))
+            echo "| Metric | Count |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|--------|-------|" >> "$GITHUB_STEP_SUMMARY"
+            echo "| ✅ Passed | ${PASSED} |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| ❌ Failed | ${FAILURES} |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| ⏭ Disabled | ${DISABLED} |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| **Total** | **${TOTAL}** |" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            if [ "${FAILURES}" -gt 0 ] 2>/dev/null; then
+              echo "### Failed Tests" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              grep 'name=.*status="fail"' test-results.xml \
+                | sed 's/.*name="\([^"]*\)".*/\1/' >> "$GITHUB_STEP_SUMMARY" || true
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            echo "⚠️ No test results file found." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: build/test-results.xml
+          retention-days: 30
