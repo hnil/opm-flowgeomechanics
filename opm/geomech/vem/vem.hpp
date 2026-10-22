@@ -21,6 +21,11 @@ namespace vem
                         // per coordinate direction d (anisotropic generalization of HARMONIC)
     FEM_BBAR = 10,  // as FEM, but Q1 with B-bar (mean dilatation) to reduce volumetric
                     // locking; VEM with ANISO_DIAG fallback on non-hex cells
+    // As D_RECIPE / ANISO_HARMONIC / SIMPLE, with each node's term scaled by its share of
+    // the cell boundary (1 on a regular hex): softer on hanging nodes of refined faces.
+    FACE_D_RECIPE = 11,
+    FACE_ANISO_HARMONIC = 12,
+    FACE_SIMPLE = 13,
     TRACE = 14,     // mu-scaled boundary (trace) term: robust to short edges and small faces
     SMOOTH_HOURGLASS = 15 // hexes: energy of the smooth (Q1 + bubble) field, exact in bending/twist
                           // at any aspect; TRACE on the extra nodes of polyhedra and as fallback
@@ -34,6 +39,7 @@ namespace vem
   constexpr int STABILITY_CHOICE_MAX = 15;
   // true for choices that request Q1 FEM assembly on cells where it is applicable
   inline bool is_fem_choice(StabilityChoice c) { return c == FEM || c == FEM_BBAR; }
+  inline bool is_face_weighted_choice(StabilityChoice c) { return c >= FACE_D_RECIPE && c <= FACE_SIMPLE; }
   
 // ============================================================================
 // == Main functions for computing element stiffness matrices and assembling ==

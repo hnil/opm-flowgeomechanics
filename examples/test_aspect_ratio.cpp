@@ -190,6 +190,9 @@ const std::vector<std::pair<vem::StabilityChoice, std::string>> variants
        {vem::ANISO_HARMONIC, "ANISO_HARM"},
        {vem::FEM, "FEM"},
        {vem::FEM_BBAR, "FEM_BBAR"},
+       {vem::FACE_D_RECIPE, "FACE_D_REC"},
+       {vem::FACE_ANISO_HARMONIC, "FACE_ANISO"},
+       {vem::FACE_SIMPLE, "FACE_SIMPLE"},
        {vem::TRACE, "TRACE"},
        {vem::SMOOTH_HOURGLASS, "SMOOTH_HG"}};
 

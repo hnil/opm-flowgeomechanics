@@ -695,12 +695,36 @@ compute_S_aniso(const std::vector<double>& EWcDWct,
 
 std::vector<double> getStabilityMatrix(vem::StabilityChoice stability_choice,const std::vector<double>&  EWcDWct,const std::vector<double>& Nc,const std::vector<double>& D,
                                        const std::vector<double>& corners,
-                                       int num_nodes,double volume,int  dim,double totdim){
+                                       int num_nodes,double volume,int  dim,double totdim,
+                                       const std::vector<double>& node_weights = {}){
     std::vector<double> S;
     // FEM choices reaching this point means the cell could not be treated with Q1
     // elements; use the anisotropic diagonal stabilization for the VEM fallback.
     if(is_fem_choice(stability_choice)){
         stability_choice = ANISO_DIAG;
+    }
+    if (is_face_weighted_choice(stability_choice)) {
+        const auto base = stability_choice == FACE_D_RECIPE ? D_RECIPE
+            : stability_choice == FACE_ANISO_HARMONIC       ? ANISO_HARMONIC
+                                                            : SIMPLE;
+        const bool weighted = int(node_weights.size()) == num_nodes;
+        if (base == D_RECIPE) {
+            // only the isotropic floor is rescaled; the consistency diagonal is already area-weighted
+            S = compute_S_D_recipe(EWcDWct, totdim, volume);
+            const double val = trace(D) / 9.0 * cbrt(volume);
+            for (int i = 0; i != totdim; ++i) {
+                const double w = weighted ? node_weights[i / dim] : 1.0;
+                S[i + totdim * i] = max(w * val, S[i + totdim * i]);
+            }
+            return S;
+        }
+        S = getStabilityMatrix(base, EWcDWct, Nc, D, corners, num_nodes, volume, dim, totdim);
+        if (weighted) {
+            for (int a = 0; a != totdim; ++a)
+                for (int b = 0; b != totdim; ++b)
+                    S[a + totdim * b] *= sqrt(node_weights[a / dim] * node_weights[b / dim]);
+        }
+        return S;
     }
     if (stability_choice == TRACE || stability_choice == SMOOTH_HOURGLASS)
         throw logic_error("TRACE/SMOOTH_HOURGLASS stabilization needs the face data");
@@ -876,7 +900,8 @@ final_assembly(const vector<double>& Wc,
                const double num_nodes,
                const double dim,
                double* target,
-               const vector<double>* S_given = nullptr)
+               const vector<double>* S_given = nullptr,
+               const vector<double>& node_weights = {})
 // ----------------------------------------------------------------------------
 {
     assert(dim == 2 || dim == 3);
@@ -888,7 +913,7 @@ final_assembly(const vector<double>& Wc,
     const auto EWcDWct = matmul(&Wc[0], totdim, lsdim, false, &DWct[0], lsdim, totdim, false, volume);
 
     std::vector<double> S = S_given ? *S_given
-        : getStabilityMatrix(stability_choice, EWcDWct, Nc, D, corners, num_nodes, volume, dim, totdim);
+        : getStabilityMatrix(stability_choice, EWcDWct, Nc, D, corners, num_nodes, volume, dim, totdim, node_weights);
     
     // const auto S = stability_choice == D_RECIPE
     //     ? compute_S_D_recipe(EWcDWct, totdim, volume)
@@ -1319,6 +1344,33 @@ fan_volume(const double* const corners,
         }
     }
     return vol;
+}
+
+// ----------------------------------------------------------------------------
+// Each node's share of the cell boundary, int_dE phi_i, normalised to mean one.
+vector<double>
+compute_boundary_weights_3D(const double* const corners,
+                            const int num_corners,
+                            const int* const faces,
+                            const int* const num_face_edges,
+                            const int num_faces)
+// ----------------------------------------------------------------------------
+{
+    vector<double> result(num_corners, 0);
+    int cur_vertex_ix = 0;
+    for (int f = 0; f != num_faces; ++f) {
+        const auto facecorners = pick_points<3>(corners, &faces[cur_vertex_ix], num_face_edges[f]);
+        vector<double> cvals(num_face_edges[f], 0);
+        for (int e = 0; e != num_face_edges[f]; ++e, ++cur_vertex_ix) {
+            fill(cvals.begin(), cvals.end(), 0);
+            cvals[e] = 1;
+            result[faces[cur_vertex_ix]] += face_integral(&facecorners[0], num_face_edges[f], 3, &cvals[0]);
+        }
+    }
+    const double mean = accumulate(result.begin(), result.end(), 0.0) / num_corners;
+    for (auto& w : result)
+        w /= mean;
+    return result;
 }
 
 // ----------------------------------------------------------------------------
@@ -3497,7 +3549,11 @@ assemble_stiffness_matrix_3D(const double* const points,
         final_assembly(Wc, D, Nc, ImP, corners_loc, stability_choice, volume, num_corners, 3, &target[0], &S);
         return;
     }
-    final_assembly(Wc, D, Nc, ImP, corners_loc, stability_choice, volume, num_corners, 3, &target[0]);
+    const auto node_weights = is_face_weighted_choice(stability_choice)
+        ? compute_boundary_weights_3D(&corners_loc[0], num_corners, &faces_loc[0], num_face_edges, num_faces)
+        : vector<double>{};
+    final_assembly(Wc, D, Nc, ImP, corners_loc, stability_choice, volume, num_corners, 3, &target[0], nullptr,
+                   node_weights);
 }
 
 void
