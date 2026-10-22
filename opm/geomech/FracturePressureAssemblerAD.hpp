@@ -1,7 +1,5 @@
 /*
-  Copyright 2015, 2020 SINTEF Digital, Mathematics and Cybernetics.
-  Copyright 2015 IRIS AS
-  Copyright 2015 NTNU
+  Copyright 2026 Equinor ASA.
 
   This file is part of the Open Porous Media project (OPM).
 
