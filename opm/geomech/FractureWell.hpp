@@ -19,6 +19,8 @@
 
 #pragma once
 
+#include <opm/geomech/FractureConnectionId.hpp>
+
 #include <dune/common/fvector.hh>
 
 #include <dune/grid/io/file/vtk/vtkwriter.hh>
@@ -53,6 +55,7 @@ public:
     struct Connection
     {
         int cell{};
+        FractureConnectionId identity{};
         int segment{};
         std::optional<std::pair<double, double>> perf_range{};
     };
@@ -100,6 +103,17 @@ public:
     void writemulti(double time) const;
     void resetWriters();
     int reservoirCell(int wellcell) const { return this->conns_[wellcell].cell; }
+    const FractureConnectionId& connectionIdentity(int wellcell) const
+    { return conns_[wellcell].identity; }
+    int reservoirCellForConnection(const FractureConnectionId& identity) const
+    {
+        for (const auto& connection : conns_) {
+            if (connection.identity == identity) {
+                return connection.cell;
+            }
+        }
+        return -1; // Completion belongs to another rank, or is absent.
+    }
     int segment(const int wellcell) const { return this->conns_[wellcell].segment; }
     decltype(auto) perfRange(const int wellcell) const { return this->conns_[wellcell].perf_range; }
     const Dune::FieldVector<double,6>& reservoirStress(int wellcell) const { return this->reservoir_stress_[wellcell]; }

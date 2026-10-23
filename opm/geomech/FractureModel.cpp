@@ -437,7 +437,8 @@ Opm::FractureModel::addFracturesPerpWell()
                 /* distance range */ fracWell.perfRange(elemIdx),
                 /* seed origin */ origin,
                 /* fracturing plane's normal vector */ normal,
-                this->prm_);
+                this->prm_,
+                fracWell.connectionIdentity(elemIdx));
         }
     }
 }
@@ -477,7 +478,8 @@ Opm::FractureModel::addFracturesTensile()
                 /* distance range */ fracWell.perfRange(elemIdx),
                 /* seed origin */ elem.geometry().corner(1),
                 /* fracturing plane's normal vector */ normal,
-                this->prm_);
+                this->prm_,
+                fracWell.connectionIdentity(elemIdx));
         }
     }
 }
@@ -494,7 +496,7 @@ localSeedCells(const Opm::FractureWell& fracWell,
 
     auto connIx = [&fracWell, &conns, lgrs](const std::size_t seedCellGlobal) {
         auto connPos = std::find_if(conns.begin(), conns.end(), [seedCellGlobal](const auto& conn) {
-            return conn.global_index() == seedCellGlobal;
+            return conn.get_lgr_level() == 0 && conn.global_index() == seedCellGlobal;
         });
 
         if (connPos == conns.end() && (lgrs != nullptr)) {
@@ -524,7 +526,8 @@ localSeedCells(const Opm::FractureWell& fracWell,
             return -1;
         }
 
-        return fracWell.reservoirCell(std::distance(conns.begin(), connPos));
+        return fracWell.reservoirCellForConnection(
+            {connPos->global_index(), connPos->get_lgr_level()});
     };
 
     const auto& cells = seeds.seedCells();
@@ -610,7 +613,8 @@ Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched,
                 /* distance range */ fracWell.perfRange(elemIdx),
                 /* seed origin */ elem.geometry().corner(1),
                 /* fracturing plane's normal vector */ normal,
-                this->prm_);
+                this->prm_,
+                fracWell.connectionIdentity(elemIdx));
         }
     }
 }
