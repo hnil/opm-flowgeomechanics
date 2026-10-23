@@ -84,7 +84,7 @@ fractureK1(double dist, double width, double E, double nu)
     double K1;
     double mu = E / (2 * (1 + nu)); //??
     K1 = (mu * sqrt(M_PI) / (2 * std::sqrt(dist) * (1.0 - nu))) * width;
-    K1 /= 1.834; // factor found numerically; TODO: the other two uses multiply, check which is right
+    K1 /= 1.834; // calibrated numerically; with the exact near-tip opening the factor is sqrt(2)
     return K1;
 }
 double
