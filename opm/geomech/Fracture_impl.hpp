@@ -638,7 +638,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             it += 1;
             double tol = prm_.get<double>("solver.max_change");
             double max_change = 0;
-            for (int i = 0; fracture_width_.size(); ++i) {
+            for (std::size_t i = 0; i < fracture_width_.size(); ++i) {
                 double diff_width = fracture_width_[i] - fracture_width[i];
                 double diff_press = fracture_pressure_[i] - fracture_pressure[i];
                 max_change = std::max(max_change, diff_width / 1e-2);
@@ -662,7 +662,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         if (numWellEquations() > 0) // assumes a single well equation
             fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
 
-        const double tol = prm_.get<int>("solver.tolerance");
+        const double tol = prm_.get<double>("solver.tolerance");
         const int max_iter = prm_.get<int>("solver.max_iter");
         int iter = 0;
 
