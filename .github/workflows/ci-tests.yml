@@ -2,9 +2,9 @@ name: CI Tests
 
 on:
   push:
-    branches: [master, geomech_hypre_cgal]
+    branches: [geomech, main]
   pull_request:
-    branches: [master, geomech_hypre_cgal]
+    branches: [geomech, main]
   workflow_dispatch:
 
 permissions:
