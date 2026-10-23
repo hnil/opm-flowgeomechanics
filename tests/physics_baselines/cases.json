@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "description": "Smoke acceptance bands from the October 2026 Linux setup and GETTING_STARTED.md, not a mesh-convergence or conservation claim. Geometry uses the last PVD timestamp, currently day 101, separately from the day-106 summary.",
+  "common": {
+    "well": "B-3H",
+    "fracture_parameters": "data/best_practice/seq_implicit_fb_robust_v2.json",
+    "mechanics_solver": "data/amgmechsolverhypre_geosxcpu_new_nv.json",
+    "expected_final_day": 106,
+    "max_geometry_lag_days": 5.000001,
+    "minimum_area_growth_ratio": 10
+  },
+  "cases": {
+    "simple": {
+      "deck": "data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SHOWCASE.DATA",
+      "mpi_ranks": 1,
+      "bands": {
+        "bhp_bar": [218.7, 223.3],
+        "injection_m3_per_day": [19999, 20001],
+        "fracture_flow_fraction": [0.95, 0.98],
+        "total_injected_m3": [2119900, 2120100],
+        "fracture_area_m2": [11344, 12046],
+        "fracture_open_area_m2": [10900, 12046],
+        "fracture_volume_m3": [278, 309]
+      },
+      "known_warnings": ["unsupported_keywords"]
+    },
+    "wellref": {
+      "deck": "data/wellref/SIMPLE_MECH_FRAC_WELLREF.DATA",
+      "mpi_ranks": 4,
+      "bands": {
+        "bhp_bar": [217.5, 222.0],
+        "injection_m3_per_day": [19999, 20001],
+        "fracture_flow_fraction": [0.985, 1.001],
+        "total_injected_m3": [2119900, 2120100],
+        "fracture_area_m2": [10750, 11420],
+        "fracture_open_area_m2": [10450, 11420],
+        "fracture_volume_m3": [210, 233]
+      },
+      "known_warnings": ["missing_connection", "mechanical_bc", "unsupported_keywords", "refined_summary", "lgr_well_averages"]
+    }
+  }
+}
