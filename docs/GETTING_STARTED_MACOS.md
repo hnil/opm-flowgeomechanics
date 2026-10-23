@@ -5,11 +5,19 @@ fracture growth from injection wells. This note gets you from nothing to a run y
 at: build the right branches, run the small SIMPLE model, check and plot the result.
 For Ubuntu see [GETTING_STARTED.md](GETTING_STARTED.md).
 
-Current line: branch **`lgr-status-geomech`** in all five repositories on
-`github.com/hnil`. It is upstream OPM master (13 Oct 2026) plus the LGR work (both LGR
-implementations behind `--lgr-backend`) and the geomechanics work. Geomechanics always runs
-on **edge-conformal** grids with the **conforming** LGR backend; `flow_energy_geomech` sets
-both by default and stops if you override them.
+Current collaboration line: branch **`geomech`** in all five repositories on
+`github.com/hnil`. Use these branches explicitly; the fork defaults may still point
+to another branch. The older `lgr-status-geomech` branches contain experimental
+grid work and are not the starting point for new development.
+
+This five-branch matrix matches the current CI dependency action. An earlier
+announcement specified `OPM/opm-upscaling:master`; that is a different revision,
+not an alias for `hnil/opm-upscaling:geomech`.
+
+As checked on 23 October 2026, `OPM/opm-flowgeomechanics` has no published
+`geomech` branch. Until the maintainers create it, use
+`hnil/opm-flowgeomechanics:geomech` as the collaboration base. Develop in your own
+fork and verify the target branch exists before opening a PR.
 
 ## 1. Build (macOS)
 
@@ -43,7 +51,7 @@ for m in dune-common dune-geometry dune-grid dune-istl dune-localfunctions dune-
   cmake -S $m -B build-$m -G Ninja -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=$DUNE -DCMAKE_PREFIX_PATH="$DUNE;/opt/homebrew" \
     -DDUNE_ENABLE_PYTHONBINDINGS=OFF -DDUNE_PYTHON_USE_VENV=OFF
-  cmake --build build-$m -j 8 && cmake --install build-$m
+  cmake --build build-$m -j 1 && cmake --install build-$m
 done
 ```
 
@@ -54,7 +62,7 @@ A few minutes. Put `export DUNE=$HOME/opm-geomech/dune-2.11` in your `~/.zshrc`.
 ```bash
 cd ~/opm-geomech
 for m in opm-common opm-grid opm-simulators opm-upscaling opm-flowgeomechanics; do
-  git clone -b lgr-status-geomech https://github.com/hnil/$m.git
+  git clone --single-branch -b geomech https://github.com/hnil/$m.git
 done
 cp opm-flowgeomechanics/superbuild/CMakeLists.txt .
 ```
@@ -71,7 +79,7 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DOpenMP_ROOT=/opt/homebrew/opt/libomp 2>&1 | tee configure.log
 grep -i "requested but not found" configure.log           # must print nothing
 grep '^OpenMP_CXX_FLAGS:' build/CMakeCache.txt             # must not say NOTFOUND
-cmake --build build --target flow_energy_geomech summary compareECL -j 6
+cmake --build build --target flow_energy_geomech summary compareECL -j 1
 ```
 
 - The first `grep` catches a missing HYPRE: configure only warns, and the mechanics solver
