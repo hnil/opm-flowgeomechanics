@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "recorded_date": "2026-10-15",
+  "description": "Fresh Linux SIMPLE and WELLREF observations on the baseline branch, analyzed with the final harness. These values are observations, not tolerances or proof of conservation/mesh convergence. Source commits identify the solver baseline; harness/test/documentation changes were uncommitted during validation.",
+  "cases": {
+    "simple": {
+      "status": "pass_with_warnings",
+      "metrics": {
+        "day": 106.0,
+        "bhp_bar": 220.976288,
+        "injection_m3_per_day": 20000.0,
+        "fracture_injection_m3_per_day": 19276.142578,
+        "total_injected_m3": 2120000.0,
+        "fracture_flow_fraction": 0.9638071289,
+        "fracture_area_m2": 11694.944000000049,
+        "fracture_open_area_m2": 11473.33200000005,
+        "fracture_volume_m3": 293.23173497304015,
+        "geometry_day": 101.0,
+        "geometry_lag_days": 5.0,
+        "area_growth_ratio": 153.9238800322461
+      },
+      "diagnostics": {
+        "end_of_simulation": true,
+        "nonconvergence_messages": 0,
+        "warning_occurrences": {
+          "missing_connection": 0,
+          "mechanical_bc": 0,
+          "unsupported_keywords": 1,
+          "refined_summary": 0,
+          "lgr_well_averages": 0,
+          "other": 0
+        },
+        "other_warning_samples": [],
+        "reported_max_cumulative_solver_counts": {
+          "nonlinear_iterations": 4334,
+          "linear_solves": 4069,
+          "linear_iterations": 10616,
+          "linear_solve_failures": 0,
+          "ladder_rescues": 0,
+          "closed_cell_toggles": 0
+        },
+        "solver_count_scope": "maximum emitted cumulative count, not a sum across MPI ranks"
+      },
+      "source_commits": {
+        "opm-common": "6c894bc56bab2918ef59c783281e282877c7b0f1",
+        "opm-grid": "e6ab5feb36b56e1a74d6f22f61e4bb0fc71db1b1",
+        "opm-simulators": "b6e452297b1016e7a72b8cbe47bc32d094444f4d",
+        "opm-upscaling": "17545de1f8bcca0efcfcbfe99fde5d87ed706d75",
+        "opm-flowgeomechanics": "3840ab3a8ede48b01963058f21a4c2ebce7ad8da"
+      },
+      "input_sha256": {
+        "data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SHOWCASE.DATA": "b8a728f139ae1c0a01ebfffc72bfa86100bae1db4772b7d4f49b42dac5eb7f5a",
+        "data/best_practice/seq_implicit_fb_robust_v2.json": "6d8f8fc1e242a445c94a8e409d1ca402c55426397b65689efe9b751adfcd648e",
+        "data/amgmechsolverhypre_geosxcpu_new_nv.json": "35f4187824bbebeb82a0cac980d4c252dab348d31b24f77234129373d0f90d19"
+      },
+      "profile_sha256": "03ea08a158870dad251ff6b32e7e494536356a006710d1f94c0983a49cddd33f",
+      "analysis_harness_sha256": "b008e1635a3467dd9a8ade2e9dbd44e4263cd4e715edad463d41a17c8e5768e8",
+      "simulator_binary_sha256": "e88564b35cb341fc9e05d4142fa229900b2f381e77fe1d71063517c1d2e467a0",
+      "mpi_ranks": 1,
+      "threads_per_rank": 1
+    },
+    "wellref": {
+      "status": "pass_with_warnings",
+      "metrics": {
+        "day": 106.0,
+        "bhp_bar": 219.740097,
+        "injection_m3_per_day": 20000.0,
+        "fracture_injection_m3_per_day": 19879.244141,
+        "total_injected_m3": 2120000.0,
+        "fracture_flow_fraction": 0.9939622070499999,
+        "fracture_area_m2": 11085.292000000041,
+        "fracture_open_area_m2": 11029.86000000004,
+        "fracture_volume_m3": 221.38826942592328,
+        "geometry_day": 101.0,
+        "geometry_lag_days": 5.0,
+        "area_growth_ratio": 145.89989964299247
+      },
+      "diagnostics": {
+        "end_of_simulation": true,
+        "nonconvergence_messages": 0,
+        "warning_occurrences": {
+          "missing_connection": 440,
+          "mechanical_bc": 3,
+          "unsupported_keywords": 1,
+          "refined_summary": 3,
+          "lgr_well_averages": 1,
+          "other": 0
+        },
+        "other_warning_samples": [],
+        "reported_max_cumulative_solver_counts": {
+          "nonlinear_iterations": 6532,
+          "linear_solves": 6213,
+          "linear_iterations": 44186,
+          "linear_solve_failures": 0,
+          "ladder_rescues": 0,
+          "closed_cell_toggles": 0
+        },
+        "solver_count_scope": "maximum emitted cumulative count, not a sum across MPI ranks"
+      },
+      "source_commits": {
+        "opm-common": "6c894bc56bab2918ef59c783281e282877c7b0f1",
+        "opm-grid": "e6ab5feb36b56e1a74d6f22f61e4bb0fc71db1b1",
+        "opm-simulators": "b6e452297b1016e7a72b8cbe47bc32d094444f4d",
+        "opm-upscaling": "17545de1f8bcca0efcfcbfe99fde5d87ed706d75",
+        "opm-flowgeomechanics": "3840ab3a8ede48b01963058f21a4c2ebce7ad8da"
+      },
+      "input_sha256": {
+        "data/wellref/SIMPLE_MECH_FRAC_WELLREF.DATA": "666a242f965611fa043fcd65ad044e1df515f2f25329ed36122bcb8983037a01",
+        "data/best_practice/seq_implicit_fb_robust_v2.json": "6d8f8fc1e242a445c94a8e409d1ca402c55426397b65689efe9b751adfcd648e",
+        "data/amgmechsolverhypre_geosxcpu_new_nv.json": "35f4187824bbebeb82a0cac980d4c252dab348d31b24f77234129373d0f90d19"
+      },
+      "profile_sha256": "03ea08a158870dad251ff6b32e7e494536356a006710d1f94c0983a49cddd33f",
+      "analysis_harness_sha256": "b008e1635a3467dd9a8ade2e9dbd44e4263cd4e715edad463d41a17c8e5768e8",
+      "simulator_binary_sha256": "e88564b35cb341fc9e05d4142fa229900b2f381e77fe1d71063517c1d2e467a0",
+      "mpi_ranks": 4,
+      "threads_per_rank": 1
+    }
+  }
+}
