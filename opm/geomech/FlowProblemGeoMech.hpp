@@ -621,6 +621,8 @@ namespace Opm{
 	    // VEM needs closed cells without hanging nodes, also on a refined leaf.
 	    Opm::Parameters::SetDefault<Opm::Parameters::EdgeConformal>(true);
 	    Opm::Parameters::SetDefault<Opm::Parameters::LgrBackend>("conforming");
+	    // Fracture connections are only placed in an LGR refined after distribution.
+	    Opm::Parameters::SetDefault<Opm::Parameters::RefineBeforeRedistribute>("false");
         }
 
         void finishInit(){
