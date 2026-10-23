@@ -1,8 +1,7 @@
 # Best-practice fracture parameter files
 
 Curated `--fracture-param-file` configurations for `flow_energy_geomech`, distilled from
-the 2026-06 validation sweeps (see `../../STATUS_2026-06-12.md` and
-`data/mac_tests_result/*/FINDINGS.md`). Every file here shares the **validated robust
+the 2026 validation sweeps. Every file here shares the **validated robust
 inner block** (decoupled Picard, `closed_cell_policy=sticky`, mech-last preconditioner,
 `reopen_width_tolerance=0`, full anti-chatter guard) and differs only in the coupling
 *method*, the well *control*, and a few case-specific levers.
@@ -11,7 +10,8 @@ Full key-by-key documentation of every option is in `../fracture_settings_REFERE
 
 > **Prime rule:** none of these trades fracturing away for stability. Always check
 > conduction (`WWIRFRAC/WWIR %`) and fracture area, not just completion — use the harness
-> `data/mac_tests_result/analysis/compare_runs.py --bands`.
+> `data/mac_tests_result/analysis/compare_runs.py --bands` (in the workspace, not in this
+> repository).
 
 ---
 
@@ -80,7 +80,7 @@ temperatures were left unconverged. Their Newton temperature step is limited to
 Newton; unlimited overshoots on model2. `rebind_after_growth=true` (opt-in) binds a grown
 fracture within the step (confirming non-propagating fracture solve, well rebuilt, flow
 re-solved on it): about half the step-size error in fracture area and rate on model2 and
-SIMPLE, for 40-55 % more Newton; see `fixed_tests/EMBEDDED_M2S_STATUS_2026-10-06_rebind.md`. `embedded_residual_check=true` (CNV against the host
+SIMPLE, for 40-55 % more Newton. `embedded_residual_check=true` (CNV against the host
 cell's pore volume) is ineffective, ~1e11 too lenient.
 
 ---
@@ -108,7 +108,7 @@ edit copies here instead.
 
 ## Example commands
 
-Paths below assume the repo root `/Users/hnil/Documents/OPM/opm_geomech`. The mech linear
+Paths below are relative to the superbuild directory. The mech linear
 solver JSON and `myparamsfrac*.ini` live in `opm-flowgeomechanics/data/`.
 
 ```bash
@@ -186,13 +186,13 @@ python3 data/test_oss/refine/frac_area.py /tmp/run_seq_bhp/*nr-*.vtu
 
 ## How these were verified (reproducible)
 
-Both decks live in `data/test_oss/refine/` and use that directory's
+Both decks live in the workspace's `data/test_oss/refine/` (not in this repository) and use that directory's
 `myparamsfrac_seq.ini` (adaptive time-stepping on). The fracture config used for
 verification is the general default, `seq_implicit_bhp.json` (identical to the parent
 `fracture_simple_bhp_seq_final.json`). Run **from `data/test_oss/refine/`**:
 
 ```bash
-ROOT=/Users/hnil/Documents/OPM/opm_geomech
+ROOT=~/opm-geomech   # the superbuild directory
 BIN=$ROOT/builds/release/opm-flowgeomechanics/bin/flow_energy_geomech
 BP=$ROOT/opm-flowgeomechanics/data/best_practice
 MECH=$ROOT/opm-flowgeomechanics/data/amgmechsolverhypre_geosxcpu_new_nv.json

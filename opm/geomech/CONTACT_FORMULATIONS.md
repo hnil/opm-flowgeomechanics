@@ -153,8 +153,8 @@ Measured on the 92-day caked model2 deck with `sticky`: **16 564 contact toggles
 **151 nonlinear iterations per solve**, ~70 % of total runtime; on the adversarial
 establishment reproducer the inner solve limit-cycles at the iteration cap (109–113 its)
 and never converges. Neither damping nor the guards fix it: raising `max_iter`, `pdas`,
-`toggle_guard_mode=chatter` and a 5×-smaller `max_dwidth` all still fail on that state
-(`fixed_tests/NEXT_WORK.md`, item 1). The cycle lives in the *stationary* problem, so
+`toggle_guard_mode=chatter` and a 5×-smaller `max_dwidth` all still fail on that state.
+The cycle lives in the *stationary* problem, so
 timestep chopping does not help either.
 
 ---
@@ -307,8 +307,7 @@ flowchart TD
 
 ## 4. Measured behaviour (92-day caked model2 deck, shipped flags)
 
-From `data/best_practice/seq_implicit_fb.json` and `fixed_tests/NEXT_WORK.md`
-(items 1, 1b, 2):
+From `data/best_practice/seq_implicit_fb.json` and the project's run records:
 
 | | `sticky` (recommended) | `fischer_burmeister` (experimental) |
 |---|---|---|
@@ -323,11 +322,10 @@ From `data/best_practice/seq_implicit_fb.json` and `fixed_tests/NEXT_WORK.md`
 601–639 bar where Reveal peaks at 495, recovering by day ~20 after ~52 chops. Prime
 suspect is the interplay with the growth criterion — K1 is evaluated on FB's smaller
 transient widths, so propagation starts later at a higher pressure. Note that the two
-records disagree for the *gated* FB variant: NEXT_WORK item 1b reports 661 bar at day 3
+records disagree for the *gated* FB variant: one run reports 661 bar at day 3
 as the remaining blocker, while the `seq_implicit_fb.json` header reports a 478 bar peak
 (below Reveal's own 495) with no overshoot — different runs, not yet reconciled. Either
-way FB is *not* the recommended default until the onset is understood; see NEXT_WORK
-item 1.
+way FB is *not* the recommended default until the onset is understood.
 
 ---
 
@@ -377,8 +375,8 @@ FB is not the only smooth answer, and the record is honest about it: semismooth
 complementarity methods are mainstream in *computational contact mechanics*
 (Signorini/obstacle problems, frictional contact — `pdas` is the max-function sibling of
 the same family), but the NCP-flash literature in porous media (Lauser et al., AWR 2011)
-has not been widely adopted by production reservoir simulators. Alternatives kept on the
-table in NEXT_WORK item 1: regularized/penalty contact (a stiff spring below zero width,
+has not been widely adopted by production reservoir simulators. Alternatives still open:
+regularized/penalty contact (a stiff spring below zero width,
 smooth by construction, at the cost of a regularization parameter), reduced-space
 active-set Newton with a line search on the variational inequality, Anderson acceleration
 on the outer switching fixed point, and reducing the exposure altogether by

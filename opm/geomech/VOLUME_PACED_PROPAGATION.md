@@ -132,7 +132,7 @@ implicitly.
 | `volume_pacing_pressure` | `false` | also apply the draw-down (3)–(4) between rounds |
 | `volume_pacing_verbosity` | `0` | >0 logs `V(k)`, `V0`, `Q_leak`, `V_avail`, and any draw-down per round |
 
-## Review 2026-09-04 (HMN + Claude): measured on the Reveal-comparison boxes
+## Review 2026-09-04: measured on the Reveal-comparison boxes
 
 **Verdict: the volume budget never binds on the thermal boxes, and the physics it
 encodes is not what paces Reveal.** Keep it as an opt-in guard; do not rely on it

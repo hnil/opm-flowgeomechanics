@@ -1,7 +1,6 @@
 # Padded SIMPLE test cases for corner-point coarsening
 
-Test decks for the coarse-mechanics-grid work. Plan:
-`~/Documents/OPM/opm_vscode_clean/opm-gridrefined/docs/COARSENING-FOR-MECHANICS.md`.
+Test decks for the coarse-mechanics-grid work.
 
 Everything here is generated — edit `make_coarsen_tests.py`, not the decks:
 
@@ -42,7 +41,7 @@ BCCON sits on the outer faces of the padded grid.
 ## Running
 
 ```bash
-BIN=~/Documents/OPM/opm_geomech/bcmech/build/opm-flowgeomechanics/bin/flow_energy_geomech
+BIN=build/opm-flowgeomechanics/bin/flow_energy_geomech
 $BIN --output-dir=/tmp/coarsen/T1_PAD_FINE \
      --fracture-param-file=sequential_implicit \
      --enable-write-all-solutions=true T1_PAD_FINE.DATA

@@ -1,7 +1,6 @@
 # Sector tests
 
-Flow on a FLUXNUM sector (USEFLUX), mechanics on a larger grid. The design is in
-`opm_geomech/fixed_tests/SECTOR_GEOMECH_DESIGN_2026-10-16.md` (not in this repository).
+Flow on a FLUXNUM sector (USEFLUX), mechanics on a larger grid.
 
 ## T0: SIMPLE_MECH, sector inside the box
 

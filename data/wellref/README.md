@@ -7,18 +7,14 @@ per LGR, ResInsight, and the fracture-on-LGR code.
 
 ## Where it works
 
-Branch **`geomech-gridrefined-2026-09`** in all five modules of the
-`opm_geomech/gridrefined/` superbuild (pushed to hnil/opm-common, hnil/opm-simulators,
-hnil/opm-upscaling, hnil/opm-flowgeomechanics; grid module on hnil/opm-gridrefined).
-Binary: `gridrefined/build/opm-flowgeomechanics/bin/flow_energy_geomech`.
+The `geomech` branches of opm-common, opm-grid and opm-simulators (hnil forks) and of this
+repository. Binary: `build/opm-flowgeomechanics/bin/flow_energy_geomech`.
 
-- opm-common `a18f30435` (WELLREF keyword and expansion), `f9ed4651a` (COMPDAT
-  connections inside a box moved into the innermost LGR).
-- opm-simulators `0a5a17260` (host transmissibility of nested cells).
-- opm-flowgeomechanics: fracture seeding in a **nested** ring needs `LgrLookup::father`
-  to walk up to level 0 (2026-10-12); a single ring works without it.
-
-Not on the plain `geomech` / bcmech branches (no WELLREF, no fracture-on-LGR).
+- opm-common: the WELLREF keyword and its expansion; COMPDAT connections inside a box moved
+  into the innermost LGR.
+- opm-simulators: host transmissibility of nested cells.
+- this repository: fracture seeding in a **nested** ring needs `LgrLookup::father` to walk up
+  to level 0; a single ring works without it.
 
 ## Syntax
 

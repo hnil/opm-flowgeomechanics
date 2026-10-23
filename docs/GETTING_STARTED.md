@@ -145,31 +145,6 @@ Pictures:
 - **ParaView**: open the fracture `...Fracture_on_B-3H_perf_0_nr.pvd` and colour by
   `FractureWidth` or pressure; `CASE.pvd` holds the reservoir fields.
 
-### Plotting through Claude (optional)
-
-The `resinsight-live` plugin lets Claude Code drive ResInsight: ask for a picture or a plot
-in plain words and it renders it. Its own guide is at
-https://github.com/hnil/resinsight-live (GETTING_STARTED.md). In short:
-
-```bash
-claude plugin marketplace add https://github.com/hnil/resinsight-live
-claude plugin install resinsight-live@hnil-reservoir-tools
-mkdir -p ~/.config/resinsight-live
-echo "RESINSIGHT_LIVE_ALLOWED_DIRS=$HOME/opm-geomech/runs" >> ~/.config/resinsight-live/env
-echo "RESINSIGHT_EXECUTABLE=/path/to/ResInsight" >> ~/.config/resinsight-live/env
-```
-
-`RESINSIGHT_EXECUTABLE` points at the `ResInsight` program you unpacked (not needed if
-`ResInsight` is on your `PATH`). The plugin needs Python 3.11 or newer (24.04 has 3.12).
-
-Restart Claude Code. It only opens files inside `RESINSIGHT_LIVE_ALLOWED_DIRS`, so write
-your runs there. Then, for example:
-
-- *"Show PRESSURE and TEMP on the slice j=6 of ~/opm-geomech/runs/simple at the first and
-  last step."*
-- *"Plot WBHP, WWIR and WWIRFRAC for B-3H."*
-- With your own ResInsight open: *"What are the values in the cell I just clicked?"*
-
 ## 4. Next steps
 
 - **Local grid refinement around the well:** `data/wellref/SIMPLE_MECH_FRAC_WELLREF.DATA`
