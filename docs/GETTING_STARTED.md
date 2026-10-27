@@ -147,6 +147,12 @@ Pictures:
 
 ## 4. Next steps
 
+Geomechanics defaults to `--refine-before-redistribute=false`: each LGR and its
+halo are registered with the partitioner and kept on one rank. Do not enable
+refine-before-redistribute for parallel fractures; a split flat leaf is not yet
+supported by fracture completion mapping.
+
+
 - **Local grid refinement around the well:** `data/wellref/SIMPLE_MECH_FRAC_WELLREF.DATA`
   (one refinement ring from the `WELLREF` keyword). Run it on 4 processes with
   `mpirun -np 4 $BIN ... --threads-per-process=1 --parsing-strictness=low` and the same

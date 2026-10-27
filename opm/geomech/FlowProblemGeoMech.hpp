@@ -621,6 +621,10 @@ namespace Opm{
 	    // VEM needs closed cells without hanging nodes, also on a refined leaf.
 	    Opm::Parameters::SetDefault<Opm::Parameters::EdgeConformal>(true);
 	    Opm::Parameters::SetDefault<Opm::Parameters::LgrBackend>("conforming");
+            // Fracture connections require each LGR and its halo on one rank.
+            // The false path registers partition cell groups before refinement;
+            // the generic conforming default instead splits a flat refined leaf.
+            Opm::Parameters::SetDefault<Opm::Parameters::RefineBeforeRedistribute>("false");
         }
 
         void finishInit(){

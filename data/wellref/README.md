@@ -40,6 +40,12 @@ WELLREF
 
 ## Rules for geomechanics
 
+- Keep `--refine-before-redistribute=false` (the geomechanics default). This informs
+  the partitioner to keep each LGR region and its halo together before local
+  refinement. The generic conforming auto path splits a flat refined leaf and
+  is not supported for parallel fracture completion mapping.
+
+
 - Run with `--edge-conformal=true`; the mechanics needs a hanging-node-free leaf.
 - `WELLDIMS` item 2 (connections per well) must hold the refined and fracture
   connections; the examples use 800.
