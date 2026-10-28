@@ -1392,16 +1392,15 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     // established (m3 stored vs hundreds delivered) but dominant exactly while a
     // cell is opening fast, where it makes opening cost pressure - the physical
     // form of a drawdown-on-growth feedback, and a damping diagonal for the solve.
-    // Cells added by growth inside the step have no previous width and correctly
-    // store their full opening; index mapping to the checkpoint assumes the mesh
-    // has not been renumbered within the step.
+    // Integrate the checkpoint aperture over each current triangle. This keeps
+    // old fluid volume independent of cell renumbering, coarsening and growth;
+    // genuinely new area has zero old volume. The rollback vectors stay intact.
     if (!external_pressure_ && prm_.get<bool>("solver.fracture_storage_term", false) && current_dt_ > 0.0) {
         const std::vector<double> areas = cellAreas();
+        const auto& old_volumes = storage_checkpoint_.volumes(storageTriangles());
         const size_t ncell = std::min(areas.size(), numFractureCells());
         for (size_t i = 0; i < ncell && i < rhs[_1].size() && i < x[_0].size(); ++i) {
-            const double w_prev = (i < fracture_width_prev_.size())
-                ? fracture_width_prev_[i][0] : 0.0;
-            rhs[_1][i][0] -= areas[i] * (x[_0][i][0] - w_prev) / current_dt_;
+            rhs[_1][i][0] -= (areas[i] * x[_0][i][0] - old_volumes.at(i)) / current_dt_;
         }
     }
 

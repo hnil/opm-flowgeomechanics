@@ -554,6 +554,28 @@ foreach(constraint_np 1 2 4)
         TIMEOUT 60 PROCESSORS ${constraint_np} LABELS "mechanics;mpi;unit")
 endforeach()
 
+# Old fracture volume must follow geometry rather than Dune cell numbering.
+if(BUILD_TESTING)
+    add_executable(test_fracture_storage tests/test_fracture_storage.cpp)
+    target_link_libraries(test_fracture_storage PRIVATE opmflowgeomechanics)
+    if(USE_MPI)
+        foreach(storage_np 1 4)
+            if(MPIEXEC_MAX_NUMPROCS LESS storage_np)
+                continue()
+            endif()
+            add_test(NAME Unit.FractureStorage.MPI${storage_np}
+                COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${storage_np} ${MPIEXEC_PREFLAGS}
+                    $<TARGET_FILE:test_fracture_storage> ${MPIEXEC_POSTFLAGS})
+            set_tests_properties(Unit.FractureStorage.MPI${storage_np} PROPERTIES
+                TIMEOUT 60 PROCESSORS ${storage_np} LABELS "fracture;mpi;unit"
+                ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
+        endforeach()
+    else()
+        add_test(NAME Unit.FractureStorage.Serial COMMAND test_fracture_storage)
+        set_tests_properties(Unit.FractureStorage.Serial PROPERTIES TIMEOUT 60 LABELS "fracture;unit")
+    endif()
+endif()
+
 # Stored-solution regression test: checks the DDM matrix assembly bit-for-bit
 # against known opening values for a 2-layer mesh.
 add_executable(test_penny_crack_regression

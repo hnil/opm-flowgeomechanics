@@ -27,6 +27,7 @@
 
 
 #include <opm/geomech/FractureConnectionId.hpp>
+#include <opm/geomech/FractureStorageCheckpoint.hpp>
 #include <limits>
 
 #include <dune/common/exceptions.hh>
@@ -602,6 +603,10 @@ private:
     std::vector<std::vector<CellRef>> grid_mesh_map_prev_; // index mapping from cells in grid_ to trimesh_.
                                                       // NB: in general many-to-many
     std::vector<double> filtercake_thikness_prev_; // properties of filter cake, if any
+    // Storage uses old volume represented on the CURRENT geometry. This snapshot
+    // is independent of the indexed state vectors retained for rollback.
+    FractureStorageCheckpoint storage_checkpoint_;
+    std::vector<FractureStorageCheckpoint::Triangle> storageTriangles() const;
     // well source checkpoints (needed to rebuild the dune grid on reset)
     std::vector<CellRef> well_source_cellref_prev_;
     std::vector<int> well_source_prev_;
