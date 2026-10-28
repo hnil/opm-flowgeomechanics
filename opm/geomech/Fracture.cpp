@@ -2473,6 +2473,12 @@ void Fracture::moveForwardInTime(double dt_last)
     // copy current state to "previous" state
     trimesh_prev_ = trimesh_ ? std::make_unique<Opm::RegularTrimesh>(*trimesh_) : nullptr;
     fracture_width_prev_ = fracture_width_;
+    if (prm_.get<bool>("solver.fracture_storage_term", false)) {
+        std::vector<double> widths(fracture_width_.size());
+        for (size_t i = 0; i < widths.size(); ++i)
+            widths[i] = fracture_width_[i][0];
+        storage_checkpoint_.capture(storageTriangles(), widths);
+    }
     fracture_pressure_prev_ = fracture_pressure_;
     filtercake_thikness_prev_ = filtercake_thikness_; // properties of filter cake, if any
     // save well source indices (needed to rebuild the dune grid on reset)
@@ -2480,6 +2486,24 @@ void Fracture::moveForwardInTime(double dt_last)
     well_source_prev_ = well_source_;
     // reservoir cell mappings are NOT stored here; they are recomputed on reset
     // via FractureModel::resetFractures → updateFractureReservoirCells + initReservoirProperties.
+}
+
+
+std::vector<FractureStorageCheckpoint::Triangle>
+Fracture::storageTriangles() const
+{
+    std::vector<FractureStorageCheckpoint::Triangle> triangles(numFractureCells());
+    const auto view = grid_->leafGridView();
+    for (const auto& element : Dune::elements(view)) {
+        const auto geometry = element.geometry();
+        if (geometry.corners() != 3)
+            OPM_THROW(std::runtime_error, "Fracture storage requires triangular cells");
+        auto& triangle = triangles[view.indexSet().index(element)];
+        for (int corner = 0; corner < 3; ++corner)
+            for (int d = 0; d < 3; ++d)
+                triangle[corner][d] = geometry.corner(corner)[d];
+    }
+    return triangles;
 }
 
 
