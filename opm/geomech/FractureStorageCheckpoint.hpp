@@ -76,6 +76,14 @@ public:
         return cached_volumes_;
     }
 
+    double totalVolume() const
+    {
+        double volume = 0.0;
+        for (const auto& source : source_)
+            volume += area(source.triangle) * source.width;
+        return volume;
+    }
+
 private:
     using Point2 = std::array<double, 2>;
     using Triangle2 = std::array<Point2, 3>;

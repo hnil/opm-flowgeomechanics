@@ -753,6 +753,14 @@ add_test(NAME Run.SIMPLE_MECH_FRAC_LGR.EnergyGeomech
 )
 
 ## regressuin
+find_package(Python3 3.9 COMPONENTS Interpreter QUIET)
+if(BUILD_TESTING AND Python3_Interpreter_FOUND)
+  add_test(NAME Unit.FractureFluidBalanceAnalysis
+    COMMAND ${CMAKE_COMMAND} -E env PYTHONDONTWRITEBYTECODE=1
+      ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/test_fracture_fluid_balance.py)
+  set_tests_properties(Unit.FractureFluidBalanceAnalysis PROPERTIES
+    LABELS "fracture;physics;unit" TIMEOUT 30)
+endif()
 opm_set_test_driver(${PROJECT_SOURCE_DIR}/tests/run-mechRegressionTest.sh "")
 
 # Set absolute tolerance to be used passed to the macros in the following tests

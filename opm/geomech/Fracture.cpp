@@ -18,6 +18,8 @@
 */
 
 #include "config.h"
+#include <filesystem>
+#include <iomanip>
 
 #include <set>
 
@@ -667,6 +669,85 @@ double Fracture::leakofDp(int i) const{
                 - (fracture_dgh_[i] - reservoir_cell_z_[i] * gravity_ * reservoir_density_[i]);
 }
 void
+Fracture::writeFluidBalance(int step, double start, double end, int rank, int ranks,
+                           const std::string& phase) const
+{
+    if (!prm_.get<bool>("solver.write_fluid_balance", false) || !active_)
+        return;
+    const auto areas = cellAreas();
+    const auto& old_volumes = storage_checkpoint_.volumes(storageTriangles());
+    const double dt = end - start;
+    if (!(dt > 0.0)) OPM_THROW(std::runtime_error, "Fluid balance requires positive timestep");
+    const bool storage = !external_pressure_
+        && prm_.get<bool>("solver.fracture_storage_term", false) && current_dt_ > 0.0;
+    double volume = 0.0, old_represented = 0.0, leakoff = 0.0;
+    const auto leak = leakOfRate();
+    for (size_t i = 0; i < areas.size(); ++i) {
+        volume += areas[i] * fracture_width_[i][0];
+        old_represented += old_volumes.at(i);
+        leakoff += areas[i] * leak.at(i);
+    }
+    const double old_total = storage_checkpoint_.totalVolume();
+    const double storage_physical = (volume - old_total) / dt;
+    const double storage_model = storage ? (volume - old_represented) / current_dt_ : 0.0;
+
+    // Isolate the very same well operator used by the pressure assembly. Cell
+    // pressures here are raw pressures: fullSystemIteration applies M to those,
+    // with gravity in addSource, rather than applying M to pressure heads.
+    auto input = makePressureAssemblyInput();
+    input.htrans.clear();
+    input.leakof.clear();
+    const auto well_matrix = prm_.get<bool>("solver.use_ad_pressure_assembly", false)
+        ? std::move(assemblePressureAD(input).pressure_matrix)
+        : assemblePressureOriginal(input);
+    ResVector source(fracture_pressure_); source = 0.0;
+    addWellSource(source);
+    ResVector well_lhs(fracture_pressure_);
+    well_matrix->mv(fracture_pressure_, well_lhs);
+    double well_inflow = 0.0;
+    for (size_t i = 0; i < areas.size(); ++i)
+        well_inflow += source[i][0] - well_lhs[i][0];
+
+    double assembled_defect = 0.0, cell_linf = 0.0;
+    const bool assembled = pressure_matrix_ && pressure_matrix_->N() == fracture_pressure_.size()
+        && rhs_pressure_.size() == fracture_pressure_.size();
+    if (assembled) {
+        auto residual = rhs_pressure_;
+        pressure_matrix_->mmv(fracture_pressure_, residual);
+        for (size_t i = 0; i < areas.size(); ++i) {
+            if (storage)
+                residual[i][0] -= (areas[i]*fracture_width_[i][0]-old_volumes[i])/current_dt_;
+            assembled_defect += residual[i][0];
+            cell_linf = std::max(cell_linf, std::abs(residual[i][0]));
+        }
+    }
+    // The audited representation is the legacy volumetric coupled fracture.
+    // Embedded/external pressure and optional density/viscosity-dependent flux
+    // conventions require their own balance and must not be labelled verified.
+    const bool applicable = assembled && !external_pressure_
+        && prm_.get<std::string>("solver.method") == "if_propagate_trimesh"
+        && !input.use_fluid_mobility_for_internal_faces
+        && !input.use_fluid_mobility_for_well_connections;
+    const std::string filename = prm_.get<std::string>("outputdir") + "/"
+        + prm_.get<std::string>("casename") + name()
+        + "_fluid_balance_rank" + std::to_string(rank) + ".csv";
+    const bool header = !std::filesystem::exists(filename) || std::filesystem::file_size(filename) == 0;
+    std::ofstream out(filename, std::ios::app);
+    if (!out) OPM_THROW(std::runtime_error, "Cannot write fracture fluid balance: " + filename);
+    if (header)
+        out << "schema,step,rank,ranks,phase,start_s,end_s,dt_s,fracture_dt_s,ncells,control,applicable,storage_enabled,inner_converged,volume_begin_m3,volume_old_on_current_m3,volume_end_m3,well_inflow_m3_s,leakoff_m3_s,storage_model_m3_s,storage_physical_m3_s,equation_defect_m3_s,physical_defect_m3_s,assembled_defect_m3_s,cell_defect_linf_m3_s,input_well_reservoir_water_rate_m3_s,input_perf_rate_m3_s,well_pressure_Pa,flow_tolerance_m3_s\n";
+    out << std::setprecision(17) << 1 << ',' << step << ',' << rank << ',' << ranks << ',' << phase
+        << ',' << start << ',' << end << ',' << dt << ',' << current_dt_ << ',' << areas.size()
+        << ',' << effectiveControlType() << ',' << applicable << ',' << storage << ',' << last_solve_stats_.converged
+        << ',' << old_total << ',' << old_represented << ',' << volume << ',' << well_inflow << ',' << leakoff
+        << ',' << storage_model << ',' << storage_physical << ',' << well_inflow-leakoff-storage_model
+        << ',' << well_inflow-leakoff-storage_physical << ',' << assembled_defect << ',' << cell_linf
+        << ',' << well_rate_ << ',' << well_perf_rate_ << ',' << injectionPressure() << ',' << prm_.get<double>("solver.tolerance") << '\n';
+    out.flush();
+    if (!out) OPM_THROW(std::runtime_error, "Failed writing fracture fluid balance: " + filename);
+}
+
+void
 Fracture::writeIterationSnapshot(int step, int round, const std::string& tag) const
 {
     if (!prm_.get<bool>("solver.write_iteration_snapshots", false) || !active_)
@@ -1089,13 +1170,19 @@ Fracture::addSource()
     }
     // gravity contributions between fracture cells
 
+    addWellSource(rhs_pressure_);
+}
+
+void
+Fracture::addWellSource(ResVector& source) const
+{
     auto control = prm_.get_child("control");
     std::string control_type = effectiveControlType();
     if (control_type == "rate") {
         double scale = well_source_.size();
         double rate = control.get<double>("rate");
         for (auto cell : well_source_) {
-            rhs_pressure_[cell] += rate / scale;
+            source[cell] += rate / scale;
         }
     } else if (control_type == "pressure") {
         double pressure = control.get<double>("pressure");
@@ -1106,7 +1193,7 @@ Fracture::addSource()
             double dh_cell = fracture_dgh_[cell];
             ;
             double dh = dh_perf - dh_cell;
-            rhs_pressure_[cell] += value * (pressure - dh);
+            source[cell] += value * (pressure - dh);
         }
     } else if (control_type == "perf_pressure") {
         for (const auto& perfinj : perfinj_) {
@@ -1116,7 +1203,7 @@ Fracture::addSource()
             double dh_cell = fracture_dgh_[cell];
             ;
             double dh = dh_perf - dh_cell;
-            rhs_pressure_[cell] += value * (perf_pressure_ - dh);
+            source[cell] += value * (perf_pressure_ - dh);
         }
     } else if (control_type == "rate_well") {
         // Single-DOF well row: a static single-phase stand-in for the well model
@@ -1130,7 +1217,7 @@ Fracture::addSource()
         double wi_dzfac = wi_respress_;
         wi_dzfac -= wi_dz_*density*gravity_; // sum wi dz
         wi_dzfac += (WI* (perf_ref_depth_- well_ref_depth_))*gravity_*density; // convert from bhp ref depth to perf ref depth
-        rhs_pressure_[rhs_pressure_.size() - 1] = well_rate + lambda * wi_dzfac;
+        source[source.size() - 1] = well_rate + lambda * wi_dzfac;
     } else if (control_type == "bhp_well") {
         // constraint row: scale*(p_w) = scale*(target at the perf-ref datum);
         // scale MUST match bhpWellRowScale() in the assembler
@@ -1139,7 +1226,7 @@ Fracture::addSource()
         const double density = reservoir_density_[std::get<0>(perfinj_[0])];
         const double p_target = well_target_bhp_
             + density * gravity_ * (perf_ref_depth_ - well_ref_depth_);
-        rhs_pressure_[rhs_pressure_.size() - 1] = scale * p_target;
+        source[source.size() - 1] = scale * p_target;
     } else {
         OPM_THROW(std::runtime_error, "Unknowns control");
     }
@@ -1150,11 +1237,11 @@ Fracture::addSource()
         for (const auto& [cell, wi] : perfinj_) {
             const double v = wi * wellConnectionMobilityValue(input, cell);
             const double dh = fracture_dgh_[cell] - gravity_ * reservoir_density_[cell] * perf_ref_depth_;
-            rhs_pressure_[cell] += v * dh;
+            source[cell] += v * dh;
             well_dh += v * dh;
         }
         if (control_type == "rate_well") {
-            rhs_pressure_[rhs_pressure_.size() - 1] -= well_dh;
+            source[source.size() - 1] -= well_dh;
         }
     }
 }
@@ -2473,7 +2560,8 @@ void Fracture::moveForwardInTime(double dt_last)
     // copy current state to "previous" state
     trimesh_prev_ = trimesh_ ? std::make_unique<Opm::RegularTrimesh>(*trimesh_) : nullptr;
     fracture_width_prev_ = fracture_width_;
-    if (prm_.get<bool>("solver.fracture_storage_term", false)) {
+    if (prm_.get<bool>("solver.fracture_storage_term", false)
+        || prm_.get<bool>("solver.write_fluid_balance", false)) {
         std::vector<double> widths(fracture_width_.size());
         for (size_t i = 0; i < widths.size(); ++i)
             widths[i] = fracture_width_[i][0];
