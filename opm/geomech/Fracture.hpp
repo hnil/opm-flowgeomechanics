@@ -278,6 +278,8 @@ public:
     // (one line) tagged with timestep, outer coupling round and a label — lets
     // the open/closed branches the coupling visits be plotted round by round.
     void writeIterationSnapshot(int step, int round, const std::string& tag) const;
+    void writeFluidBalance(int step, double start, double end, int rank, int ranks,
+                           const std::string& phase) const;
     void updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
                             const Dune::CpGrid& grid,
                             const std::vector<EntitySeed>& entity_seeds);
@@ -809,6 +811,7 @@ private:
     std::vector<double> faceGravityHeads() const;
     void assemblePressureAndCouplingAD(const std::vector<int>& closed_cells);
     void addSource();
+    void addWellSource(ResVector& source) const;
     void initPressureMatrix();
     void updateLeakoff();
     double leakoffMobilityFor(int eIdx, bool upwind) const;
@@ -893,7 +896,8 @@ private:
     // solution variables (only to avoid memory allocation, do not trust their state)
 
     mutable Dune::BlockVector<Dune::FieldVector<double, 1>> rhs_width_;
-    mutable Dune::BlockVector<Dune::FieldVector<double, 1>> rhs_pressure_;
+    // Const diagnostics must not mutate the assembled source vector.
+    Dune::BlockVector<Dune::FieldVector<double, 1>> rhs_pressure_;
 
 // State variables
     mutable Dune::BlockVector<Dune::FieldVector<double, 1>> fracture_width_;
