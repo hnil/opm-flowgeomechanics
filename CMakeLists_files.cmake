@@ -36,6 +36,7 @@ list (APPEND MAIN_SOURCE_FILES
 	opm/geomech/FractureWell.cpp
 	opm/geomech/GeometryHelpers.cpp
 	opm/geomech/GridStretcher.cpp
+	opm/geomech/MechanicalConstraintValidation.cpp
 	opm/geomech/ParamInterior.cpp
 	opm/geomech/RegularTrimesh.cpp
 	opm/geomech/vem/vem.cpp
@@ -76,6 +77,7 @@ list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/GeometryHelpers.hpp
 	opm/geomech/GridStretcher.hpp
 	opm/geomech/Math.hpp
+	opm/geomech/MechanicalConstraintValidation.hpp
 	opm/geomech/ParamInterior.hpp
 	opm/geomech/RegularTrimesh.hpp
 	opm/geomech/VemElasticitySolver.hpp

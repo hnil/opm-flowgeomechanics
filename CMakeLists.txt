@@ -521,6 +521,17 @@ add_test(NAME Unit.FractureConnectionIdentity
         $<TARGET_FILE:test_fracture_connection_identity> ${MPIEXEC_POSTFLAGS})
 set_tests_properties(Unit.FractureConnectionIdentity PROPERTIES TIMEOUT 30 LABELS "physics;unit")
 
+# Global constraint rank must be independent of MPI partitioning.
+add_executable(test_mechanical_constraints tests/test_mechanical_constraints.cpp)
+target_link_libraries(test_mechanical_constraints PRIVATE opmflowgeomechanics)
+foreach(constraint_np 1 2 4)
+    add_test(NAME Unit.MechanicalConstraints.MPI${constraint_np}
+        COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${constraint_np} ${MPIEXEC_PREFLAGS}
+            $<TARGET_FILE:test_mechanical_constraints> ${MPIEXEC_POSTFLAGS})
+    set_tests_properties(Unit.MechanicalConstraints.MPI${constraint_np} PROPERTIES
+        TIMEOUT 60 PROCESSORS ${constraint_np} LABELS "mechanics;mpi;unit")
+endforeach()
+
 # Stored-solution regression test: checks the DDM matrix assembly bit-for-bit
 # against known opening values for a 2-layer mesh.
 add_executable(test_penny_crack_regression
