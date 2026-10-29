@@ -20,6 +20,7 @@
 #include "config.h"
 
 #include "CgalHelper.hpp"
+#include <CGAL/version.h>
 #include <variant>
 #include <optional>
 template <typename T> struct typeOf;
@@ -40,8 +41,8 @@ std::vector<Point_3> intersect_hex_with_plane(const Mesh& mesh, const Plane_3& p
 
         if (result)
         {
-	  // old cgal
-#ifdef __APPLE__// modern/mac branch
+          // CGAL 6.0 replaced Boost optional/variant with std equivalents.
+#if CGAL_VERSION_NR >= 1060000000
       const auto& vresult = result.value();
 	  if (std::holds_alternative<Point_3>(vresult))
 	    pts.push_back(std::get<Point_3>(vresult));
