@@ -513,6 +513,14 @@ add_test(NAME Regression.DDM.PennyCrack.Assembly
 		--k1-tol=0.6
 )
 
+# Completion identity must survive LGR index collisions and rank-local filtering.
+add_executable(test_fracture_connection_identity tests/test_fracture_connection_identity.cpp)
+target_link_libraries(test_fracture_connection_identity PRIVATE opmflowgeomechanics)
+add_test(NAME Unit.FractureConnectionIdentity
+    COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1 ${MPIEXEC_PREFLAGS}
+        $<TARGET_FILE:test_fracture_connection_identity> ${MPIEXEC_POSTFLAGS})
+set_tests_properties(Unit.FractureConnectionIdentity PROPERTIES TIMEOUT 30 LABELS "physics;unit")
+
 # Stored-solution regression test: checks the DDM matrix assembly bit-for-bit
 # against known opening values for a 2-layer mesh.
 add_executable(test_penny_crack_regression
