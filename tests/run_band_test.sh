@@ -12,4 +12,6 @@ status=$?
 if [ $status -ne 0 ]; then
   echo "simulator exited with $status"; tail -20 "$OUT/run.log"; exit 1
 fi
-python3 "$CHECKER" --log "$OUT/run.log" "$@"
+# The fracture solve logs its properties at debug level, i.e. to the .DBG file.
+cat "$OUT/run.log" "$OUT"/*.DBG > "$OUT/check.log" 2>/dev/null
+python3 "$CHECKER" --log "$OUT/check.log" "$@"
