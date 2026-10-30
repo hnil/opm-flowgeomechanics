@@ -826,6 +826,22 @@ add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_msw
 						--enable-write-all-solutions=true
 						--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json)
 
+# Embedded fracture flow (fracture cells as auxiliary DOFs, coupled well-local solve) on a
+# rate-controlled injector whose fracture grows; reference holds summary, grid and init only.
+add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_embedded
+                         FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_EMB
+                         SIMULATOR flow_energy_geomech
+                         ABS_TOL ${abs_tol}
+                         REL_TOL ${rel_tol}
+                         DIR ${CMAKE_CURRENT_LIST_DIR}/data/
+						 PREFIX geomech_frac_embedded
+						 TEST_ARGS --parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac_seq.ini
+						--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_embedded_coupled.json
+						--linear-solver=${CMAKE_CURRENT_LIST_DIR}/data/best_practice/fg_cprw.json
+						--matrix-add-well-contributions=false
+						--shut-unsolvable-wells=false
+						--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json)
+
 
 # fracture test
 
