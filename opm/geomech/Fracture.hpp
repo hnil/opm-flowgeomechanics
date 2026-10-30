@@ -345,6 +345,8 @@ public:
     //! The mobility actually folded into leakOf(), which is reservoirMobility() only
     //! under the legacy convention. Divide by this, not by reservoirMobility().
     const std::vector<double>& leakoffMobility() const { return leakoff_mobility_; }
+    //! Mobility the flow applies on the embedded leak-off connection of a cell.
+    double flowLeakoffMobility(int eIdx) const;
 
     //! Pressure per fracture cell as the fracture's own solver last left it.  In the
     //! embedded representation the same quantity is also a degree of freedom of the
@@ -599,6 +601,7 @@ private:
     void updateFractureRHS();
     void updateLeakoff();
     double leakoffMobilityFor(int eIdx, bool upwind) const;
+    double leakoffPotentialDifference(int eIdx) const;
     // leak-off convention (solver.leakoff_model): number of leaking faces and the
     // reservoir distance as a fraction of the cell extent normal to the fracture
     int leakoffSides() const;
