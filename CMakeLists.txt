@@ -137,6 +137,7 @@ macro (opm-flowgeomechanics_prereqs_hook)
 		PUBLIC
 			opmupscaling
 			opmsimulators
+			Dune::FoamGrid
 			CGAL::CGAL GMP::gmp GMP::gmpxx
 	)
 
