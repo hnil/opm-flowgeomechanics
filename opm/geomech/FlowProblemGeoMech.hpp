@@ -264,6 +264,8 @@ namespace Opm{
                                                              static_cast<Scalar>(perfRw)));
 
             fractureAuxCells_->setRemapState(prm.get<bool>("solver.embedded_remap_state", false));
+            fractureAuxCells_->setLeakoffTotalMobility(
+                prm.get<std::string>("solver.embedded_leakoff_mobility", "upwind") == "reservoir_total");
             fractureAuxCells_->setResidualCheck(prm.get<bool>("solver.embedded_residual_check", false));
             // Fracture cells are outside CNV: bound their local Newton step; <= 0 disables.
             fractureAuxCells_->setLocalStepTolerance(

@@ -2019,17 +2019,10 @@ Fracture::leakoffMobilityFor(const int eIdx, const bool upwind) const
         return total;
     }
 
-    const bool have_state = (static_cast<size_t>(eIdx) < fracture_pressure_.size())
-        && (static_cast<size_t>(eIdx) < reservoir_pressure_.size());
-    if (!have_state) {
+    const double dpot = leakoffPotentialDifference(eIdx);
+    if (std::isnan(dpot)) {
         return total;
     }
-
-    const double dh_frac = (static_cast<size_t>(eIdx) < fracture_dgh_.size())
-        ? fracture_dgh_[eIdx] : 0.0;
-    const double dh_res = reservoir_cell_z_[eIdx] * gravity_ * reservoir_density_[eIdx];
-    const double dpot = (fracture_pressure_[eIdx][0] - dh_frac)
-        - (reservoir_pressure_[eIdx] - dh_res);
 
     if (dpot > 0.0) {
         // Out of the fracture: the fracture cell is water filled by construction, so
@@ -2046,6 +2039,29 @@ Fracture::leakoffMobilityFor(const int eIdx, const bool upwind) const
 
     return (static_cast<size_t>(eIdx) < reservoir_water_mobility_.size())
         ? reservoir_water_mobility_[eIdx] : total;
+}
+
+// Fracture minus reservoir potential across the leak-off connection; NaN without a state.
+double
+Fracture::leakoffPotentialDifference(const int eIdx) const
+{
+    const bool have_state = (static_cast<size_t>(eIdx) < fracture_pressure_.size())
+        && (static_cast<size_t>(eIdx) < reservoir_pressure_.size());
+    if (!have_state) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    const double dh_frac = (static_cast<size_t>(eIdx) < fracture_dgh_.size())
+        ? fracture_dgh_[eIdx] : 0.0;
+    const double dh_res = reservoir_cell_z_[eIdx] * gravity_ * reservoir_density_[eIdx];
+    return (fracture_pressure_[eIdx][0] - dh_frac) - (reservoir_pressure_[eIdx] - dh_res);
+}
+
+// Outflow: the water-filled fracture cell's mobility; inflow: all reservoir phases.
+double
+Fracture::flowLeakoffMobility(const int eIdx) const
+{
+    const double dpot = leakoffPotentialDifference(eIdx);
+    return (dpot > 0.0) ? leakoffMobilityFor(eIdx, /*upwind=*/true) : reservoir_mobility_[eIdx];
 }
 
 void

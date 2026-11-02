@@ -131,10 +131,8 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
                 // fracture actually used -- which is not reservoirMobility() under
                 // solver.leakoff_mobility=upwind -- so the connection is a
                 // transmissibility and nothing else.
-                const auto mob = leakMobility[cell];
-                const auto trans = (mob > 0.0)
-                    ? static_cast<Scalar>(leakOf[cell] / mob)
-                    : Scalar{0};
+                const auto trans = this->leakoffTrans_(fracture, cell, leakOf[cell],
+                                                       leakMobility[cell]);
                 const auto [alphaFrac, alphaRock]
                     = this->wallConduction_(fracture, cell, static_cast<Scalar>(areas[cell]),
                                             static_cast<Scalar>(width[cell][0]));
@@ -343,10 +341,8 @@ FractureAuxCells<TypeTag>::updateValues(const FractureModel& fractures)
                 if (!this->active_[slot]) {
                     continue;
                 }
-                const auto mob = leakMobility[cell];
-                const auto trans = (mob > 0.0)
-                    ? static_cast<Scalar>(leakOf[cell] / mob)
-                    : Scalar{0};
+                const auto trans = this->leakoffTrans_(fracture, cell, leakOf[cell],
+                                                       leakMobility[cell]);
                 const auto [alphaFrac, alphaRock]
                     = this->wallConduction_(fracture, cell, static_cast<Scalar>(areas[cell]),
                                             static_cast<Scalar>(width[cell][0]));

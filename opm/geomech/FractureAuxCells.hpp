@@ -428,6 +428,9 @@ public:
     //! Carry the cells' flow state across a regrid geometrically instead of by slot.
     void setRemapState(const bool on) { this->remapState_ = on; }
 
+    //! Weigh the leak-off with the reservoir cell's total mobility, not the flow's upwind one.
+    void setLeakoffTotalMobility(const bool on) { this->leakoffTotalMobility_ = on; }
+
     //! Cells handed out so far, for the high-water mark in the log.
     unsigned numActive() const
     { return static_cast<unsigned>(std::count(this->active_.begin(), this->active_.end(), true)); }
@@ -494,6 +497,22 @@ private:
 
     unsigned capacity_{};
     Scalar minWidth_{};
+    // The flow applies its upwind mobility; the total weighting folds in the ratio, lagged to the last bind.
+    Scalar leakoffTrans_(const auto& fracture, std::size_t cell, double leakOf, double mob) const
+    {
+        if (!(mob > 0.0)) {
+            return Scalar{0};
+        }
+        double trans = leakOf / mob;
+        if (this->leakoffTotalMobility_) {
+            const double flowMob = fracture.flowLeakoffMobility(static_cast<int>(cell));
+            if (flowMob > 0.0) {
+                trans *= fracture.reservoirMobility()[cell] / flowMob;
+            }
+        }
+        return static_cast<Scalar>(trans);
+    }
+
     // Heat exchange between fracture fluid and wall rock (geometric half transmissibilities).
     // Without it a cell with little net flow has an unanchored energy row and the Newton
     // does not converge. solver.embedded_wall_conduction (default true); the rock side uses
@@ -549,6 +568,7 @@ private:
     std::vector<unsigned> newbornDofs_{}; // see newbornDofs()
     std::vector<std::pair<unsigned, std::size_t>> boundLayout_{}; // per fracture: first slot, cells
     bool remapState_{false}; // see setRemapState()
+    bool leakoffTotalMobility_{false}; // see setLeakoffTotalMobility()
     bool residualCheck_{false}; // see cnvReferencePoreVolume()
     typename ParentType::LocalStepTolerance stepTolerance_{};
     double maxTempChange_{0.0}; // Newton step limit [K]; <= 0: the global one
