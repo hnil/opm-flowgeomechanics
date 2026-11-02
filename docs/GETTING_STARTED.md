@@ -168,3 +168,12 @@ Pictures:
   - Rate-controlled decks: add `--solver-max-time-step-in-days=2` and use a
     `seq_implicit_rate*` file.
   - JSON settings files cannot hold comments; the `"__..."` keys are dividers.
+
+## Parallel VEM mechanics: complete vertex overlap
+
+VEM needs all cells incident to each owned vertex. Geomechanics therefore defaults
+`--add-corners=true --add-corners-by-vertex=true`, using the existing `geomech`
+dependency options. A face-only overlap can change the mechanics equations at
+partition junctions. An incomplete overlap now raises a collective initialization
+error before adaptive timestepping; reducing the timestep cannot repair it.
+See [the operator regression](../tests/mechanical_vertex_stencils.md).

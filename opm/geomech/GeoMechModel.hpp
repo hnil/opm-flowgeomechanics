@@ -558,6 +558,9 @@ namespace Opm{
                 mechMap_ = MechFlowMap::identity(numDof);
             }
             checkMechGridIsGeometric_();
+#if HAVE_MPI
+            Opm::Elasticity::validateMechanicalVertexStencils(this->mechGrid());
+#endif
             elacticitysolver_
                 = std::make_unique<Opm::Elasticity::VemElasticitySolver<Grid>>(this->mechGrid());
 
