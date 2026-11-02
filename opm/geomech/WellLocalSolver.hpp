@@ -24,6 +24,7 @@
 #include <opm/models/discretization/common/tpfalinearizerstructs.hh>
 #include <opm/simulators/flow/NewtonIterationContext.hpp>
 #include <opm/simulators/linalg/extractMatrix.hpp>
+#include <opm/simulators/wells/MultisegmentWell.hpp>
 #include <opm/simulators/wells/StandardWell.hpp>
 
 #include <dune/istl/bcrsmatrix.hh>
@@ -60,9 +61,11 @@ Vector solveWithExplicitWell(const Matrix& jDom, const Vector& rDom,
     const auto& B = eq.getB();
     const auto& C = eq.getC();
     const auto& D = eq.getD();
-    const int nW = static_cast<int>(D[0][0].rows());
+    // one block row per segment (a standard well has one)
+    const int nW = static_cast<int>(D[0][0].N());
+    const int nS = static_cast<int>(D.N());
     const std::size_t nR = jDom.N() * nEq;
-    const std::size_t n = nR + nW;
+    const std::size_t n = nR + static_cast<std::size_t>(nS * nW);
 
     std::unordered_map<int, int> local;
     for (std::size_t i = 0; i < domainCells.size(); ++i) {
@@ -83,21 +86,39 @@ Vector solveWithExplicitWell(const Matrix& jDom, const Vector& rDom,
             }
         }
     }
-    for (auto col = B[0].begin(); col != B[0].end(); ++col) {
-        const int l = localOfPerf(col.index());
-        if (l < 0) {
-            continue;
-        }
-        for (int a = 0; a < nW; ++a) {
-            for (int b = 0; b < nEq; ++b) {
-                pattern.add(nR + a, l * nEq + b);
-                pattern.add(l * nEq + b, nR + a);
+    for (auto row = B.begin(); row != B.end(); ++row) {
+        for (auto col = row->begin(); col != row->end(); ++col) {
+            const int l = localOfPerf(col.index());
+            if (l < 0) {
+                continue;
+            }
+            for (int a = 0; a < nW; ++a) {
+                for (int b = 0; b < nEq; ++b) {
+                    pattern.add(nR + row.index() * nW + a, l * nEq + b);
+                }
             }
         }
     }
-    for (int a = 0; a < nW; ++a) {
-        for (int b = 0; b < nW; ++b) {
-            pattern.add(nR + a, nR + b);
+    for (auto row = C.begin(); row != C.end(); ++row) {
+        for (auto col = row->begin(); col != row->end(); ++col) {
+            const int l = localOfPerf(col.index());
+            if (l < 0) {
+                continue;
+            }
+            for (int a = 0; a < nW; ++a) {
+                for (int b = 0; b < nEq; ++b) {
+                    pattern.add(l * nEq + b, nR + row.index() * nW + a);
+                }
+            }
+        }
+    }
+    for (auto row = D.begin(); row != D.end(); ++row) {
+        for (auto col = row->begin(); col != row->end(); ++col) {
+            for (int a = 0; a < nW; ++a) {
+                for (int b = 0; b < nW; ++b) {
+                    pattern.add(nR + row.index() * nW + a, nR + col.index() * nW + b);
+                }
+            }
         }
     }
     ScalarMatrix S;
@@ -112,31 +133,39 @@ Vector solveWithExplicitWell(const Matrix& jDom, const Vector& rDom,
             }
         }
     }
-    for (auto col = B[0].begin(); col != B[0].end(); ++col) {
-        const int l = localOfPerf(col.index());
-        if (l < 0) {
-            continue;
-        }
-        for (int a = 0; a < nW; ++a) {
-            for (int b = 0; b < nEq; ++b) {
-                S[nR + a][l * nEq + b] = (*col)[a][b];
+    for (auto row = B.begin(); row != B.end(); ++row) {
+        for (auto col = row->begin(); col != row->end(); ++col) {
+            const int l = localOfPerf(col.index());
+            if (l < 0) {
+                continue;
+            }
+            for (int a = 0; a < nW; ++a) {
+                for (int b = 0; b < nEq; ++b) {
+                    S[nR + row.index() * nW + a][l * nEq + b] = (*col)[a][b];
+                }
             }
         }
     }
-    for (auto col = C[0].begin(); col != C[0].end(); ++col) {
-        const int l = localOfPerf(col.index());
-        if (l < 0) {
-            continue;
-        }
-        for (int a = 0; a < nW; ++a) {
-            for (int b = 0; b < nEq; ++b) {
-                S[l * nEq + b][nR + a] = (*col)[a][b]; // C enters transposed
+    for (auto row = C.begin(); row != C.end(); ++row) {
+        for (auto col = row->begin(); col != row->end(); ++col) {
+            const int l = localOfPerf(col.index());
+            if (l < 0) {
+                continue;
+            }
+            for (int a = 0; a < nW; ++a) {
+                for (int b = 0; b < nEq; ++b) {
+                    S[l * nEq + b][nR + row.index() * nW + a] = (*col)[a][b]; // C enters transposed
+                }
             }
         }
     }
-    for (int a = 0; a < nW; ++a) {
-        for (int b = 0; b < nW; ++b) {
-            S[nR + a][nR + b] = D[0][0][a][b];
+    for (auto row = D.begin(); row != D.end(); ++row) {
+        for (auto col = row->begin(); col != row->end(); ++col) {
+            for (int a = 0; a < nW; ++a) {
+                for (int b = 0; b < nW; ++b) {
+                    S[nR + row.index() * nW + a][nR + col.index() * nW + b] = (*col)[a][b];
+                }
+            }
         }
     }
 
@@ -191,6 +220,7 @@ class WellLocalSolver
     static constexpr bool enableEnergy = getPropValue<TypeTag, Properties::EnableEnergy>();
     using IntensiveQuantities = GetPropType<TypeTag, Properties::IntensiveQuantities>;
     using StdWell = StandardWell<TypeTag>;
+    using MsWell = MultisegmentWell<TypeTag>;
 
 public:
     struct Settings {
@@ -328,11 +358,24 @@ public:
         }
         auto& well = *wellPtr;
         auto* stdWell = dynamic_cast<StdWell*>(wellPtr);
-        if (!wellsInMatrix && stdWell == nullptr) {
+        auto* msWell = dynamic_cast<MsWell*>(wellPtr);
+        if (!wellsInMatrix && stdWell == nullptr && msWell == nullptr) {
             OPM_THROW(std::runtime_error,
-                      "WellLocalSolver: a well that is not a standard well needs the wells "
-                      "in the matrix (--matrix-add-well-contributions=true)");
+                      "WellLocalSolver: a well that is neither a standard nor a multi-segment "
+                      "well needs the wells in the matrix (--matrix-add-well-contributions=true)");
         }
+        // f(linSys) on the well's own equations; false if it has none we know
+        auto withLinSys = [&](auto&& f) {
+            if (stdWell != nullptr) {
+                f(stdWell->linSys());
+                return true;
+            }
+            if (msWell != nullptr) {
+                f(msWell->linSys());
+                return true;
+            }
+            return false;
+        };
 
         // The local-solve context turns the well's inner iterations off (assembleWellEq
         // consults it). Without it the domain linearization resets the whole system,
@@ -428,19 +471,19 @@ public:
             }
             // well rows relative to the rate the well is moving
             wmax = 0.0;
-            if (stdWell != nullptr) {
-                const auto& ws = wellModel.wellState().well(well.indexOfWell());
-                double scale = 0.0;
-                for (const auto r : ws.surface_rates) {
-                    scale = std::max(scale, std::abs(r));
-                }
-                scale = std::max(scale, 1.0e-6);
-                for (const auto& blk : stdWell->linSys().residual()) {
+            const auto& ws = wellModel.wellState().well(well.indexOfWell());
+            double scale = 0.0;
+            for (const auto r : ws.surface_rates) {
+                scale = std::max(scale, std::abs(r));
+            }
+            scale = std::max(scale, 1.0e-6);
+            withLinSys([&](const auto& linSys) {
+                for (const auto& blk : linSys.residual()) {
                     for (const auto v : blk) {
                         wmax = std::max(wmax, std::abs(v) / scale);
                     }
                 }
-            }
+            });
             // one number for the line search; the convergence test below keeps
             // the two apart because they have different tolerances
             return std::max(rmax, wmax / settings.toleranceWell);
@@ -481,8 +524,10 @@ public:
                 auto rhs = rDom;
                 lu.apply(xDom, rhs, res);
             } else {
-                xDom = WellLocalDetails::solveWithExplicitWell(jDom, rDom, domain.cells,
-                                                               well.cells(), stdWell->linSys());
+                withLinSys([&](const auto& linSys) {
+                    xDom = WellLocalDetails::solveWithExplicitWell(jDom, rDom, domain.cells,
+                                                                   well.cells(), linSys);
+                });
             }
             bool finite = true;
             for (const auto& blk : xDom) {

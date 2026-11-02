@@ -600,6 +600,7 @@ namespace Opm{
                     auto& pd = perfs.emplace_back();
                     pd.cell_index = rp.cell;
                     pd.connection_transmissibility_factor = static_cast<Scalar>(rp.ctf);
+                    pd.segment = rp.segment;
                 }
 
                 this->wellModel().setAuxiliaryPerforations(wname, std::move(perfs));
