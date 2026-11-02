@@ -1044,3 +1044,19 @@ add_test(NAME BANDTEST_geomech_best_practice_fb
                  --bhp-min 220 --bhp-max 285
                  --area-min 400 --area-max 3000
                  --open-frac-min 0.5)
+
+# Compare production VEM owner rows with serial, and reject missing vertex stars.
+add_executable(test_mechanical_vertex_stencils tests/test_mechanical_vertex_stencils.cpp)
+target_link_libraries(test_mechanical_vertex_stencils PRIVATE opmflowgeomechanics)
+if(USE_MPI)
+    foreach(stencil_np 1 4)
+        add_test(NAME Unit.MechanicalVertexStencils.MPI${stencil_np}
+            COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${stencil_np} ${MPIEXEC_PREFLAGS}
+                $<TARGET_FILE:test_mechanical_vertex_stencils> ${MPIEXEC_POSTFLAGS})
+        set_tests_properties(Unit.MechanicalVertexStencils.MPI${stencil_np} PROPERTIES
+            TIMEOUT 60 PROCESSORS ${stencil_np} LABELS "mechanics;mpi;unit")
+    endforeach()
+else()
+    add_test(NAME Unit.MechanicalVertexStencils.Serial COMMAND test_mechanical_vertex_stencils)
+    set_tests_properties(Unit.MechanicalVertexStencils.Serial PROPERTIES TIMEOUT 60 LABELS "mechanics;unit")
+endif()
