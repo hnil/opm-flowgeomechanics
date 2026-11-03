@@ -76,7 +76,10 @@ public:
         if (reportStepIdx > 0) {
             const auto& problem = this->simulator_.problem();
             const auto& fractureHost = problem.fractureHost();
-            if (problem.hasFractures() && fractureHost.fractureModelActive()) {
+            // the joint solve carries the fracture in its own cells, not in upscaled well indices
+            const bool jointSolve = problem.hasFractures()
+                && problem.getFractureParam().template get<bool>("solver.well_joint_solve", false);
+            if (problem.hasFractures() && fractureHost.fractureModelActive() && !jointSolve) {
                 for (auto& wellPtr : this->well_container_) {
                     auto wellName = wellPtr->name();
                     const auto& fracturemodel = fractureHost.fractureModel();

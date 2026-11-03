@@ -294,6 +294,25 @@ public:
      * has no cartesian index.
      */
     std::vector<RuntimePerforation> wellPerforations(const std::string& wellName) const;
+    //! Flow DOF of each cell of one fracture; -1 for a cell without one.
+    std::vector<int> cellDofs(std::size_t fractureIdx) const
+    {
+        std::vector<int> dofs;
+        for (unsigned slot = 0; slot < this->slotOf_.size() && slot < this->capacity_; ++slot) {
+            const auto [fidx, cell] = this->slotOf_[slot];
+            if (fidx != fractureIdx) {
+                continue;
+            }
+            if (cell >= dofs.size()) {
+                dofs.resize(cell + 1, -1);
+            }
+            if (this->active_[slot]) {
+                dofs[cell] = static_cast<int>(this->localToGlobalDof(slot));
+            }
+        }
+        return dofs;
+    }
+
     //! Water pressure of the bound cells of one fracture (binding order), per
     //! fracture cell; empty if the fracture is not bound.
     std::vector<Scalar> cellPressures(std::size_t fractureIdx) const

@@ -124,7 +124,9 @@ namespace Opm{
         void solveGeoMechAndFracture(){
             const auto& problem = simulator_.problem();
             this->solveGeomechanics();
-            if(problem.hasFractures()){
+            // the joint solve owns the fractures: growth only on a converged per-well state
+            if(problem.hasFractures()
+               && !problem.getGeoMechParam().template get<bool>("fractureparam.solver.well_joint_solve", false)){
                 this->solveFractures();
             }
         }

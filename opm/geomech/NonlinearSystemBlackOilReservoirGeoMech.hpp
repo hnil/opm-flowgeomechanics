@@ -24,6 +24,7 @@
 #include <fmt/format.h>
 #include <opm/common/Exceptions.hpp>
 #include <opm/geomech/FractureCouplingOuterLoop.hpp>
+#include <opm/geomech/WellFractureJointSolver.hpp>
 #include <opm/geomech/WellLocalSolver.hpp>
 #include <opm/simulators/flow/NewtonIterationContext.hpp>
 #include <opm/simulators/flow/NonlinearSystemBlackOilReservoir.hpp>
@@ -132,6 +133,9 @@ namespace Opm
             const int maxIt = prm.get<int>("fractureparam.solver.pressure_from_flow_iterations", 10);
             const double tolBar = prm.get<double>("fractureparam.solver.pressure_from_flow_tolerance", 0.1);
             const int verbosity = prm.get<int>("fractureparam.solver.pressure_from_flow_verbosity", 0);
+            if (prm.get<bool>("fractureparam.solver.well_joint_solve", false)) {
+                return this->wellFractureJointSolve(timer);
+            }
             using Solver = WellLocalSolver<TypeTag>;
             typename Solver::Settings settings;
             settings.ring = prm.get<int>("solver.well_local_ring", 1);
@@ -186,6 +190,84 @@ namespace Opm
                 if (dp / 1e5 < tolBar && it > 0) {
                     break;
                 }
+            }
+            return true;
+        }
+
+        // Width, flow pressure and well of each well's fractures in one Newton. The fracture's
+        // own solve only sets up a fracture the flow has not bound yet.
+        bool wellFractureJointSolve(const SimulatorTimerInterface& timer)
+        {
+            auto& problem = this->simulator_.problem();
+            const PropertyTree& prm = problem.getGeoMechParam();
+            auto& fractures = problem.fractureHost().fractureModel();
+            const auto* aux = problem.fractureAuxCells();
+            if (!aux->layoutMatches(fractures)) {
+                problem.fractureHost().solveFractures();
+                problem.bindFractureAuxCells(/*allowTopologyChange=*/true,
+                                             /*requireStableLayout=*/false);
+            }
+            using Solver = WellFractureJointSolver<TypeTag>;
+            typename Solver::Settings settings;
+            settings.local.ring = prm.get<int>("solver.well_local_ring", 1);
+            settings.local.maxIter = prm.get<int>("fractureparam.solver.well_joint_max_iter", 50);
+            settings.local.verbosity = prm.get<int>("fractureparam.solver.well_joint_verbosity", 0);
+            settings.toleranceFb = prm.get<double>("fractureparam.solver.well_joint_tolerance_fb", 1e-6);
+            settings.toleranceAux = prm.get<double>("fractureparam.solver.well_joint_tolerance_aux", 1e-3);
+            settings.fbMu = prm.get<double>("fractureparam.solver.fb_mu", 0.0);
+            settings.maxDwidth = prm.get<double>("fractureparam.solver.well_joint_max_dwidth", 1e-2);
+            settings.relativeDwidth = prm.get<double>("fractureparam.solver.well_joint_relative_dwidth", 1.0);
+            settings.fdColumns = prm.get<int>("fractureparam.solver.well_joint_fd_columns", 0);
+            WellLocalSolver<TypeTag> locator(this->simulator_);
+            Solver solver(this->simulator_);
+            fractures.template updateReservoirAndWellProperties<TypeTag, Simulator>(this->simulator_);
+            const auto& schedule = this->simulator_.vanguard().schedule();
+            fractures.updateActive(schedule[this->simulator_.episodeIndex()].wseed);
+
+            const int maxRounds = prm.get<int>("fractureparam.solver.well_joint_max_growth_rounds", 20);
+            for (int round = 0; round <= maxRounds; ++round) {
+                bool converged = true;
+                for (const auto& well : problem.wellModel().wellContainer()) {
+                    const auto domain = locator.buildDomain(well->name(), aux, settings.local);
+                    if (domain.numAux == 0) {
+                        continue;
+                    }
+                    const auto rep = solver.solve(domain, fractures, *aux, timer.currentStepLength(), settings);
+                    converged = converged && rep.converged;
+                    if (settings.local.verbosity > 0 || !rep.converged) {
+                        OpmLog::info(fmt::format("WellFractureJoint {}: {} iterations, residual {:.3e} -> {:.3e}, "
+                                                 "bhp {:.4f} bar, {}", well->name(), rep.iterations,
+                                                 rep.residual0, rep.residual, rep.bhp / 1e5,
+                                                 rep.converged ? "converged" : "not converged"));
+                    }
+                }
+                // growth is irreversible: only off a converged state
+                if (!converged || round == maxRounds) {
+                    break;
+                }
+                bool grew = false;
+                for (auto& wellFractures : fractures.wellFractures()) {
+                    for (auto& fracture : wellFractures) {
+                        fracture.setJointGrowthRound(true);
+                    }
+                }
+                fractures.template solve<TypeTag, Simulator>(this->simulator_);
+                for (auto& wellFractures : fractures.wellFractures()) {
+                    for (auto& fracture : wellFractures) {
+                        grew = grew || fracture.jointGrew();
+                        if (fracture.jointGrew() && settings.local.verbosity > 0) {
+                            OpmLog::info(fmt::format("WellFractureJoint growth round {}: {} now {} cells",
+                                                     round, fracture.name(), fracture.numCells()));
+                        }
+                        fracture.setJointGrowthRound(false);
+                    }
+                }
+                if (!grew) {
+                    break;
+                }
+                // the second request is what restructures a changed layout mid-step
+                problem.bindFractureAuxCells(/*allowTopologyChange=*/true, /*requireStableLayout=*/true);
+                problem.bindFractureAuxCells(/*allowTopologyChange=*/true, /*requireStableLayout=*/true);
             }
             return true;
         }
