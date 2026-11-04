@@ -105,6 +105,7 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
             for (std::size_t cell = 0; cell < numCells; ++cell) {
                 const auto slot = firstSlot + cell;
                 this->slotOf_.emplace_back(fractureIdx, cell);
+                this->phase_[slot] = fracture.injectedPhaseIdx();
 
                 // The aperture is the volume; below the floor a cell is treated as having
                 // the floor's aperture, exactly as the fracture's own pressure solve does,
@@ -337,6 +338,7 @@ FractureAuxCells<TypeTag>::updateValues(const FractureModel& fractures)
                 const auto aperture
                     = std::max(static_cast<Scalar>(width[cell][0]), this->minWidth_);
                 this->bulkVolume_[slot] = static_cast<Scalar>(areas[cell]) * aperture;
+                this->phase_[slot] = fracture.injectedPhaseIdx();
 
                 if (!this->active_[slot]) {
                     continue;
@@ -471,11 +473,12 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
             OpmLog::info("LEAKOFF-CHECK skipped: no linearization since the last restructure");
             return;
         }
-        const auto waterPos = FluidSystem::waterPhaseIdx;
+        // injected phase filling the fracture, set per fracture below
+        unsigned injPos = FluidSystem::waterPhaseIdx;
 
-        Scalar qEmb = 0.0;      // reservoir's water rate over the aux connections [sm3/s]
+        Scalar qEmb = 0.0;      // reservoir's injected-phase rate over the aux connections [sm3/s]
         Scalar qFrac = 0.0;     // fracture solver's own leak-off opinion [m3/s]
-        Scalar condEmb = 0.0;   // sum of trans * upwind water mobility
+        Scalar condEmb = 0.0;   // sum of trans * upwind injected-phase mobility
         Scalar condFrac = 0.0;  // sum of the fracture's leakof_ (trans * total mobility)
         // The conductances differ only in the mobility on the same transmissibility:
         // the flow upwinds the fracture cell's, updateLeakoff() uses solver.leakoff_mobility.
@@ -513,6 +516,7 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
                 // Aperture statistics: what the cubic law actually works with, and how
                 // many cells sit below the volume floor -- each of those is a cell whose
                 // conductivity a floor at that level would inflate by (floor/width)^3.
+                injPos = fracture.injectedPhaseIdx();
                 Scalar wMin = 1e30, wMax = 0.0, wSum = 0.0;
                 unsigned nBelowVolumeFloor = 0;
                 for (std::size_t cell = 0; cell < numCells && cell < widths.size(); ++cell) {
@@ -543,12 +547,12 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
                     const auto& iqF = model.intensiveQuantities(g, 0);
                     const auto& iqR = model.intensiveQuantities(partner, 0);
 
-                    pFracSum += getValue(iqF.fluidState().pressure(waterPos));
-                    pResSum += getValue(iqR.fluidState().pressure(waterPos));
+                    pFracSum += getValue(iqF.fluidState().pressure(injPos));
+                    pResSum += getValue(iqR.fluidState().pressure(injPos));
                     dFracSum += problem.dofCenterDepth(g);
                     dResSum += problem.dofCenterDepth(partner);
 
-                    const auto pF = getValue(iqF.fluidState().pressure(waterPos));
+                    const auto pF = getValue(iqF.fluidState().pressure(injPos));
                     pMin = std::min(pMin, pF);
                     pMax = std::max(pMax, pF);
                     if (std::find(perfDofs.begin(), perfDofs.end(), g) != perfDofs.end()) {
@@ -573,18 +577,18 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
                         }
 
                         condEmb += nbInfo.res_nbinfo.trans
-                            * getValue(iqF.mobility(waterPos));
-                        mobFracSum += getValue(iqF.mobility(waterPos));
+                            * getValue(iqF.mobility(injPos));
+                        mobFracSum += getValue(iqF.mobility(injPos));
                         for (unsigned ph = 0; ph < FluidSystem::numPhases; ++ph) {
                             if (FluidSystem::phaseIsActive(ph)) {
                                 mobResTotSum += getValue(iqR.mobility(ph));
                             }
                         }
                         dZgSum += nbInfo.res_nbinfo.dZg;
-                        dpotSum += getValue(iqF.fluidState().pressure(waterPos))
-                                 - getValue(iqR.fluidState().pressure(waterPos))
+                        dpotSum += getValue(iqF.fluidState().pressure(injPos))
+                                 - getValue(iqR.fluidState().pressure(injPos))
                                  - nbInfo.res_nbinfo.dZg
-                                   * getValue(iqF.fluidState().density(waterPos));
+                                   * getValue(iqF.fluidState().density(injPos));
 
                         RateVector flux(0.0);
                         RateVector darcy(0.0);
@@ -593,15 +597,15 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
                                                    problem.moduleParams());
 
                         const auto& fsys = iqF.fluidState().fluidSystem();
-                        const auto waterEqIdx = Indices::conti0EqIdx
+                        const auto injEqIdx = Indices::conti0EqIdx
                             + fsys.canonicalToActiveCompIdx(
-                                  fsys.solventComponentIndex(waterPos));
+                                  fsys.solventComponentIndex(injPos));
 
-                        Scalar rate = getValue(flux[waterEqIdx])
+                        Scalar rate = getValue(flux[injEqIdx])
                             * nbInfo.res_nbinfo.faceArea;
                         if constexpr (!getPropValue<TypeTag,
                                       Properties::BlackoilConserveSurfaceVolume>()) {
-                            rate /= fsys.referenceDensity(waterPos,
+                            rate /= fsys.referenceDensity(injPos,
                                                           problem.pvtRegionIndex(g));
                         }
                         qEmb += rate;
@@ -629,7 +633,7 @@ FractureAuxCells<TypeTag>::leakoffReport(const FractureModel& fractures) const
             "mean depthFrac {:.6g} m  mean depthRes {:.6g} m  "
             "mean dZg {:.6g}  mean dpot {:.6g} bar  "
             "pFrac min {:.6g} max {:.6g} bar  wellPerfs {} meanPatPerf {:.6g} bar  "
-            "mean mobWaterFrac {:.6g} mean mobTotalRes {:.6g}",
+            "mean mobInjFrac {:.6g} mean mobTotalRes {:.6g}",
             n, qEmb * day, qFrac * day, condEmb, condFrac,
             (condFrac > 0.0) ? condEmb / condFrac : Scalar{0},
             (n > 0) ? pFracSum / n / 1e5 : Scalar{0},
@@ -772,10 +776,10 @@ FractureAuxCells<TypeTag>::perforationReport() const
     const auto& model = this->simulator_.model();
     const auto& wellModel = this->simulator_.problem().wellModel();
     const auto& wellState = wellModel.wellState();
-    const auto waterPos = FluidSystem::waterPhaseIdx;
-    const auto waterActive = FluidSystem::canonicalToActivePhaseIdx(waterPos);
     const auto numPhases = wellState.numPhases();
     const Scalar day = 86400.0;
+    const auto& schedule = this->simulator_.vanguard().schedule();
+    const auto step = this->simulator_.episodeIndex();
 
     for (const auto& [wname, perfs] : this->wellPerforations_) {
         if (perfs.empty() || !wellState.has(wname)) {
@@ -784,6 +788,20 @@ FractureAuxCells<TypeTag>::perforationReport() const
 
         const auto& ws = wellState[wname];
         const auto& pd = ws.perf_data;
+
+        // the phase the well injects through the fracture
+        unsigned injPos = FluidSystem::waterPhaseIdx;
+        if (step >= 0 && static_cast<std::size_t>(step) < schedule.size()
+            && schedule[step].wells.has(wname))
+        {
+            using IndexTraits = typename FluidSystem::IndexTraitsType;
+            const auto& well = schedule[step].wells(wname);
+            const auto ph = injectedCanonicalPhaseIdx<IndexTraits>(well.injectorType());
+            if (well.isInjector() && ph.has_value() && FluidSystem::phaseIsActive(*ph)) {
+                injPos = *ph;
+            }
+        }
+        const auto injActive = FluidSystem::canonicalToActivePhaseIdx(injPos);
 
         // The perforations of the fracture are the tail of the well's list, but match
         // on the degree of freedom rather than assuming that: the whole point is to
@@ -798,8 +816,8 @@ FractureAuxCells<TypeTag>::perforationReport() const
         std::size_t nFound = 0;
 
         for (std::size_t perf = 0; perf < pd.size(); ++perf) {
-            const auto rate = (waterActive < numPhases)
-                ? pd.phase_rates[perf * numPhases + waterActive] : Scalar{0};
+            const auto rate = (injActive < numPhases)
+                ? pd.phase_rates[perf * numPhases + injActive] : Scalar{0};
             qTotal += rate;
 
             if (auxDofs.count(pd.cell_index[perf]) == 0) {
@@ -816,18 +834,18 @@ FractureAuxCells<TypeTag>::perforationReport() const
         Scalar pCellSum = 0.0;
         for (const auto& p : perfs) {
             const auto& iq = model.intensiveQuantities(static_cast<unsigned>(p.cell), 0);
-            pCellSum += getValue(iq.fluidState().pressure(waterPos));
+            pCellSum += getValue(iq.fluidState().pressure(injPos));
         }
 
         OpmLog::info(fmt::format(
             "PERF-CHECK {}: registered {}  found in well {} of {} perforations  "
             "bhp {:.6g} bar  mean perf pressure {:.6g} bar  mean cell pressure {:.6g} bar  "
-            "sum CTF {:.6g}  water rate through fracture {:.6g} of {:.6g} sm3/day",
+            "sum CTF {:.6g}  {} rate through fracture {:.6g} of {:.6g} sm3/day",
             wname, perfs.size(), nFound, pd.size(),
             ws.bhp / 1e5,
             (nFound > 0) ? pPerfSum / nFound / 1e5 : Scalar{0},
             pCellSum / perfs.size() / 1e5,
-            ctfAux, qAux * day, qTotal * day));
+            ctfAux, FluidSystem::phaseName(injPos), qAux * day, qTotal * day));
     }
 }
 

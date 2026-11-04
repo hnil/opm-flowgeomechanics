@@ -102,6 +102,7 @@ public:
         , bulkVolume_(capacity, 0.0)
         , depth_(capacity, 0.0)
         , partner_(capacity, 0)
+        , phase_(capacity, FluidSystem::waterPhaseIdx)
     {}
 
     unsigned numDofs() const override
@@ -313,8 +314,8 @@ public:
         return dofs;
     }
 
-    //! Water pressure of the bound cells of one fracture (binding order), per
-    //! fracture cell; empty if the fracture is not bound.
+    //! Pressure of the injected phase in the bound cells of one fracture (binding
+    //! order), per fracture cell; empty if the fracture is not bound.
     std::vector<Scalar> cellPressures(std::size_t fractureIdx) const
     {
         std::vector<Scalar> p;
@@ -333,7 +334,7 @@ public:
                 continue;
             }
             const auto dof = static_cast<unsigned>(this->localToGlobalDof(slot));
-            p[cell] = getValue(model.intensiveQuantities(dof, 0).fluidState().pressure(FluidSystem::waterPhaseIdx));
+            p[cell] = getValue(model.intensiveQuantities(dof, 0).fluidState().pressure(this->phase_[slot]));
         }
         return p;
     }
@@ -354,7 +355,7 @@ public:
         const auto nc = fracture.numCells();
         const auto& width = fracture.fractureWidth();
         const auto areas = fracture.cellAreas();
-        const auto& mobility = fracture.reservoirMobility();
+        const auto mobility = fracture.fractureFlowMobilities();
 
         in.htrans = fracture.currentHalfTrans();
         in.cubic_law_min_width = fracture.cubicLawMinWidth();
@@ -396,7 +397,7 @@ public:
             const auto dof = static_cast<unsigned>(this->localToGlobalDof(slot));
             in.volume_prev[cell] = this->bulkVolume_[slot];
             in.density[cell] = getValue(model.intensiveQuantities(dof, 0)
-                                        .fluidState().density(FluidSystem::waterPhaseIdx));
+                                        .fluidState().density(this->phase_[slot]));
         }
         return in;
     }
@@ -469,6 +470,7 @@ private:
         // A cell born mid-run starts from the rock's state NOW: at the initial
         // pressure it sits tens of bar below its partner, the well drops to it and
         // cross-flows from its matrix perforations.
+        const auto injectedPhase = this->phase_.at(localIdx);
         if (useCurrentState) {
             const auto& cur = this->simulator_.model().intensiveQuantities(partner, /*timeIdx=*/0).fluidState();
             for (unsigned phase = 0; phase < FluidSystem::numPhases; ++phase) {
@@ -476,11 +478,11 @@ private:
                     continue;
                 }
                 fs.setPressure(phase, getValue(cur.pressure(phase)));
-                // the fracture volume is created by the injected water and the
-                // fracture's own solve treats it as water-filled; starting at the
-                // rock's Sw would force a 0 -> 1 saturation transient inside the
-                // first step, one limiter-capped Newton iteration at a time
-                fs.setSaturation(phase, (phase == FluidSystem::waterPhaseIdx) ? 1.0 : 0.0);
+                // the fracture volume is created by the injected fluid and the
+                // fracture's own solve treats it as filled with it; starting at the
+                // rock's saturation would force a 0 -> 1 saturation transient inside
+                // the first step, one limiter-capped Newton iteration at a time
+                fs.setSaturation(phase, (phase == injectedPhase) ? 1.0 : 0.0);
             }
             if constexpr (getPropValue<TypeTag, Properties::EnableEnergy>()) {
                 fs.setTemperature(getValue(cur.temperature(0)));
@@ -493,10 +495,11 @@ private:
             }
         }
 
-        // Carry the phase pressures to the fracture cell's own depth; the fluid is the
-        // rock's, so nothing else about the state changes.
-        const auto waterPos = FluidSystem::waterPhaseIdx;
-        const auto rho = getValue(fs.density(waterPos));
+        // Carry the phase pressures to the fracture cell's own depth with the density of
+        // the fluid filling the fracture (water at model initialization).
+        const auto headPhase = useCurrentState ? injectedPhase
+                                               : static_cast<unsigned>(FluidSystem::waterPhaseIdx);
+        const auto rho = getValue(fs.density(headPhase));
         const auto gravity = problem.gravity()[dimWorld - 1];
         const auto dz = this->depth_.at(localIdx) - problem.dofCenterDepth(partner);
 
@@ -571,6 +574,8 @@ private:
     Scalar lastBindChange_ = 0.0;
     std::vector<Scalar> bulkVolume_{};
     std::vector<Scalar> depth_{};
+    //! Canonical index of the injected phase filling each slot's fracture cell.
+    std::vector<unsigned> phase_{};
     //! Reservoir cell each fracture cell leaks into; also where its initial state
     //! comes from.  Dormant cells keep cell zero, which is only ever read to give the
     //! row a defined state.

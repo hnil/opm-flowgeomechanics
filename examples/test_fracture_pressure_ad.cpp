@@ -403,7 +403,7 @@ bool test_rate_well_control()
     input.num_well_equations = 1;
     input.perfinj = {std::tuple<int,double>{0, 50.0}};
     input.total_wellindex = 200.0;
-    input.mobility_water_perf = 1000.0;
+    input.mobility_perf = 1000.0;
 
     // extra entry for well equation pressure
     input.fracture_pressure.push_back(1e6);
@@ -807,7 +807,7 @@ bool test_standalone_with_well_equations()
     input.num_well_equations = 1;
     input.perfinj = {std::tuple<int,double>{0, 50.0}, std::tuple<int,double>{2, 30.0}};
     input.total_wellindex = 200.0;
-    input.mobility_water_perf = 1000.0;
+    input.mobility_perf = 1000.0;
     input.fracture_pressure.push_back(1e6); // extra entry for well equation
 
     auto ad_result = Opm::assemblePressureAD(input);

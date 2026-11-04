@@ -23,6 +23,7 @@
 #include "RegularTrimesh.hpp"
 #include <opm/common/OpmLog/OpmLog.hpp>
 #include <opm/common/TimingMacros.hpp>
+#include <opm/input/eclipse/Schedule/Well/Well.hpp>
 #include <opm/geomech/vem/vemutils.hpp>
 #include <opm/material/densead/Evaluation.hpp>
 #include <opm/grid/UnstructuredGrid.h>
@@ -268,6 +269,31 @@ void Fracture::initReservoirProperties(const Simulator& simulator)
     assert(nu_ > 0 && nu_ < 1);
 }
 
+template <class FluidSystem, class Simulator>
+void Fracture::updateInjectedPhase(const Simulator& simulator)
+{
+    const int step = simulator.episodeIndex();
+    const auto& schedule = simulator.vanguard().schedule();
+    if (step < 0 || static_cast<std::size_t>(step) >= schedule.size()
+        || !schedule[step].wells.has(wellinfo_.name))
+    {
+        return;
+    }
+    const auto& well = schedule[step].wells(wellinfo_.name);
+    if (!well.isInjector()) {
+        return; // keep the fluid the fracture was last filled with
+    }
+    const auto phase = injectedCanonicalPhaseIdx<IndexTraits>(well.injectorType());
+    if (!phase.has_value() || !FluidSystem::phaseIsActive(*phase)) {
+        return; // MULTI injectors are not supported; keep the current fluid
+    }
+    if (*phase != injected_phase_idx_) {
+        OpmLog::info(fmt::format("Fracture {}: fracture fluid is now the injected {} phase",
+                                 this->name(), FluidSystem::phaseName(*phase)));
+        injected_phase_idx_ = *phase;
+    }
+}
+
 template <class TypeTag, class Simulator>
 void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_constant_vals,bool /*update_filtercake*/)
     {
@@ -304,12 +330,23 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
 
         std::vector<ScalarFluidState> fracture_scalar_fluid_states(ncf);
         std::vector<bool> fracture_scalar_fluid_state_valid(ncf, false);
+
+        // the fracture is filled with what the well injects: water, gas or oil
+        updateInjectedPhase<FluidSystem>(simulator);
+        const unsigned phase = injected_phase_idx_;
+        const bool injected_fluid_mobility = useInjectedFluidMobility();
         {
         // well cell properties
         const auto& intQuants = simulator.model().intensiveQuantities(wellinfo_.well_cell, /*timeIdx*/ 0);
         const auto& fs = intQuants.fluidState();
-        density_perf_ = fs.density(FluidSystem::waterPhaseIdx).value();
-        mobility_water_perf_ = intQuants.mobility(FluidSystem::waterPhaseIdx).value();
+        density_perf_ = value_of(fs.density(phase));
+        if (injected_fluid_mobility) {
+            const double mu = value_of(fs.viscosity(phase));
+            mobility_injected_perf_ = (mu > 0.0) ? 1.0 / mu : 1000.0;
+        } else {
+            mobility_injected_perf_ = value_of(intQuants.mobility(phase));
+        }
+        inv_b_perf_ = value_of(fs.invB(phase));
         }
 
 
@@ -412,14 +449,14 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                     }
                 }
                 map_reservoir_mobility_[cell] = reservoir_mobility;
-                map_reservoir_density_[cell] = fs.density(FluidSystem::waterPhaseIdx).value();
-                auto pval = fs.pressure(FluidSystem::waterPhaseIdx);
-                map_reservoir_pressure_[cell] = pval.value();
+                map_reservoir_density_[cell] = value_of(fs.density(phase));
+                map_reservoir_pressure_[cell] = value_of(fs.pressure(phase));
                 map_reservoir_cell_z_[cell] = problem.dofCenterDepth(cell);
             }
         }
 
-        reservoir_water_mobility_.resize(ncf, 0.0);
+        reservoir_injected_mobility_.resize(ncf, 0.0);
+        fracture_fluid_mobility_.resize(ncf, 1000.0);
         for (size_t i = 0; i < ncf; ++i) {
             int cell = reservoir_cells_[i];
             if (!(cell < 0)) {
@@ -428,10 +465,10 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 const auto& fs = intQuants.fluidState();
                                 copyBlackOilFluidState(fracture_scalar_fluid_states[i], fs, value_of);
                                 fracture_scalar_fluid_state_valid[i] = true;
-                                reservoir_pressure_[i] = value_of(fs.pressure(FluidSystem::waterPhaseIdx));
+                                reservoir_pressure_[i] = value_of(fs.pressure(phase));
                 enum { numPhases = getPropValue<TypeTag, Properties::NumPhases>() };
                 reservoir_mobility_[i] = 0.0;
-                                reservoir_density_[i] = value_of(fs.density(FluidSystem::waterPhaseIdx));
+                                reservoir_density_[i] = value_of(fs.density(phase));
                 for (unsigned phaseIdx = 0; phaseIdx < numPhases; ++phaseIdx) {
                   if (FluidSystem::phaseIsActive(phaseIdx)) {
                     // assume sum should only be water;
@@ -439,11 +476,14 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                     reservoir_mobility_[i] += val.value();
                   }
                 }
-                // Kept apart from the total: the flow's water equation upwinds this
-                // one, so leakoff_mobility=upwind needs it when the reservoir feeds
-                // the fracture.
-                reservoir_water_mobility_[i] =
-                    value_of(intQuants.mobility(FluidSystem::waterPhaseIdx));
+                // Kept apart from the total: the flow's equation for the injected
+                // phase upwinds this one, so leakoff_mobility=upwind needs it when
+                // the reservoir feeds the fracture.
+                reservoir_injected_mobility_[i] = value_of(intQuants.mobility(phase));
+                {
+                    const double mu = value_of(fs.viscosity(phase));
+                    fracture_fluid_mobility_[i] = (mu > 0.0) ? 1.0 / mu : 1000.0;
+                }
                 for (int dim = 0; dim < 3; ++dim) {
                   reservoir_stress_[i] = problem.stress(cell);
                 }
@@ -516,8 +556,9 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 reservoir_stress_[i][2] = stressval; //???
                 reservoir_pressure_[i] = injectionPressure();
                 reservoir_mobility_[i] = 1000.0;
-                reservoir_water_mobility_[i] = 1000.0;
-                reservoir_density_[i] = 1000.0;
+                reservoir_injected_mobility_[i] = 1000.0;
+                fracture_fluid_mobility_[i] = 1000.0;
+                reservoir_density_[i] = (phase == FluidSystem::waterPhaseIdx) ? 1000.0 : density_perf_;
                 reservoir_perm_[i] = 0.0;
                 reservoir_cstress_[i]  = 1e99;
                 reservoir_dist_[i] = 1e99;
@@ -539,10 +580,11 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                                       counts[4], counts[5], counts[6]));
         }
 
-        fracture_water_property_evaluator_ =
+        fracture_fluid_property_evaluator_ =
             [fluid_states = std::move(fracture_scalar_fluid_states),
              valid_states = std::move(fracture_scalar_fluid_state_valid),
-             fallback_density = reservoir_density_](const size_t cell_idx, const double pressure)
+             fallback_density = reservoir_density_,
+             phase](const size_t cell_idx, const double pressure)
                 -> std::pair<CellFluidProperty, CellFluidProperty>
         {
             using PressureEval = Opm::DenseAd::Evaluation<double, 1>;
@@ -561,17 +603,16 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
 
             AdFluidState ad_state;
             copyBlackOilFluidState(ad_state, fluid_states[cell_idx], make_constant);
-            ad_state.setPressure(FluidSystem::waterPhaseIdx,
-                                 PressureEval::createVariable(pressure, 0));
+            ad_state.setPressure(phase, PressureEval::createVariable(pressure, 0));
 
             const auto make_property = [](const auto& property_eval) {
                 return CellFluidProperty{property_eval.value(), property_eval.derivative(0)};
             };
 
             const auto density = make_property(
-                FluidSystem::density(ad_state, FluidSystem::waterPhaseIdx, ad_state.pvtRegionIndex()));
+                FluidSystem::density(ad_state, phase, ad_state.pvtRegionIndex()));
             const auto viscosity = make_property(
-                FluidSystem::viscosity(ad_state, FluidSystem::waterPhaseIdx, ad_state.pvtRegionIndex()));
+                FluidSystem::viscosity(ad_state, phase, ad_state.pvtRegionIndex()));
             return std::make_pair(density, viscosity);
         };
 
@@ -650,7 +691,8 @@ void Fracture::updateFilterCakePropertiesPost(const Simulator& simulator)
         const auto& wellstate = wellstates[*well_index];
 
         double dt = simulator.timeStepSize();
-        updateFilterCakeProps(*connection, wellstate, dt);
+        const bool surface_basis = well.getFilterConcBasis() == Well::FilterConcBasis::SURFACE;
+        updateFilterCakeProps(*connection, wellstate, dt, surface_basis);
 
     }
 
@@ -1342,8 +1384,9 @@ Fracture::serializeState(Serializer& serializer)
     serializer(reservoir_perm_);
     serializer(reservoir_cstress_);
     serializer(reservoir_mobility_);
-    serializer(reservoir_water_mobility_);
+    serializer(reservoir_injected_mobility_);
     serializer(reservoir_density_);
+    serializer(fracture_fluid_mobility_);
     serializer(reservoir_cell_z_);
     serializer(map_reservoir_mobility_);
     serializer(map_reservoir_density_);
@@ -1440,7 +1483,9 @@ Fracture::serializeState(Serializer& serializer)
 
     serializer(density_);
     serializer(density_perf_);
-    serializer(mobility_water_perf_);
+    serializer(mobility_injected_perf_);
+    serializer(inv_b_perf_);
+    serializer(injected_phase_idx_);
     serializer(closed_cells_);
     serializer(cell_flip_counts_);
     serializer(last_solve_stats_.converged);
