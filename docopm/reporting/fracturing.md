@@ -14,6 +14,10 @@ then additional vectors will be allocated for fracture connections as fracturing
 | ------ | --------- | ----------- |
 | `[CW]WIRFRAC` | Surface condition liquid flow rate | Water injection rate going into fracture |
 | `[CW]WITFRAC` | Liquid surface volume | Total injected water volume going into fracture |
+| `[CW]GIRFRAC` | Surface condition gas flow rate | Gas injection rate going into fracture (gas injectors) |
+| `[CW]GITFRAC` | Gas surface volume | Total injected gas volume going into fracture (gas injectors) |
+| `[CW]OIRFRAC` | Surface condition liquid flow rate | Oil injection rate going into fracture (oil injectors) |
+| `[CW]OITFRAC` | Liquid surface volume | Total injected oil volume going into fracture (oil injectors) |
 | `CFRWI` | Transmissibility | Connection transmissibility factor due to fracturing |
 | `CFRAREA` | Area | Total fracture area |
 | `CFRHEIGH` | Length | Fracture half-thickness |

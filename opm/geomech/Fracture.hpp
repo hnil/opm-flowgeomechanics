@@ -71,6 +71,7 @@
 #include <opm/models/utils/propertysystem.hh>
 #include <opm/simulators/linalg/FlexibleSolver.hpp>
 #include <opm/simulators/linalg/PropertyTree.hpp>
+#include <opm/simulators/wells/InjectedPhase.hpp>
 #include <opm/simulators/wells/WellState.hpp>
 #include <opm/simulators/wells/RuntimePerforation.hpp>
 #include <opm/material/fluidsystems/BlackOilDefaultFluidSystemIndices.hpp>
@@ -287,8 +288,13 @@ public:
     template <class TypeTag, class Simulator>
     void updateReservoirProperties(const Simulator& simulator, bool init_constant_vals=false,bool update_filtercake=true);
 
+    //! Deposit filtrate on the fracture faces over a step of length dt. The
+    //! concentration is per surface volume of injected fluid if surface_conc_basis,
+    //! else per reservoir volume (WINJFCNC item 3).
     void updateFilterCakeProps(const Opm::Connection& connection,
-                               const Opm::SingleWellState<double,IndexTraits>& wellstate,double dt);
+                               const Opm::SingleWellState<double,IndexTraits>& wellstate,
+                               double dt,
+                               bool surface_conc_basis = true);
     void initFracturePressureFromReservoir();
     double hydrostaticReservoirPressure(size_t i) const;
     void initFractureStates();
@@ -349,6 +355,15 @@ public:
     const std::vector<double>& leakoffMobility() const { return leakoff_mobility_; }
     //! Mobility the flow applies on the embedded leak-off connection of a cell.
     double flowLeakoffMobility(int eIdx) const;
+
+    //! Canonical phase index (water, oil or gas) of the fluid the well injects into,
+    //! and that fills, the fracture.  Water until the well is known as an injector of
+    //! another single phase.
+    unsigned injectedPhaseIdx() const { return injected_phase_idx_; }
+    bool injectsWater() const { return injected_phase_idx_ == IndexTraits::waterPhaseIdx; }
+
+    //! Mobility per fracture cell used for flow inside the fracture (cubic law faces).
+    std::vector<double> fractureFlowMobilities() const;
 
     //! Pressure per fracture cell as the fracture's own solver last left it.  In the
     //! embedded representation the same quantity is also a degree of freedom of the
@@ -806,7 +821,11 @@ private:
     // Reservoir state per fracture cell; refreshed from flow and mechanics.
     struct ReservoirSamples
     {
-        std::vector<double> perm, cstress, mobility, waterMobility, density, cellZ, pressure;
+        std::vector<double> perm, cstress, mobility, density, cellZ, pressure;
+        // mobility of the injected phase in the reservoir cell (kr included)
+        std::vector<double> injectedMobility;
+        // 1/mu of the injected fluid filling the fracture (kr = 1)
+        std::vector<double> fluidMobility;
         std::vector<Dune::FieldVector<double, 6>> stress;
     };
     // Flow state of an intersected reservoir cell that holds no fracture-cell centroid.
@@ -817,8 +836,8 @@ private:
     ReservoirMap reservoir_map_;
     ReservoirSamples reservoir_;
     std::map<int, ReservoirCellValues> off_centroid_cells_;
-    using WaterPropertyEvaluator = std::function<std::pair<CellFluidProperty, CellFluidProperty>(size_t, double)>;
-    WaterPropertyEvaluator fracture_water_property_evaluator_;
+    using FluidPropertyEvaluator = std::function<std::pair<CellFluidProperty, CellFluidProperty>(size_t, double)>;
+    FluidPropertyEvaluator fracture_fluid_property_evaluator_;
     std::optional<centre_stress::DeclaredFaults> stress_faults_;
     std::unordered_map<int, centre_stress::CellSides> stress_sides_;
 
@@ -931,7 +950,19 @@ private:
     std::vector<RuntimePerforation> well_indices_accel_;
     double density_{1000.0};// default to water
     double density_perf_{1000.0};
-    double mobility_water_perf_{1000.0};
+    double mobility_injected_perf_{1000.0};
+    // b of the injected fluid in the well cell (surface volume per reservoir volume)
+    double inv_b_perf_{1.0};
+    // canonical index of the phase the well injects and the fracture is filled with
+    unsigned injected_phase_idx_{IndexTraits::waterPhaseIdx};
+
+    template <class FluidSystem, class Simulator>
+    void updateInjectedPhase(const Simulator& simulator);
+    // solver.fracture_fluid_mobility: whether fracture flow, well-to-fracture flow and
+    // cake resistance use the injected fluid's 1/mu (kr = 1) instead of the legacy
+    // reservoir mobilities
+    bool useInjectedFluidMobility() const;
+    double fractureFlowMobility(std::size_t cell) const;
 
     // handling preconditioner
     std::vector<int> closed_cells_; // indices of cells that are closed (zero width) in the current iteration

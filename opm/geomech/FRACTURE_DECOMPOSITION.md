@@ -19,7 +19,7 @@ mechanical move gated by the 9 REGTEST + 2 BANDTEST suite.
 
 2. **`ReservoirSample`** — everything sampled from the flow/mech state per cell:
    `reservoir_{cells,pressure,mobility,perm,dist,stress,cstress,density,cell_z}_,
-   all_reservoir_*_, map_reservoir_*_, fracture_water_property_evaluator_`.
+   all_reservoir_*_, map_reservoir_*_, fracture_fluid_property_evaluator_`.
    One `resize(ncf)` + one `sampleFrom(simulator)`; kills the family of
    "vector sized to the old grid" bugs by construction (single resize site).
 
@@ -27,7 +27,7 @@ mechanical move gated by the 9 REGTEST + 2 BANDTEST suite.
    `wellinfo_, perfinj_, well_source_*, well_perf_cells_, well_perf_rate_,
    well_rate_(+mix), total_wellindex_(+mix), total_WI_well_, wi_dz_,
    wi_respress_, well_ref_depth_, perf_ref_depth_, perf_pressure_(+mix,
-   +step_start), dp_perf_, density_perf_, mobility_water_perf_,
+   +step_start), dp_perf_, density_perf_, mobility_injected_perf_,
    well_control_is_rate_, effective_control_latched_, well_indices_(+accel)`.
    This is the piece the **generalized well-constraint row** will rebuild —
    extract it FIRST, so the row lands in a component instead of in the god

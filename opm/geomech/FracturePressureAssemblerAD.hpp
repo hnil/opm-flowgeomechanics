@@ -200,7 +200,7 @@ struct FracturePressureInput
     std::string control_type = "rate";
     double total_wellindex = 0.0;
     double well_target_pressure = 0.0; // bhp_well: p_w target at the perf-ref datum
-    double mobility_water_perf = 1.0;
+    double mobility_perf = 1.0;
     size_t num_well_equations = 0;
     bool use_fluid_mobility_for_internal_faces = false;
     bool use_fluid_mobility_for_well_connections = false;
@@ -275,7 +275,7 @@ wellConnectionMobilityValue(const FracturePressureInput& input,
 {
     if (input.use_fluid_mobility_for_well_connections)
         return cellMobilityValue(input.density[cell], input.viscosity[cell]);
-    return input.mobility_water_perf;
+    return input.mobility_perf;
 }
 
 template <int NumDerivs>
@@ -286,7 +286,7 @@ wellConnectionMobilityAD(const FracturePressureInput& input,
 {
     using AD = LocalAD<NumDerivs>;
     if (!input.use_fluid_mobility_for_well_connections)
-        return AD::constant(input.mobility_water_perf);
+        return AD::constant(input.mobility_perf);
     return cellMobilityAD<NumDerivs>(input.density[cell], input.viscosity[cell], pressure_deriv_index);
 }
 

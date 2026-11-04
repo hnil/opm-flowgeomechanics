@@ -2,6 +2,8 @@
 
 These summary vectors show how injected filtrate particles develop over time and partition between the well bore and fractures.
 
+Filtrate is carried by the injected phase of the well, so water, gas and oil injectors (WCONINJE) can all build filter cakes (WINJDAM). The filtrate volumes are the WINJFCNC concentration times the injected volume in the concentration basis of WINJFCNC item 3: surface volume (`SURF`, default) or reservoir volume (`RES`). For gas injectors the two differ by the gas formation volume factor.
+
 The naming convention is the same as for other summary vectors, with names starting with `C` corresponding to the connection level and names starting with `W` corresponding to the well level. Furthermore, if the connection block is defaulted in a connection level vector, as in
 ```
 CFCFFVIR
