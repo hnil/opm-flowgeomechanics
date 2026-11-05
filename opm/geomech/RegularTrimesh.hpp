@@ -44,6 +44,8 @@ struct CellAttributes {
     CellAttributes()
         : flag(0) {};
     int flag;
+    template <class Serializer>
+    void serializeOp(Serializer& serializer) { serializer(flag); }
 }; // fill this with contents as needed
 
 
@@ -188,6 +190,16 @@ public:
     createGridToGridMap(const std::vector<std::vector<CellRef>>& map1,
                         const std::vector<std::vector<CellRef>>& map2,
                         const int level);
+
+    template <class Serializer>
+    void serializeOp(Serializer& serializer)
+    {
+        serializer(cellinfo_);
+        serializer(origin_);
+        serializer(axis1_);
+        serializer(axis2_);
+        serializer(edgelen_);
+    }
 
 private:
     // helper functions

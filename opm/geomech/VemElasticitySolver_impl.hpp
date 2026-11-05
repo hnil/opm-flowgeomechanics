@@ -469,7 +469,7 @@ IMPL_FUNC(void, solve())
         for (std::size_t i = 0; i < rhs_eff.size(); ++i)
             rhs_eff[i] *= scale_[i][0];
     }
-    if(sol_.size() != rhs.size()){
+    if(sol_.size() != rhs.size() || !warm_start_){
         sol_.resize(rhs.size());
         sol_ = 0;
         Vector y = sol_;

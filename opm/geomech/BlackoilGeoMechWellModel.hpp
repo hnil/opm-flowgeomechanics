@@ -68,6 +68,14 @@ public:
         return true;
     }
 
+    // Connections added by fracture growth rebuild the wells at the next time step.
+    template <class Serializer>
+    void serializeOp(Serializer& serializer)
+    {
+        Parent::serializeOp(serializer);
+        serializer(this->wellStructureChangedDynamically_);
+    }
+
     void createWellContainer(const int reportStepIdx)
     {
         Parent::createWellContainer(reportStepIdx);

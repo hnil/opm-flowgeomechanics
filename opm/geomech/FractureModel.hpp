@@ -139,6 +139,49 @@ public:
         template <typename Scalar, typename IndexTraits>
         void assignGeoMechWellState(WellState<Scalar, IndexTraits> & wellState) const;
 
+        //! Wells first: a loading run makes its fractures from them, see FractureMechHost.
+        template <class Serializer>
+        void serializeWells(Serializer& serializer)
+        {
+            std::size_t num_wells = wells_.size();
+            serializer(num_wells);
+            for (std::size_t i = 0; i < num_wells; ++i) {
+                std::string name;
+                std::vector<FractureWell::Connection> conns;
+                std::vector<Point3D> points;
+                std::vector<Segment> segments;
+                if (serializer.isSerializing()) {
+                    name = wells_[i].name();
+                    conns = wells_[i].connections();
+                    points = wells_[i].definingPoints();
+                    segments = wells_[i].definingSegments();
+                }
+                serializer(name);
+                serializer(conns);
+                GeomechCheckpoint::fieldVectors(serializer, points);
+                serializer(segments);
+                if (!serializer.isSerializing()) {
+                    this->addWell(name, conns, points, segments);
+                }
+                wells_[i].serializeState(serializer);
+            }
+        }
+
+        template <class Serializer>
+        void serializeFractures(Serializer& serializer)
+        {
+            for (auto& fractures : well_fractures_) {
+                std::size_t num_fractures = fractures.size();
+                serializer(num_fractures);
+                if (num_fractures != fractures.size()) {
+                    OPM_THROW(std::runtime_error, "Checkpoint and fracture seeds disagree on the number of fractures.");
+                }
+                for (auto& fracture : fractures) {
+                    fracture.serializeState(serializer);
+                }
+            }
+        }
+
         bool addPertsToSchedule();
         // probably this should be collected in one loop since all do full loop over fracture ++ well
         Dune::FieldVector<double, 6> stress(Dune::FieldVector<double, 3> obs) const;

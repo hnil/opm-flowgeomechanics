@@ -192,6 +192,7 @@ class VemElasticitySolver
     }
     Vector& getLoadVector(){return rhs_;}
     const Vector& getSolutionVector(){return sol_;}
+    Vector& warmStartVector(){return sol_;}
     void setCopyRowsToZero(){
       auto& matrix =  this->getOperator();
         assert(matrix.N() == matrix.M());
@@ -212,6 +213,7 @@ class VemElasticitySolver
         // Opt-in: stop the warm-started solve when the residual of the full
         // load is below tol, not when the correction's own residual is.
         tol_relative_to_load_ = prm.get<bool>("tol_relative_to_load", false);
+        warm_start_ = prm.get<bool>("warm_start", true);
         linear_tol_ = prm.get<double>("tol", 1e-5);
 #if HAVE_MPI
 // grid_.comm() is something like collective communication
@@ -449,6 +451,7 @@ private:
     bool vem_stress_ = false;
     bool diagonal_scaling_ = false;
     bool tol_relative_to_load_ = false;
+    bool warm_start_ = true;
     double linear_tol_ = 1e-5;
     Dune::BlockVector<Dune::FieldVector<ctype,1>> scale_; // Jacobi scale factors (if diagonal_scaling_)
         int num_solves_ = 0;

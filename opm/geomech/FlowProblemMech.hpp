@@ -191,6 +191,7 @@ namespace Opm{
 
         static void registerParameters(){
             Base::registerParameters();
+	    Parameters::Register<Parameters::SaveAtDay>("write a checkpoint after the first sub-step reaching this day, also within a report step; load it with --load-step=<report step + 1>");
 	    Parameters::Register<Parameters::FractureParamFile>("json file defining fracture setting or alias: standard, sequential_implicit");
 	    Parameters::Register<Parameters::MechCoarsenFile>("file of COARSEN records (I1 I2 J1 J2 K1 K2 NX NY NZ, one per line) giving a mechanics grid coarser than the flow grid");
 	    Parameters::Register<Parameters::VtkWriteMechGrid>("write VTK on a mechanics grid of its own (mech/ under the output directory), with the flow quantities where flow cells exist");
@@ -940,6 +941,21 @@ namespace Opm{
         std::vector<double> thelcoef_;
         std::vector<double> cstress_;
 
+    public:
+        //! The solver settings of a loaded checkpoint are those of the loading run.
+        static constexpr bool loadKeepsRunSettings = true;
+
+        template <class Serializer>
+        void serializeOp(Serializer& serializer)
+        {
+            serializer(static_cast<Base&>(*this));
+            serializer(initpressure_);
+            serializer(inittemperature_);
+            GeomechCheckpoint::fieldVectors(serializer, initstress_);
+            serializer(first_fracture_solve_);
+        }
+
+    protected:
         std::vector<double> initpressure_;
         std::vector<double> inittemperature_;
         Dune::BlockVector< SymTensor > initstress_;

@@ -537,10 +537,29 @@ namespace Opm{
             }
             this->calculateOutputQuantitiesMech();
         }
+        //! The operator and its preconditioner are not saved: a load keeps first_solve_
+        //! true, so the next solve assembles them and sets up this run's linear solver.
         template<class Serializer>
-        void serializeOp(Serializer&)
+        void serializeOp(Serializer& serializer)
         {
-         }
+            namespace ckpt = GeomechCheckpoint;
+            ckpt::fieldVectors(serializer, pressure_);
+            ckpt::fieldVectors(serializer, mechPotentialForce_);
+            ckpt::fieldVectors(serializer, mechPotentialForceMech_);
+            ckpt::fieldVectors(serializer, mechPotentialPressForce_);
+            ckpt::fieldVectors(serializer, mechPotentialPressForceFracture_);
+            ckpt::fieldVectors(serializer, mechPotentialTempForce_);
+            ckpt::fieldVectors(serializer, celldisplacement_);
+            ckpt::fieldVectors(serializer, displacement_);
+            ckpt::fieldVectors(serializer, flowDisplacement_);
+            ckpt::fieldVectors(serializer, linstress_);
+            ckpt::fieldVectors(serializer, outputstress_);
+            ckpt::fieldVectors(serializer, strain_);
+            if (elacticitysolver_) {
+                ckpt::fieldVectors(serializer, elacticitysolver_->warmStartVector());
+            }
+            serializer(fracHost_);
+        }
 
         // used in FlowProblemGeoMech
         void init(bool /*restart*/){

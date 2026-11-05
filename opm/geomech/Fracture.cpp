@@ -143,6 +143,7 @@ Fracture::init(const std::string& well,
 
         auto [grid, fsmap, bmap] = trimesh_->createDuneGrid(1, well_source_cellref_);
         grid_mesh_map_ = fsmap;
+        grid_fixed_cells_ = well_source_cellref_;
 
         setFractureGrid(std::move(grid)); // create the physical grid from trimesh
 
@@ -2235,6 +2236,7 @@ void Fracture::resetFracture()
     auto [grid, fsmap, bmap] =
         trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources, smooth_boundary, numcell_threshold);
     grid_mesh_map_ = fsmap;
+    grid_fixed_cells_ = wsources;
     // Restore grid and cell normals (setFractureGrid clears reservoir_cells_;
     // they will be repopulated by FractureModel::resetFractures via
     // updateFractureReservoirCells + initReservoirProperties).
@@ -2257,6 +2259,26 @@ void Fracture::resetFracture()
     // Note: reservoir_cells_, all_reservoir_cells_, reservoir_properties_, etc.
     // are recalculated by FractureModel::resetFractures after this call returns.
 }
+void Fracture::rebuildGridForLoad(const std::vector<std::vector<CellRef>>& saved_map)
+{
+    const int max_coarsening = prm_.get<int>("solver.max_num_coarsening");
+    const int numcell_threshold = prm_.get<int>("solver.numcell_threshold");
+    const bool smooth_boundary = prm_.get<bool>("solver.smooth_boundary", false);
+    auto built = trimesh_->createDuneGrid(max_coarsening, grid_fixed_cells_, smooth_boundary, numcell_threshold);
+    if (std::get<1>(built) != saved_map) {
+        // a fracture that has not grown still has its seed grid, see init()
+        built = trimesh_->createDuneGrid(1, grid_fixed_cells_);
+    }
+    if (std::get<1>(built) != saved_map) {
+        OPM_THROW(std::runtime_error,
+                  "Fracture " + name() + ": the saved mesh gives another grid with this run's "
+                  "solver.max_num_coarsening, solver.numcell_threshold or solver.smooth_boundary; "
+                  "these cannot change after a load.");
+    }
+    grid_mesh_map_ = saved_map;
+    setFractureGrid(std::move(std::get<0>(built)));
+}
+
 void Fracture::moveForwardInTime(double dt_last)
 {
     // CTF-vector acceleration: the secant information is only meaningful within

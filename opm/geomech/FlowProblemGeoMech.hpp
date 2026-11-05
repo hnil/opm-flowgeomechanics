@@ -820,6 +820,16 @@ namespace Opm{
             return Parent::recycleFirstIterationStorage();
         }
 
+        template <class Serializer>
+        void serializeOp(Serializer& serializer)
+        {
+            if (this->fractureFlowIsEmbedded()) {
+                OPM_THROW(std::runtime_error, "Saving or loading is not implemented for embedded fractures.");
+            }
+            serializer(static_cast<MechParent&>(*this));
+            serializer(geoMechModel_);
+        }
+
         void beginTimeStep() override{
             if (this->gridView().comm().rank() == 0){
                 OpmLog::debug("----------------------Start beginTimeStep-------------------");

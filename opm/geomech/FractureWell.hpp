@@ -42,6 +42,8 @@ namespace Opm::Properties {
     struct FluidSystem;
 } // namespace Opm::Properties
 
+#include <opm/geomech/GeomechCheckpoint.hpp>
+
 namespace Opm {
 
 class FractureWell
@@ -58,6 +60,15 @@ public:
         FractureConnectionId identity{};
         int segment{};
         std::optional<std::pair<double, double>> perf_range{};
+
+        template <class Serializer>
+        void serializeOp(Serializer& serializer)
+        {
+            serializer(cell);
+            serializer(identity);
+            serializer(segment);
+            serializer(perf_range);
+        }
     };
 
     FractureWell(const std::string& outputprefix,
@@ -98,6 +109,21 @@ public:
     }
     void setPerfPressure(int perf_index, double pressure){perf_pressure_[perf_index] = pressure;}
     const Grid& grid() const{return *grid_;}
+    const std::vector<Connection>& connections() const { return conns_; }
+    const std::vector<Point3D>& definingPoints() const { return points_; }
+    const std::vector<Segment>& definingSegments() const { return segments_; }
+
+    //! The state that is not fixed by the constructor arguments.
+    template <class Serializer>
+    void serializeState(Serializer& serializer)
+    {
+        GeomechCheckpoint::fieldVectors(serializer, reservoir_stress_);
+        serializer(reservoir_pressure_);
+        serializer(reservoir_temperature_);
+        serializer(perf_pressure_);
+        serializer(perf_active_);
+        serializer(active_);
+    }
     const std::string& name() const{return name_;}
     void write() const;
     void writemulti(double time) const;
@@ -133,6 +159,8 @@ private:
 
     // should probably be separated for easier testing
     std::vector<Connection> conns_;
+    std::vector<Point3D> points_;
+    std::vector<Segment> segments_;
 
     std::unique_ptr<Grid> grid_{};
     std::unique_ptr<Dune::VTKWriter<Grid::LeafGridView>> vtkwriter_{};

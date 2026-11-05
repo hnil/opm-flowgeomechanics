@@ -48,6 +48,8 @@ FractureWell::FractureWell(const std::string& outputprefix,
     , casename_ {casename}
     , name_ {name}
     , conns_ {conns}
+    , points_ {points}
+    , segments_ {segments}
 {
     this->init(points, segments);
 

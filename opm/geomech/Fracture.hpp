@@ -91,6 +91,7 @@
 
 
 #include <opm/input/eclipse/Schedule/Well/WellConnections.hpp>
+#include <opm/geomech/GeomechCheckpoint.hpp>
 
 
 namespace Dune{
@@ -473,7 +474,14 @@ public:
     void resetFracture();
     void moveForwardInTime(double dt_last = -1.0);
 
+    //! Checkpoint of everything a solve leaves behind. Loading rebuilds the grid from
+    //! the mesh; matrices and solvers are rebuilt by the next solve.
+    template <class Serializer>
+    void serializeState(Serializer& serializer);
+
 private:
+    void rebuildGridForLoad(const std::vector<std::vector<CellRef>>& saved_map);
+
    struct CouplingMixState
    {
      bool initialized{false};
@@ -557,6 +565,7 @@ private:
 
     std::vector<std::vector<CellRef>> grid_mesh_map_; // index mapping from cells in grid_ to trimesh_.
                                                       // NB: in general many-to-many
+    std::vector<CellRef> grid_fixed_cells_; // cells kept fine when grid_ was built from trimesh_
     std::unique_ptr<Grid> grid_;
     // grid definition in case of step fails
     std::unique_ptr<Grid> grid_prev_;
