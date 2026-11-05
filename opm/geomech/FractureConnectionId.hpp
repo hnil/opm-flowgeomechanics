@@ -33,6 +33,13 @@ struct FractureConnectionId
     std::size_t global_index{};
     int lgr_level{};
 
+    template <class Serializer>
+    void serializeOp(Serializer& serializer)
+    {
+        serializer(global_index);
+        serializer(lgr_level);
+    }
+
     bool matches(const Connection& connection) const
     {
         return global_index == connection.global_index()

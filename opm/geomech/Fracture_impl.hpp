@@ -764,6 +764,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources,/* smoothed triangels */ smooth_boundary, numcell_threshold); // well cells kept intact!
             auto org_map = grid_mesh_map_;
             grid_mesh_map_ = fsmap;
+            grid_fixed_cells_ = wsources;
             composeFlowStateDonor(org_map, fsmap, level);
             setFractureGrid(std::move(grid)); // true -> coarsen interior
             // generate the inverse map of fsmap_ (needed below)
@@ -1192,6 +1193,160 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         summary_of_solve();
 
 
+}
+
+template <class Serializer>
+void
+Fracture::serializeState(Serializer& serializer)
+{
+    namespace ckpt = GeomechCheckpoint;
+    if (!trimesh_) {
+        OPM_THROW(std::runtime_error, "Fracture " + name() + ": only trimesh fractures can be saved.");
+    }
+    const bool loading = !serializer.isSerializing();
+
+    serializer(*trimesh_);
+    serializer(grid_fixed_cells_);
+    std::vector<std::vector<CellRef>> saved_map = grid_mesh_map_;
+    serializer(saved_map);
+    if (loading) {
+        rebuildGridForLoad(saved_map);
+    }
+    bool has_prev = trimesh_prev_ != nullptr;
+    serializer(has_prev);
+    if (has_prev) {
+        if (loading) {
+            trimesh_prev_ = std::make_unique<RegularTrimesh>(*trimesh_);
+        }
+        serializer(*trimesh_prev_);
+    }
+    serializer(grid_mesh_map_prev_);
+    serializer(filtercake_thikness_prev_);
+    serializer(well_source_cellref_prev_);
+    serializer(well_source_prev_);
+
+    serializer(active_);
+    serializer(filtercake_thikness_);
+    serializer(filtercake_perm_);
+    serializer(filtercake_poro_);
+    serializer(has_filtercake_);
+    serializer(well_source_cellref_);
+    serializer(well_source_);
+
+    serializer(reservoir_cells_);
+    serializer(all_reservoir_cells_);
+    serializer(all_reservoir_areas_);
+    std::size_t num_center_lists = all_reservoir_centers_.size();
+    serializer(num_center_lists);
+    all_reservoir_centers_.resize(num_center_lists);
+    for (auto& centers : all_reservoir_centers_) {
+        ckpt::fieldVectors(serializer, centers);
+    }
+    serializer(reservoir_perm_);
+    serializer(reservoir_cstress_);
+    serializer(reservoir_mobility_);
+    serializer(reservoir_water_mobility_);
+    serializer(reservoir_density_);
+    serializer(reservoir_cell_z_);
+    serializer(map_reservoir_mobility_);
+    serializer(map_reservoir_density_);
+    serializer(map_reservoir_cell_z_);
+    serializer(map_reservoir_pressure_);
+    serializer(reservoir_dist_);
+    serializer(reservoir_pressure_);
+    ckpt::fieldVectors(serializer, reservoir_stress_);
+
+    ckpt::fieldVectors(serializer, fracture_width_);
+    ckpt::fieldVectors(serializer, fracture_pressure_);
+    ckpt::fieldVectors(serializer, fracture_width_prev_);
+    ckpt::fieldVectors(serializer, fracture_pressure_prev_);
+    ckpt::fieldVectors(serializer, width_round_prev_);
+    serializer(width_round_valid_);
+    serializer(area_step_start_);
+    serializer(perf_pressure_step_start_);
+    serializer(volume_step_start_);
+    serializer(coupling_dt_cap_);
+    serializer(traction_step_start_);
+    serializer(stress_dt_cap_);
+    serializer(well_control_is_rate_);
+    serializer(well_target_bhp_);
+    serializer(effective_control_latched_);
+    serializer(coupling_quiet_steps_);
+
+    serializer(htrans_);
+    serializer(perfinj_);
+    serializer(well_perf_cells_);
+    serializer(fb_cell_residual_);
+    serializer(current_dt_);
+    serializer(external_pressure_);
+    serializer(external_cell_mask_);
+    serializer(flow_state_donor_);
+    serializer(flow_state_remapped_);
+    serializer(cell_last_toggle_iter_);
+    serializer(current_solve_iter_);
+    serializer(perf_pressure_);
+    serializer(leakof_);
+    serializer(leakoff_mobility_);
+
+    serializer(E_);
+    serializer(nu_);
+    serializer(min_width_);
+    serializer(fracture_dgh_);
+    serializer(total_WI_well_);
+
+    const auto perforations = [&serializer](std::vector<RuntimePerforation>& perfs) {
+        std::size_t num = perfs.size();
+        serializer(num);
+        perfs.resize(num);
+        for (auto& perf : perfs) {
+            serializer(perf.cell);
+            serializer(perf.ctf);
+            serializer(perf.depth);
+            serializer(perf.pressure);
+            serializer(perf.segment);
+            serializer(perf.perf_range);
+            serializer(perf.fracture_pressure_offset);
+        }
+    };
+    std::size_t num_index_lists = well_indices_.size();
+    serializer(num_index_lists);
+    well_indices_.resize(num_index_lists);
+    for (auto& perfs : well_indices_) {
+        perforations(perfs);
+    }
+    perforations(well_indices_accel_);
+    serializer(max_flow_time_step_);
+    serializer(well_rate_);
+    serializer(total_wellindex_);
+    serializer(wi_dz_);
+    serializer(wi_respress_);
+    serializer(well_ref_depth_);
+    serializer(perf_ref_depth_);
+    serializer(well_perf_rate_);
+
+    const auto mix = [&serializer](CouplingMixState& state) {
+        serializer(state.initialized);
+        serializer(state.has_previous_residual);
+        serializer(state.previous_target);
+        serializer(state.previous_residual);
+        serializer(state.omega);
+    };
+    mix(perf_pressure_mix_);
+    mix(well_rate_mix_);
+    mix(total_wellindex_mix_);
+    serializer(wi_vec_mix_.initialized);
+    serializer(wi_vec_mix_.has_prev_residual);
+    serializer(wi_vec_mix_.omega);
+    serializer(wi_vec_mix_.prev_mixed);
+    serializer(wi_vec_mix_.prev_target);
+    serializer(wi_vec_mix_.prev_residual);
+
+    serializer(density_);
+    serializer(density_perf_);
+    serializer(mobility_water_perf_);
+    serializer(closed_cells_);
+    serializer(cell_flip_counts_);
+    serializer(last_solve_stats_.converged);
 }
 
 } // namespace Opm

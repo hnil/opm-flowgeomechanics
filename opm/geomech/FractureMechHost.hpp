@@ -56,6 +56,35 @@ namespace Opm{
             }
         }
 
+        //! Loading makes the model as solveFractures would and fills in the saved state,
+        //! so no seed is created anew and the fractures keep their mesh.
+        template <class Serializer>
+        void serializeOp(Serializer& serializer)
+        {
+            bool has_model = fracturemodel_ != nullptr;
+            serializer(has_model);
+            serializer(include_fracture_contributions_);
+            serializer(model_creation_step_);
+            if (!has_model) {
+                return;
+            }
+            if (!serializer.isSerializing()) {
+                Opm::PropertyTree param = simulator_.problem().getFractureParam();
+                param.put("outputdir", Parameters::Get<Parameters::OutputDir>());
+                param.put("casename", simulator_.vanguard().caseName());
+                fracturemodel_ = std::make_unique<FractureModel>(simulator_.vanguard().grid(),
+                                                                 std::vector<Opm::Well>{},
+                                                                 param);
+            }
+            fracturemodel_->serializeWells(serializer);
+            if (!serializer.isSerializing()) {
+                const LgrLookup lookup(simulator_.vanguard().eclState().getLgrs(),
+                                       simulator_.vanguard().cartesianDimensions());
+                fracturemodel_->addFractures(simulator_.vanguard().schedule()[model_creation_step_], &lookup);
+            }
+            fracturemodel_->serializeFractures(serializer);
+        }
+
         //! Whether the fracture model adds contributions to disp/strain/
         //! stress output (include_fracture_contributions parameter; set when
         //! the fracture model is created).
@@ -107,6 +136,7 @@ namespace Opm{
                     // let fracture contain all wells
                     Opm::PropertyTree param = problem.getFractureParam();
                     include_fracture_contributions_ = param.get<bool>("include_fracture_contributions");
+                    model_creation_step_ = end_step;
                     // take all wells and perforations
                     const std::vector<Opm::Well>& wells = problem.wellModel().getLocalWells(end_step);
                     const auto& grid = simulator_.vanguard().grid();
@@ -269,6 +299,7 @@ namespace Opm{
     private:
         Simulator& simulator_;
         bool include_fracture_contributions_{false};
+        int model_creation_step_{0};
         std::unique_ptr<FractureModel> fracturemodel_;
     };
 }
