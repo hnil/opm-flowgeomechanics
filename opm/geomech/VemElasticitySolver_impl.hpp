@@ -281,12 +281,11 @@ namespace Elasticity {
             }
         }
         // finaly make dune matrix
-        divmat_.setBuildMode(Matrix::implicit);
+        divmat_.setBuildMode(Matrix::random);
         // map from dof=3*nodes at a cell (ca 3*3*3) to cell
         {
             const int rows = reduce_boundary ? int(idx_free_.size())
                                              : grid_.leafGridView().size(3)*3;
-            divmat_.setImplicitBuildModeParameters(entriesPerRow(divmatdof, rows, 3*8), 0.4);
             divmat_.setSize(rows, num_cells_);
         }
         makeDuneMatrixCompressed(divmatdof,divmat_);
@@ -311,9 +310,7 @@ namespace Elasticity {
                                stability_choice_,
                                stab_on_stress_, corner_mask_.data()
         );
-        stressmat_.setBuildMode(Matrix::implicit);
-        stressmat_.setImplicitBuildModeParameters(
-            entriesPerRow(stressmat, num_cells_*6, 3*3*3), 0.4);
+        stressmat_.setBuildMode(Matrix::random);
         stressmat_.setSize(num_cells_*6, dispall.size());
         makeDuneMatrixCompressed(stressmat, stressmat_);
         }
@@ -334,9 +331,7 @@ namespace Elasticity {
                                stability_choice_,
                                stab_on_stress_, corner_mask_.data()
         );
-        strainmat_.setBuildMode(Matrix::implicit);
-        strainmat_.setImplicitBuildModeParameters(
-            entriesPerRow(strainmat, num_cells_*6, 3*3*3), 0.4);
+        strainmat_.setBuildMode(Matrix::random);
         strainmat_.setSize(num_cells_*6, dispall.size());
         makeDuneMatrixCompressed(strainmat, strainmat_);
         }
