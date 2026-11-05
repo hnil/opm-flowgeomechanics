@@ -627,6 +627,9 @@ namespace Opm{
 	    Opm::Parameters::SetDefault<Opm::Parameters::EnableAsyncEclOutput>(false);
 	    // VEM needs closed cells without hanging nodes, also on a refined leaf.
 	    Opm::Parameters::SetDefault<Opm::Parameters::EdgeConformal>(true);
+            // Owned VEM rows require all cells incident to each owned vertex.
+            Opm::Parameters::SetDefault<Opm::Parameters::AddCorners>(true);
+            Opm::Parameters::SetDefault<Opm::Parameters::AddCornersByVertex>(true);
 	    Opm::Parameters::SetDefault<Opm::Parameters::LgrBackend>("conforming");
 	    // Fracture connections are only placed in an LGR refined after distribution.
 	    Opm::Parameters::SetDefault<Opm::Parameters::RefineBeforeRedistribute>("false");
