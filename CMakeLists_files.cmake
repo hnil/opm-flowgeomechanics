@@ -78,6 +78,7 @@ list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/GridStretcher.hpp
 	opm/geomech/Math.hpp
 	opm/geomech/MechanicalConstraintValidation.hpp
+	opm/geomech/MechLinePlanePreconditioner.hpp
 	opm/geomech/ParamInterior.hpp
 	opm/geomech/RegularTrimesh.hpp
 	opm/geomech/VemElasticitySolver.hpp

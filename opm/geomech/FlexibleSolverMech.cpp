@@ -21,6 +21,7 @@
 #include <opm/common/TimingMacros.hpp>
 #include <opm/simulators/linalg/FlexibleSolver_impl.hpp>
 #include <opm/simulators/linalg/PreconditionerFactory_impl.hpp>
+#include <opm/geomech/MechLinePlanePreconditioner.hpp>
 template <int N>
 using OBMMec = Dune::BCRSMatrix<Dune::FieldMatrix<double, N, N>>;
 template <int N>
@@ -36,3 +37,30 @@ using ParOpMec = Dune::OverlappingSchwarzOperator<OBMMec<N>, BVMec<N>, BVMec<N>,
 
 INSTANTIATE_FLEXIBLESOLVER_OP(SeqOpMec<1>);
 INSTANTIATE_FLEXIBLESOLVER_OP(ParOpMec<1>);
+
+namespace Opm
+{
+void addMechLinePlanePreconditioner(const std::vector<double>& coords)
+{
+    using SeqInfo = Dune::Amg::SequentialInformation;
+    using SeqPrec = MechLinePlanePreconditioner<OBMMec<1>, BVMec<1>, SeqInfo>;
+    PreconditionerFactory<SeqOpMec<1>, SeqInfo>::addCreator(
+        "mech_lines",
+        [&coords](const SeqOpMec<1>& op, const PropertyTree& prm, const std::function<BVMec<1>()>&, std::size_t) {
+            static const SeqInfo seq;
+            auto inner = PreconditionerFactory<SeqOpMec<1>, SeqInfo>::create(op, prm.get_child("inner"));
+            return std::make_shared<SeqPrec>(op.getmat(), coords, prm, inner, seq);
+        });
+    using ParPrec = MechLinePlanePreconditioner<OBMMec<1>, BVMec<1>, CommMec>;
+    PreconditionerFactory<ParOpMec<1>, CommMec>::addCreator(
+        "mech_lines",
+        [&coords](const ParOpMec<1>& op,
+                  const PropertyTree& prm,
+                  const std::function<BVMec<1>()>&,
+                  std::size_t,
+                  const CommMec& comm) {
+            auto inner = PreconditionerFactory<ParOpMec<1>, CommMec>::create(op, prm.get_child("inner"), comm);
+            return std::make_shared<ParPrec>(op.getmat(), coords, prm, inner, comm);
+        });
+}
+} // namespace Opm

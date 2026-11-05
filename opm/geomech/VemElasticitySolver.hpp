@@ -66,6 +66,7 @@
 #include <opm/input/eclipse/Deck/Deck.hpp>
 #include <opm/input/eclipse/Schedule/BCState.hpp>
 #include <opm/simulators/linalg/FlexibleSolver.hpp>
+#include <opm/geomech/MechLinePlanePreconditioner.hpp>
 #include <opm/geomech/DuneCommunicationHelpers.hpp>
 #include <opm/geomech/vem/vem.hpp>
 namespace Opm {
@@ -210,6 +211,7 @@ class VemElasticitySolver
     void setupSolver(const Opm::PropertyTree& prm){
         OPM_TIMEBLOCK(setupLinearSolver);
         tsolver_.reset();
+        addMechLinePlanePreconditioner(coords_);
         // Opt-in: stop the warm-started solve when the residual of the full
         // load is below tol, not when the correction's own residual is.
         tol_relative_to_load_ = prm.get<bool>("tol_relative_to_load", false);
