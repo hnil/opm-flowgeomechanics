@@ -267,24 +267,26 @@ class VemElasticitySolver
     static void makeDuneMatrixCompressed(const std::vector<std::tuple<int, int, double>>& A_entries, Matrix& mat){
         OPM_TIMEBLOCK(makeDuneMatrixCompressed);
         {
-            OPM_TIMEBLOCK(buildMatrixImplicite);
-            //build mode need to be implicite and corredect matrix settings has to be done
-            for (auto matel: A_entries) {
-                int i = std::get<0>(matel);
-                int j = std::get<1>(matel);
-                mat.entry(i,j)=0;
+            OPM_TIMEBLOCK(buildMatrixPattern);
+            std::vector<std::pair<int, int>> pattern;
+            pattern.reserve(A_entries.size());
+            for (const auto& matel : A_entries) {
+                pattern.emplace_back(std::get<0>(matel), std::get<1>(matel));
             }
-            Dune::CompressionStatistics<Matrix::size_type> stats = mat.compress();
-            std::ostringstream msg;
-            msg << "Matrix compression statistics: \n";
-            msg << "avg" << stats.avg
-                << " maximum " << stats.maximum
-                << " overflow_total " << stats.overflow_total
-                << " mem_ratio " << stats.mem_ratio << '\n';
-            msg << "Matrix has " << mat.N() << " rows and " << mat.M() << " columns\n";
-            msg << "Matrix has " << mat.nonzeroes() << " nonzeros\n";
-            msg << "Entries caluclated" << A_entries.size();
-            OpmLog::debug(msg.str());
+            std::sort(pattern.begin(), pattern.end());
+            pattern.erase(std::unique(pattern.begin(), pattern.end()), pattern.end());
+            std::vector<int> row_size(mat.N(), 0);
+            for (const auto& [i, j] : pattern) {
+                ++row_size[i];
+            }
+            for (std::size_t i = 0; i < mat.N(); ++i) {
+                mat.setrowsize(i, row_size[i]);
+            }
+            mat.endrowsizes();
+            for (const auto& [i, j] : pattern) {
+                mat.addindex(i, j);
+            }
+            mat.endindices();
         }
         {
         OPM_TIMEBLOCK(setMatrixValues);
@@ -319,18 +321,6 @@ class VemElasticitySolver
     }
 
 
-    /// Entries per row to preallocate: a cell that meets finer neighbours has
-    /// more than a hexahedron's share, so a fixed guess is not enough.
-    template <class Entries>
-    static int entriesPerRow(const Entries& entries, int nrows, int fallback)
-    {
-        std::vector<int> count(nrows, 0);
-        for (const auto& entry : entries) {
-            ++count[std::get<0>(entry)];
-        }
-        const auto worst = std::max_element(count.begin(), count.end());
-        return std::max(fallback, (worst == count.end()) ? 0 : *worst);
-    }
     void makeDuneSystemMatrix(const std::vector<std::tuple<int, int, double>>& A_entries)
     {
         OPM_TIMEBLOCK(makeDuneSystemMatrix);
@@ -346,8 +336,7 @@ class VemElasticitySolver
         ncols = ncols + 1;
         Matrix& MAT = this->getOperator();
         MAT = 0;
-        MAT.setBuildMode(Matrix::implicit);
-        MAT.setImplicitBuildModeParameters(entriesPerRow(A_entries, nrows, 81), 0.4);
+        MAT.setBuildMode(Matrix::random);
         MAT.setSize(nrows, ncols);
         makeDuneMatrixCompressed(A_entries, MAT);
     }
