@@ -521,6 +521,12 @@ add_test(NAME Unit.FractureConnectionIdentity
         $<TARGET_FILE:test_fracture_connection_identity> ${MPIEXEC_POSTFLAGS})
 set_tests_properties(Unit.FractureConnectionIdentity PROPERTIES TIMEOUT 30 LABELS "physics;unit")
 
+# Filter cake volume must survive every kind of mesh change.
+add_executable(test_cake_remap tests/test_cake_remap.cpp)
+target_link_libraries(test_cake_remap PRIVATE opmflowgeomechanics)
+add_test(NAME Unit.CakeRemap COMMAND $<TARGET_FILE:test_cake_remap>)
+set_tests_properties(Unit.CakeRemap PROPERTIES TIMEOUT 30 LABELS "physics;unit")
+
 # Global constraint rank must be independent of MPI partitioning.
 add_executable(test_mechanical_constraints tests/test_mechanical_constraints.cpp)
 target_link_libraries(test_mechanical_constraints PRIVATE opmflowgeomechanics)

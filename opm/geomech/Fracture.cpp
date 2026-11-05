@@ -2218,6 +2218,52 @@ Fracture::filterCakeVolume() const
     }
     return total_filtercake_0;
 }
+
+RegularTrimesh::CellVolumes
+Fracture::filterCakeVolumesByCell() const
+{
+    RegularTrimesh::CellVolumes cake;
+    const size_t nc = numFractureCells();
+    cake.volume.resize(nc, 0.0);
+    cake.group.assign(nc, -1);
+    cake.centre.resize(nc);
+    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+    for (const auto& element : Dune::elements(grid_->leafGridView())) {
+        const auto eIdx = mapper.index(element);
+        const auto geom = element.geometry();
+        const auto c = geom.center();
+        cake.centre[eIdx] = {c[0], c[1], c[2]};
+        if (eIdx < filtercake_thikness_.size()) {
+            cake.volume[eIdx] = filtercake_thikness_[eIdx] * geom.volume();
+        }
+        if (eIdx < reservoir_cells_.size()) {
+            cake.group[eIdx] = reservoir_cells_[eIdx];
+        }
+    }
+    return cake;
+}
+
+std::vector<double>
+Fracture::remapFilterCakeConservative(const RegularTrimesh::CellVolumes& source,
+                                      const std::vector<std::vector<CellRef>>& source_map,
+                                      const int level) const
+{
+    const size_t nc = numFractureCells();
+    std::vector<double> area(nc, 0.0);
+    std::vector<int> group(nc, -1);
+    std::vector<Coord3D> centre(nc);
+    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+    for (const auto& element : Dune::elements(grid_->leafGridView())) {
+        const auto eIdx = mapper.index(element);
+        const auto geom = element.geometry();
+        const auto c = geom.center();
+        area[eIdx] = geom.volume();
+        group[eIdx] = reservoir_cells_[eIdx];
+        centre[eIdx] = {c[0], c[1], c[2]};
+    }
+    return RegularTrimesh::conservativeRemap(source, source_map, grid_mesh_map_, level, area, group, centre);
+}
+
 void Fracture::resetFracture()
 {
     if (!trimesh_prev_) {

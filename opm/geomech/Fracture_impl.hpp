@@ -743,6 +743,12 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         const auto filtercake_thickness_0 = filtercake_thikness_; // copy
         const auto grid_mesh_map_0 = grid_mesh_map_;
         double total_filtercake_0 = filterCakeVolume();
+        const std::string cake_remap = prm_.get<std::string>("solver.filtercake_remap", "legacy");
+        if (cake_remap != "legacy" && cake_remap != "conservative") {
+            OPM_THROW(std::runtime_error, "Unknown solver.filtercake_remap: " + cake_remap);
+        }
+        const auto filtercake_volumes_0 = (cake_remap == "conservative")
+            ? filterCakeVolumesByCell() : RegularTrimesh::CellVolumes{};
         // local function taking a trimesh, updates the Fracture object with it and
         // runs a simulation.  Its return value should be a vector of doubles:
 
@@ -848,9 +854,11 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
 
 
 
-            filtercake_thikness_ = redistribute_values(filtercake_thickness_0,
-                                                       grid_mesh_map_0,
-                                                       fsmap, level, /*point_wise*/ true);
+            filtercake_thikness_ = (cake_remap == "conservative")
+                ? remapFilterCakeConservative(filtercake_volumes_0, grid_mesh_map_0, level)
+                : redistribute_values(filtercake_thickness_0,
+                                      grid_mesh_map_0,
+                                      fsmap, level, /*point_wise*/ true);
             double total_filtercake = filterCakeVolume();
             if(std::abs(total_filtercake - total_filtercake_0) > 1e-6 && (nlin_verbosity > 1)){
                 OpmLog::debug(fmt::format("Total filtercake thickness before remapping: {}\n"

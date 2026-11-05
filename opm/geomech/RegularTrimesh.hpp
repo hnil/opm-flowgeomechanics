@@ -191,6 +191,25 @@ public:
                         const std::vector<std::vector<CellRef>>& map2,
                         const int level);
 
+    // Cell-wise quantity on a mesh, with what is needed to place a share that no
+    // cell of another mesh covers: first a cell in the same group, else the nearest.
+    struct CellVolumes {
+        std::vector<double> volume;
+        std::vector<int> group;
+        std::vector<Coord3D> centre;
+    };
+
+    // Thickness on map2's cells such that area*thickness sums to the total volume.
+    // A target with no source overlap and no placed share gets zero.
+    static std::vector<double>
+    conservativeRemap(const CellVolumes& source,
+                      const std::vector<std::vector<CellRef>>& map1,
+                      const std::vector<std::vector<CellRef>>& map2,
+                      const int level,
+                      const std::vector<double>& target_area,
+                      const std::vector<int>& target_group,
+                      const std::vector<Coord3D>& target_centre);
+
     template <class Serializer>
     void serializeOp(Serializer& serializer)
     {

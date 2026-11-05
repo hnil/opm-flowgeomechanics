@@ -786,6 +786,60 @@ RegularTrimesh::createGridToGridMap(const vector<vector<CellRef>>& map1,
 }
 
 //------------------------------------------------------------------------------
+vector<double>
+RegularTrimesh::conservativeRemap(const CellVolumes& source,
+                                  const vector<vector<CellRef>>& map1,
+                                  const vector<vector<CellRef>>& map2,
+                                  const int level,
+                                  const vector<double>& target_area,
+                                  const vector<int>& target_group,
+                                  const vector<Coord3D>& target_centre)
+//------------------------------------------------------------------------------
+{
+    const size_t nt = map2.size();
+    vector<double> volume(nt, 0.0);
+    vector<double> mapped(source.volume.size(), 0.0);
+    for (const auto& [i, j, w] : createGridToGridMap(map1, map2, level)) {
+        volume[j] += source.volume[i] * w;
+        mapped[i] += w;
+    }
+
+    map<int, vector<size_t>> cells_of_group;
+    for (size_t j = 0; j != nt; ++j)
+        cells_of_group[target_group[j]].push_back(j);
+
+    const auto dist2 = [](const Coord3D& a, const Coord3D& b) {
+        return (a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1])
+            + (a[2] - b[2]) * (a[2] - b[2]);
+    };
+
+    for (size_t i = 0; i != source.volume.size() && nt > 0; ++i) {
+        const double rest = source.volume[i] * std::max(0.0, 1.0 - mapped[i]);
+        if (rest <= 0.0)
+            continue;
+        const auto it = cells_of_group.find(source.group[i]);
+        if (it != cells_of_group.end()) {
+            double area = 0.0;
+            for (const auto j : it->second)
+                area += target_area[j];
+            for (const auto j : it->second)
+                volume[j] += rest * target_area[j] / area;
+        } else {
+            size_t nearest = 0;
+            for (size_t j = 1; j != nt; ++j)
+                if (dist2(source.centre[i], target_centre[j])
+                    < dist2(source.centre[i], target_centre[nearest]))
+                    nearest = j;
+            volume[nearest] += rest;
+        }
+    }
+
+    for (size_t j = 0; j != nt; ++j)
+        volume[j] /= target_area[j];
+    return volume;
+}
+
+//------------------------------------------------------------------------------
 vector<unsigned int>
 RegularTrimesh::noderefs_to_indices_(const vector<NodeRef>& noderefs) const
 //------------------------------------------------------------------------------
