@@ -68,6 +68,7 @@
 #include <opm/simulators/linalg/FlexibleSolver.hpp>
 #include <opm/geomech/MechLinePlanePreconditioner.hpp>
 #include <opm/geomech/DuneCommunicationHelpers.hpp>
+#include <opm/geomech/MechanicalPartitionValidation.hpp>
 #include <opm/geomech/vem/vem.hpp>
 namespace Opm {
 namespace Elasticity {
@@ -231,6 +232,7 @@ class VemElasticitySolver
             comm_->indexSet() = *dofParallelIndexSet_;
             assert(grid_.size(3)*3 == dofParallelIndexSet_->size());
             comm_->remoteIndices().rebuild<false>();
+            Opm::Elasticity::validateMechanicalPartition(grid_, *comm_);
             const std::function<Vector()> weightsCalculator;
             std::size_t pressureIndex = 0;
             //NB NB ! need other operator in parallel

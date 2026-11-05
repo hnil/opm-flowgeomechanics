@@ -1258,6 +1258,8 @@ private:
                 parts[c] = partOfMechCartesian[mapper.cartesianIndex(static_cast<int>(c))];
             }
         }
+        // VEM rows need every cell touching a node, not only neighbours of neighbours.
+        grid_->setCornerCellsByVertex(true);
         grid_->loadBalance(parts, /*ownersFirst*/ false, /*addCornerCells*/ true,
                            /*overlapLayers*/ 1);
     }

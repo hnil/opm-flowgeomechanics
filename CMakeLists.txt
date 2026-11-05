@@ -1067,6 +1067,17 @@ add_test(NAME BANDTEST_geomech_best_practice_fb
                  --area-min 400 --area-max 3000
                  --open-frac-min 0.5)
 
+# The mechanics partition check must abort on wrong labels and on missing vertex stars.
+add_executable(test_mechanical_partition tests/test_mechanical_partition.cpp)
+target_link_libraries(test_mechanical_partition PRIVATE opmflowgeomechanics)
+if(USE_MPI)
+    add_test(NAME Unit.MechanicalPartition.MPI2
+        COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 ${MPIEXEC_PREFLAGS}
+            $<TARGET_FILE:test_mechanical_partition> ${MPIEXEC_POSTFLAGS})
+    set_tests_properties(Unit.MechanicalPartition.MPI2 PROPERTIES
+        TIMEOUT 60 PROCESSORS 2 LABELS "mechanics;mpi;unit")
+endif()
+
 # Compare production VEM owner rows with serial, and reject missing vertex stars.
 add_executable(test_mechanical_vertex_stencils tests/test_mechanical_vertex_stencils.cpp)
 target_link_libraries(test_mechanical_vertex_stencils PRIVATE opmflowgeomechanics)
