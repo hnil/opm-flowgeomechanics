@@ -866,8 +866,11 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                                           total_filtercake_0, total_filtercake));
             }
             int iter = 0;
-            while (!fullSystemIteration(tol,iter) && iter++ < max_iter) {
-            };
+            ++joint_scores_;
+            if (!joint_growth_round_) {
+                while (!fullSystemIteration(tol,iter) && iter++ < max_iter) {
+                };
+            }
             // Contact-set stability vs the previous coupling round (evaluated on
             // the first solve of this round, i.e. before any expansion this
             // round; a grid-size mismatch means the mesh moved: treat as unstable).
@@ -1010,6 +1013,10 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         const FractureProperties& fprop_before = calculateFractureProperties();
         auto stop_criterion= [&]() -> bool
         {
+          // a joint round scores the current state once; the well's solve comes next
+          if (joint_growth_round_ && joint_scores_ > 0) {
+              return true;
+          }
           const bool area_stop = expantionMax(fprop_before);
           if (vol_pacing && vol_budget_spent) {
               if (vol_verb > 0) OpmLog::debug("VolumePacing: stopping expansion (budget spent)");
@@ -1021,7 +1028,14 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         const double threshold = 1.0;
         const std::vector<CellRef> fixed_cells = well_source_cellref_;
         const int target_cellcount = prm_.get<int>("solver.target_cellcount");
-        const int cellcount_threshold = prm_.get<int>("solver.cellcount_threshold");
+        // expand_to_criterion refines back only after a re-solve per expansion, which a joint
+        // round does not do: coarsen the seed once and hold that level.
+        int cellcount_threshold = prm_.get<int>("solver.cellcount_threshold");
+        if (joint_growth_round_) {
+            cellcount_threshold = joint_level_held_ ? std::numeric_limits<int>::max()
+                                                    : prm_.get<int>("solver.well_joint_seed_cellcount", 100);
+            joint_level_held_ = true;
+        }
         const int max_iter_on_same_level = prm_.get<int>("solver.max_iter_on_same_level");
         const auto initial_mesh= *trimesh_;
         auto [mesh, cur_level] =
@@ -1034,11 +1048,19 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
 
 
 
-        bool any_removed = removeNewZeroWithCells(mesh,cur_level, initial_mesh);
         // this will set trimesh_,change dune grid  and solve
+        if (joint_growth_round_) {
+          // new cells have no width yet; the well's solve decides whether they open
+          joint_grew_ = mesh.numCells() != initial_mesh.numCells();
+          if (joint_grew_) {
+            score_function(mesh, cur_level);
+          }
+        } else {
+        bool any_removed = removeNewZeroWithCells(mesh,cur_level, initial_mesh);
         if(any_removed){
           mesh.removeSawtooths();
           score_function(mesh, cur_level);
+        }
         }
 
 

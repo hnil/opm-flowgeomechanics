@@ -459,7 +459,13 @@ namespace Opm {
                     }
                  }
             }
-            assert(well_fractures_[i].size() < 2);// for now asser this if not better "well model is need"
+            // The separate solver gives each fracture the whole well; only embedded splits it.
+            if (well_fractures_[i].size() > 1
+                && prm_.get<std::string>("solver.fracture_flow_mode", std::string{"wi_upscaling"}) != "embedded") {
+                OPM_THROW(std::runtime_error,
+                          "Well " + wells_[i].name() + " has several fractures, which needs "
+                          "solver.fracture_flow_mode=embedded");
+            }
             for (auto& fracture : well_fractures_[i]){
               WellInfo wellinfo = fracture.wellInfo();
               if(verbosity > 1){

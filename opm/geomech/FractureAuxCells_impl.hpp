@@ -177,6 +177,7 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
                 RuntimePerforation perf;
                 perf.cell = static_cast<int>(this->localToGlobalDof(slot));
                 perf.depth = this->depth_[slot];
+                perf.segment = fracture.wellInfo().segment;
 
                 if (this->perfWiMode_ == PerfWiMode::Estimate) {
                     // Radial flow in the fracture plane towards the wellbore:
@@ -370,6 +371,7 @@ FractureAuxCells<TypeTag>::updateValues(const FractureModel& fractures)
                 RuntimePerforation perf;
                 perf.cell = static_cast<int>(this->localToGlobalDof(slot));
                 perf.depth = this->depth_[slot];
+                perf.segment = fracture.wellInfo().segment;
                 if (this->perfWiMode_ == PerfWiMode::Estimate) {
                     const auto w = this->perfWidth_;
                     const auto re = std::sqrt(static_cast<Scalar>(areas[cell]) / M_PI);

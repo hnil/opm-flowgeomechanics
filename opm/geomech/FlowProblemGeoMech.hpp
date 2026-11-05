@@ -371,6 +371,9 @@ namespace Opm{
                 if (fractureAuxCells_->updateValues(fractureModel)) {
                     embeddedCouplingChange_ = fractureAuxCells_->lastBindChange();
                     this->refreshAuxCellModules_(/*topologyChanged=*/false);
+                    if (this->getFractureParam().template get<bool>("solver.embedded_refresh_trans", false)) {
+                        this->model().linearizer().updateDiscretizationParameters();
+                    }
                     // both time levels: the pore volume moved with the aperture,
                     // and the start-of-step state is stored as a volume too
                     this->model().updateAuxiliaryIntQuants(/*timeIdx=*/0);
@@ -602,6 +605,7 @@ namespace Opm{
                     auto& pd = perfs.emplace_back();
                     pd.cell_index = rp.cell;
                     pd.connection_transmissibility_factor = static_cast<Scalar>(rp.ctf);
+                    pd.segment = rp.segment;
                 }
 
                 this->wellModel().setAuxiliaryPerforations(wname, std::move(perfs));

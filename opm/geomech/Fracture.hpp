@@ -419,6 +419,28 @@ public:
     //! (identity pressure block, zero residual) and solves mechanics, contact
     //! and propagation at it; the flow's aux cells own the pressure.
     void setExternalPressureMode(bool on) { external_pressure_ = on; }
+
+    // One growth round on the current state, without the fracture's own solve.
+    void setJointGrowthRound(bool on) { joint_growth_round_ = on; joint_scores_ = 0; joint_grew_ = false; }
+    bool jointGrew() const { return joint_grew_; }
+
+    // State and blocks for WellFractureJointSolver.
+    const DynamicMatrix& jointElasticMatrix() const { return fractureMatrix(); }
+    Dune::BlockVector<Dune::FieldVector<double, 1>> jointNormalTraction()
+    {
+        Dune::BlockVector<Dune::FieldVector<double, 1>> traction(fracture_width_);
+        normalFractureTraction(traction, false);
+        return traction;
+    }
+    void setJointWidth(const Dune::BlockVector<Dune::FieldVector<double, 1>>& width)
+    { fracture_width_ = width; }
+    void setJointContactState(const std::vector<double>& pressure, const std::vector<int>& closed)
+    {
+        for (std::size_t i = 0; i < pressure.size() && i < fracture_pressure_.size(); ++i) {
+            fracture_pressure_[i] = pressure[i];
+        }
+        closed_cells_ = closed;
+    }
     bool externalPressureMode() const { return external_pressure_; }
     //! Per cell: the cell of the layout at the last markFlowStateBound() whose flow
     //! state it inherits across regrids (-1: none). Only valid if flowStateRemapped().
@@ -591,6 +613,10 @@ private:
     std::array<Point3D, 3> naxis_;
     WellInfo wellinfo_;
     bool active_{false}; // is fracture active?
+    bool joint_growth_round_{false};
+    int joint_scores_{0};
+    bool joint_grew_{false};
+    bool joint_level_held_{false}; // the seed was coarsened once; growth keeps that level
     std::unique_ptr<Dune::VTKWriter<Grid::LeafGridView>> vtkwriter_;
     static constexpr auto VTKFormat = Dune::VTK::ascii;
     std::unique_ptr<::Opm::VtkMultiWriter<Grid::LeafGridView, VTKFormat>> vtkmultiwriter_;
