@@ -525,6 +525,11 @@ private:
    void composeFlowStateDonor(const std::vector<std::vector<CellRef>>& map1,
                               const std::vector<std::vector<CellRef>>& map2,
                               const int level);
+   RegularTrimesh::CellVolumes filterCakeVolumesByCell() const;
+   std::vector<double> remapFilterCakeConservative(const RegularTrimesh::CellVolumes& source,
+                                                   const std::vector<std::vector<CellRef>>& source_map,
+                                                   const int level) const;
+
    std::vector<double> redistribute_values(const std::vector<double>& values,
                                         const std::vector<std::vector<CellRef>>& map1,
                                         const std::vector<std::vector<CellRef>>& map2,
