@@ -522,8 +522,9 @@ namespace Opm {
                     continue;
                 }
                 const auto& wellstate = simulator.problem().wellModel().wellState().well(*well_index);
-                // check if well is open
-                if(wellstate.status != ::Opm::WellStatus::OPEN) {
+                // perf_depths is empty for a well the state calls OPEN but the well
+                // model has shut for this step, as after a well solve failure
+                if(wellstate.status != ::Opm::WellStatus::OPEN || perf_depths.empty()) {
                     wells_[i].setActive(false);
                     OpmLog::debug(fmt::format("Well {} is not open, skipping update.", wellinfo.name));
                     fracture.setActive(false);
