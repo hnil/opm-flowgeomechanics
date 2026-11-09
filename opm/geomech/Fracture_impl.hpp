@@ -481,7 +481,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                         [&problem](int c) { return problem.stress(c); });
                     reservoir_stress_[i] = centre_stress::interpolate(
                         frac_centroids[i], normal, centre_of_cell(cell), problem.stress(cell), samples, stress_mode,
-                        [&normal](const auto& s) { return ddm::tractionSymTensor(s, normal); });
+                        [&normal](const auto& s) { return ddm::tractionVoigt(s, normal); });
                 }
                 const auto& perm =  problem.intrinsicPermeability(cell);
                 const auto& cstress =  problem.cStress(cell);
