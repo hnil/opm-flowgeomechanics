@@ -449,8 +449,6 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 }
                 // depth at which Flow defines the cell pressure
                 reservoir_cell_z_[i] = problem.dofCenterDepth(cell);
-                   
-                
             } else {
                 // probably outside reservoir set all to zero
                 double stressval = 300*300e5;// large value to keep it closed
