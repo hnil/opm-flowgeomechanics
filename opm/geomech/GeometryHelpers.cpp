@@ -22,6 +22,9 @@
 #include "GeometryHelpers.hpp"
 #include <opm/geomech/CgalHelper.hpp>
 #include <opm/common/OpmLog/OpmLog.hpp>
+#include <algorithm>
+#include <cstdint>
+#include <limits>
 namespace external
 {
 std::vector<size_t>
@@ -86,28 +89,35 @@ int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
         external::cvf::BoundingBox bb;
         bb.add(point);
         std::vector<size_t> cells = external::findCloseCellIndices(m_cellSearchTree, bb);
+        // The broad phase may return both sides of a shared reservoir face.
+        // Select independently of BVH order among candidates owned on this rank.
+        // Preserve the nearest-centre model, but resolve exact or near-exact ties using
+        // the fixed leaf global ID. Two passes avoid an order-dependent fuzzy
+        // comparator when more than two candidates are equally close.
+        struct Candidate { int cell; std::int64_t id; double distanceSquared; };
+        std::vector<Candidate> candidates;
+        double minimumDistanceSquared = std::numeric_limits<double>::infinity();
+        const Dune::FieldVector<double,3> position{point[0],point[1],point[2]};
+        for (const auto cell : cells) {
+            const auto element = grid.entity(entity_seed[cell]);
+            if (element.partitionType() != Dune::InteriorEntity) continue;
+            const auto delta = position - element.geometry().center();
+            const double distanceSquared = delta.two_norm2();
+            const auto id = grid.globalIdSet().id(element);
+            candidates.push_back({static_cast<int>(cell), id, distanceSquared});
+            minimumDistanceSquared = std::min(minimumDistanceSquared, distanceSquared);
+        }
         int outcell = -1;
-        double min_distance =1e99;
-        Dune::FieldVector<double,3> local;
-        for(const auto& cell: cells){
-            auto element = grid.entity(entity_seed[cell]);
-            if (element.partitionType() != Dune::InteriorEntity){
-                // outside of parition is considered outside model
-                continue;
+        std::int64_t selectedId = std::numeric_limits<std::int64_t>::min();
+        for (const auto& candidate : candidates) {
+            const double tolerance = 64*std::numeric_limits<double>::epsilon()
+                * std::max({1.0, minimumDistanceSquared, candidate.distanceSquared});
+            if (candidate.distanceSquared - minimumDistanceSquared <= tolerance
+                && candidate.id > selectedId) {
+                outcell = candidate.cell;
+                selectedId = candidate.id;
             }
-            auto geom = element.geometry();
-            auto center = geom.center();
-            Dune::FieldVector<double,3> vec;
-            vec[0] = point[0];
-            vec[1] = point[1];
-            vec[2] = point[2];
-            auto d_vec = vec-center;
-            if(d_vec.two_norm() < min_distance){
-                min_distance = d_vec.two_norm();
-                outcell = cell;
-            }
-            //NB should probably point is inside model
-     }
+        }
      if(outcell>=0){
         return outcell;
      }else{
