@@ -23,6 +23,8 @@
 #endif
 #include <opm/common/TimingMacros.hpp>
 #include <opm/geomech/DiscreteDisplacement.hpp>
+
+#include <utility>
 namespace ddm
 {
 namespace
@@ -141,6 +143,14 @@ tractionSymTensor(const Dune::FieldVector<double, 6> symtensor, Dune::FieldVecto
     traction += 2 * symtensor[5] * normal[1] * normal[2]; // yz*ny*nz
     return traction;
 }
+
+double
+tractionVoigt(Dune::FieldVector<double, 6> voigt, Dune::FieldVector<double, 3> normal)
+{
+    std::swap(voigt[3], voigt[5]);
+    return tractionSymTensor(voigt, normal);
+}
+
 const Dune::FieldVector<double, 6>
 TDStrainFSTri(const Dune::FieldVector<double, 3>& obs,
               const std::array<Real3, 3>& tri,

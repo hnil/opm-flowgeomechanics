@@ -656,7 +656,7 @@ Fracture::write(int reportStep) const
 };
 
 double Fracture::reservoirTraction(int i) const{
-   return ddm::tractionSymTensor(reservoir_stress_[i], cell_normals_[i]);
+   return ddm::tractionVoigt(reservoir_stress_[i], cell_normals_[i]);
 }
 double Fracture::fractureForce(int i) const{
   return reservoirTraction(i) - fracture_pressure_[i];
@@ -1689,7 +1689,7 @@ Fracture::wellIndices_() const
                     / reservoir_mobility_[eIdx];
             }
             if(reservoir_cells_[eIdx] == res_cell){
-                traction[ind_wellIdx] += ddm::tractionSymTensor(reservoir_stress_[eIdx], cell_normals_[eIdx])*loc_area;
+                traction[ind_wellIdx] += ddm::tractionVoigt(reservoir_stress_[eIdx], cell_normals_[eIdx])*loc_area;
                 // assume all of this is the same so no need for interpolation
                 p_cells[ind_wellIdx] = reservoir_pressure_[eIdx]; // is set multiple times
                 mob_cells[ind_wellIdx] = reservoir_mobility_[eIdx]; // is set multiple times
@@ -2876,7 +2876,7 @@ Fracture::warnIfOpenButNotConducting() const
 double
 Fracture::normalFractureTraction(size_t eIdx) const
 {
-    return ddm::tractionSymTensor(reservoir_stress_[eIdx], cell_normals_[eIdx]);
+    return ddm::tractionVoigt(reservoir_stress_[eIdx], cell_normals_[eIdx]);
 }
 
 void

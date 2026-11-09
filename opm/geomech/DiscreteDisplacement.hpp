@@ -112,8 +112,13 @@ Dune::FieldMatrix<double,3,3> symTensor2Matrix(const Dune::FieldVector<double,6>
 Dune::FieldVector<double,6>
 strainToStress(const double E,const double nu,const Dune::FieldVector<double,6> strain);
 
+// Normal traction of a tensor ordered [xx, yy, zz, xy, xz, yz].
 double
 tractionSymTensor(const Dune::FieldVector<double,6> symtensor, Dune::FieldVector<double,3> normal);
+
+// Normal traction of a tensor in Voigt order [xx, yy, zz, yz, xz, xy].
+double
+tractionVoigt(Dune::FieldVector<double,6> voigt, Dune::FieldVector<double,3> normal);
 
 void assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);
 void assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);
