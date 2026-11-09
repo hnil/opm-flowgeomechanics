@@ -272,22 +272,31 @@ public:
                 }
             }
             wmax = 0.0;
+            double wmaxMass = 0.0;
             withLinSys([&](const auto& linSys) {
                 for (const auto& blk : linSys.residual()) {
-                    for (const auto v : blk) {
-                        wmax = std::max(wmax, std::abs(double(v)) / scale);
+                    for (std::size_t e = 0; e < blk.size(); ++e) {
+                        const double v = std::abs(double(blk[e])) / scale;
+                        wmax = std::max(wmax, v);
+                        // the last row is in pressure units, incomparable with the rates in a merit
+                        if (e + 1 < blk.size()) {
+                            wmaxMass = std::max(wmaxMass, v);
+                        }
                     }
                 }
             });
             fbmax = 0.0;
+            // the scaled phi saturates at 2 on any shut cell under tension: useless for a step search
+            double phiNorm2 = 0.0;
             for (auto& b : blocks) {
                 this->evaluateContact_(b, model, settings.fbMu);
                 for (std::size_t i = 0; i < b.nc; ++i) {
                     fbmax = std::max(fbmax, std::abs(b.phi[i]) / b.scale[i]);
+                    phiNorm2 += std::pow(b.phi[i] / 1e6, 2);
                 }
             }
             merit = std::sqrt(std::pow(rmax * settings.local.toleranceCnv, 2)
-                              + wmax * wmax + amax * amax + fbmax * fbmax);
+                              + wmaxMass * wmaxMass + amax * amax + phiNorm2);
             return std::max({rmax, wmax / settings.local.toleranceWell,
                              amax / settings.toleranceAux, fbmax / settings.toleranceFb});
         };
