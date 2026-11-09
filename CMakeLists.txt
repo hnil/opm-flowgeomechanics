@@ -32,34 +32,40 @@ endif()
 option(USE_TRACY_PROFILER "Enable tracy profiling" OFF)
 option(USE_HYPRE "Use the Hypre library for linear solvers?" OFF)
 
-# The following was copied from CMakeLists.txt in opm-common.
+# Adapted from CMakeLists.txt in opm-common, extended to all OPM modules
+# this module depends on, so a plain sibling build (<module>/build) works.
 
-if(SIBLING_SEARCH AND NOT opm-common_DIR)
-	# guess the sibling dir
+set(_opm_dep_modules opm-common opm-grid opm-simulators opm-upscaling)
+if(SIBLING_SEARCH)
+	# guess the sibling dirs
 	get_filename_component(_leaf_dir_name ${PROJECT_BINARY_DIR} NAME)
 	get_filename_component(_parent_full_dir ${PROJECT_BINARY_DIR} DIRECTORY)
-	get_filename_component(_parent_dir_name ${_parent_full_dir} NAME)
 	#Try if <module-name>/<build-dir> is used
 	get_filename_component(_modules_dir ${_parent_full_dir} DIRECTORY)
-	if(IS_DIRECTORY ${_modules_dir}/opm-common/${_leaf_dir_name})
-		set(opm-common_DIR ${_modules_dir}/opm-common/${_leaf_dir_name})
-	else()
-		string(REPLACE ${PROJECT_NAME} opm-common _opm_common_leaf ${_leaf_dir_name})
-		if(NOT _leaf_dir_name STREQUAL _opm_common_leaf
-				AND IS_DIRECTORY ${_parent_full_dir}/${_opm_common_leaf})
-			# We are using build directories named <prefix><module-name><postfix>
-			set(opm-common_DIR ${_parent_full_dir}/${_opm_common_leaf})
-		elseif(IS_DIRECTORY ${_parent_full_dir}/opm-common)
-			# All modules are in a common build dir
-			set(opm-common_DIR "${_parent_full_dir}/opm-common")
+	foreach(_mod IN LISTS _opm_dep_modules)
+		if(${_mod}_DIR)
+			continue()
 		endif()
-	endif()
+		string(REPLACE ${PROJECT_NAME} ${_mod} _mod_leaf ${_leaf_dir_name})
+		if(IS_DIRECTORY ${_modules_dir}/${_mod}/${_leaf_dir_name})
+			set(${_mod}_DIR ${_modules_dir}/${_mod}/${_leaf_dir_name})
+		elseif(NOT _leaf_dir_name STREQUAL _mod_leaf
+				AND IS_DIRECTORY ${_parent_full_dir}/${_mod_leaf})
+			# We are using build directories named <prefix><module-name><postfix>
+			set(${_mod}_DIR ${_parent_full_dir}/${_mod_leaf})
+		elseif(IS_DIRECTORY ${_parent_full_dir}/${_mod})
+			# All modules are in a common build dir
+			set(${_mod}_DIR "${_parent_full_dir}/${_mod}")
+		endif()
+	endforeach()
 endif()
 
-if(opm-common_DIR AND NOT IS_DIRECTORY ${opm-common_DIR})
-	message(WARNING "Value ${opm-common_DIR} passed to variable"
-		" opm-common_DIR is not a directory")
-endif()
+foreach(_mod IN LISTS _opm_dep_modules)
+	if(${_mod}_DIR AND NOT IS_DIRECTORY ${${_mod}_DIR})
+		message(WARNING "Value ${${_mod}_DIR} passed to variable"
+			" ${_mod}_DIR is not a directory")
+	endif()
+endforeach()
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/Modules)
 
 find_package(opm-common REQUIRED)
@@ -131,6 +137,7 @@ macro (opm-flowgeomechanics_prereqs_hook)
 		PUBLIC
 			opmupscaling
 			opmsimulators
+			Dune::FoamGrid
 			CGAL::CGAL GMP::gmp GMP::gmpxx
 	)
 
@@ -242,6 +249,15 @@ if(USE_TRACY_PROFILER AND Tracy_FOUND)
 			Tracy::TracyClient
 	)
 endif()
+
+include(GNUInstallDirs)
+install(TARGETS
+		flow_geomech
+		flow_energy_geomech
+		flow_energy_geomech_tpsa
+		flow_oilgas_energy_geomech
+	RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
 
 add_executable(padmodel
 	examples/padmodel.cpp
