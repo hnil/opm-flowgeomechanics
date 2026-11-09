@@ -219,8 +219,8 @@ class ElasticitySolver
                 sigma += s;
             }
             sigma /= volume;
-            // switch to voits notation
-            std::swap(sigma[4],sigma[5]);
+            // from getBmatrix's shear order xy, xz, yz to Voigt yz, xz, xy
+            std::swap(sigma[3],sigma[5]);
 
             sigmacells[m] = sigma;
             m++;

@@ -59,7 +59,7 @@ namespace Elasticity {
                 for (size_t k = 0; k < 3; ++k) {
 		  voigt_stress[i][k] = vemstress[i * 6 + k];
                 }
-		// transforming from xx,yy,zz,xy,xz,yz ordring to voigt i.e. xx,yy,zz,zy,zx,xy
+		// from VEM shear order xy, yz, zx to Voigt yz, zx, xy
 		voigt_stress[i][3] = vemstress[i * 6 + 4];
 		voigt_stress[i][5] = vemstress[i * 6 + 3];
 		voigt_stress[i][4] = vemstress[i * 6 + 5];
@@ -70,10 +70,10 @@ namespace Elasticity {
       for (size_t k = 0; k < 3; ++k) {
 	voigt_stress[i][k] = vemstress[i][k];
       }
-      // transforming from xx,yy,zz,xy,xz,yz ordring to voigt i.e. xx,yy,zz,zy,zx,xy
-      voigt_stress[i][3] = vemstress[i][4]; //yz??
-      voigt_stress[i][5] = vemstress[i][3]; //xy
-      voigt_stress[i][4] = vemstress[i][5]; //xz??
+      // from VEM shear order xy, yz, zx to Voigt yz, zx, xy
+      voigt_stress[i][3] = vemstress[i][4];
+      voigt_stress[i][5] = vemstress[i][3];
+      voigt_stress[i][4] = vemstress[i][5];
     }
   }
 
