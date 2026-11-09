@@ -543,6 +543,12 @@ target_link_libraries(test_cake_remap PRIVATE opmflowgeomechanics)
 add_test(NAME Unit.CakeRemap COMMAND $<TARGET_FILE:test_cake_remap>)
 set_tests_properties(Unit.CakeRemap PROPERTIES TIMEOUT 30 LABELS "physics;unit")
 
+# Interpolated stress must keep cell values and stop at faults.
+add_executable(test_centre_stress tests/test_centre_stress.cpp)
+target_link_libraries(test_centre_stress PRIVATE opmflowgeomechanics)
+add_test(NAME Unit.CentreStress COMMAND $<TARGET_FILE:test_centre_stress>)
+set_tests_properties(Unit.CentreStress PROPERTIES TIMEOUT 30 LABELS "physics;unit")
+
 # Global constraint rank must be independent of MPI partitioning.
 add_executable(test_mechanical_constraints tests/test_mechanical_constraints.cpp)
 target_link_libraries(test_mechanical_constraints PRIVATE opmflowgeomechanics)

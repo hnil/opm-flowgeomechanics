@@ -83,6 +83,7 @@ list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/MechLinePlanePreconditioner.hpp
 	opm/geomech/ParamInterior.hpp
 	opm/geomech/RegularTrimesh.hpp
+	opm/geomech/CentreStressInterpolation.hpp
 	opm/geomech/VemElasticitySolver.hpp
 	opm/geomech/VemElasticitySolver_impl.hpp
 	opm/geomech/vem/vem.hpp

@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <opm/geomech/DiscreteDisplacement.hpp>
 #include "RegularTrimesh.hpp"
 #include <opm/common/OpmLog/OpmLog.hpp>
 #include <opm/common/TimingMacros.hpp>
@@ -321,6 +322,55 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         const bool interpolate_stress = prm_.get<bool>("reservoir.interpolate_stress", false);
         std::vector<Dune::FieldVector<double,6>> nodal_stress;
         std::vector<Dune::FieldVector<double,3>> frac_centroids;
+        const auto stress_mode = centre_stress::parseMode(
+            prm_.get<std::string>("reservoir.stress_interpolation", "none"));
+        if (stress_mode != centre_stress::Mode::None) {
+            if (interpolate_stress) {
+                OPM_THROW(std::runtime_error,
+                          "reservoir.stress_interpolation and reservoir.interpolate_stress exclude each other");
+            }
+            frac_centroids.resize(ncf);
+            ElementMapper fracElemMapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+            for (const auto& element : elements(grid_->leafGridView()))
+                frac_centroids[fracElemMapper.index(element)] = element.geometry().center();
+        }
+        const std::size_t stress_sides_logged = stress_sides_.size();
+        const auto centre_of_cell = [&grid](int c) {
+            return Dune::cpgrid::Entity<0>(*grid.currentData().back(), c, true).geometry().center();
+        };
+        const auto cell_sides = [&](int c) -> const centre_stress::CellSides& {
+            const auto hit = stress_sides_.find(c);
+            if (hit != stress_sides_.end()) {
+                return hit->second;
+            }
+            if (!stress_faults_) {
+                stress_faults_ = centre_stress::DeclaredFaults(simulator.vanguard().eclState().getFaults());
+            }
+            const auto& mapper = simulator.vanguard().cartesianIndexMapper();
+            const auto logical = [&mapper](int cc) {
+                std::array<int, 3> ijk;
+                mapper.cartesianCoordinate(cc, ijk);
+                return ijk;
+            };
+            const auto cartesian = [&mapper](int cc) { return std::size_t(mapper.cartesianIndex(cc)); };
+            const auto flows = [&problem](int a, int b) {
+                const auto trans = problem.eclTransmissibilities().findTransmissibility(a, b);
+                return trans.has_value() && *trans > 0.0;
+            };
+            const auto has_mech = [&problem](int cc) {
+                if constexpr (requires { problem.geoMechModel().hasMech(std::size_t(cc)); }) {
+                    return problem.geoMechModel().hasMech(std::size_t(cc));
+                } else {
+                    return true;
+                }
+            };
+            const auto gv = grid.leafGridView();
+            const Dune::cpgrid::Entity<0> element(*grid.currentData().back(), c, true);
+            return stress_sides_.emplace(c, centre_stress::classifySides(
+                       gv, element, logical, cartesian, *stress_faults_, flows, has_mech,
+                       prm_.get<bool>("reservoir.stress_interpolation_across_faults", false)))
+                .first->second;
+        };
         if (interpolate_stress) {
             OPM_TIMEBLOCK(interpolateReservoirStress);
             const auto& gv = grid.leafGridView();
@@ -425,6 +475,14 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                         reservoir_stress_[i] = interp;
                     } // else: keep the containing-cell value
                 }
+                if (stress_mode != centre_stress::Mode::None) {
+                    const auto samples = centre_stress::samplesFromSides(
+                        cell_sides(cell), centre_of_cell,
+                        [&problem](int c) { return problem.stress(c); });
+                    reservoir_stress_[i] = centre_stress::interpolate(
+                        frac_centroids[i], normal, centre_of_cell(cell), problem.stress(cell), samples, stress_mode,
+                        [&normal](const auto& s) { return ddm::tractionSymTensor(s, normal); });
+                }
                 const auto& perm =  problem.intrinsicPermeability(cell);
                 const auto& cstress =  problem.cStress(cell);
                 auto pn = normal;
@@ -466,6 +524,19 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 reservoir_cell_z_[i] = origo_[2];// should maybe be cell center of triangle
             }
             // assume reservoir distance is calculated
+        }
+
+        if (stress_mode != centre_stress::Mode::None && stress_sides_.size() != stress_sides_logged) {
+            std::array<int, centre_stress::numSideKinds> counts {};
+            for (const auto& entry : stress_sides_) {
+                for (const auto& side : entry.second) {
+                    ++counts[static_cast<std::size_t>(side.kind)];
+                }
+            }
+            OpmLog::debug(fmt::format("Stress interpolation sides of {} reservoir cells: clean {}, boundary {}, "
+                                      "non-conforming {}, logical offset {}, declared fault {}, no flow {}, no mechanics {}",
+                                      stress_sides_.size(), counts[0], counts[1], counts[2], counts[3],
+                                      counts[4], counts[5], counts[6]));
         }
 
         fracture_water_property_evaluator_ =

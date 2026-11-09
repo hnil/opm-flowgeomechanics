@@ -26,8 +26,11 @@
 
 
 
+#include <opm/geomech/CentreStressInterpolation.hpp>
 #include <opm/geomech/FractureConnectionId.hpp>
 #include <limits>
+#include <optional>
+#include <unordered_map>
 
 #include <dune/common/exceptions.hh>
 #include <dune/foamgrid/foamgrid.hh>
@@ -682,6 +685,8 @@ private:
     std::vector<double> reservoir_dist_;
     std::vector<double> reservoir_pressure_;
     std::vector<Dune::FieldVector<double, 6>> reservoir_stress_;
+    std::optional<centre_stress::DeclaredFaults> stress_faults_;
+    std::unordered_map<int, centre_stress::CellSides> stress_sides_;
 
     // only for radom access need to be updater after trid change
     Dune::BlockVector<Dune::FieldVector<double, 3>> cell_normals_;
