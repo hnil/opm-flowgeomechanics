@@ -47,6 +47,7 @@
 #include <opm/common/TimingMacros.hpp>
 #include <opm/geomech/DiagonalScalar.hpp>
 #include <opm/geomech/Fracture.hpp>
+#include <opm/geomech/FractureCoupledLinearSolver.hpp>
 #include <opm/geomech/FractureMechanicsPreconditioner.hpp>
 
 #include <fmt/format.h>
@@ -77,170 +78,7 @@ using SystemMatrix = Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<FMatr
                                                 Dune::MultiTypeBlockVector<SMatrix, SMatrix>>;
 
 using Htrans = std::tuple<size_t, size_t, double, double>;
-using LinearPrecondType = Opm::FractureMechanicsPreconditioner;
-using LinearSolverBase = Dune::InverseOperator<VectorHP, VectorHP>;
 
-// ----------------------------------------------------------------------------
-// Block scaling for the coupled fracture linear system.
-//
-// The mechanics block A (stiffness/traction, O(1e6-1e10)) and the flow block M
-// (transmissibility, O(1e-6)) differ by many orders of magnitude, which wrecks
-// the conditioning of the coupled Krylov solve. A symmetric diagonal scaling
-//   D = diag(s_m on mech rows, s_p on pressure rows),  S -> D S D,  b -> D b,
-// solving for y and recovering x = D y, normalises the two blocks. This mirrors
-// the validated --scaling=blockmax path in examples/replay_fracture_linear_system.cpp
-// (see tests/replay_sweep.sh). s_m = 1/sqrt(max|A|), s_p = 1/sqrt(max|M|).
-// ----------------------------------------------------------------------------
-struct BlockScaling
-{
-    double mechanics = 1.0;
-    double pressure = 1.0;
-    bool active() const { return mechanics != 1.0 || pressure != 1.0; }
-};
-
-double
-max_abs_entry(const FMatrix& m)
-{
-    double res = 0.0;
-    for (size_t i = 0; i != m.N(); ++i)
-        for (size_t j = 0; j != m.M(); ++j)
-            res = std::max(res, std::abs(m[i][j]));
-    return res;
-}
-
-double
-max_abs_entry(const SMatrix& m)
-{
-    double res = 0.0;
-    for (auto row = m.begin(); row != m.end(); ++row)
-        for (auto col = row->begin(); col != row->end(); ++col)
-            res = std::max(res, std::abs((*col)[0][0]));
-    return res;
-}
-
-void
-scale_sparse(SMatrix& m, const double factor)
-{
-    for (auto row = m.begin(); row != m.end(); ++row)
-        for (auto col = row->begin(); col != row->end(); ++col)
-            (*col)[0][0] *= factor;
-}
-
-void
-scale_dense(FMatrix& m, const double factor)
-{
-    for (size_t i = 0; i != m.N(); ++i)
-        for (size_t j = 0; j != m.M(); ++j)
-            m[i][j] *= factor;
-}
-
-// Bit-exact FNV-1a hash of a double sequence; used only by the
-// solver.linsolver.debug_checksum diagnostic to tell whether two runs assemble
-// the same coupled system.
-struct Hash64
-{
-    uint64_t h {1469598103934665603ull};
-    void operator()(double v)
-    {
-        uint64_t b;
-        std::memcpy(&b, &v, sizeof b);
-        h = (h ^ b) * 1099511628211ull;
-    }
-};
-
-template <class SM>
-void
-hash_sparse(Hash64& h, const SM& m)
-{
-    for (auto row = m.begin(); row != m.end(); ++row)
-        for (auto col = row->begin(); col != row->end(); ++col) {
-            h(static_cast<double>(col.index()));
-            h((*col)[0][0]);
-        }
-}
-
-// Compute s_m, s_p from the current diagonal blocks for the requested mode.
-// "none" (default) returns identity scaling.
-BlockScaling
-compute_block_scaling(const SystemMatrix& S, const std::string& mode)
-{
-    if (mode == "none")
-        return {};
-    if (mode != "blockmax")
-        OPM_THROW(std::runtime_error, "Unsupported fracture linsolver scaling mode: " + mode);
-
-    const double a_max = max_abs_entry(S[_0][_0]);
-    const double m_max = max_abs_entry(S[_1][_1]);
-    if (a_max <= 0.0 || m_max <= 0.0)
-        return {}; // degenerate block; fall back to no scaling rather than throw
-    return {1.0 / std::sqrt(a_max), 1.0 / std::sqrt(m_max)};
-}
-
-// Scale the four blocks of S by D _ D (matrix only). fac=+1 applies the scaling,
-// fac=-1 (reciprocal) restores the original matrix.
-void
-scale_system_matrix(SystemMatrix& S, const BlockScaling& s, const int sign)
-{
-    const double mm = (sign > 0) ? s.mechanics * s.mechanics : 1.0 / (s.mechanics * s.mechanics);
-    const double mp = (sign > 0) ? s.mechanics * s.pressure : 1.0 / (s.mechanics * s.pressure);
-    const double pp = (sign > 0) ? s.pressure * s.pressure : 1.0 / (s.pressure * s.pressure);
-    scale_dense(S[_0][_0], mm);
-    scale_sparse(S[_0][_1], mp);
-    scale_sparse(S[_1][_0], mp);
-    scale_sparse(S[_1][_1], pp);
-}
-
-// Apply D S D to the system and D b to the rhs (in place).
-void
-apply_block_scaling(SystemMatrix& S, VectorHP& rhs, const BlockScaling& s)
-{
-    scale_system_matrix(S, s, +1);
-    for (auto& v : rhs[_0]) v[0] *= s.mechanics;
-    for (auto& v : rhs[_1]) v[0] *= s.pressure;
-}
-
-// Direct dense solve of the coupled system S dx = rhs. The mechanics block A is a
-// dense BEM (displacement-discontinuity) influence matrix, so the coupled system
-// is well posed but extremely ill-conditioned (width O(1) vs pressure O(1e8-1e11)),
-// which defeats Krylov methods and their cheap preconditioners. For SMALL fractures
-// a direct dense LU of the assembled 2N x 2N system is robust and affordable; an
-// exact Schur-complement preconditioner would cost the same order (A^-1 is dense).
-// Cost ~O((2N)^3) time, O((2N)^2) memory — guard on N before calling.
-bool
-solve_coupled_direct(const SystemMatrix& S, const VectorHP& rhs, VectorHP& dx)
-{
-    const size_t n = S[_0][_0].N();
-    const size_t m = S[_1][_1].N(); // n + numWellEquations (rate_well appends a row)
-    FMatrix K(n + m, n + m, 0.0);
-    const auto& A = S[_0][_0];
-    for (size_t i = 0; i != n; ++i)
-        for (size_t j = 0; j != n; ++j)
-            K[i][j] = A[i][j];
-    auto fill = [&](const SMatrix& Sb, const size_t ro, const size_t co) {
-        for (auto r = Sb.begin(); r != Sb.end(); ++r)
-            for (auto c = r->begin(); c != r->end(); ++c)
-                K[ro + r.index()][co + c.index()] = (*c)[0][0];
-    };
-    fill(S[_0][_1], 0, n);
-    fill(S[_1][_0], n, 0);
-    fill(S[_1][_1], n, n);
-
-    ResVector b(n + m), y(n + m);
-    for (size_t i = 0; i != n; ++i) b[i] = rhs[_0][i];
-    for (size_t i = 0; i != m; ++i) b[n + i] = rhs[_1][i];
-    y = 0;
-    try {
-        K.solve(y, b); // dense LU (factorises K in place)
-    } catch (const Dune::Exception&) {
-        return false; // singular
-    }
-    for (size_t i = 0; i != n + m; ++i)
-        if (!std::isfinite(y[i][0]))
-            return false;
-    for (size_t i = 0; i != n; ++i) dx[_0][i] = y[i];
-    for (size_t i = 0; i != m; ++i) dx[_1][i] = y[n + i];
-    return true;
-}
 
 void
 validate_state_vector(const ResVector& values, const char* const label, const double max_abs_value)
@@ -517,47 +355,6 @@ copyMatrixValuesWithSameSparsity(DstMatrix& dst, const SrcMatrix& src)
     assert(dstRowIt == dst.end());
 }
 
-// ----------------------------------------------------------------------------
-std::unique_ptr<LinearSolverBase>
-setupLinearSolver(const std::string& solver_type,
-                  const Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP>& linop,
-                  LinearPrecondType& precond,
-                  const Opm::PropertyTree& prm,
-                  const double lintol,
-                  const int max_iter,
-                  const int verbosity)
-// ----------------------------------------------------------------------------
-{
-    if (solver_type == "bicgstab") {
-        return std::make_unique<Dune::BiCGSTABSolver<VectorHP>>(linop,
-                                                                 precond,
-                                                                 lintol,
-                                                                 max_iter,
-                                                                 verbosity);
-    }
-
-    if (solver_type == "gmres") {
-        const int restart = prm.get<int>("solver.linsolver.restart", 100);
-        return std::make_unique<Dune::RestartedGMResSolver<VectorHP>>(linop,
-                                                                       precond,
-                                                                       lintol,
-                                                                       restart,
-                                                                       max_iter,
-                                                                       verbosity);
-    }
-
-    if (solver_type == "fgmres") {
-        const int restart = prm.get<int>("solver.linsolver.restart", 100);
-        return std::make_unique<Dune::RestartedFlexibleGMResSolver<VectorHP>>(linop,
-                                                                               precond,
-                                                                               lintol,
-                                                                               restart,
-                                                                               max_iter,
-                                                                               verbosity);
-    }
-
-    OPM_THROW(std::runtime_error, "Unknown linear solver type: for fracture");
-}
 
 // ----------------------------------------------------------------------------
 std::unique_ptr<Opm::Fracture::Matrix>
@@ -1096,24 +893,10 @@ Fracture::InnerSolveOptions::read(const PropertyTree& prm)
         o.dropTolP = prm.get<double>("solver.drop_tol_p", 1.0);
     }
     o.storageTerm = prm.get<bool>("solver.fracture_storage_term", false);
-    o.scaling = prm.get<std::string>("solver.linsolver.scaling", "none");
-    o.linearSolver = prm.get<std::string>("solver.linsolver.solver");
-    if (o.linearSolver == "direct") {
-        o.directMaxCells = prm.get<int>("solver.linsolver.direct_max_cells", 4000);
-        o.directFallbackSolver = prm.get<std::string>("solver.linsolver.direct_fallback_solver", "fgmres");
-    }
-    o.precond = prm.get_child("solver.linsolver.preconditioner");
-    o.updateMechOnReuse = o.precond.get<bool>("update_mech_on_reuse", false);
-    o.linTol = prm.get<double>("solver.linsolver.tol");
-    o.linAtol = prm.get<double>("solver.linsolver.atol");
-    o.linMaxIter = static_cast<int>(prm.get<double>("solver.linsolver.max_iter"));
-    o.linVerbosity = static_cast<int>(prm.get<double>("solver.linsolver.verbosity", 0));
+    o.linear = FractureCoupledLinearSolver::Options::read(prm);
     o.dumpMinNonlinIter = prm.get<int>("solver.dump_case_min_nonlin_iter", 0);
     o.writeCoupledSystem = prm.get<bool>("solver.write_coupled_linear_system", false);
     o.dumpOnFailure = prm.get<bool>("solver.dump_linear_system_on_failure", true);
-    o.debugChecksum = prm.get<bool>("solver.linsolver.debug_checksum", false);
-    o.failurePolicy = prm.get<std::string>("solver.linsolver.failure_policy", "throw");
-    o.gmresFallback = prm.get<bool>("solver.linsolver.fallback_gmres_on_breakdown", true);
     o.damping = prm.get<double>("solver.damping");
     o.coupledStepLimit = prm.get<double>("solver.coupled_step_limit", 0.0);
     o.maxDwidth = prm.get<double>("solver.max_dwidth");
@@ -1521,278 +1304,33 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     if (isConverged_(rhs, fb, tol))
         return true;
 
-    // Optional symmetric block scaling of the coupled system (opt-in; default
-    // "none" reproduces the unscaled behaviour). Computed from the current
-    // diagonal blocks and applied in place to S and rhs; the Newton update dx is
-    // scaled back after the linear solve. The convergence test above is done on
-    // the unscaled residual so tolerances keep their physical meaning.
-    const BlockScaling block_scaling =
-        compute_block_scaling(S, opt.scaling);
-    if (block_scaling.active()) {
-        apply_block_scaling(S, rhs, block_scaling);
-    }
-
-    const std::string& solver_type = opt.linearSolver;
-    Dune::InverseOperatorResult iores;
-
-    // Direct dense coupled solve (opt-in, solver.linsolver.solver = "direct"): for
-    // small fractures the dense BEM-coupled system is best solved directly — Krylov
-    // methods struggle with its O(1e11) conditioning and the only robust
-    // preconditioner (exact Schur) costs the same as a direct solve anyway. Guarded
-    // by direct_max_cells so large fractures fall back to the iterative path.
-    bool solved_direct = false;
-    if (solver_type == "direct") {
-        const int direct_max_cells = opt.directMaxCells;
-        const size_t ncoupled = fracture_width_.size();
-        if (static_cast<int>(ncoupled) <= direct_max_cells) {
-            solved_direct = solve_coupled_direct(S, rhs, dx);
-            iores.converged = solved_direct;
-            iores.iterations = 1;
-            ++last_solve_stats_.linear_solves;
-            if (!solved_direct && nlin_verbosity > 0)
-                OpmLog::debug("Direct coupled solve failed (singular); will report non-convergence");
-        } else if (nlin_verbosity > 0) {
-            OpmLog::debug(fmt::format("Direct coupled solve skipped: {} cells > direct_max_cells {}; using iterative solver",
-                                      ncoupled, direct_max_cells));
+    coupledSolver_.prepare(S, rhs);
+    FractureCoupledLinearSolver::Iteration it;
+    it.index = nlin_iteration;
+    it.verbosity = nlin_verbosity;
+    it.numClosed = std::accumulate(closed_cells.begin(), closed_cells.end(), 0);
+    it.newSystem = first_iteration;
+    it.contactChanged = closed_cells_changed;
+    // dump_case_min_nonlin_iter > 0 captures the systems of struggling solves for replay
+    it.dump = opt.writeCoupledSystem
+        || (opt.dumpMinNonlinIter > 0 && nlin_iteration >= opt.dumpMinNonlinIter);
+    const auto dump = [&](const SystemMatrix& system, const char* tag,
+                          const Dune::InverseOperatorResult* result) -> std::string {
+        const bool failure = (result != nullptr);
+        if (failure && !opt.dumpOnFailure) {
+            return {};
         }
-    }
-
-    if (!solved_direct) {
-    // solve system equations
-    if(first_iteration){
-        S_linop_ = std::make_unique<Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP>>(S); // store for use in preconditioner
-    }
-    const Opm::PropertyTree& lprm = opt.precond;
-    // When solver=="direct" but we fell back here (too large / singular), pick a
-    // real Krylov type for the iterative path.
-    const std::string iter_solver_type = (solver_type == "direct")
-        ? opt.directFallbackSolver
-        : solver_type;
-    bool new_precond = first_iteration || closed_cells_changed;
-    if(new_precond ){
-        frac_flow_precond_.reset(new Opm::FractureMechanicsPreconditioner(S, lprm));
-    }else{
-        frac_flow_precond_->update(S, opt.updateMechOnReuse);
-    }
-    // make possible use abs tolerance for linear solver
-    double res = rhs.two_norm2();
-    const double linsolve_tol = opt.linTol;
-    const double linsolve_atol = opt.linAtol;
-    double lintol = std::max(linsolve_tol, linsolve_atol / res);
-
-    const int max_iter = opt.linMaxIter;
-    const int verbosity = opt.linVerbosity;
-    if (nlin_verbosity > 1) {
-      int num_closed_cells = std::accumulate(closed_cells.begin(), closed_cells.end(), 0);
-      OpmLog::debug(fmt::format("Nonlinear iteration: {} rhs:  {} {} closed_cells: {} cells m: {} cells p: {}",
-                                nlin_iteration, rhs[_0].infinity_norm(), rhs[_1].infinity_norm(),
-                                num_closed_cells, rhs[_0].size(), rhs[_1].size()));
-    }
-
-    auto& precond = *frac_flow_precond_;
-    if (new_precond) {
-        psolver_ = setupLinearSolver(iter_solver_type, *S_linop_, precond, prm_, lintol, max_iter, verbosity);
-    }
-
-    // Dump a snapshot of the (physical, unscaled) coupled system either on explicit
-    // request (write_coupled_linear_system) or when the solve is "struggling" — i.e.
-    // the nonlinear iteration count reached dump_case_min_nonlin_iter (>0). The
-    // latter captures a *relevant* hard case for later offline/standalone study
-    // (replay tool, --contact-report) without dumping every system.
-    const int dump_case_min_nlin = opt.dumpMinNonlinIter;
-    const bool want_manual_dump = opt.writeCoupledSystem
-        || (dump_case_min_nlin > 0 && nlin_iteration >= dump_case_min_nlin);
-    if (want_manual_dump) {
-        if (block_scaling.active()) scale_system_matrix(S, block_scaling, -1);
-        dump_linear_system_snapshot(linear_system_dump_stem(prm_, nlin_iteration, "manual"),
-                                    S,
-                                    rhs_org,
-                                    x,
-                                    closed_cells,
-                                    use_ad,
-                                    prm_,
-                                    makePressureAssemblyInput());
-        if (block_scaling.active()) scale_system_matrix(S, block_scaling, +1);
-    }
-
-    if (opt.debugChecksum) {
-        Hash64 hs, hr;
-        for (size_t i = 0; i != S[_0][_0].N(); ++i)
-            for (size_t j = 0; j != S[_0][_0].M(); ++j)
-                hs(S[_0][_0][i][j]);
-        hash_sparse(hs, S[_0][_1]);
-        hash_sparse(hs, S[_1][_0]);
-        hash_sparse(hs, S[_1][_1]);
-        for (size_t i = 0; i != rhs[_0].size(); ++i) hr(rhs[_0][i][0]);
-        for (size_t i = 0; i != rhs[_1].size(); ++i) hr(rhs[_1][i][0]);
-        // Characterize the preconditioner as an operator: apply it to a fixed
-        // probe and hash the result, so a stale/garbage internal state shows up
-        // even though S and rhs are identical.
-        Hash64 hp;
-        {
-            VectorHP probe(rhs), out(rhs);
-            for (size_t i = 0; i != probe[_0].size(); ++i) probe[_0][i][0] = 1.0;
-            for (size_t i = 0; i != probe[_1].size(); ++i) probe[_1][i][0] = 1.0;
-            out = 0;
-            precond.apply(out, probe);
-            for (size_t i = 0; i != out[_0].size(); ++i) hp(out[_0][i][0]);
-            for (size_t i = 0; i != out[_1].size(); ++i) hp(out[_1][i][0]);
+        const auto stem = linear_system_dump_stem(prm_, nlin_iteration, tag);
+        dump_linear_system_snapshot(stem, system, rhs_org, x, closed_cells, use_ad, prm_,
+                                    makePressureAssemblyInput(), result);
+        if (!failure) {
+            return {};
         }
-        OpmLog::debug(fmt::format("linsys checksum nlin={} S={:x} rhs={:x} prec={:x} nm={} np={}",
-                                  nlin_iteration, hs.h, hr.h, hp.h, rhs[_0].size(), rhs[_1].size()));
-    }
-
-    // Pristine copy of the (possibly scaled) rhs fed to the solver, so each retry
-    // restarts from the same system (apply() overwrites rhs with the residual).
-    const VectorHP rhs_solve_org = rhs;
-    const std::string& failure_policy = opt.failurePolicy;
-
-    // Run a solver from a clean state and accumulate stats.
-    auto run_solver = [&](LinearSolverBase& solver) {
-        rhs = rhs_solve_org;
-        dx = 0;
-        solver.apply(dx, rhs, iores); // NB: will modify 'rhs'
-        ++last_solve_stats_.linear_solves;
-        last_solve_stats_.linear_iterations += iores.iterations;
+        const auto info = linear_system_info_filename(stem);
+        OpmLog::error(fmt::format("Fracture coupled linear solver failed. Snapshot info written to {}", info));
+        return info;
     };
-
-    {
-        OPM_TIMEBLOCK(SolveCoupledSystem);
-        try {
-            run_solver(*psolver_);
-        } catch (const std::exception& e1) {
-            // Identify which preconditioner block generates non-finite values -
-            // the Krylov abort ("defect=nan") is otherwise opaque.
-            try {
-                VectorHP vprobe(rhs_solve_org), dprobe(rhs_solve_org);
-                vprobe = 0;
-                precond.apply(vprobe, dprobe);
-                size_t bad_m = 0, bad_f = 0;
-                for (size_t i = 0; i < vprobe[_0].size(); ++i)
-                    if (!std::isfinite(vprobe[_0][i][0])) ++bad_m;
-                for (size_t i = 0; i < vprobe[_1].size(); ++i)
-                    if (!std::isfinite(vprobe[_1][i][0])) ++bad_f;
-                OpmLog::warning(fmt::format("Coupled solver abort ({}); precond probe non-finite: mech {}/{}, flow {}/{}",
-                                            e1.what(), bad_m, vprobe[_0].size(), bad_f, vprobe[_1].size()));
-            } catch (const std::exception& ep) {
-                OpmLog::warning(fmt::format("Coupled solver abort ({}); precond probe itself threw: {}",
-                                            e1.what(), ep.what()));
-            }
-            const bool allow_gmres_fallback = opt.gmresFallback;
-            iores.converged = false;
-            if (allow_gmres_fallback && iter_solver_type == "bicgstab") {
-                psolver_ = setupLinearSolver("gmres", *S_linop_, precond, prm_, lintol, max_iter, verbosity);
-                if (failure_policy == "ladder") {
-                    // A Krylov abort (overflow -> defect=nan) is just another
-                    // failed rung: fall through to the rescue ladder instead of
-                    // aborting the nonlinear iteration.
-                    try {
-                        run_solver(*psolver_);
-                    } catch (const std::exception&) {
-                        iores.converged = false;
-                    }
-                } else {
-                    run_solver(*psolver_);
-                }
-            } else if (failure_policy != "ladder") {
-                throw;
-            }
-        }
-    }
-
-    if (!iores.converged) {
-        ++last_solve_stats_.linear_solve_failures;
-    }
-
-    // Opt-in robustness ladder (solver.linsolver.failure_policy = "ladder"):
-    // if the configured solve did not converge, try progressively more robust
-    // rescue strategies before giving up. Each rung is transient — the persistent
-    // solver/preconditioner are untouched, and S is rebuilt in place at the top of
-    // the next nonlinear iteration, so no cleanup is required. Rungs operate on the
-    // already-scaled S/rhs, so the dx unscaling below applies uniformly.
-    if (!iores.converged && failure_policy == "ladder") {
-        const auto fixed_stress_prm = [&]() {
-            Opm::PropertyTree p = lprm;
-            p.put("mode_policy", std::string("manual"));
-            p.put("mech_first", std::string("true"));
-            p.put("fixed_stress", std::string("true"));
-            return p;
-        };
-        // rung 1: flexible GMRES with the existing preconditioner.
-        try {
-            auto s = setupLinearSolver("fgmres", *S_linop_, precond, prm_, lintol, max_iter, verbosity);
-            run_solver(*s);
-        } catch (const std::exception&) { /* fall through to next rung */ }
-
-        // rung 2: fixed-stress (Schur) preconditioner + flexible GMRES.
-        if (!iores.converged) {
-            try {
-                auto fsprm = fixed_stress_prm();
-                Opm::FractureMechanicsPreconditioner fsprecond(S, fsprm);
-                auto s = setupLinearSolver("fgmres", *S_linop_, fsprecond, prm_, lintol, max_iter, verbosity);
-                run_solver(*s);
-            } catch (const std::exception&) {}
-        }
-
-        // rung 3: drop the flow->mech coupling block C (decoupled / Picard) and
-        // solve the block-triangular system with a fixed-stress preconditioner.
-        if (!iores.converged) {
-            try {
-                S[_1][_0] = 0; // overwritten again at the top of the next iteration
-                auto dcprm = fixed_stress_prm();
-                Opm::FractureMechanicsPreconditioner dcprecond(S, dcprm);
-                auto s = setupLinearSolver("fgmres", *S_linop_, dcprecond, prm_, lintol, max_iter, verbosity);
-                run_solver(*s);
-            } catch (const std::exception&) {}
-        }
-
-        if (iores.converged) {
-            ++last_solve_stats_.ladder_rescues;
-            if (nlin_verbosity > 0) {
-                OpmLog::debug(fmt::format("Fracture coupled linear solve rescued by fallback ladder at nlin iter {} ({} iters)",
-                                          nlin_iteration, iores.iterations));
-            }
-        }
-    }
-    } // end if(!solved_direct) — iterative coupled solve path
-
-    if (!iores.converged) {
-        // Restore the physical (unscaled) system so the dumped failure case is
-        // directly replayable. The function throws right after, so no re-scale.
-        if (block_scaling.active()) scale_system_matrix(S, block_scaling, -1);
-        std::string dump_info_filename;
-        if (opt.dumpOnFailure) {
-            const auto dump_stem = linear_system_dump_stem(prm_, nlin_iteration, "linear_failure");
-            dump_info_filename = linear_system_info_filename(dump_stem);
-            dump_linear_system_snapshot(dump_stem,
-                                        S,
-                                        rhs_org,
-                                        x,
-                                        closed_cells,
-                                        use_ad,
-                                        prm_,
-                                        makePressureAssemblyInput(),
-                                        &iores);
-            OpmLog::error(fmt::format("Fracture coupled linear solver failed. Snapshot info written to {}",
-                                      dump_info_filename));
-        }
-
-        last_solve_stats_.converged = false;
-        OPM_THROW(std::runtime_error,
-                  "Fracture coupled linear solver failed to converge after "
-                      + std::to_string(iores.iterations)
-                      + " iterations."
-                      + (dump_info_filename.empty()
-                             ? std::string()
-                             : " Snapshot info: " + dump_info_filename));
-    }
-
-    // Undo the block scaling: the solver returned y, the true Newton update is
-    // dx = D y. All subsequent step control (damping, clamps) acts on dx.
-    if (block_scaling.active()) {
-        for (auto& v : dx[_0]) v[0] *= block_scaling.mechanics;
-        for (auto& v : dx[_1]) v[0] *= block_scaling.pressure;
-    }
+    coupledSolver_.solve(rhs, dx, it, last_solve_stats_, dump);
 
     if (nlin_verbosity > 2) {
         OpmLog::debug(fmt::format("x:  {} {}\ndx: {} {}\nrhs after linsolve:  {} {}",
@@ -1800,9 +1338,8 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
                                   dx[_0].infinity_norm(), dx[_1].infinity_norm(),
                                   rhs[_0].infinity_norm(), rhs[_1].infinity_norm()));
     }
-    if (nlin_verbosity > 2 && !block_scaling.active()) {
-      // Skipped when block scaling is active: S has been overwritten with D S D
-      // in place, so this unscaled residual check would be meaningless.
+    if (nlin_verbosity > 2 && !coupledSolver_.scaled()) {
+      // S holds D S D when scaled, so this unscaled check would be meaningless.
       auto x_new(dx);
       auto rhs2_tmp(rhs_org);
       S.mmv(x_new, rhs2_tmp);

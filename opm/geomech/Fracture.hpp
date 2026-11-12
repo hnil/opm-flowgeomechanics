@@ -64,6 +64,7 @@
 #include <dune/istl/multitypeblockvector.hh>
 #include <dune/istl/preconditioners.hh>
 #include <dune/istl/solvers.hh>
+#include <opm/geomech/FractureCoupledLinearSolver.hpp>
 #include <opm/geomech/FractureMechanicsPreconditioner.hpp>
 // for linear solve
 #include <opm/models/io/vtkmultiwriter.hh>
@@ -706,22 +707,10 @@ private:
         double dropTolH{1e1};
         double dropTolP{1.0};
         bool storageTerm{false};
-        std::string scaling{"none"};
-        std::string linearSolver;
-        int directMaxCells{4000};
-        std::string directFallbackSolver{"fgmres"};
-        PropertyTree precond;
-        bool updateMechOnReuse{false};
-        double linTol{0.0};
-        double linAtol{0.0};
-        int linMaxIter{0};
-        int linVerbosity{0};
+        FractureCoupledLinearSolver::Options linear;
         int dumpMinNonlinIter{0};
         bool writeCoupledSystem{false};
         bool dumpOnFailure{true};
-        bool debugChecksum{false};
-        std::string failurePolicy{"throw"};
-        bool gmresFallback{true};
         double damping{0.0};
         double coupledStepLimit{0.0};
         double maxDwidth{0.0};
@@ -965,12 +954,7 @@ private:
     // per-cell contact state changes within the current solve, used by the
     // opt-in anti-chatter guard (solver.toggle_guard_mode = "chatter")
     std::vector<int> cell_flip_counts_;
-    //using AbstractPreconditioner = Dune::PreconditionerWithUpdate<VectorHP, VectorHP>;
-    using AbstractPreconditioner = FractureMechanicsPreconditioner;
-    std::unique_ptr<AbstractPreconditioner> frac_flow_precond_;
-    std::unique_ptr<Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP>> S_linop_;
-    using LinearSolverBase = Dune::InverseOperator<VectorHP, VectorHP>;
-    std::unique_ptr<LinearSolverBase> psolver_;
+    FractureCoupledLinearSolver coupledSolver_;
     FractureSolveStats last_solve_stats_{};
 
 };

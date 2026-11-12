@@ -1940,6 +1940,7 @@ Fracture::solveOnCurrentGrid_(const PropagationOptions& opt)
     bool converged = joint_growth_round_;
     if (!joint_growth_round_) {
         inner_ = InnerSolveOptions::read(prm_);
+        coupledSolver_.setOptions(inner_.linear);
         while (!(converged = fullSystemIteration(opt.tol, iter)) && iter++ < opt.maxIter) {
         }
     }
