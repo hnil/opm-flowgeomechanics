@@ -348,7 +348,7 @@ void MechLinearSolver<GridType>::setup(const PropertyTree& prm, Matrix& A,
     addMechLinePlanePreconditioner(coords);
     // Opt-in: stop the warm-started solve when the residual of the full
     // load is below tol, not when the correction's own residual is.
-    tol_relative_to_load_ = prm.get<bool>("tol_relative_to_load", false);
+    tol_relative_to_load_ = prm.get<bool>("tol_relative_to_load", true);
     warm_start_ = prm.get<bool>("warm_start", true);
     linear_tol_ = prm.get<double>("tol", 1e-5);
 #if HAVE_MPI
@@ -387,6 +387,15 @@ MechSolveResult MechLinearSolver<GridType>::solve(const Vector& rhs, const Vecto
 {
     const bool scaled = scale.size() > 0;
     MechSolveResult result;
+    // Copy rows hold an identity and a partial load, so only owner rows count.
+    auto globalNorm2 = [this](const Vector& v) {
+        double n2 = v.two_norm2();
+#if HAVE_MPI
+        if (grid_.comm().size() > 1)
+            comm_->dot(v, v, n2);
+#endif
+        return n2;
+    };
     try {
         Dune::InverseOperatorResult r;
         // with diagonal scaling the operator is S A S: solve (S A S) y = S b, x = S y
@@ -395,16 +404,14 @@ MechSolveResult MechLinearSolver<GridType>::solve(const Vector& rhs, const Vecto
             for (std::size_t i = 0; i < rhs_eff.size(); ++i)
                 rhs_eff[i] *= scale[i][0];
         }
+        const double b_norm = std::sqrt(globalNorm2(rhs_eff));
+        const double target = linear_tol_ * b_norm;
+        Vector y(rhs.size());
         if (x.size() != rhs.size() || !warm_start_ || cold) {
-            Vector y(rhs.size());
             y = 0;
             tsolver_->apply(y, rhs_eff, r);
-            x = y;
-            if (scaled)
-                for (std::size_t i = 0; i < x.size(); ++i)
-                    x[i] = scale[i][0] * y[i][0];
         } else {
-            Vector y = x;
+            y = x;
             if (scaled)
                 for (std::size_t i = 0; i < y.size(); ++i)
                     y[i] = x[i][0] / scale[i][0];
@@ -415,17 +422,7 @@ MechSolveResult MechLinearSolver<GridType>::solve(const Vector& rhs, const Vecto
             if (tol_relative_to_load_) {
                 // ||b - A(y+dy)|| <= tol ||b||: the correction only needs the reduction
                 // that gets the full residual there, and none at all if it is already.
-                // Copy rows hold an identity and a partial load, so only owner rows count.
-                double b2 = rhs_eff.two_norm2();
-                double r2 = rhs_tmp.two_norm2();
-#if HAVE_MPI
-                if (grid_.comm().size() > 1) {
-                    comm_->dot(rhs_eff, rhs_eff, b2);
-                    comm_->dot(rhs_tmp, rhs_tmp, r2);
-                }
-#endif
-                const double target = linear_tol_ * std::sqrt(b2);
-                const double have = std::sqrt(r2);
+                const double have = std::sqrt(globalNorm2(rhs_tmp));
                 if (have <= target) {
                     r.iterations = 0;
                     r.converged = true;
@@ -437,14 +434,37 @@ MechSolveResult MechLinearSolver<GridType>::solve(const Vector& rhs, const Vecto
                 tsolver_->apply(dy, rhs_tmp, r);
             }
             y += dy;
-            x = y;
-            if (scaled)
-                for (std::size_t i = 0; i < x.size(); ++i)
-                    x[i] = scale[i][0] * y[i][0];
         }
         result.iterations = r.iterations;
         result.converged = r.converged;
         result.reduction = r.reduction;
+        if (tol_relative_to_load_ && result.converged && b_norm > 0.0) {
+            // GMRES stops on the preconditioned residual; accept only on the true one
+            auto res = rhs_eff;
+            A_->mmv(y, res);
+            double res_norm = std::sqrt(globalNorm2(res));
+            if (res_norm > target) {
+                auto dy = y;
+                dy = 0;
+                Dune::InverseOperatorResult r2;
+                auto rhs_tmp = res;
+                tsolver_->apply(dy, rhs_tmp, std::min(0.5, target / res_norm), r2);
+                y += dy;
+                result.iterations += r2.iterations;
+                res = rhs_eff;
+                A_->mmv(y, res);
+                res_norm = std::sqrt(globalNorm2(res));
+            }
+            if (res_norm > target) {
+                result.converged = false;
+                OpmLog::warning(fmt::format("Mechanical solve: true residual {:.3e} above "
+                                            "tolerance {:.3e}", res_norm, target));
+            }
+        }
+        x = y;
+        if (scaled)
+            for (std::size_t i = 0; i < x.size(); ++i)
+                x[i] = scale[i][0] * y[i][0];
     } catch (Dune::ISTLError& e) {
         result.converged = false;
         result.failed = true;

@@ -182,7 +182,7 @@ private:
     std::shared_ptr<MechCommunication> comm_;
     std::shared_ptr<MechCommunication::ParallelIndexSet> vertexParallelIndexSet_;
     std::shared_ptr<MechCommunication::ParallelIndexSet> dofParallelIndexSet_;
-    bool tol_relative_to_load_ = false;
+    bool tol_relative_to_load_ = true;
     bool warm_start_ = true;
     double linear_tol_ = 1e-5;
 };
