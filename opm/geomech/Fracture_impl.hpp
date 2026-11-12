@@ -219,22 +219,22 @@ template <class TypeTag, class Simulator>
 void Fracture::initReservoirProperties(const Simulator& simulator)
 {
     const auto& problem = simulator.problem();
-    size_t ncf = reservoir_cells_.size();
-    reservoir_perm_.resize(ncf);
-    reservoir_cstress_.resize(ncf);
-    reservoir_density_.resize(ncf);
+    size_t ncf = reservoir_map_.cells.size();
+    reservoir_.perm.resize(ncf);
+    reservoir_.cstress.resize(ncf);
+    reservoir_.density.resize(ncf);
     double dist = prm_.get<double>("reservoir.dist");
-    reservoir_dist_.resize(ncf, dist);
+    reservoir_map_.dist.resize(ncf, dist);
     double numax = -1e99;
     double Emax = -1e99;
     assert(ncf > 0);
     for (size_t i = 0; i < ncf; ++i) {
-        int cell = reservoir_cells_[i];
+        int cell = reservoir_map_.cells[i];
         if (cell < 0) {
-            reservoir_perm_[i] = 0.0;
-            reservoir_cstress_[i] = 1e20;
-            reservoir_density_[i] = 1000.0;
-            reservoir_dist_[i] = dist;
+            reservoir_.perm[i] = 0.0;
+            reservoir_.cstress[i] = 1e20;
+            reservoir_.density[i] = 1000.0;
+            reservoir_map_.dist[i] = dist;
             continue;
         }
         auto normal = this->cell_normals_[i];
@@ -244,8 +244,8 @@ void Fracture::initReservoirProperties(const Simulator& simulator)
             auto np = normal;
             permmat.mv(normal, np);
             double value = np.dot(normal);
-            reservoir_perm_[i] = value;
-            reservoir_cstress_[i] = cstress;
+            reservoir_.perm[i] = value;
+            reservoir_.cstress[i] = cstress;
         }
         Emax = std::max(Emax, problem.yModule(cell));
         numax = std::max(numax, problem.pRatio(cell));
@@ -260,7 +260,7 @@ template <class TypeTag, class Simulator>
 void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_constant_vals,bool /*update_filtercake*/)
     {
         // if `init_contant_vals` is true, the fields that should normally not
-        // change, i.e.  E_, nu_ and reservoir_perm_ will be updated. This should
+        // change, i.e.  E_, nu_ and reservoir_.perm will be updated. This should
         // normally only be needed the first time.
         if (init_constant_vals) {
             initReservoirProperties<TypeTag, Simulator>(simulator);
@@ -273,21 +273,21 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         GeometryHelper ghelper(grid);
         const auto value_of = [](const auto& value) { return Opm::scalarValue(value); };
         // NB reservoir dist not calculated
-        size_t ncf = reservoir_cells_.size();
+        size_t ncf = reservoir_map_.cells.size();
         assert(ncf > 0);
-        reservoir_pressure_.resize(ncf);
-        reservoir_stress_.resize(ncf);
-        reservoir_mobility_.resize(ncf);
-        reservoir_perm_.resize(ncf);
-        reservoir_cstress_.resize(ncf);
-        reservoir_cell_z_.resize(ncf, 0.0);
+        reservoir_.pressure.resize(ncf);
+        reservoir_.stress.resize(ncf);
+        reservoir_.mobility.resize(ncf);
+        reservoir_.perm.resize(ncf);
+        reservoir_.cstress.resize(ncf);
+        reservoir_.cellZ.resize(ncf, 0.0);
         filtercake_thikness_.resize(ncf, 0.0);
         // should be calculated
         bool calculate_dist = prm_.get<bool>("reservoir.calculate_dist");
         const double dist_factor = leakoffDistanceFactor();
         if(!calculate_dist){
           double dist = prm_.get<double>("reservoir.dist");
-          reservoir_dist_.resize(ncf, dist);
+          reservoir_map_.dist.resize(ncf, dist);
         }
 
         std::vector<ScalarFluidState> fracture_scalar_fluid_states(ncf);
@@ -375,7 +375,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         }
 
         std::vector<int> unique_reservoir_cells_;
-        for(auto & cells : all_reservoir_cells_){
+        for(auto & cells : reservoir_map_.allCells){
             for(auto & cell : cells){
                 unique_reservoir_cells_.push_back(cell);
             }
@@ -399,41 +399,41 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                         reservoir_mobility += val.value();
                     }
                 }
-                map_reservoir_mobility_[cell] = reservoir_mobility;
-                map_reservoir_density_[cell] = fs.density(FluidSystem::waterPhaseIdx).value();
-                auto pval = fs.pressure(FluidSystem::waterPhaseIdx);
-                map_reservoir_pressure_[cell] = pval.value();
-                map_reservoir_cell_z_[cell] = problem.dofCenterDepth(cell);
+                auto& v = off_centroid_cells_[cell];
+                v.mobility = reservoir_mobility;
+                v.density = fs.density(FluidSystem::waterPhaseIdx).value();
+                v.pressure = fs.pressure(FluidSystem::waterPhaseIdx).value();
+                v.cellZ = problem.dofCenterDepth(cell);
             }
         }
 
-        reservoir_water_mobility_.resize(ncf, 0.0);
+        reservoir_.waterMobility.resize(ncf, 0.0);
         for (size_t i = 0; i < ncf; ++i) {
-            int cell = reservoir_cells_[i];
+            int cell = reservoir_map_.cells[i];
             if (!(cell < 0)) {
                 auto normal = this->cell_normals_[i];
                 const auto& intQuants = simulator.model().intensiveQuantities(cell, /*timeIdx*/ 0);
                 const auto& fs = intQuants.fluidState();
                                 copyBlackOilFluidState(fracture_scalar_fluid_states[i], fs, value_of);
                                 fracture_scalar_fluid_state_valid[i] = true;
-                                reservoir_pressure_[i] = value_of(fs.pressure(FluidSystem::waterPhaseIdx));
+                                reservoir_.pressure[i] = value_of(fs.pressure(FluidSystem::waterPhaseIdx));
                 enum { numPhases = getPropValue<TypeTag, Properties::NumPhases>() };
-                reservoir_mobility_[i] = 0.0;
-                                reservoir_density_[i] = value_of(fs.density(FluidSystem::waterPhaseIdx));
+                reservoir_.mobility[i] = 0.0;
+                                reservoir_.density[i] = value_of(fs.density(FluidSystem::waterPhaseIdx));
                 for (unsigned phaseIdx = 0; phaseIdx < numPhases; ++phaseIdx) {
                   if (FluidSystem::phaseIsActive(phaseIdx)) {
                     // assume sum should only be water;
                     auto val = intQuants.mobility(phaseIdx);
-                    reservoir_mobility_[i] += val.value();
+                    reservoir_.mobility[i] += val.value();
                   }
                 }
                 // Kept apart from the total: the flow's water equation upwinds this
                 // one, so leakoff_mobility=upwind needs it when the reservoir feeds
                 // the fracture.
-                reservoir_water_mobility_[i] =
+                reservoir_.waterMobility[i] =
                     value_of(intQuants.mobility(FluidSystem::waterPhaseIdx));
                 for (int dim = 0; dim < 3; ++dim) {
-                  reservoir_stress_[i] = problem.stress(cell);
+                  reservoir_.stress[i] = problem.stress(cell);
                 }
                 if (interpolate_stress) {
                     // trilinear interpolation of the recovered nodal stress at the
@@ -460,14 +460,14 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                                 w *= ((k >> d) & 1) ? loc[d] : 1.0 - loc[d];
                             interp.axpy(w, nodal_stress[gv.indexSet().subIndex(relem, k, 3)]);
                         }
-                        reservoir_stress_[i] = interp;
+                        reservoir_.stress[i] = interp;
                     } // else: keep the containing-cell value
                 }
                 if (stress_mode != centre_stress::Mode::None) {
                     const auto samples = centre_stress::samplesFromSides(
                         cell_sides(cell), centre_of_cell,
                         [&problem](int c) { return problem.stress(c); });
-                    reservoir_stress_[i] = centre_stress::interpolate(
+                    reservoir_.stress[i] = centre_stress::interpolate(
                         frac_centroids[i], normal, centre_of_cell(cell), problem.stress(cell), samples, stress_mode,
                         [&normal](const auto& s) { return ddm::tractionVoigt(s, normal); });
                 }
@@ -476,8 +476,8 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 auto pn = normal;
                 perm.mv(normal, pn);
                 double npn = pn.dot(normal);
-                reservoir_perm_[i] = npn;
-                reservoir_cstress_[i] = cstress;
+                reservoir_.perm[i] = npn;
+                reservoir_.cstress[i] = cstress;
                 const auto& currentData = grid.currentData();
                 const auto& elem = Dune::cpgrid::Entity<0>(*currentData.back(), cell, true);
                 const auto& geom = elem.geometry();
@@ -491,25 +491,25 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                     dist += std::abs(normal.dot(cdist));
                   }
                   dist /= num_corners; // = L/2 for a box cell: mean |n.(centre-corner)|
-                  reservoir_dist_[i] = 2.0*dist*dist_factor;
+                  reservoir_map_.dist[i] = 2.0*dist*dist_factor;
                 }
                 // depth at which Flow defines the cell pressure
-                reservoir_cell_z_[i] = problem.dofCenterDepth(cell);
+                reservoir_.cellZ[i] = problem.dofCenterDepth(cell);
             } else {
                 // probably outside reservoir set all to zero
                 double stressval = 300*300e5;// large value to keep it closed
                 //NB should maybe be interpolated out from reservoir
-                reservoir_stress_[i][0] = stressval;
-                reservoir_stress_[i][1] = stressval;
-                reservoir_stress_[i][2] = stressval; //???
-                reservoir_pressure_[i] = injectionPressure();
-                reservoir_mobility_[i] = 1000.0;
-                reservoir_water_mobility_[i] = 1000.0;
-                reservoir_density_[i] = 1000.0;
-                reservoir_perm_[i] = 0.0;
-                reservoir_cstress_[i]  = 1e99;
-                reservoir_dist_[i] = 1e99;
-                reservoir_cell_z_[i] = origo_[2];// should maybe be cell center of triangle
+                reservoir_.stress[i][0] = stressval;
+                reservoir_.stress[i][1] = stressval;
+                reservoir_.stress[i][2] = stressval; //???
+                reservoir_.pressure[i] = injectionPressure();
+                reservoir_.mobility[i] = 1000.0;
+                reservoir_.waterMobility[i] = 1000.0;
+                reservoir_.density[i] = 1000.0;
+                reservoir_.perm[i] = 0.0;
+                reservoir_.cstress[i]  = 1e99;
+                reservoir_map_.dist[i] = 1e99;
+                reservoir_.cellZ[i] = origo_[2];// should maybe be cell center of triangle
             }
             // assume reservoir distance is calculated
         }
@@ -530,7 +530,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         fracture_water_property_evaluator_ =
             [fluid_states = std::move(fracture_scalar_fluid_states),
              valid_states = std::move(fracture_scalar_fluid_state_valid),
-             fallback_density = reservoir_density_](const size_t cell_idx, const double pressure)
+             fallback_density = reservoir_.density](const size_t cell_idx, const double pressure)
                 -> std::pair<CellFluidProperty, CellFluidProperty>
         {
             using PressureEval = Opm::DenseAd::Evaluation<double, 1>;
@@ -567,7 +567,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         for (auto element : Dune::elements(grid_->leafGridView())) {
             int i = grid_->leafGridView().indexSet().index(element);
             double z = element.geometry().center()[2];
-            fracture_dgh_[i] = gravity_ * reservoir_density_[i] * z;
+            fracture_dgh_[i] = gravity_ * reservoir_.density[i] * z;
         }
         int reportStepIdx = simulator.episodeIndex();
 
@@ -887,28 +887,42 @@ Fracture::serializeState(Serializer& serializer)
     serializer(well_source_cellref_);
     serializer(well_source_);
 
-    serializer(reservoir_cells_);
-    serializer(all_reservoir_cells_);
-    serializer(all_reservoir_areas_);
-    std::size_t num_center_lists = all_reservoir_centers_.size();
+    serializer(reservoir_map_.cells);
+    serializer(reservoir_map_.allCells);
+    serializer(reservoir_map_.allAreas);
+    std::size_t num_center_lists = reservoir_map_.allCenters.size();
     serializer(num_center_lists);
-    all_reservoir_centers_.resize(num_center_lists);
-    for (auto& centers : all_reservoir_centers_) {
+    reservoir_map_.allCenters.resize(num_center_lists);
+    for (auto& centers : reservoir_map_.allCenters) {
         ckpt::fieldVectors(serializer, centers);
     }
-    serializer(reservoir_perm_);
-    serializer(reservoir_cstress_);
-    serializer(reservoir_mobility_);
-    serializer(reservoir_water_mobility_);
-    serializer(reservoir_density_);
-    serializer(reservoir_cell_z_);
-    serializer(map_reservoir_mobility_);
-    serializer(map_reservoir_density_);
-    serializer(map_reservoir_cell_z_);
-    serializer(map_reservoir_pressure_);
-    serializer(reservoir_dist_);
-    serializer(reservoir_pressure_);
-    ckpt::fieldVectors(serializer, reservoir_stress_);
+    serializer(reservoir_.perm);
+    serializer(reservoir_.cstress);
+    serializer(reservoir_.mobility);
+    serializer(reservoir_.waterMobility);
+    serializer(reservoir_.density);
+    serializer(reservoir_.cellZ);
+    {
+        // four maps, as the checkpoint format has them
+        std::map<int, double> mob, dens, z, p;
+        for (const auto& [cell, v] : off_centroid_cells_) {
+            mob[cell] = v.mobility;
+            dens[cell] = v.density;
+            z[cell] = v.cellZ;
+            p[cell] = v.pressure;
+        }
+        serializer(mob);
+        serializer(dens);
+        serializer(z);
+        serializer(p);
+        off_centroid_cells_.clear();
+        for (const auto& [cell, m] : mob) {
+            off_centroid_cells_[cell] = {m, dens[cell], z[cell], p[cell]};
+        }
+    }
+    serializer(reservoir_map_.dist);
+    serializer(reservoir_.pressure);
+    ckpt::fieldVectors(serializer, reservoir_.stress);
 
     ckpt::fieldVectors(serializer, fracture_width_);
     ckpt::fieldVectors(serializer, fracture_pressure_);

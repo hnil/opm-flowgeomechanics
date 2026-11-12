@@ -1012,7 +1012,7 @@ Fracture::makePressureAssemblyInput() const
     input.htrans = htrans_;
     input.control_type = effectiveControlType();
     if (input.control_type == "bhp_well" && !perfinj_.empty()) {
-        const double density = reservoir_density_[std::get<0>(perfinj_[0])];
+        const double density = reservoir_.density[std::get<0>(perfinj_[0])];
         input.well_target_pressure = well_target_bhp_
             + density * gravity_ * (perf_ref_depth_ - well_ref_depth_);
     }
@@ -1021,8 +1021,8 @@ Fracture::makePressureAssemblyInput() const
     input.total_wellindex = total_wellindex_;
     input.mobility_water_perf = mobility_water_perf_;
     input.face_mobility.resize(nc + nw, 0.0);
-    for (size_t i = 0; i < reservoir_mobility_.size() && i < nc; ++i)
-        input.face_mobility[i] = reservoir_mobility_[i];
+    for (size_t i = 0; i < reservoir_.mobility.size() && i < nc; ++i)
+        input.face_mobility[i] = reservoir_.mobility[i];
     input.leakof = leakof_;
     input.use_fluid_mobility_for_internal_faces =
         use_fluid_system_water_properties
@@ -1051,7 +1051,7 @@ Fracture::makePressureAssemblyInput() const
             input.viscosity[i] = fluid_properties.second;
         }
         else {
-            input.density[i] = {reservoir_density_[i], 0.0};
+            input.density[i] = {reservoir_.density[i], 0.0};
             input.viscosity[i] = {1.0, 0.0};
         }
     }
@@ -1264,7 +1264,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
                              fracture_pressure_,
                              fracture_width_,
                              closed_cells,
-                             reservoir_mobility_,
+                             reservoir_.mobility,
                              min_width_);
     }
     // setup the full system

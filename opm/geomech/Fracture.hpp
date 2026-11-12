@@ -336,17 +336,17 @@ public:
     bool ensureLeakoffCurrent();
 
     //! Reservoir cell each fracture cell leaks into, by fracture cell index.
-    const std::vector<int>& reservoirCells() const { return reservoir_cells_; }
+    const std::vector<int>& reservoirCells() const { return reservoir_map_.cells; }
 
     //! Leak-off coefficient per fracture cell.  Includes the reservoir mobility.
     const std::vector<double>& leakOf() const { return leakof_; }
 
     //! Reservoir mobility used to form leakOf(), so that it can be divided back out.
-    const std::vector<double>& reservoirMobility() const { return reservoir_mobility_; }
+    const std::vector<double>& reservoirMobility() const { return reservoir_.mobility; }
 
     //! Distance from the fracture face to the reservoir cell's pressure point used by
     //! the leak-off, and the number of faces that leak.
-    const std::vector<double>& reservoirDistance() const { return reservoir_dist_; }
+    const std::vector<double>& reservoirDistance() const { return reservoir_map_.dist; }
     int leakingSides() const { return leakoffSides(); }
 
     //! The mobility actually folded into leakOf(), which is reservoirMobility() only
@@ -768,27 +768,31 @@ private:
 
     std::vector<CellRef> well_source_cellref_; // references to well cells in the fully resolved TriMesh
     std::vector<int> well_source_; // indices to well cells
-    // for reservoir
-    std::vector<int> reservoir_cells_;
-    std::vector<std::vector<int>> all_reservoir_cells_;
-    std::vector<std::vector<double>> all_reservoir_areas_;
-    std::vector<std::vector<Dune::FieldVector<double,3>>> all_reservoir_centers_;
-    std::vector<double> reservoir_perm_;
-    std::vector<double> reservoir_cstress_;
-    std::vector<double> reservoir_mobility_;
-    std::vector<double> reservoir_water_mobility_;
-    std::vector<double> reservoir_density_;
-    std::vector<double> reservoir_cell_z_;
+    // Reservoir cells each fracture cell intersects; rebuilt when the fracture grid changes.
+    struct ReservoirMap
+    {
+        std::vector<int> cells; // the cell holding the fracture cell's centroid
+        std::vector<std::vector<int>> allCells;
+        std::vector<std::vector<double>> allAreas;
+        std::vector<std::vector<Dune::FieldVector<double, 3>>> allCenters;
+        std::vector<double> dist;
+    };
+    // Reservoir state per fracture cell; refreshed from flow and mechanics.
+    struct ReservoirSamples
+    {
+        std::vector<double> perm, cstress, mobility, waterMobility, density, cellZ, pressure;
+        std::vector<Dune::FieldVector<double, 6>> stress;
+    };
+    // Flow state of an intersected reservoir cell that holds no fracture-cell centroid.
+    struct ReservoirCellValues
+    {
+        double mobility{}, density{}, cellZ{}, pressure{};
+    };
+    ReservoirMap reservoir_map_;
+    ReservoirSamples reservoir_;
+    std::map<int, ReservoirCellValues> off_centroid_cells_;
     using WaterPropertyEvaluator = std::function<std::pair<CellFluidProperty, CellFluidProperty>(size_t, double)>;
     WaterPropertyEvaluator fracture_water_property_evaluator_;
-    std::map<int,double> map_reservoir_mobility_;
-    std::map<int,double> map_reservoir_density_;
-    std::map<int,double> map_reservoir_cell_z_;
-    std::map<int,double> map_reservoir_pressure_;
-
-    std::vector<double> reservoir_dist_;
-    std::vector<double> reservoir_pressure_;
-    std::vector<Dune::FieldVector<double, 6>> reservoir_stress_;
     std::optional<centre_stress::DeclaredFaults> stress_faults_;
     std::unordered_map<int, centre_stress::CellSides> stress_sides_;
 

@@ -159,7 +159,7 @@ Fracture::init(const std::string& well,
     // not yet any connection with a surrounding reservoir. The following
     // needs to be done before the fracture can be used:
     // 1) Call `updateReservoirCells` to establish the mapping between frature grid
-    //    cells and the cells in the reservoir grid (sets `reservoir_cells_`)
+    //    cells and the cells in the reservoir grid (sets `reservoir_map_.cells`)
     // 2) Then, call `updateReservoirProperties` to import relevant reservoir properties
     //    to the fracture (`reservoir_XXX_` vectors, as well as `E_` and `nu_`)
 }
@@ -217,7 +217,7 @@ Fracture::removeCells()
 
     for (const auto& elem : elements(grid_->leafGridView())) {
         size_t eIdx = mapper.index(elem);
-        if (reservoir_cells_[eIdx] < 0) {
+        if (reservoir_map_.cells[eIdx] < 0) {
             grid_->removeElement(elem);
         }
     }
@@ -241,7 +241,7 @@ Fracture::updateFilterCakeProps(const Opm::Connection& connection,
 {
     OPM_TIMEFUNCTION();
     // potentially remap filtercake thikness if grid has changed
-    assert(filtercake_thikness_.size() == reservoir_cells_.size());
+    assert(filtercake_thikness_.size() == reservoir_map_.cells.size());
     const auto& perfdata = wellstate.perf_data;
     std::map<int, double> WI_fluxes;
     int water_index = 0;
@@ -302,7 +302,7 @@ Fracture::updateFilterCakeProps(const Opm::Connection& connection,
                 int eIdx = mapper.index(element);
                 auto geom = element.geometry();
                 double area = geom.volume(); // is the area of this face
-                int res_cell = reservoir_cells_[eIdx];
+                int res_cell = reservoir_map_.cells[eIdx];
                 reservoir_areas[res_cell] += area;
                 double flux = leakof_rate[eIdx]*area; // m3/s
                 reservoir_flux[res_cell] += flux;
@@ -439,7 +439,7 @@ Fracture::setFractureGrid(std::unique_ptr<Fracture::Grid> gptr)
     // Since the grid has been created/updated/changed, any previous mapping to
     // reservoir cells has been invalidated, and the fracture matrix (for
     // mechanics) is obsolete.
-    reservoir_cells_.clear();
+    reservoir_map_.cells.clear();
     fracture_matrix_ = nullptr;
 
     this->resetWriters();
@@ -597,7 +597,7 @@ Fracture::summary_of_solve(){
     assert( int(fracture_pressure_.size()) == nc + 1);
     double well_pressure = fracture_pressure_[nc];
     const int cell = std::get<0>(perfinj_[0]); // TODO: verify this is the correct index
-    const double pres = reservoir_pressure_[cell];
+    const double pres = reservoir_.pressure[cell];
     const double dp = well_pressure - pres;
     FractureProperties fprop = calculateFractureProperties();
     // fracture rate
@@ -621,28 +621,28 @@ Fracture::write(int reportStep) const
     std::vector<double> K1; // need to be in scope until written
     auto tmp(fracture_pressure_);
     tmp.resize(numFractureCells());
-    if (reservoir_cells_.size() > 0) {
-        vtkwriter_->addCellData(reservoir_cells_, "ReservoirCell");
+    if (reservoir_map_.cells.size() > 0) {
+        vtkwriter_->addCellData(reservoir_map_.cells, "ReservoirCell");
     }
-    if (reservoir_perm_.size() > 0) {
-        vtkwriter_->addCellData(reservoir_perm_, "ReservoirPerm");
+    if (reservoir_.perm.size() > 0) {
+        vtkwriter_->addCellData(reservoir_.perm, "ReservoirPerm");
     }
-    if (reservoir_cstress_.size() > 0) {
-        vtkwriter_->addCellData(reservoir_cstress_, "ReservoirCStress");
+    if (reservoir_.cstress.size() > 0) {
+        vtkwriter_->addCellData(reservoir_.cstress, "ReservoirCStress");
     }
-    if (reservoir_dist_.size() > 0) {
-        vtkwriter_->addCellData(reservoir_dist_, "ReservoirDist");
+    if (reservoir_map_.dist.size() > 0) {
+        vtkwriter_->addCellData(reservoir_map_.dist, "ReservoirDist");
     }
     if (fracture_pressure_.size() > 0) {
         // fracture_pressure_ may carry an extra well-pressure entry, so pass a
         // copy truncated to the cell count
         vtkwriter_->addCellData(tmp, "FracturePressure");
     }
-    if (reservoir_pressure_.size() > 0) {
-        vtkwriter_->addCellData(reservoir_pressure_, "ReservoirPressure");
+    if (reservoir_.pressure.size() > 0) {
+        vtkwriter_->addCellData(reservoir_.pressure, "ReservoirPressure");
     }
-    if (reservoir_mobility_.size() > 0) {
-        vtkwriter_->addCellData(reservoir_mobility_, "ReservoirMobility");
+    if (reservoir_.mobility.size() > 0) {
+        vtkwriter_->addCellData(reservoir_.mobility, "ReservoirMobility");
     }
     if (fracture_width_.size() > 0) {
         vtkwriter_->addCellData(fracture_width_, "FractureWidth");
@@ -659,15 +659,15 @@ Fracture::write(int reportStep) const
 };
 
 double Fracture::reservoirTraction(int i) const{
-   return ddm::tractionVoigt(reservoir_stress_[i], cell_normals_[i]);
+   return ddm::tractionVoigt(reservoir_.stress[i], cell_normals_[i]);
 }
 double Fracture::fractureForce(int i) const{
   return reservoirTraction(i) - fracture_pressure_[i];
 }
 
 double Fracture::leakofDp(int i) const{
-   return fracture_pressure_[i][0] - reservoir_pressure_[i]
-                - (fracture_dgh_[i] - reservoir_cell_z_[i] * gravity_ * reservoir_density_[i]);
+   return fracture_pressure_[i][0] - reservoir_.pressure[i]
+                - (fracture_dgh_[i] - reservoir_.cellZ[i] * gravity_ * reservoir_.density[i]);
 }
 void
 Fracture::writeIterationSnapshot(int step, int round, const std::string& tag) const
@@ -704,14 +704,14 @@ Fracture::writeIterationSnapshot(int step, int round, const std::string& tag) co
         const int closed = (i < static_cast<int>(closed_cells_.size())) ? closed_cells_[i] : 0;
         area += a; if (w > 0) { open_area += a; vol += a * w; }
         qleak += (i < static_cast<int>(leak.size()) ? leak[i] : 0.0) * a;
-        wisum += wimap.count(reservoir_cells_[i]) ? wimap[reservoir_cells_[i]] : 0.0;
+        wisum += wimap.count(reservoir_map_.cells[i]) ? wimap[reservoir_map_.cells[i]] : 0.0;
         psum += pf; wmax = std::max(wmax, w); nclosed += closed;
         if (per_cell)
             cf << step << "," << round << "," << tag << "," << i << "," << c[0] << "," << c[1] << "," << c[2]
-               << "," << a << "," << pf << "," << reservoir_pressure_[i] << "," << reservoirTraction(i)
+               << "," << a << "," << pf << "," << reservoir_.pressure[i] << "," << reservoirTraction(i)
                << "," << w << "," << closed << "," << (i < static_cast<int>(K1.size()) ? K1[i] : 0.0)
                << "," << (i < static_cast<int>(leak.size()) ? leak[i] : 0.0)
-               << "," << (wimap.count(reservoir_cells_[i]) ? wimap[reservoir_cells_[i]] : 0.0) << "\n";
+               << "," << (wimap.count(reservoir_map_.cells[i]) ? wimap[reservoir_map_.cells[i]] : 0.0) << "\n";
     }
     const std::string sname = base + "_iter_summary.csv";
     const bool fresh = !headers_written.count(sname);
@@ -742,14 +742,14 @@ Fracture::writemulti(double time) const
     std::vector<double> fracture_pressure(numFractureCells(), 0.0);
     std::vector<double> leakof_dp(numFractureCells(), 0.0);
     std::vector<double> filtercake_thikness = filtercake_thikness_;
-    std::vector<double> reservoir_pressure = reservoir_pressure_;
-    std::vector<double> reservoir_dist = reservoir_dist_;
-    std::vector<double> reservoir_perm = reservoir_perm_;
-    std::vector<double> reservoir_cstress = reservoir_cstress_;
-    std::vector<double> reservoir_mobility = reservoir_mobility_;
-    std::vector<double> reservoir_traction(reservoir_stress_.size(), 0);
-    std::vector<double> fracture_force(reservoir_stress_.size(), 0);
-    std::vector<double> reservoir_cells(reservoir_cells_.size(), 0.0);
+    std::vector<double> reservoir_pressure = reservoir_.pressure;
+    std::vector<double> reservoir_dist = reservoir_map_.dist;
+    std::vector<double> reservoir_perm = reservoir_.perm;
+    std::vector<double> reservoir_cstress = reservoir_.cstress;
+    std::vector<double> reservoir_mobility = reservoir_.mobility;
+    std::vector<double> reservoir_traction(reservoir_.stress.size(), 0);
+    std::vector<double> fracture_force(reservoir_.stress.size(), 0);
+    std::vector<double> reservoir_cells(reservoir_map_.cells.size(), 0.0);
     std::vector<double> fracture_width(fracture_width_.size(), 0.0);
     std::vector<double> fracture_head(fracture_width_.size(), 0.0);
     std::vector<double> flow_width(fracture_width_.size(), 0.0);
@@ -773,7 +773,7 @@ Fracture::writemulti(double time) const
             fracture_width[i] = fracture_width_[i][0];
             flow_width[i] = std::max(fracture_width_[i][0], min_width_);
             fracture_pressure[i] = fracture_pressure_[i][0];
-            reservoir_cells[i] = reservoir_cells_[i]; // only converts to double
+            reservoir_cells[i] = reservoir_map_.cells[i]; // only converts to double
             reservoir_traction[i] = reservoirTraction(i);
             fracture_force[i] = fractureForce(i);
             leakof_dp[i] = leakofDp(i);
@@ -785,7 +785,7 @@ Fracture::writemulti(double time) const
     if (!first) {
         for (size_t i = 0; i < numFractureCells(); ++i) {
                 // maybe slow
-                well_index[i] = wellIndMap[reservoir_cells_[i]];
+                well_index[i] = wellIndMap[reservoir_map_.cells[i]];
         }
 
     }
@@ -948,14 +948,14 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
                                const std::vector<Fracture::EntitySeed>& entity_seeds)
 {
     OPM_TIMEFUNCTION();
-    reservoir_cells_.resize(numFractureCells());
+    reservoir_map_.cells.resize(numFractureCells());
     using GridView = typename Grid::LeafGridView;
     ElementMapper elemMapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     int tri_divide = 0;
     int tri_outside = 0;
-    all_reservoir_areas_.resize(numFractureCells());
-    all_reservoir_cells_.resize(numFractureCells());
-    all_reservoir_centers_.resize(numFractureCells());
+    reservoir_map_.allAreas.resize(numFractureCells());
+    reservoir_map_.allCells.resize(numFractureCells());
+    reservoir_map_.allCenters.resize(numFractureCells());
     bool full_intersections = prm_.get<bool>("solver.divide_wellidx", false);
     for (auto& element : elements(grid_->leafGridView())) {
         const auto elemIdx = elemMapper.index(element);
@@ -963,7 +963,7 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
         using Vec3d = external::cvf::Vec3d;
         auto vertex = geom.center();
         Vec3d point(vertex[0], vertex[1], vertex[2]);
-        reservoir_cells_[elemIdx]  = external::cellOfPoint(cellSearchTree, grid, entity_seeds, point);
+        reservoir_map_.cells[elemIdx]  = external::cellOfPoint(cellSearchTree, grid, entity_seeds, point);
         // calculate area
         std::vector<std::array<double,3>> tri_corners;
         {
@@ -980,20 +980,20 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
             std::vector<Dune::FieldVector<double,3>> centers;
             std::vector<std::array<double,3>> hex_corners;
             external::cellsOfTri(rcells, areas, centers, cellSearchTree, grid, entity_seeds, tri_corners);
-            all_reservoir_areas_[elemIdx] = areas;
-            all_reservoir_cells_[elemIdx] = rcells;
-            all_reservoir_centers_[elemIdx] = centers;
+            reservoir_map_.allAreas[elemIdx] = areas;
+            reservoir_map_.allCells[elemIdx] = rcells;
+            reservoir_map_.allCenters[elemIdx] = centers;
         }
     }
-    auto it = std::find(reservoir_cells_.begin(), reservoir_cells_.end(), -1);
+    auto it = std::find(reservoir_map_.cells.begin(), reservoir_map_.cells.end(), -1);
     auto extended_fractures = prm_.get<bool>("extended_fractures");
-    if (!(it == reservoir_cells_.end()) && !(extended_fractures)) {
+    if (!(it == reservoir_map_.cells.end()) && !(extended_fractures)) {
         OpmLog::warning("Remove fracture outside of model");
         // remove fracture outside of model
         this->removeCells();
         this->updateReservoirCells(cellSearchTree, grid, entity_seeds);
     }else{
-      if(!(it == reservoir_cells_.end())){
+      if(!(it == reservoir_map_.cells.end())){
           OpmLog::warning("Fracture outside of model");
       }
     }
@@ -1008,16 +1008,16 @@ Fracture::updateReservoirProperties()
     double cstress = prm_.get<double>("KMax");
     double mobility = prm_.get<double>("reservoir.mobility");
     size_t nc = numFractureCells();
-    reservoir_perm_.resize(nc, perm);
-    reservoir_dist_.resize(nc, dist);
-    reservoir_mobility_.resize(nc, 1000);
-    reservoir_pressure_.resize(nc, 100.0e5);
-    reservoir_stress_.resize(nc);
-    reservoir_cstress_.resize(nc, cstress);
+    reservoir_.perm.resize(nc, perm);
+    reservoir_map_.dist.resize(nc, dist);
+    reservoir_.mobility.resize(nc, 1000);
+    reservoir_.pressure.resize(nc, 100.0e5);
+    reservoir_.stress.resize(nc);
+    reservoir_.cstress.resize(nc, cstress);
     fracture_water_property_evaluator_ = {};
 
     for (size_t i = 0; i != nc; ++i)
-        reservoir_stress_[i] = Dune::FieldVector<double, 6> {0, 0, 0, 0, 0, 0};
+        reservoir_.stress[i] = Dune::FieldVector<double, 6> {0, 0, 0, 0, 0, 0};
 
     nu_ = 0.25;
     E_ = 1e9;
@@ -1038,7 +1038,7 @@ Fracture::faceGravityHeads() const
     for (size_t k = 0; k < htrans_.size(); ++k) {
         const size_t i = std::get<0>(htrans_[k]);
         const size_t j = std::get<1>(htrans_[k]);
-        const double rho = 0.5 * (reservoir_density_[i] + reservoir_density_[j]);
+        const double rho = 0.5 * (reservoir_.density[i] + reservoir_.density[j]);
         dgh[k] = gravity_ * rho * (z[i] - z[j]);
     }
     return dgh;
@@ -1059,7 +1059,7 @@ Fracture::addSource()
     for (auto element : Dune::elements(grid_->leafGridView())) {
         int i = grid_->leafGridView().indexSet().index(element);
         double z = element.geometry().center()[2];
-        fracture_dgh_[i] = gravity_ * reservoir_density_[i] * z;
+        fracture_dgh_[i] = gravity_ * reservoir_.density[i] * z;
     }
     // could be put into the assemble loop
     const std::vector<double> face_dgh = faceGravityHeads();
@@ -1074,21 +1074,21 @@ Fracture::addSource()
         // harmonic mean of surface flow
         double value = 12. / (h1 * h1 * h1 * t1) + 12. / (h2 * h2 * h2 * t2);
 
-        const double mobility = 0.5 * (reservoir_mobility_[i] + reservoir_mobility_[j]);//NB shoul chane to mobility_water_perf_;
+        const double mobility = 0.5 * (reservoir_.mobility[i] + reservoir_.mobility[j]);//NB shoul chane to mobility_water_perf_;
         value = 1 / value;
         value *= mobility;
         rhs_pressure_[i] += value * face_dgh[k];
         rhs_pressure_[j] -= value * face_dgh[k];
     }
 
-    for (size_t i = 0; i < reservoir_pressure_.size(); ++i) {
-        rhs_pressure_[i] += leakof_[i] * reservoir_pressure_[i];// gravity i handeld in next loop
+    for (size_t i = 0; i < reservoir_.pressure.size(); ++i) {
+        rhs_pressure_[i] += leakof_[i] * reservoir_.pressure[i];// gravity i handeld in next loop
     }
     // gravity contribution from fracture to reservoir
     for (auto element : Dune::elements(grid_->leafGridView())) {
         int i = grid_->leafGridView().indexSet().index(element);
         double z = element.geometry().center()[2];
-        rhs_pressure_[i] += leakof_[i] * (z - reservoir_cell_z_[i]) * gravity_ * reservoir_density_[i];
+        rhs_pressure_[i] += leakof_[i] * (z - reservoir_.cellZ[i]) * gravity_ * reservoir_.density[i];
     }
     // gravity contributions between fracture cells
 
@@ -1105,7 +1105,7 @@ Fracture::addSource()
         for (const auto& perfinj : perfinj_) {
             int cell = std::get<0>(perfinj);
             double value = std::get<1>(perfinj);
-            double dh_perf = origo_[2] * gravity_ * reservoir_density_[cell];
+            double dh_perf = origo_[2] * gravity_ * reservoir_.density[cell];
             double dh_cell = fracture_dgh_[cell];
             ;
             double dh = dh_perf - dh_cell;
@@ -1115,7 +1115,7 @@ Fracture::addSource()
         for (const auto& perfinj : perfinj_) {
             int cell = std::get<0>(perfinj);
             double value = std::get<1>(perfinj);
-            double dh_perf = perf_ref_depth_ * gravity_ * reservoir_density_[cell];
+            double dh_perf = perf_ref_depth_ * gravity_ * reservoir_.density[cell];
             double dh_cell = fracture_dgh_[cell];
             ;
             double dh = dh_perf - dh_cell;
@@ -1128,7 +1128,7 @@ Fracture::addSource()
         assert(numWellEquations() == 1);
         const double well_rate = well_rate_;
         const double WI = total_wellindex_;
-        const double density = reservoir_density_[std::get<0>(perfinj_[0])];
+        const double density = reservoir_.density[std::get<0>(perfinj_[0])];
         const double lambda = 1.0;
         double wi_dzfac = wi_respress_;
         wi_dzfac -= wi_dz_*density*gravity_; // sum wi dz
@@ -1139,7 +1139,7 @@ Fracture::addSource()
         // scale MUST match bhpWellRowScale() in the assembler
         assert(numWellEquations() == 1);
         const double scale = std::max(total_wellindex_, 1e-14);
-        const double density = reservoir_density_[std::get<0>(perfinj_[0])];
+        const double density = reservoir_.density[std::get<0>(perfinj_[0])];
         const double p_target = well_target_bhp_
             + density * gravity_ * (perf_ref_depth_ - well_ref_depth_);
         rhs_pressure_[rhs_pressure_.size() - 1] = scale * p_target;
@@ -1152,7 +1152,7 @@ Fracture::addSource()
         double well_dh = 0.0;
         for (const auto& [cell, wi] : perfinj_) {
             const double v = wi * wellConnectionMobilityValue(input, cell);
-            const double dh = fracture_dgh_[cell] - gravity_ * reservoir_density_[cell] * perf_ref_depth_;
+            const double dh = fracture_dgh_[cell] - gravity_ * reservoir_.density[cell] * perf_ref_depth_;
             rhs_pressure_[cell] += v * dh;
             well_dh += v * dh;
         }
@@ -1210,9 +1210,9 @@ Fracture::leakOfRate() const
     for (auto& element : Dune::elements(grid_->leafGridView())) {
         int eIdx = mapper.index(element);
         auto geom = element.geometry();
-        double dh_res = reservoir_cell_z_[eIdx] * gravity_ * reservoir_density_[eIdx];
+        double dh_res = reservoir_.cellZ[eIdx] * gravity_ * reservoir_.density[eIdx];
         double dh_frac = fracture_dgh_[eIdx];
-        double dp = ((fracture_pressure_[eIdx]-dh_frac) - (reservoir_pressure_[eIdx]-dh_res));
+        double dp = ((fracture_pressure_[eIdx]-dh_frac) - (reservoir_.pressure[eIdx]-dh_res));
         double q = leakof_[eIdx] * dp;
         leakofrate[eIdx] = q / geom.volume();
     }
@@ -1636,15 +1636,15 @@ std::vector<Fracture::CellExchange>
 Fracture::gatherCellExchange_(const WiOptions& opt) const
 {
     const bool only_to_one = !opt.divideWellIdx;
-    std::vector<int> res_cells = reservoir_cells_;
-    std::vector<double> tot_areas(all_reservoir_cells_.size(), 0.0);
+    std::vector<int> res_cells = reservoir_map_.cells;
+    std::vector<double> tot_areas(reservoir_map_.allCells.size(), 0.0);
     if (!only_to_one) {
-        for (size_t ind = 0; ind < all_reservoir_cells_.size(); ++ind) {
+        for (size_t ind = 0; ind < reservoir_map_.allCells.size(); ++ind) {
             double total_area = 0.0;
-            const auto& cells = all_reservoir_cells_[ind];
+            const auto& cells = reservoir_map_.allCells[ind];
             for (size_t lind = 0; lind < cells.size(); ++lind) {
                 res_cells.push_back(cells[lind]);
-                total_area += all_reservoir_areas_[ind][lind];
+                total_area += reservoir_map_.allAreas[ind][lind];
             }
             tot_areas[ind] = total_area;
         }
@@ -1666,15 +1666,15 @@ Fracture::gatherCellExchange_(const WiOptions& opt) const
 
         std::vector<int> local_res_cells;
         if (only_to_one) {
-            local_res_cells.push_back(reservoir_cells_[eIdx]);
+            local_res_cells.push_back(reservoir_map_.cells[eIdx]);
         } else {
-            local_res_cells = all_reservoir_cells_[eIdx];
+            local_res_cells = reservoir_map_.allCells[eIdx];
         }
         for (int lind = 0; lind < int(local_res_cells.size()); ++lind) {
             const int res_cell = local_res_cells[lind];
             double area_frac = 1.0;
             if (!only_to_one) {
-                area_frac = all_reservoir_areas_[eIdx][lind] / tot_areas[eIdx];
+                area_frac = reservoir_map_.allAreas[eIdx][lind] / tot_areas[eIdx];
             }
             const auto it = std::lower_bound(res_cells.begin(), res_cells.end(), res_cell);
             assert(it != res_cells.end() && *it == res_cell);
@@ -1683,32 +1683,29 @@ Fracture::gatherCellExchange_(const WiOptions& opt) const
             c.area += loc_area;
             c.q += area_frac * q;
             // leakof_ = mob*perm*area/dist >= 0, so this conductivity is never negative
-            if (eIdx < static_cast<int>(leakof_.size()) && reservoir_mobility_[eIdx] > 0.0) {
-                c.trans += area_frac * leakof_[eIdx] / reservoir_mobility_[eIdx];
+            if (eIdx < static_cast<int>(leakof_.size()) && reservoir_.mobility[eIdx] > 0.0) {
+                c.trans += area_frac * leakof_[eIdx] / reservoir_.mobility[eIdx];
             }
-            if (reservoir_cells_[eIdx] == res_cell) {
-                c.p = reservoir_pressure_[eIdx];
-                c.mob = reservoir_mobility_[eIdx];
-                c.dens = reservoir_density_[eIdx];
-                c.z = reservoir_cell_z_[eIdx];
+            if (reservoir_map_.cells[eIdx] == res_cell) {
+                c.p = reservoir_.pressure[eIdx];
+                c.mob = reservoir_.mobility[eIdx];
+                c.dens = reservoir_.density[eIdx];
+                c.z = reservoir_.cellZ[eIdx];
             } else {
                 // no fracture cell has its centroid in this reservoir cell
-                auto getFromMap = [](const std::map<int, double>& map, int key) {
-                    if (auto search = map.find(key); search != map.end()) {
-                        return search->second;
-                    }
-                    assert(false);
-                    return 0.0;
-                };
-                c.p = getFromMap(map_reservoir_pressure_, res_cell);
-                c.mob = getFromMap(map_reservoir_mobility_, res_cell);
-                c.dens = getFromMap(map_reservoir_density_, res_cell);
-                c.z = getFromMap(map_reservoir_cell_z_, res_cell);
+                const auto search = off_centroid_cells_.find(res_cell);
+                assert(search != off_centroid_cells_.end());
+                const ReservoirCellValues v = (search != off_centroid_cells_.end())
+                    ? search->second : ReservoirCellValues{};
+                c.p = v.pressure;
+                c.mob = v.mobility;
+                c.dens = v.density;
+                c.z = v.cellZ;
             }
             if (fracture_pressure_drive) {
                 // fracture pressure moved hydrostatically to the connection depth
                 const double p_at_conn = fracture_pressure_[eIdx][0]
-                    + gravity_ * reservoir_density_[eIdx] * (c.z - geom.center()[2]);
+                    + gravity_ * reservoir_.density[eIdx] * (c.z - geom.center()[2]);
                 const double w_leak = (eIdx < static_cast<int>(leakof_.size()))
                     ? area_frac * leakof_[eIdx] : 0.0;
                 c.pfracLeak += w_leak * p_at_conn;
@@ -1876,7 +1873,7 @@ Fracture::assignGeoMechWellState(PerfData<Scalar>& perfData) const
     constexpr auto rateIx = static_cast<std::underlying_type_t<Quantity>>(Quantity::FlowRate);
     constexpr auto widthIx = static_cast<std::underlying_type_t<Quantity>>(Quantity::Width);
 
-    const auto nCells = this->reservoir_cells_.size();
+    const auto nCells = this->reservoir_map_.cells.size();
 
     stats.reset();
 
@@ -1884,10 +1881,10 @@ Fracture::assignGeoMechWellState(PerfData<Scalar>& perfData) const
         auto samplePoint = typename ConnFracStatistics<Scalar>::SamplePoint {};
 
         samplePoint[pressIx] = this->fracture_pressure_[cellIx][0];
-        double dh_res = reservoir_cell_z_[cellIx] * gravity_ * reservoir_density_[cellIx];
+        double dh_res = reservoir_.cellZ[cellIx] * gravity_ * reservoir_.density[cellIx];
         double dh_frac = fracture_dgh_[cellIx];
         samplePoint[rateIx] = this->leakof_[cellIx]
-          * ((this->fracture_pressure_[cellIx][0]-dh_frac)- (this->reservoir_pressure_[cellIx]-dh_res));
+          * ((this->fracture_pressure_[cellIx][0]-dh_frac)- (this->reservoir_.pressure[cellIx]-dh_res));
 
         samplePoint[widthIx] = this->fracture_width_[cellIx][0];
 
@@ -1992,8 +1989,8 @@ Fracture::VolumePacing::afterSolve(Fracture& f)
         // eq. (3)-(4): draw the BC pressure down by the over-draw over the
         // secant storage compliance C_eff = V / (p_perf - p_res)
         const int pc = f.perfinj_.empty() ? 0 : std::get<0>(f.perfinj_[0]);
-        const double p_res = (pc < static_cast<int>(f.reservoir_pressure_.size()))
-            ? f.reservoir_pressure_[pc] : 0.0;
+        const double p_res = (pc < static_cast<int>(f.reservoir_.pressure.size()))
+            ? f.reservoir_.pressure[pc] : 0.0;
         const double dp0 = std::max(perfP0 - p_res, 1.0e5);
         const double c_eff = fp.volume / dp0;
         const double p_new = std::max(perfP0 - (dV - v_avail) / c_eff, p_res);
@@ -2085,7 +2082,7 @@ Fracture::remapState_(const RegridMaps& maps, const int level, const Propagation
         for (size_t i = 0; i < fracture_width_.size(); ++i) {
             assert(std::abs(fracture_width_[i][0]) < 0.6);
         }
-        // cell entries only: reservoir_pressure_ has no well-equation entry
+        // cell entries only: reservoir_.pressure has no well-equation entry
         const size_t num_press_cells = fracture_pressure_.size() - numWellEquations();
         for (size_t i = 0; i < num_press_cells; ++i) {
             if (fracture_pressure_[i] == 0.0) {
@@ -2158,7 +2155,7 @@ Fracture::propagationScores_(std::map<CellRef, int>& boundary, const GridSolve& 
     }
     std::vector<double> score(front.size());
     for (size_t i = 0; i != score.size(); ++i) {
-        score[i] = K1[front[i]] / reservoir_cstress_[front[i]];
+        score[i] = K1[front[i]] / reservoir_.cstress[front[i]];
     }
     vetoForceLimit_(score, front, opt);
     // K1 from an unconverged solve is unreliable, and growth on it cannot be undone.
@@ -2259,7 +2256,7 @@ Fracture::initFractureWidth()
 void
 Fracture::initFracturePressureFromReservoir()
 {
-    size_t nc = reservoir_cells_.size();
+    size_t nc = reservoir_map_.cells.size();
     fracture_pressure_.resize(nc + numWellEquations());
     fracture_pressure_ = 0;
     for (size_t i = 0; i < nc; ++i) {
@@ -2272,10 +2269,10 @@ Fracture::hydrostaticReservoirPressure(size_t i) const
 {
     // reservoir pressure moved hydrostatically from the reservoir cell depth to the fracture cell depth
     if (i >= fracture_dgh_.size()) {
-        return reservoir_pressure_[i];
+        return reservoir_.pressure[i];
     }
-    return reservoir_pressure_[i] + fracture_dgh_[i]
-        - gravity_ * reservoir_density_[i] * reservoir_cell_z_[i];
+    return reservoir_.pressure[i] + fracture_dgh_[i]
+        - gravity_ * reservoir_.density[i] * reservoir_.cellZ[i];
 }
 
 
@@ -2289,9 +2286,9 @@ Fracture::ensureLeakoffCurrent()
         return true;
     }
 
-    const bool inputsCurrent = (reservoir_mobility_.size() == nc)
-        && (reservoir_perm_.size() == nc)
-        && (reservoir_dist_.size() == nc)
+    const bool inputsCurrent = (reservoir_.mobility.size() == nc)
+        && (reservoir_.perm.size() == nc)
+        && (reservoir_map_.dist.size() == nc)
         && (!has_filtercake_ || (filtercake_thikness_.size() == nc));
 
     if (!inputsCurrent) {
@@ -2335,7 +2332,7 @@ Fracture::leakoffDistanceFactor() const
 double
 Fracture::leakoffMobilityFor(const int eIdx, const bool upwind) const
 {
-    const double total = reservoir_mobility_[eIdx];
+    const double total = reservoir_.mobility[eIdx];
     if (!upwind) {
         return total;
     }
@@ -2358,8 +2355,8 @@ Fracture::leakoffMobilityFor(const int eIdx, const bool upwind) const
         return (mu > 0.0) ? 1.0 / mu : total;
     }
 
-    return (static_cast<size_t>(eIdx) < reservoir_water_mobility_.size())
-        ? reservoir_water_mobility_[eIdx] : total;
+    return (static_cast<size_t>(eIdx) < reservoir_.waterMobility.size())
+        ? reservoir_.waterMobility[eIdx] : total;
 }
 
 // Fracture minus reservoir potential across the leak-off connection; NaN without a state.
@@ -2367,14 +2364,14 @@ double
 Fracture::leakoffPotentialDifference(const int eIdx) const
 {
     const bool have_state = (static_cast<size_t>(eIdx) < fracture_pressure_.size())
-        && (static_cast<size_t>(eIdx) < reservoir_pressure_.size());
+        && (static_cast<size_t>(eIdx) < reservoir_.pressure.size());
     if (!have_state) {
         return std::numeric_limits<double>::quiet_NaN();
     }
     const double dh_frac = (static_cast<size_t>(eIdx) < fracture_dgh_.size())
         ? fracture_dgh_[eIdx] : 0.0;
-    const double dh_res = reservoir_cell_z_[eIdx] * gravity_ * reservoir_density_[eIdx];
-    return (fracture_pressure_[eIdx][0] - dh_frac) - (reservoir_pressure_[eIdx] - dh_res);
+    const double dh_res = reservoir_.cellZ[eIdx] * gravity_ * reservoir_.density[eIdx];
+    return (fracture_pressure_[eIdx][0] - dh_frac) - (reservoir_.pressure[eIdx] - dh_res);
 }
 
 // Outflow: the water-filled fracture cell's mobility; inflow: all reservoir phases.
@@ -2382,7 +2379,7 @@ double
 Fracture::flowLeakoffMobility(const int eIdx) const
 {
     const double dpot = leakoffPotentialDifference(eIdx);
-    return (dpot > 0.0) ? leakoffMobilityFor(eIdx, /*upwind=*/true) : reservoir_mobility_[eIdx];
+    return (dpot > 0.0) ? leakoffMobilityFor(eIdx, /*upwind=*/true) : reservoir_.mobility[eIdx];
 }
 
 void
@@ -2450,7 +2447,7 @@ Fracture::updateLeakoff()
         double area = geom.volume();
         double res_mob = leakoffMobilityFor(eIdx, upwind_mobility);
         leakoff_mobility_[eIdx] = res_mob;
-        leakof_[eIdx] = res_mob * reservoir_perm_[eIdx] * area / reservoir_dist_[eIdx];
+        leakof_[eIdx] = res_mob * reservoir_.perm[eIdx] * area / reservoir_map_.dist[eIdx];
         double invtrans = 1 / leakof_[eIdx];
         if (has_filtercake_) {
             assert(filtercake_thikness_[eIdx] >= 0.0);
@@ -2556,8 +2553,8 @@ Fracture::filterCakeVolumesByCell() const
         if (eIdx < filtercake_thikness_.size()) {
             cake.volume[eIdx] = filtercake_thikness_[eIdx] * geom.volume();
         }
-        if (eIdx < reservoir_cells_.size()) {
-            cake.group[eIdx] = reservoir_cells_[eIdx];
+        if (eIdx < reservoir_map_.cells.size()) {
+            cake.group[eIdx] = reservoir_map_.cells[eIdx];
         }
     }
     return cake;
@@ -2578,7 +2575,7 @@ Fracture::remapFilterCakeConservative(const RegularTrimesh::CellVolumes& source,
         const auto geom = element.geometry();
         const auto c = geom.center();
         area[eIdx] = geom.volume();
-        group[eIdx] = reservoir_cells_[eIdx];
+        group[eIdx] = reservoir_map_.cells[eIdx];
         centre[eIdx] = {c[0], c[1], c[2]};
     }
     return RegularTrimesh::conservativeRemap(source, source_map, grid_mesh_map_, level, area, group, centre);
@@ -2603,7 +2600,7 @@ void Fracture::resetFracture()
         trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources, smooth_boundary, numcell_threshold);
     grid_mesh_map_ = fsmap;
     grid_fixed_cells_ = wsources;
-    // Restore grid and cell normals (setFractureGrid clears reservoir_cells_;
+    // Restore grid and cell normals (setFractureGrid clears reservoir_map_.cells;
     // they will be repopulated by FractureModel::resetFractures via
     // updateFractureReservoirCells + initReservoirProperties).
     setFractureGrid(std::move(grid));
@@ -2622,7 +2619,7 @@ void Fracture::resetFracture()
     wi_vec_mix_.has_prev_residual = false;
     wi_vec_mix_.prev_residual.clear();
     width_round_valid_ = false; // relaxation history belongs to the rolled-back solves too
-    // Note: reservoir_cells_, all_reservoir_cells_, reservoir_properties_, etc.
+    // Note: reservoir_map_.cells, reservoir_map_.allCells, reservoir_properties_, etc.
     // are recalculated by FractureModel::resetFractures after this call returns.
 }
 void Fracture::rebuildGridForLoad(const std::vector<std::vector<CellRef>>& saved_map)
@@ -2695,7 +2692,7 @@ void Fracture::moveForwardInTime(double dt_last)
         // controller suffices (no quiet-step episodes needed).
         const double ds_target = prm_.get<double>("solver.stress_dt_target", 0.0) * 1e5;
         const size_t ncf = numFractureCells();
-        if (ds_target > 0.0 && dt_last > 0.0 && reservoir_stress_.size() >= ncf
+        if (ds_target > 0.0 && dt_last > 0.0 && reservoir_.stress.size() >= ncf
             && cell_normals_.size() >= ncf) {
             double tsum = 0.0;
             for (size_t i = 0; i < ncf; ++i)
@@ -2933,8 +2930,8 @@ Fracture::initPressureMatrix()
         std::set<int> perfcells(well_perf_cells_.begin(), well_perf_cells_.end());
         for (const auto& e : Dune::elements(grid_->leafGridView())) {
             const int i = wsmapper.index(e);
-            if (i >= static_cast<int>(reservoir_cells_.size())) continue;
-            if (!perfcells.count(reservoir_cells_[i])) continue;
+            if (i >= static_cast<int>(reservoir_map_.cells.size())) continue;
+            if (!perfcells.count(reservoir_map_.cells[i])) continue;
             if (wsr > 0.0) {
                 const auto c = e.geometry().center();
                 Point3D r({c[0] - origo_[0], c[1] - origo_[1], c[2] - origo_[2]});
@@ -3122,7 +3119,7 @@ Fracture::warnIfOpenButNotConducting() const
 double
 Fracture::normalFractureTraction(size_t eIdx) const
 {
-    return ddm::tractionVoigt(reservoir_stress_[eIdx], cell_normals_[eIdx]);
+    return ddm::tractionVoigt(reservoir_.stress[eIdx], cell_normals_[eIdx]);
 }
 
 void
