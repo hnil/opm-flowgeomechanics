@@ -1604,255 +1604,258 @@ Fracture::wellIndicesAvrg(const std::vector<std::vector<RuntimePerforation>>& we
   return wellindices;
 }
 
-std::vector<RuntimePerforation>
-Fracture::wellIndices_() const
+Fracture::WiOptions
+Fracture::WiOptions::read(const PropertyTree& prm)
 {
-    OPM_TIMEFUNCTION();
-    // find unique reservoir cells
-    if (leakof_.size() == 0) {
-        // if pressure is not assembled return empty
-        return {};
+    WiOptions opt;
+    const std::string wi_upscaling = prm.get<std::string>("solver.wi_upscaling", "legacy");
+    if (wi_upscaling != "legacy" && wi_upscaling != "conductivity") {
+        OPM_THROW(std::runtime_error, "Unknown solver.wi_upscaling: " + wi_upscaling);
     }
-    bool only_to_one = !(prm_.get<bool>("solver.divide_wellidx",false));
+    // opt-in: Flow drives the fracture CTF with the fracture's own pressure
+    const bool fracture_pressure = prm.get<bool>("solver.wi_fracture_pressure", false);
+    if (fracture_pressure && wi_upscaling == "conductivity") {
+        OPM_THROW(std::runtime_error,
+                  "solver.wi_fracture_pressure and solver.wi_upscaling=conductivity exclude each other");
+    }
+    opt.mode = fracture_pressure ? WiMode::FracturePressure
+        : (wi_upscaling == "conductivity" ? WiMode::Conductivity : WiMode::Legacy);
+    opt.divideWellIdx = prm.get<bool>("solver.divide_wellidx", false);
+    opt.fluxNorm = prm.get<bool>("solver.wi_flux_normalization", true);
+    // Must stay well below near-closure leak-off differences (~1e2-1e3 Pa), or alpha is underestimated.
+    opt.dpFloor = prm.get<double>("solver.wi_pressure_floor", 1.0e2);
+    opt.alphaMax = prm.get<double>("solver.wi_normalization_max", 2.0);
+    opt.signGate = prm.get<bool>("solver.wi_sign_gate", false);
+    return opt;
+}
+
+std::vector<Fracture::CellExchange>
+Fracture::gatherCellExchange_(const WiOptions& opt) const
+{
+    const bool only_to_one = !opt.divideWellIdx;
     std::vector<int> res_cells = reservoir_cells_;
     std::vector<double> tot_areas(all_reservoir_cells_.size(), 0.0);
-    if(only_to_one){
-        res_cells = reservoir_cells_;
-    }else{
-        for(size_t ind=0; ind < all_reservoir_cells_.size(); ++ind){
+    if (!only_to_one) {
+        for (size_t ind = 0; ind < all_reservoir_cells_.size(); ++ind) {
             double total_area = 0.0;
-            auto cells = all_reservoir_cells_[ind];
-            for(size_t lind=0; lind < cells.size(); ++lind){
+            const auto& cells = all_reservoir_cells_[ind];
+            for (size_t lind = 0; lind < cells.size(); ++lind) {
                 res_cells.push_back(cells[lind]);
                 total_area += all_reservoir_areas_[ind][lind];
             }
-            // this area should be the same as areal of cell if it is inside full model
             tot_areas[ind] = total_area;
         }
     }
-
-
     std::sort(res_cells.begin(), res_cells.end());
-    auto last = std::unique(res_cells.begin(), res_cells.end());
-    res_cells.erase(last, res_cells.end());
-    std::vector<double> q_cells(res_cells.size(), 0.0);
-    std::vector<double> p_cells(res_cells.size(), 0.0);
-    std::vector<double> mob_cells(res_cells.size(), 0.0);
-    std::vector<double> dens_cells(res_cells.size(), 0.0);
-    std::vector<double> z_cells(res_cells.size(), 0.0);
-    std::vector<double> area(res_cells.size(), 0.0);
-    // M1 (opt-in): aggregated exchange conductivity per reservoir cell,
-    // sum of leakof_/mobility over the mapped fracture cells.  leakof_ =
-    // mob*perm*area/dist >= 0, so this CTF is positive by construction --
-    // no sign flips and no blow-up when the reservoir pressure approaches
-    // the injection pressure.
-    std::vector<double> trans_cells(res_cells.size(), 0.0);
-    // opt-in: Flow drives the fracture CTF with the fracture's own pressure
-    const bool fracture_pressure_drive = prm_.get<bool>("solver.wi_fracture_pressure", false);
-    std::vector<double> pfrac_leak_sum(res_cells.size(), 0.0);
-    std::vector<double> leak_sum(res_cells.size(), 0.0);
-    std::vector<double> pfrac_area_sum(res_cells.size(), 0.0);
-    std::vector<double> leakofrate = this->leakOfRate();
+    res_cells.erase(std::unique(res_cells.begin(), res_cells.end()), res_cells.end());
+
+    std::vector<CellExchange> ex(res_cells.size());
+    for (size_t i = 0; i < res_cells.size(); ++i) {
+        ex[i].cell = res_cells[i];
+    }
+    const bool fracture_pressure_drive = (opt.mode == WiMode::FracturePressure);
+    const std::vector<double> leakofrate = this->leakOfRate();
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     for (auto& element : Dune::elements(grid_->leafGridView())) {
-        int eIdx = mapper.index(element);
-        auto geom = element.geometry();
-        double q = leakofrate[eIdx]*geom.volume(); // just to avoid warning
+        const int eIdx = mapper.index(element);
+        const auto geom = element.geometry();
+        const double q = leakofrate[eIdx] * geom.volume();
 
         std::vector<int> local_res_cells;
-        if(only_to_one){
+        if (only_to_one) {
             local_res_cells.push_back(reservoir_cells_[eIdx]);
-        }else{
+        } else {
             local_res_cells = all_reservoir_cells_[eIdx];
         }
-        // just to search
-        for(int lind=0; lind < int(local_res_cells.size()); ++lind){
-            int res_cell = local_res_cells[lind];
+        for (int lind = 0; lind < int(local_res_cells.size()); ++lind) {
+            const int res_cell = local_res_cells[lind];
             double area_frac = 1.0;
-            if(!only_to_one){
-                area_frac = all_reservoir_areas_[eIdx][lind]/tot_areas[eIdx];
+            if (!only_to_one) {
+                area_frac = all_reservoir_areas_[eIdx][lind] / tot_areas[eIdx];
             }
             const auto it = std::lower_bound(res_cells.begin(), res_cells.end(), res_cell);
             assert(it != res_cells.end() && *it == res_cell);
-            const int ind_wellIdx = it - res_cells.begin();
-            double loc_area = area_frac*element.geometry().volume();
-            area[ind_wellIdx] += loc_area;
-            q_cells[ind_wellIdx] += area_frac*q;
-            if (eIdx < static_cast<int>(leakof_.size())
-                && reservoir_mobility_[eIdx] > 0.0) {
-                trans_cells[ind_wellIdx] += area_frac * leakof_[eIdx]
-                    / reservoir_mobility_[eIdx];
+            auto& c = ex[it - res_cells.begin()];
+            const double loc_area = area_frac * element.geometry().volume();
+            c.area += loc_area;
+            c.q += area_frac * q;
+            // leakof_ = mob*perm*area/dist >= 0, so this conductivity is never negative
+            if (eIdx < static_cast<int>(leakof_.size()) && reservoir_mobility_[eIdx] > 0.0) {
+                c.trans += area_frac * leakof_[eIdx] / reservoir_mobility_[eIdx];
             }
-            if(reservoir_cells_[eIdx] == res_cell){
-                // assume all of this is the same so no need for interpolation
-                p_cells[ind_wellIdx] = reservoir_pressure_[eIdx]; // is set multiple times
-                mob_cells[ind_wellIdx] = reservoir_mobility_[eIdx]; // is set multiple times
-                dens_cells[ind_wellIdx] = reservoir_density_[eIdx]; // is set multiple times
-                z_cells[ind_wellIdx] = reservoir_cell_z_[eIdx]; // is set multiple times
-            }else{
-                // logic could be changed after introduction of map
-              auto getFromMap = [](const std::map<int,double>& map, int key){
-                if (auto search = map.find(key); search != map.end()){
-                  return search->second;
-                }else{
-                  assert(false);
-                  return 0.0;
-                }
-              };
-
-              p_cells[ind_wellIdx] = getFromMap(map_reservoir_pressure_,res_cell); // is set multiple times
-              mob_cells[ind_wellIdx] = getFromMap(map_reservoir_mobility_,res_cell); // is set multiple time
-              dens_cells[ind_wellIdx] = getFromMap(map_reservoir_density_,res_cell); // is set multiple time
-              z_cells[ind_wellIdx] = getFromMap(map_reservoir_cell_z_,res_cell); //
-                // need to collect this values if no cell has centroid nearest to this
-                // reservoir cell
+            if (reservoir_cells_[eIdx] == res_cell) {
+                c.p = reservoir_pressure_[eIdx];
+                c.mob = reservoir_mobility_[eIdx];
+                c.dens = reservoir_density_[eIdx];
+                c.z = reservoir_cell_z_[eIdx];
+            } else {
+                // no fracture cell has its centroid in this reservoir cell
+                auto getFromMap = [](const std::map<int, double>& map, int key) {
+                    if (auto search = map.find(key); search != map.end()) {
+                        return search->second;
+                    }
+                    assert(false);
+                    return 0.0;
+                };
+                c.p = getFromMap(map_reservoir_pressure_, res_cell);
+                c.mob = getFromMap(map_reservoir_mobility_, res_cell);
+                c.dens = getFromMap(map_reservoir_density_, res_cell);
+                c.z = getFromMap(map_reservoir_cell_z_, res_cell);
             }
             if (fracture_pressure_drive) {
                 // fracture pressure moved hydrostatically to the connection depth
                 const double p_at_conn = fracture_pressure_[eIdx][0]
-                    + gravity_ * reservoir_density_[eIdx] * (z_cells[ind_wellIdx] - geom.center()[2]);
+                    + gravity_ * reservoir_density_[eIdx] * (c.z - geom.center()[2]);
                 const double w_leak = (eIdx < static_cast<int>(leakof_.size()))
                     ? area_frac * leakof_[eIdx] : 0.0;
-                pfrac_leak_sum[ind_wellIdx] += w_leak * p_at_conn;
-                leak_sum[ind_wellIdx] += w_leak;
-                pfrac_area_sum[ind_wellIdx] += loc_area * p_at_conn;
+                c.pfracLeak += w_leak * p_at_conn;
+                c.leak += w_leak;
+                c.pfracArea += loc_area * p_at_conn;
             }
         }
     }
-    std::vector<RuntimePerforation> wellIndices(res_cells.size());
-    double inj_press = injectionPressure();
-    bool cells_outside = false;
-    // M1 mode switch (default "legacy" = the original back-calculation,
-    // byte-identical when the option is unset).  "conductivity" uses the
-    // aggregated leakof-based CTF plus an optional single global flux
-    // normalization so the total injected rate at the current operating
-    // point is preserved exactly.
-    const std::string wi_upscaling = prm_.get<std::string>("solver.wi_upscaling", "legacy");
-    if (wi_upscaling != "legacy" && wi_upscaling != "conductivity") {
-        OPM_THROW(std::runtime_error, "Unknown solver.wi_upscaling: " + wi_upscaling);
+    return ex;
+}
+
+RuntimePerforation
+Fracture::perforation_(const CellExchange& c, const double inj_press) const
+{
+    RuntimePerforation perf;
+    perf.cell = c.cell;
+    perf.ctf = 0.0;
+    // the CTF is derived for a connection pressure at the reservoir cell depth
+    perf.depth = c.z;
+    perf.segment = this->wellinfo_.segment;
+    perf.perf_range = this->wellinfo_.perf_range;
+    perf.pressure = inj_press;
+    return perf;
+}
+
+// CTF back-calculated from the leak-off rate at the current pressure difference.
+std::vector<RuntimePerforation>
+Fracture::wiLegacy_(const std::vector<CellExchange>& cells, const double inj_press) const
+{
+    std::vector<RuntimePerforation> perfs;
+    perfs.reserve(cells.size());
+    for (const auto& c : cells) {
+        auto& perf = perfs.emplace_back(perforation_(c, inj_press));
+        const double dh_res = c.z * gravity_ * c.dens;
+        const double dh_perf = gravity_ * c.dens * origo_[2];
+        double WI = 0.0;
+        double ctf = 0.0;
+        if (c.mob <= 0.0) {
+            OpmLog::debug(fmt::format("Zero mobility for perf cell: {}", c.cell));
+        } else {
+            WI = c.q / ((inj_press - dh_perf) - (c.p - dh_res));
+            ctf = WI / c.mob;
+        }
+        if (WI < 0.0) {
+            OpmLog::debug(fmt::format("Negative WI: {} for cell: {}", WI, c.cell));
+            ctf = 0.0;
+        }
+        perf.ctf = ctf;
     }
-    const bool conductivity_wi = !fracture_pressure_drive && (wi_upscaling == "conductivity");
-    // Flow adds the offset to BHP, or to the seed segment pressure for multi-segment wells
-    const double anchor_pressure = this->wellinfo_.perf_range.has_value()
-        ? inj_press : injectionBhp();
-    const bool wi_flux_norm = prm_.get<bool>("solver.wi_flux_normalization", true);
-    // Floor on the well-to-reservoir pressure difference used in the flux
-    // normalization denominator: protects against a vanishing denominator
-    // near equilibration (units: Pa).
-    // Must stay well below near-closure leak-off differences (~1e2-1e3 Pa), or alpha is underestimated.
-    const double wi_dp_floor = prm_.get<double>("solver.wi_pressure_floor", 1.0e2);
-    const double wi_alpha_max = prm_.get<double>("solver.wi_normalization_max", 2.0);
-    const bool wi_sign_gate = prm_.get<bool>("solver.wi_sign_gate", false);
+    return perfs;
+}
+
+// Aggregated exchange conductivity, scaled by one global factor alpha that
+// preserves the total exchange rate at the current operating point.
+std::vector<RuntimePerforation>
+Fracture::wiConductivity_(const std::vector<CellExchange>& cells,
+                          const double inj_press,
+                          const WiOptions& opt) const
+{
+    std::vector<RuntimePerforation> perfs;
+    perfs.reserve(cells.size());
     double sum_q = 0.0;
     double sum_ctf_dp = 0.0;
     int legacy_negative_count = 0;
-    for (size_t i = 0; i < res_cells.size(); ++i) {
-        auto& perf = wellIndices[i];
-        perf.cell = res_cells[i];
-        if(res_cells[i]<0){
-            // NB will be removed make dummy values
-            cells_outside = true;
-            perf.depth = this->origo_[2];
-            perf.ctf = 0;
-            perf.pressure = inj_press;
-            perf.segment = this->wellinfo_.segment;
-            perf.perf_range = this->wellinfo_.perf_range;
-            continue;
+    for (const auto& c : cells) {
+        auto& perf = perfs.emplace_back(perforation_(c, inj_press));
+        const double dh_res = c.z * gravity_ * c.dens;
+        const double dh_perf = gravity_ * c.dens * origo_[2];
+        double ctf = c.trans;
+        const double dp_well = (inj_press - dh_perf) - (c.p - dh_res);
+        const bool not_fed = (c.q < 0.0 || (dp_well <= 0.0 && c.q > 0.0));
+        if (not_fed) {
+            ++legacy_negative_count; // legacy would have zeroed this perf
         }
-        double dh_res = z_cells[i] * gravity_ * dens_cells[i];
-        double perf_density = dens_cells[i];
-        double dh_perf = gravity_ * perf_density * origo_[2];
-        double WI = 0.0;
-        double ctf = 0.0;
-        if (fracture_pressure_drive) {
-            // leak-off weighted, so Flow reproduces the fracture's leak-off at this state
-            ctf = trans_cells[i];
-            const double p_frac = (leak_sum[i] > 0.0) ? pfrac_leak_sum[i] / leak_sum[i]
-                : (area[i] > 0.0 ? pfrac_area_sum[i] / area[i] : inj_press);
-            perf.fracture_pressure_offset = p_frac - anchor_pressure;
-        } else if (conductivity_wi) {
-            // M1: sign-consistent aggregated conductivity; never negative,
-            // never divided by a vanishing pressure difference.
-            ctf = trans_cells[i];
-            WI = ctf * std::max(mob_cells[i], 0.0);
-            // Diagnostics + normalization bookkeeping against the legacy
-            // operating point.
-            const double dp_well = (inj_press - dh_perf) - (p_cells[i] - dh_res);
-            const bool not_fed = (q_cells[i] < 0.0 || (dp_well <= 0.0 && q_cells[i] > 0.0));
-            if (not_fed) {
-                ++legacy_negative_count; // legacy would have zeroed this perf
-            }
-            // A cell the fracture does not feed must get no CTF: the flow
-            // applies it against its own well-cell dp and would drive the
-            // cell backwards (measured: 377x the target rate recirculated).
-            if (wi_sign_gate && not_fed) {
-                ctf = 0.0;
-                WI = 0.0;
-            }
-            sum_q += q_cells[i];
-            sum_ctf_dp += ctf * std::max(mob_cells[i], 0.0)
-                * std::max(dp_well, wi_dp_floor);
-        } else {
-        if(mob_cells[i] <= 0.0){
-            OpmLog::debug(fmt::format("Zero mobility for perf cell: {}", res_cells[i]));
-            WI = 0.0;
-        }else{
-            WI = q_cells[i] / ((inj_press - dh_perf) - (p_cells[i] - dh_res));//NB d_perf def
-            ctf = WI/mob_cells[i]; // convert to ctf
-        }
-        if (WI < 0.0) {
-          // keep but could maybe be removed
-            OpmLog::debug(fmt::format("Negative WI: {} for cell: {}", WI, res_cells[i]));
-            WI = 0.0;
+        // A cell the fracture does not feed must get no CTF: the flow applies
+        // it against its own well-cell dp and would drive the cell backwards.
+        if (opt.signGate && not_fed) {
             ctf = 0.0;
         }
-        }
+        sum_q += c.q;
+        sum_ctf_dp += ctf * std::max(c.mob, 0.0) * std::max(dp_well, opt.dpFloor);
         perf.ctf = ctf;
-        {
-            // the CTF was derived for a connection pressure at the reservoir cell depth
-            perf.depth = z_cells[i];
-            perf.segment = this->wellinfo_.segment;
-            perf.perf_range = this->wellinfo_.perf_range;
-            perf.pressure = inj_press;
+    }
+    // alpha stays 1 unless both sums are meaningfully positive
+    double alpha = 1.0;
+    if (opt.fluxNorm && sum_q > 0.0 && sum_ctf_dp > 0.0) {
+        alpha = std::min(sum_q / sum_ctf_dp, opt.alphaMax);
+    }
+    if (prm_.get<int>("solver.verbosity", 0) > 0) {
+        std::stringstream os;
+        os << "WI upscaling (conductivity): alpha=" << alpha
+           << ", sum_q=" << sum_q
+           << ", legacy_negative_perfs=" << legacy_negative_count
+           << "/" << cells.size();
+        OpmLog::info(os.str());
+    }
+    if (alpha != 1.0) {
+        for (auto& perf : perfs) {
+            perf.ctf *= alpha;
         }
     }
-    if (conductivity_wi) {
-        // Single global flux normalization: preserve the total exchange rate
-        // at the current operating point.  The fracture's internal pressure
-        // drop then shows up as the smooth factor alpha instead of as
-        // per-cell sign flips.  Safeguarded: alpha stays 1 unless both sums
-        // are meaningfully positive, and is clamped from above.
-        double alpha = 1.0;
-        if (wi_flux_norm && sum_q > 0.0 && sum_ctf_dp > 0.0) {
-            alpha = std::min(sum_q / sum_ctf_dp, wi_alpha_max);
-        }
-        if (prm_.get<int>("solver.verbosity", 0) > 0) {
-            std::stringstream os;
-            os << "WI upscaling (conductivity): alpha=" << alpha
-               << ", sum_q=" << sum_q
-               << ", legacy_negative_perfs=" << legacy_negative_count
-               << "/" << res_cells.size();
-            OpmLog::info(os.str());
-        }
-        if (alpha != 1.0) {
-            for (auto& perf : wellIndices) {
-                if (perf.cell < 0) { continue; }
-                perf.ctf *= alpha;
-            }
-        }
-    }
+    return perfs;
+}
 
-    // remove connections to outside of reservoir
-    if(cells_outside){
+// Leak-off weighted conductivity; Flow drives it with the fracture pressure
+// passed as an offset to the anchor pressure.
+std::vector<RuntimePerforation>
+Fracture::wiFracturePressure_(const std::vector<CellExchange>& cells, const double inj_press) const
+{
+    // Flow adds the offset to BHP, or to the seed segment pressure for multi-segment wells
+    const double anchor_pressure = this->wellinfo_.perf_range.has_value()
+        ? inj_press : injectionBhp();
+    std::vector<RuntimePerforation> perfs;
+    perfs.reserve(cells.size());
+    for (const auto& c : cells) {
+        auto& perf = perfs.emplace_back(perforation_(c, inj_press));
+        perf.ctf = c.trans;
+        const double p_frac = (c.leak > 0.0) ? c.pfracLeak / c.leak
+            : (c.area > 0.0 ? c.pfracArea / c.area : inj_press);
+        perf.fracture_pressure_offset = p_frac - anchor_pressure;
+    }
+    return perfs;
+}
+
+std::vector<RuntimePerforation>
+Fracture::wellIndices_() const
+{
+    OPM_TIMEFUNCTION();
+    if (leakof_.size() == 0) {
+        // pressure not assembled yet
+        return {};
+    }
+    const auto opt = WiOptions::read(prm_);
+    auto cells = gatherCellExchange_(opt);
+    const auto outside = std::remove_if(cells.begin(), cells.end(),
+                                        [](const auto& c) { return c.cell < 0; });
+    if (outside != cells.end()) {
         OpmLog::warning("Cells of fracture outside removed from perforation index");
-        wellIndices.erase(
-                          std::remove_if(wellIndices.begin(),
-                                         wellIndices.end(),
-                          [](const auto& perf){ return perf.cell < 0;}),
-                          wellIndices.end());
+        cells.erase(outside, cells.end());
     }
-
-    return wellIndices;
+    const double inj_press = injectionPressure();
+    switch (opt.mode) {
+    case WiMode::Conductivity:
+        return wiConductivity_(cells, inj_press, opt);
+    case WiMode::FracturePressure:
+        return wiFracturePressure_(cells, inj_press);
+    case WiMode::Legacy:
+        break;
+    }
+    return wiLegacy_(cells, inj_press);
 }
 
 template <typename Scalar>

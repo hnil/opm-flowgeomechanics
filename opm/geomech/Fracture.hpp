@@ -544,6 +544,32 @@ private:
    double fractureForce(int i) const;
    double leakofDp(int i) const;
    void summary_of_solve();
+   enum class WiMode { Legacy, Conductivity, FracturePressure };
+   struct WiOptions
+   {
+       WiMode mode{WiMode::Legacy};
+       bool divideWellIdx{false};
+       bool fluxNorm{true};
+       bool signGate{false};
+       double dpFloor{1.0e2};  // Pa
+       double alphaMax{2.0};
+       static WiOptions read(const PropertyTree& prm);
+   };
+   // Fracture-to-reservoir exchange gathered per reservoir cell.
+   struct CellExchange
+   {
+       int cell{};
+       double q{}, p{}, mob{}, dens{}, z{}, trans{}, area{};
+       double pfracLeak{}, leak{}, pfracArea{}; // WiMode::FracturePressure only
+   };
+   std::vector<CellExchange> gatherCellExchange_(const WiOptions& opt) const;
+   RuntimePerforation perforation_(const CellExchange& c, double inj_press) const;
+   std::vector<RuntimePerforation> wiLegacy_(const std::vector<CellExchange>& cells,
+                                             double inj_press) const;
+   std::vector<RuntimePerforation> wiConductivity_(const std::vector<CellExchange>& cells,
+                                                   double inj_press, const WiOptions& opt) const;
+   std::vector<RuntimePerforation> wiFracturePressure_(const std::vector<CellExchange>& cells,
+                                                       double inj_press) const;
    std::vector<RuntimePerforation> wellIndices_() const;
    bool  expantionMax(const FractureProperties& fprop);
    bool removeNewZeroWithCells(RegularTrimesh& mesh,int cur_level,const RegularTrimesh& original_mesh) const;
