@@ -124,6 +124,79 @@ void VemDiscretisation<GridType>::rotateRows(std::vector<std::tuple<int, int, do
     entries.swap(out);
 }
 
+// B -> F_a B F_b^T for the 3 x 3 block coupling nodes a and b.
+template<class GridType>
+void VemDiscretisation<GridType>::rotateBlock(int node_a, int node_b, double (&blk)[3][3]) const
+{
+    if (frames_.empty()) {
+        return;
+    }
+    const int fa = frame_of_node_[node_a];
+    const int fb = frame_of_node_[node_b];
+    if (fa < 0 && fb < 0) {
+        return;
+    }
+    double t[3][3];
+    for (int i = 0; i != 3; ++i)
+        for (int l = 0; l != 3; ++l) {
+            double v = 0.0;
+            for (int k = 0; k != 3; ++k)
+                v += (fa < 0 ? double(i == k) : frames_[fa][i][k]) * blk[k][l];
+            t[i][l] = v;
+        }
+    for (int i = 0; i != 3; ++i)
+        for (int j = 0; j != 3; ++j) {
+            double v = 0.0;
+            for (int l = 0; l != 3; ++l)
+                v += t[i][l] * (fb < 0 ? double(j == l) : frames_[fb][j][l]);
+            blk[i][j] = v;
+        }
+}
+
+// Node-level pattern from the cells' face corners, three dofs per node.
+template<class GridType>
+void VemDiscretisation<GridType>::buildMatrixPattern(int num_dofs)
+{
+    OPM_TIMEBLOCK(buildMatrixPattern);
+    const int num_nodes = num_dofs / 3;
+    std::vector<std::vector<int>> adj(num_nodes);
+    std::vector<int> cell_nodes;
+    int fc = 0;
+    int cf = 0;
+    for (int c = 0; c < num_cells_; ++c) {
+        cell_nodes.clear();
+        for (int f = 0; f < num_cell_faces_[c]; ++f, ++cf) {
+            cell_nodes.insert(cell_nodes.end(), &face_corners_[fc], &face_corners_[fc] + num_face_corners_[cf]);
+            fc += num_face_corners_[cf];
+        }
+        std::sort(cell_nodes.begin(), cell_nodes.end());
+        cell_nodes.erase(std::unique(cell_nodes.begin(), cell_nodes.end()), cell_nodes.end());
+        for (const int a : cell_nodes) {
+            adj[a].insert(adj[a].end(), cell_nodes.begin(), cell_nodes.end());
+        }
+    }
+    std::size_t nnz = 0;
+    for (auto& row : adj) {
+        std::sort(row.begin(), row.end());
+        row.erase(std::unique(row.begin(), row.end()), row.end());
+        row.shrink_to_fit();
+        nnz += 9 * row.size();
+    }
+    auto& A = *matrix_;
+    A.setBuildMode(Matrix::random);
+    A.setSize(num_dofs, num_dofs, nnz);
+    for (int a = 0; a < num_nodes; ++a)
+        for (int i = 0; i != 3; ++i)
+            A.setrowsize(3 * a + i, 3 * adj[a].size());
+    A.endrowsizes();
+    for (int a = 0; a < num_nodes; ++a)
+        for (int i = 0; i != 3; ++i)
+            for (const int b : adj[a])
+                for (int j = 0; j != 3; ++j)
+                    A.addindex(3 * a + i, 3 * b + j);
+    A.endindices();
+}
+
 template<class GridType>
 template<class V>
 void VemDiscretisation<GridType>::toLocal(V& u) const
@@ -190,21 +263,35 @@ void VemDiscretisation<GridType>::assembleMatrix()
     if (coords_.empty()) {
         buildGeometry();
     }
-    std::vector<std::tuple<int, int, double>> A_entries;
+    const int num_dofs = 3 * grid_.leafGridView().size(3);
+    matrix_ = std::make_unique<Matrix>(); // a built BCRSMatrix cannot be rebuilt in place
+    buildMatrixPattern(num_dofs);
+    auto& A = *matrix_;
+    A = 0.0;
     rhs_force_.clear();
+    const auto scatter = [this, &A](const int* nodes, const int n, const double* K) {
+        const int m = 3 * n;
+        for (int a = 0; a != n; ++a) {
+            for (int b = 0; b != n; ++b) {
+                double blk[3][3];
+                for (int i = 0; i != 3; ++i)
+                    for (int j = 0; j != 3; ++j)
+                        blk[i][j] = K[(3 * a + i) * m + 3 * b + j];
+                rotateBlock(nodes[a], nodes[b], blk);
+                for (int i = 0; i != 3; ++i)
+                    for (int j = 0; j != 3; ++j)
+                        A[3 * nodes[a] + i][3 * nodes[b] + j] += blk[i][j];
+            }
+        }
+    };
     vem::assemble_mech_system_3D_dune(grid_, &coords_[0], num_cells_, &num_cell_faces_[0],
                                       &num_face_corners_[0], &face_corners_[0], &ymodule_[0],
                                       &pratio_[0], &body_force_[0],
-                                      /*num_neumann_faces*/ 0, nullptr, nullptr, A_entries,
+                                      /*num_neumann_faces*/ 0, nullptr, nullptr, scatter,
                                       rhs_force_, stability_choice_, corner_mask_.data(),
                                       hasOperators() ? nullptr : &pending_ops_);
-    rotateRows(A_entries, /*columns_too*/ true);
+    assert(int(rhs_force_.size()) == num_dofs);
     toLocal(rhs_force_);
-    const int num_dofs = int(rhs_force_.size());
-    matrix_ = std::make_unique<Matrix>(); // a built BCRSMatrix cannot be rebuilt in place
-    matrix_->setBuildMode(Matrix::random);
-    matrix_->setSize(num_dofs, num_dofs);
-    makeDuneMatrixCompressed(A_entries, *matrix_);
     applyDirichlet();
     scale_.resize(0);
     if (diagonal_scaling_) {

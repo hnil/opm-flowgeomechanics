@@ -125,6 +125,8 @@ private:
     void applyDirichlet();
     void applyDiagonalScaling();
     void rotateRows(std::vector<std::tuple<int, int, double>>& entries, bool columns_too) const;
+    void rotateBlock(int node_a, int node_b, double (&blk)[3][3]) const;
+    void buildMatrixPattern(int num_dofs);
     static void makeDuneMatrixCompressed(const std::vector<std::tuple<int, int, double>>& entries,
                                          Matrix& mat);
 

@@ -21,6 +21,7 @@
 #define VEM_UTILS_HPP
 
 #include <array>
+#include <functional>
 #include <tuple>
 #include <vector>
 #include <opm/grid/polyhedralgrid.hh>
@@ -97,6 +98,27 @@ void getGridVectors(const Dune::CpGrid& grid, std::vector<double>& coords,
                         const int* const neumann_faces,
                         const double* const neumann_forces, // 3 * number of neumann faces
                         std::vector<std::tuple<int, int, double>>& A_entries,
+                        std::vector<double>& b,
+                             const vem::StabilityChoice stability_choice,
+                             const char* const corner_mask = nullptr,
+                             CellOperatorEntries* ops = nullptr);
+
+//! Receives each element matrix: n nodes, K is 3n x 3n row-major with dof 3 * node + d.
+using ElementMatrixSink = std::function<void(const int* nodes, int n, const double* K)>;
+
+// As above, with each element matrix handed to sink instead of appended as triplets.
+  int assemble_mech_system_3D_dune(const Dune::CpGrid& grid, const double* const points,
+                        const int num_cells,
+                        const int* const num_cell_faces, // cell faces per cell
+                        const int* const num_face_corners, // corners per face
+                        const int* const face_corners,
+                        const double* const young,
+                        const double* const poisson,
+                        const double* const body_force, // 3 * number of cells
+                        const int num_neumann_faces,
+                        const int* const neumann_faces,
+                        const double* const neumann_forces, // 3 * number of neumann faces
+                        const ElementMatrixSink& sink,
                         std::vector<double>& b,
                              const vem::StabilityChoice stability_choice,
                              const char* const corner_mask = nullptr,

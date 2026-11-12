@@ -303,14 +303,42 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
                         CellOperatorEntries* ops)
 // ----------------------------------------------------------------------------
 {
+    A_entries.clear();
+    const auto sink = [&A_entries](const int* nodes, const int n, const double* K) {
+        for (int i = 0; i != 3 * n; ++i)
+            for (int j = 0; j != 3 * n; ++j)
+                A_entries.emplace_back(3 * nodes[i / 3] + i % 3, 3 * nodes[j / 3] + j % 3, K[i * 3 * n + j]);
+    };
+    return assemble_mech_system_3D_dune(grid, points, num_cells, num_cell_faces, num_face_corners, face_corners,
+                                        young, poisson, body_force, num_neumann_faces, neumann_faces,
+                                        neumann_forces, sink, b, stability_choice, corner_mask, ops);
+}
+
+    int
+assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points,
+                        const int num_cells,
+                        const int* const num_cell_faces, // cell faces per cell
+                        const int* const num_face_corners, // corners per face
+                        const int* const face_corners,
+                        const double* const young,
+                        const double* const poisson,
+                        const double* const body_force, // 3 * number of cells
+                        const int num_neumann_faces,
+                        const int* const neumann_faces,
+                        const double* const neumann_forces, // 3 * number of neumann faces
+                        const ElementMatrixSink& sink,
+                        std::vector<double>& b,
+                        const vem::StabilityChoice stability_choice,
+                        const char* const corner_mask,
+                        CellOperatorEntries* ops)
+// ----------------------------------------------------------------------------
+{
     // preliminary computations
   const int tot_num_cell_faces = std::accumulate(num_cell_faces, num_cell_faces + num_cells, 0);
     const int tot_num_face_corners
       = std::accumulate(num_face_corners, num_face_corners + tot_num_cell_faces, 0);
     const int num_points = *std::max_element(face_corners, face_corners + tot_num_face_corners) + 1;
 
-    // assemble full system matrix
-    A_entries.clear();
     b.resize(num_points * 3);
     std::fill(b.begin(), b.end(), 0);
 
@@ -386,17 +414,7 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
                                    cell_mask);
           centroid = cell.centroid;
           const auto& loc_indexing = cell.indexing;
-          const int ncv = int(loc_indexing.size()); // number of cell vertices
-          for (int i = 0; i != 3 * ncv; ++i) {
-            for (int j = 0; j != 3 * ncv; ++j) {
-              // using integer division to go from 'i' and 'j' to corresponding
-              // local point indices, which are subsequently converted to global indexing
-              const int I = 3 * loc_indexing[i / 3] + i % 3;
-              const int J = 3 * loc_indexing[j / 3] + j % 3;
-              const double val = loc[i * 3 * ncv + j]; // local matrix entry
-              A_entries.push_back(std::tuple<int, int, double> {I, J, val});
-            }
-          }
+          sink(loc_indexing.data(), int(loc_indexing.size()), loc.data());
         }else{
           // Q1 with B-bar on the cell's 8 corners (Dune reference ordering)
           std::array<int, 8> nodes;
@@ -408,9 +426,7 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
           }
           std::array<double, 24 * 24> K;
           vem::stiffness_matrix_fem_hex_3D(hc.data(), young[c], poisson[c], /*bbar*/ true, K.data());
-          for (int i = 0; i != 24; ++i)
-            for (int j = 0; j != 24; ++j)
-              A_entries.emplace_back(3 * nodes[i / 3] + i % 3, 3 * nodes[j / 3] + j % 3, K[i * 24 + j]);
+          sink(nodes.data(), 8, K.data());
           // the body force below splits the cell around this point
           const auto centre = elem.geometry().center();
           for (int d = 0; d != 3; ++d)
