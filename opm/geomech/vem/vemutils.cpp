@@ -366,10 +366,9 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
           // check if we can do vem on this cell
           bool is_femcell = cell_fem_type[c];
           if(!is_femcell){
-            // if fem and not a "normal" cell switch to vem with a stabilization
-            // that remains robust for high-aspect cells
+            // not a corner-point hex: VEM with a stabilization robust to short edges
             vem_type = true;
-            loc_stability_choice = StabilityChoice::ANISO_DIAG;
+            loc_stability_choice = StabilityChoice::TRACE;
           }
         }
 

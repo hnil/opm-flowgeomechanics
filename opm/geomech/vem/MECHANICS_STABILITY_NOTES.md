@@ -220,9 +220,13 @@ cooled zone.
 
 ## Recommended configuration (high-aspect grids, thermal injection)
 
+Since 2026-11-12 only choices 1 (SIMPLE), 10 (FEM_BBAR, TRACE on non-hex cells),
+14 (TRACE) and 15 (SMOOTH_HOURGLASS) exist; 2-9 and 11-13, described above for
+the history, now throw. The default is 1.
+
 ```json
 "fractureparam": {
-    "vem_stability_choice": "9",          // ANISO_HARMONIC: flat across aspect ratios
+    "vem_stability_choice": "15",         // SMOOTH_HOURGLASS: exact bending/twist at any aspect
     "mech_diagonal_scaling": "true",      // equilibrates the system for AMG
     "smooth_force_length": "<front width in m, e.g. sqrt(kappa*t)>",
     "patch_recovery_stress": "true",
@@ -231,16 +235,12 @@ cooled zone.
 ```
 
 Reasoning: the dominant deformation regime for an injection-cooled layer is
-laterally constrained (oedometric), where both VEM and Q1 are consistent — the
-element choice matters less than (a) not over-stabilizing the thin-cell direction
-(HARMONIC and D_RECIPE lock; ANISO_HARMONIC does not) and (b) regularizing the
-under-resolved front load and the sampled stress (the three options above).
-Pure VEM with ANISO_HARMONIC treats every cell — including degenerate
-corner-point cells — uniformly, avoiding the FEM/VEM stabilization interface that
-the combined FEM choice introduces exactly where pinch-outs cluster.  Use
-FEM/FEM_BBAR (7/10) as a cross-check on clean Cartesian decks, and FEM_BBAR if
-materials with nu >~ 0.45 appear.  At nu ~ 0.3, volumetric locking is not a
-concern in the sequential coupling (the mech element always sees drained moduli).
+laterally constrained (oedometric), where both VEM and Q1 are consistent; the
+element choice matters less than (a) not locking in the thin-cell direction
+(SIMPLE locks; SMOOTH_HOURGLASS does not, also on sheared cells) and (b)
+regularizing the under-resolved front load and the sampled stress (the three
+options above). Use FEM_BBAR (10) as a cross-check on clean Cartesian decks, and
+if materials with nu >~ 0.45 appear.
 
 ## Further options (not implemented)
 

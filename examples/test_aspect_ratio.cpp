@@ -19,7 +19,7 @@
 
 /*
   Standalone test of the pure-mechanics element discretizations (VEM with the
-  various stabilization choices, and Q1 FEM with/without B-bar) with emphasis on
+  SIMPLE, TRACE and SMOOTH_HOURGLASS stabilizations, and Q1 with B-bar) with emphasis on
   robustness for high-aspect-ratio cells.
 
   The test uses only the array-based vem:: API (no Dune grid required) and a small
@@ -33,16 +33,15 @@
 
   2. Single-element spectrum: a single hexahedron with increasing aspect ratio must
      have exactly 6 (near-)zero eigenvalues (the rigid body modes) and no spurious
-     zero-energy modes.  Hard failure for the new variants (ANISO_DIAG,
-     ANISO_HARMONIC, FEM, FEM_BBAR); legacy variants only report.
+     zero-energy modes.  Hard failure for all but SIMPLE, which only reports.
 
   3. Cantilever bending sweep: a clamped beam with fixed element count and
      increasing element aspect ratio, loaded by an end shear traction.  The tip
      deflection is compared with the analytic Timoshenko solution; the ratio
      (numeric/analytic) is reported per variant and aspect ratio.  This is a
      diagnostic: locking shows up as a ratio dropping far below 1 as the aspect
-     ratio grows.  In addition, a near-incompressible (nu=0.499) variant verifies
-     that FEM_BBAR suffers less from volumetric locking than plain FEM.
+     ratio grows.  In addition, a near-incompressible (nu=0.4999) variant verifies
+     that FEM_BBAR does not lock volumetrically at aspect 1.
      SMOOTH_HOURGLASS must stay near 1 at every aspect, also on sheared cells.
 */
 
@@ -205,15 +204,7 @@ struct HexGrid {
 
 const std::vector<std::pair<vem::StabilityChoice, std::string>> variants
     = {{vem::SIMPLE, "SIMPLE"},
-       {vem::HARMONIC, "HARMONIC"},
-       {vem::D_RECIPE, "D_RECIPE"},
-       {vem::ANISO_DIAG, "ANISO_DIAG"},
-       {vem::ANISO_HARMONIC, "ANISO_HARM"},
-       {vem::FEM, "FEM"},
        {vem::FEM_BBAR, "FEM_BBAR"},
-       {vem::FACE_D_RECIPE, "FACE_D_REC"},
-       {vem::FACE_ANISO_HARMONIC, "FACE_ANISO"},
-       {vem::FACE_SIMPLE, "FACE_SIMPLE"},
        {vem::TRACE, "TRACE"},
        {vem::SMOOTH_HOURGLASS, "SMOOTH_HG"}};
 
@@ -671,6 +662,33 @@ hourglass_energies(const vem::StabilityChoice sc, const double aspect)
     return {eb, et};
 }
 
+// The same two modes on plain Q1 (no B-bar), the reference for the energies above.
+std::pair<double, double>
+q1_hourglass_energies(const double aspect)
+{
+    std::array<double, 24> hc;
+    for (int k = 0; k != 8; ++k) {
+        hc[3 * k] = aspect * (k & 1);
+        hc[3 * k + 1] = (k >> 1) & 1;
+        hc[3 * k + 2] = (k >> 2) & 1;
+    }
+    std::vector<double> K(24 * 24);
+    vem::stiffness_matrix_fem_hex_3D(&hc[0], 1e9, 0.3, false, &K[0]);
+    std::vector<double> ub(24, 0.0), ut(24, 0.0);
+    for (int k = 0; k != 8; ++k) {
+        const double xi = k & 1, eta = (k >> 1) & 1, zeta = (k >> 2) & 1;
+        ub[3 * k] = (2 * xi - 1) * (2 * zeta - 1);
+        ut[3 * k] = (2 * eta - 1) * (2 * zeta - 1);
+    }
+    double eb = 0, et = 0;
+    for (int i = 0; i < 24; ++i)
+        for (int j = 0; j < 24; ++j) {
+            eb += ub[i] * K[i * 24 + j] * ub[j];
+            et += ut[i] * K[i * 24 + j] * ut[j];
+        }
+    return {eb, et};
+}
+
 // ----------------------------------------------------------------------------
 // cantilever bending: returns delta_numeric / delta_timoshenko.  If a rotation
 // matrix is given (row-major 3x3), the whole problem (grid, traction, deflection
@@ -805,8 +823,8 @@ main()
     }
     // patch test must also survive diagonal scaling of the system
     {
-        const double err = patch_test_3D(vem::ANISO_DIAG, 100.0, true);
-        std::printf("%-12s  %-15.3e (with diagonal scaling)\n", "ANISO_DIAG", err);
+        const double err = patch_test_3D(vem::TRACE, 100.0, true);
+        std::printf("%-12s  %-15.3e (with diagonal scaling)\n", "TRACE", err);
         if (err > 1e-6)
             ++failures;
     }
@@ -831,11 +849,9 @@ main()
     // moving a node on a short edge must cost more as the edge shrinks (gradient ~ 1/s); a
     // stabilization scaled by the cell instead of the faces leaves a near-free mode there
     std::printf("\n=== fault cell split at s: energy of moving the fault node, s=1/32 relative to s=1/2 ===\n");
-    for (const auto sc : {vem::SIMPLE, vem::D_RECIPE, vem::ANISO_HARMONIC, vem::TRACE, vem::SMOOTH_HOURGLASS}) {
+    for (const auto sc : {vem::SIMPLE, vem::TRACE, vem::SMOOTH_HOURGLASS}) {
         const double r = fault_node_energy(sc, 1.0 / 32) / fault_node_energy(sc, 0.5);
-        std::printf("%-12s  %.2f", sc == vem::TRACE ? "TRACE" : sc == vem::SIMPLE ? "SIMPLE"
-                                   : sc == vem::D_RECIPE ? "D_RECIPE" : sc == vem::ANISO_HARMONIC ? "ANISO_HARM"
-                                   : "SMOOTH_HG", r);
+        std::printf("%-12s  %.2f", sc == vem::TRACE ? "TRACE" : sc == vem::SIMPLE ? "SIMPLE" : "SMOOTH_HG", r);
         if ((sc == vem::TRACE || sc == vem::SMOOTH_HOURGLASS) && r < 4.0) {
             ++failures;
             std::printf(" (FAIL)");
@@ -926,9 +942,7 @@ main()
         for (const double a : aspects) {
             const auto [nzero, ratio] = single_element_spectrum(sc, a);
             std::printf("  %d/%-10.2e", nzero, ratio);
-            const bool is_new = (sc == vem::ANISO_DIAG || sc == vem::ANISO_HARMONIC
-                                 || sc == vem::FEM || sc == vem::FEM_BBAR || sc == vem::TRACE
-                                 || sc == vem::SMOOTH_HOURGLASS);
+            const bool is_new = sc != vem::SIMPLE;
             if (nzero != 6) {
                 std::printf(is_new ? "(FAIL)" : "(warn)");
                 if (is_new)
@@ -960,15 +974,15 @@ main()
         std::printf("\n");
     }
 
-    // the smooth hourglass term must not lock in bending: beat ANISO_HARMONIC at aspect 25 and 50
+    // the smooth hourglass term must not lock in bending: beat SIMPLE at aspect 25 and 50
     for (std::size_t i = 2; i < lengths.size(); ++i)
-        if (!(bend_ratios["SMOOTH_HG"][i] > bend_ratios["ANISO_HARM"][i] && bend_ratios["SMOOTH_HG"][i] > 0.8)) {
-            std::printf("FAIL: SMOOTH_HG (%.3f) locks at aspect %g (ANISO_HARM %.3f)\n",
-                        bend_ratios["SMOOTH_HG"][i], lengths[i] / 5.0, bend_ratios["ANISO_HARM"][i]);
+        if (!(bend_ratios["SMOOTH_HG"][i] > bend_ratios["SIMPLE"][i] && bend_ratios["SMOOTH_HG"][i] > 0.8)) {
+            std::printf("FAIL: SMOOTH_HG (%.3f) locks at aspect %g (SIMPLE %.3f)\n",
+                        bend_ratios["SMOOTH_HG"][i], lengths[i] / 5.0, bend_ratios["SIMPLE"][i]);
             ++failures;
         }
 
-    // twist must keep its stiffness on thin cells (ANISO_HARM/SIMPLE: ~1/aspect^2, spurious
+    // twist must keep its stiffness on thin cells (SIMPLE: ~1/aspect^2, spurious
     // hourglassing); bending must not stiffen like Q1 (~aspect^2). Energies relative to Q1.
     std::printf("\n=== hourglass modes on one hex, energy / Q1 energy: bending, twist ===\n");
     std::printf("%-12s", "variant");
@@ -981,7 +995,7 @@ main()
         std::printf("%-12s", name.c_str());
         for (const double a : aspects) {
             const auto [eb, et] = hourglass_energies(sc, a);
-            const auto [qb, qt] = hourglass_energies(vem::FEM, a);
+            const auto [qb, qt] = q1_hourglass_energies(a);
             std::printf("  %-9.3g %-9.3g", eb / qb, et / qt);
             if (sc == vem::SMOOTH_HOURGLASS && (et / qt < 0.9 || et / qt > 1.1 || eb / qb > 1.1)) {
                 ++failures;
@@ -1024,9 +1038,7 @@ main()
             // hard requirement for the frame-invariant-by-construction variants;
             // the tolerance is limited by the conditioning of the solved system
             // (~1e-7 at this aspect ratio), not by the element formulation
-            const bool must_be_invariant
-                = (sc == vem::ANISO_HARMONIC || sc == vem::FEM || sc == vem::FEM_BBAR || sc == vem::TRACE
-                   || sc == vem::SMOOTH_HOURGLASS);
+            const bool must_be_invariant = sc != vem::SIMPLE;
             if (must_be_invariant && diff > 1e-6) {
                 ++failures;
                 std::printf("  (FAIL)");
@@ -1037,7 +1049,7 @@ main()
 
     std::printf("\n=== volumetric locking: cantilever at nu=0.4999, ratio to Timoshenko ===\n");
     std::printf("(volumetric locking adds to shear locking as the aspect ratio grows;\n");
-    std::printf(" B-bar removes the volumetric part: FEM_BBAR must beat FEM everywhere)\n");
+    std::printf(" B-bar removes the volumetric part)\n");
     std::printf("%-12s", "variant");
     for (const double L : lengths)
         std::printf("  aspect=%-6g", L / 5.0);
@@ -1056,15 +1068,7 @@ main()
         }
         std::printf("\n");
     }
-    // hard checks: B-bar must reduce the volumetric locking of plain Q1 at every
-    // aspect ratio, and must essentially cure it where shear locking is absent
-    for (std::size_t i = 0; i < lengths.size(); ++i) {
-        if (!(vol_ratios["FEM_BBAR"][i] > vol_ratios["FEM"][i])) {
-            std::printf("FAIL: FEM_BBAR (%.3f) not softer than FEM (%.3f) at aspect %g\n",
-                        vol_ratios["FEM_BBAR"][i], vol_ratios["FEM"][i], lengths[i] / 5.0);
-            ++failures;
-        }
-    }
+    // B-bar must essentially cure volumetric locking where shear locking is absent
     if (!(vol_ratios["FEM_BBAR"][0] > 0.7)) {
         std::printf("FAIL: FEM_BBAR should cure volumetric locking at aspect 1 (got %.3f)\n",
                     vol_ratios["FEM_BBAR"][0]);

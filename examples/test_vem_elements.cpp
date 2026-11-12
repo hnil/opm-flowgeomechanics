@@ -115,7 +115,7 @@ main(int argc, char** argv)
         array<double, 3> cell_centroid;
         vector<int> indexing;
         vector<double> target(24 * 24);
-        const vem::StabilityChoice stability_choice = vem::D_RECIPE;
+        const vem::StabilityChoice stability_choice = vem::SIMPLE;
         vem::assemble_stiffness_matrix_3D(&coords[0],
                                           &faces[0],
                                           &num_face_corners[0],

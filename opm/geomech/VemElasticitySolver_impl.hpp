@@ -68,10 +68,7 @@ void VemDiscretisation<GridType>::setOptions(int stability_choice_int,
     os << "Setting stability choise to " << stability_choice_int
        << (diagonal_scaling_ ? " with diagonal scaling" : "");
     OpmLog::info(os.str());
-    if (stability_choice_int < 1 || stability_choice_int > vem::STABILITY_CHOICE_MAX) {
-        OPM_THROW(std::runtime_error, "This stability is not implmented");
-    }
-    stability_choice_ = static_cast<vem::StabilityChoice>(stability_choice_int);
+    stability_choice_ = vem::check_stability_choice(stability_choice_int);
 }
 
 template<class GridType>

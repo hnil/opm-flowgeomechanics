@@ -45,6 +45,14 @@ namespace {
 FaceQuadrature face_quadrature_ = FaceQuadrature::KITE;
 }
 void set_face_quadrature(FaceQuadrature q) { face_quadrature_ = q; }
+
+StabilityChoice check_stability_choice(int choice)
+{
+    if (choice == SIMPLE || choice == FEM_BBAR || choice == TRACE || choice == SMOOTH_HOURGLASS)
+        return static_cast<StabilityChoice>(choice);
+    throw invalid_argument("VEM stability choice " + to_string(choice)
+                           + " was removed or does not exist; use 1, 10, 14 or 15");
+}
 FaceQuadrature face_quadrature() { return face_quadrature_; }
 
 // ============================================================================
@@ -572,259 +580,28 @@ compute_S(const std::vector<double>& Nc,
           const std::vector<double>& D,
           const int num_corners,
           const double volume,
-          const int dim,
-          const StabilityChoice stability_choice)
+          const int dim)
 // ----------------------------------------------------------------------------
 {
     assert(dim == 2 || dim == 3);
-    assert(stability_choice == SIMPLE || stability_choice == HARMONIC);
     const int r = dim * num_corners;
     const int c = dim == 2 ? 3 : 6;
     const auto NtN = matmul(&Nc[0], r, c, true, &Nc[0], r, c, false);
 
-    const double gamma = 1.0 / 9.0; // since trace is about 9 times E
-    const double alpha = stability_choice == SIMPLE ? volume * trace(D) / trace(NtN)
-                                                    : // from Gain et al. 2014
-        gamma*volume * trace(D) * invtrace(NtN); // Andersen et al. 2017
+    const double alpha = volume * trace(D) / trace(NtN);
 
     return identity_matrix(alpha, dim * num_corners);
 }
 
-// ----------------------------------------------------------------------------
-vector<double>
-compute_S_D_recipe(const std::vector<double>& EWcDWct, const int dofs, const double volume)
-// ----------------------------------------------------------------------------
+std::vector<double> getStabilityMatrix(vem::StabilityChoice stability_choice,
+                                       const std::vector<double>& Nc,
+                                       const std::vector<double>& D,
+                                       int num_nodes, double volume, int dim)
 {
-    vector<double> result(dofs * dofs, 0);
-
-    const double h = cbrt(volume); // diameter of cell scales with cube root of volume
-    for (int i = 0; i != dofs; ++i)
-        result[i + dofs * i] = EWcDWct[i + dofs * i]; // extract diagonal from matrix
-
-    return result;
-}
-
-// ----------------------------------------------------------------------------
-// Eigendecomposition of a small (dim <= 3) symmetric matrix by cyclic Jacobi
-// rotations.  On return, `A` holds the eigenvalues on its diagonal and the
-// columns of `V` are the corresponding eigenvectors.
-void
-small_sym_eig(const int dim, double A[3][3], double V[3][3])
-// ----------------------------------------------------------------------------
-{
-    for (int i = 0; i != 3; ++i)
-        for (int j = 0; j != 3; ++j)
-            V[i][j] = (i == j) ? 1.0 : 0.0;
-
-    for (int sweep = 0; sweep != 50; ++sweep) {
-        double off = 0.0, diag = 0.0;
-        for (int p = 0; p != dim; ++p) {
-            diag += A[p][p] * A[p][p];
-            for (int q = p + 1; q != dim; ++q)
-                off += A[p][q] * A[p][q];
-        }
-        if (off <= 1e-30 * (diag + 1e-300))
-            break;
-        for (int p = 0; p != dim; ++p)
-            for (int q = p + 1; q != dim; ++q) {
-                if (A[p][q] == 0.0)
-                    continue;
-                const double theta = (A[q][q] - A[p][p]) / (2 * A[p][q]);
-                const double t = (theta >= 0 ? 1.0 : -1.0)
-                    / (fabs(theta) + sqrt(theta * theta + 1));
-                const double c = 1.0 / sqrt(t * t + 1);
-                const double s = t * c;
-                for (int k = 0; k != dim; ++k) {
-                    const double akp = A[k][p], akq = A[k][q];
-                    A[k][p] = c * akp - s * akq;
-                    A[k][q] = s * akp + c * akq;
-                }
-                for (int k = 0; k != dim; ++k) {
-                    const double apk = A[p][k], aqk = A[q][k];
-                    A[p][k] = c * apk - s * aqk;
-                    A[q][k] = s * apk + c * aqk;
-                }
-                for (int k = 0; k != dim; ++k) {
-                    const double vkp = V[k][p], vkq = V[k][q];
-                    V[k][p] = c * vkp - s * vkq;
-                    V[k][q] = s * vkp + c * vkq;
-                }
-            }
-    }
-}
-
-// ----------------------------------------------------------------------------
-// Anisotropic stabilization floor *tensor* of an element, computed in the
-// principal frame of its corner point cloud (so it does not assume the cell to
-// be aligned with the coordinate axes):
-//
-//   F = Escale * volume * sum_k  v_k v_k^T / h_k^2,
-//
-// where v_k are the principal axes (eigenvectors of the corner second-moment
-// tensor) and h_k = 2*sqrt(lambda_k) the corresponding principal lengths (equal
-// to the edge lengths for a box, in any orientation).  For an axis-aligned cell
-// this reduces to diag(Escale * volume / h_d^2), i.e. the natural per-direction
-// scale of the consistency-matrix diagonal (tr(D)/9 * cbrt(volume) for a cube).
-array<double, 9>
-compute_aniso_floor_tensor(const vector<double>& corners,
-                           const int num_corners,
-                           const int dim,
-                           const double Escale,
-                           const double volume)
-// ----------------------------------------------------------------------------
-{
-    array<double, 3> centroid {0.0, 0.0, 0.0};
-    for (int i = 0; i != num_corners; ++i)
-        for (int d = 0; d != dim; ++d)
-            centroid[d] += corners[dim * i + d];
-    for (int d = 0; d != dim; ++d)
-        centroid[d] /= num_corners;
-
-    double M[3][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
-    for (int i = 0; i != num_corners; ++i)
-        for (int d1 = 0; d1 != dim; ++d1)
-            for (int d2 = 0; d2 != dim; ++d2)
-                M[d1][d2] += (corners[dim * i + d1] - centroid[d1])
-                    * (corners[dim * i + d2] - centroid[d2]) / num_corners;
-
-    double V[3][3];
-    small_sym_eig(dim, M, V);
-
-    // principal lengths, guarded against (near-)degenerate point clouds
-    double h[3], hmax = 0.0;
-    for (int k = 0; k != dim; ++k) {
-        h[k] = 2.0 * sqrt(max(M[k][k], 0.0)); // box with edge L: 2*sqrt(L^2/4) = L
-        hmax = max(hmax, h[k]);
-    }
-    for (int k = 0; k != dim; ++k)
-        h[k] = max(h[k], 1e-8 * hmax);
-
-    array<double, 9> F {0, 0, 0, 0, 0, 0, 0, 0, 0};
-    for (int k = 0; k != dim; ++k) {
-        const double w = Escale * volume / (h[k] * h[k]);
-        for (int d1 = 0; d1 != dim; ++d1)
-            for (int d2 = 0; d2 != dim; ++d2)
-                F[3 * d1 + d2] += w * V[d1][k] * V[d2][k];
-    }
-    return F;
-}
-
-// ----------------------------------------------------------------------------
-// Anisotropic stabilization: the floor tensor F above replaces the isotropic
-// cbrt(volume)-based floor of D_RECIPE, which over-stabilizes the soft direction
-// of high-aspect-ratio cells.  Two variants:
-//  - use_consistency_diag (ANISO_DIAG): diagonal S, each dof floored by the
-//    corresponding diagonal entry of F (frame-aware floor; the consistency
-//    diagonal itself is naturally expressed in the coordinate frame);
-//  - otherwise (ANISO_HARMONIC): block-diagonal S with the full tensor F as the
-//    per-node block, which makes the stabilization frame *invariant* (the
-//    element stiffness transforms exactly under rigid rotations of the cell).
-vector<double>
-compute_S_aniso(const std::vector<double>& EWcDWct,
-                const std::vector<double>& D,
-                const vector<double>& corners,
-                const int num_nodes,
-                const double volume,
-                const int dim,
-                const bool use_consistency_diag)
-// ----------------------------------------------------------------------------
-{
-    const int dofs = dim * num_nodes;
-    // tr(D) ~ 9E in 3D and ~4E in 2D (with the doubled shear entries of this D)
-    const double Escale = trace(D) / ((dim == 3) ? 9.0 : 4.0);
-    const auto F = compute_aniso_floor_tensor(corners, num_nodes, dim, Escale, volume);
-
-    vector<double> result(dofs * dofs, 0.0);
-    if (use_consistency_diag) {
-        for (int i = 0; i != dofs; ++i) {
-            const int d = i % dim;
-            result[i + dofs * i] = max(EWcDWct[i + dofs * i], F[3 * d + d]);
-        }
-    } else {
-        for (int node = 0; node != num_nodes; ++node)
-            for (int d1 = 0; d1 != dim; ++d1)
-                for (int d2 = 0; d2 != dim; ++d2)
-                    result[(node * dim + d1) * dofs + node * dim + d2] = F[3 * d1 + d2];
-    }
-    return result;
-}
-
-std::vector<double> getStabilityMatrix(vem::StabilityChoice stability_choice,const std::vector<double>&  EWcDWct,const std::vector<double>& Nc,const std::vector<double>& D,
-                                       const std::vector<double>& corners,
-                                       int num_nodes,double volume,int  dim,double totdim,
-                                       const std::vector<double>& node_weights = {}){
-    std::vector<double> S;
-    // FEM choices reaching this point means the cell could not be treated with Q1
-    // elements; use the anisotropic diagonal stabilization for the VEM fallback.
-    if(is_fem_choice(stability_choice)){
-        stability_choice = ANISO_DIAG;
-    }
-    if (is_face_weighted_choice(stability_choice)) {
-        const auto base = stability_choice == FACE_D_RECIPE ? D_RECIPE
-            : stability_choice == FACE_ANISO_HARMONIC       ? ANISO_HARMONIC
-                                                            : SIMPLE;
-        const bool weighted = int(node_weights.size()) == num_nodes;
-        if (base == D_RECIPE) {
-            // only the isotropic floor is rescaled; the consistency diagonal is already area-weighted
-            S = compute_S_D_recipe(EWcDWct, totdim, volume);
-            const double val = trace(D) / 9.0 * cbrt(volume);
-            for (int i = 0; i != totdim; ++i) {
-                const double w = weighted ? node_weights[i / dim] : 1.0;
-                S[i + totdim * i] = max(w * val, S[i + totdim * i]);
-            }
-            return S;
-        }
-        S = getStabilityMatrix(base, EWcDWct, Nc, D, corners, num_nodes, volume, dim, totdim);
-        if (weighted) {
-            for (int a = 0; a != totdim; ++a)
-                for (int b = 0; b != totdim; ++b)
-                    S[a + totdim * b] *= sqrt(node_weights[a / dim] * node_weights[b / dim]);
-        }
-        return S;
-    }
-    if (stability_choice == TRACE || stability_choice == SMOOTH_HOURGLASS)
-        throw logic_error("TRACE/SMOOTH_HOURGLASS stabilization needs the face data");
-    if(stability_choice == ANISO_DIAG){
-        S = compute_S_aniso(EWcDWct, D, corners, num_nodes, volume, dim, true);
-    } else if(stability_choice == ANISO_HARMONIC){
-        S = compute_S_aniso(EWcDWct, D, corners, num_nodes, volume, dim, false);
-    } else if(stability_choice == D_RECIPE){
-        const auto SD= compute_S_D_recipe(EWcDWct, totdim, volume);
-        S=SD;
-        double val = trace(D)/9.0;
-        val *= cbrt(volume);
-        for (int i = 0; i != totdim; ++i){
-            int ind = i + totdim * i;
-            S[ind]= max(val,S[ind]);
-        }
-    } else if((stability_choice == SIMPLE) || (stability_choice == HARMONIC)){
-        S  = compute_S(Nc, D, num_nodes, volume, dim, stability_choice);
-    } else if( stability_choice == ALLMAX){
-        const auto SD= compute_S_D_recipe(EWcDWct, totdim, volume);
-        const auto SS = compute_S(Nc, D, num_nodes, volume, dim, SIMPLE);
-        const auto SH = compute_S(Nc, D, num_nodes, volume, dim, HARMONIC);
-        S = SD;
-        for(int i=0;i< int(S.size());++i){
-            S[i]= max(S[i],SS[i]);
-            S[i]= max(S[i],SH[i]);
-        }
-    }else if( stability_choice == ALLMIN){
-        const auto SD= compute_S_D_recipe(EWcDWct, totdim, volume);
-        const auto SS = compute_S(Nc, D, num_nodes, volume, dim, SIMPLE);
-        const auto SH = compute_S(Nc, D, num_nodes, volume, dim, HARMONIC);
-        S = SD;
-        for(int i=0;i< int(S.size());++i){
-            S[i]= min(S[i],SS[i]);
-            S[i]= min(S[i],SH[i]);
-        }
-    }else if( stability_choice == EXPERIMENTAL){
-        double val = trace(D)/9.0;
-        val *= 4.0;
-        S = identity_matrix(val, totdim);
-    }else{
-        throw invalid_argument("Unknown stability choice in final_assembly");
-    }
-    return S;
+    if (stability_choice != SIMPLE)
+        throw logic_error("stabilization choice " + std::to_string(int(stability_choice))
+                          + " needs its S computed by the caller");
+    return compute_S(Nc, D, num_nodes, volume, dim);
 }
 
 // ----------------------------------------------------------------------------
@@ -949,8 +726,7 @@ final_assembly(const vector<double>& Wc,
                const double num_nodes,
                const double dim,
                double* target,
-               const vector<double>* S_given = nullptr,
-               const vector<double>& node_weights = {})
+               const vector<double>* S_given = nullptr)
 // ----------------------------------------------------------------------------
 {
     assert(dim == 2 || dim == 3);
@@ -962,7 +738,7 @@ final_assembly(const vector<double>& Wc,
     const auto EWcDWct = matmul(&Wc[0], totdim, lsdim, false, &DWct[0], lsdim, totdim, false, volume);
 
     std::vector<double> S = S_given ? *S_given
-        : getStabilityMatrix(stability_choice, EWcDWct, Nc, D, corners, num_nodes, volume, dim, totdim, node_weights);
+        : getStabilityMatrix(stability_choice, Nc, D, num_nodes, volume, dim);
 
 
     const auto SImP = matmul(&S[0], totdim, totdim, false, &ImP[0], totdim, totdim, false);
@@ -1385,33 +1161,6 @@ fan_volume(const double* const corners,
         }
     }
     return vol;
-}
-
-// ----------------------------------------------------------------------------
-// Each node's share of the cell boundary, int_dE phi_i, normalised to mean one.
-vector<double>
-compute_boundary_weights_3D(const double* const corners,
-                            const int num_corners,
-                            const int* const faces,
-                            const int* const num_face_edges,
-                            const int num_faces)
-// ----------------------------------------------------------------------------
-{
-    vector<double> result(num_corners, 0);
-    int cur_vertex_ix = 0;
-    for (int f = 0; f != num_faces; ++f) {
-        const auto facecorners = pick_points<3>(corners, &faces[cur_vertex_ix], num_face_edges[f]);
-        vector<double> cvals(num_face_edges[f], 0);
-        for (int e = 0; e != num_face_edges[f]; ++e, ++cur_vertex_ix) {
-            fill(cvals.begin(), cvals.end(), 0);
-            cvals[e] = 1;
-            result[faces[cur_vertex_ix]] += face_integral(&facecorners[0], num_face_edges[f], 3, &cvals[0]);
-        }
-    }
-    const double mean = accumulate(result.begin(), result.end(), 0.0) / num_corners;
-    for (auto& w : result)
-        w /= mean;
-    return result;
 }
 
 // ----------------------------------------------------------------------------
@@ -3428,6 +3177,7 @@ assemble_stiffness_matrix_2D(const double* const points,
                              vector<double>& target)
 // ----------------------------------------------------------------------------
 {
+    check_stability_choice(stability_choice);
     // collect all affected points consecutively in one vector
     const auto corners = pick_points<2>(points, corner_ixs, num_corners);
 
@@ -3467,8 +3217,8 @@ assemble_stiffness_matrix_2D(const double* const points,
 
     // do the final assembly of matrices, and write result to target
     target.resize(pow(2 * num_corners, 2));
-    if (stability_choice == TRACE || stability_choice == SMOOTH_HOURGLASS) {
-        const auto S = stability_choice == TRACE
+    if (stability_choice != SIMPLE) {
+        const auto S = stability_choice != SMOOTH_HOURGLASS
             ? compute_S_trace_2D(&corners[0], num_corners, area, young, poisson)
             : compute_S_smooth_hg_2D(&corners[0], num_corners, area, young, poisson);
         final_assembly(Wc, D, Nc, ImP, corners, stability_choice, area, num_corners, 2, &target[0], &S);
@@ -3493,6 +3243,7 @@ assemble_stiffness_matrix_3D(const double* const points,
                              const char* const corner_mask)
 // ----------------------------------------------------------------------------
 {
+    check_stability_choice(stability_choice);
     // compute mapping between local vertex indices (0, 1, ... Ne) to
     // indexing in the global 'points' vector (0, 1, .....N)
     const auto reindex = global_to_local_indexing(faces, num_face_edges, num_faces, indexing);
@@ -3544,8 +3295,7 @@ assemble_stiffness_matrix_3D(const double* const points,
                           corner_mask);
 
     // Q1 FEM requested: applicable whenever the cell is a topological hexahedron.
-    // Non-hex cells fall through to VEM (with ANISO_DIAG stabilization, see
-    // getStabilityMatrix).
+    // Non-hex cells fall through to VEM with TRACE stabilization.
     if (is_fem_choice(stability_choice)) {
         array<int, 8> order;
         if (hex_corner_ordering(
@@ -3588,8 +3338,8 @@ assemble_stiffness_matrix_3D(const double* const points,
 
     // do the final assembly of matrices, and write result to target
     target.resize(pow(3 * num_corners, 2));
-    if (stability_choice == TRACE || stability_choice == SMOOTH_HOURGLASS) {
-        const auto S = stability_choice == TRACE
+    if (stability_choice != SIMPLE) {
+        const auto S = stability_choice != SMOOTH_HOURGLASS
             ? compute_S_trace_3D(&corners_loc[0], num_corners, &faces_loc[0], num_face_edges, num_faces,
                                  volume, young, poisson, corner_mask)
             : compute_S_smooth_hg_3D(&corners_loc[0], num_corners, &faces_loc[0], num_face_edges, num_faces,
@@ -3597,11 +3347,7 @@ assemble_stiffness_matrix_3D(const double* const points,
         final_assembly(Wc, D, Nc, ImP, corners_loc, stability_choice, volume, num_corners, 3, &target[0], &S);
         return;
     }
-    const auto node_weights = is_face_weighted_choice(stability_choice)
-        ? compute_boundary_weights_3D(&corners_loc[0], num_corners, &faces_loc[0], num_face_edges, num_faces)
-        : vector<double>{};
-    final_assembly(Wc, D, Nc, ImP, corners_loc, stability_choice, volume, num_corners, 3, &target[0], nullptr,
-                   node_weights);
+    final_assembly(Wc, D, Nc, ImP, corners_loc, stability_choice, volume, num_corners, 3, &target[0]);
 }
 
 void

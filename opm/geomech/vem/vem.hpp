@@ -25,26 +25,10 @@
 #include <vector>
 namespace vem
 {
+  // Values 2-9 and 11-13 are removed choices and are rejected by check_stability_choice.
   enum StabilityChoice {
     SIMPLE = 1,     // the basic stability term described in (Gain et al., 2014)
-    HARMONIC = 2,   // modified stability term more robust for high aspect ratios (Andersen et al., 2017)
-    D_RECIPE = 3,   // diagonal of consistency matrix, with isotropic floor tr(D)/9*cbrt(vol)
-    ALLMAX = 4,
-    ALLMIN = 5,
-    EXPERIMENTAL = 6,
-    FEM = 7,        // standard Q1 (bi-/trilinear) FEM on quad/hex cells; VEM with
-                    // ANISO_DIAG stabilization on cells where Q1 is not applicable
-    ANISO_DIAG = 8, // diagonal of consistency matrix with *anisotropic* floor based on
-                    // per-direction element length scales (robust for high aspect ratios)
-    ANISO_HARMONIC = 9, // purely geometric anisotropic diagonal: tr(D)/9 * vol / h_d^2
-                        // per coordinate direction d (anisotropic generalization of HARMONIC)
-    FEM_BBAR = 10,  // as FEM, but Q1 with B-bar (mean dilatation) to reduce volumetric
-                    // locking; VEM with ANISO_DIAG fallback on non-hex cells
-    // As D_RECIPE / ANISO_HARMONIC / SIMPLE, with each node's term scaled by its share of
-    // the cell boundary (1 on a regular hex): softer on hanging nodes of refined faces.
-    FACE_D_RECIPE = 11,
-    FACE_ANISO_HARMONIC = 12,
-    FACE_SIMPLE = 13,
+    FEM_BBAR = 10,  // Q1 with B-bar (mean dilatation) on hexes; VEM with TRACE elsewhere
     TRACE = 14,     // mu-scaled boundary (trace) term: robust to short edges and small faces
     SMOOTH_HOURGLASS = 15 // hexes: energy of the smooth (Q1 + bubble) field, exact in bending/twist
                           // at any aspect; TRACE on the extra nodes of polyhedra and as fallback
@@ -55,10 +39,10 @@ namespace vem
   enum class FaceQuadrature { KITE = 0, TRIANGULATED = 1 };
   void set_face_quadrature(FaceQuadrature q);
   FaceQuadrature face_quadrature();
-  constexpr int STABILITY_CHOICE_MAX = 15;
   // true for choices that request Q1 FEM assembly on cells where it is applicable
-  inline bool is_fem_choice(StabilityChoice c) { return c == FEM || c == FEM_BBAR; }
-  inline bool is_face_weighted_choice(StabilityChoice c) { return c >= FACE_D_RECIPE && c <= FACE_SIMPLE; }
+  inline bool is_fem_choice(StabilityChoice c) { return c == FEM_BBAR; }
+  // throws std::invalid_argument for anything but 1, 10, 14, 15
+  StabilityChoice check_stability_choice(int choice);
 
 // ============================================================================
 // == Main functions for computing element stiffness matrices and assembling ==
