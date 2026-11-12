@@ -306,7 +306,7 @@ testQ1LinearEnergy(const Dune::CpGrid& grid)
             density += 2 * mu * eps[i][j] * eps[i][j];
 
     const auto& gv = grid.leafGridView();
-    double worst = 0.0;
+    double worst_e = 0.0, worst_r = 0.0;
     for (const auto& elem : elements(gv)) {
         std::array<double, 24> hc, u, r;
         for (int k = 0; k < 8; ++k) {
@@ -314,7 +314,9 @@ testQ1LinearEnergy(const Dune::CpGrid& grid)
             for (int d = 0; d < 3; ++d)
                 hc[3 * k + d] = c[d];
             for (int d = 0; d < 3; ++d) {
-                u[3 * k + d] = G[d][0] * c[0] + G[d][1] * c[1] + G[d][2] * c[2];
+                // relative to corner 0: a translation is in K's kernel but costs digits in u.K.u
+                const auto c0 = elem.geometry().corner(0);
+                u[3 * k + d] = G[d][0] * (c[0] - c0[0]) + G[d][1] * (c[1] - c0[1]) + G[d][2] * (c[2] - c0[2]);
                 // rigid: translation plus a rotation about z
                 r[3 * k + d] = (d == 0 ? 1.0 - c[1] : d == 1 ? 2.0 + c[0] : 3.0) * 1e-3;
             }
@@ -322,7 +324,9 @@ testQ1LinearEnergy(const Dune::CpGrid& grid)
         for (const bool bbar : {false, true}) {
             std::vector<double> K(24 * 24);
             vem::stiffness_matrix_fem_hex_3D(&hc[0], E_mod, nu, bbar, &K[0]);
-            double e_lin = 0.0, rigid = 0.0, kmax = 0.0;
+            double e_lin = 0.0, rigid = 0.0, kmax = 0.0, rmax = 0.0;
+            for (double v : r)
+                rmax = std::max(rmax, std::abs(v));
             for (int i = 0; i < 24; ++i) {
                 double Kr = 0.0;
                 for (int j = 0; j < 24; ++j) {
@@ -333,12 +337,13 @@ testQ1LinearEnergy(const Dune::CpGrid& grid)
                 rigid = std::max(rigid, std::abs(Kr));
             }
             const double exact = density * elem.geometry().volume();
-            worst = std::max({worst, std::abs(e_lin - exact) / exact, rigid / (kmax * 1e-3)});
+            worst_e = std::max(worst_e, std::abs(e_lin - exact) / exact);
+            worst_r = std::max(worst_r, rigid / (kmax * rmax));
         }
     }
-    std::cout << "  Q1 / B-bar: linear-field energy and rigid modes, max rel error = " << worst
-              << std::endl;
-    return worst < 1e-10;
+    std::cout << "  Q1 / B-bar: linear-field energy rel error = " << worst_e
+              << ", rigid-mode residual = " << worst_r << std::endl;
+    return worst_e < 1e-10 && worst_r < 1e-10;
 }
 
 // --------------------------------------------------------------------------
