@@ -23,8 +23,9 @@
 // from NonlinearSystemBlackOilReservoirGeoMech so that nonlinear systems
 // built on other mechanics backends (e.g. TPSA) can drive the same fracture
 // outer loop.  CRTP: the Derived nonlinear system declares this class a
-// friend and provides flowNonlinearIteration(timer, solver) (one nonlinear
-// iteration of its flow parent).
+// friend and provides simulator_, flowNonlinearIteration(timer, solver),
+// onConnectionsUpdated(), wellFracturePicard(timer) and
+// wellFractureJointSolve(timer).
 
 #include <cmath>
 #include <limits>
@@ -69,24 +70,63 @@ namespace Opm
             }
         };
 
-        bool shouldUpdateConnections(const CouplingChangeMetrics& metrics,
-                                     const bool legacy_coupling_change_logic,
-                                     const PropertyTree& prm)
+        enum class KeepIterating { No, CouplingChanged, FractureUnconverged, EmbeddedRestructured };
+
+        // Every option fractureOuterBlock reads, read once per call.
+        struct CouplingConfig
         {
-            if (legacy_coupling_change_logic) {
+            bool legacyChangeLogic{false};
+            bool legacyParentSetup{true};
+            bool requireConvergedFractureForWi{true};
+            bool addConnections{false};
+            bool valueOnlyWiUpdate{false};
+            bool residualMode{false};
+            bool rebindAfterGrowth{false};
+            int rebindAfterGrowthRounds{2};
+            double couplingTolerance{1e-3};
+            bool hysteresis{false};
+            double hysteresisOn{1.0};
+            double hysteresisOff{0.3};
+            double hysteresisEmergency{10.0};
+            int hysteresisConfirm{1};
+            int hysteresisCooldown{0};
+
+            static CouplingConfig read(const PropertyTree& prm)
+            {
+                CouplingConfig c;
+                c.legacyChangeLogic = prm.get<bool>("fractureparam.solver.legacy_coupling_change_logic", false);
+                c.legacyParentSetup = prm.get<bool>("fractureparam.solver.legacy_parent_setup_iteration", true);
+                c.requireConvergedFractureForWi =
+                    prm.get<bool>("fractureparam.require_converged_fracture_for_wi_update", true);
+                c.addConnections = prm.get<bool>("fractureparam.addconnections");
+                c.valueOnlyWiUpdate = prm.get<bool>("fractureparam.solver.value_only_wi_update", false);
+                c.residualMode = prm.get<std::string>("fractureparam.solver.coupling_convergence_mode",
+                                                      "threshold") == "residual";
+                c.rebindAfterGrowth = prm.get<bool>("fractureparam.solver.rebind_after_growth", false);
+                c.rebindAfterGrowthRounds = prm.get<int>("fractureparam.solver.rebind_after_growth_rounds", 2);
+                c.couplingTolerance = prm.get<double>("fractureparam.solver.coupling_tolerance", 1e-3);
+                c.hysteresis = prm.get<bool>("fractureparam.topology_hysteresis.enable", false);
+                c.hysteresisOn = prm.get<double>("fractureparam.topology_hysteresis.on_threshold", 1.0);
+                c.hysteresisOff = prm.get<double>("fractureparam.topology_hysteresis.off_threshold", 0.3);
+                c.hysteresisConfirm = prm.get<int>("fractureparam.topology_hysteresis.confirm_iterations", 1);
+                c.hysteresisCooldown = prm.get<int>("fractureparam.topology_hysteresis.cooldown_iterations", 0);
+                c.hysteresisEmergency =
+                    prm.get<double>("fractureparam.topology_hysteresis.emergency_threshold", 10.0);
+                return c;
+            }
+        };
+
+        bool shouldUpdateConnections(const CouplingChangeMetrics& metrics, const CouplingConfig& cfg)
+        {
+            if (cfg.legacyChangeLogic || !cfg.hysteresis) {
                 return true;
             }
 
-            const bool hysteresis_enable = prm.get<bool>("fractureparam.topology_hysteresis.enable", false);
-            if (!hysteresis_enable) {
-                return true;
-            }
-
-            const double on_threshold = prm.get<double>("fractureparam.topology_hysteresis.on_threshold", 1.0);
-            const double off_threshold = prm.get<double>("fractureparam.topology_hysteresis.off_threshold", 0.3);
-            const int confirm_iterations = prm.get<int>("fractureparam.topology_hysteresis.confirm_iterations", 1);
-            const int cooldown_iterations = prm.get<int>("fractureparam.topology_hysteresis.cooldown_iterations", 0);
-            const double emergency_threshold = prm.get<double>("fractureparam.topology_hysteresis.emergency_threshold", 10.0);
+            const double on_threshold = cfg.hysteresisOn;
+            const double off_threshold = cfg.hysteresisOff;
+            const int confirm_iterations = cfg.hysteresisConfirm;
+            const int cooldown_iterations = cfg.hysteresisCooldown;
+            const double emergency_threshold = cfg.hysteresisEmergency;
 
             if (topology_cooldown_counter_ > 0 && metrics.composite_norm < emergency_threshold && !metrics.structure_changed) {
                 --topology_cooldown_counter_;
@@ -383,224 +423,242 @@ namespace Opm
         }
 
         protected:
+        // Why the last fractureOuterBlock kept the outer loop active.
+        KeepIterating lastKeepIterating_{KeepIterating::No};
+
         // The fracture part of one outer nonlinear iteration: solve the
-        // fractures against the current mechanics state, evaluate the
-        // coupling change, decide on and perform well-connection updates,
-        // and keep the outer loop active until the coupling has converged.
-        // The caller has already decided that fractures should be solved
-        // this iteration (do_fracture && problem.hasFractures()).
+        // fractures against the current mechanics state, couple the result to
+        // the flow and keep the outer loop active until the coupling has
+        // converged. The caller has already decided that fractures should be
+        // solved this iteration (do_fracture && problem.hasFractures()).
         template <class NonlinearSolverType>
         void fractureOuterBlock(SimulatorReportSingle& report,
                                 const SimulatorTimerInterface& timer,
                                 NonlinearSolverType& nonlinear_solver)
         {
-            const PropertyTree& prm = derived().simulator_.problem().getGeoMechParam();
-            {
-                std::stringstream os;
-                os << "Solve Fractures:";
-                OpmLog::info(os.str());
-            }
+            auto& problem = derived().simulator_.problem();
+            OpmLog::info("Solve Fractures:");
             flow_state_modified_by_setup_ = false;
-            const bool legacy_coupling_change_logic =
-                prm.get<bool>("fractureparam.solver.legacy_coupling_change_logic", false);
-            const bool legacy_parent_setup_iteration =
-                prm.get<bool>("fractureparam.solver.legacy_parent_setup_iteration", true);
-            const auto allwellIndices = derived().simulator_.problem().getAllExtraWellIndices();
-            derived().simulator_.problem().clearEmbeddedRestructured();
-            if (!derived().wellFracturePicard(timer)) {
-                derived().simulator_.problem().fractureHost().solveFractures();
-            }
-            // A FRAC deck with no WSEED has no fracture: nothing to solve and no
-            // well indices to push back. Everything else must behave as usual.
-            if (!derived().simulator_.problem().fractureHost().fractureModelActive()) {
+            const auto wiBefore = problem.getAllExtraWellIndices();
+            this->solveFracturesThisIteration(timer);
+            // A FRAC deck with no WSEED has no fracture: nothing to couple.
+            if (!problem.fractureHost().fractureModelActive()) {
                 return;
             }
-            const bool fracture_converged = derived().simulator_.problem().fractureHost().fractureModel().lastSolveStats().converged;
-            const bool require_converged_fracture_for_wi_update =
-                prm.get<bool>("fractureparam.require_converged_fracture_for_wi_update", true);
-
-            const auto coupling_metrics_local = this->evaluateFractureCouplingChange(allwellIndices);
+            const auto cfg = CouplingConfig::read(problem.getGeoMechParam());
+            const bool fractureConvergedLocal =
+                problem.fractureHost().fractureModel().lastSolveStats().converged;
             auto& comm = derived().simulator_.gridView().comm();
-            CouplingChangeMetrics coupling_metrics = coupling_metrics_local;
-            coupling_metrics.structure_changed = comm.max(coupling_metrics_local.structure_changed);
-            coupling_metrics.ctf_changed = comm.max(coupling_metrics_local.ctf_changed);
-            coupling_metrics.perf_pressure_changed = comm.max(coupling_metrics_local.perf_pressure_changed);
-            coupling_metrics.composite_norm = comm.max(coupling_metrics_local.composite_norm);
-            // Opt-in outer-residual convergence (coupling_convergence_mode=residual):
-            // declare outer convergence from a dimensionless residual instead of the
-            // threshold booleans. Needs the rel-change extrema globally consistent.
-            const std::string coupling_convergence_mode = prm.get<std::string>(
-                "fractureparam.solver.coupling_convergence_mode", "threshold");
-            const bool residual_mode = (coupling_convergence_mode == "residual");
-            if (residual_mode) {
-                coupling_metrics.max_ctf_change_rel = comm.max(coupling_metrics_local.max_ctf_change_rel);
-                coupling_metrics.max_perf_change_rel = comm.max(coupling_metrics_local.max_perf_change_rel);
+            const bool fractureConverged = comm.min(fractureConvergedLocal);
+            // Computed on embedded runs too: the mech skip reads its composite norm.
+            const auto metrics = this->globalCouplingMetrics(wiBefore, cfg);
+
+            const KeepIterating why = problem.fractureFlowIsEmbedded()
+                ? this->coupleEmbedded(cfg, fractureConverged)
+                : this->coupleThroughWellIndices(metrics, cfg, fractureConverged,
+                                                 fractureConvergedLocal, timer, nonlinear_solver);
+            lastKeepIterating_ = why;
+            if (why != KeepIterating::No) {
+                report.converged = false;
             }
-            // Remember this iteration's fracture->well coupling change so the next
-            // iteration can decide whether the mechanics solve may be skipped.
-            last_coupling_composite_norm_ = coupling_metrics.composite_norm;
-            const bool fracture_converged_global = comm.min(fracture_converged);
+            comm.barrier();
+        }
 
-            bool addconnections = prm.get<bool>("fractureparam.addconnections");
-            const bool may_update_connections = addconnections && (legacy_coupling_change_logic
-                || !require_converged_fracture_for_wi_update
-                || fracture_converged_global);
-            const bool do_update_connections = may_update_connections
-                && this->shouldUpdateConnections(coupling_metrics, legacy_coupling_change_logic, prm);
-
-            // Opt-in cheap update path: when only the CTF *values* changed (no new
-            // or removed connections), write them in place on the existing well
-            // perforations (addFracturePerforations overwrites well_index_fracture_)
-            // and skip the schedule rebuild + well-model re-init + prepareTimeStep
-            // + parent setup iteration. Structure changes always take the full path.
-            const bool value_only_wi_update =
-                prm.get<bool>("fractureparam.solver.value_only_wi_update", false);
-            if (derived().simulator_.problem().fractureFlowIsEmbedded()) {
-                // The fracture flows through degrees of freedom of its own, so a fracture
-                // solve changed apertures and possibly opened cells: re-describe them to
-                // the reservoir and refresh the well's perforations of them.  No schedule
-                // rebuild and no upscaled well index -- re-adding those here is how the
-                // wells would silently fall back to the representation being replaced.
-                // A fracture that grew changed its cell count, and a value-only
-                // refresh cannot express that.  Opt in to restructuring here,
-                // between flow solves, so the flow sees the grown fracture
-                // within the step instead of at the next step boundary.
-                const bool rebindAfterGrowth =
-                    prm.get<bool>("fractureparam.solver.rebind_after_growth", false);
-                derived().simulator_.problem().bindFractureAuxCells(
-                    /*allowTopologyChange=*/rebindAfterGrowth && fracture_converged_global,
-                    /*requireStableLayout=*/true);
-                // The well's perforations of the fracture keep the indices they were
-                // given at the step boundary: within the step both the topology and the
-                // perforation factors are held fixed -- the sequentially implicit lag --
-                // and re-registering here would demand a well-structure rebuild the
-                // step is not going to perform.
-
-                // The coupling residual is the change in what the flow was just fed --
-                // total conductance and pore volume of the binding -- not the well-index
-                // change list, which is computed above but never applied here.  Contact
-                // chatter moves individual cells' indices every iteration; the
-                // aggregates cancel it the way the upscaled index summed over it.
-                const double coupling_tolerance =
-                    prm.get<double>("fractureparam.solver.coupling_tolerance", 1e-3);
-                const double embedded_change =
-                    derived().simulator_.problem().embeddedCouplingChange();
-                auto& problem = derived().simulator_.problem();
-                if (!problem.embeddedRestructuredMidStep() && problem.embeddedLayoutPending()
-                    && problem.takeEmbeddedPendingRound(
-                           prm.get<int>("fractureparam.solver.rebind_after_growth_rounds", 2))) {
-                    // Confirm the grown layout by re-solving on it without growing,
-                    // so the binding can follow it without another growth round.
-                    auto& fractureModel = problem.fractureHost().fractureModel();
-                    auto setSuppressed = [&](const bool on) {
-                        for (auto& wellFractures : fractureModel.wellFractures()) {
-                            for (auto& fracture : wellFractures) {
-                                fracture.suppressPropagation(on);
-                            }
-                        }
-                    };
-                    setSuppressed(true);
-                    problem.fractureHost().solveFractures();
-                    setSuppressed(false);
-                    const bool confirmed = comm.min(fractureModel.lastSolveStats().converged);
-                    problem.bindFractureAuxCells(/*allowTopologyChange=*/confirmed,
-                                                 /*requireStableLayout=*/true);
-                }
-                if (problem.embeddedRestructuredMidStep()) {
-                    // The flow has not been solved on the grown fracture yet.
-                    OpmLog::info("Keeping outer loop active: fracture binding restructured "
-                                 "after growth (rebind_after_growth)");
-                    problem.holdEmbeddedOuterLoop();
-                    report.converged = false;
-                }
-                else if (!fracture_converged_global || embedded_change > coupling_tolerance) {
-                    if (!fracture_converged_global) {
-                        OpmLog::info("Keeping outer loop active: fracture solve did not converge");
-                    } else {
-                        OpmLog::info("Keeping outer loop active: embedded coupling change "
-                                     + std::to_string(embedded_change) + " > "
-                                     + std::to_string(coupling_tolerance));
-                    }
-                    report.converged = false;
-                }
-                comm.barrier();
+        private:
+        void solveFracturesThisIteration(const SimulatorTimerInterface& timer)
+        {
+            auto& problem = derived().simulator_.problem();
+            if (!problem.fractureFlowIsEmbedded()) {
+                problem.fractureHost().solveFractures();
                 return;
             }
-            else if(do_update_connections){
-                if (value_only_wi_update && !coupling_metrics.structure_changed) {
-                    OpmLog::info("Updating fracture CTFs in place (value_only_wi_update, no structure change)");
-                    derived().simulator_.problem().addConnectionsToWell();
-                } else {
-                OpmLog::debug("Add connections in iterations");
-                derived().simulator_.problem().addConnectionsToSchedual();// add new connections in the schedual
-                derived().simulator_.problem().wellModel().beginTimeStep(); // reinitialize well structure
-                derived().simulator_.problem().addConnectionsToWell(); // set the new well indices
-                derived().simulator_.problem().emptyFractureLogger();
-                {
-                    // prepareTimeStep logs through the group-state
-                    // helper's deferred logger, which the caller must
-                    // establish (same pattern as assemble()).
-                    auto& group_state_helper = derived().simulator_.problem().wellModel().groupStateHelper();
-                    auto logger_guard = group_state_helper.pushLogger();
-                    derived().simulator_.problem().wellModel().prepareTimeStep(group_state_helper.deferredLogger());
-                }
-
-                // Required after a well-structure change (new fracture connections):
-                // skipping it kills the well/fracture on fine grids. Value-only CTF
-                // changes take the value_only path above instead.
-                [[maybe_unused]] auto tmp_report =
-                    legacy_parent_setup_iteration
-                        ? this->runParentFirstIterationLegacy(timer, nonlinear_solver)
-                        : this->runParentFirstIterationPreservingState(timer, nonlinear_solver);
-                OpmLog::debug("End connections in iterations");
-                }
-                derived().onConnectionsUpdated();
+            // Per-iteration embedded flags; the Picard and joint solves bind and set them.
+            problem.clearEmbeddedRestructured();
+            const PropertyTree& prm = problem.getGeoMechParam();
+            // The fracture model is built by the first solveFractures().
+            const bool pressureFromFlow = prm.get<bool>("fractureparam.solver.pressure_from_flow", false)
+                && problem.fractureHost().fractureModelActive();
+            if (!pressureFromFlow) {
+                // embedded: plain solve
+                problem.fractureHost().solveFractures();
+            } else if (prm.get<bool>("fractureparam.solver.well_joint_solve", false)) {
+                // embedded: joint Newton
+                derived().wellFractureJointSolve(timer);
+            } else {
+                // embedded: well-fracture Picard
+                derived().wellFracturePicard(timer);
             }
-            else if (may_update_connections && !legacy_coupling_change_logic) {
+        }
+
+        // Change of the upscaled well indices over this iteration's fracture
+        // solve, reduced over all ranks; also feeds the mech skip.
+        CouplingChangeMetrics globalCouplingMetrics(
+            const std::vector<std::vector<RuntimePerforation>>& wiBefore,
+            const CouplingConfig& cfg)
+        {
+            auto& comm = derived().simulator_.gridView().comm();
+            const auto local = this->evaluateFractureCouplingChange(wiBefore);
+            CouplingChangeMetrics metrics = local;
+            metrics.structure_changed = comm.max(local.structure_changed);
+            metrics.ctf_changed = comm.max(local.ctf_changed);
+            metrics.perf_pressure_changed = comm.max(local.perf_pressure_changed);
+            metrics.composite_norm = comm.max(local.composite_norm);
+            if (cfg.residualMode) {
+                metrics.max_ctf_change_rel = comm.max(local.max_ctf_change_rel);
+                metrics.max_perf_change_rel = comm.max(local.max_perf_change_rel);
+            }
+            last_coupling_composite_norm_ = metrics.composite_norm;
+            return metrics;
+        }
+
+        // The fracture flows through degrees of freedom of its own: re-describe
+        // them to the reservoir. No schedule rebuild and no upscaled well index;
+        // within the step the well's perforations of the fracture keep the
+        // indices they got at the step boundary.
+        KeepIterating coupleEmbedded(const CouplingConfig& cfg, const bool fractureConverged)
+        {
+            auto& problem = derived().simulator_.problem();
+            auto& comm = derived().simulator_.gridView().comm();
+            // A grown fracture needs a restructure, which a value-only refresh cannot express.
+            problem.bindFractureAuxCells(
+                /*allowTopologyChange=*/cfg.rebindAfterGrowth && fractureConverged,
+                /*requireStableLayout=*/true);
+
+            // The residual is the change in what the flow was fed (total conductance and
+            // pore volume of the binding); contact chatter cancels in these aggregates.
+            const double embedded_change = problem.embeddedCouplingChange();
+            if (!problem.embeddedRestructuredMidStep() && problem.embeddedLayoutPending()
+                && problem.takeEmbeddedPendingRound(cfg.rebindAfterGrowthRounds)) {
+                // Confirm the grown layout by re-solving on it without growing.
+                auto& fractureModel = problem.fractureHost().fractureModel();
+                auto setSuppressed = [&](const bool on) {
+                    for (auto& wellFractures : fractureModel.wellFractures()) {
+                        for (auto& fracture : wellFractures) {
+                            fracture.suppressPropagation(on);
+                        }
+                    }
+                };
+                setSuppressed(true);
+                problem.fractureHost().solveFractures();
+                setSuppressed(false);
+                const bool confirmed = comm.min(fractureModel.lastSolveStats().converged);
+                problem.bindFractureAuxCells(/*allowTopologyChange=*/confirmed,
+                                             /*requireStableLayout=*/true);
+            }
+
+            if (problem.embeddedRestructuredMidStep()) {
+                // The flow has not been solved on the grown fracture yet.
+                OpmLog::info("Keeping outer loop active: fracture binding restructured "
+                             "after growth (rebind_after_growth)");
+                problem.holdEmbeddedOuterLoop();
+                return KeepIterating::EmbeddedRestructured;
+            }
+            if (!fractureConverged) {
+                OpmLog::info("Keeping outer loop active: fracture solve did not converge");
+                return KeepIterating::FractureUnconverged;
+            }
+            if (embedded_change > cfg.couplingTolerance) {
+                OpmLog::info("Keeping outer loop active: embedded coupling change "
+                             + std::to_string(embedded_change) + " > "
+                             + std::to_string(cfg.couplingTolerance));
+                return KeepIterating::CouplingChanged;
+            }
+            return KeepIterating::No;
+        }
+
+        template <class NonlinearSolverType>
+        KeepIterating coupleThroughWellIndices(const CouplingChangeMetrics& metrics,
+                                               const CouplingConfig& cfg,
+                                               const bool fractureConverged,
+                                               const bool fractureConvergedLocal,
+                                               const SimulatorTimerInterface& timer,
+                                               NonlinearSolverType& nonlinear_solver)
+        {
+            const bool may_update_connections = cfg.addConnections
+                && (cfg.legacyChangeLogic || !cfg.requireConvergedFractureForWi || fractureConverged);
+            if (may_update_connections && this->shouldUpdateConnections(metrics, cfg)) {
+                this->updateWellConnections(metrics, cfg, timer, nonlinear_solver);
+            }
+            else if (may_update_connections && !cfg.legacyChangeLogic) {
                 std::stringstream hos;
                 hos << "Deferring fracture-driven connection update due to topology hysteresis"
-                    << ", composite_norm=" << coupling_metrics.composite_norm
+                    << ", composite_norm=" << metrics.composite_norm
                     << ", pending=" << topology_pending_counter_
                     << ", cooldown=" << topology_cooldown_counter_;
                 OpmLog::info(hos.str());
             }
-            else if (addconnections && require_converged_fracture_for_wi_update && !fracture_converged) {
+            else if (cfg.addConnections && cfg.requireConvergedFractureForWi && !fractureConvergedLocal) {
                 OpmLog::info("Skipping fracture-driven connection update because fracture solve did not converge");
             }
-            if (residual_mode) {
-                // Outer convergence from a physical residual: the largest relative
-                // change of any fracture CTF or perforation pressure produced by
-                // this iteration's fracture solve. Structure changes and a
-                // non-converged inner solve always keep the loop active.
-                const double coupling_tolerance =
-                    prm.get<double>("fractureparam.solver.coupling_tolerance", 1e-3);
-                const double outer_residual = std::max(coupling_metrics.max_ctf_change_rel,
-                                                       coupling_metrics.max_perf_change_rel);
-                const bool outer_converged = fracture_converged_global
-                    && !coupling_metrics.structure_changed
-                    && outer_residual <= coupling_tolerance;
+
+            if (cfg.residualMode) {
+                // Largest relative change of any fracture CTF or perforation pressure;
+                // a structure change or an unconverged fracture solve always keeps the loop.
+                const double outer_residual = std::max(metrics.max_ctf_change_rel,
+                                                       metrics.max_perf_change_rel);
+                const bool outer_converged = fractureConverged
+                    && !metrics.structure_changed
+                    && outer_residual <= cfg.couplingTolerance;
                 std::stringstream ros;
                 ros << "Outer coupling residual: " << outer_residual
-                    << " (tol " << coupling_tolerance << ")"
-                    << ", structure_changed=" << (coupling_metrics.structure_changed ? "true" : "false")
-                    << ", fracture_converged=" << (fracture_converged_global ? "true" : "false")
+                    << " (tol " << cfg.couplingTolerance << ")"
+                    << ", structure_changed=" << (metrics.structure_changed ? "true" : "false")
+                    << ", fracture_converged=" << (fractureConverged ? "true" : "false")
                     << ", outer_converged=" << (outer_converged ? "true" : "false");
                 OpmLog::info(ros.str());
-                if (!outer_converged) {
-                    report.converged = false;
+                if (outer_converged) {
+                    return KeepIterating::No;
                 }
-            } else {
-            const bool fracture_changed = coupling_metrics.changed();
+                return fractureConverged ? KeepIterating::CouplingChanged
+                                         : KeepIterating::FractureUnconverged;
+            }
+
+            const bool fracture_changed = metrics.changed();
             OpmLog::debug("Fracture changed: " + std::to_string(fracture_changed));
             // TODO check convergence properly
-            if((!legacy_coupling_change_logic && !fracture_converged_global) || fracture_changed){
-                if (!fracture_converged_global) {
-                    OpmLog::info("Keeping outer nonlinear loop active because fracture solve did not converge");
-                }
-                report.converged = false;
-             }
+            const bool unconverged = !cfg.legacyChangeLogic && !fractureConverged;
+            if (!unconverged && !fracture_changed) {
+                return KeepIterating::No;
             }
-            comm.barrier();
+            if (!fractureConverged) {
+                OpmLog::info("Keeping outer nonlinear loop active because fracture solve did not converge");
+            }
+            return unconverged ? KeepIterating::FractureUnconverged : KeepIterating::CouplingChanged;
+        }
+
+        // Puts the new fracture well indices into the well model mid-step.
+        template <class NonlinearSolverType>
+        void updateWellConnections(const CouplingChangeMetrics& metrics,
+                                   const CouplingConfig& cfg,
+                                   const SimulatorTimerInterface& timer,
+                                   NonlinearSolverType& nonlinear_solver)
+        {
+            auto& problem = derived().simulator_.problem();
+            if (cfg.valueOnlyWiUpdate && !metrics.structure_changed) {
+                // Same connections: overwrite the CTFs in place, no well-structure rebuild.
+                OpmLog::info("Updating fracture CTFs in place (value_only_wi_update, no structure change)");
+                problem.addConnectionsToWell();
+            } else {
+                OpmLog::debug("Add connections in iterations");
+                problem.addConnectionsToSchedual();
+                problem.wellModel().beginTimeStep(); // reinitialize well structure
+                problem.addConnectionsToWell();
+                problem.emptyFractureLogger();
+                {
+                    // prepareTimeStep logs through the group-state helper's deferred
+                    // logger, which the caller must establish.
+                    auto& group_state_helper = problem.wellModel().groupStateHelper();
+                    auto logger_guard = group_state_helper.pushLogger();
+                    problem.wellModel().prepareTimeStep(group_state_helper.deferredLogger());
+                }
+                // Required after a well-structure change: skipping it kills the
+                // well/fracture on fine grids.
+                [[maybe_unused]] auto tmp_report = cfg.legacyParentSetup
+                    ? this->runParentFirstIterationLegacy(timer, nonlinear_solver)
+                    : this->runParentFirstIterationPreservingState(timer, nonlinear_solver);
+                OpmLog::debug("End connections in iterations");
+            }
+            derived().onConnectionsUpdated();
         }
     };
 }

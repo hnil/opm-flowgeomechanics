@@ -117,25 +117,13 @@ namespace Opm
         // for the new pressures - until the fracture pressure stops moving. The
         // width-pressure feedback of the cubic law needs this inner loop; one
         // pressure update per outer iteration is not enough to open a fracture.
-        // Returns false when the mode is off (caller does the plain solve).
-        bool wellFracturePicard(const SimulatorTimerInterface& timer)
+        void wellFracturePicard(const SimulatorTimerInterface& timer)
         {
             auto& problem = this->simulator_.problem();
             const PropertyTree& prm = problem.getGeoMechParam();
-            // The fracture model is built lazily by the first solveFractures();
-            // until it exists there is nothing to iterate on.
-            const bool on = prm.get<bool>("fractureparam.solver.pressure_from_flow", false)
-                && problem.fractureFlowIsEmbedded() && (problem.fractureAuxCells() != nullptr)
-                && problem.fractureHost().fractureModelActive();
-            if (!on) {
-                return false;
-            }
             const int maxIt = prm.get<int>("fractureparam.solver.pressure_from_flow_iterations", 10);
             const double tolBar = prm.get<double>("fractureparam.solver.pressure_from_flow_tolerance", 0.1);
             const int verbosity = prm.get<int>("fractureparam.solver.pressure_from_flow_verbosity", 0);
-            if (prm.get<bool>("fractureparam.solver.well_joint_solve", false)) {
-                return this->wellFractureJointSolve(timer);
-            }
             using Solver = WellLocalSolver<TypeTag>;
             typename Solver::Settings settings;
             settings.ring = prm.get<int>("solver.well_local_ring", 1);
@@ -191,12 +179,11 @@ namespace Opm
                     break;
                 }
             }
-            return true;
         }
 
         // Width, flow pressure and well of each well's fractures in one Newton. The fracture's
         // own solve only sets up a fracture the flow has not bound yet.
-        bool wellFractureJointSolve(const SimulatorTimerInterface& timer)
+        void wellFractureJointSolve(const SimulatorTimerInterface& timer)
         {
             auto& problem = this->simulator_.problem();
             const PropertyTree& prm = problem.getGeoMechParam();
@@ -269,7 +256,6 @@ namespace Opm
                 problem.bindFractureAuxCells(/*allowTopologyChange=*/true, /*requireStableLayout=*/true);
                 problem.bindFractureAuxCells(/*allowTopologyChange=*/true, /*requireStableLayout=*/true);
             }
-            return true;
         }
 
         template <class NonlinearSolverType>
