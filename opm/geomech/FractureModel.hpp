@@ -104,7 +104,10 @@ public:
     void updateActive(const wseed_collection& current_wseed);
 
     template <class TypeTag, class Simulator>
-    void solve(const Simulator& simulator);
+    void solve(const Simulator& simulator, Fracture::SolveMode mode = Fracture::SolveMode::Full);
+    // One growth round on every active fracture; true if any of them grew.
+    template <class TypeTag, class Simulator>
+    bool growOnly(const Simulator& simulator);
 
     template <class TypeTag, class Simulator>
     void updateFilterCakeProperties(const Simulator& simulator);

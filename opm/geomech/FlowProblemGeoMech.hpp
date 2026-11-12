@@ -537,7 +537,7 @@ namespace Opm{
                     if (p.size() != fracture.numCells()) {
                         // binding older than the fracture (it grew mid-step): let it
                         // solve its own pressure rather than freeze a stale one
-                        fracture.setExternalPressureMode(false);
+                        fracture.clearExternalPressure();
                         continue;
                     }
                     double bhp = -1.0;
@@ -558,10 +558,8 @@ namespace Opm{
                         wmax = std::max(wmax, w[i][0]);
                     }
                     const bool established = wmax > minWidthFactor * fracture.cubicLawMinWidth();
-                    if (established && fracture.setExternalPressure(p, bhp)) {
-                        fracture.setExternalPressureMode(true);
-                    } else {
-                        fracture.setExternalPressureMode(false);
+                    if (!established || !fracture.setExternalPressure(p, bhp)) {
+                        fracture.clearExternalPressure();
                     }
                 }
             }

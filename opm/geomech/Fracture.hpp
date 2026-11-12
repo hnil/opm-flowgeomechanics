@@ -295,10 +295,14 @@ public:
     void initFractureStates();
     void initFractureWidth();
 
+    // GrowOnly: one growth round on the current state, without the fracture's own
+    // solve; new cells get no width (the joint well-fracture solve decides them).
+    enum class SolveMode { Full, GrowOnly };
     template <class TypeTag, class Simulator>
     void solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& cell_search_tree,
                const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& entity_seeds,
-               const Simulator& simulator);
+               const Simulator& simulator,
+               SolveMode mode = SolveMode::Full);
     FractureProperties calculateFractureProperties() const;
     void printPressureMatrix() const; // debug purposes
     void printMechMatrix() const; // debug purposes
@@ -417,14 +421,10 @@ public:
     void setWellPerfCells(std::vector<int> cells) { well_perf_cells_ = std::move(cells); }
     //! current flow timestep (s); needed by the opt-in fracture storage term
     void setTimeStep(double dt) { current_dt_ = dt; }
-    //! External-pressure mode: the coupled iteration keeps the pressure fixed
-    //! (identity pressure block, zero residual) and solves mechanics, contact
-    //! and propagation at it; the flow's aux cells own the pressure.
-    void setExternalPressureMode(bool on) { external_pressure_ = on; }
-
-    // One growth round on the current state, without the fracture's own solve.
-    void setJointGrowthRound(bool on) { joint_growth_round_ = on; joint_scores_ = 0; joint_grew_ = false; }
-    bool jointGrew() const { return joint_grew_; }
+    //! Back to solving the fracture's own pressure (see setExternalPressure).
+    void clearExternalPressure() { external_pressure_ = false; }
+    //! Whether the last SolveMode::GrowOnly solve added cells.
+    bool grewInLastSolve() const { return joint_grew_; }
 
     // State and blocks for WellFractureJointSolver.
     const DynamicMatrix& jointElasticMatrix() const { return fractureMatrix(); }
@@ -451,14 +451,17 @@ public:
     void markFlowStateBound() { flow_state_donor_.clear(); flow_state_remapped_ = false; }
     //! Re-solve on the current mesh without growing it (one call, set by the caller).
     void suppressPropagation(bool on) { suppress_propagation_ = on; }
-    //! Set the fracture pressure per cell (and the well DOF, if any) from
-    //! outside; false if the sizes do not match the current grid.
+    //! Set the fracture pressure per cell (and the well DOF, if any) from outside
+    //! and switch to external-pressure mode: the coupled iteration then keeps the
+    //! pressure fixed and solves mechanics, contact and propagation at it.
+    //! False (mode off) if the sizes do not match the current grid or no cell is pinned.
     //! A NaN entry marks a cell with no flow DOF (no reservoir partner, or born
     //! since the last bind): it keeps the fracture's own pressure equation.
     bool setExternalPressure(const std::vector<double>& cellPressures, double wellPressure)
     {
         const std::size_t nc = numFractureCells();
         if (cellPressures.size() != nc || fracture_pressure_.size() < nc) {
+            external_pressure_ = false;
             return false;
         }
         external_cell_mask_.assign(nc, 0);
@@ -473,7 +476,8 @@ public:
         if (numWellEquations() > 0 && fracture_pressure_.size() > nc) {
             fracture_pressure_[nc][0] = wellPressure;
         }
-        return pinned > 0;
+        external_pressure_ = pinned > 0;
+        return external_pressure_;
     }
     Dune::FieldVector<double, 6> stress(Dune::FieldVector<double, 3> obs) const;
     Dune::FieldVector<double, 6> strain(Dune::FieldVector<double, 3> obs) const;
@@ -843,7 +847,7 @@ private:
     //! Lets propagation veto individual untrustworthy cells instead of all growth.
     std::vector<double> fb_cell_residual_;
     double current_dt_{-1.0}; // flow timestep (s), see setTimeStep
-    bool external_pressure_{false}; // see setExternalPressureMode
+    bool external_pressure_{false}; // see setExternalPressure
     std::vector<char> external_cell_mask_; // per cell: pressure pinned from outside
     std::vector<int> flow_state_donor_; // see flowStateDonor()
     bool flow_state_remapped_{false};

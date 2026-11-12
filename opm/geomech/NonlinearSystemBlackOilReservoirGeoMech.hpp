@@ -232,21 +232,15 @@ namespace Opm
                 if (!converged || round == maxRounds) {
                     break;
                 }
-                bool grew = false;
-                for (auto& wellFractures : fractures.wellFractures()) {
-                    for (auto& fracture : wellFractures) {
-                        fracture.setJointGrowthRound(true);
-                    }
-                }
-                fractures.template solve<TypeTag, Simulator>(this->simulator_);
-                for (auto& wellFractures : fractures.wellFractures()) {
-                    for (auto& fracture : wellFractures) {
-                        grew = grew || fracture.jointGrew();
-                        if (fracture.jointGrew() && settings.local.verbosity > 0) {
-                            OpmLog::info(fmt::format("WellFractureJoint growth round {}: {} now {} cells",
-                                                     round, fracture.name(), fracture.numCells()));
+                const bool grew = fractures.template growOnly<TypeTag, Simulator>(this->simulator_);
+                if (grew && settings.local.verbosity > 0) {
+                    for (const auto& wellFractures : fractures.wellFractures()) {
+                        for (const auto& fracture : wellFractures) {
+                            if (fracture.grewInLastSolve()) {
+                                OpmLog::info(fmt::format("WellFractureJoint growth round {}: {} now {} cells",
+                                                         round, fracture.name(), fracture.numCells()));
+                            }
                         }
-                        fracture.setJointGrowthRound(false);
                     }
                 }
                 if (!grew) {

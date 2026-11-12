@@ -646,9 +646,13 @@ void Fracture::updateFilterCakePropertiesPost(const Simulator& simulator)
 template <class TypeTag, class Simulator>
 void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& cell_search_tree,
                      const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& entity_seeds,
-                     const Simulator& simulator)
+                     const Simulator& simulator,
+                     const SolveMode mode)
 // ----------------------------------------------------------------------------
 {
+    joint_growth_round_ = (mode == SolveMode::GrowOnly);
+    joint_scores_ = 0;
+    joint_grew_ = false;
   const auto& cpgrid = simulator.vanguard().grid();
     if(!active_){
                 last_solve_stats_ = {};

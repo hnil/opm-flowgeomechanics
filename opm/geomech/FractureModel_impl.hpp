@@ -147,7 +147,7 @@ namespace Opm {
 
     template <class TypeTag, class Simulator>
     void
-    FractureModel::solve(const Simulator& simulator)
+    FractureModel::solve(const Simulator& simulator, const Fracture::SolveMode mode)
     {
         last_solve_stats_ = {};
         // Opt-in: outside the timestep retry scope (endTimeStep) a fracture solve
@@ -162,14 +162,14 @@ namespace Opm {
                     OpmLog::debug(fmt::format("Solving fracture {}", fractures[j].name()));
                     if (warn_keep_state) {
                         try {
-                            fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator);
+                            fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator, mode);
                         } catch (const std::exception& e) {
                             OpmLog::warning("Fracture solve FAILED for " + fractures[j].name()
                                             + "; solve_failure_policy=warn_keep_state, continuing: "
                                             + e.what());
                         }
                     } else {
-                        fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator);
+                        fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator, mode);
                     }
                     last_solve_stats_ += fractures[j].lastSolveStats();
                     fractures[j].warnIfOpenButNotConducting();
@@ -177,6 +177,20 @@ namespace Opm {
             }
         }
         total_solve_stats_ += last_solve_stats_;
+    }
+
+    template <class TypeTag, class Simulator>
+    bool
+    FractureModel::growOnly(const Simulator& simulator)
+    {
+        solve<TypeTag, Simulator>(simulator, Fracture::SolveMode::GrowOnly);
+        bool grew = false;
+        for (const auto& fractures : well_fractures_) {
+            for (const auto& fracture : fractures) {
+                grew = grew || fracture.grewInLastSolve();
+            }
+        }
+        return grew;
     }
 
     template <class TypeTag, class Simulator>
