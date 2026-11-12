@@ -91,9 +91,7 @@ public:
     }
 
     void setOptions(int stability_choice_int,
-                    bool vem_source,
                     bool stab_on_stress,
-                    bool vem_stress,
                     bool diagonal_scaling);
 
     void fixNodes(const std::vector<std::tuple<size_t,MechBCValue>>& bc_nodes);
@@ -141,9 +139,7 @@ private:
     Vector scale_;
 
     vem::StabilityChoice stability_choice_ = vem::SIMPLE;
-    bool vem_source_ = true;
     bool stab_on_stress_ = false;
-    bool vem_stress_ = true;
     bool diagonal_scaling_ = false;
 };
 

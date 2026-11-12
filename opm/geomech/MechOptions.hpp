@@ -32,8 +32,6 @@ namespace Opm {
 struct MechOptions
 {
     int vem_stability_choice = 1;
-    bool vem_source = true;
-    bool vem_stress = true;
     bool stab_on_stress = false;
     bool diagonal_scaling = false;
     std::string face_quadrature = "kite";
@@ -55,8 +53,11 @@ struct MechOptions
                                         "Dirichlet nodes are eliminated symmetrically");
         }
         o.vem_stability_choice = get("vem_stability_choice", o.vem_stability_choice);
-        o.vem_source = get("vem_source", o.vem_source);
-        o.vem_stress = get("vem_stress", o.vem_stress);
+        for (const char* key : {"vem_source", "vem_stress"}) {
+            if (!get(key, true)) {
+                throw std::invalid_argument(std::string(key) + "=false was removed (FEM path)");
+            }
+        }
         o.stab_on_stress = get("stab_on_stress", o.stab_on_stress);
         o.diagonal_scaling = get("mech_diagonal_scaling", o.diagonal_scaling);
         o.face_quadrature = get("vem_face_quadrature", o.face_quadrature);

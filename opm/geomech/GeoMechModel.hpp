@@ -345,9 +345,7 @@ namespace Opm{
                 }
                 OpmLog::info("VEM face quadrature: " + face_quad);
                 mechDisc_->setOptions(opts.vem_stability_choice,
-                                      opts.vem_source,
                                       opts.stab_on_stress,
-                                      opts.vem_stress,
                                       opts.diagonal_scaling);
                 OPM_TIMEBLOCK(SetupMechSolver);
                 if(use_body_force){

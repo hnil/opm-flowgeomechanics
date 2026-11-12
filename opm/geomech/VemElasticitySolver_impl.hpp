@@ -55,14 +55,10 @@ inline void vemToVoigt(VoigtField& voigt, const Vector& vem)
 
 template<class GridType>
 void VemDiscretisation<GridType>::setOptions(int stability_choice_int,
-                                             bool vem_source,
                                              bool stab_on_stress,
-                                             bool vem_stress,
                                              bool diagonal_scaling)
 {
-    vem_source_ = vem_source;
     stab_on_stress_ = stab_on_stress;
-    vem_stress_ = vem_stress;
     diagonal_scaling_ = diagonal_scaling;
     std::stringstream os;
     os << "Setting stability choise to " << stability_choice_int
@@ -150,17 +146,10 @@ void VemDiscretisation<GridType>::buildOperators()
         std::vector<double> rhs_tmp(num_cells_, 0);
         std::vector<double> pressure_tmp(num_cells_, 0);
         std::vector<std::tuple<int, int, double>> divmat;
-        if (vem_source_) {
-            vem::potential_gradient_force_3D(&coords_[0], num_cells_, &num_cell_faces_[0],
-                                             &num_face_corners_[0], &face_corners_[0],
-                                             &pressure_tmp[0], rhs_tmp, divmat, true,
-                                             corner_mask_.data());
-        } else {
-            vem::potential_gradient_force_3D_dune(grid_, &coords_[0], num_cells_,
-                                                  &num_cell_faces_[0], &num_face_corners_[0],
-                                                  &face_corners_[0], &pressure_tmp[0], rhs_tmp,
-                                                  divmat, true, corner_mask_.data());
-        }
+        vem::potential_gradient_force_3D(&coords_[0], num_cells_, &num_cell_faces_[0],
+                                         &num_face_corners_[0], &face_corners_[0],
+                                         &pressure_tmp[0], rhs_tmp, divmat, true,
+                                         corner_mask_.data());
         std::vector<char> fixed(num_dofs, 0);
         for (const int dof : fixed_dof_ixs) {
             fixed[dof] = 1;
@@ -244,14 +233,10 @@ template<class GridType>
 void VemDiscretisation<GridType>::stress(const Vector& dispall, VoigtField& out) const
 {
     OPM_TIMEBLOCK(calculateStressPrecomputed);
-    if (vem_stress_) {
-        Vector s(6 * num_cells_);
-        stressmat_.mv(dispall, s);
-        out.resize(num_cells_);
-        detail::vemToVoigt(out, s);
-    } else {
-        out = vem::computeStressFem(grid_, dispall, ymodule_, pratio_);
-    }
+    Vector s(6 * num_cells_);
+    stressmat_.mv(dispall, s);
+    out.resize(num_cells_);
+    detail::vemToVoigt(out, s);
 }
 
 template<class GridType>

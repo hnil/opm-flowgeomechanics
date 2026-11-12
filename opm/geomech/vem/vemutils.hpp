@@ -101,17 +101,6 @@ void getGridVectors(const Dune::CpGrid& grid, std::vector<double>& coords,
                              const vem::StabilityChoice stability_choice,
                              const char* const corner_mask = nullptr);
 
-void
-potential_gradient_force_3D_dune(const Dune::CpGrid& grid, const double* const points,
-                            const int num_cells,
-                            const int* const num_cell_faces, // cell faces per cell
-                            const int* const num_face_corners, // corners per cellface
-                            const int* const face_corners,
-                            const double* const field,
-                                 std::vector<double>& fgrad,
-                                 std::vector<std::tuple<int, int, double>>& div,
-                                 bool get_matrix,
-                                 const char* const corner_mask = nullptr);
 
 Dune::BlockVector<Dune::FieldVector<double,1>> smoothCellVector(const Dune::CpGrid& grid,const Dune::BlockVector<Dune::FieldVector<double,1>>& cell_vector);
 
@@ -144,10 +133,6 @@ Dune::BlockVector<Dune::FieldVector<double,6>>
 patchRecoveryCells6(const Dune::CpGrid& grid,
                     const Dune::BlockVector<Dune::FieldVector<double,6>>& cell_values);
 
-Dune::BlockVector<Dune::FieldVector<double,6>>  computeStressFem(const Dune::CpGrid& grid,
-                                                                const Dune::BlockVector<Dune::FieldVector<double,1>>& disp,
-                                                                const std::vector <double>& young,
-                                                                const std::vector <double>& poisson);
 
 
 }
