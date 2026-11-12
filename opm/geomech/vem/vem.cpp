@@ -1847,6 +1847,37 @@ namespace vem
 
 // ----------------------------------------------------------------------------
 void
+prepare_cell_3D(const double* points,
+                const int* faces,
+                const int* num_face_edges,
+                const int num_faces,
+                const char* corner_mask,
+                LocalCell& cell)
+// ----------------------------------------------------------------------------
+{
+    cell.reindex = global_to_local_indexing(faces, num_face_edges, num_faces, cell.indexing);
+    const int num_corners = cell.num_corners();
+    const int num_face_entries = accumulate(num_face_edges, num_face_edges + num_faces, 0);
+    cell.corners = pick_points<3>(points, &cell.indexing[0], num_corners);
+    cell.faces.resize(num_face_entries);
+    transform(faces, faces + num_face_entries, cell.faces.begin(), [&cell](const int I) {
+        return cell.reindex.find(I)->second;
+    });
+    compute_cell_geometry(&cell.corners[0],
+                          num_corners,
+                          &cell.faces[0],
+                          num_face_edges,
+                          num_faces,
+                          cell.outward_normals,
+                          cell.face_centroids,
+                          cell.centroid,
+                          cell.star_point,
+                          cell.volume,
+                          corner_mask);
+}
+
+// ----------------------------------------------------------------------------
+void
 potential_gradient_force_3D(const double* const points,
                             const int num_cells,
                             const int* const num_cell_faces, // cell faces per cell
@@ -1875,62 +1906,42 @@ potential_gradient_force_3D(const double* const points,
 
     // Below, we compute the contribution from all corners of all faces to the global 'fgrad' vector.
 
-    vector<int> indexing;
     int cur_fcor_start = 0;
     int cur_cface_start = 0;
-    for (int cell = 0; cell != num_cells; ++cell) {
-        const auto reindex = global_to_local_indexing(&face_corners[cur_fcor_start],
-                                                      &num_face_corners[cur_cface_start],
-                                                      num_cell_faces[cell],
-                                                      indexing);
-        const int num_corners = int(indexing.size());
-        const auto corners_loc = pick_points<3>(points, &indexing[0], num_corners);
-
+    for (int cell_ix = 0; cell_ix != num_cells; ++cell_ix) {
+        LocalCell cell;
+        prepare_cell_3D(points,
+                        &face_corners[cur_fcor_start],
+                        &num_face_corners[cur_cface_start],
+                        num_cell_faces[cell_ix],
+                        corner_mask ? corner_mask + cur_fcor_start : nullptr,
+                        cell);
+        const auto& indexing = cell.indexing;
+        const int num_corners = cell.num_corners();
         const int tot_num_cellface_corners
             = accumulate(&num_face_corners[cur_cface_start],
-                         &num_face_corners[cur_cface_start] + num_cell_faces[cell],
+                         &num_face_corners[cur_cface_start] + num_cell_faces[cell_ix],
                          0);
-
-        vector<int> faces_loc(tot_num_cellface_corners);
-        transform(&face_corners[cur_fcor_start],
-                  &face_corners[cur_fcor_start] + tot_num_cellface_corners,
-                  faces_loc.begin(),
-                  [&reindex](const int I) { return reindex.find(I)->second; });
-
-        double volume; // to be computed below
-        vector<double> outward_normals, face_centroids; // to be computed below
-        array<double, 3> star_point, cell_centroid; // to be computed below
-        compute_cell_geometry(&corners_loc[0],
-                              num_corners,
-                              &faces_loc[0],
-                              &num_face_corners[cur_cface_start],
-                              num_cell_faces[cell],
-                              outward_normals,
-                              face_centroids,
-                              cell_centroid,
-                              star_point,
-                              volume,
-                              corner_mask ? corner_mask + cur_fcor_start : nullptr);
 
         // Since computing q involves dividing by volume, we are really computing q * volume
         // in the below call, by passing the value '1' for volume.  In other words, we are computing
         // (1/2) z_i.
-        const auto qv = compute_q_3D(&corners_loc[0],
+        const auto qv = compute_q_3D(&cell.corners[0],
                                      num_corners,
-                                     &faces_loc[0],
+                                     &cell.faces[0],
                                      &num_face_corners[cur_cface_start],
-                                     num_cell_faces[cell],
+                                     num_cell_faces[cell_ix],
                                      1,
-                                     outward_normals,
+                                     cell.outward_normals,
                                      corner_mask ? corner_mask + cur_fcor_start : nullptr);
 
         // fill in entries in global fgrad vector
         for (int c = 0; c != num_corners; ++c) {
             for (int d = 0; d != 3; ++d) {
-                fgrad[3 * indexing[c] + d] += 2 * field[cell] * qv[3 * c + d];
+                fgrad[3 * indexing[c] + d] += 2 * field[cell_ix] * qv[3 * c + d];
                 if (get_matrix) {
                     int I = 3 * indexing[c] + d;
-                    int J = cell;
+                    int J = cell_ix;
                     double val = 2 * qv[3 * c + d];
                     div.push_back(tuple<int, int, double> {I, J, val});
                 }
@@ -1939,7 +1950,7 @@ potential_gradient_force_3D(const double* const points,
 
         // keep track of our current position in the `face_corners` array
         cur_fcor_start += tot_num_cellface_corners;
-        cur_cface_start += num_cell_faces[cell];
+        cur_cface_start += num_cell_faces[cell_ix];
     }
 }
 
@@ -3243,12 +3254,36 @@ assemble_stiffness_matrix_3D(const double* const points,
                              const char* const corner_mask)
 // ----------------------------------------------------------------------------
 {
+    LocalCell cell;
+    prepare_cell_3D(points, faces, num_face_edges, num_faces, corner_mask, cell);
+    centroid = cell.centroid;
+    indexing = cell.indexing;
+    stiffness_matrix_3D(cell, points, num_face_edges, num_faces, young, poisson, stability_choice, target,
+                        hex_corners, corner_mask);
+}
+
+// ----------------------------------------------------------------------------
+void
+stiffness_matrix_3D(const LocalCell& cell,
+                    const double* const points,
+                    const int* const num_face_edges,
+                    const int num_faces,
+                    const double young,
+                    const double poisson,
+                    const StabilityChoice stability_choice,
+                    vector<double>& target,
+                    const int* const hex_corners,
+                    const char* const corner_mask)
+// ----------------------------------------------------------------------------
+{
     check_stability_choice(stability_choice);
-    // compute mapping between local vertex indices (0, 1, ... Ne) to
-    // indexing in the global 'points' vector (0, 1, .....N)
-    const auto reindex = global_to_local_indexing(faces, num_face_edges, num_faces, indexing);
-    const int num_corners = int(indexing.size());
-    const int num_face_entries = accumulate(num_face_edges, num_face_edges + num_faces, 0);
+    const int num_corners = cell.num_corners();
+    const auto& indexing = cell.indexing;
+    const auto& reindex = cell.reindex;
+    const auto& corners_loc = cell.corners;
+    const auto& faces_loc = cell.faces;
+    const double volume = cell.volume;
+    const auto& outward_normals = cell.outward_normals;
 
     // the given corners are used only if all of them are nodes of the cell
     array<int, 8> hex_loc;
@@ -3270,29 +3305,6 @@ assemble_stiffness_matrix_3D(const double* const points,
             }
         }
     }
-
-    // make local list of corner coordinates, and a locally indexed version of
-    // 'faces'
-    const auto corners_loc = pick_points<3>(points, &indexing[0], num_corners);
-    vector<int> faces_loc(num_face_entries);
-    transform(faces, faces + num_face_entries, faces_loc.begin(), [&reindex](const int I) {
-        return reindex.find(I)->second;
-    });
-
-    double volume; // computed in 'compute_cell_geometry' below
-    vector<double> outward_normals, face_centroids; // computed in 'compute_cell_geometry' below
-    array<double, 3> star_point; // computed in 'compute_cell_geometry' below
-    compute_cell_geometry(&corners_loc[0],
-                          num_corners,
-                          &faces_loc[0],
-                          num_face_edges,
-                          num_faces,
-                          outward_normals,
-                          face_centroids,
-                          centroid,
-                          star_point,
-                          volume,
-                          corner_mask);
 
     // Q1 FEM requested: applicable whenever the cell is a topological hexahedron.
     // Non-hex cells fall through to VEM with TRACE stabilization.
@@ -3350,6 +3362,89 @@ assemble_stiffness_matrix_3D(const double* const points,
     final_assembly(Wc, D, Nc, ImP, corners_loc, stability_choice, volume, num_corners, 3, &target[0]);
 }
 
+// Rows of the cell's stress (D Wc^T) or strain (Wc^T) operator, 6 x 3n.
+vector<double>
+stress_matrix_3D(const LocalCell& cell,
+                 const int* const num_face_edges,
+                 const int num_faces,
+                 const double young,
+                 const double poisson,
+                 const bool do_stress,
+                 const char* const corner_mask)
+{
+    const auto q = compute_q_3D(&cell.corners[0],
+                                cell.num_corners(),
+                                &cell.faces[0],
+                                num_face_edges,
+                                num_faces,
+                                cell.volume,
+                                cell.outward_normals,
+                                corner_mask);
+    const int lsdim = 6;
+    const int totdim = 3 * cell.num_corners();
+    const auto Wc = compute_Wc_3D(q);
+    if (do_stress) {
+        const auto D = compute_D_3D(young, poisson);
+        return matmul(&D[0], lsdim, lsdim, false, &Wc[0], totdim, lsdim, true);
+    }
+    vector<double> matrix(lsdim * totdim, 0.0);
+    for (int i = 0; i < lsdim; ++i) {
+        for (int j = 0; j < totdim; ++j) {
+            matrix[i * totdim + j] = Wc[j * lsdim + i];
+        }
+    }
+    return matrix;
+}
+
+void
+stress_rows_3D(const LocalCell& cell,
+               const int* const num_face_edges,
+               const int num_faces,
+               const double young,
+               const double poisson,
+               const int cell_ix,
+               const bool do_stress,
+               const char* const corner_mask,
+               vector<tuple<int, int, double>>& stressmat)
+{
+    const auto matrix = stress_matrix_3D(cell, num_face_edges, num_faces, young, poisson, do_stress, corner_mask);
+    const int lsdim = 6;
+    const int totdim = 3 * cell.num_corners();
+    for (int i = 0; i < lsdim; ++i) {
+        for (int j = 0; j < totdim; ++j) {
+            double val = matrix[i * totdim + j];
+            if (i > 2 && do_stress) {
+                val /= 2.0;
+            }
+            stressmat.push_back(tuple<int, int, double> {lsdim * cell_ix + i, 3 * cell.indexing[j / 3] + j % 3, val});
+        }
+    }
+}
+
+void
+load_gradient_rows_3D(const LocalCell& cell,
+                      const int* const num_face_edges,
+                      const int num_faces,
+                      const int cell_ix,
+                      const char* const corner_mask,
+                      vector<tuple<int, int, double>>& div)
+{
+    // q with unit volume is z_i / 2, see potential_gradient_force_3D
+    const auto qv = compute_q_3D(&cell.corners[0],
+                                 cell.num_corners(),
+                                 &cell.faces[0],
+                                 num_face_edges,
+                                 num_faces,
+                                 1,
+                                 cell.outward_normals,
+                                 corner_mask);
+    for (int c = 0; c != cell.num_corners(); ++c) {
+        for (int d = 0; d != 3; ++d) {
+            div.push_back(tuple<int, int, double> {3 * cell.indexing[c] + d, cell_ix, 2 * qv[3 * c + d]});
+        }
+    }
+}
+
 void
 calculate_stress_3D_local(const double* const points,
                           const int* const faces,
@@ -3366,65 +3461,12 @@ calculate_stress_3D_local(const double* const points,
                           const char* const corner_mask)
 // ----------------------------------------------------------------------------
 {
-    array<double, 3> centroid;
-    vector<int> indexing;
-    vector<double> target;
-    // compute mapping between local vertex indices (0, 1, ... Ne) to
-    // indexing in the global 'points' vector (0, 1, .....N)
-    const auto reindex = global_to_local_indexing(faces, num_face_edges, num_faces, indexing);
-    const int num_corners = int(indexing.size());
-    const int num_face_entries = accumulate(num_face_edges, num_face_edges + num_faces, 0);
-
-    // make local list of corner coordinates, and a locally indexed version of
-    // 'faces'
-    const auto corners_loc = pick_points<3>(points, &indexing[0], num_corners);
-    vector<int> faces_loc(num_face_entries);
-    transform(faces, faces + num_face_entries, faces_loc.begin(), [&reindex](const int I) {
-        return reindex.find(I)->second;
-    });
-
-    double volume; // computed in 'compute_cell_geometry' below
-    vector<double> outward_normals, face_centroids; // computed in 'compute_cell_geometry' below
-    array<double, 3> star_point; // computed in 'compute_cell_geometry' below
-    compute_cell_geometry(&corners_loc[0],
-                          num_corners,
-                          &faces_loc[0],
-                          num_face_edges,
-                          num_faces,
-                          outward_normals,
-                          face_centroids,
-                          centroid,
-                          star_point,
-                          volume,
-                          corner_mask);
-
-    // compute all intermediary matrices
-    const auto q = compute_q_3D(&corners_loc[0],
-                                int(corners_loc.size() / 3),
-                                &faces_loc[0],
-                                num_face_edges,
-                                num_faces,
-                                volume,
-                                outward_normals,
-                                corner_mask);
-
-    const int dim = 3;
-    const int lsdim = (dim == 2) ? 3 : 6; // dimension of "linear strain space"
-    const int totdim = dim * num_corners; // total number of unknowns
-    const auto Wc = compute_Wc_3D(q);
-    std::vector<double> matrix(lsdim * totdim, 0.0);
-    if (do_stress) {
-        const auto D = compute_D_3D(young, poisson);
-        // compute stiffness matrix components
-        const auto DWct = matmul(&D[0], lsdim, lsdim, false, &Wc[0], totdim, lsdim, true);
-        matrix = DWct;
-    } else {
-        for (int i = 0; i < lsdim; ++i) {
-            for (int j = 0; j < totdim; ++j) {
-                matrix[i * totdim + j] = Wc[j * lsdim + i];
-            }
-        }
-    }
+    LocalCell local;
+    prepare_cell_3D(points, faces, num_face_edges, num_faces, corner_mask, local);
+    const auto& indexing = local.indexing;
+    const int lsdim = 6;
+    const int totdim = 3 * local.num_corners();
+    const auto matrix = stress_matrix_3D(local, num_face_edges, num_faces, young, poisson, do_stress, corner_mask);
 
     std::vector<double> local_disp;
     local_disp.resize(indexing.size() * 3);

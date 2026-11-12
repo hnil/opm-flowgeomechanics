@@ -34,6 +34,7 @@
 #include "config.h"
 
 #include <dune/common/parallel/mpihelper.hh>
+#include <dune/common/timer.hh>
 #include <dune/istl/bcrsmatrix.hh>
 #include <dune/istl/bvector.hh>
 #include <dune/istl/umfpack.hh>
@@ -594,9 +595,38 @@ main(int argc, char** argv)
     }
     std::vector<std::tuple<int, int, double>> A;
     std::vector<double> b;
+    Dune::Timer setup_timer;
     vem::assemble_mech_system_3D_dune(grid, &coords[0], nc, &ncf[0], &nfc[0], &fc[0], &young[0],
                                                         &poisson[0], &body[0], 0, nullptr, nullptr, A, b, sc,
                                                         corner_mask);
+    const double t_assemble = setup_timer.elapsed();
+    {
+        // operator setup as the simulator does it: one fused pass against separate passes
+        std::vector<std::tuple<int, int, double>> A2, div, smat, emat;
+        std::vector<double> b2, fgrad;
+        std::vector<std::array<double, 6>> s6(nc);
+        std::vector<double> zero(3 * nn, 0.0), zc(nc, 0.0);
+        setup_timer.reset();
+        vem::assemble_mech_system_3D_dune(grid, &coords[0], nc, &ncf[0], &nfc[0], &fc[0], &young[0], &poisson[0],
+                                          &body[0], 0, nullptr, nullptr, A2, b2, sc, corner_mask);
+        vem::potential_gradient_force_3D(&coords[0], nc, &ncf[0], &nfc[0], &fc[0], &zc[0], fgrad, div, true,
+                                         corner_mask);
+        vem::compute_stress_3D(&coords[0], nc, &ncf[0], &nfc[0], &fc[0], &young[0], &poisson[0], zero, s6, smat,
+                               true, true, sc, false, corner_mask);
+        vem::compute_stress_3D(&coords[0], nc, &ncf[0], &nfc[0], &fc[0], &young[0], &poisson[0], zero, s6, emat,
+                               true, false, sc, false, corner_mask);
+        const double t_separate = setup_timer.elapsed();
+        vem::CellOperatorEntries ops;
+        setup_timer.reset();
+        vem::assemble_mech_system_3D_dune(grid, &coords[0], nc, &ncf[0], &nfc[0], &fc[0], &young[0], &poisson[0],
+                                          &body[0], 0, nullptr, nullptr, A2, b2, sc, corner_mask, &ops);
+        const double t_fused = setup_timer.elapsed();
+        const bool same = ops.div == div && ops.stress == smat && ops.strain == emat;
+        std::printf("SETUP operators separate %.3f s, fused %.3f s, entries %s\n", t_separate, t_fused,
+                    same ? "identical" : "DIFFER");
+        if (arg.count("setup_only"))
+            return same ? 0 : 1;
+    }
     vem::reduce_system(A, b, int(fixed.size()), fixed.data(), fixval.data());
     const int nfree = int(b.size());
     std::vector<int> free_dofs;
@@ -606,10 +636,13 @@ main(int argc, char** argv)
         else
             free_dofs.push_back(i);
     }
+    double t_gradient = 0.0;
     if (cs == "load" || gauss) {
         std::vector<double> fgrad;
         std::vector<std::tuple<int, int, double>> div;
+        setup_timer.reset();
         vem::potential_gradient_force_3D(&coords[0], nc, &ncf[0], &nfc[0], &fc[0], &field[0], fgrad, div, false, corner_mask);
+        t_gradient = setup_timer.elapsed();
         for (int i = 0; i < nfree; ++i)
             b[i] += fgrad[free_dofs[i]];
     }
@@ -733,8 +766,11 @@ main(int argc, char** argv)
         disp[free_dofs[i]] = x[i];
     std::vector<std::array<double, 6>> stress(nc);
     std::vector<std::tuple<int, int, double>> smat;
+    setup_timer.reset();
     vem::compute_stress_3D(&coords[0], nc, &ncf[0], &nfc[0], &fc[0], &young[0], &poisson[0], disp, stress, smat,
                            false, true, sc, false, corner_mask);
+    std::printf("SETUP assemble %.3f s, load gradient %.3f s, stress %.3f s\n", t_assemble, t_gradient,
+                setup_timer.elapsed());
 
     if (gauss) {
         // total stress sigma(u) - field I against the exact cell average; split near / far from the source

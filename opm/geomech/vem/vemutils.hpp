@@ -99,7 +99,8 @@ void getGridVectors(const Dune::CpGrid& grid, std::vector<double>& coords,
                         std::vector<std::tuple<int, int, double>>& A_entries,
                         std::vector<double>& b,
                              const vem::StabilityChoice stability_choice,
-                             const char* const corner_mask = nullptr);
+                             const char* const corner_mask = nullptr,
+                             CellOperatorEntries* ops = nullptr);
 
 
 Dune::BlockVector<Dune::FieldVector<double,1>> smoothCellVector(const Dune::CpGrid& grid,const Dune::BlockVector<Dune::FieldVector<double,1>>& cell_vector);

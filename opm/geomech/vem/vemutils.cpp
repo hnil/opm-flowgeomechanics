@@ -299,7 +299,8 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
                         std::vector<std::tuple<int, int, double>>& A_entries,
                         std::vector<double>& b,
                         const vem::StabilityChoice stability_choice,
-                        const char* const corner_mask)
+                        const char* const corner_mask,
+                        CellOperatorEntries* ops)
 // ----------------------------------------------------------------------------
 {
     // preliminary computations
@@ -314,8 +315,13 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
     std::fill(b.begin(), b.end(), 0);
 
     // loop over cells and assemble system matrix
-    std::vector<int> loc_indexing;
     std::vector<double> loc; // use as local 'scratch' vector
+    vem::LocalCell cell;
+    if (ops) {
+        ops->div.clear();
+        ops->stress.clear();
+        ops->strain.clear();
+    }
     std::array<double, 3> centroid; // will contain the centroid for the currently treated cell
     int cf_ix = 0; // index to first cell face for the current cell
     int fcorners_start = 0; // index to first cell corner for current cell
@@ -346,6 +352,17 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
         int c = gv.indexSet().index(elem);
         // computing local stiffness matrix, writing its entries into the global matrix
 
+        const char* const cell_mask = corner_mask ? corner_mask + fcorners_start : nullptr;
+        vem::prepare_cell_3D(points, &face_corners[fcorners_start], &num_face_corners[cf_ix],
+                             num_cell_faces[c], cell_mask, cell);
+        if (ops) {
+            vem::load_gradient_rows_3D(cell, &num_face_corners[cf_ix], num_cell_faces[c], c, cell_mask, ops->div);
+            vem::stress_rows_3D(cell, &num_face_corners[cf_ix], num_cell_faces[c], young[c], poisson[c], c,
+                                true, cell_mask, ops->stress);
+            vem::stress_rows_3D(cell, &num_face_corners[cf_ix], num_cell_faces[c], young[c], poisson[c], c,
+                                false, cell_mask, ops->strain);
+        }
+
         auto loc_stability_choice =  stability_choice;
         bool vem_type = !use_fem_type;
         if(!vem_type){
@@ -364,18 +381,11 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
           const bool hex = elem.subEntities(3) == 8;
           for (int k = 0; hex && k != 8; ++k)
               hex_corners[k] = gv.indexSet().subIndex(elem, k, 3);
-          assemble_stiffness_matrix_3D(points,
-                                     &face_corners[fcorners_start],
-                                     &num_face_corners[cf_ix],
-                                     num_cell_faces[c],
-                                     young[c],
-                                     poisson[c],
-                                     loc_stability_choice,
-                                     centroid,
-                                     loc_indexing,
-                                     loc,
-                                     hex ? &hex_corners[0] : nullptr,
-                                     corner_mask ? corner_mask + fcorners_start : nullptr);
+          vem::stiffness_matrix_3D(cell, points, &num_face_corners[cf_ix], num_cell_faces[c], young[c],
+                                   poisson[c], loc_stability_choice, loc, hex ? &hex_corners[0] : nullptr,
+                                   cell_mask);
+          centroid = cell.centroid;
+          const auto& loc_indexing = cell.indexing;
           const int ncv = int(loc_indexing.size()); // number of cell vertices
           for (int i = 0; i != 3 * ncv; ++i) {
             for (int j = 0; j != 3 * ncv; ++j) {

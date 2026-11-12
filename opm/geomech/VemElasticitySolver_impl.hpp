@@ -196,7 +196,8 @@ void VemDiscretisation<GridType>::assembleMatrix()
                                       &num_face_corners_[0], &face_corners_[0], &ymodule_[0],
                                       &pratio_[0], &body_force_[0],
                                       /*num_neumann_faces*/ 0, nullptr, nullptr, A_entries,
-                                      rhs_force_, stability_choice_, corner_mask_.data());
+                                      rhs_force_, stability_choice_, corner_mask_.data(),
+                                      hasOperators() ? nullptr : &pending_ops_);
     rotateRows(A_entries, /*columns_too*/ true);
     toLocal(rhs_force_);
     const int num_dofs = int(rhs_force_.size());
@@ -224,10 +225,14 @@ void VemDiscretisation<GridType>::buildOperators()
         std::vector<double> rhs_tmp(num_cells_, 0);
         std::vector<double> pressure_tmp(num_cells_, 0);
         std::vector<std::tuple<int, int, double>> divmat;
-        vem::potential_gradient_force_3D(&coords_[0], num_cells_, &num_cell_faces_[0],
-                                         &num_face_corners_[0], &face_corners_[0],
-                                         &pressure_tmp[0], rhs_tmp, divmat, true,
-                                         corner_mask_.data());
+        if (!pending_ops_.div.empty()) {
+            divmat.swap(pending_ops_.div);
+        } else {
+            vem::potential_gradient_force_3D(&coords_[0], num_cells_, &num_cell_faces_[0],
+                                             &num_face_corners_[0], &face_corners_[0],
+                                             &pressure_tmp[0], rhs_tmp, divmat, true,
+                                             corner_mask_.data());
+        }
         rotateRows(divmat, /*columns_too*/ false);
         std::vector<char> fixed(num_dofs, 0);
         for (const int dof : fixed_dof_ixs) {
@@ -249,10 +254,15 @@ void VemDiscretisation<GridType>::buildOperators()
     for (const bool is_stress : {true, false}) {
         OPM_TIMEBLOCK(setUpStressStrainMatrix);
         std::vector<std::tuple<int, int, double>> entries;
-        vem::compute_stress_3D(&coords_[0], num_cells_, &num_cell_faces_[0],
-                               &num_face_corners_[0], &face_corners_[0], &ymodule_[0],
-                               &pratio_[0], dispall, stresstmp, entries, true, is_stress,
-                               stability_choice_, stab_on_stress_, corner_mask_.data());
+        auto& pending = is_stress ? pending_ops_.stress : pending_ops_.strain;
+        if (!pending.empty()) {
+            entries.swap(pending);
+        } else {
+            vem::compute_stress_3D(&coords_[0], num_cells_, &num_cell_faces_[0],
+                                   &num_face_corners_[0], &face_corners_[0], &ymodule_[0],
+                                   &pratio_[0], dispall, stresstmp, entries, true, is_stress,
+                                   stability_choice_, stab_on_stress_, corner_mask_.data());
+        }
         Matrix& mat = is_stress ? stressmat_ : strainmat_;
         mat.setBuildMode(Matrix::random);
         mat.setSize(num_cells_ * 6, dispall.size());

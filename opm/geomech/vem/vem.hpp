@@ -248,6 +248,64 @@ void assemble_stiffness_matrix_2D(const double* const points,
 //               number of corners in the element.  Matrix elements are stored
 //               in row-major order (although it does not really matter, since
 //               the matrix is symmetric).
+//! Local indexing and geometry of one cell, shared by the per-cell operators.
+struct LocalCell
+{
+    std::vector<int> indexing;   // local node -> global node
+    std::map<int, int> reindex;  // global node -> local node
+    std::vector<double> corners; // three coordinates per local node
+    std::vector<int> faces;      // face corners, locally indexed
+    std::vector<double> outward_normals, face_centroids;
+    std::array<double, 3> centroid, star_point;
+    double volume = 0.0;
+    int num_corners() const { return int(indexing.size()); }
+};
+
+void prepare_cell_3D(const double* points,
+                     const int* faces,
+                     const int* num_face_edges,
+                     int num_faces,
+                     const char* corner_mask,
+                     LocalCell& cell);
+
+//! Per-cell operators filled in the same pass as the stiffness matrix.
+struct CellOperatorEntries {
+    std::vector<std::tuple<int, int, double>> div;    // as potential_gradient_force_3D
+    std::vector<std::tuple<int, int, double>> stress; // as compute_stress_3D, do_stress
+    std::vector<std::tuple<int, int, double>> strain; // as compute_stress_3D, !do_stress
+};
+
+//! Element stiffness of a prepared cell (as assemble_stiffness_matrix_3D).
+void stiffness_matrix_3D(const LocalCell& cell,
+                         const double* points,
+                         const int* num_face_edges,
+                         int num_faces,
+                         double young,
+                         double poisson,
+                         StabilityChoice stability_choice,
+                         std::vector<double>& target,
+                         const int* hex_corners = nullptr,
+                         const char* corner_mask = nullptr);
+
+//! Rows 6 c .. 6 c + 5 of the stress (do_stress) or strain operator, as compute_stress_3D.
+void stress_rows_3D(const LocalCell& cell,
+                    const int* num_face_edges,
+                    int num_faces,
+                    double young,
+                    double poisson,
+                    int cell_ix,
+                    bool do_stress,
+                    const char* corner_mask,
+                    std::vector<std::tuple<int, int, double>>& stressmat);
+
+//! The cell's column of the load-gradient operator, as potential_gradient_force_3D.
+void load_gradient_rows_3D(const LocalCell& cell,
+                           const int* num_face_edges,
+                           int num_faces,
+                           int cell_ix,
+                           const char* corner_mask,
+                           std::vector<std::tuple<int, int, double>>& div);
+
 void assemble_stiffness_matrix_3D(const double* const points,
                                   const int* const faces,
                                   const int* const num_face_edges,

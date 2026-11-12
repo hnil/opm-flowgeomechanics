@@ -142,6 +142,7 @@ private:
     std::vector<double> rhs_force_;
 
     std::unique_ptr<Matrix> matrix_ = std::make_unique<Matrix>();
+    vem::CellOperatorEntries pending_ops_; // filled by assembleMatrix, consumed by buildOperators
     Matrix divmat_;    // from cell load to dofs
     Matrix stressmat_; // from all dofs (no elimination) to cell stress
     Matrix strainmat_;
