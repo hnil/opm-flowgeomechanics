@@ -548,6 +548,11 @@ target_link_libraries(test_centre_stress PRIVATE opmflowgeomechanics)
 add_test(NAME Unit.CentreStress COMMAND $<TARGET_FILE:test_centre_stress>)
 set_tests_properties(Unit.CentreStress PROPERTIES TIMEOUT 30 LABELS "physics;unit")
 
+add_executable(test_general_rollers tests/test_general_rollers.cpp)
+target_link_libraries(test_general_rollers PRIVATE opmflowgeomechanics)
+add_test(NAME Unit.GeneralRollers COMMAND $<TARGET_FILE:test_general_rollers>)
+set_tests_properties(Unit.GeneralRollers PROPERTIES TIMEOUT 60 LABELS "physics;unit")
+
 # Global constraint rank must be independent of MPI partitioning.
 add_executable(test_mechanical_constraints tests/test_mechanical_constraints.cpp)
 target_link_libraries(test_mechanical_constraints PRIVATE opmflowgeomechanics)

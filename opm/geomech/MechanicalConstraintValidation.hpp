@@ -19,7 +19,7 @@
 
 #pragma once
 
-#include <opm/input/eclipse/Schedule/BCState.hpp>
+#include <opm/geomech/NodeConstraint.hpp>
 
 #include <array>
 #include <cstddef>
@@ -36,7 +36,8 @@ struct ConstrainedMechanicalVertex
 {
     std::int64_t id;
     std::array<double, 3> position;
-    unsigned mask;
+    unsigned mask; // bit d: frame[d] is constrained
+    std::array<std::array<double, 3>, 3> frame{{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}};
 };
 
 struct MechanicalConstraintComponent
@@ -46,7 +47,7 @@ struct MechanicalConstraintComponent
 };
 
 // Edges describe mechanical connectivity through shared vertex DOFs. Duplicate
-// vertices/constraints from overlap partitions are merged by global ID.
+// vertices/constraints from overlap partitions add no rank.
 std::vector<MechanicalConstraintComponent> rigidBodyConstraintRanks(
     const std::vector<std::pair<std::int64_t, std::int64_t>>& edges,
     const std::vector<ConstrainedMechanicalVertex>& constraints);
@@ -54,6 +55,6 @@ std::vector<MechanicalConstraintComponent> rigidBodyConstraintRanks(
 // Collective on grid.comm(): every rank receives the same component ranks.
 std::vector<MechanicalConstraintComponent> mechanicalConstraintRanks(
     const Dune::CpGrid& grid,
-    const std::vector<std::tuple<std::size_t, MechBCValue>>& boundaryNodes);
+    const std::vector<NodeConstraint>& boundaryNodes);
 
 } // namespace Opm::Elasticity

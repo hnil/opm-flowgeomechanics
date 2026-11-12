@@ -23,6 +23,7 @@
 #include <dune/common/parallel/mpihelper.hh>
 #include <dune/grid/common/rangegenerators.hh>
 
+#include <cmath>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -69,6 +70,20 @@ void localChecks()
         require(rigidBodyConstraintRanks(edges, shifted)[0].rank == 6,
                 "Rank must be independent of origin and physical units");
     }
+    const double c = std::cos(M_PI/6), s = std::sin(M_PI/6);
+    std::vector<ConstrainedMechanicalVertex> tilted{
+        {0, {0, 0, 0}, 1}, {1, {0, 0, 1}, 1}, {2, {1, 0, 0}, 1}};
+    for (auto& node : tilted) {
+        node.frame[0] = {c, s, 0};
+    }
+    require(rigidBodyConstraintRanks(edges, tilted)[0].rank == 3,
+            "One tilted roller direction constrains its translation and two rotations");
+    auto rotated = supports;
+    for (auto& node : rotated) {
+        node.frame = {{{c, s, 0}, {-s, c, 0}, {0, 0, 1}}};
+    }
+    require(rigidBodyConstraintRanks(edges, rotated)[0].rank == 6,
+            "Rotating the support frames keeps six independent supports");
     require(rigidBodyConstraintRanks({}, {}).empty(), "Empty topology has no components");
 }
 }
@@ -124,7 +139,8 @@ int main(int argc, char** argv)
             }
         }
         auto check = [&](const Nodes& nodes, int rank, const char* message) {
-            const auto result = Opm::Elasticity::mechanicalConstraintRanks(grid, nodes);
+            const auto result = Opm::Elasticity::mechanicalConstraintRanks(
+                grid, Opm::Elasticity::toNodeConstraints(nodes));
             require(result.size() == 1 && result[0].rank == rank, message);
         };
         check(supports, 6, "Globally valid supports must pass even with no local supports on other ranks");
@@ -137,7 +153,7 @@ int main(int argc, char** argv)
         }
         bool threw = false;
         try {
-            Opm::Elasticity::mechanicalConstraintRanks(grid, invalid);
+            Opm::Elasticity::mechanicalConstraintRanks(grid, Opm::Elasticity::toNodeConstraints(invalid));
         } catch (const std::runtime_error&) {
             threw = true;
         }

@@ -22,10 +22,22 @@
 */
 #ifndef OPM_BOUNDARY_UTILS_HPP
 #define OPM_BOUNDARY_UTILS_HPP
+#include <cassert>
 #include <cstring>
 #include <iostream>
+#include <set>
+#include <stdexcept>
+#include <dune/grid/common/gridenums.hh>
+#include <dune/grid/common/rangegenerators.hh>
+#include <opm/common/ErrorMacros.hpp>
 #include <opm/input/eclipse/EclipseState/Grid/FaceDir.hpp>
 #include <opm/input/eclipse/Schedule/BCState.hpp>
+#include <opm/geomech/NodeConstraint.hpp>
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <vector>
 namespace Opm{
     namespace Elasticity{
         template<int dimension>
@@ -138,15 +150,135 @@ namespace Opm{
             RollerFreeTop,  ///< as Roller, but the Z- face is left free
         };
 
+        /// Boundary faces at a node whose normals differ by less than this
+        /// angle form one patch and give one roller direction.
+        inline constexpr double rollerPatchAngle = 30.0 * M_PI / 180.0;
+
+        /// Roller directions at one node from the area normals of its boundary
+        /// faces: one per patch, largest patch first, orthonormalised.
+        inline NodeConstraint rollerConstraint(std::size_t node,
+                                               const std::vector<std::array<double,3>>& normals)
+        {
+            using Vec = std::array<double,3>;
+            const auto dot = [](const Vec& a, const Vec& b) {
+                return a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+            };
+            std::vector<Vec> patches;
+            for (const auto& n : normals) {
+                const double len = std::sqrt(dot(n, n));
+                if (len == 0.0) {
+                    continue;
+                }
+                auto p = std::find_if(patches.begin(), patches.end(), [&](const Vec& q) {
+                    return dot(n, q) > std::cos(rollerPatchAngle) * len * std::sqrt(dot(q, q));
+                });
+                if (p == patches.end()) {
+                    patches.push_back(n);
+                } else {
+                    for (int d = 0; d < 3; ++d) {
+                        (*p)[d] += n[d];
+                    }
+                }
+            }
+            std::stable_sort(patches.begin(), patches.end(),
+                             [&dot](const Vec& a, const Vec& b) { return dot(a, a) > dot(b, b); });
+            std::vector<Vec> dirs;
+            for (auto d : patches) {
+                const double len = std::sqrt(dot(d, d));
+                for (auto& x : d) {
+                    x /= len;
+                }
+                for (const auto& q : dirs) {
+                    const double proj = dot(d, q);
+                    for (int k = 0; k < 3; ++k) {
+                        d[k] -= proj * q[k];
+                    }
+                }
+                const double rest = std::sqrt(dot(d, d));
+                // a patch nearly in the span of the larger ones adds no direction
+                if (rest < std::sin(rollerPatchAngle)) {
+                    continue;
+                }
+                for (auto& x : d) {
+                    x /= rest;
+                    if (std::abs(x) < 1e-12) {
+                        x = 0.0; // round-off tilt of an axis-aligned face
+                    }
+                }
+                const double len2 = std::sqrt(dot(d, d));
+                for (auto& x : d) {
+                    x /= len2;
+                }
+                dirs.push_back(d);
+                if (dirs.size() == 3) {
+                    break;
+                }
+            }
+
+            NodeConstraint c;
+            c.node = node;
+            const auto axisOf = [](const Vec& d) {
+                int nonzero = 0, axis = -1;
+                for (int k = 0; k < 3; ++k) {
+                    if (d[k] != 0.0) {
+                        ++nonzero;
+                        axis = k;
+                    }
+                }
+                return (nonzero == 1 && std::abs(d[axis]) == 1.0) ? axis : -1;
+            };
+            // a full set or unit axes need no rotation (roller values are zero)
+            if (dirs.size() == 3) {
+                c.fixed = {true, true, true};
+                return c;
+            }
+            if (std::all_of(dirs.begin(), dirs.end(), [&](const Vec& d) { return axisOf(d) >= 0; })) {
+                for (const auto& d : dirs) {
+                    c.fixed[axisOf(d)] = true;
+                }
+                return c;
+            }
+            c.frame[0] = dirs[0];
+            if (dirs.size() == 1) {
+                int least = 0;
+                for (int k = 1; k < 3; ++k) {
+                    if (std::abs(dirs[0][k]) < std::abs(dirs[0][least])) {
+                        least = k;
+                    }
+                }
+                Vec t{};
+                t[least] = 1.0;
+                const double proj = dot(t, dirs[0]);
+                for (int k = 0; k < 3; ++k) {
+                    t[k] -= proj * dirs[0][k];
+                }
+                const double len = std::sqrt(dot(t, t));
+                for (auto& x : t) {
+                    x /= len;
+                }
+                c.frame[1] = t;
+            } else {
+                c.frame[1] = dirs[1];
+            }
+            const auto& a = c.frame[0];
+            const auto& b = c.frame[1];
+            c.frame[2] = {a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]};
+            for (std::size_t i = 0; i < dirs.size(); ++i) {
+                c.fixed[i] = true;
+            }
+            return c;
+        }
+
         /// Every node of a boundary face, not just the cell's eight corners: a
         /// cell merged from several others has faces with more nodes than
         /// that, and leaving them free would make the boundary soft.
         template<class Grid>
-        void nodesAtOuterBoundary(std::vector<std::tuple<size_t,MechBCValue>>& bc_nodes,
+        void nodesAtOuterBoundary(std::vector<NodeConstraint>& constraints,
                                   const Grid& grid,
                                   const OuterBoundary mode)
         {
             const auto& gv = grid.leafGridView();
+            std::vector<std::pair<std::size_t, std::array<double,3>>> nodeNormals;
             for (const auto& cell : elements(gv)) {
                 // In parallel the outermost overlap cells have faces to cells
                 // this rank does not hold, which look like domain boundary and
@@ -173,35 +305,31 @@ namespace Opm{
                         && grid.faceCentroid(face)[2] < grid.cellCentroid(cellIdx)[2]) {
                         continue;                      // the top of the model
                     }
-                    MechBCValue bcval;
-                    if (mode == OuterBoundary::Fixed) {
-                        bcval.fixeddir = {true, true, true};
-                    } else {
-                        bcval.fixeddir[axis] = true;
-                    }
                     for (int v = 0; v < grid.numFaceVertices(face); ++v) {
-                        bc_nodes.emplace_back(grid.faceVertex(face, v), bcval);
+                        nodeNormals.emplace_back(grid.faceVertex(face, v),
+                                                 std::array<double,3>{normal[0], normal[1], normal[2]});
                     }
                 }
             }
-
-            std::sort(bc_nodes.begin(), bc_nodes.end(),
-                      [](const auto& a, const auto& b){ return std::get<0>(a) < std::get<0>(b); });
-            // A node on an edge or corner is met once per face: keep one entry
-            // with the union of the masks.
-            std::vector<std::tuple<size_t,MechBCValue>> unique_nodes;
-            for (const auto& node : bc_nodes) {
-                if (!unique_nodes.empty()
-                    && std::get<0>(unique_nodes.back()) == std::get<0>(node)) {
-                    auto& mask = std::get<1>(unique_nodes.back()).fixeddir;
-                    for (int d = 0; d < 3; ++d) {
-                        mask[d] = mask[d] || std::get<1>(node).fixeddir[d];
-                    }
+            std::stable_sort(nodeNormals.begin(), nodeNormals.end(),
+                             [](const auto& a, const auto& b) { return a.first < b.first; });
+            constraints.clear();
+            std::vector<std::array<double,3>> normals;
+            for (std::size_t i = 0; i < nodeNormals.size();) {
+                const auto node = nodeNormals[i].first;
+                normals.clear();
+                for (; i < nodeNormals.size() && nodeNormals[i].first == node; ++i) {
+                    normals.push_back(nodeNormals[i].second);
+                }
+                if (mode == OuterBoundary::Fixed) {
+                    NodeConstraint c;
+                    c.node = node;
+                    c.fixed = {true, true, true};
+                    constraints.push_back(c);
                 } else {
-                    unique_nodes.push_back(node);
+                    constraints.push_back(rollerConstraint(node, normals));
                 }
             }
-            bc_nodes.swap(unique_nodes);
         }
 
         template<class BCConfig, class GvType, class CartMapperType>

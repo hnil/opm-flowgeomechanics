@@ -707,7 +707,8 @@ namespace Opm{
                 const auto& cartesianIndexMapper = vanguard.cartesianIndexMapper();
                 if(mechGridContext_ && mechGridContext_->fromCornerPoints()){
                     const auto& ctx = *mechGridContext_;
-                    Opm::Elasticity::nodesAtBoundary(bc_nodes_,
+                    std::vector<std::tuple<size_t,MechBCValue>> bc_nodes;
+                    Opm::Elasticity::nodesAtBoundary(bc_nodes,
                                                      bcconfigs,
                                                      bcprops,
                                                      ctx.grid().leafGridView(),
@@ -715,6 +716,7 @@ namespace Opm{
                                                      [&ctx](int cart, Opm::FaceDir::DirEnum dir) {
                                                          return ctx.cellOfFineFace(cart, dir);
                                                      });
+                    bc_nodes_ = Opm::Elasticity::toNodeConstraints(bc_nodes);
                 } else if(mechGridContext_){
                     // BCCON describes the flow grid's boundary, not this one:
                     // constrain the mechanics grid's own outer boundary.
@@ -732,11 +734,13 @@ namespace Opm{
                                                           mechGridContext_->grid(),
                                                           mode);
                 } else {
-                    Opm::Elasticity::nodesAtBoundary(bc_nodes_,
+                    std::vector<std::tuple<size_t,MechBCValue>> bc_nodes;
+                    Opm::Elasticity::nodesAtBoundary(bc_nodes,
                                                      bcconfigs,
                                                      bcprops,
                                                      gv,
                                                      cartesianIndexMapper);
+                    bc_nodes_ = Opm::Elasticity::toNodeConstraints(bc_nodes);
                 }
 
                 const auto components = Opm::Elasticity::mechanicalConstraintRanks(
@@ -1138,7 +1142,7 @@ namespace Opm{
             return this->biotCoef(elementIdx) * (eps[0] + eps[1] + eps[2]);
         }
 
-        const std::vector<std::tuple<size_t,MechBCValue>>& bcNodes() const{
+        const std::vector<Opm::Elasticity::NodeConstraint>& bcNodes() const{
             return bc_nodes_;
         }
 
@@ -1152,7 +1156,7 @@ namespace Opm{
     private:
         GeoMechModel<TypeTag> geoMechModel_;
 
-        std::vector<std::tuple<size_t,MechBCValue>> bc_nodes_;
+        std::vector<Opm::Elasticity::NodeConstraint> bc_nodes_;
         // Only set when the mechanics runs on a grid of its own.
         std::unique_ptr<MechGridContext> mechGridContext_;
     };

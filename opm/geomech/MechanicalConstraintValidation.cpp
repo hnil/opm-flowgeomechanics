@@ -97,7 +97,12 @@ int constraintRank(const std::vector<ConstrainedMechanicalVertex>& nodes)
             if (!(node.mask & (1u << d))) {
                 continue;
             }
-            auto row = rows[d];
+            std::array<double, 6> row{};
+            for (int a = 0; a < 3; ++a) {
+                for (int j = 0; j < 6; ++j) {
+                    row[j] += node.frame[d][a]*rows[a][j];
+                }
+            }
             // Reorthogonalized Gram-Schmidt, avoiding normal equations and
             // their squared condition number. Six columns bound the work.
             for (int pass = 0; pass < 2; ++pass) {
@@ -132,7 +137,7 @@ std::vector<MechanicalConstraintComponent> rigidBodyConstraintRanks(
     for (const auto& [a, b] : edges) {
         components.join(a, b);
     }
-    std::map<std::int64_t, ConstrainedMechanicalVertex> unique;
+    std::vector<ConstrainedMechanicalVertex> supports;
     for (const auto& node : constraints) {
         if (node.mask == 0) {
             continue;
@@ -142,16 +147,14 @@ std::vector<MechanicalConstraintComponent> rigidBodyConstraintRanks(
                 throw std::runtime_error("Mechanical constraint has a nonfinite vertex coordinate");
             }
         }
-        auto [it, inserted] = unique.emplace(node.id, node);
-        if (!inserted) {
-            it->second.mask |= node.mask;
-        }
+        supports.push_back(node);
     }
     std::map<std::int64_t, std::vector<ConstrainedMechanicalVertex>> groups;
     for (const auto& [id, parent] : components.entries()) {
         groups[components.find(id)];
     }
-    for (const auto& [id, node] : unique) {
+    for (const auto& node : supports) {
+        const auto id = node.id;
         if (components.entries().count(id) == 0) {
             throw std::runtime_error("Mechanical constraint references a vertex outside the mechanical grid");
         }
@@ -166,7 +169,7 @@ std::vector<MechanicalConstraintComponent> rigidBodyConstraintRanks(
 
 std::vector<MechanicalConstraintComponent> mechanicalConstraintRanks(
     const Dune::CpGrid& grid,
-    const std::vector<std::tuple<std::size_t, MechBCValue>>& boundaryNodes)
+    const std::vector<NodeConstraint>& boundaryNodes)
 {
     const auto gv = grid.leafGridView();
     const auto& comm = grid.comm();
@@ -196,14 +199,16 @@ std::vector<MechanicalConstraintComponent> mechanicalConstraintRanks(
     int invalid = 0;
     std::vector<std::int64_t> localMasks;
     std::vector<double> localPositions;
-    for (const auto& [index, bc] : boundaryNodes) {
+    std::vector<double> localFrames;
+    for (const auto& bc : boundaryNodes) {
+        const auto index = bc.node;
         if (index >= numVertices) {
             invalid = 1;
             continue;
         }
         unsigned mask = 0;
         for (int d = 0; d < 3; ++d) {
-            if (bc.fixeddir[d]) {
+            if (bc.fixed[d]) {
                 mask |= 1u << d;
             }
         }
@@ -212,6 +217,9 @@ std::vector<MechanicalConstraintComponent> mechanicalConstraintRanks(
         }
         localMasks.insert(localMasks.end(), {ids[index], static_cast<std::int64_t>(mask)});
         localPositions.insert(localPositions.end(), positions[index].begin(), positions[index].end());
+        for (const auto& dir : bc.frame) {
+            localFrames.insert(localFrames.end(), dir.begin(), dir.end());
+        }
     }
     if (comm.max(invalid)) {
         throw std::runtime_error("Mechanical boundary condition has an invalid local vertex index");
@@ -219,6 +227,7 @@ std::vector<MechanicalConstraintComponent> mechanicalConstraintRanks(
     const auto gatheredEdges = Opm::gatherv(localEdges, comm, 0).first;
     const auto gatheredMasks = Opm::gatherv(localMasks, comm, 0).first;
     const auto gatheredPositions = Opm::gatherv(localPositions, comm, 0).first;
+    const auto gatheredFrames = Opm::gatherv(localFrames, comm, 0).first;
     std::vector<MechanicalConstraintComponent> result;
     std::string error;
     if (comm.rank() == 0) {
@@ -229,9 +238,15 @@ std::vector<MechanicalConstraintComponent> mechanicalConstraintRanks(
             }
             std::vector<ConstrainedMechanicalVertex> constraints;
             for (std::size_t i = 0; i < gatheredMasks.size()/2; ++i) {
-                constraints.push_back({gatheredMasks[2*i],
+                ConstrainedMechanicalVertex node{gatheredMasks[2*i],
                     {gatheredPositions[3*i], gatheredPositions[3*i+1], gatheredPositions[3*i+2]},
-                    static_cast<unsigned>(gatheredMasks[2*i+1])});
+                    static_cast<unsigned>(gatheredMasks[2*i+1])};
+                for (int d = 0; d < 3; ++d) {
+                    for (int a = 0; a < 3; ++a) {
+                        node.frame[d][a] = gatheredFrames[9*i + 3*d + a];
+                    }
+                }
+                constraints.push_back(node);
             }
             result = rigidBodyConstraintRanks(edges, constraints);
         } catch (const std::exception& e) {

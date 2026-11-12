@@ -68,20 +68,96 @@ void VemDiscretisation<GridType>::setOptions(int stability_choice_int,
 }
 
 template<class GridType>
-void VemDiscretisation<GridType>::fixNodes(const std::vector<std::tuple<size_t,MechBCValue>>& bc_nodes)
+void VemDiscretisation<GridType>::fixNodes(const std::vector<NodeConstraint>& constraints)
 {
-    // bc_nodes are sorted and unique (nodesAtBoundary/nodesAtOuterBoundary), so the dofs are too
+    // constraints are sorted and unique by node, so the dofs are too
     std::vector<int> fixed_dof_ixs;
     std::vector<double> fixed_dof_values;
-    for (const auto& [node, value] : bc_nodes) {
+    frame_of_node_.assign(grid_.leafGridView().size(3), -1);
+    frames_.clear();
+    for (const auto& c : constraints) {
+        if (!c.axisAligned()) {
+            frame_of_node_[c.node] = int(frames_.size());
+            frames_.push_back(c.frame);
+        }
         for (int m = 0; m < 3; ++m) {
-            if (value.fixeddir[m]) {
-                fixed_dof_ixs.push_back(3 * node + m);
-                fixed_dof_values.push_back(value.disp[m]);
+            if (c.fixed[m]) {
+                fixed_dof_ixs.push_back(3 * c.node + m);
+                fixed_dof_values.push_back(c.value[m]);
             }
         }
     }
     dirichlet_ = {int(fixed_dof_ixs.size()), fixed_dof_ixs, fixed_dof_values};
+}
+
+// Rows (and columns) of rotated nodes become F A (F^T): u = F^T u~ with F the
+// node's frame. Entries of other nodes are passed through unchanged.
+template<class GridType>
+void VemDiscretisation<GridType>::rotateRows(std::vector<std::tuple<int, int, double>>& entries,
+                                              bool columns_too) const
+{
+    if (frames_.empty()) {
+        return;
+    }
+    std::vector<std::tuple<int, int, double>> out;
+    out.reserve(entries.size());
+    const auto expand = [this](int dof, double val, auto&& emit) {
+        const int f = frame_of_node_[dof / 3];
+        if (f < 0) {
+            emit(dof, val);
+            return;
+        }
+        const int a = dof % 3;
+        for (int i = 0; i < 3; ++i) {
+            emit(3 * (dof / 3) + i, frames_[f][i][a] * val);
+        }
+    };
+    for (const auto& [r, c, v] : entries) {
+        expand(r, v, [&](int ri, double vr) {
+            if (columns_too) {
+                expand(c, vr, [&](int ci, double vc) { out.emplace_back(ri, ci, vc); });
+            } else {
+                out.emplace_back(ri, c, vr);
+            }
+        });
+    }
+    entries.swap(out);
+}
+
+template<class GridType>
+template<class V>
+void VemDiscretisation<GridType>::toLocal(V& u) const
+{
+    if (u.size() == 0) {
+        return; // no start vector yet: zero in any frame
+    }
+    for (std::size_t k = 0; k < frame_of_node_.size(); ++k) {
+        if (const int f = frame_of_node_[k]; f >= 0) {
+            const double g[3] = {double(u[3 * k]), double(u[3 * k + 1]), double(u[3 * k + 2])};
+            for (int i = 0; i < 3; ++i) {
+                const auto& d = frames_[f][i];
+                u[3 * k + i] = d[0] * g[0] + d[1] * g[1] + d[2] * g[2];
+            }
+        }
+    }
+}
+
+template<class GridType>
+template<class V>
+void VemDiscretisation<GridType>::toGlobal(V& u) const
+{
+    if (u.size() == 0) {
+        return;
+    }
+    for (std::size_t k = 0; k < frame_of_node_.size(); ++k) {
+        if (const int f = frame_of_node_[k]; f >= 0) {
+            const double l[3] = {double(u[3 * k]), double(u[3 * k + 1]), double(u[3 * k + 2])};
+            const auto& F = frames_[f];
+            for (int a = 0; a < 3; ++a) {
+                u[3 * k + a] = F[0][a] * l[0] + F[1][a] * l[1] + F[2][a] * l[2];
+            }
+        }
+    }
 }
 
 template<class GridType>
@@ -121,6 +197,8 @@ void VemDiscretisation<GridType>::assembleMatrix()
                                       &pratio_[0], &body_force_[0],
                                       /*num_neumann_faces*/ 0, nullptr, nullptr, A_entries,
                                       rhs_force_, stability_choice_, corner_mask_.data());
+    rotateRows(A_entries, /*columns_too*/ true);
+    toLocal(rhs_force_);
     const int num_dofs = int(rhs_force_.size());
     matrix_ = std::make_unique<Matrix>(); // a built BCRSMatrix cannot be rebuilt in place
     matrix_->setBuildMode(Matrix::random);
@@ -150,6 +228,7 @@ void VemDiscretisation<GridType>::buildOperators()
                                          &num_face_corners_[0], &face_corners_[0],
                                          &pressure_tmp[0], rhs_tmp, divmat, true,
                                          corner_mask_.data());
+        rotateRows(divmat, /*columns_too*/ false);
         std::vector<char> fixed(num_dofs, 0);
         for (const int dof : fixed_dof_ixs) {
             fixed[dof] = 1;

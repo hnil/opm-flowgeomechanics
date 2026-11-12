@@ -391,11 +391,8 @@ namespace Opm{
                         fixed  = 0.0;
                         const auto& bcnodes = problem.bcNodes();
                         for(const auto& node: bcnodes){
-                            int node_idx = std::get<0>(node);
-                            auto bcnode = std::get<1>(node);
-                            auto fixdir = bcnode.fixeddir;
                             for(int i = 0; i < 3; ++i){
-                                fixed[3*node_idx+i][0] = fixdir[i];
+                                fixed[3*node.node+i][0] = node.fixed[i];
                             }
                         }
                         Opm::Helper::writeVector(simulator_,
@@ -462,8 +459,10 @@ namespace Opm{
         //! A failure on any rank is a failure on all: the displacement is shared.
         Opm::Elasticity::MechSolveResult mechSolveOnAllRanks_(bool cold)
         {
+            mechDisc_->toLocal(mechState_.displacement);
             auto result = mechLinSolver_->solve(mechRhs_, mechDisc_->scale(),
                                                 mechState_.displacement, cold);
+            mechDisc_->toGlobal(mechState_.displacement);
             const auto& comm = simulator_.gridView().comm();
             result.converged = comm.min(result.converged ? 1 : 0) == 1;
             result.failed = comm.max(result.failed ? 1 : 0) == 1;

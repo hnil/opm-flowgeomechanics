@@ -38,6 +38,7 @@
 #include <opm/geomech/MechLinePlanePreconditioner.hpp>
 #include <opm/geomech/DuneCommunicationHelpers.hpp>
 #include <opm/geomech/MechanicalPartitionValidation.hpp>
+#include <opm/geomech/NodeConstraint.hpp>
 #include <opm/geomech/vem/vem.hpp>
 
 #include <memory>
@@ -94,7 +95,8 @@ public:
                     bool stab_on_stress,
                     bool diagonal_scaling);
 
-    void fixNodes(const std::vector<std::tuple<size_t,MechBCValue>>& bc_nodes);
+    //! Constrained nodes with a non-axis frame are solved in that frame.
+    void fixNodes(const std::vector<NodeConstraint>& constraints);
     void setBodyForce(double gravity, const std::vector<double>& density);
 
     //! Stiffness matrix and the fixed-load rhs (body force, Dirichlet values).
@@ -114,10 +116,15 @@ public:
     const Vector& scale() const { return scale_; }
     const std::vector<double>& coords() const { return coords_; }
 
+    //! Between global displacement and the solver's unknowns (rotated nodes in their frame).
+    template<class V> void toLocal(V& u) const;
+    template<class V> void toGlobal(V& u) const;
+
 private:
     void buildGeometry();
     void applyDirichlet();
     void applyDiagonalScaling();
+    void rotateRows(std::vector<std::tuple<int, int, double>>& entries, bool columns_too) const;
     static void makeDuneMatrixCompressed(const std::vector<std::tuple<int, int, double>>& entries,
                                          Matrix& mat);
 
@@ -130,6 +137,8 @@ private:
     std::vector<double> pratio_;
     std::vector<double> body_force_;
     std::tuple<int, std::vector<int>, std::vector<double>> dirichlet_;
+    std::vector<int> frame_of_node_; // index into frames_, or -1
+    std::vector<std::array<std::array<double, 3>, 3>> frames_;
     std::vector<double> rhs_force_;
 
     std::unique_ptr<Matrix> matrix_ = std::make_unique<Matrix>();
