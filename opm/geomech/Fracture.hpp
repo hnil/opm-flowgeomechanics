@@ -674,8 +674,72 @@ private:
     size_t numFractureCells() const { return grid_->leafGridView().size(0); }
     std::vector<int> identify_closed(const FMatrix& A,
                                      const VectorHP& x,
-                                     const ResVector& rhs,
-                                     const int nwells);
+                                     const ResVector& rhs);
+    static ResVector contactForce(const FMatrix& A,
+                                  const ResVector& w,
+                                  const ResVector& p,
+                                  const ResVector& traction);
+
+    // Inner Newton settings, read once per grid solve.
+    struct InnerSolveOptions
+    {
+        bool useAd{false};
+        int verbosity{0};
+        std::string closingType{"org"};
+        std::string closedCellPolicy{"sticky"};
+        bool isFb{false};
+        double closeForceTol{0.0};
+        double reopenForceTol{0.0};
+        double reopenWidthTol{0.0};
+        bool reopenUseOpenPressure{false};
+        int freezeClosedAfter{-1};
+        bool chatterGuard{false};
+        int chatterFlipLimit{3};
+        int maxToggleCount{1000000000};
+        double maxToggleFraction{1.0};
+        double fbMu{0.0};
+        bool fbScaledConvergence{false};
+        bool fbLineSearch{false};
+        double fbLineSearchMin{0.0625};
+        bool fbClampWidth{true};
+        bool dropCoupling{true};
+        double dropTolH{1e1};
+        double dropTolP{1.0};
+        bool storageTerm{false};
+        std::string scaling{"none"};
+        std::string linearSolver;
+        int directMaxCells{4000};
+        std::string directFallbackSolver{"fgmres"};
+        PropertyTree precond;
+        bool updateMechOnReuse{false};
+        double linTol{0.0};
+        double linAtol{0.0};
+        int linMaxIter{0};
+        int linVerbosity{0};
+        int dumpMinNonlinIter{0};
+        bool writeCoupledSystem{false};
+        bool dumpOnFailure{true};
+        bool debugChecksum{false};
+        std::string failurePolicy{"throw"};
+        bool gmresFallback{true};
+        double damping{0.0};
+        double coupledStepLimit{0.0};
+        double maxDwidth{0.0};
+        double maxDp{0.0};
+        static InnerSolveOptions read(const PropertyTree& prm);
+    };
+    struct ContactUpdate
+    {
+        std::vector<int> closed;
+        bool changed{false};
+    };
+    // Fischer-Burmeister residual phi and its per-cell scale 1+|a|+|b|; empty otherwise.
+    struct FbRows
+    {
+        std::vector<double> phi;
+        std::vector<double> scale;
+    };
+    InnerSolveOptions inner_;
     template <class TypeTag, class Simulator>
     void initReservoirProperties(const Simulator& simulator);
 
@@ -738,6 +802,18 @@ private:
 
     // one nonlinear iteration of fully coupled system.  Returns 'true' if converged
   bool fullSystemIteration(const double tol,const int iteration);
+    void updateFlowCoefficients_();
+    ContactUpdate updateContactSet_(const VectorHP& x, const ResVector& traction, int nlin_iteration);
+    FbRows assembleMechanicsRows_(const VectorHP& x,
+                                  ResVector& mech_rhs,
+                                  const std::vector<int>& closed_cells,
+                                  bool first_iteration);
+    void assembleFlowRows_(const ResVector& mech_rhs, const std::vector<int>& closed_cells);
+    void assembleSystemMatrix_(const std::vector<int>& closed_cells, bool first_iteration);
+    VectorHP assembleResidual_(const VectorHP& x, const ResVector& mech_rhs, const FbRows& fb) const;
+    bool isConverged_(const VectorHP& rhs, const FbRows& fb, double tol) const;
+    void limitStep_(const VectorHP& x, VectorHP& dx, const ResVector& mech_rhs, const FbRows& fb) const;
+    void applyUpdate_(VectorHP& x, const VectorHP& dx);
 
     void assembleFractureMatrix() const;
     std::vector<double> stressIntensityK1() const;

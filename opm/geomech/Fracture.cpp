@@ -1939,6 +1939,7 @@ Fracture::solveOnCurrentGrid_(const PropagationOptions& opt)
     // a grow-only round scores the current state without solving
     bool converged = joint_growth_round_;
     if (!joint_growth_round_) {
+        inner_ = InnerSolveOptions::read(prm_);
         while (!(converged = fullSystemIteration(opt.tol, iter)) && iter++ < opt.maxIter) {
         }
     }
