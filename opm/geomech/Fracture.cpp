@@ -2820,22 +2820,6 @@ Fracture::initPressureMatrix()
     }
     matrix.compress();
 }
-void
-Fracture::assemblePressure()
-{
-    // Delegate to the standalone implementation shared with unit tests and the
-    // AD assembler path, eliminating the duplicate inline code that lived here.
-    // updateLeakoff() is called by the caller before this function.
-    auto result = assemblePressureOriginal(makePressureAssemblyInput());
-    if (!pressure_matrix_) {
-        // First call: take ownership of the newly created matrix.
-        pressure_matrix_ = std::move(result);
-    } else {
-        // Subsequent calls: copy values so references to the matrix stay valid.
-        *pressure_matrix_ = *result;
-    }
-}
-
 bool
 Fracture::removeNewZeroWithCells(RegularTrimesh& mesh,
                                  int cur_level,

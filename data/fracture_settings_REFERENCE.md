@@ -10,13 +10,9 @@ and the longer `model2` BHP/RATE decks (complete, 0 non-convergence, 0 linear-so
 grows to grid ~1556). The four committed regression tests still pass unchanged.
 
 **The settings that actually matter:**
-1. `closed_cell` toggle guard must stay effectively unlimited — `max_closed_cell_toggle_count=1e9`,
-   `max_closed_cell_toggle_fraction=1.0`. Too-tight values freeze the contact set and the solve never
-   converges. (Also fixed in code: the guard now throttles only re-openings, never contact growth.)
-2. `reopen_width_tolerance=0.0` (force-driven reopen). Any value >0 locks closed cells (their width is
-   pinned at 0) and suppresses fracture growth. (Also fixed in code.)
-3. **Robust linear solver beats the fancy one.** `use_ad_pressure_assembly=false`,
-   `drop_fluid_mech_linearization=true`, preconditioner `mode_policy=manual` / `mech_first=false`
+1. Reopening of closed cells is force-driven only; the toggle guard and the reopen width test were
+   removed (both could lock the contact set and suppress growth).
+2. **Robust linear solver beats the fancy one.** `drop_fluid_mech_linearization=true`, preconditioner `mode_policy=manual` / `mech_first=false`
    (mech-last), `linsolver.tol=1e-10`, `linsolver.max_iter=100`. The AD + `coupling_auto` + `mech_first`
    path converges fast on short cases but **fails the coupled linear solve on longer runs** (it aborts).
    The mech-last / decoupled path completes long runs with zero failures.
@@ -64,8 +60,6 @@ configs) is **dead**. It now lives under `fractureparam.solver` in the final con
 |---|---|
 | `area_change_fac` | max fracture-area growth factor allowed per expansion step (growth limiter ↔ your timestep coupling) |
 | `dt_limit` | growth/step limiter |
-| `efac`, `rfac` | expansion heuristics (target-expansion gain `efac`; max grow as fraction of box length `rfac`) |
-| `max_expand_iter` | max grid-expansion iterations per fracture solve |
 | `max_iter_on_same_level` | cap on solves at one refinement level |
 | `target_cellcount`, `cellcount_threshold`, `numcell_threshold`, `max_num_coarsening` | trimesh coarsening / size control |
 | `leakoff_model` | leak-off convention: `legacy` (default; 2 faces, d = L/4 → 8λkA/L), `onesided` (1 face, d = L/4 → 4λkA/L), `reveal` (1 face, d = 0.632 L → 1.58λkA/L, fitted to the dz20 reference, no physical argument). Filter cake follows the same face count (total thickness split over the faces). `leakoff_sides` / `leakoff_distance_factor` override the preset. L = cell extent normal to the fracture, λ = total mobility. |
@@ -80,9 +74,8 @@ configs) is **dead**. It now lives under `fractureparam.solver` in the final con
 |---|---|
 | `max_iter` | max Newton iterations per fracture solve (non-convergence → warning, or throw if `failure_on_nonconvergence`) |
 | `tolerance` | convergence tol on the (mech, flow) residual infinity-norms |
-| `damping` | Newton step scaling (1 = full step) |
 | `min_width`,`max_width` | numerical width clamps inside the width solve. NOT the flow floor — that is `config.min_width`, and for deck runs it is SET BY THE DECK: `WSEED` item 10 (WIDTH, default 1e-4 m) overrides the JSON (`FractureModel.cpp`, logged at seed creation). Recommended deck value 3e-4 (≈ Reveal's conductivity floor); `config.min_width` in JSON matters only for standalone/test setups without a deck `WSEED`. |
-| `max_dwidth`,`max_dp` | per-iteration clamps on width / pressure update (stability) |
+| `max_dwidth` | per-iteration clamp on the width update (stability) |
 | `max_change` | misc step clamp |
 | `force_limit` | traction floor in closed-cell force test |
 | `failure_on_nonconvergence` | throw (true) vs warn-and-continue (false) when `max_iter` is hit |
@@ -92,22 +85,15 @@ configs) is **dead**. It now lives under `fractureparam.solver` in the final con
 
 | key | default | meaning |
 |---|---|---|
-| `closing_type` | `org` | `org` (force = rhs − A·w − I·p) · `simple` (per-face force vs pressure) · `open` (never close) |
-| `closed_cell_policy` | `sticky` | `legacy` (stateless test each iter) · `sticky` (hysteresis: stay closed unless reopen test passes) · `pdas` (semismooth-Newton / primal-dual active set: one consistently-scaled criterion `closed ⟺ tmp_i − \|A_ii\|·w_i > tol`). `pdas` cuts contact chatter ~20% on the decoupled path with identical growth; it does NOT make keep-C true Newton converge (that non-convergence is the contact complementarity itself, not the active-set rule). |
+| `closed_cell_policy` | `sticky` | `sticky` (hysteresis: stay closed unless reopen test passes) · `fischer_burmeister` (smooth complementarity rows, no binary set; experimental). Contact force is rhs − A·w − I·p. |
 | `close_force_tolerance` | 0.0 | compressive force above which an open cell closes |
 | `reopen_force_tolerance` | =close_tol | (sticky) opening force below which a closed cell may reopen |
-| `reopen_width_tolerance` | 0.0 | **(sticky) keep at 0.** A closed cell's width is pinned at 0, so any value >0 makes the reopen test `width≥tol` unsatisfiable → cells lock closed → fracture under-grows. 0 ⇒ force-driven reopen. |
-| `max_closed_cell_toggle_count` | 1e9 | **keep large.** Max cells allowed to flip open/closed per iteration; too small (e.g. 32) freezes the closed set at empty and the solve never converges |
-| `max_closed_cell_toggle_fraction` | 1.0 | **keep at 1.0.** Same guard as a fraction of N; effective limit is `min(count, fraction·N)` |
 
 ## 6. `fractureparam.solver` — fracture flow–mech coupling block `C`  *(group `__4`)*
 
 | key | default | meaning |
 |---|---|---|
-| `drop_fluid_mech_linearization` | true | `true` ⇒ always zero the coupling block `C` (decoupled / Picard). `false` ⇒ keep `C` (true Newton) subject to the drop tolerances below |
-| `drop_tol_h` | 1e1 | drop `C` when the **mech traction** infinity-norm exceeds this. The traction is ~confining stress (O(1e6–1e7 Pa)), so values like 100 mean `C` is *always* dropped even with `drop_fluid_mech_linearization=false` — setting that flag alone reproduces drop-C bit for bit. To actually keep coupling, lift this (≳1e8) **and** `drop_tol_p`. ⚠️ The old note here said the coupled solver fails on these systems; that was measured before the 2026-08-26 out-of-bounds fix and no longer holds — keep-C now runs with zero linear-solve failures and fewer nonlinear iterations than drop-C on both the SIMPLE deck and 92-day model2. Defaults unchanged pending a full matrix re-run. |
-| `drop_tol_p` | 1.0 | same, on the pressure residual |
-| `use_ad_pressure_assembly` | false | use the consistent AD assembler for the pressure+coupling matrices |
+| `drop_fluid_mech_linearization` | true | `true` ⇒ always zero the coupling block `C` (decoupled / Picard). `false` ⇒ keep `C` (true Newton) |
 
 ## 7. `fractureparam.solver` — state guards  *(group `__5`)*
 
@@ -149,8 +135,6 @@ across outer iterations. Implemented in `Fracture::applyCouplingUpdate`.
 | `wi_vector_acceleration` | `none` | opt-in acceleration of the per-cell **CTF vector** fixed point (the quantity `wellIndicesAvrg` damps): `none` (legacy damped average) · `aitken` (vector Aitken relaxation ω from the residual history) · `anderson` (depth-1 Anderson mixing of the last two targets). Reuses `coupling_relax_*`/`coupling_anderson_alpha_*`/`coupling_acceptance_factor`/`coupling_fallback_legacy`; CTFs kept ≥ 0; rejected steps fall back to the legacy damped update; history reset at timestep boundaries and on fracture reset |
 | `value_only_wi_update` | false | opt-in cheap connection-update path in the outer loop: when the coupling change has **no structure change** (same cells, only CTF values moved), write the CTFs in place on the existing well perforations and skip the schedule rebuild + well-model `beginTimeStep` + `prepareTimeStep` + parent setup iteration. Structure changes always take the full legacy path |
 | `k1_extraction` | `aperture_cell` | how the propagation criterion's K1 is evaluated at front cells: `aperture_cell` (legacy: single boundary-cell width at its centroid distance — mesh sensitive) · `displacement_correlation` (opt-in: least-squares fit of the asymptotic opening w(s)=C·√s over a corridor behind the front edge, converted with the same calibrated constant; reduces to legacy for a single point, falls back to legacy when <2 corridor cells) |
-| `toggle_guard_mode` | `count` | anti-chatter strategy for the contact set: `count` (legacy: global re-opening count vs `max_closed_cell_toggle_*`; **WARNING:** a finite count limit wholesale-rejects legitimate en-masse re-opening — observed ~100× fracture-area suppression on the refine decks with 32/0.1) · `chatter` (opt-in: per-cell flip counting within a solve; first state changes always pass so monotone opening is never blocked; a cell is pinned only after `chatter_flip_limit` changes — true chatter) |
-| `chatter_flip_limit` | 3 | per-cell contact state changes allowed per solve before the cell is pinned (`toggle_guard_mode=chatter`) |
 | `k1_correlation_length` | 0.0 | corridor length L in meters for `displacement_correlation`; 0 ⇒ auto = `k1_correlation_cells` × local cell size |
 | `k1_correlation_cells` | 3.0 | corridor length in local cell sizes when `k1_correlation_length` is 0 |
 
@@ -190,10 +174,9 @@ across outer iterations. Implemented in `Fracture::applyCouplingUpdate`.
 | key | location | default | meaning |
 |---|---|---|---|
 | `linsolver.scaling` | `fractureparam.solver.linsolver` | `none` | `blockmax`: symmetric block scaling `D S D` of the coupled system (s_m=1/√max\|A\|, s_p=1/√max\|M\|) before the Krylov solve. Strong, cheap conditioning win; dumps stay unscaled (physical). |
-| `linsolver.failure_policy` | `fractureparam.solver.linsolver` | `throw` | `ladder`: on linear non-convergence, try a rescue ladder (configured→fgmres→fixed-stress preconditioner→**drop-C / decoupled**) before giving up. The drop-C rung is essentially always solvable, so the run progresses instead of aborting. Since 2026-08-24 a Krylov *abort* (bicgstab breakdown / `defect=nan` from overflow on the ill-scaled system) also falls into the ladder instead of failing the nonlinear iteration — this plus `scaling=blockmax` + `preconditioner.lu_pivoting` is what makes the iterative rate_well solve survive establishment (109 s vs direct 458 s on the caked SHORT10D, same answer). With `throw` (default) aborts still rethrow unchanged. |
+| rescue ladder | `fractureparam.solver.linsolver` | always on | on linear non-convergence or a Krylov abort, try configured→fgmres→fixed-stress preconditioner→**drop-C / decoupled** before giving up. With `scaling=blockmax` + `preconditioner.lu_pivoting` this is what makes the iterative rate_well solve survive establishment. |
 | `linsolver.preconditioner.lu_pivoting` | `…linsolver.preconditioner` | `false` | Partially pivoted dense LU for the mechanics block of `FractureMechanicsPreconditioner` (+ a named recoverable error on a zero/non-finite pivot). The unpivoted legacy LU can overflow when O(1) pinned closed-cell rows mix with O(1e9) BEM rows. Off by default (pivoting changes round-off → REGTEST bit-identity); on in `seq_implicit_ratewell.json`. |
-| `linsolver.debug_checksum` | `fractureparam.solver.linsolver` | `false` | Per coupled solve, print a bit-exact hash of the system matrix, the residual and the preconditioner's action on a fixed probe. Two runs of the same case must print identical streams; the first differing line localizes a reproducibility break to assembly, residual or preconditioner. (Found the 2026-08-26 out-of-bounds `dR/dw` read this way; see also `-DGEOMECH_ASAN=ON`.) |
-| `linsolver.solver` | `fractureparam.solver.linsolver` | `bicgstab` | also accepts `direct`: assemble the dense 2N×2N coupled system and LU-solve it. For SMALL fractures this is a robust *linear* solve (the dense-BEM coupled system has cond ~1e11 and defeats Krylov; the only good iterative preconditioner — exact Schur — is dense, i.e. same cost as direct). Gated by `direct_max_cells` (default 4000); above it, falls back to `direct_fallback_solver` (default `fgmres`). NOTE: a robust linear solve does **not** by itself make keep-C *true Newton* converge — the nonlinear coupled step is erratic for this contact problem; decoupled Picard (drop-C) remains the robust path. |
+| `linsolver.solver` | `fractureparam.solver.linsolver` | `bicgstab` | `bicgstab`, `gmres` or `fgmres` |
 | `keep_zero_ctf_topology` | `fractureparam.solver` | `false` | Keep fracture-generated dynamic completions in the schedule even when their current fracture WI/CTF is non-positive. Default `false` skips these topology-only connections because an open zero-CF schedule completion is **not** inert: it still enters `initializeWellPerfData()` / `initializeWellState()`, changing well topology, perf ordering and first-perforation pressure seeding before the fracture WI is added later. Enable only for topology studies or debugging. |
 | `conservative_propagation` | `fractureparam.solver` | `false` | Don't grow the fracture (trimesh `if_propagate_trimesh`) off a non-converged inner solve — K1 from an unconverged state is unreliable, and opening on it can irreversibly alter the result. |
 | `retract_established_compressed` | `fractureparam.solver` | `false` | In `removeNewZeroWithCells`, also retract **established** cells (not just newly-grown) that end zero-width/compressed, instead of only closing them. ⚠️ lets the fracture shrink → can oscillate against growth; experimental. |

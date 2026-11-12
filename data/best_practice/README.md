@@ -2,8 +2,8 @@
 
 Curated `--fracture-param-file` configurations for `flow_energy_geomech`, distilled from
 the 2026 validation sweeps. Every file here shares the **validated robust
-inner block** (decoupled Picard, `closed_cell_policy=sticky`, mech-last preconditioner,
-`reopen_width_tolerance=0`, full anti-chatter guard) and differs only in the coupling
+inner block** (decoupled Picard, `closed_cell_policy=sticky`, mech-last preconditioner)
+and differs only in the coupling
 *method*, the well *control*, and a few case-specific levers.
 
 Full key-by-key documentation of every option is in `../fracture_settings_REFERENCE.md`.
@@ -22,15 +22,13 @@ Full key-by-key documentation of every option is in `../fracture_settings_REFERE
 | `seq_implicit_bhp.json` | SeqMechFrac (implicit_flow) | perf_pressure (BHP) | **general default**: tight flow↔mech↔fracture coupling, highest conduction |
 | `seq_implicit_rate.json` | SeqMechFrac | rate_well | rate-controlled wells (the hard case) — adds Anderson CTF acceleration |
 | `postsolve.json` | PostSolve | perf_pressure | cheaper per step, fracture solved once after the converged flow+mech step; coupling is *lagged* |
-| `seq_implicit_chatter.json` | SeqMechFrac | perf_pressure | compressed / vemstab decks with contact chatter (large closed-cell populations) |
 | `seq_implicit_performance.json` | SeqMechFrac | perf_pressure | large / grid-refined runs where the VEM mech solve dominates |
 
 ### `seq_implicit_bhp.json` — general sequential-implicit default
 The robust base. `method=SeqMechFrac`, `implicit_flow=true`: flow, mechanics and fracture
 are iterated each timestep until the coupling converges. Decoupled Picard
 (`drop_fluid_mech_linearization=true`), `closed_cell_policy=sticky`, mech-last
-preconditioner, `use_ad_pressure_assembly=true`, gravity on, full toggle guard
-(no finite re-opening cap — it would suppress fracture growth, see STATUS §3.5).
+preconditioner, gravity on.
 **Highest fracture conduction on every validated deck (~85–99 %).**
 
 ### `seq_implicit_rate.json` — rate-controlled
@@ -46,16 +44,6 @@ after** the converged flow+mech step (the original scheme). Cheaper per step, no
 coupling iteration; physically correct when fracture growth per step is small. Coupling is
 lagged, so conduction develops more slowly on short timescales and catches up as the
 fracture matures.
-
-### `seq_implicit_chatter.json` — chatter-prone / compressed cases
-General base + `toggle_guard_mode=chatter`, `chatter_flip_limit=3`. The per-cell
-anti-chatter guard pins only cells that flip contact state more than `chatter_flip_limit`
-times within a solve; first-time openings/closings always pass, so it breaks the
-nonsmooth-contact chatter loop (e.g. vegard_0806: vemstab + large compressed zone) **without
-blocking fracture establishment**. Use when you see runaway fracture-NL-iteration counts /
-huge `closed_cell_toggles`.
-> Requires a build that includes the chatter guard (`toggle_guard_mode` option). On older
-> binaries the key is simply ignored (legacy `count` guard, unlimited cap) — still safe.
 
 ### `seq_implicit_performance.json` — large / refined runs
 General base + top-level `solver.mech_skip_coupling_threshold=1.0` (conservative: skip the
@@ -93,11 +81,11 @@ compiled into the binary in `opm/geomech/BuiltinFractureParams.cpp`:
 | alias | method | equivalent file here |
 |---|---|---|
 | `sequential_implicit` | SeqMechFrac (implicit_flow) | ≈ `seq_implicit_bhp.json` |
-| `standard` | PostSolve | ≈ `postsolve.json` (the alias uses the legacy `closed_cell_policy=legacy` + `vem_stability_choice=3`; the file here uses the newer sticky/robust block) |
+| `standard` | PostSolve | ≈ `postsolve.json` (the alias uses `vem_stability_choice=3`) |
 
 So for the two main schemes you can skip the file entirely and pass the alias. The files in
 this directory are the place to start when you need to change control (rate), turn on a
-case-specific lever (chatter, performance), or pin settings for reproducibility.
+case-specific lever (performance), or pin settings for reproducibility.
 
 The committed regression decks use the frozen reference configs in the parent directory
 (`fracture_simple_bhp_seq_final.json`, `fracture_simple_bhp_seq_legacy_full.json`,
@@ -144,13 +132,6 @@ $BIN --parameter-file=$DATA/myparamsfrac.ini \
      --linear-solver-mech=$DATA/amgmechsolverhypre_geosxcpu_new_nv.json \
      --output-dir=/tmp/run_post
 #   or:  --fracture-param-file=standard
-
-# --- Chatter-prone / compressed deck ---
-$BIN --parameter-file=$DATA/myparamsfrac_seq.ini \
-     <your_compressed_deck>.DATA \
-     --fracture-param-file=$BP/seq_implicit_chatter.json \
-     --linear-solver-mech=$DATA/amgmechsolverhypre_geosxcpu_new_nv.json \
-     --output-dir=/tmp/run_chatter
 
 # --- Large / grid-refined run (mech-skip + Anderson) ---
 $BIN --parameter-file=$DATA/myparamsfrac_seq.ini \
@@ -246,7 +227,7 @@ What "verified" means for these cases, and the **option each check exercises**:
 | check | tool | option it pins down |
 |---|---|---|
 | completes, 0 timestep cuts / `did not converge` | run log `grep` | the inner solver block (Picard, sticky, mech-last) is stable |
-| fracture **grows** (`total_area` ≫ seed ~299 m²) | `frac_area.py` last VTU | the toggle guard does **not** suppress opening (the whole reason `seq_implicit_bhp.json` keeps the *unlimited* guard, not 32/0.1) |
+| fracture **grows** (`total_area` ≫ seed ~299 m²) | `frac_area.py` last VTU | the contact settings do **not** suppress opening |
 | **conduction** `WWIRFRAC/WWIR` high | `summary` CLI | `addconnections=true` + control type actually route flow through the fracture |
 | pass/fail vs known-good | `compare_runs.py --bands` | the whole config, scored against `acceptance_bands.json` |
 

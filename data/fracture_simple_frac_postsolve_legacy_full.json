@@ -36,17 +36,12 @@
             "numcell_threshold": "100000",
             "max_num_coarsening": "0",
             "max_iter_on_same_level": "100000000",
-            "efac": "0.5",
-            "rfac": "0.10000000000000001",
-            "max_expand_iter": "20",
             "max_iter": "100",
             "tolerance": "9.9999999999999995e-07",
-            "damping": "1",
             "min_width": "0.001",
             "max_width": "0.5",
             "max_change": "100000",
             "max_dwidth": "0.0050000000000000001",
-            "max_dp": "1000000000",
             "remap_solution": "false",
             "linsolver": {
                 "tol": "1e-10",
@@ -54,7 +49,6 @@
                 "max_iter": "1000",
                 "verbosity": "0",
                 "solver": "bicgstab",
-                "failure_policy": "ladder",
                 "preconditioner": {
                     "diag_mech": "false",
                     "diag_flow": "false",
@@ -85,7 +79,6 @@
             "no_leakof_outercells": "false",
             "drop_fluid_mech_linearization": "true",
             "closed_cell_policy": "sticky",
-            "use_ad_pressure_assembly": "true",
             "coupling_legacy_first_damp": "true"
         },
         "reservoir": {

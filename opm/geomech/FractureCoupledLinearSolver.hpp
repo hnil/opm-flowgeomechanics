@@ -33,9 +33,8 @@ namespace Opm
 struct FractureSolveStats;
 
 // Linear solve of one Newton step of the coupled fracture system
-// [A I; C M] [dw; dp] = rhs: block scaling, direct or Krylov solve, and the
-// optional rescue ladder. Keeps the preconditioner and Krylov solver between
-// iterations of one grid solve.
+// [A I; C M] [dw; dp] = rhs: block scaling, Krylov solve and a rescue ladder.
+// Keeps the preconditioner and Krylov solver between iterations of one grid solve.
 class FractureCoupledLinearSolver
 {
 public:
@@ -45,8 +44,6 @@ public:
     {
         std::string scaling{"none"};
         std::string solver;
-        int directMaxCells{4000};
-        std::string directFallbackSolver{"fgmres"};
         PropertyTree precond;
         bool updateMechOnReuse{false};
         double tol{0.0};
@@ -54,8 +51,6 @@ public:
         int maxIter{0};
         int verbosity{0};
         int restart{100};
-        bool debugChecksum{false};
-        std::string failurePolicy{"throw"};
         bool gmresFallback{true};
         static Options read(const PropertyTree& prm);
     };

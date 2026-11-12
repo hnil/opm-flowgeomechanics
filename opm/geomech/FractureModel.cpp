@@ -99,14 +99,12 @@ makeDefaultFractureParam(bool rate_control)
     // used ??
     fracture_param.put("fractureparam.solver.max_iter", 100);
     fracture_param.put("fractureparam.solver.tolerance", 1e-6);
-    fracture_param.put("fractureparam.solver.damping", 1e0);
     fracture_param.put("fractureparam.solver.min_width", 0.001);// NB should not be used
     fracture_param.put("fractureparam.solver.max_width", 0.5);
     fracture_param.put("fractureparam.solver.max_change", 1e5);
     // end used ??
 
     fracture_param.put("fractureparam.solver.max_dwidth", 5e-3);
-    fracture_param.put("fractureparam.solver.max_dp", 1000000000);// NB probably better value 5e6
     fracture_param.put("fractureparam.solver.verbosity", 2);
 
     // fracture linear solve
@@ -139,7 +137,6 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.solver.linsolver.max_iter", 1000);
     fracture_param.put("fractureparam.solver.linsolver.verbosity", 0);
     fracture_param.put("fractureparam.solver.linsolver.solver", "bicgstab"s);
-    fracture_param.put("fractureparam.solver.linsolver.failure_policy", "ladder"s);
     // preconditioner
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.diag_mech", false);// for large systems seem sto better with better preconditioner
     fracture_param.put("fractureparam.solver.linsolver.preconditioner.diag_flow", false);
@@ -161,12 +158,8 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.solver.guard_max_abs_width", 1e30);
     fracture_param.put("fractureparam.solver.guard_max_abs_pressure", 1e30);
     fracture_param.put("fractureparam.solver.closed_cell_policy", "sticky"s);
-    fracture_param.put("fractureparam.solver.use_ad_pressure_assembly", true);
     fracture_param.put("fractureparam.solver.close_force_tolerance", 0.0);
     fracture_param.put("fractureparam.solver.reopen_force_tolerance", 0.0);
-    fracture_param.put("fractureparam.solver.reopen_width_tolerance", 0.0);
-    fracture_param.put("fractureparam.solver.max_closed_cell_toggle_count", 1000000000);
-    fracture_param.put("fractureparam.solver.max_closed_cell_toggle_fraction", 1.0);
 
     // reservoir fracture coupling
     fracture_param.put("fractureparam.reservoir.calculate_dist", true);

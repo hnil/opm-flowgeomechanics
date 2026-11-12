@@ -45,7 +45,6 @@
 #include <opm/common/ErrorMacros.hpp>
 #include <opm/common/OpmLog/OpmLog.hpp>
 #include <opm/common/TimingMacros.hpp>
-#include <opm/geomech/DiagonalScalar.hpp>
 #include <opm/geomech/Fracture.hpp>
 #include <opm/geomech/FractureCoupledLinearSolver.hpp>
 #include <opm/geomech/FractureMechanicsPreconditioner.hpp>
@@ -76,8 +75,6 @@ using FMatrix = Dune::DynamicMatrix<double>; // full matrix
 
 using SystemMatrix = Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVector<FMatrix, SMatrix>,
                                                 Dune::MultiTypeBlockVector<SMatrix, SMatrix>>;
-
-using Htrans = std::tuple<size_t, size_t, double, double>;
 
 
 void
@@ -120,26 +117,6 @@ count_toggled_cells(const std::vector<int>& previous, const std::vector<int>& cu
     size_t count = 0;
     for (size_t i = 0; i < current.size(); ++i) {
         count += (previous[i] != current[i]);
-    }
-    return count;
-}
-
-// Count only cells that re-open (closed -> open). Establishing contact
-// (open -> closed) must never be throttled: the contact set legitimately needs
-// to grow by hundreds of cells in a single iteration when a fracture starts
-// fully compressed, and throttling that growth freezes the closed set at empty
-// and prevents the mechanics residual from ever converging. Chattering, the
-// behaviour the toggle guard is meant to suppress, shows up as re-openings, so
-// the guard only counts those.
-size_t
-count_reopened_cells(const std::vector<int>& previous, const std::vector<int>& current)
-{
-    if (previous.size() != current.size()) {
-        return 0;
-    }
-    size_t count = 0;
-    for (size_t i = 0; i < current.size(); ++i) {
-        count += (previous[i] != 0 && current[i] == 0);
     }
     return count;
 }
@@ -212,45 +189,6 @@ dump_vector(const VectorHP& v, const char* const name1, const char* const name2,
 {
     dump_vector(v[_0], name1, append);
     dump_vector(v[_1], name2, append);
-}
-
-// ----------------------------------------------------------------------------
-double
-sparse_value_or_zero(const SMatrix& matrix, const size_t row, const size_t col)
-// ----------------------------------------------------------------------------
-{
-    auto entry = matrix[row].find(col);
-    return (entry == matrix[row].end()) ? 0.0 : (*entry)[0][0];
-}
-
-// ----------------------------------------------------------------------------
-double
-max_abs_matrix_difference(const SMatrix& lhs, const SMatrix& rhs)
-// ----------------------------------------------------------------------------
-{
-    assert(lhs.N() == rhs.N());
-    assert(lhs.M() == rhs.M());
-
-    double max_diff = 0.0;
-    for (auto row_it = lhs.begin(); row_it != lhs.end(); ++row_it) {
-        const size_t row = row_it.index();
-        for (auto col_it = row_it->begin(); col_it != row_it->end(); ++col_it) {
-            const size_t col = col_it.index();
-            const double diff = std::abs((*col_it)[0][0] - sparse_value_or_zero(rhs, row, col));
-            max_diff = std::max(max_diff, diff);
-        }
-    }
-
-    for (auto row_it = rhs.begin(); row_it != rhs.end(); ++row_it) {
-        const size_t row = row_it.index();
-        for (auto col_it = row_it->begin(); col_it != row_it->end(); ++col_it) {
-            const size_t col = col_it.index();
-            const double diff = std::abs((*col_it)[0][0] - sparse_value_or_zero(lhs, row, col));
-            max_diff = std::max(max_diff, diff);
-        }
-    }
-
-    return max_diff;
 }
 
 // ----------------------------------------------------------------------------
@@ -357,144 +295,13 @@ copyMatrixValuesWithSameSparsity(DstMatrix& dst, const SrcMatrix& src)
 
 
 // ----------------------------------------------------------------------------
-std::unique_ptr<Opm::Fracture::Matrix>
-initCouplingMatrixSparsity(const std::vector<Htrans>& htrans, size_t num_cells, size_t num_wells)
-// ----------------------------------------------------------------------------
-{
-    OPM_TIMEFUNCTION();
-    auto C = std::make_unique<Opm::Fracture::Matrix>(
-        num_cells + num_wells, num_cells, 4, 0.4, Opm::Fracture::Matrix::implicit);
-    for (const auto& e : htrans) {
-        const size_t i = std::get<0>(e);
-        const size_t j = std::get<1>(e);
-        assert(i != j);
-        C->entry(i, j) = 0;
-        C->entry(j, i) = 0;
-        C->entry(i, i) = 0;
-        C->entry(j, j) = 0;
-    }
-    C->compress();
-    return C;
-}
-
-// ----------------------------------------------------------------------------
-void
-updateCouplingMatrix(std::unique_ptr<Opm::Fracture::Matrix>& Cptr,
-                     const size_t num_cells,
-                     const size_t num_wells,
-                     const std::vector<Htrans>& htrans,
-                     const std::vector<double>& face_dgh, // empty: no gravity
-                     const ResVector& pressure,
-                     const ResVector& aperture,
-                     const std::vector<int>& closed_cells,
-                     const std::vector<double>& reservoir_mobility,
-                     double min_width)
-{
-    OPM_TIMEFUNCTION();
-    // create C if not done already
-    if (!Cptr)
-        Cptr = initCouplingMatrixSparsity(htrans, num_cells, num_wells);
-
-    // NB: If the implementation of the pressure matrix changes (i.e. `assemblePressure()`),
-    //        the code below might need to be updated accordingly as well.
-    auto& C = *Cptr;
-    C = 0;
-    for (size_t k = 0; k < htrans.size(); ++k) {
-        const auto& e = htrans[k];
-        const size_t i = std::get<0>(e);
-        const size_t j = std::get<1>(e);
-        assert(i != j);
-
-        const double t1 = std::get<2>(e);
-        const double t2 = std::get<3>(e);
-        double  dh1 = 1.0;
-        double  dh2 = 1.0;
-        if(aperture[i][0] <= min_width) dh1 = 0.0;
-        if(aperture[j][0] <= min_width) dh2 = 0.0;
-        assert(aperture[i][0]>=0.0);
-        assert(aperture[j][0]>=0.0);
-        const double h1 = std::max(aperture[i][0],min_width);
-        const double h2 = std::max(aperture[j][0],min_width);
-        const double g_ij = face_dgh.empty() ? 0.0 : face_dgh[k];
-        const double p1 = pressure[i] - g_ij;
-        const double p2 = pressure[j];
-
-        const double q = (h1 * h1 * h1) * (h2 * h2 * h2) * (t1 * t2); // numerator
-        const double d1q = 3 * (h1 * h1) * (h2 * h2 * h2) * (t1 * t2)* dh1;
-        const double d2q = 3 * (h1 * h1 * h1) * (h2 * h2) * (t1 * t2)* dh2;
-
-        const double r = 12 * (h1 * h1 * h1 * t1 + h2 * h2* h2 * t2); // denominator
-        const double d1r = 36 * (h1 * h1) * t1 *dh1;
-        const double d2r = 36 * (h2 * h2) * t2 *dh2;
-        assert(r >= 0.0);
-        assert(q >= 0.0);
-        const double dTdh1 = (r == 0) ? 0.0 : (d1q * r - q * d1r) / (r * r);
-        const double dTdh2 = (r == 0) ? 0.0 : (d2q * r - q * d2r) / (r * r);
-
-        const double mobility = 0.5 * (reservoir_mobility[i] + reservoir_mobility[j]);
-        // diagonal elements
-        C[i][i] += dTdh1 * (p1 - p2) * mobility;
-        C[j][j] += dTdh2 * (p2 - p1) * mobility;
-
-        // off-diagonal elements
-        C[i][j] += dTdh2 * (p1 - p2) * mobility;
-        C[j][i] += dTdh1 * (p2 - p1) * mobility;
-    }
-    // zeroing out columns corresponding to closed cells
-    if(false){
-      for (size_t col = 0; col != closed_cells.size(); ++col)
-        if (closed_cells[col])
-          for (size_t row = 0; row != C.N(); ++row)
-            if (C.exists(row, col))
-              C[row][col] = 0;
-    }
-}
-
-// ----------------------------------------------------------------------------
-std::unique_ptr<SMatrix>
-assemble_coupling_original(const Opm::FracturePressureInput& input,
-                           const std::vector<int>& closed_cells)
-// ----------------------------------------------------------------------------
-{
-    ResVector pressure(input.num_cells + input.num_well_equations);
-    ResVector aperture(input.num_cells + input.num_well_equations);
-    std::vector<double> mobility(input.num_cells, 0.0);
-
-    for (size_t i = 0; i < pressure.size(); ++i) {
-        pressure[i][0] = input.fracture_pressure[i];
-        aperture[i][0] = input.fracture_width[i];
-    }
-
-    for (size_t i = 0; i < input.num_cells; ++i) {
-        mobility[i] = input.density[i].value / input.viscosity[i].value;
-    }
-
-    auto coupling = initCouplingMatrixSparsity(input.htrans,
-                                               input.num_cells,
-                                               input.num_well_equations);
-    updateCouplingMatrix(coupling,
-                         input.num_cells,
-                         input.num_well_equations,
-                         input.htrans,
-                         input.face_gravity,
-                         pressure,
-                         aperture,
-                         closed_cells,
-                         mobility,
-                         input.min_width);
-    return coupling;
-}
-
-// ----------------------------------------------------------------------------
 void
 dump_linear_system_snapshot(const std::string& stem,
                             const SystemMatrix& system,
                             const VectorHP& rhs,
                             const VectorHP& x,
                             const std::vector<int>& closed_cells,
-                            const bool use_ad,
                             const Opm::PropertyTree& prm,
-                            const Opm::FracturePressureInput& input,
                             const Dune::InverseOperatorResult* iores = nullptr)
 // ----------------------------------------------------------------------------
 {
@@ -508,24 +315,9 @@ dump_linear_system_snapshot(const std::string& stem,
     Dune::storeMatrixMarket(x[_1], stem + "_x_p.mtx");
     dump_vector(closed_cells, (stem + "_closed_cells.txt").c_str());
 
-    const auto ad_result = assemblePressureAD(input);
-    const auto original_pressure = assemblePressureOriginal(input);
-    const auto original_coupling = assemble_coupling_original(input, closed_cells);
-
-    Dune::storeMatrixMarket(*ad_result.pressure_matrix, stem + "_M_ad.mtx");
-    Dune::storeMatrixMarket(*ad_result.coupling_matrix, stem + "_C_ad.mtx");
-    Dune::storeMatrixMarket(*original_pressure, stem + "_M_original.mtx");
-    Dune::storeMatrixMarket(*original_coupling, stem + "_C_original.mtx");
-
     Opm::PropertyTree info;
-    info.put("use_ad_pressure_assembly", use_ad);
-    info.put("active_pressure_matrix", std::string(use_ad ? "ad" : "original"));
     info.put("mechanics_size", system[_0][_0].N());
     info.put("pressure_size", system[_1][_1].N());
-    info.put("pressure_max_abs_diff_ad_vs_original",
-             max_abs_matrix_difference(*ad_result.pressure_matrix, *original_pressure));
-    info.put("coupling_max_abs_diff_ad_vs_original",
-             max_abs_matrix_difference(*ad_result.coupling_matrix, *original_coupling));
     if (iores) {
         info.put("linear.converged", iores->converged);
         info.put("linear.iterations", iores->iterations);
@@ -548,66 +340,6 @@ convergence_test(const VectorHP& res, const double tol_flow, double tol_mech, in
                                 res[_0].infinity_norm(), res[_1].infinity_norm()));
     }
     return converged;
-}
-
-// ----------------------------------------------------------------------------
-template <typename Mat>
-ResVector
-diagvec(const Mat& M)
-// ----------------------------------------------------------------------------
-{
-    ResVector res(M.M());
-    for (size_t i = 0; i != res.size(); ++i)
-        res[i] = Opm::diagScalar(M[i][i]);
-    return res;
-}
-
-
-// ----------------------------------------------------------------------------
-class TailoredPrecondDiag : public Dune::Preconditioner<VectorHP, VectorHP>
-// ----------------------------------------------------------------------------
-{
-public:
-    TailoredPrecondDiag(const SystemMatrix& S)
-        : A_diag_(diagvec(S[_0][_0]))
-        , M_diag_(diagvec(S[_1][_1]))
-    {
-    }
-    virtual void apply(VectorHP& v, const VectorHP& d)
-    {
-        for (size_t i = 0; i != A_diag_.size(); ++i)
-            v[_0][i] = d[_0][i] / A_diag_[i];
-        for (size_t i = 0; i != M_diag_.size(); ++i)
-            v[_1][i] = d[_1][i] / M_diag_[i];
-    };
-    virtual void post(VectorHP& /*v*/) {};
-    virtual void pre(VectorHP& /*x*/, VectorHP& /*b*/) {};
-    virtual Dune::SolverCategory::Category category() const
-    {
-        return Dune::SolverCategory::sequential;
-    }
-
-private:
-    const ResVector A_diag_;
-    const ResVector M_diag_;
-};
-
-
-// ----------------------------------------------------------------------------
-[[maybe_unused]] double
-estimate_step_fac(const VectorHP& x, const VectorHP& dx)
-// ----------------------------------------------------------------------------
-{
-    // estimate what might be a safe step size to avoid exiting the convergence radius
-    const double x0_norm = x[_0].infinity_norm();
-    const double x1_norm = x[_1].infinity_norm();
-
-    const double f1 = x0_norm == 0 ? 1 : dx[_0].infinity_norm() / x0_norm;
-    const double f2 = x1_norm == 0 ? 1 : dx[_1].infinity_norm() / x1_norm;
-    const double fmax = std::max(f1, f2);
-    const double threshold = 0.95;
-    const double fac_min = 1e-1;
-    return (fmax < threshold) ? 1.0 : std::max(threshold / fmax, fac_min);
 }
 
 // ----------------------------------------------------------------------------
@@ -654,110 +386,22 @@ Fracture::identify_closed(const FMatrix& A, const VectorHP& x, const ResVector& 
 
     OPM_TIMEFUNCTION();
     const InnerSolveOptions& opt = inner_;
-    const std::string& closing_type = opt.closingType;
-    const std::string& closed_cell_policy = opt.closedCellPolicy;
-    const double close_force_tolerance = opt.closeForceTol;
-    const double reopen_force_tolerance = opt.reopenForceTol;
-    const double reopen_width_tolerance = opt.reopenWidthTol;
-    // "none": never close any cell — keep the fracture open and allow negative
-    // aperture (no contact constraint). This makes the mechanics block linear, so
-    // the keep-C coupled Newton stays smooth and the open/close chatter cannot
-    // occur. Physical only where genuine contact is negligible; the flow already
-    // floors transmissibility at min_width, so w<0 is benign for the flow.
-    // Fischer-Burmeister handles contact through smooth mech-row weights in
-    // fullSystemIteration, not a binary active set. Both report no hard-closed
-    // cells here (the binary set is only used for tracking/metrics and the C-drop check).
-    if (closed_cell_policy == "fischer_burmeister" || closed_cell_policy == "none") {
+    // Fischer-Burmeister handles contact through smooth mech rows, not a binary set.
+    if (opt.isFb) {
         return std::vector<int>(A.N(), 0);
     }
-    const bool legacy_closed_cells = (closed_cell_policy == "legacy");
-    // Primal-dual active set (semismooth Newton): the contact set is chosen by a
-    // single consistently-scaled criterion  active(closed) <=> tmp_i - c_i w_i > tol
-    // with c_i = |A_ii| (BEM self-stiffness, converts width to force units), instead
-    // of the separate force/width tests + sticky hysteresis. Folding the open/close
-    // decision into one smooth complementarity function is what stops the active-set
-    // chatter that prevents the keep-C true-Newton iteration from converging.
-    const bool pdas_closed_cells = (closed_cell_policy == "pdas");
     const auto was_closed = [this](const size_t index) {
         return index < closed_cells_.size() && closed_cells_[index] != 0;
     };
-
-    // Opt-in (default off): when testing whether a CLOSED cell should reopen, use
-    // the pressure that would develop once it opens, not its pinned (closed)
-    // pressure. The static reopen test ignores that fluid flows into a cell as it
-    // opens and raises its pressure — so it underestimates the opening tendency and
-    // can lock cells closed (the "half-open fracture hard to open" pathology). We
-    // estimate the pressure flow could communicate as the max fracture pressure
-    // over currently-open cells.
-    const bool reopen_use_open_pressure = opt.reopenUseOpenPressure;
-
-    // computing rhs - A x[0] - I x[1]
+    const ResVector& h = x[_0];
+    const ResVector force = contactForce(A, h, x[_1], rhs);
     std::vector<int> result;
-    if(closing_type == "org"){
-        const ResVector& h = x[_0];
-        const ResVector& p = x[_1];
-        double p_open_estimate = 0.0;
-        if (reopen_use_open_pressure)
-            for (size_t i = 0; i != A.N(); ++i)
-                if (!was_closed(i))
-                    p_open_estimate = std::max(p_open_estimate, p[i][0]);
-        const ResVector tmp = contactForce(A, h, p, rhs);
-        for (size_t i = 0; i != A.N(); ++i) {
-            if (legacy_closed_cells) {
-                result.push_back(tmp[i] >= 0.0 && h[i] <= 0.0);
-                continue;
-            }
-            if (pdas_closed_cells) {
-                // Semismooth-Newton / primal-dual active set: one criterion,
-                // stateless (no sticky hysteresis), consistently scaled by the
-                // mech self-stiffness c_i = |A_ii|.
-                const double c_i = std::abs(A[i][i]);
-                result.push_back((tmp[i] - c_i * h[i][0]) > close_force_tolerance);
-                continue;
-            }
-            const bool close_candidate = tmp[i] >= close_force_tolerance && h[i] <= 0.0;
-            // Re-opening is force-driven. A closed cell has its width pinned at 0,
-            // so a width gate (h[i] >= reopen_width_tolerance) with a positive
-            // tolerance can never be satisfied and would lock the cell closed
-            // forever, suppressing fracture growth. reopen_width_tolerance is kept
-            // for backward compatibility but no longer gates on the pinned width.
-            (void)reopen_width_tolerance;
-            // tmp[i] = (rhs - A h - I p)[i]; replacing the cell pressure p[i] by the
-            // higher pressure-on-opening makes the reopen test easier (more tensile),
-            // since I is the identity on cell rows.
-            double reopen_force = tmp[i];
-            if (reopen_use_open_pressure && was_closed(i))
-                reopen_force = tmp[i] - (p_open_estimate - p[i][0]);
-            const bool reopen_candidate = reopen_force <= -reopen_force_tolerance;
-            result.push_back(was_closed(i) ? !reopen_candidate : close_candidate);
-        }
-    } else if(closing_type == "open") {
-            result.resize(A.N(), 1);
-    } else if(closing_type == "simple"){
-     // sum forces over faces
-        result.resize(A.N(), 0);
-        for (auto element : Dune::elements(grid_->leafGridView())) {
-            int i = grid_->leafGridView().indexSet().index(element);
-            double pressure = fracture_pressure_[i][0];
-            //NB maybe use other pressure if closed
-            if (legacy_closed_cells) {
-                result[i] = (this->fractureForce(i) - pressure) < 0;
-                continue;
-            }
-            const double closure_balance = this->fractureForce(i) - pressure;
-            const bool close_candidate = closure_balance < -close_force_tolerance;
-            // Force-driven reopen (see "org" branch): width is pinned at 0 for
-            // closed cells, so we do not gate reopening on it.
-            (void)reopen_width_tolerance;
-            const bool reopen_candidate = closure_balance > reopen_force_tolerance;
-            result[i] = was_closed(i) ? !reopen_candidate : close_candidate;
-        }
-    } else {
-        std::stringstream ss;
-        ss << "Unknown closing type: " << closing_type;
-        OPM_THROW(std::runtime_error, ss.str());
+    for (size_t i = 0; i != A.N(); ++i) {
+        // A closed cell has its width pinned at 0, so reopening is decided by force alone.
+        const bool close_candidate = force[i] >= opt.closeForceTol && h[i] <= 0.0;
+        const bool reopen_candidate = force[i] <= -opt.reopenForceTol;
+        result.push_back(was_closed(i) ? !reopen_candidate : close_candidate);
     }
-
     return result;
 }
 
@@ -856,51 +500,28 @@ Fracture::InnerSolveOptions::read(const PropertyTree& prm)
 // ----------------------------------------------------------------------------
 {
     InnerSolveOptions o;
-    o.useAd = prm.get<bool>("solver.use_ad_pressure_assembly", false);
     o.verbosity = prm.get<int>("solver.verbosity", 0);
-    o.closingType = prm.get<std::string>("solver.closing_type", "org");
-    o.closedCellPolicy = prm.get<std::string>("solver.closed_cell_policy", "sticky");
-    const std::string& policy = o.closedCellPolicy;
-    if (policy != "sticky" && policy != "legacy" && policy != "pdas"
-        && policy != "fischer_burmeister" && policy != "none") {
+    const auto policy = prm.get<std::string>("solver.closed_cell_policy", "sticky");
+    if (policy != "sticky" && policy != "fischer_burmeister") {
         OPM_THROW(std::runtime_error, "Unknown closed cell policy: " + policy);
     }
     o.isFb = (policy == "fischer_burmeister");
     o.closeForceTol = prm.get<double>("solver.close_force_tolerance", 0.0);
     o.reopenForceTol = prm.get<double>("solver.reopen_force_tolerance", o.closeForceTol);
-    o.reopenWidthTol = prm.get<double>("solver.reopen_width_tolerance", 0.0);
-    o.reopenUseOpenPressure = prm.get<bool>("solver.reopen_use_open_pressure", false);
-    o.freezeClosedAfter = prm.get<int>("solver.freeze_closed_after", -1);
-    o.chatterGuard = (prm.get<std::string>("solver.toggle_guard_mode", "count") == "chatter");
-    if (o.chatterGuard) {
-        o.chatterFlipLimit = prm.get<int>("solver.chatter_flip_limit", 3);
-    } else {
-        o.maxToggleCount = prm.get<int>("solver.max_closed_cell_toggle_count", 1000000000);
-        o.maxToggleFraction = prm.get<double>("solver.max_closed_cell_toggle_fraction", 1.0);
-    }
     if (o.isFb) {
-        o.fbMu = prm.get<double>("solver.fb_mu", 0.0);
         o.fbScaledConvergence = prm.get<bool>("solver.fb_scaled_convergence", false);
         o.fbLineSearch = prm.get<bool>("solver.fb_line_search", false);
         if (o.fbLineSearch) {
             o.fbLineSearchMin = prm.get<double>("solver.fb_line_search_min", 0.0625);
         }
-        o.fbClampWidth = prm.get<bool>("solver.fb_clamp_width", true);
     }
     o.dropCoupling = prm.get<bool>("solver.drop_fluid_mech_linearization", true);
-    if (!o.dropCoupling) {
-        o.dropTolH = prm.get<double>("solver.drop_tol_h", 1e1);
-        o.dropTolP = prm.get<double>("solver.drop_tol_p", 1.0);
-    }
     o.storageTerm = prm.get<bool>("solver.fracture_storage_term", false);
     o.linear = FractureCoupledLinearSolver::Options::read(prm);
     o.dumpMinNonlinIter = prm.get<int>("solver.dump_case_min_nonlin_iter", 0);
     o.writeCoupledSystem = prm.get<bool>("solver.write_coupled_linear_system", false);
     o.dumpOnFailure = prm.get<bool>("solver.dump_linear_system_on_failure", true);
-    o.damping = prm.get<double>("solver.damping");
-    o.coupledStepLimit = prm.get<double>("solver.coupled_step_limit", 0.0);
     o.maxDwidth = prm.get<double>("solver.max_dwidth");
-    o.maxDp = prm.get<double>("solver.max_dp");
     return o;
 }
 
@@ -924,9 +545,6 @@ Fracture::updateFlowCoefficients_()
 // ----------------------------------------------------------------------------
 {
     updateLeakoff();
-    if (!inner_.useAd) {
-        assemblePressure();
-    }
     addSource();
 }
 
@@ -935,58 +553,7 @@ Fracture::ContactUpdate
 Fracture::updateContactSet_(const VectorHP& x, const ResVector& traction, const int nlin_iteration)
 // ----------------------------------------------------------------------------
 {
-    const InnerSolveOptions& opt = inner_;
-    const int nlin_verbosity = opt.verbosity;
-    // freeze_closed_after >= 0 reuses the previous contact set after that iteration,
-    // separating active-set chatter from a bad Newton step for a fixed set.
-    std::vector<int> closed_cells;
-    if (opt.freezeClosedAfter >= 0 && nlin_iteration > opt.freezeClosedAfter
-        && closed_cells_.size() == fracture_width_.size()) {
-        closed_cells = closed_cells_; // frozen set
-    } else {
-        closed_cells = identify_closed(fractureMatrix(), x, traction);
-    }
-    if (opt.chatterGuard) {
-        // Per-cell anti-chatter guard: chatter is the same cell flipping repeatedly
-        // within one solve, while en-masse first-time re-opening is legitimate. A
-        // global re-opening throttle suppresses an opening fracture, so pin only
-        // cells that exceeded chatter_flip_limit changes this solve.
-        if (nlin_iteration == 0 || cell_flip_counts_.size() != closed_cells.size()) {
-            cell_flip_counts_.assign(closed_cells.size(), 0);
-        }
-        if (closed_cells_.size() == closed_cells.size()) {
-            const int flip_limit = opt.chatterFlipLimit;
-            size_t pinned = 0;
-            for (size_t i = 0; i < closed_cells.size(); ++i) {
-                if (closed_cells[i] != closed_cells_[i]) {
-                    if (cell_flip_counts_[i] >= flip_limit) {
-                        closed_cells[i] = closed_cells_[i]; // pin chattering cell
-                        ++pinned;
-                    } else {
-                        ++cell_flip_counts_[i];
-                    }
-                }
-            }
-            if (pinned > 0 && nlin_verbosity > 0) {
-                OpmLog::debug(fmt::format("Chatter guard pinned {} cells that changed contact state more than {} times this solve",
-                                          pinned, flip_limit));
-            }
-        }
-    } else if (!closed_cells_.empty() && closed_cells_.size() == closed_cells.size()) {
-        // Only re-openings are throttled; establishing contact is always allowed.
-        // A finite limit also rejects legitimate en-masse re-opening.
-        const size_t toggled_cells = count_reopened_cells(closed_cells_, closed_cells);
-        const size_t max_toggle_count = static_cast<size_t>(std::max(0, opt.maxToggleCount));
-        const size_t fraction_limit = static_cast<size_t>(opt.maxToggleFraction * closed_cells.size());
-        const size_t allowed_toggles = std::min(max_toggle_count, std::max<size_t>(fraction_limit, 0));
-        if (toggled_cells > allowed_toggles) {
-            if (nlin_verbosity > 0) {
-                OpmLog::debug(fmt::format("Keeping previous closed-cell state after {} re-openings exceeded guard limit {}",
-                                          toggled_cells, allowed_toggles));
-            }
-            closed_cells = closed_cells_;
-        }
-    }
+    std::vector<int> closed_cells = identify_closed(fractureMatrix(), x, traction);
     bool closed_cells_changed = false;
     if(closed_cells_.size() != closed_cells.size()){
       closed_cells_changed = true;
@@ -1046,17 +613,14 @@ Fracture::assembleMechanicsRows_(const VectorHP& x,
         SMatrix& Ifb = *I_;
         const double eps = 1e-30;
         const ResVector force = contactForce(Aorig, w, p, mech_rhs);
-        // fb_mu > 0 is Chen-Mangasarian smoothing of the a=b=0 kink; it relaxes
-        // complementarity by ~mu, so it must be small against (c_i w)^2.
-        const double mu = opt.fbMu;
         for (size_t i = 0; i < n; ++i) {
             const double c_i = std::max(std::abs(Aorig[i][i]), eps);
             const double a = c_i * w[i][0];
             const double b = force[i][0];
-            const double r = std::sqrt(a * a + b * b + 2.0 * mu) + eps;
+            const double r = std::sqrt(a * a + b * b) + eps;
             const double da = 1.0 - a / r;
             const double db = 1.0 - b / r;
-            fb.phi[i] = a + b - std::sqrt(a * a + b * b + 2.0 * mu);
+            fb.phi[i] = a + b - std::sqrt(a * a + b * b);
             fb.scale[i] = 1.0 + std::abs(a) + std::abs(b);
             fb_cell_residual_[i] = std::abs(fb.phi[i]) / fb.scale[i];
             for (size_t j = 0; j < n; ++j) Afb[i][j] = -db * Aorig[i][j];
@@ -1079,28 +643,11 @@ Fracture::assembleMechanicsRows_(const VectorHP& x,
 
 // ----------------------------------------------------------------------------
 void
-Fracture::assembleFlowRows_(const ResVector& mech_rhs, const std::vector<int>& closed_cells)
+Fracture::assembleFlowRows_(const std::vector<int>& closed_cells)
 // ----------------------------------------------------------------------------
 {
-    const InnerSolveOptions& opt = inner_;
-    if (opt.useAd) {
-        assemblePressureAndCouplingAD(closed_cells);
-    } else {
-        updateCouplingMatrix(coupling_matrix_,
-                             pressure_matrix_->N() - numWellEquations(), // num cells
-                             numWellEquations(), // num wells
-                             htrans_,
-                             faceGravityHeads(),
-                             fracture_pressure_,
-                             fracture_width_,
-                             closed_cells,
-                             reservoir_.mobility,
-                             min_width_);
-    }
-    if (opt.dropCoupling) {
-        *coupling_matrix_ = 0;
-    } else if (mech_rhs.infinity_norm() > opt.dropTolH
-               || rhs_pressure_.infinity_norm() > opt.dropTolP) {
+    assemblePressureAndCouplingAD(closed_cells);
+    if (inner_.dropCoupling) {
         *coupling_matrix_ = 0;
     }
     // External-pressure mode: pressure rows become p = p_external (identity,
@@ -1278,7 +825,6 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
 
     const InnerSolveOptions& opt = inner_;
     const int nlin_verbosity = opt.verbosity;
-    const bool use_ad = opt.useAd;
     updateFlowCoefficients_();
 
     VectorHP x {fracture_width_, fracture_pressure_};
@@ -1292,7 +838,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     const bool closed_cells_changed = contact.changed;
     const bool first_iteration = (nlin_iteration == 0);
     const FbRows fb = assembleMechanicsRows_(x, mech_rhs, closed_cells, first_iteration);
-    assembleFlowRows_(mech_rhs, closed_cells);
+    assembleFlowRows_(closed_cells);
     assembleSystemMatrix_(closed_cells, first_iteration);
     auto& S = *S_;
 
@@ -1321,8 +867,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
             return {};
         }
         const auto stem = linear_system_dump_stem(prm_, nlin_iteration, tag);
-        dump_linear_system_snapshot(stem, system, rhs_org, x, closed_cells, use_ad, prm_,
-                                    makePressureAssemblyInput(), result);
+        dump_linear_system_snapshot(stem, system, rhs_org, x, closed_cells, prm_, result);
         if (!failure) {
             return {};
         }
@@ -1362,24 +907,6 @@ Fracture::limitStep_(const VectorHP& x, VectorHP& dx, const ResVector& mech_rhs,
 {
     const InnerSolveOptions& opt = inner_;
     const int nlin_verbosity = opt.verbosity;
-    double step_fac = opt.damping;
-    // coupled_step_limit > 0 caps the per-block relative change ||dx||/||x||, a
-    // cheap trust-region surrogate for the badly conditioned keep-C step.
-    const double coupled_step_limit = opt.coupledStepLimit;
-    if (coupled_step_limit > 0.0) {
-        const double xw = x[_0].infinity_norm(), xp = x[_1].infinity_norm();
-        const double dw = dx[_0].infinity_norm(), dp = dx[_1].infinity_norm();
-        const double fw = (xw > 0.0) ? dw / xw : 0.0;
-        const double fp = (xp > 0.0) ? dp / xp : 0.0;
-        const double fmax = std::max(fw, fp);
-        if (fmax > coupled_step_limit) {
-            const double lim = std::max(coupled_step_limit / fmax, 1e-3);
-            step_fac *= lim;
-            if (nlin_verbosity > 1)
-                OpmLog::debug(fmt::format("Coupled step limited: rel-change {} > {}, scaling step by {}",
-                                          fmax, coupled_step_limit, lim));
-        }
-    }
     // FB backtracking: far from the solution the full semismooth Newton step
     // overshoots; damp it until the merit ||phi||^2 decreases.
     if (opt.isFb && opt.fbLineSearch) {
@@ -1409,21 +936,13 @@ Fracture::limitStep_(const VectorHP& x, VectorHP& dx, const ResVector& mech_rhs,
             if (merit <= (1.0 - 1e-4 * sstep) * merit0) break; // sufficient decrease
             sstep *= 0.5;
         }
-        step_fac *= best_s;
+        dx *= best_s;
         if (nlin_verbosity > 1 && best_s < 1.0)
             OpmLog::debug(fmt::format("FB line search: step {} merit {} -> {}", best_s, merit0, best_merit));
     }
-    if (nlin_verbosity > 2) {
-        OpmLog::debug(fmt::format("fac: {}", step_fac));
-    }
-    dx *= step_fac;
     auto& dx0 = dx[_0];
     for (size_t i = 0; i != fracture_width_.size(); ++i) {
         dx0[i][0] = std::max(-opt.maxDwidth, std::min(opt.maxDwidth, dx0[i][0]));
-    }
-    auto& dx1 = dx[_1];
-    for (size_t i = 0; i != fracture_pressure_.size(); ++i) {
-        dx1[i][0] = std::max(-opt.maxDp, std::min(opt.maxDp, dx1[i][0]));
     }
 }
 
@@ -1437,14 +956,8 @@ Fracture::applyUpdate_(VectorHP& x, const VectorHP& dx)
         OpmLog::debug(fmt::format("after: dx: {} {}", dx[_0].infinity_norm(), dx[_1].infinity_norm()));
     }
     fracture_width_ = x[_0];
-    // Policy "none" permits negative aperture by design, and FB satisfies w >= 0
-    // at convergence (fb_clamp_width=false skips the projection on its iterates).
-    const bool allow_negative_width = (inner_.closedCellPolicy == "none")
-        || (inner_.isFb && !inner_.fbClampWidth);
-    if (!allow_negative_width) {
-        for (size_t i = 0; i != fracture_width_.size(); ++i) {
-            fracture_width_[i][0] = std::max(0.0, fracture_width_[i][0]); // ensure non-negativity
-        }
+    for (size_t i = 0; i != fracture_width_.size(); ++i) {
+        fracture_width_[i][0] = std::max(0.0, fracture_width_[i][0]);
     }
     fracture_pressure_ = x[_1];
 }

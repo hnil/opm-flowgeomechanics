@@ -1013,7 +1013,6 @@ Fracture::serializeState(Serializer& serializer)
     serializer(density_perf_);
     serializer(mobility_water_perf_);
     serializer(closed_cells_);
-    serializer(cell_flip_counts_);
     serializer(last_solve_stats_.converged);
 }
 

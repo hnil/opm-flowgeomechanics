@@ -5,7 +5,8 @@ How the open/closed state of a fracture cell is formulated in
 Fischer–Burmeister (FB) formulation added 2026-08-25 differs from them.
 
 Selected by one key: `fractureparam.solver.closed_cell_policy` ∈
-`legacy` · `sticky` (default) · `pdas` · `none` · `fischer_burmeister`.
+`sticky` (default) · `fischer_burmeister`. `legacy`, `pdas` and `none` were removed on
+2026-11-12; they are described below because the comparison explains the choice.
 
 ---
 
@@ -120,10 +121,9 @@ longer feels pressure. The formulations differ only in the **rule** that fills
 | `pdas` | close ⟺ `λ_i − c_i w_i > tol`, `c_i = |A_ii|` | one consistently scaled criterion (primal–dual active set = semismooth Newton on the **max** NCP function) |
 | `none` | never close; negative width allowed (no clamp) | contact removed entirely — makes the block linear, physical only when contact is negligible |
 
-`sticky` additionally carries guards on top of the rule: `max_closed_cell_toggle_count` /
-`..._fraction` (reject an iteration that flips too many cells) and
-`toggle_guard_mode=chatter` (per-cell flip counting). Both are damping devices for the
-failure mode described next — they do not change the formulation.
+`sticky` used to carry guards on top of the rule (a toggle count limit and a per-cell
+chatter guard, removed 2026-11-12). Both were damping devices for the failure mode
+described next — they did not change the formulation.
 
 ### Why a binary set can cycle
 
@@ -284,8 +284,8 @@ The ordinary safeguards still apply on top: `damping`, `max_dwidth`, `max_dp`.
 flowchart TD
     S[start iteration: state w, p] --> Q{closed_cell_policy}
 
-    Q -->|legacy / sticky / pdas| C1[classify every cell: open or closed]
-    C1 --> C2[apply toggle guards / hysteresis]
+    Q -->|sticky| C1[classify every cell: open or closed]
+    C1 --> C2[apply hysteresis]
     C2 --> C3["rewrite closed rows: w_i = 0, drop pressure entry"]
     C3 --> L[assemble and solve the 2x2 block system]
 

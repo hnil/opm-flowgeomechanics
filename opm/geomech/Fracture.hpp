@@ -684,37 +684,20 @@ private:
     // Inner Newton settings, read once per grid solve.
     struct InnerSolveOptions
     {
-        bool useAd{false};
         int verbosity{0};
-        std::string closingType{"org"};
-        std::string closedCellPolicy{"sticky"};
-        bool isFb{false};
+        bool isFb{false}; // closed_cell_policy fischer_burmeister; otherwise sticky
         double closeForceTol{0.0};
         double reopenForceTol{0.0};
-        double reopenWidthTol{0.0};
-        bool reopenUseOpenPressure{false};
-        int freezeClosedAfter{-1};
-        bool chatterGuard{false};
-        int chatterFlipLimit{3};
-        int maxToggleCount{1000000000};
-        double maxToggleFraction{1.0};
-        double fbMu{0.0};
         bool fbScaledConvergence{false};
         bool fbLineSearch{false};
         double fbLineSearchMin{0.0625};
-        bool fbClampWidth{true};
         bool dropCoupling{true};
-        double dropTolH{1e1};
-        double dropTolP{1.0};
         bool storageTerm{false};
         FractureCoupledLinearSolver::Options linear;
         int dumpMinNonlinIter{0};
         bool writeCoupledSystem{false};
         bool dumpOnFailure{true};
-        double damping{0.0};
-        double coupledStepLimit{0.0};
         double maxDwidth{0.0};
-        double maxDp{0.0};
         static InnerSolveOptions read(const PropertyTree& prm);
     };
     struct ContactUpdate
@@ -774,7 +757,6 @@ private:
     // help function for solving
     FracturePressureInput makePressureAssemblyInput() const;
     std::vector<double> faceGravityHeads() const;
-    void assemblePressure();
     void assemblePressureAndCouplingAD(const std::vector<int>& closed_cells);
     void addSource();
     void initPressureMatrix();
@@ -797,7 +779,7 @@ private:
                                   ResVector& mech_rhs,
                                   const std::vector<int>& closed_cells,
                                   bool first_iteration);
-    void assembleFlowRows_(const ResVector& mech_rhs, const std::vector<int>& closed_cells);
+    void assembleFlowRows_(const std::vector<int>& closed_cells);
     void assembleSystemMatrix_(const std::vector<int>& closed_cells, bool first_iteration);
     VectorHP assembleResidual_(const VectorHP& x, const ResVector& mech_rhs, const FbRows& fb) const;
     bool isConverged_(const VectorHP& rhs, const FbRows& fb, double tol) const;
@@ -952,8 +934,6 @@ private:
     // handling preconditioner
     std::vector<int> closed_cells_; // indices of cells that are closed (zero width) in the current iteration
     // per-cell contact state changes within the current solve, used by the
-    // opt-in anti-chatter guard (solver.toggle_guard_mode = "chatter")
-    std::vector<int> cell_flip_counts_;
     FractureCoupledLinearSolver coupledSolver_;
     FractureSolveStats last_solve_stats_{};
 
