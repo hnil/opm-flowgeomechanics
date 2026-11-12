@@ -570,6 +570,82 @@ private:
                                                        double inj_press) const;
    std::vector<RuntimePerforation> wellIndices_() const;
    bool  expantionMax(const FractureProperties& fprop);
+
+   // ---- trimesh propagation solve (solve()) ----
+   struct PropagationOptions
+   {
+       int maxIter{};
+       double tol{};
+       int nlinVerbosity{};
+       int maxNumCoarsening{};
+       int numcellThreshold{};
+       bool smoothBoundary{false};
+       bool remapSolution{true};
+       bool conservativeCake{false};
+       double forceLimit{0.0};
+       bool conservative{false};
+       bool convergedCellsOnly{false};
+       double fbTol{1e-3};
+       int stableIters{2};
+       int verbosity{0};
+       bool disable{false};
+       bool openFrontOnly{false};
+       static PropagationOptions read(const PropertyTree& prm);
+   };
+   // Stops expansion once new fracture volume exceeds what the well can deliver
+   // this step; optionally draws the BC pressure down by the over-draw.
+   struct VolumePacing
+   {
+       bool on{false};
+       bool pressure{false};
+       bool wholeWell{false};
+       double fac{1.0};
+       double dt{0.0};
+       double v0{0.0};
+       double perfP0{0.0};
+       int verbosity{0};
+       bool budgetSpent{false};
+       static VolumePacing start(const Fracture& f, double dt);
+       void afterSolve(Fracture& f);
+       void restorePerfPressure(Fracture& f) const;
+   };
+   struct FilterCakeSnapshot
+   {
+       std::vector<double> thickness;
+       std::vector<std::vector<CellRef>> gridMeshMap;
+       double total{0.0};
+       RegularTrimesh::CellVolumes volumes;
+   };
+   struct RegridMaps
+   {
+       std::vector<std::vector<CellRef>> before; // grid_mesh_map_ before the regrid
+       std::vector<std::vector<CellRef>> after;
+       std::map<CellRef, int> boundary;          // trimesh boundary cell -> grid cell
+   };
+   struct GridSolve
+   {
+       bool converged{true};
+       int iterations{0};
+   };
+   void reinitializeTrimeshState_();
+   FilterCakeSnapshot snapshotFilterCake_(const PropagationOptions& opt) const;
+   template <class TypeTag, class Simulator>
+   RegridMaps regridTo_(const RegularTrimesh& trimesh, int level, const PropagationOptions& opt,
+                        const external::cvf::ref<external::cvf::BoundingBoxTree>& cell_search_tree,
+                        const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& entity_seeds,
+                        const Simulator& simulator);
+   void remapState_(const RegridMaps& maps, int level, const PropagationOptions& opt,
+                    const FilterCakeSnapshot& cake0);
+   GridSolve solveOnCurrentGrid_(const PropagationOptions& opt);
+   void reportGridSolve_(const GridSolve& solve, const PropagationOptions& opt);
+   // K1/K1c per trimesh front cell; -1 where a veto forbids growth
+   std::vector<double> propagationScores_(std::map<CellRef, int>& boundary, const GridSolve& solve,
+                                          const PropagationOptions& opt) const;
+   void vetoForceLimit_(std::vector<double>& score, const std::vector<int>& front,
+                        const PropagationOptions& opt) const;
+   void vetoUnconvergedCells_(std::vector<double>& score, const std::vector<int>& front,
+                              const PropagationOptions& opt) const;
+   void vetoClosedFront_(std::vector<double>& score, const std::vector<int>& front) const;
    bool removeNewZeroWithCells(RegularTrimesh& mesh,int cur_level,const RegularTrimesh& original_mesh) const;
    bool suppress_propagation_ = false;
    void composeFlowStateDonor(const std::vector<std::vector<CellRef>>& map1,

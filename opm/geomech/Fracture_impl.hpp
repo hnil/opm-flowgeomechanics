@@ -676,305 +676,24 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         last_solve_stats_.fractures_solved = 1;
     OPM_TIMEBLOCK(SolveFracture);
     {
-        // ----------------------------------------------------------------------------
         OpmLog::debug("Solve Fracture Pressure using Iterative Fracture with Trimesh Propagation");
-        // Volume-paced propagation (opt-in): see VOLUME_PACED_PROPAGATION.md.
-        // V0 = fracture volume at the step checkpoint; V_avail = fluid the well
-        // can deliver into new fracture volume during this step (eq. 1).
-        const bool vol_pacing = prm_.get<bool>("solver.volume_paced_propagation", false);
-        const double vol_fac = prm_.get<double>("solver.volume_pacing_factor", 1.0);
-        const bool vol_pressure = prm_.get<bool>("solver.volume_pacing_pressure", false);
-        const int vol_verb = prm_.get<int>("solver.volume_pacing_verbosity", 0);
-        const double vol_dt = simulator.timeStepSize();
-        const double vol_V0 = vol_pacing ? std::max(volume_step_start_, 0.0) : 0.0;
-        const double vol_perf_p0 = perf_pressure_;
-        bool vol_budget_spent = false;
-        bool reinitialize= !(prm_.get<bool>("solver.remap_solution"));
-        if(reinitialize){
-            OpmLog::debug("Reinitializing fracture states before IF with trimesh propagation");
-                fracture_width_ = 1e-3; // Ensure not completely closed
-            // start by assuming pressure equal to confining stress (will also set
-            // fracture_pressure_ to its correct size
-            auto traction = fracture_pressure_;
-            normalFractureTraction(traction);
-            for(size_t i=0; i < traction.size();++i){
-                fracture_pressure_[i] = std::max(traction[i], fracture_pressure_[i]);
-            }
-            if (numWellEquations() > 0){
-                fracture_pressure_[fracture_pressure_.size() - 1] = fracture_pressure_[0];
-            }
+        const auto opt = PropagationOptions::read(prm_);
+        VolumePacing pacing = VolumePacing::start(*this, simulator.timeStepSize());
+        if (!opt.remapSolution) {
+            reinitializeTrimeshState_();
         }
+        // the grid and filter cake at entry, to map onto each evolved grid
+        const FilterCakeSnapshot cake0 = snapshotFilterCake_(opt);
 
-
-        // save original grid and filtercake, to allow us to map it onto evolved grids
-        const auto filtercake_thickness_0 = filtercake_thikness_; // copy
-        const auto grid_mesh_map_0 = grid_mesh_map_;
-        double total_filtercake_0 = filterCakeVolume();
-        const std::string cake_remap = prm_.get<std::string>("solver.filtercake_remap", "legacy");
-        if (cake_remap != "legacy" && cake_remap != "conservative") {
-            OPM_THROW(std::runtime_error, "Unknown solver.filtercake_remap: " + cake_remap);
-        }
-        const auto filtercake_volumes_0 = (cake_remap == "conservative")
-            ? filterCakeVolumesByCell() : RegularTrimesh::CellVolumes{};
-        // local function taking a trimesh, updates the Fracture object with it and
-        // runs a simulation.  Its return value should be a vector of doubles:
-
+        // Regrid to a candidate mesh, solve on it and score its front cells.
         auto score_function = [&](const RegularTrimesh& trimesh, const int level) -> std::vector<double> {
-            const int max_iter = prm_.get<int>("solver.max_iter");
-            const double tol = prm_.get<double>("solver.tolerance");
-            const int nlin_verbosity = prm_.get<double>("solver.verbosity");
-            *trimesh_ = trimesh;
-            // save well sources before grid change
-            std::vector<CellRef> wsources = well_source_cellref_;
-            for (auto& cell : wsources)
-                cell = RegularTrimesh::fine_to_coarse(cell, level);
-
-            // setup fracture with new grid
-            const int MAX_NUM_COARSENING = prm_.get<int>("solver.max_num_coarsening"); // should be enough for all practical purposes
-            const int numcell_threshold = prm_.get<int>("solver.numcell_threshold");
-            bool smooth_boundary = prm_.get<bool>("solver.smooth_boundary",false);
-            auto [grid, fsmap, bmap] =
-            trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources,/* smoothed triangels */ smooth_boundary, numcell_threshold); // well cells kept intact!
-            auto org_map = grid_mesh_map_;
-            grid_mesh_map_ = fsmap;
-            grid_fixed_cells_ = wsources;
-            composeFlowStateDonor(org_map, fsmap, level);
-            setFractureGrid(std::move(grid)); // true -> coarsen interior
-            // generate the inverse map of fsmap_ (needed below)
-            std::map<CellRef, size_t> fsmap_inv;
-            for (int i = 0; i != fsmap.size(); ++i)
-                if (size(fsmap[i]) == 1) // a fine-scale cell
-                    fsmap_inv[fsmap[i].front()] = i;
-
-            // update indices for well sources to the correct cells in the new grid
-            well_source_.clear();
-            for (const auto& cell : wsources)
-                well_source_.push_back(fsmap_inv[cell]);
-
-            // Update the rest of the fracture object to adapt to grid change
-            updateReservoirCells(cell_search_tree, cpgrid, entity_seeds);
-            updateReservoirProperties<TypeTag, Simulator>(simulator, true, false);
-            initPressureMatrix();
-            rhs_pressure_.resize(0);
-            coupling_matrix_ = nullptr;
-
-
-
-            // solve flow-mechanical system
-            bool remap_solution= prm_.get<bool>("solver.remap_solution");
-            if (remap_solution) {
-
-                for (size_t i = 0; i < fracture_pressure_.size(); ++i) {
-                    assert(std::abs(fracture_pressure_[i][0]) < 1e10);
-                }
-                for (size_t i = 0; i < fracture_width_.size(); ++i) {
-                    assert(std::abs(fracture_width_[i][0]) < 0.6);
-                }
-                auto old_fracture_width_ = fracture_width_;
-                redistribute_values(fracture_width_, org_map, fsmap, level, /*point_wise*/true);
-                double well_value = 0.0;
-                if (numWellEquations() > 0){
-                    well_value = fracture_pressure_[fracture_pressure_.size() - 1];
-                    fracture_pressure_.resize(fracture_pressure_.size() - 1);
-                }
-                if (external_cell_mask_.size() == old_fracture_width_.size()) {
-                    Dune::BlockVector<Dune::FieldVector<double, 1>> m(external_cell_mask_.size());
-                    for (size_t i = 0; i < m.size(); ++i) {
-                        m[i] = external_cell_mask_[i] ? 1.0 : 0.0;
-                    }
-                    redistribute_values(m, org_map, fsmap, level, /*point_wise*/true);
-                    external_cell_mask_.assign(m.size(), 0);
-                    for (size_t i = 0; i < m.size(); ++i) {
-                        external_cell_mask_[i] = (m[i][0] > 0.5) ? 1 : 0;
-                    }
-                } else {
-                    external_cell_mask_.clear();
-                }
-                redistribute_values(fracture_pressure_, org_map, fsmap, level, /*point_wise*/true);
-                if (numWellEquations() > 0){
-                    assert(fracture_pressure_.size() == fracture_width_.size());
-                    fracture_pressure_.resize(fracture_pressure_.size() + 1);
-                    fracture_pressure_[fracture_pressure_.size() - 1] = well_value;
-                }
-                for (size_t i = 0; i < fracture_pressure_.size(); ++i) {
-                    assert(std::abs(fracture_pressure_[i][0]) < 1e10);
-                }
-                for (size_t i = 0; i < fracture_width_.size(); ++i) {
-                    assert(std::abs(fracture_width_[i][0]) < 0.6);
-                }
-                // solve flow-mechanical system
-                // cell entries only: reservoir_pressure_ has no well-equation entry
-                const size_t num_press_cells = fracture_pressure_.size() - numWellEquations();
-                for (size_t i = 0; i < num_press_cells; ++i) {
-                    if(fracture_pressure_[i] == 0.0){
-                      // not initialized values
-                      fracture_pressure_[i] = hydrostaticReservoirPressure(i);
-                    }
-                }
-                if (numWellEquations() > 0 && fracture_pressure_[num_press_cells] == 0.0) {
-                    fracture_pressure_[num_press_cells] = fracture_pressure_[0];
-                }
-            } else {
-                initFractureWidth();
-                initFracturePressureFromReservoir();
-            }
-
-
-
-            filtercake_thikness_ = (cake_remap == "conservative")
-                ? remapFilterCakeConservative(filtercake_volumes_0, grid_mesh_map_0, level)
-                : redistribute_values(filtercake_thickness_0,
-                                      grid_mesh_map_0,
-                                      fsmap, level, /*point_wise*/ true);
-            double total_filtercake = filterCakeVolume();
-            if(std::abs(total_filtercake - total_filtercake_0) > 1e-6 && (nlin_verbosity > 1)){
-                OpmLog::debug(fmt::format("Total filtercake thickness before remapping: {}\n"
-                                          "Total filtercake thickness after remapping: {}",
-                                          total_filtercake_0, total_filtercake));
-            }
-            int iter = 0;
-            ++joint_scores_;
-            if (!joint_growth_round_) {
-                while (!fullSystemIteration(tol,iter) && iter++ < max_iter) {
-                };
-            }
-            // Contact-set stability vs the previous coupling round (evaluated on
-            // the first solve of this round, i.e. before any expansion this
-            // round; a grid-size mismatch means the mesh moved: treat as unstable).
-            if (vol_pacing) {
-                // eq. (1)-(2): V(k)-V0 vs (q_perf - Q_leak(k))*dt*f_vol
-                const FractureProperties fp = calculateFractureProperties();
-                // budget source: this perforation's current CTF share (default) or
-                // the whole well (solver.volume_pacing_source=well) — the share is
-                // circular for an establishing fracture (small fracture -> small
-                // share -> halted), the whole well is what an open fracture takes
-                const std::string vol_src = prm_.get<std::string>("solver.volume_pacing_source", "perf");
-                const double q_perf = (vol_src == "well") ? std::abs(well_rate_) : well_perf_rate_;
-                const double v_avail = std::max(0.0, (q_perf - fp.flux) * vol_dt) * vol_fac;
-                const double dV = fp.volume - vol_V0;
-                vol_budget_spent = dV > v_avail;
-                if (vol_verb > 0) {
-                    OpmLog::debug(fmt::format("VolumePacing: V={} V0={} dV={} q_perf={} Q_leak={} V_avail={}{}",
-                                              fp.volume, vol_V0, dV, q_perf, fp.flux, v_avail,
-                                              vol_budget_spent ? "  -> BUDGET SPENT" : ""));
-                }
-                if (vol_pressure && dV > v_avail && fp.volume > 0.0) {
-                    // eq. (3)-(4): draw the BC pressure down by the over-draw over the
-                    // secant storage compliance C_eff = V / (p_perf - p_res)
-                    const int pc = perfinj_.empty() ? 0 : std::get<0>(perfinj_[0]);
-                    const double p_res = (pc < static_cast<int>(reservoir_pressure_.size()))
-                        ? reservoir_pressure_[pc] : 0.0;
-                    const double dp0 = std::max(vol_perf_p0 - p_res, 1.0e5);
-                    const double c_eff = fp.volume / dp0;
-                    const double p_new = std::max(vol_perf_p0 - (dV - v_avail) / c_eff, p_res);
-                    if (vol_verb > 0) {
-                        OpmLog::debug(fmt::format("VolumePacing: perf pressure {} -> {} bar (C_eff={})",
-                                                  perf_pressure_ / 1e5, p_new / 1e5, c_eff));
-                    }
-                    perf_pressure_ = p_new;
-                }
-            }
-            // remove closed cells which was not open before ??
-            if(iter >= max_iter){
-                last_solve_stats_.converged = false;
-                bool failure_on_convergence = prm_.get<bool>("solver.failure_on_nonconvergence",false);
-                if(failure_on_convergence){
-                    throw std::runtime_error("Fracture solver did not converge within " + std::to_string(max_iter) + " iterations.");
-                }else{
-                    OpmLog::warning(fmt::format("Fracture solver did not converge within {} iterations.", max_iter));
-                }
-            }
-            if(nlin_verbosity > 0){
-                int num_closed_cells = std::accumulate(closed_cells_.begin(), closed_cells_.end(), 0);
-                OpmLog::debug(fmt::format("Nonlinear iterations needed with fixed expansion: {}\n"
-                                          " fracture cells: {} closed cells: {}",
-                                          iter, fracture_width_.size(), num_closed_cells));
-             }
-
-            // compute K1 stress intensity
-            const std::vector<double> K1_not_nan = Fracture::stressIntensityK1();
-            const std::vector<CellRef> boundary_cells = trimesh_->boundaryCells();
-            std::vector<double> result(boundary_cells.size());
-            for (size_t i = 0; i != result.size(); ++i){
-                const double KImax = reservoir_cstress_[bmap[boundary_cells[i]]];
-                const double KI = K1_not_nan[bmap[boundary_cells[i]]];
-                result[i] = KI/KImax;
-            }
-            //
-            const double force_limit = prm_.get<double>("solver.force_limit", 0.0);
-            for (size_t i = 0; i != result.size(); ++i){
-                int bind = bmap[boundary_cells[i]];
-                if(fractureForce(bind) > force_limit ){
-                    result[i] = -1.0; // do not expand here
-                }
-            }
-
-            // Conservative propagation (opt-in, default off): do not let the
-            // fracture grow off a non-converged inner solve. The K1 scores come
-            // from the current width/pressure state; if that solve did not
-            // converge they are unreliable, and opening/propagating on them can
-            // irreversibly alter the solution (an opened cell changes the global
-            // mechanics). Suppress expansion this round and let growth happen on a
-            // later, converged step instead of relying on an expensive roll-back.
-            if (prm_.get<bool>("solver.conservative_propagation", false)
-                && iter >= max_iter) {
-                std::fill(result.begin(), result.end(), -1.0);
-            }
-
-
-            // Per-cell propagation veto (opt-in): refuse to grow from a front cell
-            // that is closed or whose FB complementarity has not converged, instead
-            // of vetoing ALL growth when the solve hit its iteration cap
-            // (conservative_propagation) - a global veto starves the fracture while
-            // the well keeps pressurising. Only front cells are scored at all, so
-            // this leaves every trustworthy open front free to propagate.
-            if (prm_.get<bool>("solver.propagate_converged_cells_only", false)) {
-                const double fbtol = prm_.get<double>("solver.propagate_fb_tol", 1e-3);
-                int vetoed = 0;
-                for (size_t i = 0; i != result.size(); ++i) {
-                    const int bind = bmap[boundary_cells[i]];
-                    if (bind < 0) continue;
-                    const bool closed = bind < static_cast<int>(closed_cells_.size())
-                                        && closed_cells_[bind];
-                    // FB: scaled complementarity residual. Sticky/pdas: the cell's
-                    // own toggle count, so the veto is available to the binary
-                    // active set as well (solver.propagate_max_toggles).
-                    const int stable = prm_.get<int>("solver.propagate_stable_iters", 2);
-                    const bool unconverged =
-                        (bind < static_cast<int>(fb_cell_residual_.size())
-                         && fb_cell_residual_[bind] > fbtol)
-                        || (bind < static_cast<int>(cell_last_toggle_iter_.size())
-                            && current_solve_iter_ - cell_last_toggle_iter_[bind] < stable);
-                    if (closed || unconverged) {
-                        result[i] = -1.0;
-                        ++vetoed;
-                    }
-                }
-                if (vetoed > 0 && prm_.get<int>("verbosity", 0) > 1)
-                    OpmLog::debug(fmt::format("Propagation veto: {}/{} front cells closed or unconverged",
-                                              vetoed, result.size()));
-            }
-
-            // Fixed-topology mode: freeze the mesh at the seed (Reveal comparison).
-            if (suppress_propagation_ || prm_.get<bool>("solver.disable_propagation", false)) {
-                std::fill(result.begin(), result.end(), -1.0);
-            }
-
-            // Only propagate where the front is OPEN to the fresh rock (opt-in):
-            // a closed front cell carries no mechanical opening load, so growth
-            // from it would ride on the width-floor conductivity, not on K1.
-            // Combine with solver.conservative_propagation so new cells are only
-            // added off a converged open/closed set.
-            if (prm_.get<bool>("solver.propagate_open_front_only", false)) {
-                for (size_t i = 0; i != result.size(); ++i) {
-                    const int bind = bmap[boundary_cells[i]];
-                    if (bind >= 0 && bind < static_cast<int>(closed_cells_.size())
-                        && closed_cells_[bind])
-                        result[i] = -1.0;
-                }
-            }
-
-            return result;
+            auto maps = regridTo_<TypeTag, Simulator>(trimesh, level, opt,
+                                                      cell_search_tree, entity_seeds, simulator);
+            remapState_(maps, level, opt, cake0);
+            const auto solve = solveOnCurrentGrid_(opt);
+            pacing.afterSolve(*this);
+            reportGridSolve_(solve, opt);
+            return propagationScores_(maps.boundary, solve, opt);
         };
 
         const FractureProperties& fprop_before = calculateFractureProperties();
@@ -985,8 +704,8 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
               return true;
           }
           const bool area_stop = expantionMax(fprop_before);
-          if (vol_pacing && vol_budget_spent) {
-              if (vol_verb > 0) OpmLog::debug("VolumePacing: stopping expansion (budget spent)");
+          if (pacing.on && pacing.budgetSpent) {
+              if (pacing.verbosity > 0) OpmLog::debug("VolumePacing: stopping expansion (budget spent)");
               return true;
           }
           return area_stop;
@@ -1038,7 +757,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
 
             // volume pacing: the drawn-down BC was for the expansion rounds only;
             // the coupling continues from the flow's perf pressure
-            if (vol_pacing && vol_pressure) perf_pressure_ = vol_perf_p0;
+            pacing.restorePerfPressure(*this);
 
             // Opt-in damped fixed point on the width exposed to the coupling
             // (WI, volume, K1 all derive from it): prevents the contact
@@ -1082,6 +801,48 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         summary_of_solve();
 
 
+}
+
+template <class TypeTag, class Simulator>
+Fracture::RegridMaps
+Fracture::regridTo_(const RegularTrimesh& trimesh, const int level, const PropagationOptions& opt,
+                    const external::cvf::ref<external::cvf::BoundingBoxTree>& cell_search_tree,
+                    const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& entity_seeds,
+                    const Simulator& simulator)
+{
+    const auto& cpgrid = simulator.vanguard().grid();
+    *trimesh_ = trimesh;
+    // well sources at this level; their cells are kept intact by createDuneGrid
+    std::vector<CellRef> wsources = well_source_cellref_;
+    for (auto& cell : wsources)
+        cell = RegularTrimesh::fine_to_coarse(cell, level);
+
+    auto [grid, fsmap, bmap] = trimesh_->createDuneGrid(opt.maxNumCoarsening, wsources,
+                                                        opt.smoothBoundary, opt.numcellThreshold);
+    RegridMaps maps;
+    maps.before = grid_mesh_map_;
+    grid_mesh_map_ = fsmap;
+    grid_fixed_cells_ = wsources;
+    composeFlowStateDonor(maps.before, fsmap, level);
+    setFractureGrid(std::move(grid));
+
+    std::map<CellRef, size_t> fsmap_inv;
+    for (int i = 0; i != fsmap.size(); ++i)
+        if (size(fsmap[i]) == 1) // a fine-scale cell
+            fsmap_inv[fsmap[i].front()] = i;
+    well_source_.clear();
+    for (const auto& cell : wsources)
+        well_source_.push_back(fsmap_inv[cell]);
+
+    updateReservoirCells(cell_search_tree, cpgrid, entity_seeds);
+    updateReservoirProperties<TypeTag, Simulator>(simulator, true, false);
+    initPressureMatrix();
+    rhs_pressure_.resize(0);
+    coupling_matrix_ = nullptr;
+
+    maps.after = std::move(fsmap);
+    maps.boundary = std::move(bmap);
+    return maps;
 }
 
 template <class Serializer>
