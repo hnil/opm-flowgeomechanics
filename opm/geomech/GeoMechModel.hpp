@@ -121,7 +121,12 @@ namespace Opm{
         }
         void solveGeoMechAndFracture(){
             const auto& problem = simulator_.problem();
-            this->solveGeomechanics();
+            // the step is already accepted here: keep the result, but say so
+            if (!this->solveGeomechanics().converged && simulator_.gridView().comm().rank() == 0) {
+                OpmLog::warning(fmt::format("End-of-step mechanical solve not converged "
+                                            "({} unconverged mechanical solves so far)",
+                                            num_mech_unconverged_));
+            }
             // the joint solve owns the fractures: growth only on a converged per-well state
             if(problem.hasFractures()
                && !problem.getGeoMechParam().template get<bool>("fractureparam.solver.well_joint_solve", false)){
@@ -466,6 +471,17 @@ namespace Opm{
         }
 
 
+        //! A failure on any rank is a failure on all: the displacement is shared.
+        Opm::Elasticity::MechSolveResult mechSolveOnAllRanks_(bool cold)
+        {
+            auto result = mechLinSolver_->solve(mechRhs_, mechDisc_->scale(),
+                                                mechState_.displacement, cold);
+            const auto& comm = simulator_.gridView().comm();
+            result.converged = comm.min(result.converged ? 1 : 0) == 1;
+            result.failed = comm.max(result.failed ? 1 : 0) == 1;
+            return result;
+        }
+
         Opm::Elasticity::MechSolveResult solveGeomechanics(bool use_body_force = false, bool relative_solve = true){
             {
                 OPM_TIMEBLOCK(endTimeStepMech);
@@ -478,8 +494,16 @@ namespace Opm{
             {
                 OPM_TIMEBLOCK(SolveMechanicalSystem);
                 Dune::Timer solve_timer;
-                result = mechLinSolver_->solve(mechRhs_, mechDisc_->scale(), mechState_.displacement);
+                result = this->mechSolveOnAllRanks_(/*cold*/ false);
+                if (!result.converged) {
+                    total_mech_linear_iterations_ += result.iterations;
+                    if (simulator_.gridView().comm().rank() == 0)
+                        OpmLog::warning("Mechanical solve not converged; retrying from a zero start");
+                    result = this->mechSolveOnAllRanks_(/*cold*/ true);
+                }
                 ++num_mech_solves_;
+                if (!result.converged)
+                    ++num_mech_unconverged_;
                 total_mech_linear_iterations_ += result.iterations;
                 last_mechanical_solve_time_seconds_ = solve_timer.stop();
                 total_mechanical_solve_time_seconds_ += last_mechanical_solve_time_seconds_;
@@ -500,6 +524,8 @@ namespace Opm{
             this->calculateOutputQuantitiesMech();
             return result;
         }
+        int numMechUnconverged() const { return num_mech_unconverged_; }
+
         //! The operators and the preconditioner are not saved: the first solve after a
         //! load assembles them and sets up this run's linear solver.
         template<class Serializer>
@@ -889,6 +915,7 @@ namespace Opm{
             report_time("  Mechanical solve time:", total_mechanical_solve_time_seconds_);
             report_count("Overall Mechanical Solves:", num_mech_solves_);
             report_count("Overall Mech Lin Iters:", total_mech_linear_iterations_);
+            report_count("Mech Solves Unconverged:", num_mech_unconverged_);
 
             if (simulator_.problem().hasFractures()) {
                 const auto total_stats = fracHost_.fractureModelPtr() ? fracHost_.fractureModelPtr()->totalSolveStats() : FractureSolveStats{};
@@ -912,6 +939,7 @@ namespace Opm{
     private:
         std::optional<double> assembledGravity_; // body force of the assembled matrix
         int num_mech_solves_{0};
+        int num_mech_unconverged_{0};
         int total_mech_linear_iterations_{0};
         bool write_system_{false};
         std::optional<MechOptions> mechOptions_;

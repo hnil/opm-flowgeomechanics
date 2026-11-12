@@ -383,7 +383,7 @@ void MechLinearSolver<GridType>::setup(const PropertyTree& prm, Matrix& A,
 }
 
 template<class GridType>
-MechSolveResult MechLinearSolver<GridType>::solve(const Vector& rhs, const Vector& scale, Vector& x)
+MechSolveResult MechLinearSolver<GridType>::solve(const Vector& rhs, const Vector& scale, Vector& x, bool cold)
 {
     const bool scaled = scale.size() > 0;
     MechSolveResult result;
@@ -395,10 +395,9 @@ MechSolveResult MechLinearSolver<GridType>::solve(const Vector& rhs, const Vecto
             for (std::size_t i = 0; i < rhs_eff.size(); ++i)
                 rhs_eff[i] *= scale[i][0];
         }
-        if (x.size() != rhs.size() || !warm_start_) {
-            x.resize(rhs.size());
-            x = 0;
-            Vector y = x;
+        if (x.size() != rhs.size() || !warm_start_ || cold) {
+            Vector y(rhs.size());
+            y = 0;
             tsolver_->apply(y, rhs_eff, r);
             x = y;
             if (scaled)

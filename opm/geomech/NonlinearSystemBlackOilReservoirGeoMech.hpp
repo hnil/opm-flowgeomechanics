@@ -274,6 +274,15 @@ namespace Opm
                 return report;
         }
 
+        //! An unconverged mechanics solve inside a step cuts the step: the fracture
+        //! and the next flow iterate would otherwise act on a stale displacement.
+        void solveGeomechanicsInStep_()
+        {
+            if (!this->simulator_.problem().geoMechModel().solveGeomechanics().converged) {
+                OPM_THROW_NOLOG(NumericalProblem, "mechanical linear solve did not converge");
+            }
+        }
+
         template <class NonlinearSolverType>
         SimulatorReportSingle nonlinearIterationSeqMechFrac(const SimulatorTimerInterface& timer,
                                             NonlinearSolverType& nonlinear_solver){
@@ -360,7 +369,7 @@ namespace Opm
                     }
                 } else {
                     OpmLog::info("Solve Geomechanics:");
-                    this->simulator_.problem().geoMechModel().solveGeomechanics();
+                    this->solveGeomechanicsInStep_();
                     ++this->mech_solves_performed_;
                     ++this->mech_solves_this_step_;
                 }
@@ -436,7 +445,7 @@ namespace Opm
                     if (growth_mech_cap_reached) {
                         ++this->mech_solves_skipped_;
                     } else {
-                        this->simulator_.problem().geoMechModel().solveGeomechanics();
+                        this->solveGeomechanicsInStep_();
                         ++this->mech_solves_performed_;
                         ++this->mech_solves_this_step_;
                     }
@@ -541,7 +550,7 @@ namespace Opm
             }
             int mech_max_it = prm.get<int>("solver.max_mech_it");
             if(iteration < mech_max_it){
-                this->simulator_.problem().geoMechModel().solveGeomechanics();
+                this->solveGeomechanicsInStep_();
                 OpmLog::debug("Geomech nonlinearIteration with mechanical solve:");
                 // TODO check convergence properly
                 report.converged = false;

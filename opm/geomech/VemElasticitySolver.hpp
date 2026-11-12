@@ -163,8 +163,9 @@ public:
 
     //! Sets up the preconditioner on A; in parallel, A's copy rows become identity rows.
     void setup(const PropertyTree& prm, Matrix& A, const std::vector<double>& coords);
-    //! x is the unscaled solution and the warm start; scale is empty or the Jacobi factors of A.
-    MechSolveResult solve(const Vector& b, const Vector& scale, Vector& x);
+    //! x is the unscaled solution and, unless cold, the warm start; scale is empty or
+    //! the Jacobi factors of A. On failure x is left unchanged.
+    MechSolveResult solve(const Vector& b, const Vector& scale, Vector& x, bool cold = false);
     const MechCommunication* comm() const { return comm_.get(); }
 
 private:
