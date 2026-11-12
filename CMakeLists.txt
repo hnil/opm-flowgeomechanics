@@ -356,6 +356,14 @@ target_link_libraries(test_fracture_mech_coupling
 		opmflowgeomechanics
 )
 
+add_executable(test_q1_equivalence
+	examples/test_q1_equivalence.cpp
+)
+target_link_libraries(test_q1_equivalence
+	PUBLIC
+		opmflowgeomechanics
+)
+
 add_executable(test_patch_recovery
 	examples/test_patch_recovery.cpp
 )
@@ -950,6 +958,10 @@ add_test(NAME Unit.Trimesh.GridRefinement
 
 add_test(NAME Unit.PatchRecovery
 	COMMAND $<TARGET_FILE:test_patch_recovery>
+)
+
+add_test(NAME Unit.Q1Equivalence
+	COMMAND $<TARGET_FILE:test_q1_equivalence>
 )
 
 set(FRACTURE_LINEAR_REPLAY_PREFIX
