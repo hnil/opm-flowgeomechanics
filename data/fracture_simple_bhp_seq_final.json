@@ -130,6 +130,7 @@
                 "max_iter": "100",
                 "verbosity": "0",
                 "solver": "bicgstab",
+                "failure_policy": "ladder",
                 "preconditioner": {
                     "verbosity": 0,
                     "diag_mech": "false",

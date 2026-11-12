@@ -10,22 +10,23 @@
 Flow is a simulator for fully implicit three-phase black-oil flow, and is part of OPM.
 For more information visit: https://opm-project.org 
 
-Flow Version     =  2026.04-pre (919449b*)
+Flow Version     =  2026.04-pre (e90d784*)
 Machine name     =  Halvors-MacBook-Pro.local (Number of logical cores: 14, Memory size: 24576.00 MB) 
-Operating system =  Darwin arm64 (Kernel: 25.6.0, Darwin Kernel Version 25.6.0: Fri Jul 31 19:17:26 PDT 2026; root:xnu-12377.161.14~5/RELEASE_ARM64_T6041 )
-Build time       =  2026-09-21 at 15:40:05 hrs
+Operating system =  Darwin arm64 (Kernel: 25.6.0, Darwin Kernel Version 25.6.0: Tue Aug 18 17:48:46 PDT 2026; root:xnu-12377.161.15.700.19~2/RELEASE_ARM64_T6041 )
+Build time       =  2026-11-12 at 15:46:53 hrs
 User             =  root
-Simulation started on 21-09-2026 at 15:40:07 hrs
+Simulation started on 12-11-2026 at 15:47:56 hrs
 Using 1 MPI processes with 2 OMP threads on each 
 Parameters used by Flow:
 # [known parameters which were specified at run-time]
-EclDeckFileName="/Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC" # default: ""
-FractureParamFile="/Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/fracture_simple_frac_postsolve_legacy_full.json" # default: "notafile"
-OutputDir="/Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/result/REGTEST_geomech_frac" # default: ""
+EclDeckFileName="/Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC" # default: ""
+FractureParamFile="/Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/fracture_simple_frac_postsolve_legacy_full.json" # default: "notafile"
+OutputDir="/Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/build/opm-flowgeomechanics/tests/results/REGTEST_geomech_frac" # default: ""
 # [parameters which were specified at compile-time]
 AcceleratorMode="none"
 ActionParsingStrictness="normal"
-AddCorners="0"
+AddCorners="1"
+AddCornersByVertex="1"
 AllowDistributedWells="0"
 AllowSplittingInactiveWells="1"
 AlternativeWellRateInit="1"
@@ -33,6 +34,7 @@ CheckGroupConstraintsInnerWellIterations="1"
 CheckSatfuncConsistency="1"
 ConserveInnerEnergyThermal="0"
 ContinueOnConvergenceError="0"
+ContinuousFluidPropertiesMsWells="0"
 ConvergenceMonitoring="0"
 ConvergenceMonitoringCutOff="6"
 ConvergenceMonitoringDecayFactor="0.75"
@@ -48,7 +50,8 @@ DsMax="0.2"
 DwellFractionMax="0.2"
 EclOutputDoublePrecision="0"
 EclOutputInterval="-1"
-EdgeConformal="0"
+EdgeConformal="1"
+EdgeConformalMergeTolerance="0"
 EdgeWeightsMethod="transmissibility"
 EnableAdaptiveTimeStepping="1"
 EnableAsyncEclOutput="0"
@@ -63,7 +66,7 @@ EnableGridAdaptation="0"
 EnableIntensiveQuantityCache="1"
 EnableLoggingFalloutWarning="0"
 EnableOpmRstFile="1"
-EnableStateRollback="0"
+EnableStateRollback="1"
 EnableStorageCache="1"
 EnableTerminalOutput="1"
 EnableThermodynamicHints="0"
@@ -76,6 +79,10 @@ EndStep="-1"
 EndTime="1e+100"
 ExplicitRockCompaction="0"
 ExternalPartition=""
+FluxBoundaryInterpolate="1"
+FluxBoundaryMinIntervalBetweenSamples="1"
+FluxBoundaryReportStepsOnly="0"
+FluxSummaryMinIntervalBetweenSamples="1"
 ForceDisableFluidInPlaceOutput="0"
 ForceDisableResvFluidInPlaceOutput="0"
 FullTimeStepInitially="0"
@@ -95,6 +102,7 @@ InjMultDampMult="0.9"
 InjMultMinDampFactor="0.05"
 InjMultOscThreshold="0.1"
 InputSkipMode="100"
+LgrBackend="conforming"
 LinearSolver="cprw"
 LinearSolverAccelerator="cpu"
 LinearSolverIgnoreConvergenceFailure="0"
@@ -135,7 +143,15 @@ MaxWelleqIter="30"
 MaximumNumberOfGroupSwitches="3"
 MaximumNumberOfWellSwitches="3"
 MaximumWaterSaturation="1"
+MechCoarsenFile="none"
+MechCoarsenMethod="auto"
+MechFillHoles="1"
+MechGrid="flow"
+MechGridCheck="error"
+MechGridVtu=""
 MechPorosityCoupling="0"
+MechSectorFile="none"
+MechThinCellThickness="0"
 MetisParams="default"
 MiluVariant="ilu"
 MinStrictCnvIter="-1"
@@ -161,6 +177,7 @@ NlddLocalLinearSolver="ilu0"
 NlddLocalLinearSolverMaxIter="200"
 NlddLocalLinearSolverReduction="0.01"
 NlddNumInitialNewtonIter="1"
+NlddNumOverlapLayers="1"
 NlddRelativeMobilityChangeTol="0.1"
 NonlinearSolver="newton"
 NumLocalDomains="0"
@@ -187,14 +204,17 @@ PriVarOscilationThreshold="1e-05"
 PrintParameters="2"
 ProjectSaturations="0"
 RcNetworkLooseCoupling="0"
+RefineBeforeRedistribute="false"
 RegularizationFactorWells="100"
 RelaxedLinearSolverReduction="0.01"
 RelaxedMaxPvFraction="0.03"
 RelaxedPressureTolMsw="10000"
 RelaxedWellFlowTol="0.001"
+RescoupSpawnWrapper=""
 RescoupSyncAtReportSteps="0"
 RestartTime="-1e+35"
 RestartWritingInterval="16777215"
+SaveAtDay="-1"
 SaveFile=""
 SaveStep=""
 ScaleLinearSystem="0"
@@ -288,8 +308,10 @@ VtkWriteGasDissolutionFactor="0"
 VtkWriteGasFormationVolumeFactor="0"
 VtkWriteGasSaturationPressure="0"
 VtkWriteGeoMech="1"
+VtkWriteGeoMechNodal="0"
 VtkWriteIntrinsicPermeabilities="0"
 VtkWriteMassFractions="0"
+VtkWriteMechGrid="0"
 VtkWriteMobilities="0"
 VtkWriteMolarities="0"
 VtkWriteMoleFractions="1"
@@ -321,131 +343,131 @@ ZoltanImbalanceTol="1.1"
 ZoltanParams="graph"
 ZoltanPhgEdgeSizeThreshold="0.35"
 
-Reading deck file '/Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.data'
-    0 Reading RUNSPEC  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 2
-    1 Reading DIMENS   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 3
-    2 Reading OIL      in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 6
-    3 Reading WATER    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 7
-    4 Reading GAS      in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 8
-    5 Reading DISGAS   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 9
-    6 Reading METRIC   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 10
-    7 Reading THERMAL  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 11
-    8 Reading MECH     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 13
-    9 Reading FRAC     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 14
-   10 Reading START    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 15
-   11 Reading GRIDOPTS in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 17
-   12 Reading EQLDIMS  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 19
-   13 Reading REGDIMS  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 21
-   14 Reading TABDIMS  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 23
-   15 Reading WELLDIMS in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 25
-   16 Reading VFPPDIMS in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 27
-   17 Reading UNIFIN   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 29
-   18 Reading UNIFOUT  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 30
-   19 Reading GRID     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 31
-   20 Reading NEWTRAN  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 32
-   21 Reading GRIDFILE in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 33
-   22 Reading GRIDUNIT in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 35
-   23 Reading INIT     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 37
-   24 Reading TOPS     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 41
-   25 Reading DXV      in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 43
-   26 Reading DYV      in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 45
-   27 Reading DZV      in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 47
-   28 Reading EQUALS   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 58
-   29 Reading EQUALS   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 63
-   30 Reading COPY     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 72
-   31 Reading MULTIPLY in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 76
-   32 Reading EQUALS   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 81
-   33 Reading BCCON    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 92
-   34 Reading RPTGRID  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 101
-   35 Reading EDIT     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 103
-   36 Reading PROPS    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 104
-   37 Reading NOECHO   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 105
-   38 Reading SPECROCK in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 107
-   39 Reading SPECHEAT in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 111
-   40 Reading DENSITY  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 115
-   41 Reading PVTW     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 118
-   42 Reading PVTO     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 121
-   43 Reading PVDG     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 138
-   44 Reading ROCK     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 141
-   45 Reading SWOF     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 144
-   46 Reading SGOF     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 146
-   47 Reading REGIONS  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 148
-   48 Reading EQUALS   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 149
-   49 Reading SOLUTION in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 154
-   50 Reading RPTRST   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 155
-   51 Reading EQUIL    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 157
-   52 Reading PBVD     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 160
-   53 Reading RTEMPVD  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 165
-   54 Reading STREQUIL in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 170
-   55 Reading SUMMARY  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 177
-   56 Reading ALL      in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 178
-   57 Reading PERFORMA in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 179
-   58 Reading WFCFFVIR in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 180
-   59 Reading WFCFFVIR in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 183
-   60 Reading WFCWFVIR in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 187
-   61 Reading WFCFVIR  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 190
-   62 Reading CFCFFVIR in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 193
-   63 Reading CFCWFVIR in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 198
-   64 Reading CFCFVIR  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 202
-   65 Reading WFCFFVIT in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 207
-   66 Reading WFCWFVIR in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 210
-   67 Reading WFCWFVIT in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 212
-   68 Reading WFCFVIR  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 215
-   69 Reading WFCFVIT  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 218
-   70 Reading WWIRFRAC in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 221
-   71 Reading CWIR     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 223
-   72 Reading CWIRFRAC in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 226
-   73 Reading CFCFFRAC in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 230
-   74 Reading CFCFRATE in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 233
-   75 Reading CPI      in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 237
-   76 Reading CINJFVR  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 240
-   77 Reading CINJFVT  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 243
-   78 Reading CFCSKIN  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 246
-   79 Reading CFCWIDTH in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 249
-   80 Reading CFCPERM  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 252
-   81 Reading CFCPORO  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 255
-   82 Reading CFCRAD   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 258
-   83 Reading CFCAOF   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 261
-   84 Reading CFRINJPR in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 265
-   85 Reading CFRINJBH in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 269
-   86 Reading CFRINJRA in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 273
-   87 Reading CWIR     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 277
-   88 Reading CTFAC    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 280
-   89 Reading CPR      in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 284
-   90 Reading CFRAREA  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 288
-   91 Reading CFRFLUX  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 291
-   92 Reading CFRHEIGH in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 294
-   93 Reading CFRLENGT in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 297
-   94 Reading CFRFVOLU in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 301
-   95 Reading CFRWI    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 304
-   96 Reading CFRAVGW  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 307
-   97 Reading CFRAVGFW in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 310
-   98 Reading CPI      in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 314
-   99 Reading CINJFVR  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 317
-  100 Reading CINJFVT  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 320
-  101 Reading BPR      in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 324
-  102 Reading BTEMP    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 327
-  103 Reading BSTRSSXX in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 330
-  104 Reading SCHEDULE in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 336
-  105 Reading TUNING   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 337
-  106 Reading NUPCOL   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 341
-  107 Reading BCPROP   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 345
-  108 Reading BCMECH   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 353
-  109 Reading GRUPTREE in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 360
-  110 Reading WELSPECS in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 372
-  111 Reading COMPDAT  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 376
-  112 Reading WCONINJE in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 401
-  113 Reading WSEED    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 406
-  114 Reading WTEMP    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 418
-  115 Reading TSTEP    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 421
-  116 Reading DATES    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 425
+Reading deck file '/Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.data'
+    0 Reading RUNSPEC  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 2
+    1 Reading DIMENS   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 3
+    2 Reading OIL      in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 6
+    3 Reading WATER    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 7
+    4 Reading GAS      in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 8
+    5 Reading DISGAS   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 9
+    6 Reading METRIC   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 10
+    7 Reading THERMAL  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 11
+    8 Reading MECH     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 13
+    9 Reading FRAC     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 14
+   10 Reading START    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 15
+   11 Reading GRIDOPTS in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 17
+   12 Reading EQLDIMS  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 19
+   13 Reading REGDIMS  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 21
+   14 Reading TABDIMS  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 23
+   15 Reading WELLDIMS in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 25
+   16 Reading VFPPDIMS in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 27
+   17 Reading UNIFIN   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 29
+   18 Reading UNIFOUT  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 30
+   19 Reading GRID     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 31
+   20 Reading NEWTRAN  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 32
+   21 Reading GRIDFILE in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 33
+   22 Reading GRIDUNIT in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 35
+   23 Reading INIT     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 37
+   24 Reading TOPS     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 41
+   25 Reading DXV      in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 43
+   26 Reading DYV      in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 45
+   27 Reading DZV      in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 47
+   28 Reading EQUALS   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 58
+   29 Reading EQUALS   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 63
+   30 Reading COPY     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 72
+   31 Reading MULTIPLY in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 76
+   32 Reading EQUALS   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 81
+   33 Reading BCCON    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 92
+   34 Reading RPTGRID  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 101
+   35 Reading EDIT     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 103
+   36 Reading PROPS    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 104
+   37 Reading NOECHO   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 105
+   38 Reading SPECROCK in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 107
+   39 Reading SPECHEAT in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 111
+   40 Reading DENSITY  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 115
+   41 Reading PVTW     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 118
+   42 Reading PVTO     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 121
+   43 Reading PVDG     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 138
+   44 Reading ROCK     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 141
+   45 Reading SWOF     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 144
+   46 Reading SGOF     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 146
+   47 Reading REGIONS  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 148
+   48 Reading EQUALS   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 149
+   49 Reading SOLUTION in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 154
+   50 Reading RPTRST   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 155
+   51 Reading EQUIL    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 157
+   52 Reading PBVD     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 160
+   53 Reading RTEMPVD  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 165
+   54 Reading STREQUIL in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 170
+   55 Reading SUMMARY  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 177
+   56 Reading ALL      in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 178
+   57 Reading PERFORMA in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 179
+   58 Reading WFCFFVIR in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 180
+   59 Reading WFCFFVIR in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 183
+   60 Reading WFCWFVIR in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 187
+   61 Reading WFCFVIR  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 190
+   62 Reading CFCFFVIR in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 193
+   63 Reading CFCWFVIR in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 198
+   64 Reading CFCFVIR  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 202
+   65 Reading WFCFFVIT in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 207
+   66 Reading WFCWFVIR in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 210
+   67 Reading WFCWFVIT in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 212
+   68 Reading WFCFVIR  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 215
+   69 Reading WFCFVIT  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 218
+   70 Reading WWIRFRAC in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 221
+   71 Reading CWIR     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 223
+   72 Reading CWIRFRAC in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 226
+   73 Reading CFCFFRAC in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 230
+   74 Reading CFCFRATE in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 233
+   75 Reading CPI      in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 237
+   76 Reading CINJFVR  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 240
+   77 Reading CINJFVT  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 243
+   78 Reading CFCSKIN  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 246
+   79 Reading CFCWIDTH in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 249
+   80 Reading CFCPERM  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 252
+   81 Reading CFCPORO  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 255
+   82 Reading CFCRAD   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 258
+   83 Reading CFCAOF   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 261
+   84 Reading CFRINJPR in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 265
+   85 Reading CFRINJBH in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 269
+   86 Reading CFRINJRA in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 273
+   87 Reading CWIR     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 277
+   88 Reading CTFAC    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 280
+   89 Reading CPR      in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 284
+   90 Reading CFRAREA  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 288
+   91 Reading CFRFLUX  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 291
+   92 Reading CFRHEIGH in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 294
+   93 Reading CFRLENGT in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 297
+   94 Reading CFRFVOLU in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 301
+   95 Reading CFRWI    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 304
+   96 Reading CFRAVGW  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 307
+   97 Reading CFRAVGFW in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 310
+   98 Reading CPI      in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 314
+   99 Reading CINJFVR  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 317
+  100 Reading CINJFVT  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 320
+  101 Reading BPR      in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 324
+  102 Reading BTEMP    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 327
+  103 Reading BSTRSSXX in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 330
+  104 Reading SCHEDULE in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 336
+  105 Reading TUNING   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 337
+  106 Reading NUPCOL   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 341
+  107 Reading BCPROP   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 345
+  108 Reading BCMECH   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 353
+  109 Reading GRUPTREE in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 360
+  110 Reading WELSPECS in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 372
+  111 Reading COMPDAT  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 376
+  112 Reading WCONINJE in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 401
+  113 Reading WSEED    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 406
+  114 Reading WTEMP    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 418
+  115 Reading TSTEP    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 421
+  116 Reading DATES    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 425
 Unsupported keywords or keyword items:
 
   RPTGRID: keyword not supported
-  In file: /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA, line 101
+  In file: /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA, line 101
 
   NOECHO: keyword not supported
-  In file: /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA, line 105
+  In file: /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA, line 105
 
 Simulation will solve for mechanical quantities
 
@@ -455,7 +477,7 @@ Creating grid from keywords DX, DY, DZ and TOPS
 4 fluid phases are active
 
 Processing dynamic information from
-/Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 336
+/Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 336
 Initializing report step 0/4 at 2020-01-01 0 DAYS line 336
 Processing keyword TUNING at line 337
 Processing keyword NUPCOL at line 341
@@ -476,7 +498,7 @@ Initializing report step 3/4 at 2020-01-11 (5 DAYS) line 421
 Complete report step 3 (5 DAYS) at 2020-01-16 (10 DAYS)
 
 Initializing report step 4/4 at 2020-01-16 (10 DAYS) line 421
-Complete report step 4 (85.5 DAYS) at 2020-04-10 (15 DAYS)
+Complete report step 4 (85.5 DAYS) at 2020-04-10 12:00:00 (15 DAYS)
 
 
 Simulation will solve for mechanical quantities
@@ -500,6 +522,7 @@ Property tree for linear solvers:
         "type": "cprw",
         "use_well_weights": "false",
         "add_wells": "true",
+        "well_coarse_diagonal": "row_sum",
         "weight_type": "trueimpes",
         "pre_smooth": "0",
         "post_smooth": "1",
@@ -539,13 +562,13 @@ Property tree for linear solvers:
 
 ESMRY is incompatible with MECH/FRAC. Request for ESMRY output ignored.
 Unhandled summary keyword ALL/FAQR
-In /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 178
+In /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 178
 Unhandled summary keyword ALL/FAQRG
-In /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 178
+In /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 178
 Unhandled summary keyword ALL/FAQT
-In /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 178
+In /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 178
 Unhandled summary keyword ALL/FAQTG
-In /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 178
+In /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 178
 {
     "hasfractures": "true",
     "verbosity": "1",
@@ -602,6 +625,7 @@ In /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE
                 "max_iter": "1000",
                 "verbosity": "0",
                 "solver": "bicgstab",
+                "failure_policy": "ladder",
                 "preconditioner": {
                     "diag_mech": "false",
                     "diag_flow": "false",
@@ -631,7 +655,8 @@ In /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE
             "divide_wellidx": "false",
             "no_leakof_outercells": "false",
             "drop_fluid_mech_linearization": "true",
-            "closed_cell_policy": "legacy",
+            "closed_cell_policy": "sticky",
+            "use_ad_pressure_assembly": "true",
             "coupling_legacy_first_damp": "true"
         },
         "reservoir": {
@@ -662,6 +687,8 @@ Manually tuning the simulator with the TUNING keyword may increase run time.
 It is recommended using the simulator's default tuning (--enable-tuning=false).
 Geomech init
 
+Mechanics grid: 3025 cells, 9746 faces: geometric (closed cells, edge-conformal, one closed boundary)
+Mechanical constraints: 1 connected component(s), all six rigid-body modes constrained
 Update Forces for Geomechanics
 
 
@@ -681,6 +708,7 @@ Restart file written for report step 0/4, date = 01-Jan-2020 00:00:00
 Using Newton nonlinear solver.
 
 Starting time step 0, stepsize 1 days, at day 0/5, date = 01-Jan-2020
+----------------------Start beginTimeStep-------------------
    Well B-3H converged in 1 inner iterations (0 control/status switches).
    Well B-3H converged in 1 inner iterations (0 control/status switches).
 Geomech begin time step
@@ -688,15 +716,16 @@ Geomech begin time step
    Well B-3H converged in 1 inner iterations (0 control/status switches).
    Well B-3H converged in 1 inner iterations (0 control/status switches).
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
-   0  0.000e+00  5.867e-05  0.000e+00  5.739e-04  0.000e+00  1.090e-01  0.000e+00  1.067e+00   Strict  Relaxed
+   0  0.000e+00  8.327e-05  0.000e+00  8.756e-04  0.000e+00  1.090e-01  0.000e+00  1.067e+00   Strict  Relaxed
 Linear system blocksize: 4 size:    3025 block nonzeroes:     19833
-   1  0.000e+00  1.711e-03  0.000e+00  2.102e-02  0.000e+00  1.401e-02  0.000e+00  1.721e-01   Strict   Strict
-   2  0.000e+00  2.195e-06  0.000e+00  2.899e-05  0.000e+00  2.542e-05  0.000e+00  3.120e-04   Strict   Strict
-   3  0.000e+00  9.327e-09  0.000e+00  1.331e-07  0.000e+00  1.483e-07  0.000e+00  2.725e-06   Strict   Strict
+   1  0.000e+00  4.354e-08  0.000e+00  2.379e-07  0.000e+00  4.482e-05  0.000e+00  1.340e-02   Strict  Relaxed
+   2  0.000e+00  6.728e-11  0.000e+00  8.073e-10  0.000e+00  1.430e-08  0.000e+00  5.244e-07   Strict   Strict
 Overall linear iterations used: 2
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
+VEM face quadrature: kite
 Setting stability choise to 3
 Property tree for mech linear solver:
 {
@@ -711,61 +740,110 @@ Property tree for mech linear solver:
     }
 }
 
-Mechanical solve stats: solves=1, linear_iterations=49 (total 49), solve_time_s=0.0749436 (total 0.0749436), converged=true
+Mechanical solve stats: solves=1, linear_iterations=49 (total 49), solve_time_s=0.0753152 (total 0.0753152), converged=true
 
+Fracture option solver.efac is no longer used and is ignored
+Fracture option solver.rfac is no longer used and is ignored
+Fracture option solver.max_expand_iter is no longer used and is ignored
 Fracture seed on B-3H: flow-width floor (WSEED WIDTH) = 0.000100 m
+Creating trimesh with radius: 5, edgelen: 1, ax1: 0,0,-5, ax2: -4.330127018922193,0,-2.5
+Added fractures to 1 wells
+Total number of fractures_wells: 1
+Well B-3H has 1 fracture
+Total number of fractures: 1
+Activating fracture Fracture_on_B-3H_perf_0_nr
 Writing fracture data to VTK files at time: 0grid_size156
 
-Fracture solve stats: fractures_solved=1 (total 1), nonlinear_iterations=2 (total 2), linear_solves=1 (total 1), linear_iterations=0 (total 0), closed_cell_toggles=180 (total 180), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.00485846 (total 0.00485846), converged=true
+Activating fracture Fracture_on_B-3H_perf_0_nr
+Solving fracture Fracture_on_B-3H_perf_0_nr
+Solve Fracture Pressure using Iterative Fracture with Trimesh Propagation
+Reinitializing fracture states before IF with trimesh propagation
+Nonlinear iteration: 0 rhs:  14046305.439687531 7.4279258643887855 closed_cells: 0 cells m: 180 cells p: 180
+Converged with residual norm[0] is 0
+Converged with residual norm[1] is 5.873858440965373e-15
+Nonlinear iterations needed with fixed expansion: 1
+ fracture cells: 180 closed cells: 180
+Solver converged with expantion iterations: 0 at level: 0
+ ** ---------- FINAL MESH HAS 180 CELLS ---------- **
+ ** ---------- CONVERGED BOUNDARY MESH ---------- **
+Fracture solve stats: fractures_solved=1 (total 1), nonlinear_iterations=2 (total 2), linear_solves=1 (total 1), linear_iterations=0 (total 0), closed_cell_toggles=180 (total 180), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.00490608 (total 0.00490608), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Suggested next time step size (from PID controller): 14.162700674069182 days
-Suggested next time step size (from iteration target): 3 days
-Well its= 1 Newton its= 3, linearizations= 4 (0.0sec), linear its=  2 (0.0sec)
+Suggested next time step size (from PID controller): 14.163475011756045 days
+Suggested next time step size (from iteration target): 3.400000000000001 days
+Well its= 2 Newton its= 2, linearizations= 3 (0.0sec), linear its=  2 (0.0sec)
 
 Starting time step 1, stepsize 2 days, at day 1/5, date = 02-Jan-2020
+----------------------Start beginTimeStep-------------------
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
-   0  0.000e+00  2.459e-05  0.000e+00  9.043e-06  0.000e+00  4.389e-04  0.000e+00  5.156e-01   Strict  Relaxed
-   1  0.000e+00  4.197e-07  0.000e+00  4.334e-05  0.000e+00  6.672e-06  0.000e+00  9.833e-02   Strict  Relaxed
-   2  0.000e+00  2.911e-08  0.000e+00  3.455e-07  0.000e+00  8.726e-07  0.000e+00  1.292e-05   Strict   Strict
+   0  0.000e+00  2.461e-05  0.000e+00  9.225e-06  0.000e+00  4.388e-04  0.000e+00  5.156e-01   Strict  Relaxed
+   1  0.000e+00  4.199e-07  0.000e+00  4.333e-05  0.000e+00  6.674e-06  0.000e+00  9.833e-02   Strict  Relaxed
+   2  0.000e+00  2.912e-08  0.000e+00  3.457e-07  0.000e+00  8.728e-07  0.000e+00  1.292e-05   Strict   Strict
 Overall linear iterations used: 0
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=2, linear_iterations=38 (total 87), solve_time_s=0.0589093 (total 0.133853), converged=true
+Mechanical solve stats: solves=2, linear_iterations=38 (total 87), solve_time_s=0.0603557 (total 0.135671), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 2), nonlinear_iterations=2 (total 4), linear_solves=1 (total 2), linear_iterations=0 (total 0), closed_cell_toggles=360 (total 540), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.00494937 (total 0.00980783), converged=true
+Activating fracture Fracture_on_B-3H_perf_0_nr
+Solving fracture Fracture_on_B-3H_perf_0_nr
+Solve Fracture Pressure using Iterative Fracture with Trimesh Propagation
+Reinitializing fracture states before IF with trimesh propagation
+Nonlinear iteration: 0 rhs:  0.0001 4.194561542071479 closed_cells: 180 cells m: 180 cells p: 180
+Converged with residual norm[0] is 0
+Converged with residual norm[1] is 3.485881845897067e-15
+Nonlinear iterations needed with fixed expansion: 1
+ fracture cells: 180 closed cells: 180
+Solver converged with expantion iterations: 0 at level: 0
+ ** ---------- FINAL MESH HAS 180 CELLS ---------- **
+ ** ---------- CONVERGED BOUNDARY MESH ---------- **
+Fracture solve stats: fractures_solved=1 (total 2), nonlinear_iterations=2 (total 4), linear_solves=1 (total 2), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 180), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.00501054 (total 0.00991663), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Suggested next time step size (from PID controller): 20.994456854518813 days
+Suggested next time step size (from PID controller): 20.989509918739937 days
 Suggested next time step size (from iteration target): 6.800000000000002 days
 Well its= 1 Newton its= 2, linearizations= 3 (0.0sec), linear its=  0 (0.0sec)
 
 Starting time step 2, stepsize 2 days, at day 3/5, date = 04-Jan-2020
+----------------------Start beginTimeStep-------------------
 Geomech begin time step
 
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
-   0  0.000e+00  2.769e-06  0.000e+00  2.590e-04  0.000e+00  1.479e-05  0.000e+00  4.760e-01   Strict  Relaxed
-   1  0.000e+00  7.657e-08  0.000e+00  2.545e-05  0.000e+00  2.062e-06  0.000e+00  5.353e-02   Strict  Relaxed
-   2  0.000e+00  7.061e-09  0.000e+00  8.016e-08  0.000e+00  2.598e-07  0.000e+00  6.721e-06   Strict   Strict
+   0  0.000e+00  2.771e-06  0.000e+00  2.590e-04  0.000e+00  1.481e-05  0.000e+00  4.760e-01   Strict  Relaxed
+   1  0.000e+00  7.658e-08  0.000e+00  2.545e-05  0.000e+00  2.062e-06  0.000e+00  5.353e-02   Strict  Relaxed
+   2  0.000e+00  7.062e-09  0.000e+00  8.017e-08  0.000e+00  2.599e-07  0.000e+00  6.721e-06   Strict   Strict
 Overall linear iterations used: 0
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=3, linear_iterations=51 (total 138), solve_time_s=0.0786673 (total 0.21252), converged=true
+Mechanical solve stats: solves=3, linear_iterations=51 (total 138), solve_time_s=0.0796395 (total 0.21531), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 3), nonlinear_iterations=2 (total 6), linear_solves=1 (total 3), linear_iterations=0 (total 0), closed_cell_toggles=360 (total 900), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.00474325 (total 0.0145511), converged=true
+Activating fracture Fracture_on_B-3H_perf_0_nr
+Solving fracture Fracture_on_B-3H_perf_0_nr
+Solve Fracture Pressure using Iterative Fracture with Trimesh Propagation
+Reinitializing fracture states before IF with trimesh propagation
+Nonlinear iteration: 0 rhs:  0.0001 4.194564067496825 closed_cells: 180 cells m: 180 cells p: 180
+Converged with residual norm[0] is 0
+Converged with residual norm[1] is 3.09222316461231e-15
+Nonlinear iterations needed with fixed expansion: 1
+ fracture cells: 180 closed cells: 180
+Solver converged with expantion iterations: 0 at level: 0
+ ** ---------- FINAL MESH HAS 180 CELLS ---------- **
+ ** ---------- CONVERGED BOUNDARY MESH ---------- **
+Fracture solve stats: fractures_solved=1 (total 3), nonlinear_iterations=2 (total 6), linear_solves=1 (total 3), linear_iterations=0 (total 0), closed_cell_toggles=0 (total 180), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.00499542 (total 0.014912), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
-Suggested next time step size (from PID controller): 37.221276813434294 days
+Suggested next time step size (from PID controller): 37.21642341331251 days
 Suggested next time step size (from iteration target): 6.800000000000002 days
  Newton its= 2, linearizations= 3 (0.0sec), linear its=  0 (0.0sec)
 Sub steps started at time = 0 (days)
@@ -778,7 +856,7 @@ Suggested next step size = 6 (days)
 Restart file written for report step 1/4, date = 06-Jan-2020 00:00:00
 Writing fracture data to VTK files at time: 259200grid_size180
 
-Time step took 0.930939 seconds; total solver time 0.930939 seconds.
+Time step took 1.021429 seconds; total solver time 1.021429 seconds.
 
 
 
@@ -792,24 +870,49 @@ Time step took 0.930939 seconds; total solver time 0.930939 seconds.
 Report step  1/4 at day 5/100.5, date = 06-Jan-2020
 
 Starting time step 0, stepsize 5 days, at day 5/10, date = 06-Jan-2020
+----------------------Start beginTimeStep-------------------
 Geomech begin time step
 
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
-   0  0.000e+00  1.277e-06  0.000e+00  7.168e-04  0.000e+00  1.084e-05  0.000e+00  1.088e+00   Strict  Relaxed
-   1  0.000e+00  7.846e-08  0.000e+00  2.659e-04  0.000e+00  1.863e-06  0.000e+00  6.107e-01   Strict  Relaxed
-   2  0.000e+00  1.117e-08  0.000e+00  5.849e-05  0.000e+00  3.006e-07  0.000e+00  1.336e-01   Strict  Relaxed
-   3  0.000e+00  1.758e-09  0.000e+00  7.503e-08  0.000e+00  4.768e-08  0.000e+00  7.661e-05   Strict   Strict
+   0  0.000e+00  1.277e-06  0.000e+00  7.168e-04  0.000e+00  1.085e-05  0.000e+00  1.088e+00   Strict  Relaxed
+   1  0.000e+00  7.848e-08  0.000e+00  2.659e-04  0.000e+00  1.863e-06  0.000e+00  6.107e-01   Strict  Relaxed
+   2  0.000e+00  1.117e-08  0.000e+00  5.849e-05  0.000e+00  3.007e-07  0.000e+00  1.336e-01   Strict  Relaxed
+   3  0.000e+00  1.758e-09  0.000e+00  7.503e-08  0.000e+00  4.769e-08  0.000e+00  7.661e-05   Strict   Strict
 Overall linear iterations used: 0
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=4, linear_iterations=45 (total 183), solve_time_s=0.0704561 (total 0.282976), converged=true
+Mechanical solve stats: solves=4, linear_iterations=45 (total 183), solve_time_s=0.0708068 (total 0.286117), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 4), nonlinear_iterations=13 (total 19), linear_solves=12 (total 15), linear_iterations=4 (total 4), closed_cell_toggles=516 (total 1416), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.0101855 (total 0.0247366), converged=true
+Activating fracture Fracture_on_B-3H_perf_0_nr
+Solving fracture Fracture_on_B-3H_perf_0_nr
+Solve Fracture Pressure using Iterative Fracture with Trimesh Propagation
+Reinitializing fracture states before IF with trimesh propagation
+Nonlinear iteration: 0 rhs:  0.0001 4.194564464653655 closed_cells: 180 cells m: 180 cells p: 180
+Nonlinear iteration: 1 rhs:  1971623.4644235373 2.7004729413776325e-15 closed_cells: 168 cells m: 180 cells p: 180
+Nonlinear iteration: 2 rhs:  7.450580596923828e-09 0.0006517637564098881 closed_cells: 168 cells m: 180 cells p: 180
+Nonlinear iteration: 3 rhs:  373105.6851537712 0.0025126322727627706 closed_cells: 156 cells m: 180 cells p: 180
+Nonlinear iteration: 4 rhs:  304678.5870486796 0.009255880430881906 closed_cells: 144 cells m: 180 cells p: 180
+Nonlinear iteration: 5 rhs:  1643265.3748069182 0.009762560946160797 closed_cells: 126 cells m: 180 cells p: 180
+Nonlinear iteration: 6 rhs:  1791061.1577183232 0.03270611641098815 closed_cells: 96 cells m: 180 cells p: 180
+Nonlinear iteration: 7 rhs:  2050330.8207067735 0.049966338388064815 closed_cells: 54 cells m: 180 cells p: 180
+Nonlinear iteration: 8 rhs:  3465694.2894641086 0.07074484485563748 closed_cells: 0 cells m: 180 cells p: 180
+Nonlinear iteration: 9 rhs:  7.078051567077637e-08 0.09443430763047628 closed_cells: 0 cells m: 180 cells p: 180
+Nonlinear iteration: 10 rhs:  4.470348358154297e-08 0.0004705949952677087 closed_cells: 0 cells m: 180 cells p: 180
+Nonlinear iteration: 11 rhs:  6.332993507385254e-08 6.887347763645682e-06 closed_cells: 0 cells m: 180 cells p: 180
+Converged with residual norm[0] is 5.21540641784668e-08
+Converged with residual norm[1] is 9.212126340203349e-08
+Nonlinear iterations needed with fixed expansion: 12
+ fracture cells: 180 closed cells: 0
+Solver converged with expantion iterations: 0 at level: 0
+ ** ---------- FINAL MESH HAS 180 CELLS ---------- **
+ ** ---------- CONVERGED BOUNDARY MESH ---------- **
+Fracture solve stats: fractures_solved=1 (total 4), nonlinear_iterations=13 (total 19), linear_solves=12 (total 15), linear_iterations=4 (total 4), closed_cell_toggles=180 (total 360), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.010367 (total 0.0252791), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
-Suggested next time step size (from PID controller): 134.07528454065235 days
+Suggested next time step size (from PID controller): 134.0559587782278 days
 Suggested next time step size (from iteration target): 15 days
  Newton its= 3, linearizations= 4 (0.0sec), linear its=  0 (0.0sec)
 Sub steps started at time = 5 (days)
@@ -820,7 +923,7 @@ Suggested next step size = 15 (days)
 Restart file written for report step 2/4, date = 11-Jan-2020 00:00:00
 Writing fracture data to VTK files at time: 432000grid_size180
 
-Time step took 0.141879 seconds; total solver time 1.072818 seconds.
+Time step took 0.140878 seconds; total solver time 1.162307 seconds.
 
 
 
@@ -834,25 +937,99 @@ Time step took 0.141879 seconds; total solver time 1.072818 seconds.
 Report step  2/4 at day 10/100.5, date = 11-Jan-2020
 
 Starting time step 0, stepsize 5 days, at day 10/15, date = 11-Jan-2020
+----------------------Start beginTimeStep-------------------
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
-   0  0.000e+00  1.445e-07  0.000e+00  7.307e-04  0.000e+00  1.388e-06  0.000e+00  8.805e-01   Strict  Relaxed
-   1  0.000e+00  9.458e-09  0.000e+00  1.763e-04  0.000e+00  2.328e-07  0.000e+00  4.034e-01   Strict  Relaxed
-   2  0.000e+00  1.363e-09  0.000e+00  2.756e-07  0.000e+00  3.724e-08  0.000e+00  2.311e-04   Strict   Strict
+   0  0.000e+00  1.446e-07  0.000e+00  7.307e-04  0.000e+00  1.388e-06  0.000e+00  8.805e-01   Strict  Relaxed
+   1  0.000e+00  9.460e-09  0.000e+00  1.763e-04  0.000e+00  2.329e-07  0.000e+00  4.034e-01   Strict  Relaxed
+   2  0.000e+00  1.363e-09  0.000e+00  2.756e-07  0.000e+00  3.725e-08  0.000e+00  2.311e-04   Strict   Strict
 Overall linear iterations used: 0
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=5, linear_iterations=43 (total 226), solve_time_s=0.066422 (total 0.349398), converged=true
+Mechanical solve stats: solves=5, linear_iterations=43 (total 226), solve_time_s=0.0715142 (total 0.357631), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 5), nonlinear_iterations=40 (total 59), linear_solves=32 (total 47), linear_iterations=24 (total 28), closed_cell_toggles=0 (total 1416), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.184034 (total 0.20877), converged=true
+Activating fracture Fracture_on_B-3H_perf_0_nr
+Solving fracture Fracture_on_B-3H_perf_0_nr
+Solve Fracture Pressure using Iterative Fracture with Trimesh Propagation
+Reinitializing fracture states before IF with trimesh propagation
+Nonlinear iteration: 0 rhs:  2044758.2370409817 4.018076479096695 closed_cells: 0 cells m: 180 cells p: 180
+Nonlinear iteration: 1 rhs:  6.332993507385254e-08 15.813935899136137 closed_cells: 0 cells m: 180 cells p: 180
+Nonlinear iteration: 2 rhs:  6.705522537231445e-08 0.022108011097342242 closed_cells: 0 cells m: 180 cells p: 180
+Nonlinear iteration: 3 rhs:  8.568167686462402e-08 3.7252483179057194e-06 closed_cells: 0 cells m: 180 cells p: 180
+Converged with residual norm[0] is 6.332993507385254e-08
+Converged with residual norm[1] is 4.970433330516749e-10
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 180 closed cells: 0
+Nonlinear iteration: 0 rhs:  2054820.4555904716 4.018076479096695 closed_cells: 0 cells m: 222 cells p: 222
+Nonlinear iteration: 1 rhs:  6.705522537231445e-08 19.41203169614975 closed_cells: 0 cells m: 222 cells p: 222
+Nonlinear iteration: 2 rhs:  7.82310962677002e-08 0.031092543802045555 closed_cells: 0 cells m: 222 cells p: 222
+Nonlinear iteration: 3 rhs:  7.450580596923828e-08 5.188573801188756e-06 closed_cells: 0 cells m: 222 cells p: 222
+Converged with residual norm[0] is 8.940696716308594e-08
+Converged with residual norm[1] is 6.771219521119583e-10
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 222 closed cells: 0
+Nonlinear iteration: 0 rhs:  2064272.4295633994 4.018076479096695 closed_cells: 0 cells m: 264 cells p: 264
+Nonlinear iteration: 1 rhs:  8.568167686462402e-08 23.27287271045051 closed_cells: 0 cells m: 264 cells p: 264
+Nonlinear iteration: 2 rhs:  8.195638656616211e-08 0.04109967279681028 closed_cells: 0 cells m: 264 cells p: 264
+Nonlinear iteration: 3 rhs:  7.82310962677002e-08 6.639695574393411e-06 closed_cells: 0 cells m: 264 cells p: 264
+Converged with residual norm[0] is 8.195638656616211e-08
+Converged with residual norm[1] is 8.346653830810784e-10
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 264 closed cells: 0
+Nonlinear iteration: 0 rhs:  2072334.0941917114 4.018076479096695 closed_cells: 0 cells m: 312 cells p: 312
+Nonlinear iteration: 1 rhs:  1.043081283569336e-07 27.71394670401168 closed_cells: 0 cells m: 312 cells p: 312
+Nonlinear iteration: 2 rhs:  8.568167686462402e-08 0.05340308131827963 closed_cells: 0 cells m: 312 cells p: 312
+Nonlinear iteration: 3 rhs:  9.685754776000977e-08 8.366965566841593e-06 closed_cells: 0 cells m: 312 cells p: 312
+Converged with residual norm[0] is 8.940696716308594e-08
+Converged with residual norm[1] is 1.0165365373361477e-09
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 312 closed cells: 0
+Nonlinear iteration: 0 rhs:  2080705.5260764472 4.018076479096695 closed_cells: 0 cells m: 366 cells p: 366
+Nonlinear iteration: 1 rhs:  9.685754776000977e-08 32.62668737140893 closed_cells: 0 cells m: 366 cells p: 366
+Nonlinear iteration: 2 rhs:  9.313225746154785e-08 0.06805709712729908 closed_cells: 0 cells m: 366 cells p: 366
+Nonlinear iteration: 3 rhs:  9.685754776000977e-08 1.0414038612917121e-05 closed_cells: 0 cells m: 366 cells p: 366
+Converged with residual norm[0] is 8.195638656616211e-08
+Converged with residual norm[1] is 1.235755801659122e-09
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 366 closed cells: 0
+Nonlinear iteration: 0 rhs:  2087633.8636258282 4.018076479096695 closed_cells: 0 cells m: 420 cells p: 420
+Nonlinear iteration: 1 rhs:  1.0803341865539551e-07 37.86649836032805 closed_cells: 0 cells m: 420 cells p: 420
+Nonlinear iteration: 2 rhs:  8.940696716308594e-08 0.08383351882836071 closed_cells: 0 cells m: 420 cells p: 420
+Nonlinear iteration: 3 rhs:  1.0058283805847168e-07 1.2392700616685638e-05 closed_cells: 0 cells m: 420 cells p: 420
+Converged with residual norm[0] is 1.0058283805847168e-07
+Converged with residual norm[1] is 1.4209752903802749e-09
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 420 closed cells: 0
+Nonlinear iteration: 0 rhs:  2094915.5654697753 4.018076479096695 closed_cells: 0 cells m: 480 cells p: 480
+Nonlinear iteration: 1 rhs:  1.3783574104309082e-07 43.74603657401631 closed_cells: 0 cells m: 480 cells p: 480
+Nonlinear iteration: 2 rhs:  1.1920928955078125e-07 0.10223461810801521 closed_cells: 0 cells m: 480 cells p: 480
+Nonlinear iteration: 3 rhs:  1.2665987014770508e-07 1.463243508486689e-05 closed_cells: 0 cells m: 480 cells p: 480
+Converged with residual norm[0] is 1.1920928955078125e-07
+Converged with residual norm[1] is 1.6249792093257222e-09
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 480 closed cells: 0
+Nonlinear iteration: 0 rhs:  2101623.8436254673 4.018076479096695 closed_cells: 0 cells m: 546 cells p: 546
+Nonlinear iteration: 1 rhs:  1.6391277313232422e-07 50.16257889560468 closed_cells: 0 cells m: 546 cells p: 546
+Nonlinear iteration: 2 rhs:  1.1548399925231934e-07 0.12326265258803723 closed_cells: 0 cells m: 546 cells p: 546
+Nonlinear iteration: 3 rhs:  1.1175870895385742e-07 1.7171325305619084e-05 closed_cells: 0 cells m: 546 cells p: 546
+Converged with residual norm[0] is 1.1920928955078125e-07
+Converged with residual norm[1] is 1.8624484076950096e-09
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 546 closed cells: 0
+Fracture area doubled, stopping expansion
+Solver converged with expantion iterations: 8 at level: 0
+ ** ---------- FINAL MESH HAS 612 CELLS ---------- **
+ ** ---------- CONVERGED BOUNDARY MESH ---------- **
+Fracture solve stats: fractures_solved=1 (total 5), nonlinear_iterations=40 (total 59), linear_solves=32 (total 47), linear_iterations=24 (total 28), closed_cell_toggles=0 (total 360), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.18946 (total 0.214739), converged=true
 ---------- Starting propagation at level: 0 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Suggested next time step size (from PID controller): 331.6914573220974 days
+Suggested next time step size (from PID controller): 331.64313869739027 days
 Suggested next time step size (from iteration target): 17.000000000000004 days
 Well its= 1 Newton its= 2, linearizations= 3 (0.0sec), linear its=  0 (0.0sec)
 Sub steps started at time = 10 (days)
@@ -863,7 +1040,7 @@ Suggested next step size = 15 (days)
 Restart file written for report step 3/4, date = 16-Jan-2020 00:00:00
 Writing fracture data to VTK files at time: 864000grid_size546
 
-Time step took 0.307882 seconds; total solver time 1.380700 seconds.
+Time step took 0.316636 seconds; total solver time 1.478942 seconds.
 
 
 
@@ -877,25 +1054,175 @@ Time step took 0.307882 seconds; total solver time 1.380700 seconds.
 Report step  3/4 at day 15/100.5, date = 16-Jan-2020
 
 Starting time step 0, stepsize 0.1 days, at day 15/100.5, date = 16-Jan-2020
+----------------------Start beginTimeStep-------------------
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
-   0  0.000e+00  3.671e-10  0.000e+00  1.464e-05  0.000e+00  4.014e-09  0.000e+00  1.426e-02   Strict  Relaxed
-   1  0.000e+00  2.936e-12  0.000e+00  4.146e-11  0.000e+00  3.874e-11  0.000e+00  4.519e-09   Strict   Strict
-   2  0.000e+00  5.994e-15  0.000e+00  9.783e-14  0.000e+00  1.439e-13  0.000e+00  1.850e-11   Strict   Strict
+   0  0.000e+00  3.673e-10  0.000e+00  1.464e-05  0.000e+00  4.015e-09  0.000e+00  1.426e-02   Strict  Relaxed
+   1  0.000e+00  2.938e-12  0.000e+00  4.148e-11  0.000e+00  3.875e-11  0.000e+00  4.519e-09   Strict   Strict
+   2  0.000e+00  5.984e-15  0.000e+00  9.757e-14  0.000e+00  1.437e-13  0.000e+00  1.849e-11   Strict   Strict
 Overall linear iterations used: 1
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=6, linear_iterations=46 (total 272), solve_time_s=0.0713535 (total 0.420752), converged=true
+Mechanical solve stats: solves=6, linear_iterations=49 (total 275), solve_time_s=0.0766465 (total 0.434278), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 6), nonlinear_iterations=104 (total 163), linear_solves=92 (total 139), linear_iterations=55 (total 83), closed_cell_toggles=348 (total 1764), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.286749 (total 0.495519), converged=true
+Activating fracture Fracture_on_B-3H_perf_0_nr
+Solving fracture Fracture_on_B-3H_perf_0_nr
+Solve Fracture Pressure using Iterative Fracture with Trimesh Propagation
+Reinitializing fracture states before IF with trimesh propagation
+Nonlinear iteration: 0 rhs:  2176981.2855681963 3.56045962913868 closed_cells: 0 cells m: 114 cells p: 114
+Nonlinear iteration: 1 rhs:  6.332993507385254e-08 61.97266718615633 closed_cells: 0 cells m: 114 cells p: 114
+Nonlinear iteration: 2 rhs:  5.587935447692871e-08 0.049184514749208784 closed_cells: 0 cells m: 114 cells p: 114
+Nonlinear iteration: 3 rhs:  5.587935447692871e-08 4.970240500575302e-06 closed_cells: 0 cells m: 114 cells p: 114
+Converged with residual norm[0] is 5.587935447692871e-08
+Converged with residual norm[1] is 4.0881537914138584e-10
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 114 closed cells: 0
+Nonlinear iteration: 0 rhs:  2190965.0466259345 3.56045962913868 closed_cells: 0 cells m: 144 cells p: 144
+Nonlinear iteration: 1 rhs:  5.960464477539063e-08 80.8718700800462 closed_cells: 0 cells m: 144 cells p: 144
+Nonlinear iteration: 2 rhs:  5.587935447692871e-08 0.07065766562612706 closed_cells: 0 cells m: 144 cells p: 144
+Nonlinear iteration: 3 rhs:  5.587935447692871e-08 6.891210371232652e-06 closed_cells: 0 cells m: 144 cells p: 144
+Converged with residual norm[0] is 4.470348358154297e-08
+Converged with residual norm[1] is 5.460339397486755e-10
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 144 closed cells: 0
+Nonlinear iteration: 0 rhs:  2203266.2061078846 3.56045962913868 closed_cells: 0 cells m: 180 cells p: 180
+Nonlinear iteration: 1 rhs:  1295091.1726174504 94.9848961445598 closed_cells: 0 cells m: 180 cells p: 180
+Nonlinear iteration: 2 rhs:  6.705522537231445e-08 0.10942525505077885 closed_cells: 0 cells m: 180 cells p: 180
+Nonlinear iteration: 3 rhs:  5.960464477539063e-08 9.626433563515202e-06 closed_cells: 0 cells m: 180 cells p: 180
+Converged with residual norm[0] is 6.705522537231445e-08
+Converged with residual norm[1] is 7.283430143386341e-10
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 180 closed cells: 0
+Nonlinear iteration: 0 rhs:  13609784.984296698 3.56045962913868 closed_cells: 0 cells m: 222 cells p: 222
+Nonlinear iteration: 1 rhs:  3107561.1711839736 102.05292579470667 closed_cells: 8 cells m: 222 cells p: 222
+Nonlinear iteration: 2 rhs:  653292.232277371 0.16591060360536738 closed_cells: 4 cells m: 222 cells p: 222
+Nonlinear iteration: 3 rhs:  7.450580596923828e-08 0.0010432302447519802 closed_cells: 4 cells m: 222 cells p: 222
+Nonlinear iteration: 4 rhs:  1.0058283805847168e-07 0.0024591753599607935 closed_cells: 4 cells m: 222 cells p: 222
+Nonlinear iteration: 5 rhs:  8.195638656616211e-08 0.002062954966646698 closed_cells: 4 cells m: 222 cells p: 222
+Nonlinear iteration: 6 rhs:  6.332993507385254e-08 0.00039798664526845577 closed_cells: 4 cells m: 222 cells p: 222
+Nonlinear iteration: 7 rhs:  7.078051567077637e-08 3.932460027061442e-05 closed_cells: 4 cells m: 222 cells p: 222
+Nonlinear iteration: 8 rhs:  6.705522537231445e-08 3.778659583970259e-06 closed_cells: 4 cells m: 222 cells p: 222
+Converged with residual norm[0] is 6.705522537231445e-08
+Converged with residual norm[1] is 3.6909100319542036e-07
+Nonlinear iterations needed with fixed expansion: 9
+ fracture cells: 222 closed cells: 4
+Nonlinear iteration: 0 rhs:  13586740.866102453 3.56045962913868 closed_cells: 2 cells m: 256 cells p: 256
+Nonlinear iteration: 1 rhs:  2932804.3760426827 105.1711427005865 closed_cells: 16 cells m: 256 cells p: 256
+Nonlinear iteration: 2 rhs:  1412547.7313618287 0.18791508788481961 closed_cells: 4 cells m: 256 cells p: 256
+Nonlinear iteration: 3 rhs:  9.313225746154785e-08 0.027797120253368376 closed_cells: 4 cells m: 256 cells p: 256
+Nonlinear iteration: 4 rhs:  8.940696716308594e-08 0.004380242611017493 closed_cells: 4 cells m: 256 cells p: 256
+Nonlinear iteration: 5 rhs:  7.078051567077637e-08 0.0002647423036264076 closed_cells: 4 cells m: 256 cells p: 256
+Nonlinear iteration: 6 rhs:  8.195638656616211e-08 0.0005971627528030231 closed_cells: 4 cells m: 256 cells p: 256
+Nonlinear iteration: 7 rhs:  9.685754776000977e-08 0.00077902141204985 closed_cells: 4 cells m: 256 cells p: 256
+Nonlinear iteration: 8 rhs:  8.568167686462402e-08 0.00044980763665823 closed_cells: 4 cells m: 256 cells p: 256
+Nonlinear iteration: 9 rhs:  8.940696716308594e-08 0.00014814678868004698 closed_cells: 4 cells m: 256 cells p: 256
+Nonlinear iteration: 10 rhs:  11607.266271144152 3.9501512019905715e-05 closed_cells: 2 cells m: 256 cells p: 256
+Nonlinear iteration: 11 rhs:  7.078051567077637e-08 1.692345964248201e-05 closed_cells: 2 cells m: 256 cells p: 256
+Nonlinear iteration: 12 rhs:  8.568167686462402e-08 4.82014635976708e-06 closed_cells: 2 cells m: 256 cells p: 256
+Nonlinear iteration: 13 rhs:  8.195638656616211e-08 1.358577970840746e-06 closed_cells: 2 cells m: 256 cells p: 256
+Converged with residual norm[0] is 1.1920928955078125e-07
+Converged with residual norm[1] is 3.8213658559236996e-07
+Nonlinear iterations needed with fixed expansion: 14
+ fracture cells: 256 closed cells: 2
+Nonlinear iteration: 0 rhs:  13693756.860604081 3.56045962913868 closed_cells: 0 cells m: 286 cells p: 286
+Nonlinear iteration: 1 rhs:  2971789.3325560205 105.17168604136135 closed_cells: 20 cells m: 286 cells p: 286
+Nonlinear iteration: 2 rhs:  1931457.2248357348 0.209847166569946 closed_cells: 6 cells m: 286 cells p: 286
+Nonlinear iteration: 3 rhs:  179272.0570603162 0.0819362395724455 closed_cells: 4 cells m: 286 cells p: 286
+Nonlinear iteration: 4 rhs:  8.568167686462402e-08 0.004556875881586533 closed_cells: 4 cells m: 286 cells p: 286
+Nonlinear iteration: 5 rhs:  9.313225746154785e-08 0.00022968748165019739 closed_cells: 4 cells m: 286 cells p: 286
+Nonlinear iteration: 6 rhs:  7.078051567077637e-08 7.099701814493938e-06 closed_cells: 4 cells m: 286 cells p: 286
+Converged with residual norm[0] is 8.940696716308594e-08
+Converged with residual norm[1] is 2.1882951386397862e-07
+Nonlinear iterations needed with fixed expansion: 7
+ fracture cells: 286 closed cells: 4
+Nonlinear iteration: 0 rhs:  13608586.485180195 3.56045962913868 closed_cells: 1 cells m: 316 cells p: 316
+Nonlinear iteration: 1 rhs:  3060146.381245937 105.1718344321873 closed_cells: 22 cells m: 316 cells p: 316
+Nonlinear iteration: 2 rhs:  2392055.2496145368 0.23212210516146894 closed_cells: 4 cells m: 316 cells p: 316
+Nonlinear iteration: 3 rhs:  732.290499676019 0.17242346247393694 closed_cells: 2 cells m: 316 cells p: 316
+Nonlinear iteration: 4 rhs:  1.043081283569336e-07 0.0046471571724391765 closed_cells: 2 cells m: 316 cells p: 316
+Nonlinear iteration: 5 rhs:  8.195638656616211e-08 0.0007211765822414076 closed_cells: 2 cells m: 316 cells p: 316
+Nonlinear iteration: 6 rhs:  9.685754776000977e-08 3.366394350523927e-05 closed_cells: 2 cells m: 316 cells p: 316
+Nonlinear iteration: 7 rhs:  1.2293457984924316e-07 1.4984147452983546e-06 closed_cells: 2 cells m: 316 cells p: 316
+Converged with residual norm[0] is 8.940696716308594e-08
+Converged with residual norm[1] is 6.708863597825226e-08
+Nonlinear iterations needed with fixed expansion: 8
+ fracture cells: 316 closed cells: 2
+Nonlinear iteration: 0 rhs:  13585762.427824397 3.56045962913868 closed_cells: 1 cells m: 344 cells p: 344
+Nonlinear iteration: 1 rhs:  3209796.300597463 105.17179057555529 closed_cells: 24 cells m: 344 cells p: 344
+Nonlinear iteration: 2 rhs:  2738230.3342228383 0.2528507580213887 closed_cells: 4 cells m: 344 cells p: 344
+Nonlinear iteration: 3 rhs:  279188.20208361745 0.27874875493898477 closed_cells: 2 cells m: 344 cells p: 344
+Nonlinear iteration: 4 rhs:  8.568167686462402e-08 0.003769243546196934 closed_cells: 2 cells m: 344 cells p: 344
+Nonlinear iteration: 5 rhs:  1.1920928955078125e-07 0.0012962536226875498 closed_cells: 2 cells m: 344 cells p: 344
+Nonlinear iteration: 6 rhs:  1.043081283569336e-07 0.00022173561963941126 closed_cells: 2 cells m: 344 cells p: 344
+Nonlinear iteration: 7 rhs:  9.313225746154785e-08 2.4580977897982404e-05 closed_cells: 2 cells m: 344 cells p: 344
+Nonlinear iteration: 8 rhs:  1.1920928955078125e-07 2.6072216503185722e-06 closed_cells: 2 cells m: 344 cells p: 344
+Converged with residual norm[0] is 1.1548399925231934e-07
+Converged with residual norm[1] is 2.757833773398139e-07
+Nonlinear iterations needed with fixed expansion: 9
+ fracture cells: 344 closed cells: 2
+Nonlinear iteration: 0 rhs:  13693126.721739072 3.56045962913868 closed_cells: 0 cells m: 374 cells p: 374
+Nonlinear iteration: 1 rhs:  3316999.69905518 105.17186460755775 closed_cells: 28 cells m: 374 cells p: 374
+Nonlinear iteration: 2 rhs:  3029443.9141392633 0.2747756047927441 closed_cells: 4 cells m: 374 cells p: 374
+Nonlinear iteration: 3 rhs:  1.2293457984924316e-07 0.4017116772066589 closed_cells: 4 cells m: 374 cells p: 374
+Nonlinear iteration: 4 rhs:  1.0803341865539551e-07 0.0023611925818958924 closed_cells: 4 cells m: 374 cells p: 374
+Nonlinear iteration: 5 rhs:  1.043081283569336e-07 0.0009082492610858081 closed_cells: 4 cells m: 374 cells p: 374
+Nonlinear iteration: 6 rhs:  1.30385160446167e-07 0.00013535782359438888 closed_cells: 4 cells m: 374 cells p: 374
+Nonlinear iteration: 7 rhs:  1.0058283805847168e-07 1.6494639842123225e-05 closed_cells: 4 cells m: 374 cells p: 374
+Nonlinear iteration: 8 rhs:  9.313225746154785e-08 1.9578618054893608e-06 closed_cells: 4 cells m: 374 cells p: 374
+Converged with residual norm[0] is 9.313225746154785e-08
+Converged with residual norm[1] is 2.3166265888942984e-07
+Nonlinear iterations needed with fixed expansion: 9
+ fracture cells: 374 closed cells: 4
+Nonlinear iteration: 0 rhs:  13608103.323149916 3.56045962913868 closed_cells: 1 cells m: 404 cells p: 404
+Nonlinear iteration: 1 rhs:  3442532.448117871 105.17187970982208 closed_cells: 30 cells m: 404 cells p: 404
+Nonlinear iteration: 2 rhs:  3303231.4679142945 0.29692492638643975 closed_cells: 4 cells m: 404 cells p: 404
+Nonlinear iteration: 3 rhs:  392346.1404651627 0.5430523153385237 closed_cells: 2 cells m: 404 cells p: 404
+Nonlinear iteration: 4 rhs:  1.2293457984924316e-07 0.0035644351797422327 closed_cells: 2 cells m: 404 cells p: 404
+Nonlinear iteration: 5 rhs:  1.043081283569336e-07 6.505070427140786e-05 closed_cells: 2 cells m: 404 cells p: 404
+Converged with residual norm[0] is 1.1175870895385742e-07
+Converged with residual norm[1] is 9.996536752870204e-07
+Nonlinear iterations needed with fixed expansion: 6
+ fracture cells: 404 closed cells: 2
+Nonlinear iteration: 0 rhs:  13585330.404149938 3.56045962913868 closed_cells: 1 cells m: 432 cells p: 432
+Nonlinear iteration: 1 rhs:  3533695.9671335407 105.17187480528099 closed_cells: 32 cells m: 432 cells p: 432
+Nonlinear iteration: 2 rhs:  3520278.267826237 0.3175338225136004 closed_cells: 4 cells m: 432 cells p: 432
+Nonlinear iteration: 3 rhs:  632792.9573645107 0.6805850624734252 closed_cells: 2 cells m: 432 cells p: 432
+Nonlinear iteration: 4 rhs:  1.2665987014770508e-07 0.0056666227409751775 closed_cells: 2 cells m: 432 cells p: 432
+Nonlinear iteration: 5 rhs:  9.685754776000977e-08 0.0009886567753370687 closed_cells: 2 cells m: 432 cells p: 432
+Nonlinear iteration: 6 rhs:  1.2293457984924316e-07 3.864058128646908e-05 closed_cells: 2 cells m: 432 cells p: 432
+Nonlinear iteration: 7 rhs:  1.341104507446289e-07 1.4289071670315196e-06 closed_cells: 2 cells m: 432 cells p: 432
+Converged with residual norm[0] is 1.4901161193847656e-07
+Converged with residual norm[1] is 5.318872342595861e-08
+Nonlinear iterations needed with fixed expansion: 8
+ fracture cells: 432 closed cells: 2
+Fracture area doubled, stopping expansion
+Solver converged with expantion iterations: 11 at level: 1
+ ** ---------- FINAL MESH HAS 462 CELLS ---------- **
+ ** ---------- CONVERGED BOUNDARY MESH ---------- **
+Nonlinear iteration: 0 rhs:  13708149.535691578 3.56045962913868 closed_cells: 1 cells m: 432 cells p: 432
+Nonlinear iteration: 1 rhs:  3838424.6075843237 105.15866617811785 closed_cells: 6 cells m: 432 cells p: 432
+Nonlinear iteration: 2 rhs:  2251489.204199791 0.32072556699002475 closed_cells: 4 cells m: 432 cells p: 432
+Nonlinear iteration: 3 rhs:  1.0803341865539551e-07 0.05091268954115711 closed_cells: 4 cells m: 432 cells p: 432
+Nonlinear iteration: 4 rhs:  1.0058283805847168e-07 0.001154459916110001 closed_cells: 4 cells m: 432 cells p: 432
+Nonlinear iteration: 5 rhs:  1.2293457984924316e-07 0.0009828937861264316 closed_cells: 4 cells m: 432 cells p: 432
+Nonlinear iteration: 6 rhs:  1.4156103134155273e-07 0.0002927307626944553 closed_cells: 4 cells m: 432 cells p: 432
+Nonlinear iteration: 7 rhs:  1.1920928955078125e-07 5.830469144896e-05 closed_cells: 4 cells m: 432 cells p: 432
+Nonlinear iteration: 8 rhs:  1.0058283805847168e-07 1.0633971425882527e-05 closed_cells: 4 cells m: 432 cells p: 432
+Nonlinear iteration: 9 rhs:  1.043081283569336e-07 1.9080676281101883e-06 closed_cells: 4 cells m: 432 cells p: 432
+Converged with residual norm[0] is 1.043081283569336e-07
+Converged with residual norm[1] is 3.4136264368163403e-07
+Nonlinear iterations needed with fixed expansion: 10
+ fracture cells: 432 closed cells: 4
+Fracture solve stats: fractures_solved=1 (total 6), nonlinear_iterations=104 (total 163), linear_solves=92 (total 139), linear_iterations=55 (total 83), closed_cell_toggles=340 (total 700), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.294679 (total 0.509418), converged=true
 | 
 | Processing dynamic information from
-| /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 336
+| /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 336
 | Initializing report step 4/4 at 2020-01-01 100.5 DAYS line 336
-| Complete report step 4 (85.5 DAYS) at 2020-04-10 (15 DAYS)
+| Complete report step 4 (85.5 DAYS) at 2020-04-10 12:00:00 (15 DAYS)
 | 
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
@@ -903,174 +1230,814 @@ Adding connections to schedule
 Adding 2 extra connections for well: B-3H
 Adding extra connections to schedule for report step: 3 old connections: 1 new connections: 2
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Suggested next time step size (from PID controller): 33.93640392398163 days
+Suggested next time step size (from PID controller): 33.931554425620526 days
 Suggested next time step size (from iteration target): 0.34 days
 Well its= 1 Newton its= 2, linearizations= 3 (0.0sec), linear its=  1 (0.0sec)
 
 Starting time step 1, stepsize 0.1 days, at day 15.1/100.5, date = 16-Jan-2020
+----------------------Start beginTimeStep-------------------
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
-   0  0.000e+00  3.337e-10  0.000e+00  1.464e-05  0.000e+00  4.390e-05  0.000e+00  1.462e-02   Strict  Relaxed
+   0  0.000e+00  3.338e-10  0.000e+00  1.464e-05  0.000e+00  4.390e-05  0.000e+00  1.462e-02   Strict  Relaxed
 Linear system blocksize: 4 size:    3025 block nonzeroes:     19833
-   1  0.000e+00  3.692e-12  0.000e+00  6.903e-11  0.000e+00  1.527e-08  0.000e+00  1.612e-07   Strict   Strict
-   2  0.000e+00  1.940e-14  0.000e+00  9.346e-13  0.000e+00  7.850e-11  0.000e+00  9.018e-10   Strict   Strict
+   1  0.000e+00  3.694e-12  0.000e+00  6.901e-11  0.000e+00  1.527e-08  0.000e+00  1.612e-07   Strict   Strict
+   2  0.000e+00  1.938e-14  0.000e+00  9.344e-13  0.000e+00  7.850e-11  0.000e+00  9.018e-10   Strict   Strict
 Overall linear iterations used: 1
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=7, linear_iterations=44 (total 316), solve_time_s=0.0684992 (total 0.489251), converged=true
+Mechanical solve stats: solves=7, linear_iterations=47 (total 322), solve_time_s=0.0732186 (total 0.507496), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 7), nonlinear_iterations=94 (total 257), linear_solves=78 (total 217), linear_iterations=24 (total 107), closed_cell_toggles=496 (total 2260), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.169629 (total 0.665148), converged=true
+Activating fracture Fracture_on_B-3H_perf_0_nr
+Solving fracture Fracture_on_B-3H_perf_0_nr
+Solve Fracture Pressure using Iterative Fracture with Trimesh Propagation
+Reinitializing fracture states before IF with trimesh propagation
+Nonlinear iteration: 0 rhs:  2290409.017580107 2.6193890367707637 closed_cells: 0 cells m: 90 cells p: 90
+Nonlinear iteration: 1 rhs:  2896060.922726456 98.80448521049091 closed_cells: 0 cells m: 90 cells p: 90
+Nonlinear iteration: 2 rhs:  526070.5831975043 0.1871810556592808 closed_cells: 0 cells m: 90 cells p: 90
+Nonlinear iteration: 3 rhs:  4.470348358154297e-08 0.0011826489006266285 closed_cells: 0 cells m: 90 cells p: 90
+Converged with residual norm[0] is 3.725290298461914e-08
+Converged with residual norm[1] is 2.4988530302074338e-08
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 90 closed cells: 0
+Nonlinear iteration: 0 rhs:  13445898.000805583 2.6193890367707637 closed_cells: 0 cells m: 124 cells p: 124
+Nonlinear iteration: 1 rhs:  3382253.960592296 98.81279209791246 closed_cells: 14 cells m: 124 cells p: 124
+Nonlinear iteration: 2 rhs:  1231179.0974196456 0.7223447860027874 closed_cells: 14 cells m: 124 cells p: 124
+Nonlinear iteration: 3 rhs:  3.725290298461914e-08 0.013778528575313795 closed_cells: 14 cells m: 124 cells p: 124
+Converged with residual norm[0] is 3.725290298461914e-08
+Converged with residual norm[1] is 7.125684891687969e-07
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 124 closed cells: 14
+Nonlinear iteration: 0 rhs:  13434260.871655833 2.6193890367707637 closed_cells: 3 cells m: 144 cells p: 144
+Nonlinear iteration: 1 rhs:  3308270.7301536873 98.83616217149881 closed_cells: 20 cells m: 144 cells p: 144
+Nonlinear iteration: 2 rhs:  1283472.227967292 0.5101095137563141 closed_cells: 20 cells m: 144 cells p: 144
+Nonlinear iteration: 3 rhs:  5.960464477539063e-08 0.02077817553989138 closed_cells: 20 cells m: 144 cells p: 144
+Nonlinear iteration: 4 rhs:  4.470348358154297e-08 1.3481186901870855e-06 closed_cells: 20 cells m: 144 cells p: 144
+Converged with residual norm[0] is 5.960464477539063e-08
+Converged with residual norm[1] is 1.368297457432797e-10
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 144 closed cells: 20
+Nonlinear iteration: 0 rhs:  13488014.186969798 2.6193890367707637 closed_cells: 2 cells m: 160 cells p: 160
+Nonlinear iteration: 1 rhs:  3387703.7040979527 98.83616440394474 closed_cells: 24 cells m: 160 cells p: 160
+Nonlinear iteration: 2 rhs:  1253288.4254278988 1.1274291875148332 closed_cells: 24 cells m: 160 cells p: 160
+Nonlinear iteration: 3 rhs:  4.0978193283081055e-08 0.026885802641123738 closed_cells: 24 cells m: 160 cells p: 160
+Nonlinear iteration: 4 rhs:  4.842877388000488e-08 2.087673957410922e-06 closed_cells: 24 cells m: 160 cells p: 160
+Converged with residual norm[0] is 6.705522537231445e-08
+Converged with residual norm[1] is 2.411503172472472e-10
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 160 closed cells: 24
+Nonlinear iteration: 0 rhs:  13445510.082330633 2.6193890367707637 closed_cells: 4 cells m: 176 cells p: 176
+Nonlinear iteration: 1 rhs:  3438745.094625827 98.8361639715712 closed_cells: 26 cells m: 176 cells p: 176
+Nonlinear iteration: 2 rhs:  1386984.7421908975 0.976113116552395 closed_cells: 26 cells m: 176 cells p: 176
+Nonlinear iteration: 3 rhs:  5.21540641784668e-08 0.03361425689805867 closed_cells: 26 cells m: 176 cells p: 176
+Nonlinear iteration: 4 rhs:  6.332993507385254e-08 2.715262181393429e-06 closed_cells: 26 cells m: 176 cells p: 176
+Converged with residual norm[0] is 4.470348358154297e-08
+Converged with residual norm[1] is 3.364536088998391e-10
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 176 closed cells: 26
+Nonlinear iteration: 0 rhs:  13434009.30881789 2.6193890367707637 closed_cells: 4 cells m: 192 cells p: 192
+Nonlinear iteration: 1 rhs:  3377820.445073571 98.8361644693911 closed_cells: 28 cells m: 192 cells p: 192
+Nonlinear iteration: 2 rhs:  1441207.0226999447 0.5919356887170232 closed_cells: 28 cells m: 192 cells p: 192
+Nonlinear iteration: 3 rhs:  5.960464477539063e-08 0.04011663196607145 closed_cells: 28 cells m: 192 cells p: 192
+Nonlinear iteration: 4 rhs:  6.705522537231445e-08 3.5472625558756022e-06 closed_cells: 28 cells m: 192 cells p: 192
+Converged with residual norm[0] is 5.587935447692871e-08
+Converged with residual norm[1] is 4.982228433515004e-10
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 192 closed cells: 28
+Nonlinear iteration: 0 rhs:  13487851.040924098 2.6193890367707637 closed_cells: 2 cells m: 208 cells p: 208
+Nonlinear iteration: 1 rhs:  3437599.4576375484 98.83616449405484 closed_cells: 32 cells m: 208 cells p: 208
+Nonlinear iteration: 2 rhs:  1357517.3585700989 1.3141357659560065 closed_cells: 32 cells m: 208 cells p: 208
+Nonlinear iteration: 3 rhs:  5.21540641784668e-08 0.04587805141619132 closed_cells: 32 cells m: 208 cells p: 208
+Nonlinear iteration: 4 rhs:  6.332993507385254e-08 4.810797138985695e-06 closed_cells: 32 cells m: 208 cells p: 208
+Converged with residual norm[0] is 7.078051567077637e-08
+Converged with residual norm[1] is 7.395127672205616e-10
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 208 closed cells: 32
+Nonlinear iteration: 0 rhs:  13445384.432287421 2.6193890367707637 closed_cells: 4 cells m: 224 cells p: 224
+Nonlinear iteration: 1 rhs:  3459075.3693049625 98.83616449019816 closed_cells: 34 cells m: 224 cells p: 224
+Nonlinear iteration: 2 rhs:  1460303.8049005084 1.0812985968379587 closed_cells: 34 cells m: 224 cells p: 224
+Nonlinear iteration: 3 rhs:  6.332993507385254e-08 0.052039184129148715 closed_cells: 34 cells m: 224 cells p: 224
+Nonlinear iteration: 4 rhs:  7.078051567077637e-08 5.70002180736656e-06 closed_cells: 34 cells m: 224 cells p: 224
+Converged with residual norm[0] is 8.568167686462402e-08
+Converged with residual norm[1] is 9.555029181268607e-10
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 224 closed cells: 34
+Nonlinear iteration: 0 rhs:  13433897.64572968 2.6193890367707637 closed_cells: 4 cells m: 240 cells p: 240
+Nonlinear iteration: 1 rhs:  3417533.8216590434 98.83616449470564 closed_cells: 36 cells m: 240 cells p: 240
+Nonlinear iteration: 2 rhs:  1488291.7300297357 0.6600635703119122 closed_cells: 36 cells m: 240 cells p: 240
+Nonlinear iteration: 3 rhs:  6.332993507385254e-08 0.057945211593391825 closed_cells: 36 cells m: 240 cells p: 240
+Nonlinear iteration: 4 rhs:  6.332993507385254e-08 6.831500005386293e-06 closed_cells: 36 cells m: 240 cells p: 240
+Converged with residual norm[0] is 6.705522537231445e-08
+Converged with residual norm[1] is 1.2300531629413402e-09
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 240 closed cells: 36
+Nonlinear iteration: 0 rhs:  13487771.42976794 2.6193890367707637 closed_cells: 2 cells m: 256 cells p: 256
+Nonlinear iteration: 1 rhs:  3459190.1206485443 98.83616449496263 closed_cells: 40 cells m: 256 cells p: 256
+Nonlinear iteration: 2 rhs:  1405741.0303925946 1.4127003700148173 closed_cells: 40 cells m: 256 cells p: 256
+Nonlinear iteration: 3 rhs:  6.705522537231445e-08 0.06318098158173853 closed_cells: 40 cells m: 256 cells p: 256
+Nonlinear iteration: 4 rhs:  7.450580596923828e-08 8.40447999805296e-06 closed_cells: 40 cells m: 256 cells p: 256
+Converged with residual norm[0] is 6.332993507385254e-08
+Converged with residual norm[1] is 1.6495308937495326e-09
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 256 closed cells: 40
+Nonlinear iteration: 0 rhs:  13445319.745181646 2.6193890367707637 closed_cells: 4 cells m: 272 cells p: 272
+Nonlinear iteration: 1 rhs:  3472519.7612283938 98.83616449492987 closed_cells: 42 cells m: 272 cells p: 272
+Nonlinear iteration: 2 rhs:  1468464.397800196 1.1302383787491905 closed_cells: 42 cells m: 272 cells p: 272
+Nonlinear iteration: 3 rhs:  7.450580596923828e-08 0.06872953547437623 closed_cells: 42 cells m: 272 cells p: 272
+Nonlinear iteration: 4 rhs:  7.078051567077637e-08 9.542104106993093e-06 closed_cells: 42 cells m: 272 cells p: 272
+Converged with residual norm[0] is 6.332993507385254e-08
+Converged with residual norm[1] is 1.9961893133920596e-09
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 272 closed cells: 42
+Nonlinear iteration: 0 rhs:  13433838.883398432 2.6193890367707637 closed_cells: 4 cells m: 288 cells p: 288
+Nonlinear iteration: 1 rhs:  3439210.5930107497 98.83616449496894 closed_cells: 44 cells m: 288 cells p: 288
+Nonlinear iteration: 2 rhs:  1484040.8372292332 0.7080857649745196 closed_cells: 44 cells m: 288 cells p: 288
+Nonlinear iteration: 3 rhs:  7.078051567077637e-08 0.07407110794710037 closed_cells: 44 cells m: 288 cells p: 288
+Nonlinear iteration: 4 rhs:  7.82310962677002e-08 1.0926705642466027e-05 closed_cells: 44 cells m: 288 cells p: 288
+Converged with residual norm[0] is 9.313225746154785e-08
+Converged with residual norm[1] is 2.4498394301683975e-09
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 288 closed cells: 44
+Nonlinear iteration: 0 rhs:  13487726.895682234 2.6193890367707637 closed_cells: 2 cells m: 304 cells p: 304
+Nonlinear iteration: 1 rhs:  3473341.92000803 98.83616449497191 closed_cells: 48 cells m: 304 cells p: 304
+Nonlinear iteration: 2 rhs:  1429375.5007315427 1.4596854895065678 closed_cells: 48 cells m: 304 cells p: 304
+Nonlinear iteration: 3 rhs:  7.450580596923828e-08 0.07884421028939427 closed_cells: 48 cells m: 304 cells p: 304
+Nonlinear iteration: 4 rhs:  8.568167686462402e-08 1.270665670505442e-05 closed_cells: 48 cells m: 304 cells p: 304
+Converged with residual norm[0] is 8.940696716308594e-08
+Converged with residual norm[1] is 3.0327894346967927e-09
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 304 closed cells: 48
+Nonlinear iteration: 0 rhs:  13445282.25625706 2.6193890367707637 closed_cells: 4 cells m: 320 cells p: 320
+Nonlinear iteration: 1 rhs:  3479351.938637968 98.83616449497156 closed_cells: 50 cells m: 320 cells p: 320
+Nonlinear iteration: 2 rhs:  1463845.1678379402 1.150899396812004 closed_cells: 50 cells m: 320 cells p: 320
+Nonlinear iteration: 3 rhs:  5.587935447692871e-08 0.08387632685452287 closed_cells: 50 cells m: 320 cells p: 320
+Nonlinear iteration: 4 rhs:  7.82310962677002e-08 1.4080507476445127e-05 closed_cells: 50 cells m: 320 cells p: 320
+Converged with residual norm[0] is 6.332993507385254e-08
+Converged with residual norm[1] is 3.559201981890621e-09
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 320 closed cells: 50
+Nonlinear iteration: 0 rhs:  13433804.306613911 2.6193890367707637 closed_cells: 4 cells m: 336 cells p: 336
+Nonlinear iteration: 1 rhs:  3449029.674669083 98.83616449497146 closed_cells: 52 cells m: 336 cells p: 336
+Nonlinear iteration: 2 rhs:  1471842.5661011748 0.7283997017165684 closed_cells: 52 cells m: 336 cells p: 336
+Nonlinear iteration: 3 rhs:  7.078051567077637e-08 0.08874785654153998 closed_cells: 52 cells m: 336 cells p: 336
+Nonlinear iteration: 4 rhs:  7.078051567077637e-08 1.5667670393213372e-05 closed_cells: 52 cells m: 336 cells p: 336
+Converged with residual norm[0] is 6.705522537231445e-08
+Converged with residual norm[1] is 4.200621822152276e-09
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 336 closed cells: 52
+Fracture area doubled, stopping expansion
+Solver converged with expantion iterations: 15 at level: 1
+ ** ---------- FINAL MESH HAS 352 CELLS ---------- **
+ ** ---------- CONVERGED BOUNDARY MESH ---------- **
+Nonlinear iteration: 0 rhs:  13495517.889842365 2.6193890367707637 closed_cells: 1 cells m: 302 cells p: 302
+Nonlinear iteration: 1 rhs:  3432861.0142267197 98.80513022341148 closed_cells: 6 cells m: 302 cells p: 302
+Nonlinear iteration: 2 rhs:  1871593.673495654 0.6340060844365069 closed_cells: 6 cells m: 302 cells p: 302
+Nonlinear iteration: 3 rhs:  1.043081283569336e-07 0.08626480475585083 closed_cells: 6 cells m: 302 cells p: 302
+Nonlinear iteration: 4 rhs:  7.82310962677002e-08 1.08848533410685e-05 closed_cells: 6 cells m: 302 cells p: 302
+Converged with residual norm[0] is 8.568167686462402e-08
+Converged with residual norm[1] is 2.728260672547593e-09
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 302 closed cells: 6
+Fracture solve stats: fractures_solved=1 (total 7), nonlinear_iterations=94 (total 257), linear_solves=78 (total 217), linear_iterations=23 (total 106), closed_cell_toggles=452 (total 1152), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.17648 (total 0.685897), converged=true
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Suggested next time step size (from PID controller): 5.883879221525032 days
+Suggested next time step size (from PID controller): 5.8842673067203615 days
 Suggested next time step size (from iteration target): 0.34 days
 Well its= 1 Newton its= 2, linearizations= 3 (0.0sec), linear its=  1 (0.0sec)
 
 Starting time step 2, stepsize 0.1 days, at day 15.2/100.5, date = 16-Jan-2020
+----------------------Start beginTimeStep-------------------
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
-   0  0.000e+00  3.008e-10  0.000e+00  1.465e-05  0.000e+00  3.325e-05  0.000e+00  1.439e-02   Strict  Relaxed
-   1  0.000e+00  5.618e-12  0.000e+00  6.901e-11  0.000e+00  1.899e-08  0.000e+00  1.224e-07   Strict   Strict
+   0  0.000e+00  3.009e-10  0.000e+00  1.465e-05  0.000e+00  3.325e-05  0.000e+00  1.439e-02   Strict  Relaxed
+   1  0.000e+00  5.619e-12  0.000e+00  6.899e-11  0.000e+00  1.899e-08  0.000e+00  1.224e-07   Strict   Strict
    2  0.000e+00  2.131e-14  0.000e+00  9.843e-13  0.000e+00  9.203e-11  0.000e+00  1.154e-09   Strict   Strict
 Overall linear iterations used: 1
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=8, linear_iterations=48 (total 364), solve_time_s=0.0745879 (total 0.563839), converged=true
+Mechanical solve stats: solves=8, linear_iterations=45 (total 367), solve_time_s=0.0702774 (total 0.577774), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 8), nonlinear_iterations=80 (total 337), linear_solves=66 (total 283), linear_iterations=24 (total 131), closed_cell_toggles=584 (total 2844), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.243798 (total 0.908947), converged=true
+Activating fracture Fracture_on_B-3H_perf_0_nr
+Solving fracture Fracture_on_B-3H_perf_0_nr
+Solve Fracture Pressure using Iterative Fracture with Trimesh Propagation
+Reinitializing fracture states before IF with trimesh propagation
+Nonlinear iteration: 0 rhs:  2362486.6895572543 1.5416308122531284 closed_cells: 0 cells m: 60 cells p: 60
+Nonlinear iteration: 1 rhs:  2015022.5468652584 67.57172405358911 closed_cells: 0 cells m: 60 cells p: 60
+Nonlinear iteration: 2 rhs:  3.3527612686157227e-08 0.22087270179539029 closed_cells: 0 cells m: 60 cells p: 60
+Nonlinear iteration: 3 rhs:  3.3527612686157227e-08 6.732418714076882e-05 closed_cells: 0 cells m: 60 cells p: 60
+Converged with residual norm[0] is 2.60770320892334e-08
+Converged with residual norm[1] is 2.6252061270931514e-08
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 60 closed cells: 0
+Nonlinear iteration: 0 rhs:  13328397.873352706 1.5416308122531304 closed_cells: 0 cells m: 98 cells p: 98
+Nonlinear iteration: 1 rhs:  3637557.8848411813 67.60363263239358 closed_cells: 18 cells m: 98 cells p: 98
+Nonlinear iteration: 2 rhs:  1719599.6493198797 53.63698652498031 closed_cells: 18 cells m: 98 cells p: 98
+Nonlinear iteration: 3 rhs:  4.470348358154297e-08 0.017398524181129346 closed_cells: 18 cells m: 98 cells p: 98
+Nonlinear iteration: 4 rhs:  2.9802322387695312e-08 4.013747313401145e-06 closed_cells: 18 cells m: 98 cells p: 98
+Converged with residual norm[0] is 2.9802322387695312e-08
+Converged with residual norm[1] is 1.1813588429046118e-09
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 98 closed cells: 18
+Nonlinear iteration: 0 rhs:  13353987.585791118 1.5416308122531304 closed_cells: 9 cells m: 118 cells p: 118
+Nonlinear iteration: 1 rhs:  3738988.462418575 62.5741727308528 closed_cells: 32 cells m: 118 cells p: 118
+Nonlinear iteration: 2 rhs:  1827895.8549741395 121.846609885145 closed_cells: 32 cells m: 118 cells p: 118
+Nonlinear iteration: 3 rhs:  3.725290298461914e-08 0.03589881873097859 closed_cells: 32 cells m: 118 cells p: 118
+Nonlinear iteration: 4 rhs:  2.9802322387695312e-08 1.0463287237718255e-05 closed_cells: 32 cells m: 118 cells p: 118
+Converged with residual norm[0] is 4.470348358154297e-08
+Converged with residual norm[1] is 3.4494394168227454e-09
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 118 closed cells: 32
+Nonlinear iteration: 0 rhs:  13332882.535031572 1.5416308122531304 closed_cells: 4 cells m: 128 cells p: 128
+Nonlinear iteration: 1 rhs:  4068237.3136105724 28.20929419021728 closed_cells: 36 cells m: 128 cells p: 128
+Nonlinear iteration: 2 rhs:  1591693.5818402432 112.40137154742408 closed_cells: 36 cells m: 128 cells p: 128
+Nonlinear iteration: 3 rhs:  4.0978193283081055e-08 0.10499728166149454 closed_cells: 36 cells m: 128 cells p: 128
+Nonlinear iteration: 4 rhs:  2.60770320892334e-08 3.3573027014778115e-05 closed_cells: 36 cells m: 128 cells p: 128
+Converged with residual norm[0] is 3.3527612686157227e-08
+Converged with residual norm[1] is 1.201252979421348e-08
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 128 closed cells: 36
+Nonlinear iteration: 0 rhs:  13327149.132410862 1.5416308122531304 closed_cells: 2 cells m: 136 cells p: 136
+Nonlinear iteration: 1 rhs:  4130069.4344586954 21.661979670227353 closed_cells: 36 cells m: 136 cells p: 136
+Nonlinear iteration: 2 rhs:  1398152.2121159583 98.56631117631996 closed_cells: 36 cells m: 136 cells p: 136
+Nonlinear iteration: 3 rhs:  5.587935447692871e-08 0.11980451493198 closed_cells: 36 cells m: 136 cells p: 136
+Nonlinear iteration: 4 rhs:  4.0978193283081055e-08 4.234864360650194e-05 closed_cells: 36 cells m: 136 cells p: 136
+Converged with residual norm[0] is 4.842877388000488e-08
+Converged with residual norm[1] is 1.6187749019756698e-08
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 136 closed cells: 36
+Nonlinear iteration: 0 rhs:  13353962.393298402 1.5416308122531304 closed_cells: 2 cells m: 146 cells p: 146
+Nonlinear iteration: 1 rhs:  4142176.5255500153 21.21652737381238 closed_cells: 40 cells m: 146 cells p: 146
+Nonlinear iteration: 2 rhs:  1410636.661734756 97.55025486384268 closed_cells: 40 cells m: 146 cells p: 146
+Nonlinear iteration: 3 rhs:  4.470348358154297e-08 0.129810741137917 closed_cells: 40 cells m: 146 cells p: 146
+Nonlinear iteration: 4 rhs:  4.842877388000488e-08 4.826481894655913e-05 closed_cells: 40 cells m: 146 cells p: 146
+Converged with residual norm[0] is 4.0978193283081055e-08
+Converged with residual norm[1] is 2.064881551502527e-08
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 146 closed cells: 40
+Nonlinear iteration: 0 rhs:  13332862.40040797 1.5416308122531304 closed_cells: 4 cells m: 156 cells p: 156
+Nonlinear iteration: 1 rhs:  4129952.882417511 22.530080638060618 closed_cells: 44 cells m: 156 cells p: 156
+Nonlinear iteration: 2 rhs:  1399479.5571210757 99.29613714245629 closed_cells: 44 cells m: 156 cells p: 156
+Nonlinear iteration: 3 rhs:  4.0978193283081055e-08 0.13727983667938387 closed_cells: 44 cells m: 156 cells p: 156
+Nonlinear iteration: 4 rhs:  3.725290298461914e-08 5.3150077792439975e-05 closed_cells: 44 cells m: 156 cells p: 156
+Converged with residual norm[0] is 4.470348358154297e-08
+Converged with residual norm[1] is 2.8308227292526773e-08
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 156 closed cells: 44
+Nonlinear iteration: 0 rhs:  13327130.656722486 1.5416308122531304 closed_cells: 2 cells m: 164 cells p: 164
+Nonlinear iteration: 1 rhs:  4157763.489617504 20.50424776901287 closed_cells: 44 cells m: 164 cells p: 164
+Nonlinear iteration: 2 rhs:  1419018.8682836108 95.99960507598425 closed_cells: 44 cells m: 164 cells p: 164
+Nonlinear iteration: 3 rhs:  4.0978193283081055e-08 0.149631709193784 closed_cells: 44 cells m: 164 cells p: 164
+Nonlinear iteration: 4 rhs:  3.725290298461914e-08 6.0338396454339115e-05 closed_cells: 44 cells m: 164 cells p: 164
+Converged with residual norm[0] is 4.470348358154297e-08
+Converged with residual norm[1] is 3.51409461699844e-08
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 164 closed cells: 44
+Nonlinear iteration: 0 rhs:  13353948.589354172 1.5416308122531304 closed_cells: 2 cells m: 174 cells p: 174
+Nonlinear iteration: 1 rhs:  4164336.78572483 20.284434564258124 closed_cells: 48 cells m: 174 cells p: 174
+Nonlinear iteration: 2 rhs:  1425079.4114463888 95.47076631205222 closed_cells: 48 cells m: 174 cells p: 174
+Nonlinear iteration: 3 rhs:  4.470348358154297e-08 0.15872768508431495 closed_cells: 48 cells m: 174 cells p: 174
+Nonlinear iteration: 4 rhs:  4.842877388000488e-08 6.571924148289532e-05 closed_cells: 48 cells m: 174 cells p: 174
+Converged with residual norm[0] is 6.332993507385254e-08
+Converged with residual norm[1] is 4.37401094030348e-08
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 174 closed cells: 48
+Nonlinear iteration: 0 rhs:  17168752.36188834 1.5416308122531304 closed_cells: 5 cells m: 184 cells p: 184
+Nonlinear iteration: 1 rhs:  4161988.4940280095 20.659923214714976 closed_cells: 54 cells m: 184 cells p: 184
+Nonlinear iteration: 2 rhs:  1423857.1843999773 95.95615976747749 closed_cells: 54 cells m: 184 cells p: 184
+Nonlinear iteration: 3 rhs:  4.470348358154297e-08 0.16506424194951635 closed_cells: 54 cells m: 184 cells p: 184
+Nonlinear iteration: 4 rhs:  5.587935447692871e-08 6.993585007446481e-05 closed_cells: 54 cells m: 184 cells p: 184
+Converged with residual norm[0] is 4.470348358154297e-08
+Converged with residual norm[1] is 5.5638374289927385e-08
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 184 closed cells: 54
+Nonlinear iteration: 0 rhs:  17221329.63797432 1.5416308122531304 closed_cells: 6 cells m: 192 cells p: 192
+Nonlinear iteration: 1 rhs:  4147958.3250860386 19.494686987564133 closed_cells: 62 cells m: 192 cells p: 192
+Nonlinear iteration: 2 rhs:  1464844.0066848397 95.22828725390046 closed_cells: 62 cells m: 192 cells p: 192
+Nonlinear iteration: 3 rhs:  5.21540641784668e-08 0.1694812045319205 closed_cells: 62 cells m: 192 cells p: 192
+Nonlinear iteration: 4 rhs:  5.21540641784668e-08 7.071748286017236e-05 closed_cells: 62 cells m: 192 cells p: 192
+Converged with residual norm[0] is 4.0978193283081055e-08
+Converged with residual norm[1] is 7.234644493417418e-08
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 192 closed cells: 62
+** -------- Refining to level -------- 0
+Nonlinear iteration: 0 rhs:  17276045.11610647 1.5416308122531237 closed_cells: 8 cells m: 546 cells p: 546
+Nonlinear iteration: 1 rhs:  5096354.165952049 58.17806040655731 closed_cells: 38 cells m: 546 cells p: 546
+Nonlinear iteration: 2 rhs:  1.3783574104309082e-07 38.54013067197181 closed_cells: 38 cells m: 546 cells p: 546
+Nonlinear iteration: 3 rhs:  1.1548399925231934e-07 0.0002608182708555973 closed_cells: 38 cells m: 546 cells p: 546
+Converged with residual norm[0] is 1.1548399925231934e-07
+Converged with residual norm[1] is 9.765171398903259e-08
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 546 closed cells: 38
+Nonlinear iteration: 0 rhs:  17307417.925260484 1.5416308122531237 closed_cells: 5 cells m: 644 cells p: 644
+Nonlinear iteration: 1 rhs:  3934462.385655649 58.18202106315995 closed_cells: 124 cells m: 644 cells p: 644
+Nonlinear iteration: 2 rhs:  1061641.9888759628 48.66928192395219 closed_cells: 124 cells m: 644 cells p: 644
+Nonlinear iteration: 3 rhs:  1.1548399925231934e-07 0.0037608312961083393 closed_cells: 124 cells m: 644 cells p: 644
+Converged with residual norm[0] is 1.1175870895385742e-07
+Converged with residual norm[1] is 7.967866483848795e-07
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 644 closed cells: 124
+Solver converged with expantion iterations: 1 at level: 0
+ ** ---------- FINAL MESH HAS 644 CELLS ---------- **
+ ** ---------- CONVERGED BOUNDARY MESH ---------- **
+Nonlinear iteration: 0 rhs:  13408296.44289969 1.5416308122531237 closed_cells: 5 cells m: 528 cells p: 528
+Nonlinear iteration: 1 rhs:  2472652.519226741 58.15138486607738 closed_cells: 8 cells m: 528 cells p: 528
+Nonlinear iteration: 2 rhs:  1.3783574104309082e-07 0.6284854565938778 closed_cells: 8 cells m: 528 cells p: 528
+Nonlinear iteration: 3 rhs:  1.1548399925231934e-07 0.00022597186079612657 closed_cells: 8 cells m: 528 cells p: 528
+Converged with residual norm[0] is 1.1175870895385742e-07
+Converged with residual norm[1] is 1.0585331475130069e-07
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 528 closed cells: 8
+Fracture solve stats: fractures_solved=1 (total 8), nonlinear_iterations=80 (total 337), linear_solves=66 (total 283), linear_iterations=25 (total 131), closed_cell_toggles=530 (total 1682), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.251828 (total 0.937725), converged=true
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Suggested next time step size (from PID controller): 11.036946682280336 days
+Suggested next time step size (from PID controller): 11.036827892411921 days
 Suggested next time step size (from iteration target): 0.34 days
 Well its= 1 Newton its= 2, linearizations= 3 (0.0sec), linear its=  1 (0.0sec)
 
 Starting time step 3, stepsize 0.3 days, at day 15.3/100.5, date = 16-Jan-2020
+----------------------Start beginTimeStep-------------------
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
-   0  0.000e+00  8.118e-10  0.000e+00  4.394e-05  0.000e+00  3.369e-05  0.000e+00  4.210e-02   Strict  Relaxed
-   1  0.000e+00  2.671e-11  0.000e+00  5.084e-10  0.000e+00  3.888e-08  0.000e+00  4.777e-07   Strict   Strict
-   2  0.000e+00  6.122e-15  0.000e+00  3.844e-14  0.000e+00  9.395e-12  0.000e+00  1.296e-09   Strict   Strict
+   0  0.000e+00  8.122e-10  0.000e+00  4.394e-05  0.000e+00  3.369e-05  0.000e+00  4.210e-02   Strict  Relaxed
+   1  0.000e+00  2.672e-11  0.000e+00  5.085e-10  0.000e+00  3.888e-08  0.000e+00  4.777e-07   Strict   Strict
+   2  0.000e+00  6.121e-15  0.000e+00  3.825e-14  0.000e+00  9.395e-12  0.000e+00  1.296e-09   Strict   Strict
 Overall linear iterations used: 1
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=9, linear_iterations=43 (total 407), solve_time_s=0.0662779 (total 0.630117), converged=true
+Mechanical solve stats: solves=9, linear_iterations=46 (total 413), solve_time_s=0.070713 (total 0.648487), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 9), nonlinear_iterations=32 (total 369), linear_solves=26 (total 309), linear_iterations=12 (total 143), closed_cell_toggles=272 (total 3116), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.215159 (total 1.12411), converged=true
+Activating fracture Fracture_on_B-3H_perf_0_nr
+Solving fracture Fracture_on_B-3H_perf_0_nr
+Solve Fracture Pressure using Iterative Fracture with Trimesh Propagation
+Reinitializing fracture states before IF with trimesh propagation
+Nonlinear iteration: 0 rhs:  2632923.83044485 0.9531223071671846 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 1 rhs:  1749626.5916226096 41.77661965180525 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 2 rhs:  3.725290298461914e-08 0.18577181339017562 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 3 rhs:  4.470348358154297e-08 7.92892469323807e-05 closed_cells: 0 cells m: 108 cells p: 108
+Converged with residual norm[0] is 3.3527612686157227e-08
+Converged with residual norm[1] is 6.996679551943277e-08
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 108 closed cells: 0
+Nonlinear iteration: 0 rhs:  17242020.911651466 0.9531223071671828 closed_cells: 0 cells m: 170 cells p: 170
+Nonlinear iteration: 1 rhs:  3870202.311763268 41.799158196754114 closed_cells: 40 cells m: 170 cells p: 170
+Nonlinear iteration: 2 rhs:  1311388.8590958454 87.95910158881671 closed_cells: 40 cells m: 170 cells p: 170
+Nonlinear iteration: 3 rhs:  4.842877388000488e-08 0.010960959694598003 closed_cells: 40 cells m: 170 cells p: 170
+Nonlinear iteration: 4 rhs:  6.332993507385254e-08 2.873214340382695e-06 closed_cells: 40 cells m: 170 cells p: 170
+Converged with residual norm[0] is 4.0978193283081055e-08
+Converged with residual norm[1] is 2.237244274382491e-09
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 170 closed cells: 40
+Nonlinear iteration: 0 rhs:  17240042.96039584 0.9531223071671828 closed_cells: 12 cells m: 192 cells p: 192
+Nonlinear iteration: 1 rhs:  4001043.5314621106 41.8070720880609 closed_cells: 62 cells m: 192 cells p: 192
+Nonlinear iteration: 2 rhs:  1451587.4437830523 88.04546552584573 closed_cells: 62 cells m: 192 cells p: 192
+Nonlinear iteration: 3 rhs:  5.21540641784668e-08 0.02183979766935051 closed_cells: 62 cells m: 192 cells p: 192
+Nonlinear iteration: 4 rhs:  3.725290298461914e-08 7.755779819393763e-06 closed_cells: 62 cells m: 192 cells p: 192
+Converged with residual norm[0] is 4.0978193283081055e-08
+Converged with residual norm[1] is 6.872227130177158e-09
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 192 closed cells: 62
+** -------- Refining to level -------- 0
+Nonlinear iteration: 0 rhs:  17294446.77114461 0.9531223071671786 closed_cells: 9 cells m: 558 cells p: 558
+Nonlinear iteration: 1 rhs:  4959668.888519138 35.98297961464845 closed_cells: 38 cells m: 558 cells p: 558
+Nonlinear iteration: 2 rhs:  1.0803341865539551e-07 0.3670560162127726 closed_cells: 38 cells m: 558 cells p: 558
+Nonlinear iteration: 3 rhs:  1.1175870895385742e-07 9.361269014742665e-05 closed_cells: 38 cells m: 558 cells p: 558
+Converged with residual norm[0] is 1.30385160446167e-07
+Converged with residual norm[1] is 3.744989638056625e-08
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 558 closed cells: 38
+Nonlinear iteration: 0 rhs:  17326131.24768194 0.9531223071671786 closed_cells: 3 cells m: 644 cells p: 644
+Nonlinear iteration: 1 rhs:  4421707.135705043 35.98293594801294 closed_cells: 124 cells m: 644 cells p: 644
+Nonlinear iteration: 2 rhs:  1.1548399925231934e-07 29.90049727786098 closed_cells: 124 cells m: 644 cells p: 644
+Nonlinear iteration: 3 rhs:  9.313225746154785e-08 0.0010764921196920773 closed_cells: 124 cells m: 644 cells p: 644
+Converged with residual norm[0] is 9.685754776000977e-08
+Converged with residual norm[1] is 1.366806751362516e-07
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 644 closed cells: 124
+Solver converged with expantion iterations: 1 at level: 0
+ ** ---------- FINAL MESH HAS 644 CELLS ---------- **
+ ** ---------- CONVERGED BOUNDARY MESH ---------- **
+Nonlinear iteration: 0 rhs:  13341292.095598564 0.9531223071671786 closed_cells: 5 cells m: 528 cells p: 528
+Nonlinear iteration: 1 rhs:  2172704.0386911295 35.952439018972825 closed_cells: 8 cells m: 528 cells p: 528
+Nonlinear iteration: 2 rhs:  1.2293457984924316e-07 0.2913897402616409 closed_cells: 8 cells m: 528 cells p: 528
+Nonlinear iteration: 3 rhs:  1.1548399925231934e-07 8.691249858013497e-05 closed_cells: 8 cells m: 528 cells p: 528
+Converged with residual norm[0] is 1.0803341865539551e-07
+Converged with residual norm[1] is 3.523210842568685e-08
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 528 closed cells: 8
+Fracture solve stats: fractures_solved=1 (total 9), nonlinear_iterations=32 (total 369), linear_solves=26 (total 309), linear_iterations=11 (total 142), closed_cell_toggles=243 (total 1925), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.228836 (total 1.16656), converged=true
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Suggested next time step size (from PID controller): 36.96769136271931 days
+Suggested next time step size (from PID controller): 36.96622327583563 days
 Suggested next time step size (from iteration target): 1.0200000000000002 days
 Well its= 1 Newton its= 2, linearizations= 3 (0.0sec), linear its=  1 (0.0sec)
 
 Starting time step 4, stepsize 0.9 days, at day 15.6/100.5, date = 16-Jan-2020
+----------------------Start beginTimeStep-------------------
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
-   0  0.000e+00  1.769e-09  0.000e+00  1.318e-04  0.000e+00  4.408e-05  0.000e+00  1.242e-01   Strict  Relaxed
-   1  0.000e+00  8.888e-12  0.000e+00  4.070e-09  0.000e+00  5.210e-08  0.000e+00  3.070e-06   Strict   Strict
-   2  0.000e+00  7.397e-15  0.000e+00  6.539e-13  0.000e+00  1.321e-11  0.000e+00  2.173e-09   Strict   Strict
+   0  0.000e+00  1.770e-09  0.000e+00  1.318e-04  0.000e+00  4.408e-05  0.000e+00  1.242e-01   Strict  Relaxed
+   1  0.000e+00  8.902e-12  0.000e+00  4.070e-09  0.000e+00  5.210e-08  0.000e+00  3.070e-06   Strict   Strict
+   2  0.000e+00  7.385e-15  0.000e+00  6.534e-13  0.000e+00  1.321e-11  0.000e+00  2.173e-09   Strict   Strict
 Overall linear iterations used: 1
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=10, linear_iterations=49 (total 456), solve_time_s=0.0758295 (total 0.705946), converged=true
+Mechanical solve stats: solves=10, linear_iterations=49 (total 462), solve_time_s=0.0769122 (total 0.725399), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 10), nonlinear_iterations=32 (total 401), linear_solves=26 (total 335), linear_iterations=7 (total 150), closed_cell_toggles=272 (total 3388), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.215053 (total 1.33916), converged=true
+Activating fracture Fracture_on_B-3H_perf_0_nr
+Solving fracture Fracture_on_B-3H_perf_0_nr
+Solve Fracture Pressure using Iterative Fracture with Trimesh Propagation
+Reinitializing fracture states before IF with trimesh propagation
+Nonlinear iteration: 0 rhs:  3351104.676244665 0.7598478085503575 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 1 rhs:  2293876.17006284 33.30514301402743 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 2 rhs:  86431.47498581931 0.2465866975964567 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 3 rhs:  4.0978193283081055e-08 0.0003830303812364408 closed_cells: 0 cells m: 108 cells p: 108
+Converged with residual norm[0] is 2.9802322387695312e-08
+Converged with residual norm[1] is 1.9867344600391037e-08
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 108 closed cells: 0
+Nonlinear iteration: 0 rhs:  17291602.362302575 0.7598478085503575 closed_cells: 0 cells m: 170 cells p: 170
+Nonlinear iteration: 1 rhs:  5137663.841527745 33.32460292497897 closed_cells: 40 cells m: 170 cells p: 170
+Nonlinear iteration: 2 rhs:  1430199.316850841 68.80007855789916 closed_cells: 40 cells m: 170 cells p: 170
+Nonlinear iteration: 3 rhs:  4.842877388000488e-08 0.025102139797362786 closed_cells: 40 cells m: 170 cells p: 170
+Nonlinear iteration: 4 rhs:  5.21540641784668e-08 1.7439659685389621e-06 closed_cells: 40 cells m: 170 cells p: 170
+Converged with residual norm[0] is 6.705522537231445e-08
+Converged with residual norm[1] is 5.002371132016674e-10
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 170 closed cells: 40
+Nonlinear iteration: 0 rhs:  17289624.41104695 0.7598478085503575 closed_cells: 12 cells m: 192 cells p: 192
+Nonlinear iteration: 1 rhs:  4414671.377937473 34.11307066872186 closed_cells: 62 cells m: 192 cells p: 192
+Nonlinear iteration: 2 rhs:  1848710.1397840455 70.41191519115054 closed_cells: 62 cells m: 192 cells p: 192
+Nonlinear iteration: 3 rhs:  5.960464477539063e-08 0.02601689097876234 closed_cells: 62 cells m: 192 cells p: 192
+Nonlinear iteration: 4 rhs:  5.587935447692871e-08 2.015252234010355e-06 closed_cells: 62 cells m: 192 cells p: 192
+Converged with residual norm[0] is 5.587935447692871e-08
+Converged with residual norm[1] is 6.530008813961018e-10
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 192 closed cells: 62
+** -------- Refining to level -------- 0
+Nonlinear iteration: 0 rhs:  17344028.223022353 0.7598478085503599 closed_cells: 9 cells m: 558 cells p: 558
+Nonlinear iteration: 1 rhs:  4547331.738362536 28.693791753689904 closed_cells: 38 cells m: 558 cells p: 558
+Nonlinear iteration: 2 rhs:  752254.2916994542 0.3240729593452912 closed_cells: 38 cells m: 558 cells p: 558
+Nonlinear iteration: 3 rhs:  1.043081283569336e-07 0.009192737445614864 closed_cells: 38 cells m: 558 cells p: 558
+Converged with residual norm[0] is 1.0803341865539551e-07
+Converged with residual norm[1] is 7.261527882703765e-07
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 558 closed cells: 38
+Nonlinear iteration: 0 rhs:  17375712.69833303 0.7598478085503599 closed_cells: 3 cells m: 644 cells p: 644
+Nonlinear iteration: 1 rhs:  5699414.540439803 28.775305379299766 closed_cells: 124 cells m: 644 cells p: 644
+Nonlinear iteration: 2 rhs:  746035.1321091056 32.52669662782558 closed_cells: 124 cells m: 644 cells p: 644
+Nonlinear iteration: 3 rhs:  1.4528632164001465e-07 0.009813100753418742 closed_cells: 124 cells m: 644 cells p: 644
+Converged with residual norm[0] is 1.1175870895385742e-07
+Converged with residual norm[1] is 8.181101364344551e-07
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 644 closed cells: 124
+Solver converged with expantion iterations: 1 at level: 0
+ ** ---------- FINAL MESH HAS 644 CELLS ---------- **
+ ** ---------- CONVERGED BOUNDARY MESH ---------- **
+Nonlinear iteration: 0 rhs:  13132219.906468552 0.7598478085503599 closed_cells: 5 cells m: 528 cells p: 528
+Nonlinear iteration: 1 rhs:  2766214.118452709 28.661991645069076 closed_cells: 8 cells m: 528 cells p: 528
+Nonlinear iteration: 2 rhs:  755067.5949202701 0.31460591538511873 closed_cells: 8 cells m: 528 cells p: 528
+Nonlinear iteration: 3 rhs:  1.0058283805847168e-07 0.008984507171105235 closed_cells: 8 cells m: 528 cells p: 528
+Converged with residual norm[0] is 1.0058283805847168e-07
+Converged with residual norm[1] is 6.944174734140698e-07
+Nonlinear iterations needed with fixed expansion: 4
+ fracture cells: 528 closed cells: 8
+Fracture solve stats: fractures_solved=1 (total 10), nonlinear_iterations=32 (total 401), linear_solves=26 (total 335), linear_iterations=6 (total 148), closed_cell_toggles=243 (total 2168), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.221202 (total 1.38776), converged=true
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Suggested next time step size (from PID controller): 122.75059864505947 days
+Suggested next time step size (from PID controller): 122.7348908193422 days
 Suggested next time step size (from iteration target): 3.06 days
 Well its= 1 Newton its= 2, linearizations= 3 (0.0sec), linear its=  1 (0.0sec)
 
 Starting time step 5, stepsize 2.7 days, at day 16.5/100.5, date = 17-Jan-2020
+----------------------Start beginTimeStep-------------------
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
-   0  0.000e+00  2.355e-09  0.000e+00  3.955e-04  0.000e+00  7.977e-05  0.000e+00  3.570e-01   Strict  Relaxed
-   1  0.000e+00  7.943e-11  0.000e+00  9.470e-08  0.000e+00  7.652e-08  0.000e+00  6.732e-05   Strict   Strict
+   0  0.000e+00  2.356e-09  0.000e+00  3.955e-04  0.000e+00  7.977e-05  0.000e+00  3.570e-01   Strict  Relaxed
+   1  0.000e+00  7.944e-11  0.000e+00  9.470e-08  0.000e+00  7.652e-08  0.000e+00  6.732e-05   Strict   Strict
    2  0.000e+00  1.822e-12  0.000e+00  3.749e-11  0.000e+00  2.175e-10  0.000e+00  9.568e-09   Strict   Strict
 Overall linear iterations used: 1
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=11, linear_iterations=46 (total 502), solve_time_s=0.0713173 (total 0.777264), converged=true
+Mechanical solve stats: solves=11, linear_iterations=44 (total 506), solve_time_s=0.0688225 (total 0.794221), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 11), nonlinear_iterations=36 (total 437), linear_solves=30 (total 365), linear_iterations=4 (total 154), closed_cell_toggles=272 (total 3660), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.218974 (total 1.55813), converged=true
+Activating fracture Fracture_on_B-3H_perf_0_nr
+Solving fracture Fracture_on_B-3H_perf_0_nr
+Solve Fracture Pressure using Iterative Fracture with Trimesh Propagation
+Reinitializing fracture states before IF with trimesh propagation
+Nonlinear iteration: 0 rhs:  5238566.960184675 0.6690947084300765 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 1 rhs:  4090976.693954777 29.327314703805172 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 2 rhs:  2961914.9781415723 0.2215307994436117 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 3 rhs:  4.0978193283081055e-08 0.06518158743451069 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 4 rhs:  4.0978193283081055e-08 2.018789195862771e-06 closed_cells: 0 cells m: 108 cells p: 108
+Converged with residual norm[0] is 3.3527612686157227e-08
+Converged with residual norm[1] is 1.6130406259171355e-10
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 108 closed cells: 0
+Nonlinear iteration: 0 rhs:  17388699.790651556 0.6690947084300765 closed_cells: 0 cells m: 170 cells p: 170
+Nonlinear iteration: 1 rhs:  6814302.278679462 30.14919649786754 closed_cells: 40 cells m: 170 cells p: 170
+Nonlinear iteration: 2 rhs:  3246261.5187865123 14.848157527726977 closed_cells: 40 cells m: 170 cells p: 170
+Nonlinear iteration: 3 rhs:  1328163.052106794 0.09942246536878042 closed_cells: 40 cells m: 170 cells p: 170
+Nonlinear iteration: 4 rhs:  4.0978193283081055e-08 0.016155588335904147 closed_cells: 40 cells m: 170 cells p: 170
+Converged with residual norm[0] is 4.842877388000488e-08
+Converged with residual norm[1] is 1.9053500160946504e-07
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 170 closed cells: 40
+Nonlinear iteration: 0 rhs:  17386721.83939593 0.6690947084300765 closed_cells: 12 cells m: 192 cells p: 192
+Nonlinear iteration: 1 rhs:  6930798.756393792 30.14920496300048 closed_cells: 62 cells m: 192 cells p: 192
+Nonlinear iteration: 2 rhs:  4097755.286523301 43.11378397472815 closed_cells: 62 cells m: 192 cells p: 192
+Nonlinear iteration: 3 rhs:  1326035.3133298084 0.10300328118956344 closed_cells: 62 cells m: 192 cells p: 192
+Nonlinear iteration: 4 rhs:  4.470348358154297e-08 0.016672228180128004 closed_cells: 62 cells m: 192 cells p: 192
+Converged with residual norm[0] is 5.21540641784668e-08
+Converged with residual norm[1] is 2.0176643972758572e-07
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 192 closed cells: 62
+** -------- Refining to level -------- 0
+Nonlinear iteration: 0 rhs:  17441125.614431195 0.6690947084300735 closed_cells: 9 cells m: 558 cells p: 558
+Nonlinear iteration: 1 rhs:  4577231.627248559 25.271109863950933 closed_cells: 38 cells m: 558 cells p: 558
+Nonlinear iteration: 2 rhs:  3130446.1919065863 0.2858009517065327 closed_cells: 38 cells m: 558 cells p: 558
+Nonlinear iteration: 3 rhs:  519344.25509306043 0.1001783036724467 closed_cells: 38 cells m: 558 cells p: 558
+Nonlinear iteration: 4 rhs:  1.1175870895385742e-07 0.0030702266087262176 closed_cells: 38 cells m: 558 cells p: 558
+Converged with residual norm[0] is 1.1920928955078125e-07
+Converged with residual norm[1] is 3.9482124508143114e-08
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 558 closed cells: 38
+Nonlinear iteration: 0 rhs:  17472810.126681987 0.6690947084300735 closed_cells: 3 cells m: 644 cells p: 644
+Nonlinear iteration: 1 rhs:  7184912.810315499 25.352001243587427 closed_cells: 124 cells m: 644 cells p: 644
+Nonlinear iteration: 2 rhs:  3126244.234418165 2.322227827774013 closed_cells: 124 cells m: 644 cells p: 644
+Nonlinear iteration: 3 rhs:  502909.3367754817 0.10937517291164472 closed_cells: 124 cells m: 644 cells p: 644
+Nonlinear iteration: 4 rhs:  1.1548399925231934e-07 0.0032410682709828422 closed_cells: 124 cells m: 644 cells p: 644
+Converged with residual norm[0] is 1.043081283569336e-07
+Converged with residual norm[1] is 4.476953880842459e-08
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 644 closed cells: 124
+Solver converged with expantion iterations: 1 at level: 0
+ ** ---------- FINAL MESH HAS 644 CELLS ---------- **
+ ** ---------- CONVERGED BOUNDARY MESH ---------- **
+Nonlinear iteration: 0 rhs:  12448134.85673114 0.6690947084300735 closed_cells: 5 cells m: 528 cells p: 528
+Nonlinear iteration: 1 rhs:  4577251.952044617 25.238722102039326 closed_cells: 8 cells m: 528 cells p: 528
+Nonlinear iteration: 2 rhs:  3131855.3697867505 0.277149304896132 closed_cells: 8 cells m: 528 cells p: 528
+Nonlinear iteration: 3 rhs:  524819.8006547168 0.0971217084058385 closed_cells: 8 cells m: 528 cells p: 528
+Nonlinear iteration: 4 rhs:  1.043081283569336e-07 0.0030119277105404435 closed_cells: 8 cells m: 528 cells p: 528
+Converged with residual norm[0] is 1.1920928955078125e-07
+Converged with residual norm[1] is 3.7739345063989056e-08
+Nonlinear iterations needed with fixed expansion: 5
+ fracture cells: 528 closed cells: 8
+Fracture solve stats: fractures_solved=1 (total 11), nonlinear_iterations=36 (total 437), linear_solves=30 (total 365), linear_iterations=4 (total 152), closed_cell_toggles=243 (total 2411), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.227708 (total 1.61547), converged=true
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Suggested next time step size (from PID controller): 454.8973210307252 days
+Suggested next time step size (from PID controller): 454.84857338341675 days
 Suggested next time step size (from iteration target): 9.180000000000001 days
 Well its= 1 Newton its= 2, linearizations= 3 (0.0sec), linear its=  1 (0.0sec)
 
 Starting time step 6, stepsize 8.1 days, at day 19.2/100.5, date = 20-Jan-2020
+----------------------Start beginTimeStep-------------------
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
    0  0.000e+00  1.462e-09  0.000e+00  1.187e-03  0.000e+00  1.601e-04  0.000e+00  9.505e-01   Strict  Relaxed
-   1  0.000e+00  5.451e-11  0.000e+00  1.725e-04  0.000e+00  1.508e-07  0.000e+00  4.165e-01   Strict  Relaxed
-   2  0.000e+00  3.173e-12  0.000e+00  6.831e-07  0.000e+00  1.347e-08  0.000e+00  5.315e-04   Strict   Strict
+   1  0.000e+00  5.454e-11  0.000e+00  1.725e-04  0.000e+00  1.508e-07  0.000e+00  4.165e-01   Strict  Relaxed
+   2  0.000e+00  3.169e-12  0.000e+00  6.831e-07  0.000e+00  1.347e-08  0.000e+00  5.315e-04   Strict   Strict
 Overall linear iterations used: 0
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=12, linear_iterations=48 (total 550), solve_time_s=0.073398 (total 0.850662), converged=true
+Mechanical solve stats: solves=12, linear_iterations=44 (total 550), solve_time_s=0.0689593 (total 0.863181), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 12), nonlinear_iterations=51 (total 488), linear_solves=45 (total 410), linear_iterations=6 (total 160), closed_cell_toggles=92 (total 3752), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.238431 (total 1.79656), converged=true
+Activating fracture Fracture_on_B-3H_perf_0_nr
+Solving fracture Fracture_on_B-3H_perf_0_nr
+Solve Fracture Pressure using Iterative Fracture with Trimesh Propagation
+Reinitializing fracture states before IF with trimesh propagation
+Nonlinear iteration: 0 rhs:  9168002.530146547 0.6194875919113885 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 1 rhs:  7970972.3640505 27.1529692327707 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 2 rhs:  6847134.4996737875 0.20510636700625515 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 3 rhs:  5420859.901694085 0.0712730975589504 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 4 rhs:  3530574.6525258757 0.05492061210126683 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 5 rhs:  3.725290298461914e-08 0.016317624484562587 closed_cells: 0 cells m: 108 cells p: 108
+Converged with residual norm[0] is 3.3527612686157227e-08
+Converged with residual norm[1] is 5.5870442127843694e-08
+Nonlinear iterations needed with fixed expansion: 6
+ fracture cells: 108 closed cells: 0
+Nonlinear iteration: 0 rhs:  17350164.506895695 0.6194875919113898 closed_cells: 0 cells m: 170 cells p: 170
+Nonlinear iteration: 1 rhs:  8496505.569347963 27.97410651251517 closed_cells: 14 cells m: 170 cells p: 170
+Nonlinear iteration: 2 rhs:  7216923.406941857 0.4979809282500568 closed_cells: 14 cells m: 170 cells p: 170
+Nonlinear iteration: 3 rhs:  5929187.666101076 0.11000019186330814 closed_cells: 14 cells m: 170 cells p: 170
+Nonlinear iteration: 4 rhs:  4626210.942106444 0.06388176328155709 closed_cells: 10 cells m: 170 cells p: 170
+Nonlinear iteration: 5 rhs:  2423993.5806597695 0.46300765613072115 closed_cells: 10 cells m: 170 cells p: 170
+Nonlinear iteration: 6 rhs:  5.21540641784668e-08 0.021490804257021198 closed_cells: 10 cells m: 170 cells p: 170
+Nonlinear iteration: 7 rhs:  6.705522537231445e-08 2.782054960871185e-05 closed_cells: 10 cells m: 170 cells p: 170
+Converged with residual norm[0] is 5.960464477539063e-08
+Converged with residual norm[1] is 6.734061182453738e-08
+Nonlinear iterations needed with fixed expansion: 8
+ fracture cells: 170 closed cells: 10
+Nonlinear iteration: 0 rhs:  17348186.555640068 0.6194875919113898 closed_cells: 3 cells m: 192 cells p: 192
+Nonlinear iteration: 1 rhs:  8518038.359005315 27.974114941421202 closed_cells: 29 cells m: 192 cells p: 192
+Nonlinear iteration: 2 rhs:  7280137.41872409 0.4639727093230725 closed_cells: 29 cells m: 192 cells p: 192
+Nonlinear iteration: 3 rhs:  5988562.965996243 0.11835167172283816 closed_cells: 29 cells m: 192 cells p: 192
+Nonlinear iteration: 4 rhs:  4695497.696214728 0.06873109669797078 closed_cells: 22 cells m: 192 cells p: 192
+Nonlinear iteration: 5 rhs:  2578146.742572177 4.448987324658461 closed_cells: 18 cells m: 192 cells p: 192
+Nonlinear iteration: 6 rhs:  5.21540641784668e-08 0.09709484830399608 closed_cells: 18 cells m: 192 cells p: 192
+Nonlinear iteration: 7 rhs:  5.960464477539063e-08 0.03806691763817841 closed_cells: 18 cells m: 192 cells p: 192
+Nonlinear iteration: 8 rhs:  4.842877388000488e-08 0.0005016246581994279 closed_cells: 18 cells m: 192 cells p: 192
+Nonlinear iteration: 9 rhs:  5.960464477539063e-08 4.921095244004908e-06 closed_cells: 18 cells m: 192 cells p: 192
+Converged with residual norm[0] is 5.960464477539063e-08
+Converged with residual norm[1] is 4.931071351817771e-08
+Nonlinear iterations needed with fixed expansion: 10
+ fracture cells: 192 closed cells: 18
+** -------- Refining to level -------- 0
+Nonlinear iteration: 0 rhs:  17402591.642741468 0.6194875919113861 closed_cells: 5 cells m: 558 cells p: 558
+Nonlinear iteration: 1 rhs:  12309659.955224387 23.40021479116112 closed_cells: 13 cells m: 558 cells p: 558
+Nonlinear iteration: 2 rhs:  8137790.045342941 0.27273819867372123 closed_cells: 10 cells m: 558 cells p: 558
+Nonlinear iteration: 3 rhs:  6879152.560862523 17.430786518961078 closed_cells: 10 cells m: 558 cells p: 558
+Nonlinear iteration: 4 rhs:  4194979.299311265 0.05550055932187002 closed_cells: 10 cells m: 558 cells p: 558
+Nonlinear iteration: 5 rhs:  1452509.926977016 0.03870707477055169 closed_cells: 10 cells m: 558 cells p: 558
+Nonlinear iteration: 6 rhs:  1.0058283805847168e-07 0.005053156032563902 closed_cells: 10 cells m: 558 cells p: 558
+Converged with residual norm[0] is 1.30385160446167e-07
+Converged with residual norm[1] is 8.310366174212933e-09
+Nonlinear iterations needed with fixed expansion: 7
+ fracture cells: 558 closed cells: 10
+Nonlinear iteration: 0 rhs:  17434274.84292611 0.6194875919113861 closed_cells: 1 cells m: 644 cells p: 644
+Nonlinear iteration: 1 rhs:  13485119.593197674 23.480762635102057 closed_cells: 24 cells m: 644 cells p: 644
+Nonlinear iteration: 2 rhs:  9501565.983196527 0.3203820427044401 closed_cells: 24 cells m: 644 cells p: 644
+Nonlinear iteration: 3 rhs:  6035145.989935178 0.11201308180356587 closed_cells: 22 cells m: 644 cells p: 644
+Nonlinear iteration: 4 rhs:  4495357.325425487 0.06506016384782391 closed_cells: 22 cells m: 644 cells p: 644
+Nonlinear iteration: 5 rhs:  2259759.0926004834 0.04543302382401035 closed_cells: 22 cells m: 644 cells p: 644
+Nonlinear iteration: 6 rhs:  1.1175870895385742e-07 0.013418789434645056 closed_cells: 22 cells m: 644 cells p: 644
+Converged with residual norm[0] is 1.1920928955078125e-07
+Converged with residual norm[1] is 5.62320412589458e-08
+Nonlinear iterations needed with fixed expansion: 7
+ fracture cells: 644 closed cells: 22
+Solver converged with expantion iterations: 1 at level: 0
+ ** ---------- FINAL MESH HAS 644 CELLS ---------- **
+ ** ---------- CONVERGED BOUNDARY MESH ---------- **
+Nonlinear iteration: 0 rhs:  10145592.793370824 0.6194875919113861 closed_cells: 0 cells m: 528 cells p: 528
+Nonlinear iteration: 1 rhs:  11961696.435934272 23.367507447586007 closed_cells: 0 cells m: 528 cells p: 528
+Nonlinear iteration: 2 rhs:  7807392.769878019 0.25915045970903006 closed_cells: 0 cells m: 528 cells p: 528
+Nonlinear iteration: 3 rhs:  6547389.871208068 0.09050398034940238 closed_cells: 0 cells m: 528 cells p: 528
+Nonlinear iteration: 4 rhs:  4119658.8746840917 0.052559120229784 closed_cells: 0 cells m: 528 cells p: 528
+Nonlinear iteration: 5 rhs:  1109819.5869394504 0.03686443936190253 closed_cells: 0 cells m: 528 cells p: 528
+Nonlinear iteration: 6 rhs:  8.940696716308594e-08 0.0030012708307731056 closed_cells: 0 cells m: 528 cells p: 528
+Converged with residual norm[0] is 8.940696716308594e-08
+Converged with residual norm[1] is 4.618488846434261e-09
+Nonlinear iterations needed with fixed expansion: 7
+ fracture cells: 528 closed cells: 0
+Fracture solve stats: fractures_solved=1 (total 12), nonlinear_iterations=51 (total 488), linear_solves=45 (total 410), linear_iterations=6 (total 158), closed_cell_toggles=91 (total 2502), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.257184 (total 1.87266), converged=true
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Suggested next time step size (from PID controller): 2119.4285897863665 days
+Suggested next time step size (from PID controller): 2119.3853258326817 days
 Suggested next time step size (from iteration target): 27.540000000000006 days
 Well its= 1 Newton its= 2, linearizations= 3 (0.0sec), linear its=  0 (0.0sec)
 
 Starting time step 7, stepsize 24.3 days, at day 27.3/100.5, date = 28-Jan-2020
+----------------------Start beginTimeStep-------------------
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
-   0  0.000e+00  3.464e-10  0.000e+00  3.560e-03  0.000e+00  9.097e-03  0.000e+00  2.154e+00   Strict  Relaxed
-   1  0.000e+00  6.775e-11  0.000e+00  1.102e-03  0.000e+00  1.712e-07  0.000e+00  1.236e+00   Strict  Relaxed
-   2  0.000e+00  3.871e-12  0.000e+00  4.772e-04  0.000e+00  7.581e-10  0.000e+00  4.151e-01   Strict  Relaxed
-   3  0.000e+00  1.359e-13  0.000e+00  2.838e-09  0.000e+00  1.791e-11  0.000e+00  1.153e-06   Strict   Strict
+   0  0.000e+00  3.466e-10  0.000e+00  3.560e-03  0.000e+00  9.097e-03  0.000e+00  2.154e+00   Strict  Relaxed
+   1  0.000e+00  6.776e-11  0.000e+00  1.102e-03  0.000e+00  1.712e-07  0.000e+00  1.236e+00   Strict  Relaxed
+   2  0.000e+00  3.872e-12  0.000e+00  4.772e-04  0.000e+00  7.581e-10  0.000e+00  4.151e-01   Strict  Relaxed
+   3  0.000e+00  1.359e-13  0.000e+00  2.838e-09  0.000e+00  1.792e-11  0.000e+00  1.153e-06   Strict   Strict
 Overall linear iterations used: 3
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=13, linear_iterations=47 (total 597), solve_time_s=0.0718079 (total 0.92247), converged=true
+Mechanical solve stats: solves=13, linear_iterations=46 (total 596), solve_time_s=0.0711987 (total 0.934379), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 13), nonlinear_iterations=64 (total 552), linear_solves=58 (total 468), linear_iterations=0 (total 160), closed_cell_toggles=48 (total 3800), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.267416 (total 2.06398), converged=true
+Activating fracture Fracture_on_B-3H_perf_0_nr
+Solving fracture Fracture_on_B-3H_perf_0_nr
+Solve Fracture Pressure using Iterative Fracture with Trimesh Propagation
+Reinitializing fracture states before IF with trimesh propagation
+Nonlinear iteration: 0 rhs:  13761458.51704221 0.5883752392467699 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 1 rhs:  12533420.871494645 25.78928594053745 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 2 rhs:  11411474.316622298 0.19480545788988704 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 3 rhs:  9986208.229163157 0.0676936003302861 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 4 rhs:  8554676.252212428 0.03929169322654667 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 5 rhs:  7117751.904164443 0.027399170648683666 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 6 rhs:  4881104.927324157 0.03181426099151108 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 7 rhs:  1001105.7967026308 0.011911742828257996 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 8 rhs:  4.0978193283081055e-08 0.001052737170695919 closed_cells: 0 cells m: 108 cells p: 108
+Converged with residual norm[0] is 4.842877388000488e-08
+Converged with residual norm[1] is 3.0704627807509267e-10
+Nonlinear iterations needed with fixed expansion: 9
+ fracture cells: 108 closed cells: 0
+Nonlinear iteration: 0 rhs:  15965835.71264356 0.5883752392467699 closed_cells: 0 cells m: 170 cells p: 170
+Nonlinear iteration: 1 rhs:  13215764.064092847 26.606623955813713 closed_cells: 6 cells m: 170 cells p: 170
+Nonlinear iteration: 2 rhs:  12310876.726251319 0.31547870899584457 closed_cells: 6 cells m: 170 cells p: 170
+Nonlinear iteration: 3 rhs:  11357877.623114187 0.11001378793829159 closed_cells: 6 cells m: 170 cells p: 170
+Nonlinear iteration: 4 rhs:  9975369.472870685 0.0638793727144615 closed_cells: 6 cells m: 170 cells p: 170
+Nonlinear iteration: 5 rhs:  8671918.031319728 0.04454857379281365 closed_cells: 6 cells m: 170 cells p: 170
+Nonlinear iteration: 6 rhs:  7362857.248696396 0.034076277374076015 closed_cells: 6 cells m: 170 cells p: 170
+Nonlinear iteration: 7 rhs:  5966880.857767606 0.027546732997980196 closed_cells: 6 cells m: 170 cells p: 170
+Nonlinear iteration: 8 rhs:  3702734.9201769233 0.02339011968743986 closed_cells: 6 cells m: 170 cells p: 170
+Nonlinear iteration: 9 rhs:  5.960464477539063e-08 0.015545420400822645 closed_cells: 6 cells m: 170 cells p: 170
+Converged with residual norm[0] is 5.21540641784668e-08
+Converged with residual norm[1] is 5.307447361631336e-09
+Nonlinear iterations needed with fixed expansion: 10
+ fracture cells: 170 closed cells: 6
+Nonlinear iteration: 0 rhs:  15963857.761387933 0.5883752392467699 closed_cells: 3 cells m: 192 cells p: 192
+Nonlinear iteration: 1 rhs:  13394630.842195798 26.60663232863866 closed_cells: 10 cells m: 192 cells p: 192
+Nonlinear iteration: 2 rhs:  12417904.229626654 79.15602407114685 closed_cells: 10 cells m: 192 cells p: 192
+Nonlinear iteration: 3 rhs:  12843552.735740751 0.1247135081000744 closed_cells: 10 cells m: 192 cells p: 192
+Nonlinear iteration: 4 rhs:  10218528.601818746 0.0724167687967267 closed_cells: 10 cells m: 192 cells p: 192
+Nonlinear iteration: 5 rhs:  8927031.757747166 0.05050241821680379 closed_cells: 10 cells m: 192 cells p: 192
+Nonlinear iteration: 6 rhs:  7635115.887508776 0.03863054394122151 closed_cells: 10 cells m: 192 cells p: 192
+Nonlinear iteration: 7 rhs:  6341380.873021651 0.031228372075764076 closed_cells: 10 cells m: 192 cells p: 192
+Nonlinear iteration: 8 rhs:  4370864.891494192 0.0261857633070493 closed_cells: 10 cells m: 192 cells p: 192
+Nonlinear iteration: 9 rhs:  1372809.145700682 0.02381581073896324 closed_cells: 10 cells m: 192 cells p: 192
+Nonlinear iteration: 10 rhs:  7.078051567077637e-08 0.00585252411930664 closed_cells: 10 cells m: 192 cells p: 192
+Converged with residual norm[0] is 6.332993507385254e-08
+Converged with residual norm[1] is 1.0660746778734173e-09
+Nonlinear iterations needed with fixed expansion: 11
+ fracture cells: 192 closed cells: 10
+** -------- Refining to level -------- 0
+Nonlinear iteration: 0 rhs:  16018262.848490473 0.5883752392467699 closed_cells: 2 cells m: 558 cells p: 558
+Nonlinear iteration: 1 rhs:  13084147.226255167 22.226692888642404 closed_cells: 5 cells m: 558 cells p: 558
+Nonlinear iteration: 2 rhs:  16437673.847625945 40.095872568059946 closed_cells: 5 cells m: 558 cells p: 558
+Nonlinear iteration: 3 rhs:  12901842.401462797 0.09173015200868771 closed_cells: 5 cells m: 558 cells p: 558
+Nonlinear iteration: 4 rhs:  10200910.480906907 0.053272674521232785 closed_cells: 4 cells m: 558 cells p: 558
+Nonlinear iteration: 5 rhs:  7866682.365307253 0.8394879345426413 closed_cells: 4 cells m: 558 cells p: 558
+Nonlinear iteration: 6 rhs:  6103929.337516349 0.028478070554282517 closed_cells: 4 cells m: 558 cells p: 558
+Nonlinear iteration: 7 rhs:  3804684.0133082755 0.023021334371924794 closed_cells: 4 cells m: 558 cells p: 558
+Nonlinear iteration: 8 rhs:  1.30385160446167e-07 0.01349183788873553 closed_cells: 4 cells m: 558 cells p: 558
+Converged with residual norm[0] is 1.341104507446289e-07
+Converged with residual norm[1] is 7.72570029423196e-09
+Nonlinear iterations needed with fixed expansion: 9
+ fracture cells: 558 closed cells: 4
+Nonlinear iteration: 0 rhs:  16049946.048673693 0.5883752392467699 closed_cells: 0 cells m: 644 cells p: 644
+Nonlinear iteration: 1 rhs:  13241253.671205472 22.30670632943829 closed_cells: 20 cells m: 644 cells p: 644
+Nonlinear iteration: 2 rhs:  15272118.728637017 0.306296831427958 closed_cells: 20 cells m: 644 cells p: 644
+Nonlinear iteration: 3 rhs:  16484137.550882101 0.10702469694076124 closed_cells: 20 cells m: 644 cells p: 644
+Nonlinear iteration: 4 rhs:  11096426.912060421 0.0621562483923683 closed_cells: 14 cells m: 644 cells p: 644
+Nonlinear iteration: 5 rhs:  8369585.9204146955 3.1086835898442056 closed_cells: 12 cells m: 644 cells p: 644
+Nonlinear iteration: 6 rhs:  6866948.988418004 0.06751962134720076 closed_cells: 12 cells m: 644 cells p: 644
+Nonlinear iteration: 7 rhs:  5074501.875457019 0.02733517037957584 closed_cells: 12 cells m: 644 cells p: 644
+Nonlinear iteration: 8 rhs:  2300601.00709863 0.022921803976430774 closed_cells: 12 cells m: 644 cells p: 644
+Nonlinear iteration: 9 rhs:  1.3783574104309082e-07 0.006592510626014677 closed_cells: 12 cells m: 644 cells p: 644
+Converged with residual norm[0] is 1.1920928955078125e-07
+Converged with residual norm[1] is 3.6803766383210306e-09
+Nonlinear iterations needed with fixed expansion: 10
+ fracture cells: 644 closed cells: 12
+Solver converged with expantion iterations: 1 at level: 0
+ ** ---------- FINAL MESH HAS 644 CELLS ---------- **
+ ** ---------- CONVERGED BOUNDARY MESH ---------- **
+Nonlinear iteration: 0 rhs:  13772519.226203123 0.5883752392467699 closed_cells: 0 cells m: 528 cells p: 528
+Nonlinear iteration: 1 rhs:  13021179.901506111 22.193938604620378 closed_cells: 0 cells m: 528 cells p: 528
+Nonlinear iteration: 2 rhs:  15960426.951904755 0.24620275711603473 closed_cells: 0 cells m: 528 cells p: 528
+Nonlinear iteration: 3 rhs:  12188060.732932828 0.08597914119201935 closed_cells: 0 cells m: 528 cells p: 528
+Nonlinear iteration: 4 rhs:  10236517.37846021 0.04993131024875296 closed_cells: 0 cells m: 528 cells p: 528
+Nonlinear iteration: 5 rhs:  7680965.400844555 0.034822977204040165 closed_cells: 0 cells m: 528 cells p: 528
+Nonlinear iteration: 6 rhs:  5960838.316236932 0.026637130464618977 closed_cells: 0 cells m: 528 cells p: 528
+Nonlinear iteration: 7 rhs:  3484835.783447262 0.021533078261921197 closed_cells: 0 cells m: 528 cells p: 528
+Nonlinear iteration: 8 rhs:  1.1548399925231934e-07 0.009332341665649124 closed_cells: 0 cells m: 528 cells p: 528
+Converged with residual norm[0] is 1.1548399925231934e-07
+Converged with residual norm[1] is 3.983430908270778e-09
+Nonlinear iterations needed with fixed expansion: 9
+ fracture cells: 528 closed cells: 0
+Fracture solve stats: fractures_solved=1 (total 13), nonlinear_iterations=64 (total 552), linear_solves=58 (total 468), linear_iterations=0 (total 158), closed_cell_toggles=51 (total 2553), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.302922 (total 2.17558), converged=true
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Suggested next time step size (from PID controller): 1597.4093540060965 days
+Suggested next time step size (from PID controller): 1597.4400910570462 days
 Suggested next time step size (from iteration target): 72.9 days
 Well its= 1 Newton its= 3, linearizations= 4 (0.0sec), linear its=  3 (0.0sec)
 
 Starting time step 8, stepsize 48.9 days, at day 51.6/100.5, date = 21-Feb-2020
+----------------------Start beginTimeStep-------------------
 Geomech begin time step
 
    Well B-3H converged in 1 inner iterations (0 control/status switches).
@@ -1078,20 +2045,160 @@ Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)
    0  0.000e+00  1.684e-10  0.000e+00  7.163e-03  0.000e+00  1.149e-02  0.000e+00  2.207e+00   Strict  Relaxed
    1  0.000e+00  9.363e-11  0.000e+00  2.696e-03  0.000e+00  2.233e-07  0.000e+00  1.872e+00   Strict  Relaxed
    2  0.000e+00  5.506e-12  0.000e+00  9.713e-04  0.000e+00  1.042e-09  0.000e+00  1.340e+00   Strict  Relaxed
-   3  0.000e+00  2.042e-13  0.000e+00  3.859e-04  0.000e+00  2.664e-11  0.000e+00  6.466e-01   Strict  Relaxed
-   4  0.000e+00  7.747e-15  0.000e+00  1.155e-08  0.000e+00  8.610e-13  0.000e+00  5.720e-06   Strict   Strict
+   3  0.000e+00  2.041e-13  0.000e+00  3.859e-04  0.000e+00  2.669e-11  0.000e+00  6.466e-01   Strict  Relaxed
+   4  0.000e+00  7.805e-15  0.000e+00  1.155e-08  0.000e+00  8.425e-13  0.000e+00  5.720e-06   Strict   Strict
 Overall linear iterations used: 4
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=14, linear_iterations=48 (total 645), solve_time_s=0.0734249 (total 0.995895), converged=true
+Mechanical solve stats: solves=14, linear_iterations=46 (total 642), solve_time_s=0.0715279 (total 1.00591), converged=true
 
-Fracture solve stats: fractures_solved=1 (total 14), nonlinear_iterations=110 (total 662), linear_solves=103 (total 571), linear_iterations=0 (total 160), closed_cell_toggles=72 (total 3872), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.17438 (total 2.23836), converged=true
+Activating fracture Fracture_on_B-3H_perf_0_nr
+Solving fracture Fracture_on_B-3H_perf_0_nr
+Solve Fracture Pressure using Iterative Fracture with Trimesh Propagation
+Reinitializing fracture states before IF with trimesh propagation
+Nonlinear iteration: 0 rhs:  14625599.78969105 0.5692733085734801 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 1 rhs:  13378524.60210987 24.952030084990866 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 2 rhs:  12257739.24773091 0.18848104498181523 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 3 rhs:  10832272.024456736 0.06549590907054448 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 4 rhs:  9400963.558494559 0.0380160774859467 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 5 rhs:  7966468.8178356625 0.026509649098327183 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 6 rhs:  6090244.391403409 0.026758286056933457 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 7 rhs:  3228811.6368296556 0.022429876496514546 closed_cells: 0 cells m: 108 cells p: 108
+Nonlinear iteration: 8 rhs:  4.0978193283081055e-08 0.003211489335432401 closed_cells: 0 cells m: 108 cells p: 108
+Converged with residual norm[0] is 4.842877388000488e-08
+Converged with residual norm[1] is 6.184499604213372e-10
+Nonlinear iterations needed with fixed expansion: 9
+ fracture cells: 108 closed cells: 0
+Nonlinear iteration: 0 rhs:  14665135.81075817 0.5692733085734756 closed_cells: 0 cells m: 170 cells p: 170
+Nonlinear iteration: 1 rhs:  14060867.797138872 25.766990865292197 closed_cells: 6 cells m: 170 cells p: 170
+Nonlinear iteration: 2 rhs:  13158255.178569263 0.30587812026932615 closed_cells: 6 cells m: 170 cells p: 170
+Nonlinear iteration: 3 rhs:  12187216.483747192 0.1066659745003847 closed_cells: 6 cells m: 170 cells p: 170
+Nonlinear iteration: 4 rhs:  11209408.945993124 0.061935730002879406 closed_cells: 6 cells m: 170 cells p: 170
+Nonlinear iteration: 5 rhs:  10145055.676884582 0.043193461608456475 closed_cells: 6 cells m: 170 cells p: 170
+Nonlinear iteration: 6 rhs:  8840194.9107784 0.03303961693563692 closed_cells: 4 cells m: 170 cells p: 170
+Nonlinear iteration: 7 rhs:  7520479.320321117 0.2323161455282594 closed_cells: 4 cells m: 170 cells p: 170
+Nonlinear iteration: 8 rhs:  6132634.371443544 0.022797764050939688 closed_cells: 4 cells m: 170 cells p: 170
+Nonlinear iteration: 9 rhs:  4019489.253920473 0.021078812105950067 closed_cells: 4 cells m: 170 cells p: 170
+Nonlinear iteration: 10 rhs:  148626.894408226 0.011049777126617153 closed_cells: 4 cells m: 170 cells p: 170
+Nonlinear iteration: 11 rhs:  5.21540641784668e-08 0.0001062207658359035 closed_cells: 4 cells m: 170 cells p: 170
+Converged with residual norm[0] is 4.470348358154297e-08
+Converged with residual norm[1] is 6.618009670420858e-10
+Nonlinear iterations needed with fixed expansion: 12
+ fracture cells: 170 closed cells: 4
+Nonlinear iteration: 0 rhs:  14676296.382337637 0.5692733085734756 closed_cells: 0 cells m: 230 cells p: 230
+Nonlinear iteration: 1 rhs:  14355450.603570443 25.77671360423149 closed_cells: 8 cells m: 230 cells p: 230
+Nonlinear iteration: 2 rhs:  13585143.164293973 2.597210947252579 closed_cells: 8 cells m: 230 cells p: 230
+Nonlinear iteration: 3 rhs:  12834405.693521664 0.15198791355052008 closed_cells: 8 cells m: 230 cells p: 230
+Nonlinear iteration: 4 rhs:  12076702.21931272 0.08826219972717506 closed_cells: 8 cells m: 230 cells p: 230
+Nonlinear iteration: 5 rhs:  11268308.782807775 0.06155507197147602 closed_cells: 8 cells m: 230 cells p: 230
+Nonlinear iteration: 6 rhs:  11452074.316783328 0.04708529305750408 closed_cells: 6 cells m: 230 cells p: 230
+Nonlinear iteration: 7 rhs:  9330723.384781169 0.9356330147655997 closed_cells: 4 cells m: 230 cells p: 230
+Nonlinear iteration: 8 rhs:  8092201.546517333 0.08459691723866437 closed_cells: 4 cells m: 230 cells p: 230
+Nonlinear iteration: 9 rhs:  6787359.907218415 0.02808561789233224 closed_cells: 4 cells m: 230 cells p: 230
+Nonlinear iteration: 10 rhs:  5450395.03032916 0.024650950508128974 closed_cells: 4 cells m: 230 cells p: 230
+Nonlinear iteration: 11 rhs:  3386191.3538225293 0.022250945738689902 closed_cells: 4 cells m: 230 cells p: 230
+Nonlinear iteration: 12 rhs:  7.078051567077637e-08 0.012744058760129932 closed_cells: 4 cells m: 230 cells p: 230
+Converged with residual norm[0] is 8.568167686462402e-08
+Converged with residual norm[1] is 1.0086907453951442e-08
+Nonlinear iterations needed with fixed expansion: 13
+ fracture cells: 230 closed cells: 4
+Nonlinear iteration: 0 rhs:  16276565.922813337 0.5692733085734756 closed_cells: 0 cells m: 290 cells p: 290
+Nonlinear iteration: 1 rhs:  14528339.295627758 25.77680297347461 closed_cells: 10 cells m: 290 cells p: 290
+Nonlinear iteration: 2 rhs:  13846911.788753929 0.5566056262027095 closed_cells: 10 cells m: 290 cells p: 290
+Nonlinear iteration: 3 rhs:  13234119.22412432 0.19450804260470286 closed_cells: 10 cells m: 290 cells p: 290
+Nonlinear iteration: 4 rhs:  12614307.662123734 0.11296535520649555 closed_cells: 10 cells m: 290 cells p: 290
+Nonlinear iteration: 5 rhs:  11969913.876379095 0.07878522021444356 closed_cells: 8 cells m: 290 cells p: 290
+Nonlinear iteration: 6 rhs:  11230715.630992906 11.05303760663681 closed_cells: 8 cells m: 290 cells p: 290
+Nonlinear iteration: 7 rhs:  10461685.09911094 0.04921834997187136 closed_cells: 8 cells m: 290 cells p: 290
+Nonlinear iteration: 8 rhs:  9668339.537644789 0.04127090790306912 closed_cells: 8 cells m: 290 cells p: 290
+Nonlinear iteration: 9 rhs:  8581539.03357323 0.03551725397901187 closed_cells: 8 cells m: 290 cells p: 290
+Nonlinear iteration: 10 rhs:  7332534.871948071 0.031163155765397497 closed_cells: 8 cells m: 290 cells p: 290
+Nonlinear iteration: 11 rhs:  6028480.553668845 0.027755245414254393 closed_cells: 8 cells m: 290 cells p: 290
+Nonlinear iteration: 12 rhs:  4653857.770811316 0.025016350020431042 closed_cells: 8 cells m: 290 cells p: 290
+Nonlinear iteration: 13 rhs:  2406910.1041364074 0.023211399470653434 closed_cells: 8 cells m: 290 cells p: 290
+Nonlinear iteration: 14 rhs:  7.450580596923828e-08 0.008405058722472165 closed_cells: 8 cells m: 290 cells p: 290
+Converged with residual norm[0] is 6.332993507385254e-08
+Converged with residual norm[1] is 1.7808835375435443e-09
+Nonlinear iterations needed with fixed expansion: 15
+ fracture cells: 290 closed cells: 8
+Nonlinear iteration: 0 rhs:  16718647.4677262 0.5692733085734756 closed_cells: 0 cells m: 350 cells p: 350
+Nonlinear iteration: 1 rhs:  14653210.040840797 25.776803820670747 closed_cells: 12 cells m: 350 cells p: 350
+Nonlinear iteration: 2 rhs:  14376114.846775137 0.7753871546317996 closed_cells: 12 cells m: 350 cells p: 350
+Nonlinear iteration: 3 rhs:  13500452.833985835 0.23550441262405597 closed_cells: 12 cells m: 350 cells p: 350
+Nonlinear iteration: 4 rhs:  12975363.504432157 0.13678845589804617 closed_cells: 12 cells m: 350 cells p: 350
+Nonlinear iteration: 5 rhs:  12437236.776876617 0.09540243078790606 closed_cells: 12 cells m: 350 cells p: 350
+Nonlinear iteration: 6 rhs:  11834246.882957 0.07297741699627812 closed_cells: 12 cells m: 350 cells p: 350
+Nonlinear iteration: 7 rhs:  11207570.29861588 0.05899430568268477 closed_cells: 12 cells m: 350 cells p: 350
+Nonlinear iteration: 8 rhs:  10501150.671847757 0.0494683294055923 closed_cells: 12 cells m: 350 cells p: 350
+Nonlinear iteration: 9 rhs:  9733390.125434987 0.042571900062130456 closed_cells: 12 cells m: 350 cells p: 350
+Nonlinear iteration: 10 rhs:  8825770.52103387 0.037352988145226695 closed_cells: 12 cells m: 350 cells p: 350
+Nonlinear iteration: 11 rhs:  7805406.203036118 0.0332681891334312 closed_cells: 12 cells m: 350 cells p: 350
+Nonlinear iteration: 12 rhs:  6514284.123620922 0.029985280018338462 closed_cells: 12 cells m: 350 cells p: 350
+Nonlinear iteration: 13 rhs:  5210230.1348408125 0.027289921512623192 closed_cells: 12 cells m: 350 cells p: 350
+Nonlinear iteration: 14 rhs:  3500888.220245652 0.02503774939702445 closed_cells: 12 cells m: 350 cells p: 350
+Nonlinear iteration: 15 rhs:  71466.82371075079 0.024008001111938532 closed_cells: 12 cells m: 350 cells p: 350
+Nonlinear iteration: 16 rhs:  7.450580596923828e-08 9.732508469875976e-05 closed_cells: 12 cells m: 350 cells p: 350
+Converged with residual norm[0] is 7.078051567077637e-08
+Converged with residual norm[1] is 3.383436733139988e-09
+Nonlinear iterations needed with fixed expansion: 17
+ fracture cells: 350 closed cells: 12
+Nonlinear iteration: 0 rhs:  16716983.849175423 0.5692733085734756 closed_cells: 0 cells m: 410 cells p: 410
+Nonlinear iteration: 1 rhs:  15753799.715753041 25.77680382851724 closed_cells: 16 cells m: 410 cells p: 410
+Nonlinear iteration: 2 rhs:  15752178.240675878 0.7778981097716411 closed_cells: 16 cells m: 410 cells p: 410
+Nonlinear iteration: 3 rhs:  13706416.917885114 0.2723159776496317 closed_cells: 16 cells m: 410 cells p: 410
+Nonlinear iteration: 4 rhs:  13241283.011356682 0.15818413351807503 closed_cells: 16 cells m: 410 cells p: 410
+Nonlinear iteration: 5 rhs:  12779451.576758647 0.11032720659334914 closed_cells: 16 cells m: 410 cells p: 410
+Nonlinear iteration: 6 rhs:  12272208.602747783 0.08439470930576122 closed_cells: 16 cells m: 410 cells p: 410
+Nonlinear iteration: 7 rhs:  11744661.340201238 0.06822419851140593 closed_cells: 16 cells m: 410 cells p: 410
+Nonlinear iteration: 8 rhs:  11168367.854089482 0.05720795335385632 closed_cells: 16 cells m: 410 cells p: 410
+Nonlinear iteration: 9 rhs:  10548141.90036019 0.049232589358415145 closed_cells: 12 cells m: 410 cells p: 410
+Nonlinear iteration: 10 rhs:  9841134.010699656 0.39548420508195353 closed_cells: 12 cells m: 410 cells p: 410
+Nonlinear iteration: 11 rhs:  9050300.380846335 0.03878114752795398 closed_cells: 12 cells m: 410 cells p: 410
+Nonlinear iteration: 12 rhs:  8119810.902963396 0.03495564966031872 closed_cells: 12 cells m: 410 cells p: 410
+Nonlinear iteration: 13 rhs:  6968831.498622753 0.03181351779468074 closed_cells: 12 cells m: 410 cells p: 410
+Nonlinear iteration: 14 rhs:  5670911.391897816 0.02918802625679588 closed_cells: 12 cells m: 410 cells p: 410
+Nonlinear iteration: 15 rhs:  4362651.0974618755 0.026961724505155254 closed_cells: 12 cells m: 410 cells p: 410
+Nonlinear iteration: 16 rhs:  2194574.0351945944 0.025050195421684063 closed_cells: 12 cells m: 410 cells p: 410
+Nonlinear iteration: 17 rhs:  8.940696716308594e-08 0.011407239442027234 closed_cells: 12 cells m: 410 cells p: 410
+Converged with residual norm[0] is 1.1175870895385742e-07
+Converged with residual norm[1] is 3.353089282604468e-09
+Nonlinear iterations needed with fixed expansion: 18
+ fracture cells: 410 closed cells: 12
+Fracture area doubled, stopping expansion
+Solver converged with expantion iterations: 6 at level: 1
+ ** ---------- FINAL MESH HAS 468 CELLS ---------- **
+ ** ---------- CONVERGED BOUNDARY MESH ---------- **
+Nonlinear iteration: 0 rhs:  16676118.240955845 0.5692733085734756 closed_cells: 0 cells m: 448 cells p: 448
+Nonlinear iteration: 1 rhs:  14809351.566965347 25.776807672377988 closed_cells: 8 cells m: 448 cells p: 448
+Nonlinear iteration: 2 rhs:  14277909.544544123 0.8648750360217787 closed_cells: 8 cells m: 448 cells p: 448
+Nonlinear iteration: 3 rhs:  13833775.169416811 0.3033244839439396 closed_cells: 8 cells m: 448 cells p: 448
+Nonlinear iteration: 4 rhs:  13378206.08240534 0.17620393602356116 closed_cells: 8 cells m: 448 cells p: 448
+Nonlinear iteration: 5 rhs:  12921412.311263418 0.12289691472049251 closed_cells: 8 cells m: 448 cells p: 448
+Nonlinear iteration: 6 rhs:  12462449.739855392 0.09401048716857277 closed_cells: 8 cells m: 448 cells p: 448
+Nonlinear iteration: 7 rhs:  11961586.589680813 0.0759978150910303 closed_cells: 8 cells m: 448 cells p: 448
+Nonlinear iteration: 8 rhs:  11443021.919967208 0.06372644180329644 closed_cells: 8 cells m: 448 cells p: 448
+Nonlinear iteration: 9 rhs:  10864675.799177703 0.054842388188396644 closed_cells: 8 cells m: 448 cells p: 448
+Nonlinear iteration: 10 rhs:  10246957.53072356 0.04811927935244288 closed_cells: 8 cells m: 448 cells p: 448
+Nonlinear iteration: 11 rhs:  9524622.673649682 0.0428571473314888 closed_cells: 8 cells m: 448 cells p: 448
+Nonlinear iteration: 12 rhs:  8699614.08234253 0.03862801516804961 closed_cells: 8 cells m: 448 cells p: 448
+Nonlinear iteration: 13 rhs:  7757621.216049505 0.035155779899848555 closed_cells: 8 cells m: 448 cells p: 448
+Nonlinear iteration: 14 rhs:  6519044.78533826 0.03225446047887517 closed_cells: 8 cells m: 448 cells p: 448
+Nonlinear iteration: 15 rhs:  5217503.921044871 0.029794269657850026 closed_cells: 8 cells m: 448 cells p: 448
+Nonlinear iteration: 16 rhs:  3719370.2401957475 0.0276819208567555 closed_cells: 8 cells m: 448 cells p: 448
+Nonlinear iteration: 17 rhs:  823048.2245154679 0.026218156123605472 closed_cells: 8 cells m: 448 cells p: 448
+Nonlinear iteration: 18 rhs:  8.940696716308594e-08 0.003283584732456317 closed_cells: 8 cells m: 448 cells p: 448
+Converged with residual norm[0] is 8.568167686462402e-08
+Converged with residual norm[1] is 3.7037221744927207e-09
+Nonlinear iterations needed with fixed expansion: 19
+ fracture cells: 448 closed cells: 8
+Fracture solve stats: fractures_solved=1 (total 14), nonlinear_iterations=110 (total 662), linear_solves=103 (total 571), linear_iterations=0 (total 158), closed_cell_toggles=72 (total 2625), linear_solve_failures=0 (total 0), ladder_rescues=0 (total 0), solve_time_s=0.190023 (total 2.3656), converged=true
 | 
 | Processing dynamic information from
-| /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 336
+| /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA line 336
 | Initializing report step 4/4 at 2020-01-01 100.5 DAYS line 336
-| Complete report step 4 (85.5 DAYS) at 2020-04-10 (15 DAYS)
+| Complete report step 4 (85.5 DAYS) at 2020-04-10 12:00:00 (15 DAYS)
 | 
 ---------- Starting propagation at level: 1 --------
 Adding connections to schedule
@@ -1099,7 +2206,7 @@ Adding connections to schedule
 Adding 4 extra connections for well: B-3H
 Adding extra connections to schedule for report step: 3 old connections: 3 new connections: 4
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Suggested next time step size (from PID controller): 6479.02416981602 days
+Suggested next time step size (from PID controller): 6479.000967391489 days
 Suggested next time step size (from iteration target): 127.14 days
 Well its= 1 Newton its= 4, linearizations= 5 (0.0sec), linear its=  4 (0.0sec)
 Sub steps started at time = 15 (days)
@@ -1118,7 +2225,7 @@ Suggested next step size = 127.14 (days)
 Restart file written for report step 4/4, date = 10-Apr-2020 12:00:00
 Writing fracture data to VTK files at time: 4.45824e+06grid_size448
 
-Time step took 2.875466 seconds; total solver time 4.256166 seconds.
+Time step took 3.011572 seconds; total solver time 4.490514 seconds.
 
 
 
@@ -1126,28 +2233,28 @@ Time step took 2.875466 seconds; total solver time 4.256166 seconds.
 
 Number of MPI processes:         1
 Threads per MPI process:         2
-Setup time:                      0.03 s
+Setup time:                      0.04 s
   Deck input:                    0.01 s
 Number of timesteps:            14
-Simulation time:                 4.26 s
-  Assembly time:                 0.05 s (Wasted: 0.0 s; 0.0%)
-    Well assembly:               0.00 s (Wasted: 0.0 s; 0.0%)
+Simulation time:                 4.49 s
+  Assembly time:                 0.06 s (Wasted: 0.0 s; 0.0%)
+    Well assembly:               0.01 s (Wasted: 0.0 s; 0.0%)
   Linear solve time:             0.10 s (Wasted: 0.0 s; 0.0%)
     Linear setup:                0.08 s (Wasted: 0.0 s; 0.0%)
   Props/update time:             0.04 s (Wasted: 0.0 s; 0.0%)
-  Pre/post step:                 3.89 s (Wasted: 0.0 s; 0.0%)
+  Pre/post step:                 4.12 s (Wasted: 0.0 s; 0.0%)
   Output write time:             0.19 s
-Overall Linearizations:         47      (Wasted:     0; 0.0%)
-Overall Newton Iterations:      33      (Wasted:     0; 0.0%)
+Overall Linearizations:         46      (Wasted:     0; 0.0%)
+Overall Newton Iterations:      32      (Wasted:     0; 0.0%)
 Overall Linear Iterations:      15      (Wasted:     0; 0.0%)
 
 
 
 Error summary:
-Warnings          6
-Info              314
+Warnings          9
+Info              334
 Errors            0
 Bugs              0
-Debug             156
+Debug             1002
 Problems          0
 

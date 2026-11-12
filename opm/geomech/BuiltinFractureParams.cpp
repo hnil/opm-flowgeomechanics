@@ -89,6 +89,7 @@ const char* standardFractureParamJson()
                 "max_iter": "1000",
                 "verbosity": "0",
                 "solver": "bicgstab",
+                "failure_policy": "ladder",
                 "preconditioner": {
                     "diag_mech": "false",
                     "diag_flow": "false",
@@ -118,7 +119,8 @@ const char* standardFractureParamJson()
             "divide_wellidx": "false",
             "no_leakof_outercells": "false",
             "drop_fluid_mech_linearization": "true",
-            "closed_cell_policy": "legacy",
+            "closed_cell_policy": "sticky",
+            "use_ad_pressure_assembly": "true",
             "coupling_legacy_first_damp": "true"
         },
         "reservoir": {
@@ -280,6 +282,7 @@ const char* sequentialImplicitFractureParamJson()
                 "max_iter": "100",
                 "verbosity": "0",
                 "solver": "bicgstab",
+                "failure_policy": "ladder",
                 "preconditioner": {
                     "verbosity": 0,
                     "diag_mech": "false",
