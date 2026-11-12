@@ -1640,7 +1640,6 @@ Fracture::wellIndices_() const
     std::vector<double> mob_cells(res_cells.size(), 0.0);
     std::vector<double> dens_cells(res_cells.size(), 0.0);
     std::vector<double> z_cells(res_cells.size(), 0.0);
-    std::vector<double> traction(res_cells.size(), 0.0);
     std::vector<double> area(res_cells.size(), 0.0);
     // M1 (opt-in): aggregated exchange conductivity per reservoir cell,
     // sum of leakof_/mobility over the mapped fracture cells.  leakof_ =
@@ -1654,7 +1653,6 @@ Fracture::wellIndices_() const
     std::vector<double> leak_sum(res_cells.size(), 0.0);
     std::vector<double> pfrac_area_sum(res_cells.size(), 0.0);
     std::vector<double> leakofrate = this->leakOfRate();
-    double q_prev = 0;
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     for (auto& element : Dune::elements(grid_->leafGridView())) {
         int eIdx = mapper.index(element);
@@ -1677,9 +1675,6 @@ Fracture::wellIndices_() const
             auto it = std::find(res_cells.begin(), res_cells.end(), res_cell);
             int ind_wellIdx = it - res_cells.begin();
             assert(!(it == res_cells.end()));
-            if (q_prev * q < 0) {
-                OPM_THROW(std::runtime_error, "Cross flow in fracture ??");
-            }
             double loc_area = area_frac*element.geometry().volume();
             area[ind_wellIdx] += loc_area;
             q_cells[ind_wellIdx] += area_frac*q;
@@ -1689,7 +1684,6 @@ Fracture::wellIndices_() const
                     / reservoir_mobility_[eIdx];
             }
             if(reservoir_cells_[eIdx] == res_cell){
-                traction[ind_wellIdx] += ddm::tractionVoigt(reservoir_stress_[eIdx], cell_normals_[eIdx])*loc_area;
                 // assume all of this is the same so no need for interpolation
                 p_cells[ind_wellIdx] = reservoir_pressure_[eIdx]; // is set multiple times
                 mob_cells[ind_wellIdx] = reservoir_mobility_[eIdx]; // is set multiple times
