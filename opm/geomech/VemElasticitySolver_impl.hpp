@@ -17,388 +17,444 @@
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-//==============================================================================
-//!
-//! \file elasticity_upscale_impl.hpp
-//!
-//! \date Nov 9 2011
-//!
-//! \author Arne Morten Kvarving / SINTEF
-//!
-//! \brief Elasticity upscale class - template implementations
-//!
-//==============================================================================
 #ifndef OPM_VEM_ELASTICITY_SOLVER_IMPL_HPP
 #define OPM_VEM_ELASTICITY_SOLVER_IMPL_HPP
 
 #include <opm/common/OpmLog/OpmLog.hpp>
+#include <opm/common/ErrorMacros.hpp>
+#include <opm/common/TimingMacros.hpp>
+#include <opm/geomech/vem/vem.hpp>
+#include <opm/geomech/vem/vemutils.hpp>
 
 #include <fmt/format.h>
 
-#ifdef HAVE_OPENMP
-#include <omp.h>
-#endif
-#include <tuple>
-#include <vector>
 #include <algorithm>
 #include <cmath>
-#include <opm/common/TimingMacros.hpp>
-#include <opm/input/eclipse/Deck/DeckKeyword.hpp>
-#include <opm/geomech/vem/vem.hpp>
-#include <opm/geomech/vem/vemutils.hpp>
+#include <numeric>
+#include <sstream>
+#include <tuple>
+#include <vector>
+
 namespace Opm {
 namespace Elasticity {
 
-#undef IMPL_FUNC
-#define IMPL_FUNC(A,B) template<class GridType> \
-                         A VemElasticitySolver<GridType>::B
-
-  IMPL_FUNC(void,assignToVoigt(Dune::BlockVector< Dune::FieldVector<double,6> >& voigt_stress, const Dune::BlockVector< Dune::FieldVector<double,1> >& vemstress)){
-    // This is used in flow!!!
-    for (size_t i = 0; i < voigt_stress.size(); ++i) {
-                for (size_t k = 0; k < 3; ++k) {
-		  voigt_stress[i][k] = vemstress[i * 6 + k];
-                }
-		// from VEM shear order xy, yz, zx to Voigt yz, zx, xy
-		voigt_stress[i][3] = vemstress[i * 6 + 4];
-		voigt_stress[i][5] = vemstress[i * 6 + 3];
-		voigt_stress[i][4] = vemstress[i * 6 + 5];
-    }
-  }
-  IMPL_FUNC(void,assignToVoigtSymMat(Dune::BlockVector< Dune::FieldVector<double,6> >& voigt_stress, const std::vector< std::array<double,6> >& vemstress)){
-    for (size_t i = 0; i < voigt_stress.size(); ++i) {
-      for (size_t k = 0; k < 3; ++k) {
-	voigt_stress[i][k] = vemstress[i][k];
-      }
-      // from VEM shear order xy, yz, zx to Voigt yz, zx, xy
-      voigt_stress[i][3] = vemstress[i][4];
-      voigt_stress[i][5] = vemstress[i][3];
-      voigt_stress[i][4] = vemstress[i][5];
-    }
-  }
-
-  IMPL_FUNC(void, calculateStressPrecomputed(const Vector& dispalldune))
-    {
-
-            OPM_TIMEBLOCK(calculateStressPrecomputed);
-            //NB stressmat is defined in linear indices not block linear indices
-            if(vem_stress_){
-              Vector stress(6 * grid_.leafGridView().size(0));
-              stressmat_.mv(dispalldune,stress);
-              stress_.resize(num_cells_);
-
-              assignToVoigt(stress_,stress);
-            }else{
-              stress_ = vem::computeStressFem(grid_,
-                                dispalldune,
-                                ymodule_,
-                                pratio_);
-            }
-
-    }
-    IMPL_FUNC(void, calculateStress())
-    {
-        bool expand = true;
-            OPM_TIMEBLOCK(calculateStressFull);
-            // assumes the grid structure is made
-            num_cells_ = grid_.leafGridView().size(0); // entities of codim 0
-            // assemble the mechanical system
-            stress_.resize(num_cells_);
-            std::vector<std::array<double, 6>> stress;
-            stress.resize(num_cells_);
-            std::vector<double> dispall;
-            this->expandDisp(dispall,expand);
-            std::vector<std::tuple<int, int, double>> stressmat;
-            vem::compute_stress_3D(&coords_[0],
-                                   num_cells_,
-                                   &num_cell_faces_[0],
-                                   &num_face_corners_[0],
-                                   &face_corners_[0],
-                                   &ymodule_[0],
-                                   &pratio_[0],
-                                   dispall,
-                                   stress,
-                                   stressmat,
-                                   false,
-                                   true,
-                                   stability_choice_,
-                                   stab_on_stress_, corner_mask_.data()
-                );
-            // copy to dune definitions
-            stress_.resize(num_cells_);
-	    assignToVoigtSymMat(stress_,stress);
-
-    }
-
-    IMPL_FUNC(void, calculateStrainPrecomputed(const Vector& dispalldune))
-    {
-
-            OPM_TIMEBLOCK(calculateStrainPrecomputed);
-            //NB stressmat is defined in linear indices not block linear indices
-            Vector strain(6 * grid_.leafGridView().size(0));
-            strainmat_.mv(dispalldune,strain);
-            strain_.resize(num_cells_);
-	    assignToVoigt(strain_,strain);
-    }
-    IMPL_FUNC(void, calculateStrain())
-    {
-        bool expand = true;// assumes that matrices is caculated with reduced_boundary = true
-            OPM_TIMEBLOCK(calculateStressFull);
-            // assumes the grid structure is made
-            num_cells_ = grid_.leafGridView().size(0); // entities of codim 0
-            // assemble the mechanical system
-            strain_.resize(num_cells_);
-            std::vector<std::array<double, 6>> strain;
-            strain.resize(num_cells_);
-
-            std::vector<double> dispall;
-            this->expandDisp(dispall,expand);
-            std::vector<std::tuple<int, int, double>> stressmat;
-            vem::compute_stress_3D(&coords_[0],
-                                   num_cells_,
-                                   &num_cell_faces_[0],
-                                   &num_face_corners_[0],
-                                   &face_corners_[0],
-                                   &ymodule_[0],
-                                   &pratio_[0],
-                                   dispall,
-                                   strain,
-                                   stressmat,
-                                   false,
-                                   false,
-                                   stability_choice_,
-                                   stab_on_stress_, corner_mask_.data()
-
-                );
-            // copy to dune definitions
-            strain_.resize(num_cells_);
-	        assignToVoigtSymMat(strain_,strain);
-
-    }
-
-    IMPL_FUNC(void, assemble(const Vector& pressure, bool reduce_boundary))
+namespace detail {
+// VEM shear order xy, yz, zx to Voigt yz, zx, xy.
+inline void vemToVoigt(VoigtField& voigt, const Vector& vem)
 {
-    OPM_TIMEBLOCK(assemble);
-    using namespace std;
-    this->getLoadVector() = 0;
-    this->getOperator() = 0;
-    {
-        vem::getGridVectors(grid_,coords_,
-                            num_cell_faces_,
-                            num_face_corners_,
-                            face_corners_,
-                            &corner_mask_);
-
-        const int num_fixed_dofs = get<0>(dirichlet_);
-        const vector<int>& fixed_dof_ixs = std::get<1>(dirichlet_);
-        const vector<double>& fixed_dof_values = std::get<2>(dirichlet_);
-
-        // neumann boundary conditions
-        const int num_neumann_faces = 0;
-        num_cells_ = grid_.leafGridView().size(0); // entities of codim 0
-        // assemble the mechanical system
-        {// scope for timing and removing A_entries util assembled directly in dune matrices
-        OPM_TIMEBLOCK(assembleVEMSystem);
-        vector<tuple<int, int, double>> A_entries;
-
-        vem::assemble_mech_system_3D_dune(grid_, &coords_[0], num_cells_, &num_cell_faces_[0], &num_face_corners_[0],
-                       &face_corners_[0], &ymodule_[0], &pratio_[0], &body_force_[0],
-                       num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0],
-                       num_neumann_faces, nullptr, nullptr,
-                       A_entries, rhs_force_, stability_choice_,reduce_boundary, corner_mask_.data());
-
-
-        this->makeDuneSystemMatrix(A_entries);
-        if(diagonal_scaling_){
-            this->applyDiagonalScaling();
+    for (std::size_t i = 0; i < voigt.size(); ++i) {
+        for (std::size_t k = 0; k < 3; ++k) {
+            voigt[i][k] = vem[i * 6 + k];
         }
-        }
-        // hack
-        if(divmat_.N() > 0){// not rebuilding divmat_, stressmat_,strainmat_ for now
-            return;
-        }
-        {
-        OPM_TIMEBLOCK(setUpExtraStructuresForVEM);
-        // make indexing for div operator i.e. all nodes to dofs
-        std::vector<int> dof_idx(grid_.leafGridView().size(3)*3);
-        std::iota(dof_idx.begin(), dof_idx.end(),0);
+        voigt[i][3] = vem[i * 6 + 4];
+        voigt[i][5] = vem[i * 6 + 3];
+        voigt[i][4] = vem[i * 6 + 5];
+    }
+}
+} // namespace detail
 
-        std::set_difference(dof_idx.begin(), dof_idx.end(), fixed_dof_ixs.begin(), fixed_dof_ixs.end(),std::back_inserter(idx_free_));
-        vector<double> rhs_tmp(pressure.size(),0);
-        vector<double> pressure_tmp(pressure.size(),0);
-        vector<tuple<int, int, double>> divmat;
-        if(vem_source_){
-          vem::potential_gradient_force_3D(&coords_[0],
-                                         num_cells_,
-                                         &num_cell_faces_[0],
-                                         &num_face_corners_[0],
-                                         &face_corners_[0],
-                                         &pressure_tmp[0],
-                                         rhs_tmp,
-                                         divmat,
-                                         true, corner_mask_.data());
-        }else{
-          vem::potential_gradient_force_3D_dune(grid_,&coords_[0],
-                                             num_cells_,
-                                             &num_cell_faces_[0],
-                                             &num_face_corners_[0],
-                                             &face_corners_[0],
-                                             &pressure_tmp[0],
-                                             rhs_tmp,
-                                             divmat,
-                                             true, corner_mask_.data());
-        }
-        std::vector<int> global_to_dof(grid_.leafGridView().size(3)*3,-1);
-        for(size_t i=0; i< idx_free_.size(); ++i){
-            if(reduce_boundary){
-                //new numbering of dofs
-                global_to_dof[idx_free_[i]] = i;
-            }else{
-                global_to_dof[idx_free_[i]] = idx_free_[i];
+template<class GridType>
+void VemDiscretisation<GridType>::setOptions(int stability_choice_int,
+                                             bool vem_source,
+                                             bool stab_on_stress,
+                                             bool vem_stress,
+                                             bool diagonal_scaling,
+                                             bool reduce_boundary)
+{
+    vem_source_ = vem_source;
+    stab_on_stress_ = stab_on_stress;
+    vem_stress_ = vem_stress;
+    diagonal_scaling_ = diagonal_scaling;
+    reduce_boundary_ = reduce_boundary;
+    std::stringstream os;
+    os << "Setting stability choise to " << stability_choice_int
+       << (diagonal_scaling_ ? " with diagonal scaling" : "");
+    OpmLog::info(os.str());
+    if (stability_choice_int < 1 || stability_choice_int > vem::STABILITY_CHOICE_MAX) {
+        OPM_THROW(std::runtime_error, "This stability is not implmented");
+    }
+    stability_choice_ = static_cast<vem::StabilityChoice>(stability_choice_int);
+}
+
+template<class GridType>
+void VemDiscretisation<GridType>::fixNodes(const std::vector<std::tuple<size_t,MechBCValue>>& bc_nodes)
+{
+    // bc_nodes are sorted and unique (nodesAtBoundary/nodesAtOuterBoundary), so the dofs are too
+    std::vector<int> fixed_dof_ixs;
+    std::vector<double> fixed_dof_values;
+    for (const auto& [node, value] : bc_nodes) {
+        for (int m = 0; m < 3; ++m) {
+            if (value.fixeddir[m]) {
+                fixed_dof_ixs.push_back(3 * node + m);
+                fixed_dof_values.push_back(value.disp[m]);
             }
         }
-        //renumber and eliminate dof fized
-        vector<tuple<int, int, double>> divmatdof;
-        for(const auto& elem: divmat){
-            int I = global_to_dof[std::get<0>(elem)];
-            if(I>-1){
-                int J = get<1>(elem);
-                double val = std::get<2>(elem);
-                divmatdof.push_back(std::tuple<int, int, double>(I,J,val));
-            }
-        }
-        // finaly make dune matrix
-        divmat_.setBuildMode(Matrix::random);
-        // map from dof=3*nodes at a cell (ca 3*3*3) to cell
-        {
-            const int rows = reduce_boundary ? int(idx_free_.size())
-                                             : grid_.leafGridView().size(3)*3;
-            divmat_.setSize(rows, num_cells_);
-        }
-        makeDuneMatrixCompressed(divmatdof,divmat_);
-        }
-        std::vector<double> dispall(grid_.leafGridView().size(3)*3);
-        std::vector<std::array<double,6>> stresstmp(grid_.leafGridView().size(0));
-        {
-        OPM_TIMEBLOCK(setUpStressStressMatrix);
-        // also make stress matrix
-        std::vector<std::tuple<int, int, double>> stressmat;
-        vem::compute_stress_3D(&coords_[0],
-                               num_cells_,
-                               &num_cell_faces_[0],
-                               &num_face_corners_[0],
-                               &face_corners_[0],
-                               &ymodule_[0], &pratio_[0],
-                               dispall,
-                               stresstmp,
-                               stressmat,
-                               true,
-                               true,
-                               stability_choice_,
-                               stab_on_stress_, corner_mask_.data()
-        );
-        stressmat_.setBuildMode(Matrix::random);
-        stressmat_.setSize(num_cells_*6, dispall.size());
-        makeDuneMatrixCompressed(stressmat, stressmat_);
-        }
-        {
-        OPM_TIMEBLOCK(setUpStrainMatrix);
-        std::vector<std::tuple<int, int, double>> strainmat;
-        vem::compute_stress_3D(&coords_[0],
-                               num_cells_,
-                               &num_cell_faces_[0],
-                               &num_face_corners_[0],
-                               &face_corners_[0],
-                               &ymodule_[0], &pratio_[0],
-                               dispall,
-                               stresstmp,
-                               strainmat,
-                               true,
-                               false,
-                               stability_choice_,
-                               stab_on_stress_, corner_mask_.data()
-        );
-        strainmat_.setBuildMode(Matrix::random);
-        strainmat_.setSize(num_cells_*6, dispall.size());
-        makeDuneMatrixCompressed(strainmat, strainmat_);
-        }
+    }
+    dirichlet_ = {int(fixed_dof_ixs.size()), fixed_dof_ixs, fixed_dof_values};
+}
+
+template<class GridType>
+void VemDiscretisation<GridType>::setBodyForce(double gravity, const std::vector<double>& density)
+{
+    const int num_cells = grid_.leafGridView().size(0);
+    body_force_.assign(3 * num_cells, 0.0);
+    for (int i = 0; i < num_cells; ++i) {
+        body_force_[3 * i + 2] = density[i] * gravity;
     }
 }
 
-IMPL_FUNC(void, solve())
+template<class GridType>
+void VemDiscretisation<GridType>::buildGeometry()
 {
-  try {
-    Dune::InverseOperatorResult r;
-    ++num_solves_;
-    Vector& rhs = this->getLoadVector();
-    // when diagonal scaling is active the assembled operator is S A S; we solve
-    // (S A S) y = S b and recover x = S y.  sol_ always holds the unscaled solution.
-    Vector rhs_eff = rhs;
+    coords_.clear();
+    num_cell_faces_.clear();
+    num_face_corners_.clear();
+    face_corners_.clear();
+    corner_mask_.clear();
+    vem::getGridVectors(grid_, coords_, num_cell_faces_, num_face_corners_, face_corners_,
+                        &corner_mask_);
+    num_cells_ = grid_.leafGridView().size(0);
+}
+
+template<class GridType>
+void VemDiscretisation<GridType>::assembleMatrix()
+{
+    OPM_TIMEBLOCK(assembleVEMSystem);
+    if (coords_.empty()) {
+        buildGeometry();
+    }
+    const int num_fixed_dofs = std::get<0>(dirichlet_);
+    const auto& fixed_dof_ixs = std::get<1>(dirichlet_);
+    const auto& fixed_dof_values = std::get<2>(dirichlet_);
+    std::vector<std::tuple<int, int, double>> A_entries;
+    rhs_force_.clear();
+    vem::assemble_mech_system_3D_dune(grid_, &coords_[0], num_cells_, &num_cell_faces_[0],
+                                      &num_face_corners_[0], &face_corners_[0], &ymodule_[0],
+                                      &pratio_[0], &body_force_[0], num_fixed_dofs,
+                                      &fixed_dof_ixs[0], &fixed_dof_values[0],
+                                      /*num_neumann_faces*/ 0, nullptr, nullptr, A_entries,
+                                      rhs_force_, stability_choice_, reduce_boundary_,
+                                      corner_mask_.data());
+    int nrows = 0;
+    int ncols = 0;
+    for (const auto& [i, j, v] : A_entries) {
+        nrows = std::max(nrows, i);
+        ncols = std::max(ncols, j);
+    }
+    matrix_ = Matrix();
+    matrix_.setBuildMode(Matrix::random);
+    matrix_.setSize(nrows + 1, ncols + 1);
+    makeDuneMatrixCompressed(A_entries, matrix_);
+    scale_.resize(0);
     if (diagonal_scaling_) {
-        for (std::size_t i = 0; i < rhs_eff.size(); ++i)
-            rhs_eff[i] *= scale_[i][0];
+        applyDiagonalScaling();
     }
-    if(sol_.size() != rhs.size() || !warm_start_){
-        sol_.resize(rhs.size());
-        sol_ = 0;
-        Vector y = sol_;
-        tsolver_->apply(y, rhs_eff, r);
-        sol_ = y;
-        if (diagonal_scaling_)
-            for (std::size_t i = 0; i < sol_.size(); ++i)
-                sol_[i] = scale_[i][0]*y[i][0];
-    }else{
-        const auto& mat= this->getOperator();
-        // warm start from the previous (unscaled) solution
-        Vector y = sol_;
-        if (diagonal_scaling_)
-            for (std::size_t i = 0; i < y.size(); ++i)
-                y[i] = sol_[i][0]/scale_[i][0];
-        auto rhs_tmp = rhs_eff;
-        mat.mmv(y,rhs_tmp);
-        auto dy = y;
-        dy=0;
-        if (tol_relative_to_load_) {
-            // ||b - A(y+dy)|| <= tol ||b||: the correction only needs the reduction
-            // that gets the full residual there, and none at all if it is already.
-            // Copy rows hold an identity and a partial load, so only owner rows count.
-            double b2 = rhs_eff.two_norm2();
-            double r2 = rhs_tmp.two_norm2();
-#if HAVE_MPI
-            if (grid_.comm().size() > 1) {
-                comm_->dot(rhs_eff, rhs_eff, b2);
-                comm_->dot(rhs_tmp, rhs_tmp, r2);
-            }
-#endif
-            const double target = linear_tol_ * std::sqrt(b2);
-            const double have = std::sqrt(r2);
-            if (have <= target) {
-                r.iterations = 0;
-                r.converged = true;
-                r.reduction = 1.0;
-            } else {
-                tsolver_->apply(dy, rhs_tmp, std::min(0.5, target / have), r);
-            }
-        } else {
-            tsolver_->apply(dy, rhs_tmp, r);
-        }
-        y += dy;
-        sol_ = y;
-        if (diagonal_scaling_)
-            for (std::size_t i = 0; i < sol_.size(); ++i)
-                sol_[i] = scale_[i][0]*y[i][0];
-    }
-    last_linear_iterations_ = r.iterations;
-    total_linear_iterations_ += r.iterations;
-    last_linear_solve_converged_ = r.converged;
-        // MAYBe do other initialization or shift solution.
-
-  } catch (Dune::ISTLError& e) {
-    last_linear_solve_converged_ = false;
-    OpmLog::warning(fmt::format("exception thrown {}", e.what()));
-  }
 }
 
-}} // namespace Opm, Elasticity
+template<class GridType>
+void VemDiscretisation<GridType>::buildOperators()
+{
+    if (coords_.empty()) {
+        buildGeometry();
+    }
+    const auto& fixed_dof_ixs = std::get<1>(dirichlet_);
+    const int num_dofs = grid_.leafGridView().size(3) * 3;
+    {
+        OPM_TIMEBLOCK(setUpExtraStructuresForVEM);
+        std::vector<int> dof_idx(num_dofs);
+        std::iota(dof_idx.begin(), dof_idx.end(), 0);
+        idx_free_.clear();
+        std::set_difference(dof_idx.begin(), dof_idx.end(), fixed_dof_ixs.begin(),
+                            fixed_dof_ixs.end(), std::back_inserter(idx_free_));
+        std::vector<double> rhs_tmp(num_cells_, 0);
+        std::vector<double> pressure_tmp(num_cells_, 0);
+        std::vector<std::tuple<int, int, double>> divmat;
+        if (vem_source_) {
+            vem::potential_gradient_force_3D(&coords_[0], num_cells_, &num_cell_faces_[0],
+                                             &num_face_corners_[0], &face_corners_[0],
+                                             &pressure_tmp[0], rhs_tmp, divmat, true,
+                                             corner_mask_.data());
+        } else {
+            vem::potential_gradient_force_3D_dune(grid_, &coords_[0], num_cells_,
+                                                  &num_cell_faces_[0], &num_face_corners_[0],
+                                                  &face_corners_[0], &pressure_tmp[0], rhs_tmp,
+                                                  divmat, true, corner_mask_.data());
+        }
+        std::vector<int> global_to_dof(num_dofs, -1);
+        for (std::size_t i = 0; i < idx_free_.size(); ++i) {
+            global_to_dof[idx_free_[i]] = reduce_boundary_ ? int(i) : idx_free_[i];
+        }
+        // fixed dofs get no load
+        std::vector<std::tuple<int, int, double>> divmatdof;
+        for (const auto& [row, col, val] : divmat) {
+            const int I = global_to_dof[row];
+            if (I > -1) {
+                divmatdof.emplace_back(I, col, val);
+            }
+        }
+        divmat_ = Matrix();
+        divmat_.setBuildMode(Matrix::random);
+        divmat_.setSize(reduce_boundary_ ? int(idx_free_.size()) : num_dofs, num_cells_);
+        makeDuneMatrixCompressed(divmatdof, divmat_);
+    }
+    std::vector<double> dispall(num_dofs);
+    std::vector<std::array<double, 6>> stresstmp(num_cells_);
+    for (const bool is_stress : {true, false}) {
+        OPM_TIMEBLOCK(setUpStressStrainMatrix);
+        std::vector<std::tuple<int, int, double>> entries;
+        vem::compute_stress_3D(&coords_[0], num_cells_, &num_cell_faces_[0],
+                               &num_face_corners_[0], &face_corners_[0], &ymodule_[0],
+                               &pratio_[0], dispall, stresstmp, entries, true, is_stress,
+                               stability_choice_, stab_on_stress_, corner_mask_.data());
+        Matrix& mat = is_stress ? stressmat_ : strainmat_;
+        mat = Matrix();
+        mat.setBuildMode(Matrix::random);
+        mat.setSize(num_cells_ * 6, dispall.size());
+        makeDuneMatrixCompressed(entries, mat);
+    }
+}
+
+template<class GridType>
+void VemDiscretisation<GridType>::rhs(const Vector& load, Vector& b) const
+{
+    OPM_TIMEBLOCK(updateRhsWithGrad);
+    b.resize(rhs_force_.size());
+    divmat_.mv(load, b);
+    for (std::size_t i = 0; i < rhs_force_.size(); ++i) {
+        b[i] += rhs_force_[i];
+    }
+}
+
+template<class GridType>
+void VemDiscretisation<GridType>::expandSolution(Vector& result, const Vector& u) const
+{
+    std::fill(result.begin(), result.end(), std::nan("1"));
+    const auto& fixed_dof_ixs = std::get<1>(dirichlet_);
+    const auto& fixed_dof_values = std::get<2>(dirichlet_);
+    for (std::size_t i = 0; i < fixed_dof_ixs.size(); ++i) {
+        result[fixed_dof_ixs[i]] = fixed_dof_values[i];
+    }
+    for (std::size_t i = 0, cur = 0; i < result.size(); ++i) {
+        if (std::isnan(result[i][0])) {
+            result[i] = u[cur++];
+        }
+    }
+}
+
+template<class GridType>
+void VemDiscretisation<GridType>::stress(const Vector& dispall, VoigtField& out) const
+{
+    OPM_TIMEBLOCK(calculateStressPrecomputed);
+    if (vem_stress_) {
+        Vector s(6 * num_cells_);
+        stressmat_.mv(dispall, s);
+        out.resize(num_cells_);
+        detail::vemToVoigt(out, s);
+    } else {
+        out = vem::computeStressFem(grid_, dispall, ymodule_, pratio_);
+    }
+}
+
+template<class GridType>
+void VemDiscretisation<GridType>::strain(const Vector& dispall, VoigtField& out) const
+{
+    OPM_TIMEBLOCK(calculateStrainPrecomputed);
+    Vector s(6 * num_cells_);
+    strainmat_.mv(dispall, s);
+    out.resize(num_cells_);
+    detail::vemToVoigt(out, s);
+}
+
+// A -> S A S with S = diag(1/sqrt(A_ii)): equilibrates the diagonal of high-aspect
+// cells; the solver recovers x = S y.
+template<class GridType>
+void VemDiscretisation<GridType>::applyDiagonalScaling()
+{
+    auto& mat = matrix_;
+    scale_.resize(mat.N());
+    for (auto row = mat.begin(), rowEnd = mat.end(); row != rowEnd; ++row) {
+        const auto i = row.index();
+        double d = 0.0;
+        for (auto col = row->begin(), colEnd = row->end(); col != colEnd; ++col) {
+            if (col.index() == i) {
+                d = (*col)[0][0];
+            }
+        }
+        scale_[i] = (d > 0.0) ? 1.0 / std::sqrt(d) : 1.0;
+    }
+    for (auto row = mat.begin(), rowEnd = mat.end(); row != rowEnd; ++row) {
+        const auto i = row.index();
+        for (auto col = row->begin(), colEnd = row->end(); col != colEnd; ++col) {
+            (*col) *= scale_[i][0] * scale_[col.index()][0];
+        }
+    }
+}
+
+template<class GridType>
+void VemDiscretisation<GridType>::makeDuneMatrixCompressed(
+    const std::vector<std::tuple<int, int, double>>& entries, Matrix& mat)
+{
+    OPM_TIMEBLOCK(makeDuneMatrixCompressed);
+    {
+        OPM_TIMEBLOCK(buildMatrixPattern);
+        std::vector<std::pair<int, int>> pattern;
+        pattern.reserve(entries.size());
+        for (const auto& e : entries) {
+            pattern.emplace_back(std::get<0>(e), std::get<1>(e));
+        }
+        std::sort(pattern.begin(), pattern.end());
+        pattern.erase(std::unique(pattern.begin(), pattern.end()), pattern.end());
+        std::vector<int> row_size(mat.N(), 0);
+        for (const auto& [i, j] : pattern) {
+            ++row_size[i];
+        }
+        for (std::size_t i = 0; i < mat.N(); ++i) {
+            mat.setrowsize(i, row_size[i]);
+        }
+        mat.endrowsizes();
+        for (const auto& [i, j] : pattern) {
+            mat.addindex(i, j);
+        }
+        mat.endindices();
+    }
+    OPM_TIMEBLOCK(setMatrixValues);
+    mat = 0;
+    for (const auto& [i, j, val] : entries) {
+        mat[i][j] += val;
+    }
+}
+
+template<class GridType>
+void MechLinearSolver<GridType>::setCopyRowsToZero(Matrix& A)
+{
+    assert(A.N() == A.M());
+    assert(A.N() == dofParallelIndexSet_->size());
+    for (const auto& index : *dofParallelIndexSet_) {
+        const auto lind = index.local().local();
+        if (index.local().attribute() == Dune::OwnerOverlapCopyAttributeSet::copy) {
+            A[lind] = 0.0;
+            A[lind][lind] = 1.0;
+        }
+    }
+}
+
+template<class GridType>
+void MechLinearSolver<GridType>::setup(const PropertyTree& prm, Matrix& A,
+                                       const std::vector<double>& coords)
+{
+    OPM_TIMEBLOCK(setupLinearSolver);
+    tsolver_.reset();
+    A_ = &A;
+    addMechLinePlanePreconditioner(coords);
+    // Opt-in: stop the warm-started solve when the residual of the full
+    // load is below tol, not when the correction's own residual is.
+    tol_relative_to_load_ = prm.get<bool>("tol_relative_to_load", false);
+    warm_start_ = prm.get<bool>("warm_start", true);
+    linear_tol_ = prm.get<double>("tol", 1e-5);
+#if HAVE_MPI
+    comm_.reset(new MechCommunication(grid_.comm(), Dune::SolverCategory::overlapping, /*free*/ false));
+#endif
+    const std::function<Vector()> weightsCalculator;
+    const std::size_t pressureIndex = 0;
+    if (comm_->communicator().size() > 1) {
+        vertexParallelIndexSet_.reset(new MechCommunication::ParallelIndexSet(
+            Opm::makeEntityEntityCommunication<3>(grid_)));
+        assert(grid_.size(3) == vertexParallelIndexSet_->size());
+        dofParallelIndexSet_.reset(new MechCommunication::ParallelIndexSet(
+            Opm::entityToDofIndexSet(*vertexParallelIndexSet_, 3)));
+        comm_->indexSet() = *dofParallelIndexSet_;
+        assert(grid_.size(3) * 3 == dofParallelIndexSet_->size());
+        comm_->remoteIndices().rebuild<false>();
+        Opm::Elasticity::validateMechanicalPartition(grid_, *comm_);
+        setCopyRowsToZero(A);
+        comm_->communicator().barrier();
+        auto pop = std::make_unique<ParOperatorType>(A, *comm_);
+        using FlexibleSolverType = Dune::FlexibleSolver<ParOperatorType>;
+        tsolver_ = std::make_unique<FlexibleSolverType>(*pop, *comm_, prm, weightsCalculator,
+                                                        pressureIndex);
+        pop_ = std::move(pop);
+    } else {
+        auto sop = std::make_unique<SeqOperatorType>(A);
+        using FlexibleSolverType = Dune::FlexibleSolver<SeqOperatorType>;
+        tsolver_ = std::make_unique<FlexibleSolverType>(*sop, prm, weightsCalculator,
+                                                        pressureIndex);
+        sop_ = std::move(sop);
+    }
+}
+
+template<class GridType>
+MechSolveResult MechLinearSolver<GridType>::solve(const Vector& rhs, const Vector& scale, Vector& x)
+{
+    const bool scaled = scale.size() > 0;
+    MechSolveResult result;
+    try {
+        Dune::InverseOperatorResult r;
+        // with diagonal scaling the operator is S A S: solve (S A S) y = S b, x = S y
+        Vector rhs_eff = rhs;
+        if (scaled) {
+            for (std::size_t i = 0; i < rhs_eff.size(); ++i)
+                rhs_eff[i] *= scale[i][0];
+        }
+        if (x.size() != rhs.size() || !warm_start_) {
+            x.resize(rhs.size());
+            x = 0;
+            Vector y = x;
+            tsolver_->apply(y, rhs_eff, r);
+            x = y;
+            if (scaled)
+                for (std::size_t i = 0; i < x.size(); ++i)
+                    x[i] = scale[i][0] * y[i][0];
+        } else {
+            Vector y = x;
+            if (scaled)
+                for (std::size_t i = 0; i < y.size(); ++i)
+                    y[i] = x[i][0] / scale[i][0];
+            auto rhs_tmp = rhs_eff;
+            A_->mmv(y, rhs_tmp);
+            auto dy = y;
+            dy = 0;
+            if (tol_relative_to_load_) {
+                // ||b - A(y+dy)|| <= tol ||b||: the correction only needs the reduction
+                // that gets the full residual there, and none at all if it is already.
+                // Copy rows hold an identity and a partial load, so only owner rows count.
+                double b2 = rhs_eff.two_norm2();
+                double r2 = rhs_tmp.two_norm2();
+#if HAVE_MPI
+                if (grid_.comm().size() > 1) {
+                    comm_->dot(rhs_eff, rhs_eff, b2);
+                    comm_->dot(rhs_tmp, rhs_tmp, r2);
+                }
+#endif
+                const double target = linear_tol_ * std::sqrt(b2);
+                const double have = std::sqrt(r2);
+                if (have <= target) {
+                    r.iterations = 0;
+                    r.converged = true;
+                    r.reduction = 1.0;
+                } else {
+                    tsolver_->apply(dy, rhs_tmp, std::min(0.5, target / have), r);
+                }
+            } else {
+                tsolver_->apply(dy, rhs_tmp, r);
+            }
+            y += dy;
+            x = y;
+            if (scaled)
+                for (std::size_t i = 0; i < x.size(); ++i)
+                    x[i] = scale[i][0] * y[i][0];
+        }
+        result.iterations = r.iterations;
+        result.converged = r.converged;
+        result.reduction = r.reduction;
+    } catch (Dune::ISTLError& e) {
+        result.converged = false;
+        result.failed = true;
+        OpmLog::warning(fmt::format("exception thrown {}", e.what()));
+    }
+    return result;
+}
+
+} // namespace Elasticity
+} // namespace Opm
 
 #endif

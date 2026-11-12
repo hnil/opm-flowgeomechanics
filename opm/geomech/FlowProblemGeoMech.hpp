@@ -790,8 +790,6 @@ namespace Opm{
                 this->initstress_[i] = geoMechModel_.stress(i);
             }
             this->writeMechGridVtk_(0.0);
-            // stress in output on first step maybe wrong i.e. 2*stress;
-            this->geoMechModel_.setFirstSolveTrue();// to do full rebuild next time step
         }
 
         void applyInitialOutputStress() override{

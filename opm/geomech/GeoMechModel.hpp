@@ -80,8 +80,6 @@ namespace Opm{
         }
     public:
         GeoMechModel(Simulator& simulator):
-            first_solve_(true),
-            write_system_(false),
             simulator_(simulator)
         {
 
@@ -308,8 +306,8 @@ namespace Opm{
         //! Fields on the mechanics grid's own cells and vertices (output of a separate grid).
         const MechGridContext* mechContext() const { return mechCtx_; }
         const MechFlowMap& mechFlowMap() const { return mechMap_; }
-        const Dune::BlockVector<Dune::FieldVector<double,6>>& mechCellLinStress() const { return linstress_; }
-        const Dune::BlockVector<Dune::FieldVector<double,6>>& mechCellStrain() const { return strain_; }
+        const Dune::BlockVector<Dune::FieldVector<double,6>>& mechCellLinStress() const { return mechState_.stress; }
+        const Dune::BlockVector<Dune::FieldVector<double,6>>& mechCellStrain() const { return mechState_.strain; }
         const Dune::BlockVector<Dune::FieldVector<double,3>>& mechVertexDisplacement() const { return displacement_; }
         const std::vector<double>& mechCellYModule() const { return ymoduleMech_; }
         const std::vector<double>& mechCellPRatio() const { return pratioMech_; }
@@ -323,7 +321,13 @@ namespace Opm{
         bool hasMech(std::size_t globalIdx) const {
             return mechMap_.mechCell(globalIdx) >= 0;
         }
-        void setupMechSolver(bool use_body_force = false){
+        //! Operators once; the matrix (and its preconditioner) again only when the
+        //! body force differs from the one it was assembled with.
+        void prepareMechSolve_(bool use_body_force){
+                const double gravity = use_body_force ? Opm::unit::gravity : 0.0;
+                if (assembledGravity_ && *assembledGravity_ == gravity) {
+                    return;
+                }
                 const auto& problem = simulator_.problem();
                 const auto& opts = this->mechOptions();
                 const std::string& face_quad = opts.face_quadrature;
@@ -335,32 +339,29 @@ namespace Opm{
                     OPM_THROW(std::invalid_argument, "vem_face_quadrature must be 'kite' or 'triangulated', got " + face_quad);
                 }
                 OpmLog::info("VEM face quadrature: " + face_quad);
-                elacticitysolver_->setOptions(opts.vem_stability_choice,
-                                             opts.vem_source,
-                                             opts.stab_on_stress,
-                                             opts.vem_stress,
-                                             opts.diagonal_scaling);
+                mechDisc_->setOptions(opts.vem_stability_choice,
+                                      opts.vem_source,
+                                      opts.stab_on_stress,
+                                      opts.vem_stress,
+                                      opts.diagonal_scaling,
+                                      opts.reduce_boundary);
                 OPM_TIMEBLOCK(SetupMechSolver);
-                // set boundary
-                double gravity = 0.0;
                 if(use_body_force){
-                    gravity = Opm::unit::gravity;
                     OpmLog::info("Using body force in geomechanics to 2000 kg/m^3 \n");
                 }
                 int nc = this->mechGrid().leafGridView().size(0);
                 std::vector<double> density(nc, 2000.0);
-                elacticitysolver_->setBodyForce(gravity, density);
-
-                elacticitysolver_->fixNodes(problem.bcNodes());
+                mechDisc_->setBodyForce(gravity, density);
+                mechDisc_->fixNodes(problem.bcNodes());
                 // a cell that fails to assemble throws on its owner only; the solver setup below is collective
                 OPM_BEGIN_PARALLEL_TRY_CATCH();
-                elacticitysolver_->initForAssembly();
-                elacticitysolver_->assemble(this->mechLoad(), opts.reduce_boundary);
+                mechDisc_->assembleMatrix();
+                if (!mechDisc_->hasOperators()) {
+                    mechDisc_->buildOperators();
+                }
                 OPM_END_PARALLEL_TRY_CATCH("Mechanics assembly failed: ", simulator_.vanguard().grid().comm());
                 FlowLinearSolverParametersGeoMech p;
                 p.init<TypeTag>();
-                // Print parameters to PRT/DBG logs.
-
                 PropertyTree prm = setupPropertyTree(p, true, true);
                 if (p.linear_solver_print_json_definition_) {
                     if(simulator_.gridView().comm().rank() == 0){
@@ -370,18 +371,18 @@ namespace Opm{
                         OpmLog::note(os.str());
                     }
                 }
-                elacticitysolver_->setupSolver(prm);
-                elacticitysolver_->comm()->communicator().barrier();
-                first_solve_ = false;
+                mechLinSolver_->setup(prm, mechDisc_->matrix(), mechDisc_->coords());
+                mechLinSolver_->comm()->communicator().barrier();
+                assembledGravity_ = gravity;
                 write_system_ = prm.get<int>("verbosity", 0) > 10;
         }
         void writeMechSystem(){
             OPM_TIMEBLOCK(WriteMechSystem);
                     const auto& problem = simulator_.problem();
                     Opm::Helper::writeMechSystem(simulator_,
-                    elacticitysolver_->getOperator(),
-                    elacticitysolver_->getLoadVector(),
-                    elacticitysolver_->comm());
+                    mechDisc_->matrix(),
+                    mechRhs_,
+                    mechLinSolver_->comm());
                     {
                         int num_points = this->mechGrid().size(3);
                         Dune::BlockVector<Dune::FieldVector<double,1>> fixed(3*num_points);
@@ -398,7 +399,7 @@ namespace Opm{
                         Opm::Helper::writeVector(simulator_,
                                                 fixed,
                                                 "fixed_values_",
-                                                elacticitysolver_->comm());
+                                                mechLinSolver_->comm());
                         // node coordinates in dof order, for offline solver studies
                         Dune::BlockVector<Dune::FieldVector<double,1>> xyz(3*num_points);
                         const auto& gv = this->mechGrid().leafGridView();
@@ -409,7 +410,7 @@ namespace Opm{
                                 xyz[3*idx+i][0] = c[i];
                             }
                         }
-                        Opm::Helper::writeVector(simulator_, xyz, "coords_", elacticitysolver_->comm());
+                        Opm::Helper::writeVector(simulator_, xyz, "coords_", mechLinSolver_->comm());
                     }
         }
       void setOutputPutStress(const Dune::BlockVector<Dune::FieldVector<double,6> >& initstress){
@@ -423,34 +424,25 @@ namespace Opm{
             const auto& gv = grid.leafGridView();
             static constexpr int dim = Grid::dimension;
             field.resize(grid.size(dim)*dim);
-            if(this->mechOptions().reduce_boundary){
-              elacticitysolver_->expandSolution(field,elacticitysolver_->getSolutionVector());
+            if(mechDisc_->reduceBoundary()){
+              mechDisc_->expandSolution(field, mechState_.displacement);
             }else{
-              assert(field.size() == elacticitysolver_->getSolutionVector().size());
-              field =  elacticitysolver_->getSolutionVector();
+              assert(field.size() == mechState_.displacement.size());
+              field = mechState_.displacement;
             }
 
             this->makeDisplacement(field);
             // update variables used for output to resinsight
             {
             OPM_TIMEBLOCK(calculateStress);
-            elacticitysolver_->calculateStressPrecomputed(field);
-            elacticitysolver_->calculateStrainPrecomputed(field);
-            }
-            const auto& linstress = elacticitysolver_->stress();
-            const auto& linstrain = elacticitysolver_->strain();
-
-            for (const auto& cell: elements(gv)){
-                auto cellindex = gv.indexSet().index(cell);
-                // add initial stress
-                strain_[cellindex] = linstrain[cellindex];
-                linstress_[cellindex] = linstress[cellindex];
+            mechDisc_->stress(field, mechState_.stress);
+            mechDisc_->strain(field, mechState_.strain);
             }
             // Optional patch recovery of the cell-wise stress: reduces grid-dependent
             // jumps at under-resolved fronts, and so the tractions the fracture samples.
             if(this->mechOptions().patch_recovery_stress){
                 OPM_TIMEBLOCK(patchRecoveryStress);
-                linstress_ = vem::patchRecoveryCells6(grid, linstress_);
+                mechState_.stress = vem::patchRecoveryCells6(grid, mechState_.stress);
             }
             /// NB need to be updated after linstress to be correct
             // output stress is saved here in case init stress is changed before
@@ -465,46 +457,40 @@ namespace Opm{
             if(verbose){
                 OPM_TIMEBLOCK(WriteMatrixMarket);
                 // debug output to matrixmaket format
-                Dune::storeMatrixMarket(elacticitysolver_->getOperator(), "A.mtx");
-                Dune::storeMatrixMarket(elacticitysolver_->getLoadVector(), "b.mtx");
-                Dune::storeMatrixMarket(elacticitysolver_->getSolutionVector(), "u.mtx");
+                Dune::storeMatrixMarket(mechDisc_->matrix(), "A.mtx");
+                Dune::storeMatrixMarket(mechRhs_, "b.mtx");
+                Dune::storeMatrixMarket(mechState_.displacement, "u.mtx");
                 Dune::storeMatrixMarket(field, "field.mtx");
                 Dune::storeMatrixMarket(mechPotentialForce_, "pressforce.mtx");
             }
         }
 
 
-        void setupAndUpdateGemechanics(bool use_body_force = false, bool relative_solve = true){
-            OPM_TIMEBLOCK(endTimeStepMech);
-            this->updatePotentialForces(relative_solve);
-            // for now assemble and set up solver her
-            if(first_solve_){
-                this->setupMechSolver(use_body_force);
-            }
+        Opm::Elasticity::MechSolveResult solveGeomechanics(bool use_body_force = false, bool relative_solve = true){
             {
-                // reset the rhs even in the first iteration maybe bug in rhs for reduce_boundary=false;
+                OPM_TIMEBLOCK(endTimeStepMech);
+                this->updatePotentialForces(relative_solve);
+                this->prepareMechSolve_(use_body_force);
                 OPM_TIMEBLOCK(AssembleRhs);
-                // need "static boundary conditions is changing"
-                // need precomputed divgrad operator
-                elacticitysolver_->updateRhsWithGrad(this->mechLoad());
+                mechDisc_->rhs(this->mechLoad(), mechRhs_);
             }
-        }
-        void solveGeomechanics(bool use_body_force = false, bool relative_solve = true){
-            setupAndUpdateGemechanics(use_body_force , relative_solve);
+            Opm::Elasticity::MechSolveResult result;
             {
                 OPM_TIMEBLOCK(SolveMechanicalSystem);
                 Dune::Timer solve_timer;
-                elacticitysolver_->solve();
+                result = mechLinSolver_->solve(mechRhs_, mechDisc_->scale(), mechState_.displacement);
+                ++num_mech_solves_;
+                total_mech_linear_iterations_ += result.iterations;
                 last_mechanical_solve_time_seconds_ = solve_timer.stop();
                 total_mechanical_solve_time_seconds_ += last_mechanical_solve_time_seconds_;
                 if(simulator_.gridView().comm().rank() == 0){
                     std::ostringstream os;
-                    os << "Mechanical solve stats: solves=" << elacticitysolver_->numSolves()
-                       << ", linear_iterations=" << elacticitysolver_->lastLinearIterations()
-                       << " (total " << elacticitysolver_->totalLinearIterations() << ")"
+                    os << "Mechanical solve stats: solves=" << num_mech_solves_
+                       << ", linear_iterations=" << result.iterations
+                       << " (total " << total_mech_linear_iterations_ << ")"
                        << ", solve_time_s=" << last_mechanical_solve_time_seconds_
                        << " (total " << total_mechanical_solve_time_seconds_ << ")"
-                       << ", converged=" << (elacticitysolver_->lastLinearSolveConverged() ? "true" : "false");
+                       << ", converged=" << (result.converged ? "true" : "false");
                     OpmLog::info(os.str());
                 }
                 if(write_system_){
@@ -512,9 +498,10 @@ namespace Opm{
                 }
             }
             this->calculateOutputQuantitiesMech();
+            return result;
         }
-        //! The operator and its preconditioner are not saved: a load keeps first_solve_
-        //! true, so the next solve assembles them and sets up this run's linear solver.
+        //! The operators and the preconditioner are not saved: the first solve after a
+        //! load assembles them and sets up this run's linear solver.
         template<class Serializer>
         void serializeOp(Serializer& serializer)
         {
@@ -528,12 +515,10 @@ namespace Opm{
             ckpt::fieldVectors(serializer, celldisplacement_);
             ckpt::fieldVectors(serializer, displacement_);
             ckpt::fieldVectors(serializer, flowDisplacement_);
-            ckpt::fieldVectors(serializer, linstress_);
+            ckpt::fieldVectors(serializer, mechState_.stress);
             ckpt::fieldVectors(serializer, outputstress_);
-            ckpt::fieldVectors(serializer, strain_);
-            if (elacticitysolver_) {
-                ckpt::fieldVectors(serializer, elacticitysolver_->warmStartVector());
-            }
+            ckpt::fieldVectors(serializer, mechState_.strain);
+            ckpt::fieldVectors(serializer, mechState_.displacement);
             serializer(fracHost_);
         }
 
@@ -556,20 +541,20 @@ namespace Opm{
 #if HAVE_MPI
             Opm::Elasticity::validateMechanicalPartition(this->mechGrid());
 #endif
-            elacticitysolver_
-                = std::make_unique<Opm::Elasticity::VemElasticitySolver<Grid>>(this->mechGrid());
+            mechDisc_ = std::make_unique<Opm::Elasticity::VemDiscretisation<Grid>>(this->mechGrid());
+            mechLinSolver_ = std::make_unique<Opm::Elasticity::MechLinearSolver<Grid>>(this->mechGrid());
 
             // Displacement, stress and strain live on the mechanics grid; the
             // loads above stay on the flow grid and are restricted to it.
             const size_t numMech = mechMap_.numMechCells();
             celldisplacement_.resize(numMech);
             std::fill(celldisplacement_.begin(),celldisplacement_.end(),0.0);
-            linstress_.resize(numMech);
-            std::fill(linstress_.begin(),linstress_.end(),0.0);
+            mechState_.stress.resize(numMech);
+            std::fill(mechState_.stress.begin(),mechState_.stress.end(),0.0);
             outputstress_.resize(numDof);
             std::fill(outputstress_.begin(),outputstress_.end(),0.0);
-            strain_.resize(numMech);
-            std::fill(strain_.begin(),strain_.end(),0.0);
+            mechState_.strain.resize(numMech);
+            std::fill(mechState_.strain.begin(),mechState_.strain.end(),0.0);
             const auto& gv = this->mechGrid().leafGridView();
             displacement_.resize(gv.indexSet().size(3));
             if (!mechMap_.isIdentity()) {
@@ -583,7 +568,7 @@ namespace Opm{
                          const std::vector<double>* ymoduleCartesian = nullptr,
                          const std::vector<double>* pratioCartesian = nullptr){
             if(mechMap_.isIdentity()){
-                elacticitysolver_->setMaterial(ymodule,pratio);
+                mechDisc_->setMaterial(ymodule,pratio);
                 return;
             }
             std::vector<double> ymodule_mech, pratio_mech;
@@ -612,7 +597,7 @@ namespace Opm{
             mechCtx_->communicate(pratio_mech);
             ymoduleMech_ = ymodule_mech;
             pratioMech_ = pratio_mech;
-            elacticitysolver_->setMaterial(ymodule_mech,pratio_mech);
+            mechDisc_->setMaterial(ymodule_mech,pratio_mech);
         }
         /// Displacement of a flow grid vertex.
         const Dune::FieldVector<double,3>& displacement(size_t vertexIndex) const{
@@ -673,7 +658,7 @@ namespace Opm{
 	  if (!this->hasMech(globalIdx)) {
 	    return SymTensor(0.0);
 	  }
-	  return linstress_[this->mechIdx(globalIdx)];
+	  return mechState_.stress[this->mechIdx(globalIdx)];
         }
 
         const SymTensor outputstress(size_t globalIdx) const{
@@ -685,14 +670,14 @@ namespace Opm{
 	         if (!this->hasMech(globalIdx)) {
 	           return SymTensor(0.0);
 	         }
-	         return -1.0*linstress_[this->mechIdx(globalIdx)];
+	         return -1.0*mechState_.stress[this->mechIdx(globalIdx)];
         }
 
         const SymTensor strain(size_t globalIdx, bool = false) const{
             if (!this->hasMech(globalIdx)) {
                 return SymTensor(0.0);
             }
-            return strain_[this->mechIdx(globalIdx)];
+            return mechState_.strain[this->mechIdx(globalIdx)];
         }
 
         const SymTensor stress(size_t globalIdx) const{
@@ -902,8 +887,8 @@ namespace Opm{
             };
 
             report_time("  Mechanical solve time:", total_mechanical_solve_time_seconds_);
-            report_count("Overall Mechanical Solves:", elacticitysolver_->numSolves());
-            report_count("Overall Mech Lin Iters:", elacticitysolver_->totalLinearIterations());
+            report_count("Overall Mechanical Solves:", num_mech_solves_);
+            report_count("Overall Mech Lin Iters:", total_mech_linear_iterations_);
 
             if (simulator_.problem().hasFractures()) {
                 const auto total_stats = fracHost_.fractureModelPtr() ? fracHost_.fractureModelPtr()->totalSolveStats() : FractureSolveStats{};
@@ -924,12 +909,10 @@ namespace Opm{
             return *mechOptions_;
         }
 
-        void setFirstSolveTrue(){
-            elacticitysolver_->resetOperator();
-            first_solve_ = true;
-        }
     private:
-        bool first_solve_{true};
+        std::optional<double> assembledGravity_; // body force of the assembled matrix
+        int num_mech_solves_{0};
+        int total_mech_linear_iterations_{0};
         bool write_system_{false};
         std::optional<MechOptions> mechOptions_;
         double last_mechanical_solve_time_seconds_{0.0};
@@ -957,10 +940,11 @@ namespace Opm{
         };
         std::vector<FlowVertexSource> flowVertexSource_;
         Dune::BlockVector<Dune::FieldVector<double,3> > flowDisplacement_;
-        Dune::BlockVector<Dune::FieldVector<double,6> > linstress_;//NB is also stored in esolver
         Dune::BlockVector<Dune::FieldVector<double,6> > outputstress_;// used in to avoid trouble with initialstress_
-        Dune::BlockVector<Dune::FieldVector<double,6> > strain_;
-        std::unique_ptr<Opm::Elasticity::VemElasticitySolver<Grid>> elacticitysolver_;
+        Opm::Elasticity::MechState mechState_; // stress is the linear (mechanics-cell) stress
+        Opm::Elasticity::Vector mechRhs_;
+        std::unique_ptr<Opm::Elasticity::VemDiscretisation<Grid>> mechDisc_;
+        std::unique_ptr<Opm::Elasticity::MechLinearSolver<Grid>> mechLinSolver_;
         const MechGridContext* mechCtx_{nullptr};
         FractureMechHost<TypeTag> fracHost_{simulator_};
     };
