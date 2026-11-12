@@ -31,7 +31,7 @@ namespace Opm {
 struct MechOptions
 {
     bool reduce_boundary = false;
-    int vem_stability_choice = 3;
+    int vem_stability_choice = 1;
     bool vem_source = true;
     bool vem_stress = true;
     bool stab_on_stress = false;

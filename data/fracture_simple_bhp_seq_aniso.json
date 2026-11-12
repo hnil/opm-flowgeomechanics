@@ -15,7 +15,7 @@
         "__doc": "Fracture model parameters. Outer SeqMechFrac coupling knobs live here and under .solver",
         "verbosity": 0,
         "reduce_boundary": "false",
-        "vem_stability_choice": "9",
+        "vem_stability_choice": "15",
         "vem_source": "true",
         "vem_stress": "true",
         "vem_force": "true",

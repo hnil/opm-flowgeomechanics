@@ -15,7 +15,7 @@
             "tolerance": "0.0001"
         },
         "reduce_boundary": "false",
-        "vem_stability_choice": "3",
+        "vem_stability_choice": "1",
         "smooth_force": "false",
         "addconnections": "true",
         "include_fracture_contributions": "false",

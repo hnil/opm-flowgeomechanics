@@ -81,7 +81,7 @@ compiled into the binary in `opm/geomech/BuiltinFractureParams.cpp`:
 | alias | method | equivalent file here |
 |---|---|---|
 | `sequential_implicit` | SeqMechFrac (implicit_flow) | ≈ `seq_implicit_bhp.json` |
-| `standard` | PostSolve | ≈ `postsolve.json` (the alias uses `vem_stability_choice=3`) |
+| `standard` | PostSolve | ≈ `postsolve.json` (both use `vem_stability_choice=1`) |
 
 So for the two main schemes you can skip the file entirely and pass the alias. The files in
 this directory are the place to start when you need to change control (rate), turn on a

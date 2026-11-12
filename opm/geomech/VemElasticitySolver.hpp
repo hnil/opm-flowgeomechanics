@@ -143,7 +143,7 @@ private:
     Matrix strainmat_;
     Vector scale_;
 
-    vem::StabilityChoice stability_choice_ = vem::D_RECIPE;
+    vem::StabilityChoice stability_choice_ = vem::SIMPLE;
     bool vem_source_ = true;
     bool stab_on_stress_ = false;
     bool vem_stress_ = true;

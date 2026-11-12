@@ -47,7 +47,7 @@ const char* standardFractureParamJson()
             "tolerance": "0.0001"
         },
         "reduce_boundary": "false",
-        "vem_stability_choice": "3",
+        "vem_stability_choice": "1",
         "mech_diagonal_scaling": "false",
         "patch_recovery_stress": "false",
         "smooth_force": "false",

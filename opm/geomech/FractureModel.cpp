@@ -73,7 +73,7 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.method.tolerance", 1e-4);
 
     fracture_param.put("fractureparam.reduce_boundary", false);
-    fracture_param.put("fractureparam.vem_stability_choice", 3);
+    fracture_param.put("fractureparam.vem_stability_choice", 1);
     fracture_param.put("fractureparam.smooth_force", false);
     fracture_param.put("fractureparam.addconnections", true);
     // very experimental to calculate stress contributions from fracture to cell values
