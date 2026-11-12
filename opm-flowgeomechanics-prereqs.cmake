@@ -27,7 +27,6 @@ find_package(CGAL REQUIRED)
 find_package(GMP REQUIRED)
 find_package(SuiteSparse COMPONENTS UMFPACK)
 find_package(opm-grid REQUIRED)
-find_package(opm-upscaling REQUIRED)
 find_package(opm-simulators REQUIRED)
 
 find_package(MPI)

@@ -10,4 +10,4 @@ Label: 2026.04-pre
 Maintainer: HalvorMoll.Nilsen@sintef.no
 MaintainerName: Halvor M. Nilsen
 Url: http://opm-project.org
-Depends: dune-istl (>= 2.9) opm-common opm-grid opm-simulators opm-upscaling
+Depends: dune-istl (>= 2.9) opm-common opm-grid opm-simulators

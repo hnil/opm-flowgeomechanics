@@ -5,14 +5,13 @@ fracture growth from injection wells. This note gets you from nothing to a run y
 at: build the right branches, run the small SIMPLE model, check and plot the result.
 For macOS see [GETTING_STARTED_MACOS.md](GETTING_STARTED_MACOS.md).
 
-Current collaboration line: branch **`geomech`** in all five repositories on
+Current collaboration line: branch **`geomech`** in all four repositories on
 `github.com/hnil`. Use these branches explicitly; the fork defaults may still point
 to another branch. The older `lgr-status-geomech` branches contain experimental
 grid work and are not the starting point for new development.
 
-This five-branch matrix matches the current CI dependency action. An earlier
-announcement specified `OPM/opm-upscaling:master`; that is a different revision,
-not an alias for `hnil/opm-upscaling:geomech`.
+This branch matrix matches the current CI dependency action; opm-upscaling is no
+longer a dependency.
 
 As checked on 23 October 2026, `OPM/opm-flowgeomechanics` has no published
 `geomech` branch. Until the maintainers create it, use
@@ -64,13 +63,13 @@ A few minutes. Put `export DUNE=$HOME/opm-geomech/dune-2.11` in your `~/.bashrc`
 
 ```bash
 cd ~/opm-geomech
-for m in opm-common opm-grid opm-simulators opm-upscaling opm-flowgeomechanics; do
+for m in opm-common opm-grid opm-simulators opm-flowgeomechanics; do
   git clone --single-branch -b geomech https://github.com/hnil/$m.git
 done
 cp opm-flowgeomechanics/superbuild/CMakeLists.txt .
 ```
 
-The copied `CMakeLists.txt` builds all five as one project, so nothing has to be installed.
+The copied `CMakeLists.txt` builds all four as one project, so nothing has to be installed.
 
 ### Configure and build
 

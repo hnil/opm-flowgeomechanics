@@ -6,7 +6,7 @@ inputs:
     required: false
     default: 'hnil'
   opm-branch:
-    description: 'Branch for opm-common, opm-grid, opm-simulators, opm-upscaling'
+    description: 'Branch for opm-common, opm-grid, opm-simulators'
     required: false
     default: 'geomech'
   dune-foamgrid-branch:
@@ -39,7 +39,7 @@ runs:
         WORKSPACE="${RUNNER_TEMP}/opm-superbuild"
         mkdir -p "${WORKSPACE}"
 
-        for module in common grid simulators upscaling; do
+        for module in common grid simulators; do
           git clone --depth 1 --branch ${{ inputs.opm-branch }} \
             "https://github.com/${{ inputs.opm-fork }}/opm-${module}.git" \
             "${WORKSPACE}/opm-${module}"
@@ -72,7 +72,7 @@ runs:
         cat > "${WORKSPACE}/CMakeLists.txt" <<'SUPERBUILD'
         project(opm)
         cmake_minimum_required(VERSION 3.26)
-        foreach(TARGET opm-common opm-grid opm-simulators opm-upscaling)
+        foreach(TARGET opm-common opm-grid opm-simulators)
           set(${TARGET}_DIR ${CMAKE_BINARY_DIR}/${TARGET})
         endforeach()
         set(SIBLING_SEARCH 0)
@@ -82,8 +82,6 @@ runs:
         add_dependencies(opmgrid opmcommon)
         add_subdirectory(opm-simulators)
         add_dependencies(opmsimulators opmgrid)
-        add_subdirectory(opm-upscaling)
-        add_dependencies(opmupscaling opmgrid)
         SUPERBUILD
 
         cmake -S "${WORKSPACE}" -B "${WORKSPACE}/build" -G Ninja \

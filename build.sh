@@ -37,7 +37,7 @@ sudo apt-get install -y \
 
 # ── clone OPM modules from fork ───────────────────────────────────────
 echo "=== Cloning OPM modules ==="
-for module in common grid simulators upscaling; do
+for module in common grid simulators; do
     if [ ! -d "opm-${module}" ]; then
         git clone -b "${BRANCH}" \
             "https://github.com/${FORK}/opm-${module}.git"
@@ -78,7 +78,7 @@ cat > CMakeLists.txt << 'SUPERBUILD'
 project(opm)
 cmake_minimum_required(VERSION 3.26)
 
-foreach(TARGET opm-common opm-grid opm-simulators opm-upscaling opm-flowgeomechanics)
+foreach(TARGET opm-common opm-grid opm-simulators opm-flowgeomechanics)
   set(${TARGET}_DIR ${CMAKE_BINARY_DIR}/${TARGET})
 endforeach()
 
@@ -92,10 +92,8 @@ add_subdirectory(opm-grid)
 add_dependencies(opmgrid opmcommon)
 add_subdirectory(opm-simulators)
 add_dependencies(opmsimulators opmgrid)
-add_subdirectory(opm-upscaling)
-add_dependencies(opmupscaling opmgrid)
 add_subdirectory(opm-flowgeomechanics)
-add_dependencies(opmflowgeomechanics opmsimulators opmupscaling)
+add_dependencies(opmflowgeomechanics opmsimulators)
 SUPERBUILD
 
 # ── build ──────────────────────────────────────────────────────────────

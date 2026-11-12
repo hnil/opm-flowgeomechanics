@@ -57,7 +57,7 @@ If you prefer to run each step yourself:
 mkdir ~/opm-workspace && cd ~/opm-workspace
 
 # 2. Clone the required OPM modules
-for module in common grid simulators upscaling; do
+for module in common grid simulators; do
     git clone -b geomech_hypre https://github.com/hnil/opm-${module}.git
 done
 
@@ -73,7 +73,7 @@ git clone -b geomech_hypre_cgal https://github.com/hnil/opm-flowgeomechanics.git
 cat > CMakeLists.txt << 'EOF'
 project(opm)
 cmake_minimum_required(VERSION 3.26)
-foreach(TARGET opm-common opm-grid opm-simulators opm-upscaling opm-flowgeomechanics)
+foreach(TARGET opm-common opm-grid opm-simulators opm-flowgeomechanics)
   set(${TARGET}_DIR ${CMAKE_BINARY_DIR}/${TARGET})
 endforeach()
 set(SIBLING_SEARCH 0)
@@ -84,10 +84,8 @@ add_subdirectory(opm-grid)
 add_dependencies(opmgrid opmcommon)
 add_subdirectory(opm-simulators)
 add_dependencies(opmsimulators opmgrid)
-add_subdirectory(opm-upscaling)
-add_dependencies(opmupscaling opmgrid)
 add_subdirectory(opm-flowgeomechanics)
-add_dependencies(opmflowgeomechanics opmsimulators opmupscaling)
+add_dependencies(opmflowgeomechanics opmsimulators)
 EOF
 
 # 6. Configure and build

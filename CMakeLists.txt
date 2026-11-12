@@ -35,7 +35,7 @@ option(USE_HYPRE "Use the Hypre library for linear solvers?" OFF)
 # Adapted from CMakeLists.txt in opm-common, extended to all OPM modules
 # this module depends on, so a plain sibling build (<module>/build) works.
 
-set(_opm_dep_modules opm-common opm-grid opm-simulators opm-upscaling)
+set(_opm_dep_modules opm-common opm-grid opm-simulators)
 if(SIBLING_SEARCH)
 	# guess the sibling dirs
 	get_filename_component(_leaf_dir_name ${PROJECT_BINARY_DIR} NAME)
@@ -135,7 +135,6 @@ endmacro (opm-flowgeomechanics_config_hook)
 macro (opm-flowgeomechanics_prereqs_hook)
 	target_link_libraries(opmflowgeomechanics
 		PUBLIC
-			opmupscaling
 			opmsimulators
 			Dune::FoamGrid
 			CGAL::CGAL GMP::gmp GMP::gmpxx
@@ -272,7 +271,7 @@ add_executable(test_foamgrid
 )
 target_link_libraries(test_foamgrid
 	PUBLIC
-		opmsimulators opmupscaling
+		opmsimulators
 )
 
 add_executable(test_vem_elements
@@ -352,14 +351,6 @@ add_executable(test_fracture_mech_coupling
 	examples/test_fracture_mech_coupling.cpp
 )
 target_link_libraries(test_fracture_mech_coupling
-	PUBLIC
-		opmflowgeomechanics
-)
-
-add_executable(test_q1_equivalence
-	examples/test_q1_equivalence.cpp
-)
-target_link_libraries(test_q1_equivalence
 	PUBLIC
 		opmflowgeomechanics
 )
@@ -958,10 +949,6 @@ add_test(NAME Unit.Trimesh.GridRefinement
 
 add_test(NAME Unit.PatchRecovery
 	COMMAND $<TARGET_FILE:test_patch_recovery>
-)
-
-add_test(NAME Unit.Q1Equivalence
-	COMMAND $<TARGET_FILE:test_q1_equivalence>
 )
 
 set(FRACTURE_LINEAR_REPLAY_PREFIX
