@@ -49,7 +49,7 @@ System assemble(const Dune::CpGrid& grid)
     std::vector<double> load;
     vem::assemble_mech_system_3D_dune(grid, coords.data(), gv.size(0), nf.data(),
         nv.data(), nodes.data(), young.data(), poisson.data(), body.data(),
-        0, nullptr, nullptr, 0, nullptr, nullptr, entries, load, vem::SIMPLE, false, mask.data());
+        0, nullptr, nullptr, entries, load, vem::SIMPLE, mask.data());
     const auto dofs = physicalDofs(grid);
     System result;
     for (const auto& [i, j, value] : entries) {

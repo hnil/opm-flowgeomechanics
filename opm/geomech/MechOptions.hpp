@@ -22,6 +22,7 @@
 
 #include <opm/simulators/linalg/PropertyTree.hpp>
 
+#include <stdexcept>
 #include <string>
 
 namespace Opm {
@@ -30,7 +31,6 @@ namespace Opm {
 //! a key in its `mech` block wins over the same key at the top level.
 struct MechOptions
 {
-    bool reduce_boundary = false;
     int vem_stability_choice = 1;
     bool vem_source = true;
     bool vem_stress = true;
@@ -50,7 +50,10 @@ struct MechOptions
             return mech ? mech->template get<T>(key, top) : top;
         };
         MechOptions o;
-        o.reduce_boundary = get("reduce_boundary", o.reduce_boundary);
+        if (get("reduce_boundary", false)) {
+            throw std::invalid_argument("reduce_boundary=true was removed; "
+                                        "Dirichlet nodes are eliminated symmetrically");
+        }
         o.vem_stability_choice = get("vem_stability_choice", o.vem_stability_choice);
         o.vem_source = get("vem_source", o.vem_source);
         o.vem_stress = get("vem_stress", o.vem_stress);

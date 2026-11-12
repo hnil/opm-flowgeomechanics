@@ -594,9 +594,11 @@ main(int argc, char** argv)
     }
     std::vector<std::tuple<int, int, double>> A;
     std::vector<double> b;
-    const int nfree = vem::assemble_mech_system_3D_dune(grid, &coords[0], nc, &ncf[0], &nfc[0], &fc[0], &young[0],
-                                                        &poisson[0], &body[0], int(fixed.size()), &fixed[0],
-                                                        &fixval[0], 0, nullptr, nullptr, A, b, sc, true, corner_mask);
+    vem::assemble_mech_system_3D_dune(grid, &coords[0], nc, &ncf[0], &nfc[0], &fc[0], &young[0],
+                                                        &poisson[0], &body[0], 0, nullptr, nullptr, A, b, sc,
+                                                        corner_mask);
+    vem::reduce_system(A, b, int(fixed.size()), fixed.data(), fixval.data());
+    const int nfree = int(b.size());
     std::vector<int> free_dofs;
     for (int i = 0, k = 0; i < 3 * nn; ++i) {
         if (k < int(fixed.size()) && fixed[k] == i)

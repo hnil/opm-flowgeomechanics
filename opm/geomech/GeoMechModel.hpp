@@ -348,8 +348,7 @@ namespace Opm{
                                       opts.vem_source,
                                       opts.stab_on_stress,
                                       opts.vem_stress,
-                                      opts.diagonal_scaling,
-                                      opts.reduce_boundary);
+                                      opts.diagonal_scaling);
                 OPM_TIMEBLOCK(SetupMechSolver);
                 if(use_body_force){
                     OpmLog::info("Using body force in geomechanics to 2000 kg/m^3 \n");
@@ -424,17 +423,8 @@ namespace Opm{
       }
       void calculateOutputQuantitiesMech(){
             OPM_TIMEBLOCK(CalculateOutputQuantitesMech);
-            Opm::Elasticity::Vector field;
             const auto& grid = this->mechGrid();
-            const auto& gv = grid.leafGridView();
-            static constexpr int dim = Grid::dimension;
-            field.resize(grid.size(dim)*dim);
-            if(mechDisc_->reduceBoundary()){
-              mechDisc_->expandSolution(field, mechState_.displacement);
-            }else{
-              assert(field.size() == mechState_.displacement.size());
-              field = mechState_.displacement;
-            }
+            const Opm::Elasticity::Vector& field = mechState_.displacement;
 
             this->makeDisplacement(field);
             // update variables used for output to resinsight

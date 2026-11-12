@@ -295,16 +295,12 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
                         const double* const young,
                         const double* const poisson,
                         const double* const body_force, // 3 * number of cells
-                        const int num_fixed_dofs, // dirichlet
-                        const int* const fixed_dof_ixs, // indices must be sorted
-                        const double* const fixed_dof_values,
                         const int num_neumann_faces,
                         const int* const neumann_faces,
                         const double* const neumann_forces, // 3 * number of neumann faces
                         std::vector<std::tuple<int, int, double>>& A_entries,
                         std::vector<double>& b,
                         const vem::StabilityChoice stability_choice,
-                        bool reduce_boundary,
                         const char* const corner_mask)
 // ----------------------------------------------------------------------------
 {
@@ -512,13 +508,6 @@ assemble_mech_system_3D_dune(const Dune::CpGrid& grid,const double* const points
     vem::compute_applied_forces_3D(
         points, num_face_corners, face_corners, num_neumann_faces, neumann_faces, neumann_forces, &b[0],
         corner_mask);
-
-    if (reduce_boundary) {
-        vem::reduce_system(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
-    } else {
-        vem::set_boundary_conditions(A_entries, b, num_fixed_dofs, fixed_dof_ixs, fixed_dof_values);
-    }
-
 
     return b.size();
 }

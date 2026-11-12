@@ -66,7 +66,7 @@ struct MechSolveResult
     bool failed = false; // the solver threw; the solution was not updated
 };
 
-//! Displacement (all node dofs, or the free ones with reduce_boundary) and cell fields.
+//! Displacement (all node dofs) and cell fields.
 struct MechState
 {
     Vector displacement;
@@ -94,8 +94,7 @@ public:
                     bool vem_source,
                     bool stab_on_stress,
                     bool vem_stress,
-                    bool diagonal_scaling,
-                    bool reduce_boundary);
+                    bool diagonal_scaling);
 
     void fixNodes(const std::vector<std::tuple<size_t,MechBCValue>>& bc_nodes);
     void setBodyForce(double gravity, const std::vector<double>& density);
@@ -108,7 +107,6 @@ public:
 
     //! b = divmat * load + rhs_force
     void rhs(const Vector& load, Vector& b) const;
-    void expandSolution(Vector& result, const Vector& u) const;
     void stress(const Vector& dispall, VoigtField& out) const;
     void strain(const Vector& dispall, VoigtField& out) const;
 
@@ -117,10 +115,10 @@ public:
     //! Jacobi factors when the matrix is S A S (diagonal_scaling), else empty.
     const Vector& scale() const { return scale_; }
     const std::vector<double>& coords() const { return coords_; }
-    bool reduceBoundary() const { return reduce_boundary_; }
 
 private:
     void buildGeometry();
+    void applyDirichlet();
     void applyDiagonalScaling();
     static void makeDuneMatrixCompressed(const std::vector<std::tuple<int, int, double>>& entries,
                                          Matrix& mat);
@@ -130,7 +128,6 @@ private:
     std::vector<double> coords_;
     std::vector<int> num_cell_faces_, num_face_corners_, face_corners_;
     std::vector<char> corner_mask_; // per face_corners_ entry: a grid corner of its face
-    std::vector<int> idx_free_;
     std::vector<double> ymodule_;
     std::vector<double> pratio_;
     std::vector<double> body_force_;
@@ -148,7 +145,6 @@ private:
     bool stab_on_stress_ = false;
     bool vem_stress_ = true;
     bool diagonal_scaling_ = false;
-    bool reduce_boundary_ = false;
 };
 
 //! Krylov solve of the assembled mechanics system (FlexibleSolver), warm started

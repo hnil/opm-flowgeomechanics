@@ -58,14 +58,12 @@ void VemDiscretisation<GridType>::setOptions(int stability_choice_int,
                                              bool vem_source,
                                              bool stab_on_stress,
                                              bool vem_stress,
-                                             bool diagonal_scaling,
-                                             bool reduce_boundary)
+                                             bool diagonal_scaling)
 {
     vem_source_ = vem_source;
     stab_on_stress_ = stab_on_stress;
     vem_stress_ = vem_stress;
     diagonal_scaling_ = diagonal_scaling;
-    reduce_boundary_ = reduce_boundary;
     std::stringstream os;
     os << "Setting stability choise to " << stability_choice_int
        << (diagonal_scaling_ ? " with diagonal scaling" : "");
@@ -123,28 +121,19 @@ void VemDiscretisation<GridType>::assembleMatrix()
     if (coords_.empty()) {
         buildGeometry();
     }
-    const int num_fixed_dofs = std::get<0>(dirichlet_);
-    const auto& fixed_dof_ixs = std::get<1>(dirichlet_);
-    const auto& fixed_dof_values = std::get<2>(dirichlet_);
     std::vector<std::tuple<int, int, double>> A_entries;
     rhs_force_.clear();
     vem::assemble_mech_system_3D_dune(grid_, &coords_[0], num_cells_, &num_cell_faces_[0],
                                       &num_face_corners_[0], &face_corners_[0], &ymodule_[0],
-                                      &pratio_[0], &body_force_[0], num_fixed_dofs,
-                                      &fixed_dof_ixs[0], &fixed_dof_values[0],
+                                      &pratio_[0], &body_force_[0],
                                       /*num_neumann_faces*/ 0, nullptr, nullptr, A_entries,
-                                      rhs_force_, stability_choice_, reduce_boundary_,
-                                      corner_mask_.data());
-    int nrows = 0;
-    int ncols = 0;
-    for (const auto& [i, j, v] : A_entries) {
-        nrows = std::max(nrows, i);
-        ncols = std::max(ncols, j);
-    }
+                                      rhs_force_, stability_choice_, corner_mask_.data());
+    const int num_dofs = int(rhs_force_.size());
     matrix_ = Matrix();
     matrix_.setBuildMode(Matrix::random);
-    matrix_.setSize(nrows + 1, ncols + 1);
+    matrix_.setSize(num_dofs, num_dofs);
     makeDuneMatrixCompressed(A_entries, matrix_);
+    applyDirichlet();
     scale_.resize(0);
     if (diagonal_scaling_) {
         applyDiagonalScaling();
@@ -161,11 +150,6 @@ void VemDiscretisation<GridType>::buildOperators()
     const int num_dofs = grid_.leafGridView().size(3) * 3;
     {
         OPM_TIMEBLOCK(setUpExtraStructuresForVEM);
-        std::vector<int> dof_idx(num_dofs);
-        std::iota(dof_idx.begin(), dof_idx.end(), 0);
-        idx_free_.clear();
-        std::set_difference(dof_idx.begin(), dof_idx.end(), fixed_dof_ixs.begin(),
-                            fixed_dof_ixs.end(), std::back_inserter(idx_free_));
         std::vector<double> rhs_tmp(num_cells_, 0);
         std::vector<double> pressure_tmp(num_cells_, 0);
         std::vector<std::tuple<int, int, double>> divmat;
@@ -180,21 +164,20 @@ void VemDiscretisation<GridType>::buildOperators()
                                                   &face_corners_[0], &pressure_tmp[0], rhs_tmp,
                                                   divmat, true, corner_mask_.data());
         }
-        std::vector<int> global_to_dof(num_dofs, -1);
-        for (std::size_t i = 0; i < idx_free_.size(); ++i) {
-            global_to_dof[idx_free_[i]] = reduce_boundary_ ? int(i) : idx_free_[i];
+        std::vector<char> fixed(num_dofs, 0);
+        for (const int dof : fixed_dof_ixs) {
+            fixed[dof] = 1;
         }
         // fixed dofs get no load
         std::vector<std::tuple<int, int, double>> divmatdof;
         for (const auto& [row, col, val] : divmat) {
-            const int I = global_to_dof[row];
-            if (I > -1) {
-                divmatdof.emplace_back(I, col, val);
+            if (!fixed[row]) {
+                divmatdof.emplace_back(row, col, val);
             }
         }
         divmat_ = Matrix();
         divmat_.setBuildMode(Matrix::random);
-        divmat_.setSize(reduce_boundary_ ? int(idx_free_.size()) : num_dofs, num_cells_);
+        divmat_.setSize(num_dofs, num_cells_);
         makeDuneMatrixCompressed(divmatdof, divmat_);
     }
     std::vector<double> dispall(num_dofs);
@@ -225,19 +208,38 @@ void VemDiscretisation<GridType>::rhs(const Vector& load, Vector& b) const
     }
 }
 
+// Symmetric elimination: fixed columns move into the rhs; a fixed row becomes
+// d u_j = d g_j with d the mean diagonal, so the scaling of A is unchanged.
 template<class GridType>
-void VemDiscretisation<GridType>::expandSolution(Vector& result, const Vector& u) const
+void VemDiscretisation<GridType>::applyDirichlet()
 {
-    std::fill(result.begin(), result.end(), std::nan("1"));
     const auto& fixed_dof_ixs = std::get<1>(dirichlet_);
     const auto& fixed_dof_values = std::get<2>(dirichlet_);
-    for (std::size_t i = 0; i < fixed_dof_ixs.size(); ++i) {
-        result[fixed_dof_ixs[i]] = fixed_dof_values[i];
+    double diag_sum = 0.0;
+    for (std::size_t i = 0; i < matrix_.N(); ++i) {
+        diag_sum += matrix_[i][i];
     }
-    for (std::size_t i = 0, cur = 0; i < result.size(); ++i) {
-        if (std::isnan(result[i][0])) {
-            result[i] = u[cur++];
+    const double d = matrix_.N() > 0 ? diag_sum / matrix_.N() : 1.0;
+    std::vector<double> g(matrix_.N(), 0.0);
+    std::vector<char> fixed(matrix_.N(), 0);
+    for (std::size_t k = 0; k < fixed_dof_ixs.size(); ++k) {
+        fixed[fixed_dof_ixs[k]] = 1;
+        g[fixed_dof_ixs[k]] = fixed_dof_values[k];
+    }
+    // the pattern is symmetric, so row j lists the rows that hold column j
+    for (const int j : fixed_dof_ixs) {
+        for (auto col = matrix_[j].begin(); col != matrix_[j].end(); ++col) {
+            const auto i = col.index();
+            if (!fixed[i]) {
+                rhs_force_[i] -= matrix_[i][j] * g[j];
+                matrix_[i][j] = 0.0;
+            }
         }
+    }
+    for (const int j : fixed_dof_ixs) {
+        matrix_[j] = 0.0;
+        matrix_[j][j] = d;
+        rhs_force_[j] = d * g[j];
     }
 }
 
