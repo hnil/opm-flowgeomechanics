@@ -111,9 +111,13 @@ Fracture::init(const std::string& well,
     layers_ = 0;
     nlinear_ = 0;
 
-    std::string method = prm_.get<std::string>("solver.method");
-
-    if (method == "if_propagate_trimesh") {
+    const std::string method = prm_.get<std::string>("solver.method");
+    if (method != "if_propagate_trimesh") {
+        OPM_THROW(std::runtime_error,
+                  "Unknown fracture solver.method '" + method + "': use if_propagate_trimesh, "
+                  "with solver.disable_propagation=true for a fixed mesh");
+    }
+    {
         double trires = prm_.get<double>("config.trires");
         const double edgelen = init_scale / trires;
         const double radius = init_scale;
@@ -146,9 +150,6 @@ Fracture::init(const std::string& well,
         grid_fixed_cells_ = well_source_cellref_;
 
         setFractureGrid(std::move(grid)); // create the physical grid from trimesh
-
-    } else {
-        setFractureGrid();
     }
 
 
@@ -1939,57 +1940,6 @@ Fracture::writeFractureSystem() const
 {
     if (prm_.get<bool>("write_fracture_system")) {
         Dune::storeMatrixMarket(rhs_width_, "rhs_width");
-    }
-}
-
-void
-Fracture::solvePressure()
-{
-    OPM_TIMEFUNCTION();
-    size_t nc = numFractureCells();
-    assert(numWellEquations() == 0); // not implemented/tested for "rate_well" control
-    fracture_pressure_.resize(nc);
-    fracture_pressure_ = 1e5;
-    assert(pressure_matrix_); // should always be constructed at this pointn
-    this->assemblePressure();
-    this->addSource(); // probably include reservoir pressure
-    this->writePressureSystem();
-    try {
-        if (!pressure_solver_) {
-            this->setupPressureSolver();
-        }
-        Dune::InverseOperatorResult r;
-        fracture_pressure_.resize(rhs_pressure_.size());
-        fracture_pressure_ = 0;
-        pressure_solver_->apply(fracture_pressure_, rhs_pressure_, r);
-        ++last_solve_stats_.linear_solves;
-        last_solve_stats_.linear_iterations += r.iterations;
-    } catch (Dune::ISTLError& e) {
-        last_solve_stats_.converged = false;
-        OpmLog::warning(fmt::format("exception thrown {}", e.what()));
-    }
-}
-
-// based on the (given) values of fracture_pressure__, compute rhs_width_ and
-// fracture_width_
-void
-Fracture::solveFractureWidth()
-{
-    fractureMatrix().solve(fracture_width_, rhs_width_);
-    ++last_solve_stats_.linear_solves;
-    double max_width = prm_.get<double>("solver.max_width");
-    double min_width = prm_.get<double>("solver.min_width");
-    for (int i = 0; i < fracture_width_.size(); ++i) {
-        assert(std::isfinite(fracture_width_[i]));
-        if (fracture_width_[i] > max_width) {
-            OpmLog::debug("Limit Fracture width");
-            fracture_width_[i] = max_width;
-        }
-        if (fracture_width_[i] < min_width) {
-            OpmLog::debug("Remove small Fracture width");
-            fracture_width_[i] = min_width;
-        }
-        assert(std::isfinite(fracture_width_[i]));
     }
 }
 

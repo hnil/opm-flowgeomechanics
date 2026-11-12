@@ -294,8 +294,6 @@ public:
     double hydrostaticReservoirPressure(size_t i) const;
     void initFractureStates();
     void initFractureWidth();
-    void solveFractureWidth();
-    void solvePressure();
 
     template <class TypeTag, class Simulator>
     void solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& cell_search_tree,
