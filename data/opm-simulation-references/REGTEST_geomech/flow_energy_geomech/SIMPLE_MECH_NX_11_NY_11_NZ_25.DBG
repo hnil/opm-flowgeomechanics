@@ -10,21 +10,22 @@
 Flow is a simulator for fully implicit three-phase black-oil flow, and is part of OPM.
 For more information visit: https://opm-project.org 
 
-Flow Version     =  2026.04-pre (919449b*)
+Flow Version     =  2026.04-pre (6e04627*)
 Machine name     =  Halvors-MacBook-Pro.local (Number of logical cores: 14, Memory size: 24576.00 MB) 
-Operating system =  Darwin arm64 (Kernel: 25.6.0, Darwin Kernel Version 25.6.0: Fri Jul 31 19:17:26 PDT 2026; root:xnu-12377.161.14~5/RELEASE_ARM64_T6041 )
-Build time       =  2026-09-21 at 15:40:05 hrs
+Operating system =  Darwin arm64 (Kernel: 25.6.0, Darwin Kernel Version 25.6.0: Tue Aug 18 17:48:46 PDT 2026; root:xnu-12377.161.15.700.19~2/RELEASE_ARM64_T6041 )
+Build time       =  2026-11-12 at 21:51:07 hrs
 User             =  root
-Simulation started on 21-09-2026 at 15:40:07 hrs
+Simulation started on 12-11-2026 at 21:52:57 hrs
 Using 1 MPI processes with 2 OMP threads on each 
 Parameters used by Flow:
 # [known parameters which were specified at run-time]
-EclDeckFileName="/Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25" # default: ""
-OutputDir="/Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/result/REGTEST_geomech" # default: ""
+EclDeckFileName="/Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25" # default: ""
+OutputDir="/Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/build/opm-flowgeomechanics/tests/results/REGTEST_geomech" # default: ""
 # [parameters which were specified at compile-time]
 AcceleratorMode="none"
 ActionParsingStrictness="normal"
-AddCorners="0"
+AddCorners="1"
+AddCornersByVertex="1"
 AllowDistributedWells="0"
 AllowSplittingInactiveWells="1"
 AlternativeWellRateInit="1"
@@ -32,6 +33,7 @@ CheckGroupConstraintsInnerWellIterations="1"
 CheckSatfuncConsistency="1"
 ConserveInnerEnergyThermal="0"
 ContinueOnConvergenceError="0"
+ContinuousFluidPropertiesMsWells="0"
 ConvergenceMonitoring="0"
 ConvergenceMonitoringCutOff="6"
 ConvergenceMonitoringDecayFactor="0.75"
@@ -47,7 +49,8 @@ DsMax="0.2"
 DwellFractionMax="0.2"
 EclOutputDoublePrecision="0"
 EclOutputInterval="-1"
-EdgeConformal="0"
+EdgeConformal="1"
+EdgeConformalMergeTolerance="0"
 EdgeWeightsMethod="transmissibility"
 EnableAdaptiveTimeStepping="1"
 EnableAsyncEclOutput="0"
@@ -62,7 +65,7 @@ EnableGridAdaptation="0"
 EnableIntensiveQuantityCache="1"
 EnableLoggingFalloutWarning="0"
 EnableOpmRstFile="1"
-EnableStateRollback="0"
+EnableStateRollback="1"
 EnableStorageCache="1"
 EnableTerminalOutput="1"
 EnableThermodynamicHints="0"
@@ -75,6 +78,10 @@ EndStep="-1"
 EndTime="1e+100"
 ExplicitRockCompaction="0"
 ExternalPartition=""
+FluxBoundaryInterpolate="1"
+FluxBoundaryMinIntervalBetweenSamples="1"
+FluxBoundaryReportStepsOnly="0"
+FluxSummaryMinIntervalBetweenSamples="1"
 ForceDisableFluidInPlaceOutput="0"
 ForceDisableResvFluidInPlaceOutput="0"
 FractureParamFile="notafile"
@@ -95,6 +102,7 @@ InjMultDampMult="0.9"
 InjMultMinDampFactor="0.05"
 InjMultOscThreshold="0.1"
 InputSkipMode="100"
+LgrBackend="conforming"
 LinearSolver="cprw"
 LinearSolverAccelerator="cpu"
 LinearSolverIgnoreConvergenceFailure="0"
@@ -135,7 +143,15 @@ MaxWelleqIter="30"
 MaximumNumberOfGroupSwitches="3"
 MaximumNumberOfWellSwitches="3"
 MaximumWaterSaturation="1"
+MechCoarsenFile="none"
+MechCoarsenMethod="auto"
+MechFillHoles="1"
+MechGrid="flow"
+MechGridCheck="error"
+MechGridVtu=""
 MechPorosityCoupling="0"
+MechSectorFile="none"
+MechThinCellThickness="0"
 MetisParams="default"
 MiluVariant="ilu"
 MinStrictCnvIter="-1"
@@ -161,6 +177,7 @@ NlddLocalLinearSolver="ilu0"
 NlddLocalLinearSolverMaxIter="200"
 NlddLocalLinearSolverReduction="0.01"
 NlddNumInitialNewtonIter="1"
+NlddNumOverlapLayers="1"
 NlddRelativeMobilityChangeTol="0.1"
 NonlinearSolver="newton"
 NumLocalDomains="0"
@@ -187,14 +204,17 @@ PriVarOscilationThreshold="1e-05"
 PrintParameters="2"
 ProjectSaturations="0"
 RcNetworkLooseCoupling="0"
+RefineBeforeRedistribute="false"
 RegularizationFactorWells="100"
 RelaxedLinearSolverReduction="0.01"
 RelaxedMaxPvFraction="0.03"
 RelaxedPressureTolMsw="10000"
 RelaxedWellFlowTol="0.001"
+RescoupSpawnWrapper=""
 RescoupSyncAtReportSteps="0"
 RestartTime="-1e+35"
 RestartWritingInterval="16777215"
+SaveAtDay="-1"
 SaveFile=""
 SaveStep=""
 ScaleLinearSystem="0"
@@ -288,8 +308,10 @@ VtkWriteGasDissolutionFactor="0"
 VtkWriteGasFormationVolumeFactor="0"
 VtkWriteGasSaturationPressure="0"
 VtkWriteGeoMech="1"
+VtkWriteGeoMechNodal="0"
 VtkWriteIntrinsicPermeabilities="0"
 VtkWriteMassFractions="0"
+VtkWriteMechGrid="0"
 VtkWriteMobilities="0"
 VtkWriteMolarities="0"
 VtkWriteMoleFractions="1"
@@ -321,130 +343,130 @@ ZoltanImbalanceTol="1.1"
 ZoltanParams="graph"
 ZoltanPhgEdgeSizeThreshold="0.35"
 
-Reading deck file '/Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.data'
-    0 Reading RUNSPEC  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 2
-    1 Reading DIMENS   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 3
-    2 Reading OIL      in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 6
-    3 Reading WATER    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 7
-    4 Reading GAS      in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 8
-    5 Reading DISGAS   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 9
-    6 Reading METRIC   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 10
-    7 Reading THERMAL  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 11
-    8 Reading MECH     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 13
-    9 Reading START    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 15
-   10 Reading GRIDOPTS in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 17
-   11 Reading EQLDIMS  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 19
-   12 Reading REGDIMS  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 21
-   13 Reading TABDIMS  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 23
-   14 Reading WELLDIMS in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 25
-   15 Reading VFPPDIMS in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 27
-   16 Reading UNIFIN   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 29
-   17 Reading UNIFOUT  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 30
-   18 Reading GRID     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 31
-   19 Reading NEWTRAN  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 32
-   20 Reading GRIDFILE in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 33
-   21 Reading GRIDUNIT in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 35
-   22 Reading INIT     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 37
-   23 Reading TOPS     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 41
-   24 Reading DXV      in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 43
-   25 Reading DYV      in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 45
-   26 Reading DZV      in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 47
-   27 Reading EQUALS   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 58
-   28 Reading EQUALS   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 63
-   29 Reading COPY     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 72
-   30 Reading MULTIPLY in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 76
-   31 Reading EQUALS   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 81
-   32 Reading BCCON    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 92
-   33 Reading RPTGRID  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 101
-   34 Reading EDIT     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 103
-   35 Reading PROPS    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 104
-   36 Reading NOECHO   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 105
-   37 Reading SPECROCK in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 107
-   38 Reading SPECHEAT in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 111
-   39 Reading DENSITY  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 115
-   40 Reading PVTW     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 118
-   41 Reading PVTO     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 121
-   42 Reading PVDG     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 138
-   43 Reading ROCK     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 141
-   44 Reading SWOF     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 144
-   45 Reading SGOF     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 146
-   46 Reading REGIONS  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 148
-   47 Reading EQUALS   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 149
-   48 Reading SOLUTION in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 154
-   49 Reading RPTRST   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 155
-   50 Reading EQUIL    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 157
-   51 Reading PBVD     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 160
-   52 Reading RTEMPVD  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 165
-   53 Reading STREQUIL in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 170
-   54 Reading SUMMARY  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 177
-   55 Reading ALL      in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 178
-   56 Reading PERFORMA in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 179
-   57 Reading WFCFFVIR in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 180
-   58 Reading WFCFFVIR in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 183
-   59 Reading WFCWFVIR in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 187
-   60 Reading WFCFVIR  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 190
-   61 Reading CFCFFVIR in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 193
-   62 Reading CFCWFVIR in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 198
-   63 Reading CFCFVIR  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 202
-   64 Reading WFCFFVIT in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 207
-   65 Reading WFCWFVIR in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 210
-   66 Reading WFCWFVIT in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 212
-   67 Reading WFCFVIR  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 215
-   68 Reading WFCFVIT  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 218
-   69 Reading WWIRFRAC in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 221
-   70 Reading CWIR     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 223
-   71 Reading CWIRFRAC in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 226
-   72 Reading CFCFFRAC in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 230
-   73 Reading CFCFRATE in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 233
-   74 Reading CPI      in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 237
-   75 Reading CINJFVR  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 240
-   76 Reading CINJFVT  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 243
-   77 Reading CFCSKIN  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 246
-   78 Reading CFCWIDTH in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 249
-   79 Reading CFCPERM  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 252
-   80 Reading CFCPORO  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 255
-   81 Reading CFCRAD   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 258
-   82 Reading CFCAOF   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 261
-   83 Reading CFRINJPR in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 265
-   84 Reading CFRINJBH in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 269
-   85 Reading CFRINJRA in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 273
-   86 Reading CWIR     in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 277
-   87 Reading CTFAC    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 280
-   88 Reading CPR      in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 284
-   89 Reading CFRAREA  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 288
-   90 Reading CFRFLUX  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 291
-   91 Reading CFRHEIGH in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 294
-   92 Reading CFRLENGT in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 297
-   93 Reading CFRFVOLU in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 301
-   94 Reading CFRWI    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 304
-   95 Reading CFRAVGW  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 307
-   96 Reading CFRAVGFW in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 310
-   97 Reading CPI      in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 314
-   98 Reading CINJFVR  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 317
-   99 Reading CINJFVT  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 320
-  100 Reading BPR      in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 324
-  101 Reading BTEMP    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 327
-  102 Reading BSTRSSXX in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 330
-  103 Reading SCHEDULE in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 336
-  104 Reading TUNING   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 337
-  105 Reading NUPCOL   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 341
-  106 Reading BCPROP   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 345
-  107 Reading BCMECH   in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 353
-  108 Reading GRUPTREE in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 360
-  109 Reading WELSPECS in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 372
-  110 Reading COMPDAT  in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 376
-  111 Reading WCONINJE in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 401
-  112 Reading WSEED    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 406
-  113 Reading WTEMP    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 418
-  114 Reading TSTEP    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 421
-  115 Reading DATES    in /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 425
+Reading deck file '/Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.data'
+    0 Reading RUNSPEC  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 2
+    1 Reading DIMENS   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 3
+    2 Reading OIL      in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 6
+    3 Reading WATER    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 7
+    4 Reading GAS      in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 8
+    5 Reading DISGAS   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 9
+    6 Reading METRIC   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 10
+    7 Reading THERMAL  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 11
+    8 Reading MECH     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 13
+    9 Reading START    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 15
+   10 Reading GRIDOPTS in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 17
+   11 Reading EQLDIMS  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 19
+   12 Reading REGDIMS  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 21
+   13 Reading TABDIMS  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 23
+   14 Reading WELLDIMS in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 25
+   15 Reading VFPPDIMS in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 27
+   16 Reading UNIFIN   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 29
+   17 Reading UNIFOUT  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 30
+   18 Reading GRID     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 31
+   19 Reading NEWTRAN  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 32
+   20 Reading GRIDFILE in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 33
+   21 Reading GRIDUNIT in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 35
+   22 Reading INIT     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 37
+   23 Reading TOPS     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 41
+   24 Reading DXV      in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 43
+   25 Reading DYV      in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 45
+   26 Reading DZV      in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 47
+   27 Reading EQUALS   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 58
+   28 Reading EQUALS   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 63
+   29 Reading COPY     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 72
+   30 Reading MULTIPLY in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 76
+   31 Reading EQUALS   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 81
+   32 Reading BCCON    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 92
+   33 Reading RPTGRID  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 101
+   34 Reading EDIT     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 103
+   35 Reading PROPS    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 104
+   36 Reading NOECHO   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 105
+   37 Reading SPECROCK in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 107
+   38 Reading SPECHEAT in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 111
+   39 Reading DENSITY  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 115
+   40 Reading PVTW     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 118
+   41 Reading PVTO     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 121
+   42 Reading PVDG     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 138
+   43 Reading ROCK     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 141
+   44 Reading SWOF     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 144
+   45 Reading SGOF     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 146
+   46 Reading REGIONS  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 148
+   47 Reading EQUALS   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 149
+   48 Reading SOLUTION in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 154
+   49 Reading RPTRST   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 155
+   50 Reading EQUIL    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 157
+   51 Reading PBVD     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 160
+   52 Reading RTEMPVD  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 165
+   53 Reading STREQUIL in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 170
+   54 Reading SUMMARY  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 177
+   55 Reading ALL      in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 178
+   56 Reading PERFORMA in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 179
+   57 Reading WFCFFVIR in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 180
+   58 Reading WFCFFVIR in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 183
+   59 Reading WFCWFVIR in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 187
+   60 Reading WFCFVIR  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 190
+   61 Reading CFCFFVIR in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 193
+   62 Reading CFCWFVIR in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 198
+   63 Reading CFCFVIR  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 202
+   64 Reading WFCFFVIT in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 207
+   65 Reading WFCWFVIR in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 210
+   66 Reading WFCWFVIT in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 212
+   67 Reading WFCFVIR  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 215
+   68 Reading WFCFVIT  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 218
+   69 Reading WWIRFRAC in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 221
+   70 Reading CWIR     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 223
+   71 Reading CWIRFRAC in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 226
+   72 Reading CFCFFRAC in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 230
+   73 Reading CFCFRATE in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 233
+   74 Reading CPI      in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 237
+   75 Reading CINJFVR  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 240
+   76 Reading CINJFVT  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 243
+   77 Reading CFCSKIN  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 246
+   78 Reading CFCWIDTH in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 249
+   79 Reading CFCPERM  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 252
+   80 Reading CFCPORO  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 255
+   81 Reading CFCRAD   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 258
+   82 Reading CFCAOF   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 261
+   83 Reading CFRINJPR in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 265
+   84 Reading CFRINJBH in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 269
+   85 Reading CFRINJRA in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 273
+   86 Reading CWIR     in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 277
+   87 Reading CTFAC    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 280
+   88 Reading CPR      in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 284
+   89 Reading CFRAREA  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 288
+   90 Reading CFRFLUX  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 291
+   91 Reading CFRHEIGH in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 294
+   92 Reading CFRLENGT in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 297
+   93 Reading CFRFVOLU in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 301
+   94 Reading CFRWI    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 304
+   95 Reading CFRAVGW  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 307
+   96 Reading CFRAVGFW in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 310
+   97 Reading CPI      in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 314
+   98 Reading CINJFVR  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 317
+   99 Reading CINJFVT  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 320
+  100 Reading BPR      in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 324
+  101 Reading BTEMP    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 327
+  102 Reading BSTRSSXX in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 330
+  103 Reading SCHEDULE in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 336
+  104 Reading TUNING   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 337
+  105 Reading NUPCOL   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 341
+  106 Reading BCPROP   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 345
+  107 Reading BCMECH   in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 353
+  108 Reading GRUPTREE in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 360
+  109 Reading WELSPECS in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 372
+  110 Reading COMPDAT  in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 376
+  111 Reading WCONINJE in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 401
+  112 Reading WSEED    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 406
+  113 Reading WTEMP    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 418
+  114 Reading TSTEP    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 421
+  115 Reading DATES    in /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 425
 Unsupported keywords or keyword items:
 
   RPTGRID: keyword not supported
-  In file: /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA, line 101
+  In file: /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA, line 101
 
   NOECHO: keyword not supported
-  In file: /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA, line 105
+  In file: /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA, line 105
 
 Simulation will solve for mechanical quantities
 
@@ -452,7 +474,7 @@ Creating grid from keywords DX, DY, DZ and TOPS
 4 fluid phases are active
 
 Processing dynamic information from
-/Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 336
+/Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 336
 Initializing report step 0/4 at 2020-01-01 0 DAYS line 336
 Processing keyword TUNING at line 337
 Processing keyword NUPCOL at line 341
@@ -473,7 +495,7 @@ Initializing report step 3/4 at 2020-01-11 (5 DAYS) line 421
 Complete report step 3 (5 DAYS) at 2020-01-16 (10 DAYS)
 
 Initializing report step 4/4 at 2020-01-16 (10 DAYS) line 421
-Complete report step 4 (85.5 DAYS) at 2020-04-10 (15 DAYS)
+Complete report step 4 (85.5 DAYS) at 2020-04-10 12:00:00 (15 DAYS)
 
 
 Simulation will solve for mechanical quantities
@@ -493,6 +515,7 @@ Property tree for linear solvers:
         "type": "cprw",
         "use_well_weights": "false",
         "add_wells": "true",
+        "well_coarse_diagonal": "row_sum",
         "weight_type": "trueimpes",
         "pre_smooth": "0",
         "post_smooth": "1",
@@ -531,13 +554,13 @@ Property tree for linear solvers:
 }
 
 Unhandled summary keyword ALL/FAQR
-In /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 178
+In /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 178
 Unhandled summary keyword ALL/FAQRG
-In /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 178
+In /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 178
 Unhandled summary keyword ALL/FAQT
-In /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 178
+In /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 178
 Unhandled summary keyword ALL/FAQTG
-In /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 178
+In /Users/hnil/Documents/OPM/opm_geomech/geomech-cleanup/opm-flowgeomechanics/data/SIMPLE_MECH_NX_11_NY_11_NZ_25.DATA line 178
 {
     "hasfractures": "true",
     "verbosity": "1",
@@ -555,7 +578,7 @@ In /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE
             "tolerance": "0.0001"
         },
         "reduce_boundary": "false",
-        "vem_stability_choice": "3",
+        "vem_stability_choice": "1",
         "smooth_force": "false",
         "addconnections": "true",
         "include_fracture_contributions": "false",
@@ -576,17 +599,12 @@ In /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE
             "numcell_threshold": "100000",
             "max_num_coarsening": "0",
             "max_iter_on_same_level": "100000000",
-            "efac": "0.5",
-            "rfac": "0.10000000000000001",
-            "max_expand_iter": "20",
             "max_iter": "100",
             "tolerance": "9.9999999999999995e-07",
-            "damping": "1",
             "min_width": "0.001",
             "max_width": "0.5",
             "max_change": "100000",
             "max_dwidth": "0.0050000000000000001",
-            "max_dp": "1000000000",
             "remap_solution": "false",
             "linsolver": {
                 "tol": "1e-10",
@@ -637,10 +655,7 @@ In /Users/hnil/Documents/OPM/opm_geomech/bcmech/opm-flowgeomechanics/data/SIMPLE
             "guard_max_abs_pressure": "1e+30",
             "closed_cell_policy": "sticky",
             "close_force_tolerance": "0",
-            "reopen_force_tolerance": "0",
-            "reopen_width_tolerance": "0",
-            "max_closed_cell_toggle_count": "1000000000",
-            "max_closed_cell_toggle_fraction": "1"
+            "reopen_force_tolerance": "0"
         },
         "reservoir": {
             "calculate_dist": "true",
@@ -670,6 +685,8 @@ Manually tuning the simulator with the TUNING keyword may increase run time.
 It is recommended using the simulator's default tuning (--enable-tuning=false).
 Geomech init
 
+Mechanics grid: 3025 cells, 9746 faces: geometric (closed cells, edge-conformal, one closed boundary)
+Mechanical constraints: 1 connected component(s), all six rigid-body modes constrained
 Update Forces for Geomechanics
 
 
@@ -689,21 +706,23 @@ Restart file written for report step 0/4, date = 01-Jan-2020 00:00:00
 Using Newton nonlinear solver.
 
 Starting time step 0, stepsize 1 days, at day 0/5, date = 01-Jan-2020
+----------------------Start beginTimeStep-------------------
    Well B-3H converged in 1 inner iterations (0 control/status switches).
    Well B-3H converged in 1 inner iterations (0 control/status switches).
 Geomech begin time step
 
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
-   0  0.000e+00  5.867e-05  0.000e+00  5.739e-04  0.000e+00  1.090e-01  0.000e+00  1.067e+00   Strict  Relaxed
+   0  0.000e+00  8.327e-05  0.000e+00  8.756e-04  0.000e+00  1.090e-01  0.000e+00  1.067e+00   Strict  Relaxed
 Linear system blocksize: 4 size:    3025 block nonzeroes:     19833
-   1  0.000e+00  1.711e-03  0.000e+00  2.102e-02  0.000e+00  1.401e-02  0.000e+00  1.721e-01   Strict   Strict
-   2  0.000e+00  2.195e-06  0.000e+00  2.899e-05  0.000e+00  2.542e-05  0.000e+00  3.120e-04   Strict   Strict
-   3  0.000e+00  9.327e-09  0.000e+00  1.331e-07  0.000e+00  1.483e-07  0.000e+00  2.725e-06   Strict   Strict
+   1  0.000e+00  4.354e-08  0.000e+00  2.379e-07  0.000e+00  4.482e-05  0.000e+00  1.340e-02   Strict  Relaxed
+   2  0.000e+00  6.728e-11  0.000e+00  8.073e-10  0.000e+00  1.430e-08  0.000e+00  5.244e-07   Strict   Strict
 Overall linear iterations used: 2
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Setting stability choise to 3
+VEM face quadrature: kite
+Setting stability choise to 1
 Property tree for mech linear solver:
 {
     "tol": "9.9999999999999995e-07",
@@ -717,42 +736,46 @@ Property tree for mech linear solver:
     }
 }
 
-Mechanical solve stats: solves=1, linear_iterations=49 (total 49), solve_time_s=0.0741226 (total 0.0741226), converged=true
+Mechanical solve stats: solves=1, linear_iterations=90 (total 90), solve_time_s=0.142135 (total 0.142135), converged=true
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Suggested next time step size (from PID controller): 14.162700674069182 days
-Suggested next time step size (from iteration target): 3 days
-Well its= 1 Newton its= 3, linearizations= 4 (0.0sec), linear its=  2 (0.0sec)
+Suggested next time step size (from PID controller): 14.163475011756045 days
+Suggested next time step size (from iteration target): 3.400000000000001 days
+Well its= 1 Newton its= 2, linearizations= 3 (0.0sec), linear its=  2 (0.0sec)
 
 Starting time step 1, stepsize 2 days, at day 1/5, date = 02-Jan-2020
+----------------------Start beginTimeStep-------------------
 Geomech begin time step
 
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
-   0  0.000e+00  2.459e-05  0.000e+00  9.043e-06  0.000e+00  4.389e-04  0.000e+00  5.156e-01   Strict  Relaxed
-   1  0.000e+00  4.197e-07  0.000e+00  4.334e-05  0.000e+00  6.672e-06  0.000e+00  9.833e-02   Strict  Relaxed
-   2  0.000e+00  2.911e-08  0.000e+00  3.455e-07  0.000e+00  8.726e-07  0.000e+00  1.292e-05   Strict   Strict
+   0  0.000e+00  2.461e-05  0.000e+00  9.225e-06  0.000e+00  4.388e-04  0.000e+00  5.156e-01   Strict  Relaxed
+   1  0.000e+00  4.199e-07  0.000e+00  4.333e-05  0.000e+00  6.674e-06  0.000e+00  9.833e-02   Strict  Relaxed
+   2  0.000e+00  2.912e-08  0.000e+00  3.457e-07  0.000e+00  8.728e-07  0.000e+00  1.292e-05   Strict   Strict
 Overall linear iterations used: 0
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=2, linear_iterations=38 (total 87), solve_time_s=0.0593082 (total 0.133431), converged=true
+Mechanical solve stats: solves=2, linear_iterations=45 (total 135), solve_time_s=0.07199 (total 0.214125), converged=true
    Well B-3H converged in 1 inner iterations (0 control/status switches).
-Suggested next time step size (from PID controller): 20.99445736514952 days
+Suggested next time step size (from PID controller): 20.98951042903706 days
 Suggested next time step size (from iteration target): 6.800000000000002 days
  Newton its= 2, linearizations= 3 (0.0sec), linear its=  0 (0.0sec)
 
 Starting time step 2, stepsize 2 days, at day 3/5, date = 04-Jan-2020
+----------------------Start beginTimeStep-------------------
 Geomech begin time step
 
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
-   0  0.000e+00  2.769e-06  0.000e+00  2.590e-04  0.000e+00  1.479e-05  0.000e+00  4.760e-01   Strict  Relaxed
-   1  0.000e+00  7.657e-08  0.000e+00  2.545e-05  0.000e+00  2.062e-06  0.000e+00  5.353e-02   Strict  Relaxed
-   2  0.000e+00  7.061e-09  0.000e+00  8.015e-08  0.000e+00  2.598e-07  0.000e+00  6.720e-06   Strict   Strict
+   0  0.000e+00  2.771e-06  0.000e+00  2.590e-04  0.000e+00  1.481e-05  0.000e+00  4.760e-01   Strict  Relaxed
+   1  0.000e+00  7.658e-08  0.000e+00  2.545e-05  0.000e+00  2.062e-06  0.000e+00  5.353e-02   Strict  Relaxed
+   2  0.000e+00  7.062e-09  0.000e+00  8.016e-08  0.000e+00  2.599e-07  0.000e+00  6.721e-06   Strict   Strict
 Overall linear iterations used: 0
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=3, linear_iterations=51 (total 138), solve_time_s=0.079239 (total 0.21267), converged=true
-Suggested next time step size (from PID controller): 37.2212737218292 days
+Mechanical solve stats: solves=3, linear_iterations=44 (total 179), solve_time_s=0.0684966 (total 0.282622), converged=true
+Suggested next time step size (from PID controller): 37.21642032443903 days
 Suggested next time step size (from iteration target): 6.800000000000002 days
  Newton its= 2, linearizations= 3 (0.0sec), linear its=  0 (0.0sec)
 Sub steps started at time = 0 (days)
@@ -763,7 +786,7 @@ sub steps end time = 5 (days)
 Suggested next step size = 6 (days)
 
 Restart file written for report step 1/4, date = 06-Jan-2020 00:00:00
-Time step took 0.903378 seconds; total solver time 0.903378 seconds.
+Time step took 0.995630 seconds; total solver time 0.995630 seconds.
 
 
 
@@ -777,19 +800,21 @@ Time step took 0.903378 seconds; total solver time 0.903378 seconds.
 Report step  1/4 at day 5/100.5, date = 06-Jan-2020
 
 Starting time step 0, stepsize 5 days, at day 5/10, date = 06-Jan-2020
+----------------------Start beginTimeStep-------------------
 Geomech begin time step
 
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
-   0  0.000e+00  1.277e-06  0.000e+00  7.168e-04  0.000e+00  1.084e-05  0.000e+00  1.088e+00   Strict  Relaxed
-   1  0.000e+00  7.846e-08  0.000e+00  2.659e-04  0.000e+00  1.863e-06  0.000e+00  6.107e-01   Strict  Relaxed
-   2  0.000e+00  1.117e-08  0.000e+00  5.849e-05  0.000e+00  3.006e-07  0.000e+00  1.336e-01   Strict  Relaxed
-   3  0.000e+00  1.758e-09  0.000e+00  7.503e-08  0.000e+00  4.768e-08  0.000e+00  7.661e-05   Strict   Strict
+   0  0.000e+00  1.277e-06  0.000e+00  7.168e-04  0.000e+00  1.085e-05  0.000e+00  1.088e+00   Strict  Relaxed
+   1  0.000e+00  7.848e-08  0.000e+00  2.659e-04  0.000e+00  1.863e-06  0.000e+00  6.107e-01   Strict  Relaxed
+   2  0.000e+00  1.117e-08  0.000e+00  5.849e-05  0.000e+00  3.007e-07  0.000e+00  1.336e-01   Strict  Relaxed
+   3  0.000e+00  1.758e-09  0.000e+00  7.503e-08  0.000e+00  4.769e-08  0.000e+00  7.661e-05   Strict   Strict
 Overall linear iterations used: 0
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=4, linear_iterations=45 (total 183), solve_time_s=0.0702383 (total 0.282908), converged=true
-Suggested next time step size (from PID controller): 134.0752767112357 days
+Mechanical solve stats: solves=4, linear_iterations=42 (total 221), solve_time_s=0.0655119 (total 0.348134), converged=true
+Suggested next time step size (from PID controller): 134.05595095834838 days
 Suggested next time step size (from iteration target): 15 days
  Newton its= 3, linearizations= 4 (0.0sec), linear its=  0 (0.0sec)
 Sub steps started at time = 5 (days)
@@ -798,7 +823,7 @@ sub steps end time = 10 (days)
 Suggested next step size = 15 (days)
 
 Restart file written for report step 2/4, date = 11-Jan-2020 00:00:00
-Time step took 0.127657 seconds; total solver time 1.031036 seconds.
+Time step took 0.123411 seconds; total solver time 1.119040 seconds.
 
 
 
@@ -812,18 +837,20 @@ Time step took 0.127657 seconds; total solver time 1.031036 seconds.
 Report step  2/4 at day 10/100.5, date = 11-Jan-2020
 
 Starting time step 0, stepsize 5 days, at day 10/15, date = 11-Jan-2020
+----------------------Start beginTimeStep-------------------
 Geomech begin time step
 
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
-   0  0.000e+00  1.445e-07  0.000e+00  7.307e-04  0.000e+00  1.388e-06  0.000e+00  8.805e-01   Strict  Relaxed
-   1  0.000e+00  9.458e-09  0.000e+00  1.763e-04  0.000e+00  2.328e-07  0.000e+00  4.034e-01   Strict  Relaxed
-   2  0.000e+00  1.363e-09  0.000e+00  2.756e-07  0.000e+00  3.724e-08  0.000e+00  2.311e-04   Strict   Strict
+   0  0.000e+00  1.446e-07  0.000e+00  7.307e-04  0.000e+00  1.388e-06  0.000e+00  8.805e-01   Strict  Relaxed
+   1  0.000e+00  9.460e-09  0.000e+00  1.763e-04  0.000e+00  2.329e-07  0.000e+00  4.034e-01   Strict  Relaxed
+   2  0.000e+00  1.363e-09  0.000e+00  2.756e-07  0.000e+00  3.725e-08  0.000e+00  2.311e-04   Strict   Strict
 Overall linear iterations used: 0
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=5, linear_iterations=46 (total 229), solve_time_s=0.0701361 (total 0.353044), converged=true
-Suggested next time step size (from PID controller): 331.69143970164686 days
+Mechanical solve stats: solves=5, linear_iterations=42 (total 263), solve_time_s=0.0671915 (total 0.415325), converged=true
+Suggested next time step size (from PID controller): 331.64312109425475 days
 Suggested next time step size (from iteration target): 17.000000000000004 days
  Newton its= 2, linearizations= 3 (0.0sec), linear its=  0 (0.0sec)
 Sub steps started at time = 10 (days)
@@ -832,7 +859,7 @@ sub steps end time = 15 (days)
 Suggested next step size = 15 (days)
 
 Restart file written for report step 3/4, date = 16-Jan-2020 00:00:00
-Time step took 0.122203 seconds; total solver time 1.153239 seconds.
+Time step took 0.122305 seconds; total solver time 1.241346 seconds.
 
 
 
@@ -846,56 +873,62 @@ Time step took 0.122203 seconds; total solver time 1.153239 seconds.
 Report step  3/4 at day 15/100.5, date = 16-Jan-2020
 
 Starting time step 0, stepsize 15 days, at day 15/100.5, date = 16-Jan-2020
+----------------------Start beginTimeStep-------------------
 Geomech begin time step
 
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
-   0  0.000e+00  5.507e-08  0.000e+00  2.197e-03  0.000e+00  6.020e-07  0.000e+00  2.138e+00   Strict  Relaxed
-   1  0.000e+00  4.963e-09  0.000e+00  8.174e-04  0.000e+00  1.129e-07  0.000e+00  1.479e+00   Strict  Relaxed
-   2  0.000e+00  8.356e-10  0.000e+00  2.658e-04  0.000e+00  2.027e-08  0.000e+00  8.205e-01   Strict  Relaxed
-   3  0.000e+00  1.487e-10  0.000e+00  5.438e-05  0.000e+00  3.612e-09  0.000e+00  1.615e-01   Strict  Relaxed
-   4  0.000e+00  2.663e-11  0.000e+00  6.696e-07  0.000e+00  6.429e-10  0.000e+00  5.238e-04   Strict   Strict
+   0  0.000e+00  5.509e-08  0.000e+00  2.197e-03  0.000e+00  6.022e-07  0.000e+00  2.138e+00   Strict  Relaxed
+   1  0.000e+00  4.964e-09  0.000e+00  8.174e-04  0.000e+00  1.129e-07  0.000e+00  1.479e+00   Strict  Relaxed
+   2  0.000e+00  8.358e-10  0.000e+00  2.658e-04  0.000e+00  2.027e-08  0.000e+00  8.205e-01   Strict  Relaxed
+   3  0.000e+00  1.488e-10  0.000e+00  5.438e-05  0.000e+00  3.613e-09  0.000e+00  1.615e-01   Strict  Relaxed
+   4  0.000e+00  2.663e-11  0.000e+00  6.696e-07  0.000e+00  6.431e-10  0.000e+00  5.238e-04   Strict   Strict
 Overall linear iterations used: 0
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=6, linear_iterations=48 (total 277), solve_time_s=0.0753964 (total 0.428441), converged=true
-Suggested next time step size (from PID controller): 1787.8112677904026 days
+Mechanical solve stats: solves=6, linear_iterations=45 (total 308), solve_time_s=0.0713402 (total 0.486665), converged=true
+Suggested next time step size (from PID controller): 1787.5519934263364 days
 Suggested next time step size (from iteration target): 39 days
  Newton its= 4, linearizations= 5 (0.0sec), linear its=  0 (0.0sec)
 
 Starting time step 1, stepsize 39 days, at day 30/100.5, date = 31-Jan-2020
+----------------------Start beginTimeStep-------------------
 Geomech begin time step
 
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
-   0  0.000e+00  6.842e-09  0.000e+00  5.713e-03  0.000e+00  6.969e-08  0.000e+00  3.259e+00   Strict  Relaxed
-   1  0.000e+00  1.069e-10  0.000e+00  2.435e-03  0.000e+00  2.515e-09  0.000e+00  2.163e+00   Strict  Relaxed
-   2  0.000e+00  3.665e-12  0.000e+00  1.055e-03  0.000e+00  8.596e-11  0.000e+00  1.068e+00   Strict  Relaxed
-   3  0.000e+00  1.272e-13  0.000e+00  4.369e-04  0.000e+00  2.947e-12  0.000e+00  6.713e-01   Strict  Relaxed
-   4  0.000e+00  4.421e-15  0.000e+00  2.119e-05  0.000e+00  1.141e-13  0.000e+00  4.081e-02   Strict  Relaxed
-   5  0.000e+00  1.856e-16  0.000e+00  3.393e-10  0.000e+00  5.676e-14  0.000e+00  1.764e-07   Strict   Strict
+   0  0.000e+00  6.845e-09  0.000e+00  5.713e-03  0.000e+00  6.971e-08  0.000e+00  3.259e+00   Strict  Relaxed
+   1  0.000e+00  1.069e-10  0.000e+00  2.435e-03  0.000e+00  2.516e-09  0.000e+00  2.163e+00   Strict  Relaxed
+   2  0.000e+00  3.666e-12  0.000e+00  1.055e-03  0.000e+00  8.598e-11  0.000e+00  1.068e+00   Strict  Relaxed
+   3  0.000e+00  1.272e-13  0.000e+00  4.369e-04  0.000e+00  2.946e-12  0.000e+00  6.713e-01   Strict  Relaxed
+   4  0.000e+00  4.430e-15  0.000e+00  2.119e-05  0.000e+00  1.104e-13  0.000e+00  4.081e-02   Strict  Relaxed
+   5  0.000e+00  2.267e-16  0.000e+00  3.393e-10  0.000e+00  7.065e-14  0.000e+00  1.764e-07   Strict   Strict
 Overall linear iterations used: 5
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=7, linear_iterations=48 (total 325), solve_time_s=0.0748692 (total 0.50331), converged=true
-Suggested next time step size (from PID controller): 16946.85514156507 days
+Mechanical solve stats: solves=7, linear_iterations=48 (total 356), solve_time_s=0.0749245 (total 0.56159), converged=true
+Suggested next time step size (from PID controller): 16944.35993890171 days
 Suggested next time step size (from iteration target): 85.80000000000001 days
  Newton its= 5, linearizations= 6 (0.0sec), linear its=  5 (0.0sec)
 
 Starting time step 2, stepsize 31.5 days, at day 69/100.5, date = 10-Mar-2020
+----------------------Start beginTimeStep-------------------
 Geomech begin time step
 
 Iter    MB(O)      MB(W)      MB(G)      MB(E)      CNV(O)     CNV(W)     CNV(G)     CNV(E)    MBFLAG  CNVFLAG
-   0  0.000e+00  9.744e-11  0.000e+00  4.614e-03  0.000e+00  9.687e-10  0.000e+00  1.268e+00   Strict  Relaxed
-   1  0.000e+00  1.447e-12  0.000e+00  1.069e-03  0.000e+00  3.435e-11  0.000e+00  8.753e-01   Strict  Relaxed
-   2  0.000e+00  2.656e-13  0.000e+00  2.144e-04  0.000e+00  6.310e-12  0.000e+00  2.918e-01   Strict  Relaxed
-   3  0.000e+00  4.901e-14  0.000e+00  2.104e-06  0.000e+00  1.159e-12  0.000e+00  1.295e-03   Strict   Strict
+   0  0.000e+00  9.749e-11  0.000e+00  4.614e-03  0.000e+00  9.690e-10  0.000e+00  1.268e+00   Strict  Relaxed
+   1  0.000e+00  1.448e-12  0.000e+00  1.069e-03  0.000e+00  3.436e-11  0.000e+00  8.753e-01   Strict  Relaxed
+   2  0.000e+00  2.659e-13  0.000e+00  2.144e-04  0.000e+00  6.311e-12  0.000e+00  2.918e-01   Strict  Relaxed
+   3  0.000e+00  4.897e-14  0.000e+00  2.104e-06  0.000e+00  1.158e-12  0.000e+00  1.295e-03   Strict   Strict
 Overall linear iterations used: 1
+----------------------Start endTimeStep-------------------
 Geomech model endstimeStep
 
 Update Forces for Geomechanics
-Mechanical solve stats: solves=8, linear_iterations=47 (total 372), solve_time_s=0.0732678 (total 0.576578), converged=true
-Suggested next time step size (from PID controller): 65459.81881378007 days
+Mechanical solve stats: solves=8, linear_iterations=45 (total 401), solve_time_s=0.0718425 (total 0.633432), converged=true
+Suggested next time step size (from PID controller): 65450.062352838206 days
 Suggested next time step size (from iteration target): 94.5 days
  Newton its= 3, linearizations= 4 (0.0sec), linear its=  1 (0.0sec)
 Sub steps started at time = 15 (days)
@@ -906,7 +939,7 @@ sub steps end time = 100.5 (days)
 Suggested next step size = 94.5 (days)
 
 Restart file written for report step 4/4, date = 10-Apr-2020 12:00:00
-Time step took 0.333422 seconds; total solver time 1.486660 seconds.
+Time step took 0.332003 seconds; total solver time 1.573349 seconds.
 
 
 
@@ -917,25 +950,25 @@ Threads per MPI process:         2
 Setup time:                      0.03 s
   Deck input:                    0.01 s
 Number of timesteps:             8
-Simulation time:                 1.49 s
-  Assembly time:                 0.03 s (Wasted: 0.0 s; 0.0%)
+Simulation time:                 1.57 s
+  Assembly time:                 0.04 s (Wasted: 0.0 s; 0.0%)
     Well assembly:               0.00 s (Wasted: 0.0 s; 0.0%)
   Linear solve time:             0.07 s (Wasted: 0.0 s; 0.0%)
     Linear setup:                0.05 s (Wasted: 0.0 s; 0.0%)
-  Props/update time:             0.03 s (Wasted: 0.0 s; 0.0%)
-  Pre/post step:                 1.20 s (Wasted: 0.0 s; 0.0%)
-  Output write time:             0.19 s
-Overall Linearizations:         32      (Wasted:     0; 0.0%)
-Overall Newton Iterations:      24      (Wasted:     0; 0.0%)
+  Props/update time:             0.04 s (Wasted: 0.0 s; 0.0%)
+  Pre/post step:                 1.27 s (Wasted: 0.0 s; 0.0%)
+  Output write time:             0.18 s
+Overall Linearizations:         31      (Wasted:     0; 0.0%)
+Overall Newton Iterations:      23      (Wasted:     0; 0.0%)
 Overall Linear Iterations:       8      (Wasted:     0; 0.0%)
 
 
 
 Error summary:
 Warnings          5
-Info              211
+Info              214
 Errors            0
 Bugs              0
-Debug             81
+Debug             96
 Problems          0
 

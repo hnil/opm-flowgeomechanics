@@ -15936,7 +15936,7 @@
         </DataArray>
       </CellData>
       <Points>
-        <DataArray type="Float32" Name="Coordinates" NumberOfComponents="3" format="ascii">
+        <DataArray type="Float64" Name="Coordinates" NumberOfComponents="3" format="ascii">
           0 0 1900 181 0 1900 0 181 1900 181 181 1900
           0 0 1920 181 0 1920 0 181 1920 181 181 1920
           362 0 1900 362 181 1900 362 0 1920 362 181 1920
