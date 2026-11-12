@@ -1672,9 +1672,9 @@ Fracture::wellIndices_() const
             if(!only_to_one){
                 area_frac = all_reservoir_areas_[eIdx][lind]/tot_areas[eIdx];
             }
-            auto it = std::find(res_cells.begin(), res_cells.end(), res_cell);
-            int ind_wellIdx = it - res_cells.begin();
-            assert(!(it == res_cells.end()));
+            const auto it = std::lower_bound(res_cells.begin(), res_cells.end(), res_cell);
+            assert(it != res_cells.end() && *it == res_cell);
+            const int ind_wellIdx = it - res_cells.begin();
             double loc_area = area_frac*element.geometry().volume();
             area[ind_wellIdx] += loc_area;
             q_cells[ind_wellIdx] += area_frac*q;
@@ -1691,7 +1691,7 @@ Fracture::wellIndices_() const
                 z_cells[ind_wellIdx] = reservoir_cell_z_[eIdx]; // is set multiple times
             }else{
                 // logic could be changed after introduction of map
-              auto getFromMap = [](const std::map<int,double> map, int key){
+              auto getFromMap = [](const std::map<int,double>& map, int key){
                 if (auto search = map.find(key); search != map.end()){
                   return search->second;
                 }else{
