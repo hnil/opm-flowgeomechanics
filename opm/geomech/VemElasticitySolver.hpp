@@ -108,8 +108,8 @@ public:
     void stress(const Vector& dispall, VoigtField& out) const;
     void strain(const Vector& dispall, VoigtField& out) const;
 
-    Matrix& matrix() { return matrix_; }
-    const Matrix& matrix() const { return matrix_; }
+    Matrix& matrix() { return *matrix_; }
+    const Matrix& matrix() const { return *matrix_; }
     //! Jacobi factors when the matrix is S A S (diagonal_scaling), else empty.
     const Vector& scale() const { return scale_; }
     const std::vector<double>& coords() const { return coords_; }
@@ -132,7 +132,7 @@ private:
     std::tuple<int, std::vector<int>, std::vector<double>> dirichlet_;
     std::vector<double> rhs_force_;
 
-    Matrix matrix_;
+    std::unique_ptr<Matrix> matrix_ = std::make_unique<Matrix>();
     Matrix divmat_;    // from cell load to dofs
     Matrix stressmat_; // from all dofs (no elimination) to cell stress
     Matrix strainmat_;

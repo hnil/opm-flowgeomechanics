@@ -122,10 +122,10 @@ void VemDiscretisation<GridType>::assembleMatrix()
                                       /*num_neumann_faces*/ 0, nullptr, nullptr, A_entries,
                                       rhs_force_, stability_choice_, corner_mask_.data());
     const int num_dofs = int(rhs_force_.size());
-    matrix_ = Matrix();
-    matrix_.setBuildMode(Matrix::random);
-    matrix_.setSize(num_dofs, num_dofs);
-    makeDuneMatrixCompressed(A_entries, matrix_);
+    matrix_ = std::make_unique<Matrix>(); // a built BCRSMatrix cannot be rebuilt in place
+    matrix_->setBuildMode(Matrix::random);
+    matrix_->setSize(num_dofs, num_dofs);
+    makeDuneMatrixCompressed(A_entries, *matrix_);
     applyDirichlet();
     scale_.resize(0);
     if (diagonal_scaling_) {
@@ -161,7 +161,6 @@ void VemDiscretisation<GridType>::buildOperators()
                 divmatdof.emplace_back(row, col, val);
             }
         }
-        divmat_ = Matrix();
         divmat_.setBuildMode(Matrix::random);
         divmat_.setSize(num_dofs, num_cells_);
         makeDuneMatrixCompressed(divmatdof, divmat_);
@@ -176,7 +175,6 @@ void VemDiscretisation<GridType>::buildOperators()
                                &pratio_[0], dispall, stresstmp, entries, true, is_stress,
                                stability_choice_, stab_on_stress_, corner_mask_.data());
         Matrix& mat = is_stress ? stressmat_ : strainmat_;
-        mat = Matrix();
         mat.setBuildMode(Matrix::random);
         mat.setSize(num_cells_ * 6, dispall.size());
         makeDuneMatrixCompressed(entries, mat);
@@ -202,29 +200,29 @@ void VemDiscretisation<GridType>::applyDirichlet()
     const auto& fixed_dof_ixs = std::get<1>(dirichlet_);
     const auto& fixed_dof_values = std::get<2>(dirichlet_);
     double diag_sum = 0.0;
-    for (std::size_t i = 0; i < matrix_.N(); ++i) {
-        diag_sum += matrix_[i][i];
+    for (std::size_t i = 0; i < matrix_->N(); ++i) {
+        diag_sum += (*matrix_)[i][i];
     }
-    const double d = matrix_.N() > 0 ? diag_sum / matrix_.N() : 1.0;
-    std::vector<double> g(matrix_.N(), 0.0);
-    std::vector<char> fixed(matrix_.N(), 0);
+    const double d = matrix_->N() > 0 ? diag_sum / matrix_->N() : 1.0;
+    std::vector<double> g(matrix_->N(), 0.0);
+    std::vector<char> fixed(matrix_->N(), 0);
     for (std::size_t k = 0; k < fixed_dof_ixs.size(); ++k) {
         fixed[fixed_dof_ixs[k]] = 1;
         g[fixed_dof_ixs[k]] = fixed_dof_values[k];
     }
     // the pattern is symmetric, so row j lists the rows that hold column j
     for (const int j : fixed_dof_ixs) {
-        for (auto col = matrix_[j].begin(); col != matrix_[j].end(); ++col) {
+        for (auto col = (*matrix_)[j].begin(); col != (*matrix_)[j].end(); ++col) {
             const auto i = col.index();
             if (!fixed[i]) {
-                rhs_force_[i] -= matrix_[i][j] * g[j];
-                matrix_[i][j] = 0.0;
+                rhs_force_[i] -= (*matrix_)[i][j] * g[j];
+                (*matrix_)[i][j] = 0.0;
             }
         }
     }
     for (const int j : fixed_dof_ixs) {
-        matrix_[j] = 0.0;
-        matrix_[j][j] = d;
+        (*matrix_)[j] = 0.0;
+        (*matrix_)[j][j] = d;
         rhs_force_[j] = d * g[j];
     }
 }
@@ -254,7 +252,7 @@ void VemDiscretisation<GridType>::strain(const Vector& dispall, VoigtField& out)
 template<class GridType>
 void VemDiscretisation<GridType>::applyDiagonalScaling()
 {
-    auto& mat = matrix_;
+    auto& mat = *matrix_;
     scale_.resize(mat.N());
     for (auto row = mat.begin(), rowEnd = mat.end(); row != rowEnd; ++row) {
         const auto i = row.index();
