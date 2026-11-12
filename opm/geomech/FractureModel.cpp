@@ -80,8 +80,8 @@ makeDefaultFractureParam(bool rate_control)
     fracture_param.put("fractureparam.include_fracture_contributions", false);
 
     // seed to be in input file
-    fracture_param.put("fractureparam.config.verbosity", 1);// well seed should not be used any more
-    fracture_param.put("fractureparam.config.type", "well_seed"s);// well seed should not be used any more
+    fracture_param.put("fractureparam.config.verbosity", 1);
+    fracture_param.put("fractureparam.config.type", "well_seed"s);
     fracture_param.put("fractureparam.config.initial_fracture_width", 1e-4);
     fracture_param.put("fractureparam.config.min_width", 0.0);// normaly taken from deck
     fracture_param.put("fractureparam.config.trires", 5);
@@ -222,12 +222,7 @@ FractureModel::addFractures(const ScheduleState& sched,
 {
     const auto fracture_type = this->prm_.get<std::string>("config.type", "well_seed");
 
-    if (fracture_type == "perp_well") {
-        this->addFracturesPerpWell();
-    } else if (fracture_type == "tensile_fracture") {
-        this->addFracturesTensile();
-    }
-    else if (fracture_type == "well_seed") {
+    if (fracture_type == "well_seed") {
         this->addFracturesWellSeed(sched, lgrs);
     } else {
         OPM_THROW(std::runtime_error, "Fracture type '" + fracture_type + "' is not supported");
@@ -408,78 +403,6 @@ FractureModel::assignGeoMechWellState(WellState<Scalar,IndexTraits>& wellState) 
 // ===========================================================================
 // Private member functions
 // ===========================================================================
-
-void
-Opm::FractureModel::addFracturesPerpWell()
-{
-    using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<FractureWell::Grid::LeafGridView>;
-
-    for (auto wellIx = 0 * this->wells_.size(); wellIx < this->wells_.size(); ++wellIx) {
-        const auto& fracWell = this->wells_[wellIx];
-
-        const auto emap = ElementMapper {fracWell.grid().leafGridView(), Dune::mcmgElementLayout()};
-
-        for (const auto& elem : elements(fracWell.grid().leafGridView())) {
-            const auto& geom = elem.geometry();
-            const auto& origin = geom.corner(1);
-            const auto normal = origin - geom.corner(0);
-            const auto elemIdx = emap.index(elem);
-
-            this->well_fractures_[wellIx].emplace_back().init(
-                fracWell.name(),
-                /* connection index */ elemIdx,
-                /* reservoir cell */ fracWell.reservoirCell(elemIdx),
-                /*global_index */ -1, // dummy for now
-                /* well segment */ fracWell.segment(elemIdx),
-                /* distance range */ fracWell.perfRange(elemIdx),
-                /* seed origin */ origin,
-                /* fracturing plane's normal vector */ normal,
-                this->prm_,
-                fracWell.connectionIdentity(elemIdx));
-        }
-    }
-}
-
-void
-Opm::FractureModel::addFracturesTensile()
-{
-    // https://link.springer.com/article/10.1007/s40948-023-00694-1
-
-    using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<FractureWell::Grid::LeafGridView>;
-
-    for (auto wellIx = 0 * this->wells_.size(); wellIx < this->wells_.size(); ++wellIx) {
-        const auto& fracWell = this->wells_[wellIx];
-
-        const auto emap = ElementMapper {fracWell.grid().leafGridView(), Dune::mcmgElementLayout()};
-
-        for (const auto& elem : elements(fracWell.grid().leafGridView())) {
-            auto eigenVectors = Dune::FieldMatrix<double, 3, 3> {};
-            auto eigenValues = Dune::FieldVector<double, 3> {};
-
-            const auto elemIdx = emap.index(elem);
-
-            const auto stressmat = ddm::symTensor2Matrix(fracWell.reservoirStress(elemIdx));
-            Dune::FMatrixHelp::eigenValuesVectors(stressmat, eigenValues, eigenVectors);
-
-            // Note: documentation for eigenValuesVectors() seems to imply
-            // that minPos == eigenValues.begin() here.
-            const auto minPos = std::min_element(eigenValues.begin(), eigenValues.end());
-            const auto& normal = eigenVectors[std::distance(eigenValues.begin(), minPos)];
-
-            this->well_fractures_[wellIx].emplace_back().init(
-                fracWell.name(),
-                /* connection index */ elemIdx,
-                /* reservoir cell */ fracWell.reservoirCell(elemIdx),
-                /*global_index */ -1, // dummy for now
-                /* well segment */ fracWell.segment(elemIdx),
-                /* distance range */ fracWell.perfRange(elemIdx),
-                /* seed origin */ elem.geometry().corner(1),
-                /* fracturing plane's normal vector */ normal,
-                this->prm_,
-                fracWell.connectionIdentity(elemIdx));
-        }
-    }
-}
 
 namespace
 {

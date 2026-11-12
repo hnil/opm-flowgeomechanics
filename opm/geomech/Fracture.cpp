@@ -27,7 +27,6 @@
 
 #include <opm/geomech/Fracture.hpp>
 
-#include "opm/geomech/GridStretcher.hpp"
 #include <opm/geomech/Math.hpp>
 #include <opm/grid/polyhedralgrid.hh>
 #include <opm/simulators/linalg/FlowLinearSolverParameters.hpp>
@@ -110,8 +109,6 @@ Fracture::init(const std::string& well,
         naxis_[i] = axis_[i];
         axis_[i] *= init_scale;
     }
-    layers_ = 0;
-    nlinear_ = 0;
 
     const std::string method = prm_.get<std::string>("solver.method");
     if (method != "if_propagate_trimesh") {
@@ -182,24 +179,6 @@ Fracture::resetWriters()
     }
 }
 
-void
-Fracture::setupPressureSolver()
-{
-    OPM_TIMEFUNCTION();
-    Opm::FlowLinearSolverParameters p;
-    p.linsolver_ = prm_.get<std::string>("pressuresolver");
-    prmpressure_ = Opm::setupPropertyTree(p, true, true);
-    {
-        std::size_t pressureIndex = 0; // Dummy
-        const std::function<Vector()> weightsCalculator; // Dummy
-        auto pressure_operator = std::make_unique<PressureOperatorType>(*pressure_matrix_);
-        pressure_operator_ = std::move(pressure_operator);
-        auto psolver = std::make_unique<FlexibleSolverType>(
-            *pressure_operator_, prmpressure_, weightsCalculator, pressureIndex);
-
-        pressure_solver_ = std::move(psolver);
-    }
-}
 /**
  * @brief Removes cells from the grid if they are out side reservoir.
  */
@@ -406,33 +385,10 @@ Fracture::updateCellNormals()
 void
 Fracture::setFractureGrid(std::unique_ptr<Fracture::Grid> gptr)
 {
-    if (gptr == nullptr) {
-        // create a new grid
-        initFracture();
-        int num_exp = prm_.get<int>("config.num_exp");
-        if (num_exp > 0) {
-            grow(num_exp, 0);
-        }
-        nlinear_ = layers_;
-        int num_lin = prm_.get<int>("config.num_lin");
-        if (num_lin > 0) {
-            grow(num_lin, 1);
-        }
-        grid_->grow();
-        grid_->postGrow();
-    } else {
-        // use grid provided by user
-        grid_ = std::move(gptr);
-        // NB: we have not initialized the out_indices_ vector, which would be
-        // necessary if we plan to grow the user-provided grid.
-        // well_source_ is also not initialized.
-    }
+    assert(gptr != nullptr);
+    grid_ = std::move(gptr);
     // compute the cell normals
     updateCellNormals();
-
-    // set object to allow stretching of the grid (not used with trimesh)
-    if (trimesh_ == nullptr)
-        grid_stretcher_ = std::unique_ptr<GridStretcher>(new GridStretcher(*grid_));
 
     // set sparsity of pressure matrix, but do not compute its entries
 
@@ -443,46 +399,6 @@ Fracture::setFractureGrid(std::unique_ptr<Fracture::Grid> gptr)
     fracture_matrix_ = nullptr;
 
     this->resetWriters();
-}
-
-void
-Fracture::initFracture()
-{
-    Dune::GridFactory<Grid> factory;
-    size_t N = 6;
-    double radius = 1;
-    std::vector<unsigned int> inner_indices;
-    std::vector<Dune::FieldVector<double, 3>> vertices;
-    {
-        Point3D vertex = surfaceMap(0.0, 0.0);
-        vertices.push_back(vertex);
-    }
-
-    for (size_t i = 0; i < N; ++i) {
-
-        inner_indices.push_back(i + 1);
-        double theta = (i * 2 * M_PI) / N;
-        double x = radius * cos(theta);
-        double y = radius * sin(theta);
-        Point3D vertex = surfaceMap(x, y);
-        vertices.push_back(vertex);
-        // assume the first 6 cells has source
-        well_source_.push_back(i);
-    }
-    for (size_t i = 0; i < vertices.size(); i++) {
-        factory.insertVertex(vertices[i]);
-    }
-    std::vector<std::vector<unsigned int>> cornerIDs;
-    for (size_t i = 0; i < N; ++i) {
-        unsigned int next = inner_indices[(i + 1) % N];
-        std::vector<unsigned int> cornerID({unsigned(0), unsigned(inner_indices[i]), next});
-        cornerIDs.push_back(cornerID);
-    }
-    for (size_t i = 0; i < N; ++i) {
-        factory.insertElement(Dune::GeometryTypes::simplex(2), cornerIDs[i]);
-    }
-    out_indices_ = inner_indices;
-    grid_ = factory.createGrid();
 }
 
 std::vector<double>
@@ -847,100 +763,6 @@ Fracture::writemulti(double time) const
     }
     vtkmultiwriter_->endWrite(false);
 };
-
-void
-Fracture::grow(int layers, int method)
-{
-    while (layers_ < layers) {
-        std::vector<unsigned int> inner_indices = out_indices_;
-        out_indices_.resize(0);
-        if (method == 0) {
-            this->insertExp(inner_indices);
-        } else {
-            this->insertLinear(inner_indices);
-            nlinear_ += 1;
-        }
-        ++layers_;
-        inner_indices = out_indices_;
-    }
-}
-void
-Fracture::insertLinear(const std::vector<unsigned int>& inner_indices)
-{
-    double radius = 1.0;
-    size_t N = inner_indices.size();
-    for (size_t i = 0; i < N; ++i) {
-        double theta = (i * 2 * M_PI) / (N);
-        theta += (layers_ - nlinear_) * 0.5 * (2 * M_PI / N);
-        double out_radius = radius + layers_ + 1;
-        double x = out_radius * cos(theta);
-        double y = out_radius * sin(theta);
-        Point3D vertex = surfaceMap(x, y);
-        int new_ind = grid_->insertVertex(vertex);
-        out_indices_.push_back(new_ind);
-    }
-    for (size_t i = 0; i < N; ++i) {
-        {
-            std::vector<unsigned int> cornerID(
-                {inner_indices[i % N], out_indices_[(i) % (N)], inner_indices[(i + 1) % (N)]});
-            grid_->insertElement(Dune::GeometryTypes::simplex(2), cornerID);
-        }
-
-        {
-            std::vector<unsigned int> cornerID(
-                {inner_indices[(i + 1) % N], out_indices_[(i) % (N)], out_indices_[(i + 1) % (N)]});
-            grid_->insertElement(Dune::GeometryTypes::simplex(2), cornerID);
-        }
-    }
-}
-
-void
-Fracture::insertExp(const std::vector<unsigned int>& inner_indices)
-{
-    size_t N = inner_indices.size();
-    double radius = 1.0;
-
-    for (size_t i = 0; i < N * 2; ++i) {
-        double theta = (i * 2 * M_PI) / (N * 2);
-        double out_radius = radius + layers_ + 1;
-        double x = out_radius * cos(theta);
-        double y = out_radius * sin(theta);
-        Point3D vertex = surfaceMap(x, y);
-        int new_ind = grid_->insertVertex(vertex);
-        out_indices_.push_back(new_ind);
-    }
-
-
-    for (size_t i = 0; i < N; ++i) {
-        {
-            std::vector<unsigned int> cornerID({inner_indices[i],
-                                                out_indices_[(2 * i) % (N * 2)],
-                                                out_indices_[(2 * i + 1) % (N * 2)]});
-            grid_->insertElement(Dune::GeometryTypes::simplex(2), cornerID);
-        }
-        {
-            std::vector<unsigned int> cornerID(
-                {inner_indices[i], out_indices_[(2 * i + 1) % (N * 2)], inner_indices[(i + 1) % N]});
-            grid_->insertElement(Dune::GeometryTypes::simplex(2), cornerID);
-        }
-        {
-            std::vector<unsigned int> cornerID({inner_indices[(i + 1) % N],
-                                                out_indices_[(2 * i + 1) % (N * 2)],
-                                                out_indices_[(2 * i + 2) % (N * 2)]});
-            grid_->insertElement(Dune::GeometryTypes::simplex(2), cornerID);
-        }
-    }
-}
-
-Dune::FieldVector<double, 3>
-Fracture::surfaceMap(double x, double y)
-{
-    Point3D vec(0.0);
-    vec += x * axis_[0];
-    vec += y * axis_[1];
-    vec += origo_;
-    return vec;
-}
 
 void
 Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
@@ -2223,23 +2045,6 @@ Fracture::vetoClosedFront_(std::vector<double>& score, const std::vector<int>& f
 }
 
 void
-Fracture::writePressureSystem() const
-{
-    if (prm_.get<bool>("write_pressure_system")) {
-        Dune::storeMatrixMarket(*pressure_matrix_, "pressure_matrix");
-        Dune::storeMatrixMarket(rhs_pressure_, "pressure_rhs");
-    }
-}
-
-void
-Fracture::writeFractureSystem() const
-{
-    if (prm_.get<bool>("write_fracture_system")) {
-        Dune::storeMatrixMarket(rhs_width_, "rhs_width");
-    }
-}
-
-void
 Fracture::initFractureStates()
 {
     this->initFractureWidth();
@@ -3022,8 +2827,7 @@ Fracture::assemblePressure()
         // First call: take ownership of the newly created matrix.
         pressure_matrix_ = std::move(result);
     } else {
-        // Subsequent calls: copy values into the existing matrix so that any
-        // cached solver (pressure_solver_) still holds a valid reference.
+        // Subsequent calls: copy values so references to the matrix stay valid.
         *pressure_matrix_ = *result;
     }
 }
@@ -3135,19 +2939,6 @@ Fracture::normalFractureTraction(Dune::BlockVector<Dune::FieldVector<double, 1>>
         traction[eIdx] = normalFractureTraction(eIdx);
 }
 void
-Fracture::updateFractureRHS()
-{
-    assert(numWellEquations() == 0); // not implemented/tested for rate-controlled systems
-    rhs_width_ = fracture_pressure_;
-    for (size_t i = 0; i < rhs_width_.size(); ++i) {
-        rhs_width_[i] = rhs_width_[i] - normalFractureTraction(i);
-        if (rhs_width_[i] < 0.0)
-            rhs_width_[i] = 0.0; // not entirely accurate, but avoids
-        // unphysical negative normal displacements
-    }
-}
-
-void
 Fracture::assembleFractureMatrix() const
 {
     OPM_TIMEFUNCTION();
@@ -3158,18 +2949,6 @@ Fracture::assembleFractureMatrix() const
     fracture_matrix_->resize(nc, nc);
     *fracture_matrix_ = 0.0;
     ddm::assembleMatrix_fast(*fracture_matrix_, E_, nu_, *grid_);
-}
-
-void
-Fracture::printPressureMatrix() const // debug purposes
-{
-    Dune::printSparseMatrix(std::cout, *pressure_matrix_, "matname", "linameo");
-}
-
-void
-Fracture::printMechMatrix() const // debug purposes
-{
-    Dune::printmatrix(std::cout, fractureMatrix(), "matname", "linameo");
 }
 
 

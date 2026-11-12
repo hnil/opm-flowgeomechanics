@@ -309,18 +309,6 @@ namespace Opm {
         }
     }
 
-    inline bool
-    FractureModel::addPertsToSchedule()
-    {
-        return prm_.get<bool>("addperfs_to_schedule");
-    }
-
-    inline Opm::PropertyTree&
-    FractureModel::getParam()
-    {
-        return prm_;
-    }
-
     inline const FractureSolveStats&
     FractureModel::lastSolveStats() const
     {

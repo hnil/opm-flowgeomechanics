@@ -185,12 +185,10 @@ public:
             }
         }
 
-        bool addPertsToSchedule();
         // probably this should be collected in one loop since all do full loop over fracture ++ well
         Dune::FieldVector<double, 6> stress(Dune::FieldVector<double, 3> obs) const;
         Dune::FieldVector<double, 6> strain(Dune::FieldVector<double, 3> obs) const;
         Dune::FieldVector<double, 3> disp(Dune::FieldVector<double, 3> obs) const;
-        Opm::PropertyTree& getParam();
         const FractureSolveStats& lastSolveStats() const;
         const FractureSolveStats& totalSolveStats() const;
         static Opm::DeferredLogger fractureLogger;
@@ -235,10 +233,6 @@ public:
         FractureSolveStats total_solve_stats_{};
         external::cvf::ref<external::cvf::BoundingBoxTree> cell_search_tree_;
         std::vector<EntitySeed> cell_seeds_;
-        /// Initialise fractures perpendicularly to each reservoir connection.
-        void addFracturesPerpWell();
-        void addFracturesTensile();
-
         /// Initialise fractures in each seed identified in the WSEED keyword.
         ///
         /// \param[in] sched Dynamic objects in current run, especially

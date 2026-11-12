@@ -75,7 +75,6 @@
 #include <opm/material/fluidsystems/BlackOilDefaultFluidSystemIndices.hpp>
 #include <dune/istl/matrixmarket.hh>
 
-#include <opm/geomech/GridStretcher.hpp>
 #include <opm/geomech/RegularTrimesh.hpp>
 #include <opm/geomech/FracturePressureAssemblerAD.hpp>
 
@@ -267,7 +266,6 @@ public:
               const PropertyTree& prm,
               FractureConnectionId connection_id);
 
-    void grow(int layers, int method);
     std::string name() const;
     void write(int reportStep = -1) const;
     void writemulti(double time) const;
@@ -304,11 +302,7 @@ public:
                const Simulator& simulator,
                SolveMode mode = SolveMode::Full);
     FractureProperties calculateFractureProperties() const;
-    void printPressureMatrix() const; // debug purposes
-    void printMechMatrix() const; // debug purposes
-    void writeFractureSystem()  const;
-    void writePressureSystem()  const;
-    void setFractureGrid(std::unique_ptr<Fracture::Grid> gptr = nullptr); // a hack to allow use of another grid
+    void setFractureGrid(std::unique_ptr<Fracture::Grid> gptr);
     std::vector<RuntimePerforation> wellIndices() const;
     std::vector<RuntimePerforation> wellIndicesAvrg(const std::vector<std::vector<RuntimePerforation>>& well_indices) const;
     WellInfo& wellInfo();
@@ -443,7 +437,6 @@ public:
         }
         closed_cells_ = closed;
     }
-    bool externalPressureMode() const { return external_pressure_; }
     //! Per cell: the cell of the layout at the last markFlowStateBound() whose flow
     //! state it inherits across regrids (-1: none). Only valid if flowStateRemapped().
     const std::vector<int>& flowStateDonor() const { return flow_state_donor_; }
@@ -488,7 +481,6 @@ public:
     void setActive(bool active);
     bool isActive() const;
     const FractureSolveStats& lastSolveStats() const;
-    std::array<double,2> hightAndWidth() const;
     double maxFlowTimeStep() const;
     // Per-step growth guard: area now vs at the step checkpoint. Returns a
     // non-empty message if growth exceeded solver.max_area_growth_per_step
@@ -689,13 +681,7 @@ private:
 
     void resetWriters();
     Dune::BlockVector<Dune::FieldVector<double, 3>> all_slips() const;
-    // helpers for growing grid
-    void insertLinear(const std::vector<unsigned int>& inner_indices);
-    void insertExp(const std::vector<unsigned int>& inner_indices);
-    void initFracture(); // create a new fracture grid from scratch
-    Point3D surfaceMap(double x, double y);
 
-    std::unique_ptr<GridStretcher> grid_stretcher_; // experimental, for stretching grids
     std::unique_ptr<Opm::RegularTrimesh> trimesh_; // experimental, implicitly defined grids
 
     std::vector<std::vector<CellRef>> grid_mesh_map_; // index mapping from cells in grid_ to trimesh_.
@@ -703,8 +689,6 @@ private:
     std::vector<CellRef> grid_fixed_cells_; // cells kept fine when grid_ was built from trimesh_
     std::unique_ptr<Grid> grid_;
     // grid definition in case of step fails
-    std::unique_ptr<Grid> grid_prev_;
-    std::unique_ptr<GridStretcher> grid_stretcher_prev_; // experimental, for stretching grids
     std::unique_ptr<Opm::RegularTrimesh> trimesh_prev_; // experimental, implicitly defined grids
     std::vector<std::vector<CellRef>> grid_mesh_map_prev_; // index mapping from cells in grid_ to trimesh_.
                                                       // NB: in general many-to-many
@@ -728,16 +712,11 @@ private:
     std::unique_ptr<Dune::VTKWriter<Grid::LeafGridView>> vtkwriter_;
     static constexpr auto VTKFormat = Dune::VTK::ascii;
     std::unique_ptr<::Opm::VtkMultiWriter<Grid::LeafGridView, VTKFormat>> vtkmultiwriter_;
-    std::vector<unsigned int> out_indices_;
 
     std::vector<double> filtercake_thikness_; // properties of filter cake, if any
     double filtercake_perm_{0.0}; // permeability of filter cake, if any
     double filtercake_poro_{0.0}; // permeability of filter cake, if any
     bool has_filtercake_{false}; // if true, filter cake is used in the model
-
-    // should probably not be needed
-    int layers_;
-    int nlinear_;
 
     // help function for solving
     FracturePressureInput makePressureAssemblyInput() const;
@@ -746,8 +725,6 @@ private:
     void assemblePressureAndCouplingAD(const std::vector<int>& closed_cells);
     void addSource();
     void initPressureMatrix();
-    void setupPressureSolver();
-    void updateFractureRHS();
     void updateLeakoff();
     double leakoffMobilityFor(int eIdx, bool upwind) const;
     double leakoffPotentialDifference(int eIdx) const;
@@ -864,12 +841,7 @@ private:
     std::vector<double> leakof_;
     std::vector<double> leakoff_mobility_;
 
-    PropertyTree prmpressure_;
-    using PressureOperatorType = Dune::MatrixAdapter<Matrix, Vector, Vector>;
-    using FlexibleSolverType = Dune::FlexibleSolver<PressureOperatorType>;
     mutable std::unique_ptr<Matrix> pressure_matrix_;
-    mutable std::unique_ptr<PressureOperatorType> pressure_operator_;
-    mutable std::unique_ptr<FlexibleSolverType> pressure_solver_;
     mutable std::unique_ptr<Matrix> coupling_matrix_; // will be updated by `fullSystemIteration`
 
     using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView>;
