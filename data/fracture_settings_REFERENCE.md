@@ -115,9 +115,6 @@ across outer iterations. Implemented in `Fracture::applyCouplingUpdate`.
 | `wi_upscaling` | `legacy` | KEEP BOTH options; the default stays `legacy` (the safe one). `legacy` zeroes CTF contributions where p_well < p_cell — a discontinuity, but it implicitly limits over-injection through cells the fracture cannot actually feed. `conductivity` is continuous but MISSES the in-fracture pressure drop (it upscales as if the whole fracture sat at the perforation pressure), over-stating conduction on long fractures. The proper fix arrives with the well-in-the-loop integration, where the fracture pressure profile enters the well equations directly. |
 | `ctf_change_threshold_rel` | 0.0 | optional relative CTF change gate (AND-ed with abs when >0) |
 | `ctf_relative_scale` | 1.0 | floor scale for the relative CTF change |
-| `perf_pressure_change_threshold` | 1e30 | abs perf-pressure change gate (1e30 ⇒ effectively never gates on perf pressure) |
-| `perf_pressure_change_threshold_rel` | 0.0 | relative perf-pressure gate |
-| `perf_pressure_relative_scale` | 1.0 | floor scale for relative perf-pressure change |
 | `coupling_update_mode` | `legacy` | how perf-pressure (and WI, if enabled) are updated each outer iter: `legacy` (fixed damped average) · `aitken` (adaptive relaxation ω) · `anderson` (1-history Anderson mixing, Aitken/legacy fallback) |
 | `damping_factor_perf` | 2.0 | legacy damping weight for perf-pressure: `new=(old·d+target)/(1+d)` |
 | `damping_factor_wi` | 2.0 | legacy damping weight for well-index / CTF averaging |

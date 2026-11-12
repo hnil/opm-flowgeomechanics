@@ -558,7 +558,7 @@ private:
        double pfracLeak{}, leak{}, pfracArea{}; // WiMode::FracturePressure only
    };
    std::vector<CellExchange> gatherCellExchange_(const WiOptions& opt) const;
-   RuntimePerforation perforation_(const CellExchange& c, double inj_press) const;
+   RuntimePerforation perforation_(const CellExchange& c) const;
    std::vector<RuntimePerforation> wiLegacy_(const std::vector<CellExchange>& cells,
                                              double inj_press) const;
    std::vector<RuntimePerforation> wiConductivity_(const std::vector<CellExchange>& cells,

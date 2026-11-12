@@ -1540,7 +1540,7 @@ Fracture::gatherCellExchange_(const WiOptions& opt) const
 }
 
 RuntimePerforation
-Fracture::perforation_(const CellExchange& c, const double inj_press) const
+Fracture::perforation_(const CellExchange& c) const
 {
     RuntimePerforation perf;
     perf.cell = c.cell;
@@ -1549,7 +1549,6 @@ Fracture::perforation_(const CellExchange& c, const double inj_press) const
     perf.depth = c.z;
     perf.segment = this->wellinfo_.segment;
     perf.perf_range = this->wellinfo_.perf_range;
-    perf.pressure = inj_press;
     return perf;
 }
 
@@ -1560,7 +1559,7 @@ Fracture::wiLegacy_(const std::vector<CellExchange>& cells, const double inj_pre
     std::vector<RuntimePerforation> perfs;
     perfs.reserve(cells.size());
     for (const auto& c : cells) {
-        auto& perf = perfs.emplace_back(perforation_(c, inj_press));
+        auto& perf = perfs.emplace_back(perforation_(c));
         const double dh_res = c.z * gravity_ * c.dens;
         const double dh_perf = gravity_ * c.dens * origo_[2];
         double WI = 0.0;
@@ -1593,7 +1592,7 @@ Fracture::wiConductivity_(const std::vector<CellExchange>& cells,
     double sum_ctf_dp = 0.0;
     int legacy_negative_count = 0;
     for (const auto& c : cells) {
-        auto& perf = perfs.emplace_back(perforation_(c, inj_press));
+        auto& perf = perfs.emplace_back(perforation_(c));
         const double dh_res = c.z * gravity_ * c.dens;
         const double dh_perf = gravity_ * c.dens * origo_[2];
         double ctf = c.trans;
@@ -1643,7 +1642,7 @@ Fracture::wiFracturePressure_(const std::vector<CellExchange>& cells, const doub
     std::vector<RuntimePerforation> perfs;
     perfs.reserve(cells.size());
     for (const auto& c : cells) {
-        auto& perf = perfs.emplace_back(perforation_(c, inj_press));
+        auto& perf = perfs.emplace_back(perforation_(c));
         perf.ctf = c.trans;
         const double p_frac = (c.leak > 0.0) ? c.pfracLeak / c.leak
             : (c.area > 0.0 ? c.pfracArea / c.area : inj_press);

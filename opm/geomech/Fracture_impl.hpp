@@ -970,7 +970,6 @@ Fracture::serializeState(Serializer& serializer)
             serializer(perf.cell);
             serializer(perf.ctf);
             serializer(perf.depth);
-            serializer(perf.pressure);
             serializer(perf.segment);
             serializer(perf.perf_range);
             serializer(perf.fracture_pressure_offset);

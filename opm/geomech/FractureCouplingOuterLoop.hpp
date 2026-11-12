@@ -57,16 +57,13 @@ namespace Opm
         {
             bool structure_changed{false};
             bool ctf_changed{false};
-            bool perf_pressure_changed{false};
             double max_ctf_change_abs{0.0};
             double max_ctf_change_rel{0.0};
-            double max_perf_change_abs{0.0};
-            double max_perf_change_rel{0.0};
             double composite_norm{0.0};
 
             bool changed() const
             {
-                return structure_changed || ctf_changed || perf_pressure_changed;
+                return structure_changed || ctf_changed;
             }
         };
 
@@ -311,9 +308,6 @@ namespace Opm
             const double ctf_threshold_abs = prm.get("solver.ctf_change_threshold", 1e-15);
             const double ctf_threshold_rel = prm.get("solver.ctf_change_threshold_rel", 0.0);
             const double ctf_rel_scale = prm.get("solver.ctf_relative_scale", 1.0);
-            const double perf_threshold_abs = prm.get("solver.perf_pressure_change_threshold", 1e30);
-            const double perf_threshold_rel = prm.get("solver.perf_pressure_change_threshold_rel", 0.0);
-            const double perf_rel_scale = prm.get("solver.perf_pressure_relative_scale", 1.0);
             const int verbosity = prm.get("solver.verbosity", 1);
 
             CouplingChangeMetrics metrics;
@@ -344,15 +338,6 @@ namespace Opm
 
                     metrics.max_ctf_change_abs = std::max(metrics.max_ctf_change_abs, ctf_change_abs);
                     metrics.max_ctf_change_rel = std::max(metrics.max_ctf_change_rel, ctf_change_rel);
-
-                    const double perf_old = wellIndices[i].pressure;
-                    const double perf_new = wellIndices_new[i].pressure;
-                    const double perf_change_abs = std::abs(perf_old - perf_new);
-                    const double perf_scale = std::max({std::abs(perf_old), std::abs(perf_new), perf_rel_scale});
-                    const double perf_change_rel = perf_change_abs / perf_scale;
-
-                    metrics.max_perf_change_abs = std::max(metrics.max_perf_change_abs, perf_change_abs);
-                    metrics.max_perf_change_rel = std::max(metrics.max_perf_change_rel, perf_change_rel);
                 }
             }
 
@@ -364,51 +349,26 @@ namespace Opm
                 metrics.ctf_changed = metrics.max_ctf_change_abs > ctf_threshold_abs;
             }
 
-            if (perf_threshold_rel > 0.0) {
-                metrics.perf_pressure_changed = metrics.max_perf_change_abs > perf_threshold_abs
-                                             && metrics.max_perf_change_rel > perf_threshold_rel;
-            }
-            else {
-                metrics.perf_pressure_changed = metrics.max_perf_change_abs > perf_threshold_abs;
-            }
-
             const double ctf_abs_norm = (ctf_threshold_abs > 0.0)
                 ? metrics.max_ctf_change_abs / ctf_threshold_abs
                 : 0.0;
             const double ctf_rel_norm = (ctf_threshold_rel > 0.0)
                 ? metrics.max_ctf_change_rel / ctf_threshold_rel
                 : 0.0;
-            const double perf_abs_norm = (perf_threshold_abs > 0.0)
-                ? metrics.max_perf_change_abs / perf_threshold_abs
-                : 0.0;
-            const double perf_rel_norm = (perf_threshold_rel > 0.0)
-                ? metrics.max_perf_change_rel / perf_threshold_rel
-                : 0.0;
             metrics.composite_norm = std::max({ctf_abs_norm,
                                                ctf_rel_norm,
-                                               perf_abs_norm,
-                                               perf_rel_norm,
                                                metrics.structure_changed ? 1.0 : 0.0});
 
             if (verbosity > 0) {
                 std::stringstream os;
                 os << "Fracture coupling change: structure_changed=" << (metrics.structure_changed ? "true" : "false")
                    << ", ctf_changed=" << (metrics.ctf_changed ? "true" : "false")
-                   << ", perf_changed=" << (metrics.perf_pressure_changed ? "true" : "false")
                    << ", max_ctf_change_abs=" << metrics.max_ctf_change_abs
                    << ", max_ctf_change_rel=" << metrics.max_ctf_change_rel
-                   << ", max_perf_change_abs=" << metrics.max_perf_change_abs
-                   << ", max_perf_change_rel=" << metrics.max_perf_change_rel
                    << ", composite_norm=" << metrics.composite_norm
                    << ", abs_threshold=" << ctf_threshold_abs;
                 if (ctf_threshold_rel > 0.0) {
                     os << ", rel_threshold=" << ctf_threshold_rel;
-                }
-                if (perf_threshold_abs < 1e29) {
-                    os << ", perf_abs_threshold=" << perf_threshold_abs;
-                }
-                if (perf_threshold_rel > 0.0) {
-                    os << ", perf_rel_threshold=" << perf_threshold_rel;
                 }
                 OpmLog::info(os.str());
             }
@@ -501,11 +461,9 @@ namespace Opm
             CouplingChangeMetrics metrics = local;
             metrics.structure_changed = comm.max(local.structure_changed);
             metrics.ctf_changed = comm.max(local.ctf_changed);
-            metrics.perf_pressure_changed = comm.max(local.perf_pressure_changed);
             metrics.composite_norm = comm.max(local.composite_norm);
             if (cfg.residualMode) {
                 metrics.max_ctf_change_rel = comm.max(local.max_ctf_change_rel);
-                metrics.max_perf_change_rel = comm.max(local.max_perf_change_rel);
             }
             last_coupling_composite_norm_ = metrics.composite_norm;
             return metrics;
@@ -592,10 +550,9 @@ namespace Opm
             }
 
             if (cfg.residualMode) {
-                // Largest relative change of any fracture CTF or perforation pressure;
-                // a structure change or an unconverged fracture solve always keeps the loop.
-                const double outer_residual = std::max(metrics.max_ctf_change_rel,
-                                                       metrics.max_perf_change_rel);
+                // Largest relative change of any fracture CTF; a structure change or
+                // an unconverged fracture solve always keeps the loop.
+                const double outer_residual = metrics.max_ctf_change_rel;
                 const bool outer_converged = fractureConverged
                     && !metrics.structure_changed
                     && outer_residual <= cfg.couplingTolerance;

@@ -52,8 +52,11 @@ namespace Opm {
         GeometryHelper geomhelp(grid);
 	// NB: need to be carefull in parallel
         vtkwritewells_= prm_.get<bool>("vtkwritewells", false);
-        // options of the removed non-trimesh solve methods, still set in old configs
-        for (const std::string key : {"solver.efac", "solver.rfac", "solver.max_expand_iter"}) {
+        // removed options, still set in old configs
+        for (const std::string key : {"solver.efac", "solver.rfac", "solver.max_expand_iter",
+                                      "solver.perf_pressure_change_threshold",
+                                      "solver.perf_pressure_change_threshold_rel",
+                                      "solver.perf_pressure_relative_scale"}) {
             if (prm_.get_child_optional(key)) {
                 OpmLog::warning("Fracture option " + key + " is no longer used and is ignored");
             }
