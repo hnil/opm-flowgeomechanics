@@ -43,24 +43,11 @@
 #include <dune/istl/solvers.hh>
 #include <dune/istl/preconditioners.hh>
 #include <opm/grid/CpGrid.hpp>
-#include <opm/elasticity/shapefunctions.hpp>
+#include <dune/istl/bvector.hh>
+#include <dune/istl/bcrsmatrix.hh>
+#include <dune/istl/owneroverlapcopy.hh>
 
 #include <opm/common/utility/platform_dependent/reenable_warnings.h>
-
-#include <opm/elasticity/asmhandler.hpp>
-#include <opm/elasticity/boundarygrid.hh>
-#include <opm/elasticity/elasticity.hpp>
-#include <opm/elasticity/elasticity_preconditioners.hpp>
-#include <opm/elasticity/logutils.hpp>
-#include <opm/elasticity/materials.hh>
-#include <opm/elasticity/matrixops.hpp>
-#include <opm/elasticity/meshcolorizer.hpp>
-#include <opm/elasticity/mpc.hh>
-#include <opm/elasticity/mortar_schur.hpp>
-#include <opm/elasticity/mortar_utils.hpp>
-#include <opm/elasticity/mortar_evaluator.hpp>
-#include <opm/elasticity/mortar_schur_precond.hpp>
-#include <opm/elasticity/uzawa_solver.hpp>
 
 #include <opm/input/eclipse/Parser/Parser.hpp>
 #include <opm/input/eclipse/Deck/Deck.hpp>
@@ -73,6 +60,7 @@
 namespace Opm {
 namespace Elasticity {
 
+using Vector = Dune::BlockVector<Dune::FieldVector<double,1>>;
 
 //! \brief The main driver class
 template<class GridType>
@@ -115,9 +103,6 @@ class VemElasticitySolver
     {
     }
 
-    void setMaterial(const std::vector<std::shared_ptr<Material>>& materials_){
-        materials = materials_;
-    }
     void setMaterial(const std::vector<double>& ymodule,const std::vector<double>& pratio){
         ymodule_ = ymodule;
         pratio_ = pratio;
@@ -164,8 +149,7 @@ class VemElasticitySolver
     //! \brief Assemble (optionally) stiffness matrix A and load vector
     //! \param[in] loadcase The strain load case. Set to -1 to skip
     //! \param[in] matrix Whether or not to assemble the matrix
-    void assemble(const Vector& pressure, bool matrix,bool vector, bool reduce_system);
-    void assemble_fem(const Vector& pressure, bool matrix,bool vector, bool reduce_system);
+    void assemble(const Vector& pressure, bool reduce_system);
 
 
     //! \brief Solve Au = b for u
@@ -355,12 +339,10 @@ class VemElasticitySolver
     const Dune::BlockVector<Dune::FieldVector<ctype,6>>& strain() const{return strain_;}
   void setOptions(int stability_choice_int,
                   bool vem_source,
-                  bool vem_force,
                   bool stab_on_stress,
                   bool vem_stress,
                   bool diagonal_scaling = false){
      vem_source_ = vem_source;
-     vem_force_ = vem_force;
      stab_on_stress_ = stab_on_stress;
      vem_stress_ = vem_stress;
      diagonal_scaling_ = diagonal_scaling;
@@ -429,8 +411,6 @@ private:
     std::vector<int> idx_free_;
 
     std::vector<double> rhs_force_;
-    //! \brief Vector holding material parameters for each active grid cell
-    std::vector< std::shared_ptr<Material> > materials;
     std::vector<double> ymodule_;
     std::vector<double> pratio_;
     std::vector<double> body_force_;
@@ -450,7 +430,6 @@ private:
     std::shared_ptr< CommunicationType::ParallelIndexSet > dofParallelIndexSet_;
     vem::StabilityChoice stability_choice_ = vem::D_RECIPE;
     bool vem_source_ = true;
-    bool vem_force_ = true;
     bool stab_on_stress_ = false;
     bool vem_stress_ = false;
     bool diagonal_scaling_ = false;

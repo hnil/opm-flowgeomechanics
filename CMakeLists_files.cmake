@@ -61,9 +61,8 @@ list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/DuneCommunicationHelpers.hpp
 	opm/geomech/DuneUtilities.hpp
 	opm/geomech/GeoMechModel.hpp
+	opm/geomech/MechOptions.hpp
 	opm/geomech/FlowProblemGeoMech.hpp
-	opm/geomech/ElasticitySolver.hpp
-	opm/geomech/ElasticitySolver_impl.hpp
 	opm/geomech/FlowGeoMechLinearSolverParameters.hpp
 	opm/geomech/FracturePressureAssemblerAD.hpp
 	opm/geomech/FractureConnectionId.hpp

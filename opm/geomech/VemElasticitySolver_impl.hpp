@@ -176,17 +176,13 @@ namespace Elasticity {
 
     }
 
-    IMPL_FUNC(void, assemble(const Vector& pressure, bool do_matrix, bool do_vector,bool reduce_boundary))
+    IMPL_FUNC(void, assemble(const Vector& pressure, bool reduce_boundary))
 {
     OPM_TIMEBLOCK(assemble);
     using namespace std;
-    Vector& b = this->getLoadVector();
-    b = 0;
     this->getLoadVector() = 0;
-    if (do_matrix)
-        this->getOperator() = 0;
-
-    if(do_matrix){
+    this->getOperator() = 0;
+    {
         vem::getGridVectors(grid_,coords_,
                             num_cell_faces_,
                             num_face_corners_,
@@ -205,20 +201,11 @@ namespace Elasticity {
         OPM_TIMEBLOCK(assembleVEMSystem);
         vector<tuple<int, int, double>> A_entries;
 
-        if(false){
-            OPM_TIMEBLOCK(assembleVEM);
-            vem::assemble_mech_system_3D(&coords_[0], num_cells_, &num_cell_faces_[0], &num_face_corners_[0],
+        vem::assemble_mech_system_3D_dune(grid_, &coords_[0], num_cells_, &num_cell_faces_[0], &num_face_corners_[0],
                        &face_corners_[0], &ymodule_[0], &pratio_[0], &body_force_[0],
                        num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0],
                        num_neumann_faces, nullptr, nullptr,
                        A_entries, rhs_force_, stability_choice_,reduce_boundary, corner_mask_.data());
-        }else{
-          vem::assemble_mech_system_3D_dune(grid_, &coords_[0], num_cells_, &num_cell_faces_[0], &num_face_corners_[0],
-                       &face_corners_[0], &ymodule_[0], &pratio_[0], &body_force_[0],
-                       num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0],
-                       num_neumann_faces, nullptr, nullptr,
-                       A_entries, rhs_force_, stability_choice_,reduce_boundary, corner_mask_.data());
-        }
 
 
         this->makeDuneSystemMatrix(A_entries);
@@ -336,124 +323,6 @@ namespace Elasticity {
         makeDuneMatrixCompressed(strainmat, strainmat_);
         }
     }
-    if(do_vector){
-        OPM_TIMEBLOCK(calculateRHS);
-        //NB rhs_force_ is calculated by matrix call
-        vector<double> rhs_pressure;
-        vector<double> std_pressure(pressure.size(), 0);
-        for(size_t i = 0; i < pressure.size(); ++i){
-            std_pressure[i] = pressure[i][0];
-        }
-        std::vector<std::tuple<int, int, double>> divmat;
-        vem::potential_gradient_force_3D(&coords_[0],
-                                         num_cells_,
-                                         &num_cell_faces_[0],
-                                         &num_face_corners_[0],
-                                         &face_corners_[0],
-                                         &std_pressure[0],
-                                         rhs_pressure,
-                                         divmat,
-                                         false, corner_mask_.data());
-
-        //Sign is added here  i.e \div \sigma =
-        vector<double> rhs(rhs_force_);
-        if(reduce_boundary){
-        assert(rhs_force_.size() == idx_free_.size());
-        for(size_t i=0; i< idx_free_.size(); ++i){
-            rhs[i] += rhs_pressure[idx_free_[i]];
-        }
-        }else{
-            assert(int(rhs_force_.size()) == int(grid_.leafGridView().size(3)*3));
-            assert(rhs.size() == rhs_pressure.size());
-            for(size_t i=0; i< rhs_pressure.size(); ++i){
-              rhs[i] += rhs_pressure[i];
-            }
-        }
-
-        b.resize(rhs.size());
-        // end initialization
-        for (std::size_t i = 0; i < rhs.size(); ++i) {
-            b[i] = rhs[i];
-        }
-    }
-}
-
-IMPL_FUNC(void, assemble_fem(const Vector& /*pressure*/, bool do_matrix, bool do_vector, bool reduce_boundary))
-{
-  this->resetOperator();
-  static constexpr int comp = 3 + (dim - 2) * 3;
-  static constexpr int bfunc = 4 + (dim - 2) * 4;
-  static constexpr int esize = dim*bfunc;
-  Dune::FieldVector<ctype,comp> eps0 = {1, 1, 1, 0, 0, 0};
-  const auto& gv =grid_.leafGridView();
-
-
-      Dune::FieldMatrix<ctype,comp,comp> C;
-      Dune::FieldMatrix<ctype,dim*bfunc,dim*bfunc> K;
-      Dune::FieldMatrix<ctype,dim*bfunc,dim*bfunc> Aq;
-      Elasticity E(grid_);
-      std::vector<std::tuple<int, int, double>> A_entries;
-      for(const auto elem : elements(gv)){
-        int cellIdx = gv.indexSet().index(elem);
-        // determine geometry type of the current element and get the matching reference element
-          int  id = 1;
-          double young = ymodule_[cellIdx];
-          double nu = pratio_[cellIdx];
-          double rho = 0.0;
-          Isotropic  material(id, young, nu, rho);
-          Dune::GeometryType gt = elem.type();
-          // get a quadrature rule of order two for the given geometry type
-          const Dune::QuadratureRule<ctype,dim>& rule = Dune::QuadratureRules<ctype,dim>::rule(gt,2);
-          for (typename Dune::QuadratureRule<ctype,dim>::const_iterator r = rule.begin();
-               r != rule.end() ; ++r) {
-            // compute the jacobian inverse transposed to transform the gradients
-            Dune::FieldMatrix<ctype,dim,dim> jacInvTra =
-              elem.geometry().jacobianInverseTransposed(r->position());
-            bool verbose = true;
-            ctype detJ = elem.geometry().integrationElement(r->position());
-            if (detJ <= 1.e-5 && verbose) {
-              double zdiff=0.0;
-              for (int ii=0;ii<4;++ii)
-                zdiff = std::max(zdiff, elem.geometry().corner(ii+4)[2]-elem.geometry().corner(ii)[2]);
-              OpmLog::warning(fmt::format("Consider setting ctol larger than {}", zdiff));
-            }
-
-            Dune::FieldMatrix<ctype,comp,dim*bfunc> lB;
-            E.getBmatrix(lB,r->position(),jacInvTra);
-
-            E.getStiffnessMatrix(Aq,lB,C,detJ*r->weight());
-            K += Aq;
-          }
-          for (int li =0;li<esize/dim;++li) {//nomber for nodes of reference element
-            int node_index1 = gv.indexSet().subIndex(elem,li,dim);
-            for (int ki=0;ki<dim;++ki) {
-              int ldof1 = li*dim+ki;
-              int gdof1 = node_index1*dim+ki;
-              for (int lj=0;lj<esize/dim;++lj) {
-                int node_index2 = gv.indexSet().subIndex(elem,lj,dim);
-                for (int kj=0;kj<dim;++kj) {
-                  int ldof2 = lj*dim+kj;
-                  int gdof2 = node_index2*dim+kj;
-                  A_entries.push_back(std::tuple<int, int, double> {gdof1, gdof2, K[ldof1][ldof2]});
-                }
-              }
-            }
-          }
-      }
-      const int num_fixed_dofs = std::get<0>(dirichlet_);
-      const std::vector<int>& fixed_dof_ixs = std::get<1>(dirichlet_);
-      const std::vector<double>& fixed_dof_values = std::get<2>(dirichlet_);
-      int num_points = gv.size(3);
-      std::vector<double> b(num_points * 3,0.0);
-      if (reduce_boundary) {
-        vem::reduce_system(A_entries, b, num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0]);
-      } else {
-        vem::set_boundary_conditions(A_entries, b, num_fixed_dofs, &fixed_dof_ixs[0], &fixed_dof_values[0]);
-      }
-      this->makeDuneSystemMatrix(A_entries);
-      if(diagonal_scaling_){
-          this->applyDiagonalScaling();
-      }
 }
 
 IMPL_FUNC(void, solve())

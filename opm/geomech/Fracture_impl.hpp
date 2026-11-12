@@ -432,9 +432,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 // the fracture.
                 reservoir_.waterMobility[i] =
                     value_of(intQuants.mobility(FluidSystem::waterPhaseIdx));
-                for (int dim = 0; dim < 3; ++dim) {
-                  reservoir_.stress[i] = problem.stress(cell);
-                }
+                reservoir_.stress[i] = problem.stress(cell);
                 if (interpolate_stress) {
                     // trilinear interpolation of the recovered nodal stress at the
                     // fracture cell centroid, inside the containing reservoir cell
@@ -499,9 +497,10 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 // probably outside reservoir set all to zero
                 double stressval = 300*300e5;// large value to keep it closed
                 //NB should maybe be interpolated out from reservoir
+                reservoir_.stress[i] = 0.0;
                 reservoir_.stress[i][0] = stressval;
                 reservoir_.stress[i][1] = stressval;
-                reservoir_.stress[i][2] = stressval; //???
+                reservoir_.stress[i][2] = stressval;
                 reservoir_.pressure[i] = injectionPressure();
                 reservoir_.mobility[i] = 1000.0;
                 reservoir_.waterMobility[i] = 1000.0;

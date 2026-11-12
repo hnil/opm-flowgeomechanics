@@ -54,8 +54,6 @@
 #include <opm/simulators/utils/MPIPacker.hpp>
 #include <opm/simulators/utils/ParallelCommunication.hpp>
 #include <opm/simulators/wells/RuntimePerforation.hpp>
-#include <opm/elasticity/material.hh>
-#include <opm/elasticity/materials.hh>
 
 #include <array>
 #include <cmath>
@@ -701,10 +699,6 @@ namespace Opm{
                     geoMechModel_.setMechGrid(*mechGridContext_);
                 }
                 geoMechModel_.init(initconfig.restartRequested());
-                for(size_t i=0; i < this->ymodule_.size(); ++i){
-                    using IsoMat = Opm::Elasticity::Isotropic;
-                    elasticparams_.push_back(std::make_shared<IsoMat>(i,this->ymodule_[i],this->pratio_[i]));
-                }
                 // read mechanical boundary conditions
                 const auto& vanguard = simulator.vanguard();
                 const auto& bcconfigs = vanguard.eclState().getSimulationConfig().bcconfig();
@@ -1163,7 +1157,6 @@ namespace Opm{
         std::vector<std::tuple<size_t,MechBCValue>> bc_nodes_;
         // Only set when the mechanics runs on a grid of its own.
         std::unique_ptr<MechGridContext> mechGridContext_;
-        std::vector<std::shared_ptr<Opm::Elasticity::Material>> elasticparams_;
     };
 }
 #endif
