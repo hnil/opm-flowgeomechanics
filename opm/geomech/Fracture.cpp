@@ -19,6 +19,7 @@
 
 #include "config.h"
 
+#include <numeric>
 #include <set>
 
 #include <iostream> // std::cout
@@ -288,7 +289,11 @@ Fracture::updateFilterCakeProps(const Opm::Connection& connection,
         // Both rates in the concentration basis: the fracture solution's leak-off
         // and the flow model's fracture-routed rate (a surface rate).
         double frac_flux = frac_prop.flux * basis_factor;
-        double sim_frac_flux = wellstate.frac_rate * basis_factor / b_frac;
+        // Local sum, as the former SingleWellState::frac_rate: the fracture update
+        // does not run collectively over the ranks of a well.
+        const auto& frac_rates = wellstate.perf_data.fracture_data.injected_rate;
+        const double sim_frac_rate = std::accumulate(frac_rates.begin(), frac_rates.end(), 0.0);
+        double sim_frac_flux = sim_frac_rate * basis_factor / b_frac;
         //NB maybe we should only use posive fluxes (cross flow problems)
         if(frac_flux > 1.0e-12){
             scale_factor = std::max(0.0,sim_frac_flux) / frac_flux;
