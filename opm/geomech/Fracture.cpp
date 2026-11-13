@@ -89,6 +89,7 @@ Fracture::init(const std::string& well,
     OPM_TIMEFUNCTION();
     max_flow_time_step_ = std::numeric_limits<double>::max();
     prm_ = prm;
+    WiOptions::read(prm_); // throws on bad WI options here, outside solve()'s failure policy
     if(prm_.get<bool>("config.gravity_off", true)){
         gravity_ = 0.0;
     }
