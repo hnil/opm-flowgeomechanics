@@ -48,7 +48,7 @@ namespace MechPartition
 
 /// COARSEN records, one per line: I1 I2 J1 J2 K1 K2 NX NY NZ, 1-based and
 /// inclusive. '--' and '#' start a comment.
-inline std::vector<Coarsening::CoarsenRequest> readRecords(const std::string& filename)
+inline std::vector<Coarsening::CoarsenRequest> readRecords(const std::string& filename, bool groups = false)
 {
     std::ifstream is(filename);
     if (!is) {
@@ -71,15 +71,15 @@ inline std::vector<Coarsening::CoarsenRequest> readRecords(const std::string& fi
         if (v.empty()) {
             continue;
         }
-        if (v.size() != 9) {
+        if (v.size() != (groups ? 6u : 9u)) {
             OPM_THROW(std::runtime_error,
-                      "A coarsening record needs 9 numbers (I1 I2 J1 J2 K1 K2 NX NY NZ): " + line);
+                      "Invalid mechanics coarsening/partition record: " + line);
         }
         Coarsening::CoarsenRequest r;
         for (int d = 0; d < 3; ++d) {
             r.startIJK[d] = v[2*d] - 1;
             r.endIJK[d] = v[2*d + 1];
-            r.cellsPerDim[d] = v[6 + d];
+            r.cellsPerDim[d] = groups ? 1 : v[6 + d];
         }
         requests.push_back(r);
     }
@@ -203,6 +203,8 @@ public:
 
     static bool empty() { return instance().empty(); }
 
+    static bool& protectedFractures() { static bool enabled = false; return enabled; }
+
 private:
     static std::vector<int>& instance()
     {
@@ -216,7 +218,8 @@ private:
 /// partitioned this way from the start.
 template <class Grid>
 std::vector<int> flowPartition(const Grid& grid,
-                               const std::vector<Coarsening::CoarsenRequest>& requests)
+                               const std::vector<Coarsening::CoarsenRequest>& requests,
+                               const std::vector<Coarsening::CoarsenRequest>& groups = {})
 {
     const auto size = grid.logicalCartesianSize();
     const std::array<int,3> dims{size[0], size[1], size[2]};
@@ -230,12 +233,33 @@ std::vector<int> flowPartition(const Grid& grid,
         return box[0] + dims[0]*(box[1] + static_cast<std::size_t>(dims[1])*box[2]);
     };
 
+    // Join whole mechanics blocks touched by each declared growth region.
+    // Overlapping regions form one group; fine cells never move independently.
+    std::vector<int> parent(layout.blockOfCartesian.size());
+    std::iota(parent.begin(), parent.end(), 0);
+    const auto root = [&parent](int c) {
+        while (parent[c] != c) c = parent[c];
+        return c;
+    };
+    for (const auto& group : groups) {
+        for (int d = 0; d < 3; ++d)
+            if (group.startIJK[d] < 0 || group.endIJK[d] > dims[d]
+                || group.startIJK[d] >= group.endIJK[d])
+                throw std::runtime_error("Mechanics partition group is outside the grid");
+        const int first = anchor(group.startIJK[0] + dims[0]
+            * (group.startIJK[1] + dims[1]*group.startIJK[2]));
+        for (int k = group.startIJK[2]; k < group.endIJK[2]; ++k)
+            for (int j = group.startIJK[1]; j < group.endIJK[1]; ++j)
+                for (int i = group.startIJK[0]; i < group.endIJK[0]; ++i)
+                    parent[root(anchor(i + dims[0]*(j + dims[1]*k)))] = root(first);
+    }
+
     // Each block is weighted where its first corner sits, so the bisection
     // runs over the Cartesian box as usual.
     const auto& globalCell = grid.globalCell();
     std::vector<double> weight(layout.blockOfCartesian.size(), 0.0);
     for (const int cartesian : globalCell) {
-        weight[anchor(cartesian)] += 1.0;
+        weight[root(anchor(cartesian))] += 1.0;
     }
 
     const auto partOfAnchor = partitionCoarseCells(dims, weight, grid.comm().size());
@@ -243,7 +267,7 @@ std::vector<int> flowPartition(const Grid& grid,
     // Rank of every Cartesian cell, which the mechanics grid reads back.
     std::vector<int> partOfCartesian(layout.blockOfCartesian.size(), 0);
     for (std::size_t c = 0; c < partOfCartesian.size(); ++c) {
-        partOfCartesian[c] = partOfAnchor[anchor(static_cast<int>(c))];
+        partOfCartesian[c] = partOfAnchor[root(anchor(static_cast<int>(c)))];
     }
     Registry::set(partOfCartesian);
 
@@ -283,17 +307,26 @@ void installFlowPartition(int argc, char** argv)
         // The mechanics grid is rebuilt from the corner-point input.
         RetainCornerPointInput::enable();
     }
+    const auto groupFile = argFromArgs(argc, argv, "--mech-partition-group-file");
+    const bool protectedGrowth = !groupFile.empty() && groupFile != "none";
+    Registry::protectedFractures() = protectedGrowth;
     const auto file = argFromArgs(argc, argv, "--mech-coarsen-file");
     if (file.empty() || file == "none") {
+        if (protectedGrowth)
+            throw std::runtime_error("--mech-partition-group-file requires --mech-coarsen-file");
         return;
     }
     const auto requests = readRecords(file);
+    const auto groups = protectedGrowth ? readRecords(groupFile, true)
+                                        : std::vector<Coarsening::CoarsenRequest>{};
+    if (protectedGrowth && groups.empty())
+        throw std::runtime_error("Mechanics partition group file is empty");
     // The mechanics grid is a coarsening of what flow was built from, so the
     // processing has to keep that description.
     RetainCornerPointInput::enable();
     using Vanguard = GetPropType<TypeTag, Properties::Vanguard>;
     Vanguard::setExternalLoadBalancer(
-        [requests](const Dune::CpGrid& grid) { return flowPartition(grid, requests); });
+        [requests, groups](const Dune::CpGrid& grid) { return flowPartition(grid, requests, groups); });
 }
 
 } // namespace MechPartition
