@@ -120,6 +120,10 @@ public:
     std::string growthGuardViolation() const;
     //! true when any active fracture's last solve ended unconverged
     bool anyLastSolveUnconverged() const;
+    //! Max over active fractures of Fracture::drivingStateChange; not MPI-reduced.
+    template <class TypeTag, class Simulator>
+    std::pair<double, double> drivingStateChange(const Simulator& simulator, bool record);
+    void setAreaChangeFactorOverride(double fac);
     void writeIterationSnapshots(int step, int round, const std::string& tag) const;
 
         void updateReservoirProperties(); // for testing without simulator

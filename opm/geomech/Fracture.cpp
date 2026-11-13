@@ -1787,7 +1787,8 @@ bool
 Fracture::expantionMax(const FractureProperties& fprop)
 {
     FractureProperties fprop_current = calculateFractureProperties();
-    const double area_change_fac = prm_.get<double>("solver.area_change_fac");
+    const double area_change_fac = area_change_fac_override_ > 0.0
+        ? area_change_fac_override_ : prm_.get<double>("solver.area_change_fac");
     const double dt_lim = prm_.get<double>("solver.dt_limit")*86400.0;
     if (fprop_current.area > area_change_fac * fprop.area) {
         OpmLog::debug("Fracture area doubled, stopping expansion");

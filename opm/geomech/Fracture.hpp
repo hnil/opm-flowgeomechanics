@@ -289,6 +289,13 @@ public:
     template <class TypeTag, class Simulator>
     void updateReservoirProperties(const Simulator& simulator, bool init_constant_vals=false,bool update_filtercake=true);
 
+    // Max |change| of water pressure and temperature in the fracture's reservoir cells
+    // since the last call with record=true; infinite if nothing was recorded on this mesh.
+    template <class TypeTag, class Simulator>
+    std::pair<double, double> drivingStateChange(const Simulator& simulator, bool record);
+    // > 0 replaces solver.area_change_fac; <= 0 restores it.
+    void setAreaChangeFactorOverride(double fac) { area_change_fac_override_ = fac; }
+
     //! Deposit filtrate on the fracture faces over a step of length dt. The
     //! concentration is per surface volume of injected fluid if surface_conc_basis,
     //! else per reservoir volume (WINJFCNC item 3).
@@ -962,6 +969,9 @@ private:
     std::unique_ptr<SMatrix> I_; // system matrix without coupling terms
     std::vector<std::vector<RuntimePerforation>> well_indices_; // for each perf, the corresponding well index info
     double max_flow_time_step_{-1.0};
+    double area_change_fac_override_{-1.0};
+    std::vector<double> driving_pressure_;
+    std::vector<double> driving_temperature_;
     double well_rate_;
     double total_wellindex_;
     double wi_dz_{0.0};

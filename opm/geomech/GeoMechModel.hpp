@@ -114,7 +114,6 @@ namespace Opm{
             fracHost_.beginTimeStep();
         }
         void endTimeStep(){
-            // always do post solve
             if(simulator_.gridView().comm().rank() == 0){
                 OpmLog::info("Geomech model endstimeStep\n");
             }
@@ -122,7 +121,64 @@ namespace Opm{
                 solved_in_step_ = false;
                 return;
             }
-            this->solveGeoMechAndFracture();
+            if (this->skipEndOfStepSolve_()) {
+                return;
+            }
+            const double eos_area_fac = simulator_.problem().getGeoMechParam()
+                .template get<double>("fractureparam.solver.end_of_step_area_change_fac", -1.0);
+            if (eos_area_fac > 0.0 && this->fractureModelActive()) {
+                this->fractureModel().setAreaChangeFactorOverride(eos_area_fac);
+            }
+            try {
+                this->solveGeoMechAndFracture();
+            } catch (...) {
+                if (eos_area_fac > 0.0 && this->fractureModelActive())
+                    this->fractureModel().setAreaChangeFactorOverride(-1.0);
+                throw;
+            }
+            if (eos_area_fac > 0.0 && this->fractureModelActive()) {
+                this->fractureModel().setAreaChangeFactorOverride(-1.0);
+            }
+        }
+
+        //! "off" reuses this step's last converged in-loop fracture state; "tolerance" also
+        //! needs p and T in the fracture cells to have moved less than the tolerances since.
+        bool skipEndOfStepSolve_()
+        {
+            const auto& prm = simulator_.problem().getGeoMechParam();
+            const std::string mode
+                = prm.template get<std::string>("fractureparam.solver.end_of_step_fracture", "always");
+            if (mode == "always") {
+                return false;
+            }
+            if (mode != "off" && mode != "tolerance") {
+                OPM_THROW(std::runtime_error, "Unknown fractureparam.solver.end_of_step_fracture: " + mode);
+            }
+            const auto& comm = simulator_.gridView().comm();
+            int reusable = this->fractureModelActive() && fracHost_.solvesThisStep() > 0
+                && !this->fractureModel().anyLastSolveUnconverged();
+            reusable = comm.min(reusable);
+            double dp = std::numeric_limits<double>::infinity();
+            double dT = dp;
+            if (reusable) {
+                std::tie(dp, dT) = this->fractureModel()
+                    .template drivingStateChange<TypeTag, Simulator>(simulator_, /*record*/ false);
+                dp = comm.max(dp);
+                dT = comm.max(dT);
+            }
+            bool skip = reusable;
+            if (mode == "tolerance") {
+                skip = skip
+                    && dp <= prm.template get<double>("fractureparam.solver.end_of_step_pressure_tol", 1.0e5)
+                    && dT <= prm.template get<double>("fractureparam.solver.end_of_step_temperature_tol", 1.0);
+            }
+            if (comm.rank() == 0) {
+                OpmLog::info(fmt::format("End-of-step fracture solve {} ({}; max dp {:.3g} bar, dT {:.3g} K)",
+                                         skip ? "skipped" : "done",
+                                         reusable ? "in-loop state converged" : "no converged in-loop state",
+                                         dp / 1.0e5, dT));
+            }
+            return skip;
         }
         struct PostSolveResult {
             bool mech_converged = true;

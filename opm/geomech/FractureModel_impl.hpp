@@ -198,6 +198,23 @@ namespace Opm {
     }
 
     template <class TypeTag, class Simulator>
+    std::pair<double, double>
+    FractureModel::drivingStateChange(const Simulator& simulator, bool record)
+    {
+        std::pair<double, double> change{0.0, 0.0};
+        for (auto& fractures : well_fractures_) {
+            for (auto& fracture : fractures) {
+                if (fracture.isActive()) {
+                    const auto c = fracture.drivingStateChange<TypeTag, Simulator>(simulator, record);
+                    change.first = std::max(change.first, c.first);
+                    change.second = std::max(change.second, c.second);
+                }
+            }
+        }
+        return change;
+    }
+
+    template <class TypeTag, class Simulator>
     void
     FractureModel::updateFilterCakeProperties(const Simulator& simulator)
     {
@@ -280,6 +297,14 @@ namespace Opm {
                 if (fracture.isActive() && !fracture.lastSolveStats().converged)
                     return true;
         return false;
+    }
+
+    inline void
+    FractureModel::setAreaChangeFactorOverride(double fac)
+    {
+        for (auto& fractures : well_fractures_)
+            for (auto& fracture : fractures)
+                fracture.setAreaChangeFactorOverride(fac);
     }
 
     inline std::string

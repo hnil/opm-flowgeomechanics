@@ -1066,4 +1066,37 @@ Fracture::serializeState(Serializer& serializer)
     serializer(last_solve_stats_.converged);
 }
 
+template <class TypeTag, class Simulator>
+std::pair<double, double>
+Fracture::drivingStateChange(const Simulator& simulator, bool record)
+{
+    using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
+    const auto& cells = reservoir_map_.cells;
+    constexpr double inf = std::numeric_limits<double>::infinity();
+    if (record) {
+        driving_pressure_.assign(cells.size(), 0.0);
+        driving_temperature_.assign(cells.size(), 0.0);
+    } else if (driving_pressure_.size() != cells.size()) {
+        return {inf, inf};
+    }
+    double dp = 0.0;
+    double dT = 0.0;
+    for (size_t i = 0; i < cells.size(); ++i) {
+        if (cells[i] < 0) {
+            continue;
+        }
+        const auto& fs = simulator.model().intensiveQuantities(cells[i], /*timeIdx*/ 0).fluidState();
+        const double p = Opm::scalarValue(fs.pressure(FluidSystem::waterPhaseIdx));
+        const double T = Opm::scalarValue(fs.temperature(FluidSystem::waterPhaseIdx));
+        if (record) {
+            driving_pressure_[i] = p;
+            driving_temperature_[i] = T;
+        } else {
+            dp = std::max(dp, std::abs(p - driving_pressure_[i]));
+            dT = std::max(dT, std::abs(T - driving_temperature_[i]));
+        }
+    }
+    return {dp, dT};
+}
+
 } // namespace Opm

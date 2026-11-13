@@ -51,6 +51,7 @@ namespace Opm{
 
         //! Called at the start of each time step.
         void beginTimeStep(){
+            solves_this_step_ = 0;
             if(fracturemodel_){
                 fracturemodel_->moveForwardInTime(simulator_.timeStepSize());
             }
@@ -200,6 +201,10 @@ namespace Opm{
                 fracturemodel_->updateReservoirAndWellProperties<TypeTag,Simulator>(simulator_);// set all fractures active if well is active
                 fracturemodel_->updateActive(current_wseed);//only set fracture active if seed is active
                 fracturemodel_->solve<TypeTag, Simulator>(simulator_);
+                ++solves_this_step_;
+                if (prm.template get<std::string>("solver.end_of_step_fracture", "always") != "always") {
+                    fracturemodel_->drivingStateChange<TypeTag, Simulator>(simulator_, /*record*/ true);
+                }
                 if(simulator_.gridView().comm().rank() == 0){
                     const auto& last_stats = fracturemodel_->lastSolveStats();
                     const auto& total_stats = fracturemodel_->totalSolveStats();
@@ -301,8 +306,12 @@ namespace Opm{
             }
         }
 
+        //! Fracture solves since the start of the current time step.
+        int solvesThisStep() const { return solves_this_step_; }
+
     private:
         Simulator& simulator_;
+        int solves_this_step_{0};
         bool include_fracture_contributions_{false};
         int model_creation_step_{0};
         std::unique_ptr<FractureModel> fracturemodel_;
