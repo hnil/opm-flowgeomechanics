@@ -59,6 +59,8 @@
    "method": "if_propagate_trimesh",
    "__1_propagation_growth": "--- fracture grid growth / trimesh propagation (KEEP fidelity here) ---",
    "area_change_fac": 1.2,
+   "__conservative_propagation": "no growth from an unconverged solve: sticky contact cycles and its K1 then drives spurious growth (model2: late lateral breakout, -70 bar)",
+   "conservative_propagation": "true",
    "dt_limit": 10,
    "max_iter_on_same_level": "100000000",
    "target_cellcount": "400",
