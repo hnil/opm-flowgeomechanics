@@ -102,9 +102,36 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
             }
 
             const auto firstSlot = nextSlot;
+
+            // A newborn cell starts at the fracture's own pressure, shifted to the flow's
+            // level by the mean offset over the cells that were already bound.
+            const auto& ownPressure = fracture.fracturePressure();
+            const bool haveOwn = ownPressure.size() == numCells;
+            auto ownAt = [&](const std::size_t cell) {
+                const double p = haveOwn ? ownPressure[cell][0] : -1.0;
+                return (std::isfinite(p) && p > 0.0) ? static_cast<Scalar>(p) : Scalar{-1};
+            };
+            Scalar offset = 0.0;
+            if (haveOwn) {
+                Scalar sum = 0.0;
+                int n = 0;
+                for (std::size_t cell = 0; cell < numCells && firstSlot + cell < wasActive.size(); ++cell) {
+                    const auto slot = firstSlot + cell;
+                    if (!wasActive[slot] || ownAt(cell) < 0) {
+                        continue;
+                    }
+                    const auto dof = static_cast<unsigned>(this->localToGlobalDof(slot));
+                    const auto& fs = this->simulator_.model().intensiveQuantities(dof, 0).fluidState();
+                    sum += getValue(fs.pressure(FluidSystem::waterPhaseIdx)) - ownAt(cell);
+                    ++n;
+                }
+                offset = (n > 0) ? sum / n : Scalar{0};
+            }
+
             for (std::size_t cell = 0; cell < numCells; ++cell) {
                 const auto slot = firstSlot + cell;
                 this->slotOf_.emplace_back(fractureIdx, cell);
+                this->newbornPressure_[slot] = (ownAt(cell) > 0) ? ownAt(cell) + offset : Scalar{-1};
 
                 // The aperture is the volume; below the floor a cell is treated as having
                 // the floor's aperture, exactly as the fracture's own pressure solve does,
@@ -210,8 +237,9 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
     this->newbornDofs_.clear();
     for (unsigned slot = 0; slot < nextSlot; ++slot) {
         if (this->active_[slot] && !wasActive[slot]) {
-            this->assignStateFromPartner(solution, slot, /*useCurrentState=*/true);
-            this->assignStateFromPartner(solutionOld, slot, /*useCurrentState=*/true);
+            const auto p = this->newbornPressureMode_ ? this->newbornPressure_[slot] : Scalar{-1};
+            this->assignStateFromPartner(solution, slot, /*useCurrentState=*/true, p);
+            this->assignStateFromPartner(solutionOld, slot, /*useCurrentState=*/true, p);
             this->newbornDofs_.push_back(static_cast<unsigned>(this->localToGlobalDof(slot)));
             // Its old state is its current one, so its old volume is too; otherwise the
             // storage term would read the birth as a volume change and inject mass.

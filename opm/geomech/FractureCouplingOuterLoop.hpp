@@ -99,7 +99,7 @@ namespace Opm
                 c.valueOnlyWiUpdate = prm.get<bool>("fractureparam.solver.value_only_wi_update", false);
                 c.residualMode = prm.get<std::string>("fractureparam.solver.coupling_convergence_mode",
                                                       "threshold") == "residual";
-                c.rebindAfterGrowth = prm.get<bool>("fractureparam.solver.rebind_after_growth", false);
+                c.rebindAfterGrowth = prm.get<bool>("fractureparam.solver.rebind_after_growth", true);
                 c.rebindAfterGrowthRounds = prm.get<int>("fractureparam.solver.rebind_after_growth_rounds", 2);
                 c.couplingTolerance = prm.get<double>("fractureparam.solver.coupling_tolerance", 1e-3);
                 c.hysteresis = prm.get<bool>("fractureparam.topology_hysteresis.enable", false);
@@ -447,6 +447,10 @@ namespace Opm
             } else {
                 // embedded: well-fracture Picard
                 derived().wellFracturePicard(timer);
+            }
+            if (pressureFromFlow) {
+                // The local well solves changed the flow solution and well state.
+                flow_state_modified_by_setup_ = true;
             }
         }
 

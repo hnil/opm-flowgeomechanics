@@ -61,6 +61,7 @@
 #include <fstream>
 #include <functional>
 #include <limits>
+#include <map>
 #include <memory>
 #include <set>
 #include <sstream>
@@ -262,6 +263,8 @@ namespace Opm{
                                                              static_cast<Scalar>(perfRw)));
 
             fractureAuxCells_->setRemapState(prm.get<bool>("solver.embedded_remap_state", false));
+            fractureAuxCells_->setNewbornOwnPressure(
+                prm.get<bool>("solver.embedded_newborn_own_pressure", true));
             fractureAuxCells_->setLeakoffTotalMobility(
                 prm.get<std::string>("solver.embedded_leakoff_mobility", "upwind") == "reservoir_total");
             fractureAuxCells_->setResidualCheck(prm.get<bool>("solver.embedded_residual_check", false));
@@ -369,7 +372,7 @@ namespace Opm{
                 if (fractureAuxCells_->updateValues(fractureModel)) {
                     embeddedCouplingChange_ = fractureAuxCells_->lastBindChange();
                     this->refreshAuxCellModules_(/*topologyChanged=*/false);
-                    if (this->getFractureParam().template get<bool>("solver.embedded_refresh_trans", false)) {
+                    if (this->getFractureParam().template get<bool>("solver.embedded_refresh_trans", true)) {
                         this->model().linearizer().updateDiscretizationParameters();
                     }
                     // both time levels: the pore volume moved with the aperture,
@@ -905,6 +908,9 @@ namespace Opm{
 
                     this->geoMechModel_.fractureModel().
                         assignGeoMechWellState(this->wellModel_.wellState());
+                    if (this->fractureFlowIsEmbedded()) {
+                        this->assignEmbeddedFractureRates_();
+                    }
                 }
             }
             OPM_END_PARALLEL_TRY_CATCH("End time step geomech failed: ", this->simulator().vanguard().grid().comm());
@@ -927,6 +933,44 @@ namespace Opm{
         { return geoMechModel_; }
 
     private:
+        //! Water rate into each fracture's cells: the well's fracture rate, and the
+        //! seed connection's, which also carries the fracture's area and WI.
+        void assignEmbeddedFractureRates_()
+        {
+            auto& wellState = this->wellModel_.wellState();
+            const int np = wellState.numPhases();
+            const int water = FluidSystem::canonicalToActivePhaseIdx(FluidSystem::waterPhaseIdx);
+            std::map<std::size_t, Scalar> wellRate;
+            std::size_t fidx = 0;
+            for (const auto& wellFractures : this->geoMechModel_.fractureModel().wellFractures()) {
+                for (const auto& fracture : wellFractures) {
+                    const auto dofs = fractureAuxCells_->cellDofs(fidx++);
+                    const auto wsIx = wellState.index(fracture.wellInfo().name);
+                    if (!wsIx.has_value()) {
+                        continue;
+                    }
+                    auto& pd = wellState[*wsIx].perf_data;
+                    const std::set<int> fractureDofs(dofs.begin(), dofs.end());
+                    Scalar rate = 0.0;
+                    for (std::size_t perf = 0; perf < pd.size(); ++perf) {
+                        if (fractureDofs.count(pd.cell_index[perf]) > 0) {
+                            rate += pd.phase_rates[perf * np + water];
+                        }
+                    }
+                    wellRate[*wsIx] += rate;
+                    const auto seed = std::find(pd.cell_index.begin(), pd.cell_index.end(),
+                                                fracture.wellInfo().well_cell);
+                    if (seed != pd.cell_index.end()
+                        && pd.fracture_data.water_rate.size() == pd.size()) {
+                        pd.fracture_data.water_rate[seed - pd.cell_index.begin()] = rate;
+                    }
+                }
+            }
+            for (const auto& [wsIx, rate] : wellRate) {
+                wellState[wsIx].frac_rate = rate;
+            }
+        }
+
         //! The mechanics grid as a geomechanical VTK case: total stress (compression positive,
         //! as on the flow grid), strain, displacement, and the flow quantities.
         void writeMechGridVtk_(double time)

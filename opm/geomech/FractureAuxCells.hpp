@@ -102,6 +102,7 @@ public:
         , bulkVolume_(capacity, 0.0)
         , depth_(capacity, 0.0)
         , partner_(capacity, 0)
+        , newbornPressure_(capacity, -1.0)
     {}
 
     unsigned numDofs() const override
@@ -447,6 +448,9 @@ public:
     //! Carry the cells' flow state across a regrid geometrically instead of by slot.
     void setRemapState(const bool on) { this->remapState_ = on; }
 
+    //! Start newborn cells at the fracture's own pressure instead of the partner rock's.
+    void setNewbornOwnPressure(const bool on) { this->newbornPressureMode_ = on; }
+
     //! Weigh the leak-off with the reservoir cell's total mobility, not the flow's upwind one.
     void setLeakoffTotalMobility(const bool on) { this->leakoffTotalMobility_ = on; }
 
@@ -459,7 +463,8 @@ private:
     //! intensive quantities) rather than its initial one (model init).
     template <class SolutionVector>
     void assignStateFromPartner(SolutionVector& solution, const unsigned localIdx,
-                                const bool useCurrentState = false)
+                                const bool useCurrentState = false,
+                                const Scalar pressure = -1.0)
     {
         const auto globalIdx = static_cast<unsigned>(this->localToGlobalDof(localIdx));
         const auto partner = this->partner_.at(localIdx);
@@ -505,7 +510,8 @@ private:
                 continue;
             }
 
-            fs.setPressure(phase, getValue(fs.pressure(phase)) + rho * gravity * dz);
+            fs.setPressure(phase, (pressure > 0.0) ? pressure
+                                                   : getValue(fs.pressure(phase)) + rho * gravity * dz);
         }
 
         solution[globalIdx].setPvtRegionIndex(this->pvtRegionIndex(localIdx));
@@ -587,6 +593,8 @@ private:
     std::vector<unsigned> newbornDofs_{}; // see newbornDofs()
     std::vector<std::pair<unsigned, std::size_t>> boundLayout_{}; // per fracture: first slot, cells
     bool remapState_{false}; // see setRemapState()
+    bool newbornPressureMode_{true}; // see setNewbornOwnPressure()
+    std::vector<Scalar> newbornPressure_{}; // per slot; negative = use the partner's
     bool leakoffTotalMobility_{false}; // see setLeakoffTotalMobility()
     bool residualCheck_{false}; // see cnvReferencePoreVolume()
     typename ParentType::LocalStepTolerance stepTolerance_{};

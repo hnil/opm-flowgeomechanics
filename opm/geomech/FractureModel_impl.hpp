@@ -400,6 +400,11 @@ namespace Opm {
                                     "control.type='well': THP-constrained well '"
                                         + wells_[i].name()
                                         + "' is not supported - set an explicit fracture control");
+                      // Embedded flow already splits the rate; the fracture's own
+                      // solve then only needs the BHP the flow found.
+                      if (prm_.get<std::string>("solver.fracture_flow_mode", "wi_upscaling") == "embedded"
+                          && prm_.get<std::string>("solver.embedded_well_bc", "row") == "flow_bhp")
+                          well_control_is_rate = false;
                       // wellState() indexes all wells, localNonshutWells() only
                       // the non-shut ones - with shut wells in the deck the two
                       // indices diverge, so look up by name.
