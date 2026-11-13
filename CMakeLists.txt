@@ -560,6 +560,28 @@ foreach(constraint_np 1 2 4)
         TIMEOUT 60 PROCESSORS ${constraint_np} LABELS "mechanics;mpi;unit")
 endforeach()
 
+# Old fracture volume must follow geometry rather than Dune cell numbering.
+if(BUILD_TESTING)
+    add_executable(test_fracture_storage tests/test_fracture_storage.cpp)
+    target_link_libraries(test_fracture_storage PRIVATE opmflowgeomechanics)
+    if(USE_MPI)
+        foreach(storage_np 1 4)
+            if(MPIEXEC_MAX_NUMPROCS LESS storage_np)
+                continue()
+            endif()
+            add_test(NAME Unit.FractureStorage.MPI${storage_np}
+                COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${storage_np} ${MPIEXEC_PREFLAGS}
+                    $<TARGET_FILE:test_fracture_storage> ${MPIEXEC_POSTFLAGS})
+            set_tests_properties(Unit.FractureStorage.MPI${storage_np} PROPERTIES
+                TIMEOUT 60 PROCESSORS ${storage_np} LABELS "fracture;mpi;unit"
+                ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
+        endforeach()
+    else()
+        add_test(NAME Unit.FractureStorage.Serial COMMAND test_fracture_storage)
+        set_tests_properties(Unit.FractureStorage.Serial PROPERTIES TIMEOUT 60 LABELS "fracture;unit")
+    endif()
+endif()
+
 # Stored-solution regression test: checks the DDM matrix assembly bit-for-bit
 # against known opening values for a 2-layer mesh.
 add_executable(test_penny_crack_regression
@@ -731,6 +753,14 @@ add_test(NAME Run.SIMPLE_MECH_FRAC_LGR.EnergyGeomech
 )
 
 ## regressuin
+find_package(Python3 3.9 COMPONENTS Interpreter QUIET)
+if(BUILD_TESTING AND Python3_Interpreter_FOUND)
+  add_test(NAME Unit.FractureFluidBalanceAnalysis
+    COMMAND ${CMAKE_COMMAND} -E env PYTHONDONTWRITEBYTECODE=1
+      ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/test_fracture_fluid_balance.py)
+  set_tests_properties(Unit.FractureFluidBalanceAnalysis PROPERTIES
+    LABELS "fracture;physics;unit" TIMEOUT 30)
+endif()
 opm_set_test_driver(${PROJECT_SOURCE_DIR}/tests/run-mechRegressionTest.sh "")
 
 # Set absolute tolerance to be used passed to the macros in the following tests
@@ -1114,4 +1144,34 @@ if(USE_MPI)
 else()
     add_test(NAME Unit.MechanicalVertexStencils.Serial COMMAND test_mechanical_vertex_stencils)
     set_tests_properties(Unit.MechanicalVertexStencils.Serial PROPERTIES TIMEOUT 60 LABELS "mechanics;unit")
+endif()
+
+if(BUILD_TESTING AND USE_MPI)
+    add_executable(test_fracture_cell_search tests/test_fracture_cell_search.cpp)
+    target_link_libraries(test_fracture_cell_search PRIVATE opmflowgeomechanics)
+    foreach(search_grid Cartesian LGR)
+        set(search_args)
+        set(search_suffix "")
+        if(search_grid STREQUAL "LGR")
+            set(search_args lgr)
+            set(search_suffix ".LGR")
+        endif()
+        foreach(search_np 1 4)
+            if(MPIEXEC_MAX_NUMPROCS LESS search_np)
+                continue()
+            endif()
+            set(search_variants 0)
+            if(search_np EQUAL 4)
+                list(APPEND search_variants 1)
+            endif()
+            foreach(search_variant IN LISTS search_variants)
+                set(search_name Unit.FractureCellSearch${search_suffix}.MPI${search_np}.Partition${search_variant})
+                add_test(NAME ${search_name}
+                    COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${search_np} ${MPIEXEC_PREFLAGS}
+                        $<TARGET_FILE:test_fracture_cell_search> ${MPIEXEC_POSTFLAGS} ${search_variant} ${search_args})
+                set_tests_properties(${search_name} PROPERTIES TIMEOUT 60 PROCESSORS ${search_np}
+                    LABELS "mechanics;mpi;unit" ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
+            endforeach()
+        endforeach()
+    endforeach()
 endif()

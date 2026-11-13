@@ -28,6 +28,7 @@
 
 #include <opm/geomech/CentreStressInterpolation.hpp>
 #include <opm/geomech/FractureConnectionId.hpp>
+#include <opm/geomech/FractureStorageCheckpoint.hpp>
 #include <limits>
 #include <optional>
 #include <unordered_map>
@@ -276,6 +277,8 @@ public:
     // (one line) tagged with timestep, outer coupling round and a label — lets
     // the open/closed branches the coupling visits be plotted round by round.
     void writeIterationSnapshot(int step, int round, const std::string& tag) const;
+    void writeFluidBalance(int step, double start, double end, int rank, int ranks,
+                           const std::string& phase) const;
     void updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
                             const Dune::CpGrid& grid,
                             const std::vector<EntitySeed>& entity_seeds);
@@ -605,6 +608,10 @@ private:
     std::vector<std::vector<CellRef>> grid_mesh_map_prev_; // index mapping from cells in grid_ to trimesh_.
                                                       // NB: in general many-to-many
     std::vector<double> filtercake_thikness_prev_; // properties of filter cake, if any
+    // Storage uses old volume represented on the CURRENT geometry. This snapshot
+    // is independent of the indexed state vectors retained for rollback.
+    FractureStorageCheckpoint storage_checkpoint_;
+    std::vector<FractureStorageCheckpoint::Triangle> storageTriangles() const;
     // well source checkpoints (needed to rebuild the dune grid on reset)
     std::vector<CellRef> well_source_cellref_prev_;
     std::vector<int> well_source_prev_;
@@ -641,6 +648,7 @@ private:
     void assemblePressure();
     void assemblePressureAndCouplingAD(const std::vector<int>& closed_cells);
     void addSource();
+    void addWellSource(ResVector& source) const;
     void initPressureMatrix();
     void setupPressureSolver();
     void updateFractureRHS();
@@ -694,7 +702,8 @@ private:
     // solution variables (only to avoid memory allocation, do not trust their state)
 
     mutable Dune::BlockVector<Dune::FieldVector<double, 1>> rhs_width_;
-    mutable Dune::BlockVector<Dune::FieldVector<double, 1>> rhs_pressure_;
+    // Const diagnostics must not mutate the assembled source vector.
+    Dune::BlockVector<Dune::FieldVector<double, 1>> rhs_pressure_;
 
 // State variables
     mutable Dune::BlockVector<Dune::FieldVector<double, 1>> fracture_width_;

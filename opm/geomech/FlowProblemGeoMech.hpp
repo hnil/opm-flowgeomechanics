@@ -883,6 +883,24 @@ namespace Opm{
             this->emptyFractureLogger();
         }
         void endTimeStep() override{
+            // The adaptive timestepper invokes this hook only for accepted steps.
+            // Keep its start time: Parent::endTimeStep increments the step index.
+            const int balanceStep = this->simulator().timeStepIndex();
+            const double balanceStart = this->simulator().time();
+            const double balanceEnd = balanceStart + this->simulator().timeStepSize();
+            auto writeBalance = [&](const std::string& phase) {
+                if (!this->getFractureParam().template get<bool>("solver.write_fluid_balance", false))
+                    return;
+                OPM_BEGIN_PARALLEL_TRY_CATCH();
+                if (this->geoMechModel().fractureModelActive()) {
+                    for (const auto& fractures : this->geoMechModel().fractureModel().wellFractures())
+                        for (const auto& fracture : fractures)
+                            fracture.writeFluidBalance(balanceStep, balanceStart, balanceEnd,
+                                this->gridView().comm().rank(), this->gridView().comm().size(), phase);
+                }
+                OPM_END_PARALLEL_TRY_CATCH("Fracture fluid balance failed: ", this->gridView().comm());
+            };
+            writeBalance("flow_converged");
             // The state the step just converged on is still bound; compare the two
             // representations' view of the leak-off before anything moves.
             if (embeddedLeakoffReport_ && (fractureAuxCells_ != nullptr)
@@ -927,6 +945,7 @@ namespace Opm{
             if(Parameters::Get<Parameters::EnableWriteAllSolutions>()){
                 geoMechModel_.writeFractureSolution();
             }
+            writeBalance("accepted_end");
         }
 
         const GeoMechModel<TypeTag>& geoMechModel() const
