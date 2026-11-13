@@ -217,8 +217,10 @@ namespace Opm
             settings.toleranceAux = prm.get<double>("fractureparam.solver.well_joint_tolerance_aux", 1e-3);
             settings.fbMu = prm.get<double>("fractureparam.solver.fb_mu", 0.0);
             settings.maxDwidth = prm.get<double>("fractureparam.solver.well_joint_max_dwidth", 1e-2);
-            settings.relativeDwidth = prm.get<double>("fractureparam.solver.well_joint_relative_dwidth", 1.0);
+            settings.relativeDwidth = prm.get<double>("fractureparam.solver.well_joint_relative_dwidth", 50.0);
             settings.fdColumns = prm.get<int>("fractureparam.solver.well_joint_fd_columns", 0);
+            settings.oneSidedFloor = prm.get<bool>("fractureparam.solver.well_joint_one_sided_floor", false);
+            settings.uniformStep = prm.get<bool>("fractureparam.solver.well_joint_uniform_step", true);
             WellLocalSolver<TypeTag> locator(this->simulator_);
             Solver solver(this->simulator_);
             fractures.template updateReservoirAndWellProperties<TypeTag, Simulator>(this->simulator_);

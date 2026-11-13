@@ -32,6 +32,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <optional>
@@ -82,8 +83,10 @@ public:
         double toleranceAux = 1e-3;  //!< fracture cell mass residual relative to the well rate
         double fbMu = 0.0;           //!< Chen-Mangasarian smoothing
         double maxDwidth = 1e-2;     //!< largest width change per iteration [m]
-        double relativeDwidth = 1.0; //!< largest width change relative to the width
+        double relativeDwidth = 50.0; //!< largest width change relative to the width; large so opening can jump the fold
         int fdColumns = 0;           //!< > 0: FD-check this many width columns once
+        bool oneSidedFloor = false;  //!< at or below the cubic-law floor use dT/dw from above it
+        bool uniformStep = true;     //!< scale the whole step to the width limit; keep the largest if none descends
     };
 
     struct Report {
@@ -104,6 +107,31 @@ public:
                  const double dt, const Settings& settings)
     {
         Report rep;
+        oneSidedFloor_ = settings.oneSidedFloor;
+        // wall-clock split of the local solve, printed on exit (verbosity > 0)
+        struct Timing {
+            using Clock = std::chrono::steady_clock;
+            Clock::time_point start = Clock::now();
+            double assemble = 0, build = 0, factor = 0, widths = 0, bind = 0, refresh = 0, trans = 0;
+            int binds = 0;
+            std::size_t n = 0, nnz = 0, nwidth = 0;
+            int solves = 0, verbosity = 0;
+            std::string well;
+            static double since(Clock::time_point t)
+            { return std::chrono::duration<double>(Clock::now() - t).count(); }
+            ~Timing()
+            {
+                if (verbosity > 0) {
+                    OpmLog::info(fmt::format("WellFractureJoint timing {}: total {:.2f} s, assemble {:.2f}, "
+                                             "build {:.2f}, factor+solve {:.2f}, setWidths {:.2f} (bind {:.2f} x{}, trans {:.2f}), refresh {:.2f} "
+                                             "({} solves, n {}, entries {}, widths {})",
+                                             well, since(start), assemble, build, factor, widths, bind, binds, trans, refresh,
+                                             solves, n, nnz, nwidth));
+                }
+            }
+        } timing;
+        timing.verbosity = settings.local.verbosity;
+        timing.well = domain.well;
         auto& problem = simulator_.problem();
         auto& model = simulator_.model();
         auto& wellModel = problem.wellModel();
@@ -176,6 +204,9 @@ public:
         GlobalEqVector dxGlobal(model.numTotalDof());
 
         auto refreshCache = [&]() {
+            const auto t0 = Timing::Clock::now();
+            struct AddOnExit { double& acc; Timing::Clock::time_point t; ~AddOnExit() { acc += Timing::since(t); } }
+                addOnExit {timing.refresh, t0};
             for (const int c : domain.cells) {
                 IntensiveQuantities iq;
                 iq.update(problem, solution[c], static_cast<unsigned>(c), /*timeIdx=*/0);
@@ -183,12 +214,20 @@ public:
             }
         };
         auto setWidths = [&](const std::vector<WidthVector>& widths) {
+            const auto t0 = Timing::Clock::now();
+            struct AddOnExit { double& acc; Timing::Clock::time_point t; ~AddOnExit() { acc += Timing::since(t); } }
+                addOnExit {timing.widths, t0};
             for (std::size_t k = 0; k < blocks.size(); ++k) {
                 blocks[k].fracture->setJointWidth(widths[k]);
             }
+            const auto tBind = Timing::Clock::now();
             problem.bindFractureAuxCells(/*allowTopologyChange=*/false, /*requireStableLayout=*/true);
+            timing.bind += Timing::since(tBind);
+            ++timing.binds;
             // the assembly reads its own copy of the transmissibilities
+            const auto tTrans = Timing::Clock::now();
             linearizer.updateDiscretizationParameters();
+            timing.trans += Timing::since(tTrans);
         };
         auto currentWidths = [&]() {
             std::vector<WidthVector> w;
@@ -219,6 +258,9 @@ public:
         double rmax = 0.0, wmax = 0.0, amax = 0.0, fbmax = 0.0, merit = 0.0;
         int worstAux = -1, worstAuxEq = -1;
         auto assembleAndMeasure = [&]() {
+            const auto t0 = Timing::Clock::now();
+            struct AddOnExit { double& acc; Timing::Clock::time_point t; ~AddOnExit() { acc += Timing::since(t); } }
+                addOnExit {timing.assemble, t0};
             well.assembleWellEq(simulator_, dt, wellModel.groupStateHelper(), wellModel.wellState());
             wellModel.updateCellRates();
             linearizer.linearizeDomain(dom);
@@ -344,11 +386,26 @@ public:
                     }
                 }
             }
+            if (settings.local.verbosity > 2) {
+                const auto waterEq = Indices::conti0EqIdx
+                    + FluidSystem::canonicalToActiveCompIdx(FluidSystem::waterCompIdx);
+                for (const auto& b : blocks) {
+                    const auto& w = b.fracture->fractureWidth();
+                    std::string line;
+                    for (std::size_t i = 0; i < b.nc; ++i) {
+                        const double r = (b.dof[i] >= 0) ? double(linearizer.residual()[b.dof[i]][waterEq]) : 0.0;
+                        line += fmt::format(" [{} w {:.2e} p {:.1f} {} rw {:.1e}]", i, double(w[i][0]),
+                                            b.pressure[i] / 1e5, b.isClosed[i] ? "C" : "o", r);
+                    }
+                    OpmLog::info("WellFractureJoint cells" + line);
+                }
+            }
             if (rnorm < 1.0) {
                 rep.converged = true;
                 break;
             }
 
+            const auto tBuild = Timing::Clock::now();
             std::vector<std::tuple<std::size_t, std::size_t, double>> entries;
             const auto rDom = Details::extractVector(linearizer.residual(), domain.cells);
             auto jDom = Details::extractMatrix(linearizer.jacobian().istlMatrix(), domain.cells);
@@ -377,7 +434,14 @@ public:
                 }
             }
             this->pinSaturationsOfWaterCells_(entries, rhs, domain.cells);
+            timing.build += Timing::since(tBuild);
+            const auto tFactor = Timing::Clock::now();
             this->solveSparse_(entries, n, rhs, x);
+            timing.factor += Timing::since(tFactor);
+            ++timing.solves;
+            timing.n = n;
+            timing.nnz = entries.size();
+            timing.nwidth = numWidths;
             bool finite = true;
             for (std::size_t i = 0; i < n; ++i) {
                 finite = finite && std::isfinite(x[i][0]);
@@ -426,10 +490,102 @@ public:
             }
             const auto wellStateIt = wellModel.wellState();
             const auto widthsIt = currentWidths();
+            if (settings.local.verbosity > 2) {
+                // directional check: a step a*d must shrink every row of the system to (1-a) R
+                const double a = 1e-4;
+                const auto r0 = rDom;
+                std::vector<double> well0, fb0;
+                withLinSys([&](const auto& linSys) {
+                    for (const auto& blk : linSys.residual()) {
+                        for (std::size_t e = 0; e < blk.size(); ++e) {
+                            well0.push_back(double(blk[e]));
+                        }
+                    }
+                });
+                for (const auto& b : blocks) {
+                    for (std::size_t i = 0; i < b.nc; ++i) {
+                        fb0.push_back(b.phi[i]);
+                    }
+                }
+                auto widths = widthsIt;
+                for (std::size_t k = 0; k < blocks.size(); ++k) {
+                    for (std::size_t i = 0; i < blocks[k].nc; ++i) {
+                        widths[k][i][0] = widthsIt[k][i][0] - a * x[nFlow + blocks[k].offset + i][0];
+                    }
+                }
+                setWidths(widths);
+                dxGlobal = 0.0;
+                auto xStep = xDom;
+                xStep *= a;
+                Details::setGlobal(xStep, domain.cells, dxGlobal);
+                model.newtonMethod().update_(solution, solution, dxGlobal, dxGlobal, domain.cells);
+                refreshCache();
+                GlobalEqVector dxWell(well.cells().size());
+                for (std::size_t i = 0; i < well.cells().size(); ++i) {
+                    dxWell[i] = dxGlobal[well.cells()[i]];
+                }
+                well.recoverWellSolutionAndUpdateWellState(simulator_, dxWell, wellModel.groupStateHelper(),
+                                                           wellModel.wellState());
+                assembleAndMeasure();
+                const auto r1 = Details::extractVector(linearizer.residual(), domain.cells);
+                auto report = [&](const std::string& what, const double v0, const double v1) {
+                    const double ratio = (v0 - v1) / (a * v0);
+                    if (std::abs(v0) > 0.0 && std::abs(ratio - 1.0) > 0.05) {
+                        OpmLog::info(fmt::format("WellFractureJoint probe {}: R0 {:.4e} Ra {:.4e} ratio {:.4f}",
+                                                 what, v0, v1, ratio));
+                    }
+                };
+                for (std::size_t i = 0; i < domain.cells.size(); ++i) {
+                    for (int e = 0; e < numEq; ++e) {
+                        report(fmt::format("dof {} eq {}", domain.cells[i], e), r0[i][e], r1[i][e]);
+                    }
+                }
+                std::size_t m = 0;
+                withLinSys([&](const auto& linSys) {
+                    for (const auto& blk : linSys.residual()) {
+                        for (std::size_t e = 0; e < blk.size(); ++e, ++m) {
+                            report(fmt::format("well eq {}", m), well0[m], double(blk[e]));
+                        }
+                    }
+                });
+                m = 0;
+                for (const auto& b : blocks) {
+                    for (std::size_t i = 0; i < b.nc; ++i, ++m) {
+                        report(fmt::format("fb cell {} w {:.3e} dw {:.3e}", i, double(widthsIt[&b - &blocks[0]][i][0]),
+                                           x[nFlow + b.offset + i][0]), fb0[m], b.phi[i]);
+                    }
+                }
+                OpmLog::info("WellFractureJoint probe done");
+                for (std::size_t i = 0; i < domain.cells.size(); ++i) {
+                    solution[domain.cells[i]] = solutionIt[i];
+                }
+                refreshCache();
+                wellModel.wellState() = wellStateIt;
+                well.updatePrimaryVariables(wellModel.groupStateHelper());
+                setWidths(widthsIt);
+                well.assembleWellEq(simulator_, dt, wellModel.groupStateHelper(), wellModel.wellState());
+                assembleAndMeasure();
+            }
             const double meritPrev = merit;
             bool accepted = false;
             double alpha = 1.0;
-            for (int ls = 0; ls < 6 && !accepted; ++ls, alpha *= 0.5) {
+            if (settings.uniformStep) {
+                // clamping widths alone leaves the pressures stepping for widths that never came
+                for (std::size_t k = 0; k < blocks.size(); ++k) {
+                    for (std::size_t i = 0; i < blocks[k].nc; ++i) {
+                        const double limit = std::min(settings.maxDwidth,
+                                                      std::max(settings.relativeDwidth * widthsIt[k][i][0],
+                                                               blocks[k].fracture->cubicLawMinWidth()));
+                        const double dw = std::abs(x[nFlow + blocks[k].offset + i][0]);
+                        if (dw > limit) {
+                            alpha = std::min(alpha, limit / dw);
+                        }
+                    }
+                }
+            }
+            const double alphaMax = alpha;
+            for (int ls = 0; ls < 7 && !accepted; ++ls) {
+                alpha = (ls < 6) ? alphaMax * std::pow(0.5, ls) : alphaMax;
                 if (ls > 0) {
                     for (std::size_t i = 0; i < domain.cells.size(); ++i) {
                         solution[domain.cells[i]] = solutionIt[i];
@@ -469,7 +625,9 @@ public:
                                                            wellModel.wellState());
                 rnorm = assembleAndMeasure();
                 // a max over tolerance ratios would reject good steps: the rows start far apart
-                accepted = std::isfinite(rnorm) && ((merit < meritPrev) || (ls == 5));
+                // no descent: the fixed-scale default takes the shortest step, continuation the longest
+                accepted = std::isfinite(rnorm)
+                    && ((merit < meritPrev) || (ls == 5 && !settings.uniformStep) || (ls == 6));
                 if (settings.local.verbosity > 1) {
                     OpmLog::info(fmt::format("WellFractureJoint   alpha {:.4f}: merit {:.3e} -> {:.3e} "
                                              "(cnv {:.3e} well {:.3e} aux {:.3e} fb {:.3e})",
@@ -560,8 +718,10 @@ private:
             }
             const unsigned gi = static_cast<unsigned>(b.dof[ci]);
             const unsigned gj = static_cast<unsigned>(b.dof[cj]);
-            const Eval wi = Eval::variable(input.aperture[ci], 0);
-            const Eval wj = Eval::variable(input.aperture[cj], 1);
+            // max(w, floor) is flat below the floor: take the slope from just above it
+            const double lift = oneSidedFloor_ ? input.cubic_law_min_width * (1.0 + 1e-9) : 0.0;
+            const Eval wi = Eval::variable(std::max(double(input.aperture[ci]), lift), 0);
+            const Eval wj = Eval::variable(std::max(double(input.aperture[cj]), lift), 1);
             const Eval trans = detail::connectionTrans(wi, wj, t1, t2, input.cubic_law_min_width);
             if (!(trans.value > 0.0)) {
                 continue;
@@ -856,6 +1016,7 @@ private:
     }
 
     Simulator& simulator_;
+    bool oneSidedFloor_ = false;
 };
 
 } // namespace Opm
