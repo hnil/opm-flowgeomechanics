@@ -18,6 +18,8 @@
 */
 
 #include "config.h"
+#include <opm/geomech/MechGridPartition.hpp>
+#include <numeric>
 
 #include <set>
 
@@ -953,7 +955,8 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
     all_reservoir_areas_.resize(numFractureCells());
     all_reservoir_cells_.resize(numFractureCells());
     all_reservoir_centers_.resize(numFractureCells());
-    bool full_intersections = prm_.get<bool>("solver.divide_wellidx", false);
+    const bool require_coverage = MechPartition::Registry::protectedFractures();
+    bool full_intersections = require_coverage || prm_.get<bool>("solver.divide_wellidx", false);
     for (auto& element : elements(grid_->leafGridView())) {
         const auto elemIdx = elemMapper.index(element);
         auto geom = element.geometry();
@@ -977,6 +980,12 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
             std::vector<Dune::FieldVector<double,3>> centers;
             std::vector<std::array<double,3>> hex_corners;
             external::cellsOfTri(rcells, areas, centers, cellSearchTree, grid, entity_seeds, tri_corners);
+            const double covered = std::accumulate(areas.begin(), areas.end(), 0.0);
+            if (require_coverage && (reservoir_cells_[elemIdx] < 0
+                || covered < geom.volume() - 1e-8*std::max(1.0, geom.volume())))
+                OPM_THROW(std::runtime_error,
+                    "Incomplete owned reservoir coverage for fracture " + name()
+                    + "; enlarge the mechanics partition group before continuing");
             all_reservoir_areas_[elemIdx] = areas;
             all_reservoir_cells_[elemIdx] = rcells;
             all_reservoir_centers_[elemIdx] = centers;

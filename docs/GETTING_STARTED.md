@@ -177,3 +177,24 @@ dependency options. A face-only overlap can change the mechanics equations at
 partition junctions. An incomplete overlap now raises a collective initialization
 error before adaptive timestepping; reducing the timestep cannot repair it.
 See [the operator regression](../tests/mechanical_vertex_stencils.md).
+
+### Bounded fracture growth with a coarsened mechanics partition
+
+With `--mech-coarsen-file`, optional
+`--mech-partition-group-file=fracture-regions.txt` keeps every mechanics block
+touched by each listed region on one rank. Each line contains
+`I1 I2 J1 J2 K1 K2`, using 1-based inclusive deck indices; `#` and `--` start
+comments. Overlapping regions are joined. Include the seed and expected
+fracture-growth region. Whole mechanics blocks are retained, including blocks
+only partly intersected by a region, preserving flow/mechanics ownership.
+Too few independent groups for the MPI ranks is an error.
+
+The option checks full owned-reservoir coverage before removing outside
+fracture cells. Unsupported growth at a partition boundary or physical exterior
+is rejected through the collective fracture error handler; enlarge the region
+and rerun. The check includes partial area loss with a still-local centroid.
+Regions can reduce load balance. The separate `solver.well_joint_solve` mode
+is rejected because its growth path bypasses collective fracture error handling.
+This is bounded local completion support;
+remote property sampling and completion transfer are not implemented. The default
+partition and outside-cell behavior are unchanged without this option.

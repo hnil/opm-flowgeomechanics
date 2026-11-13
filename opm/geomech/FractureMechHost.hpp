@@ -231,7 +231,14 @@ namespace Opm{
                 }
             }
                 // copy from apply action
-            OPM_END_PARALLEL_TRY_CATCH("Solving fracture failed: ", simulator_.vanguard().grid().comm());
+            }
+            OPM_PARALLEL_CATCH_CLAUSE(obptc_exc_type, obptc_exc_msg);
+            const auto& comm = simulator_.vanguard().grid().comm();
+            if (MechPartition::Registry::protectedFractures())
+                logAndCheckForExceptionsAndThrow(FractureModel::fractureLogger, obptc_exc_type,
+                    "Solving fracture failed: " + obptc_exc_msg, comm.rank() == 0, comm);
+            else
+                checkForExceptionsAndThrow(obptc_exc_type, "Solving fracture failed: " + obptc_exc_msg, comm);
        }
 
 
