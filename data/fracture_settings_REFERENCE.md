@@ -163,7 +163,13 @@ across outer iterations. Implemented in `Fracture::applyCouplingUpdate`.
 `solver` (`bicgstab`/`gmres`/`fgmres`), `tol`, `atol`, `max_iter`, `verbosity`, `restart`, and
 `preconditioner` (`FractureMechanicsPreconditioner`): `mode_policy` (`manual`/`coupling_auto`),
 `mech_first`, `fixed_stress`, `mode_switch_coupling_threshold`, `diag_mech`, `diag_flow`,
-`mech_press_coupling`, `update_mech_on_reuse`, and a nested `flow_solver` (Dune FlexibleSolver) block.
+`mech_press_coupling`, `update_mech_on_reuse`, `lu_pivoting`, `mech_solver.type`, and a nested `flow_solver`
+(Dune FlexibleSolver) block.
+`mech_solver.type` picks the dense mechanics factor: `dune_lu` (default, Dune elimination, `lu_pivoting` applies) or
+`lapack_lu` (rows of the mechanics block with only a diagonal entry, the closed cells, are solved directly; the rest is
+factored with LAPACK `dgetrf`; `lu_pivoting` is ignored) or `lapack_inv` (as `lapack_lu`, then the explicit inverse from
+`dgetri`, so each preconditioner apply is one `dgemv`). The LAPACK types change round-off, so they are not bit-for-bit
+with the default.
 `coupling_auto` estimates a coupling indicator and switches to `fixed_stress` when it exceeds the threshold.
 
 ## 11. New robustness / performance levers (all opt-in, defaults reproduce old behaviour)
@@ -173,6 +179,7 @@ across outer iterations. Implemented in `Fracture::applyCouplingUpdate`.
 | `linsolver.scaling` | `fractureparam.solver.linsolver` | `none` | `blockmax`: symmetric block scaling `D S D` of the coupled system (s_m=1/√max\|A\|, s_p=1/√max\|M\|) before the Krylov solve. Strong, cheap conditioning win; dumps stay unscaled (physical). |
 | rescue ladder | `fractureparam.solver.linsolver` | always on | on linear non-convergence or a Krylov abort, try configured→fgmres→fixed-stress preconditioner→**drop-C / decoupled** before giving up. With `scaling=blockmax` + `preconditioner.lu_pivoting` this is what makes the iterative rate_well solve survive establishment. |
 | `linsolver.preconditioner.lu_pivoting` | `…linsolver.preconditioner` | `false` | Partially pivoted dense LU for the mechanics block of `FractureMechanicsPreconditioner` (+ a named recoverable error on a zero/non-finite pivot). The unpivoted legacy LU can overflow when O(1) pinned closed-cell rows mix with O(1e9) BEM rows. Off by default (pivoting changes round-off → REGTEST bit-identity); on in `seq_implicit_ratewell.json`. |
+| `linsolver.blas_operator` | `fractureparam.solver.linsolver` | `false` | Apply the dense mechanics block of the coupled operator with BLAS `dgemv` on a contiguous copy instead of the Dune loop (the copy is refreshed before every linear solve). Round-off level change, not bit-for-bit. |
 | `linsolver.solver` | `fractureparam.solver.linsolver` | `bicgstab` | `bicgstab`, `gmres` or `fgmres` |
 | `keep_zero_ctf_topology` | `fractureparam.solver` | `false` | Keep fracture-generated dynamic completions in the schedule even when their current fracture WI/CTF is non-positive. Default `false` skips these topology-only connections because an open zero-CF schedule completion is **not** inert: it still enters `initializeWellPerfData()` / `initializeWellState()`, changing well topology, perf ordering and first-perforation pressure seeding before the fracture WI is added later. Enable only for topology studies or debugging. |
 | `conservative_propagation` | `fractureparam.solver` | `false` | Don't grow the fracture (trimesh `if_propagate_trimesh`) off a non-converged inner solve — K1 from an unconverged state is unreliable, and opening on it can irreversibly alter the result. |

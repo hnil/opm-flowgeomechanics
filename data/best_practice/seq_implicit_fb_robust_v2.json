@@ -115,8 +115,12 @@
     "max_iter": "100",
     "verbosity": 0,
     "solver": "bicgstab",
+    "blas_operator": true,
     "preconditioner": {
      "verbosity": 0,
+     "mech_solver": {
+      "type": "lapack_inv"
+     },
      "diag_mech": "false",
      "diag_flow": "false",
      "mech_first": false,

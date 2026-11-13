@@ -20,12 +20,25 @@
 #include "config.h"
 #include "FractureMechanicsPreconditioner.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <sstream>
 #include <utility>
 
 #include <opm/common/ErrorMacros.hpp>
 #include <opm/common/OpmLog/OpmLog.hpp>
+
+#include <stdexcept>
+#include <string>
+
+extern "C" {
+void dgetrf_(const int* m, const int* n, double* a, const int* lda, int* ipiv, int* info);
+void dgetrs_(const char* trans, const int* n, const int* nrhs, const double* a, const int* lda,
+             const int* ipiv, double* b, const int* ldb, int* info);
+void dgetri_(const int* n, double* a, const int* lda, const int* ipiv, double* work, const int* lwork, int* info);
+void dgemv_(const char* trans, const int* m, const int* n, const double* alpha, const double* a, const int* lda,
+            const double* x, const int* incx, const double* beta, double* y, const int* incy);
+}
 
 namespace Opm
 {
@@ -145,19 +158,18 @@ FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::Frac
     mech_press_coupling_ = prm.get<bool>("mech_press_coupling", true);
     mech_first_ = prm_.get<bool>("mech_first");
     lu_pivoting_ = prm_.get<bool>("lu_pivoting", false);
+    const auto mech_solver = prm_.get<std::string>("mech_solver.type", "dune_lu");
+    if (mech_solver != "dune_lu" && mech_solver != "lapack_lu" && mech_solver != "lapack_inv") {
+        OPM_THROW(std::invalid_argument, "Unknown fracture preconditioner mech_solver.type: " + mech_solver);
+    }
+    lapack_inv_ = (mech_solver == "lapack_inv");
+    lapack_lu_ = (mech_solver == "lapack_lu") || lapack_inv_;
     if (!diag_mech_) {
         OPM_TIMEBLOCK(SetupLuFactorization);
         if(verbosity>0){
-        OpmLog::debug("FractureMechanicsPreconditioner: using full mechanics preconditioner");
+        OpmLog::debug("FractureMechanicsPreconditioner: using full mechanics preconditioner, " + mech_solver);
         }
-        luM_ = S[_0][_0];
-        if (lu_pivoting_) {
-            MyDenseMatrix<double>::luDecomp(luM_, lu_pivot_);
-        } else {
-            lu_pivot_.clear();
-            MyDenseMatrix<double>::luDecomp(luM_);
-        }
-        checkLuFactor();
+        factorMechanics(S[_0][_0]);
     }
     active_mode_ = selectMode(S);
     if (verbosity > 0 && mode_policy_ == "manual") {
@@ -171,19 +183,7 @@ void FractureMechanicsPreconditioner::update(const Opm::FractureSystemMatrix& S,
 
     if (!diag_mech_ && new_lu_mech) {
         OPM_TIMEBLOCK(SetupLuFactorization);
-        //copy to dense matrix for lu factorization
-        for(size_t i = 0; i != S[_0][_0].M(); ++i){
-            for(size_t j = 0; j != S[_0][_0].N(); ++j){
-                luM_[i][j] = S[_0][_0][i][j];
-            }
-        }
-        if (lu_pivoting_) {
-            MyDenseMatrix<double>::luDecomp(luM_, lu_pivot_);
-        } else {
-            lu_pivot_.clear();
-            MyDenseMatrix<double>::luDecomp(luM_);
-        }
-        checkLuFactor();
+        factorMechanics(S[_0][_0]);
     }
     if(diag_mech_ && new_lu_mech){
         // if we are using a diagonal mechanics preconditioner, we need to update the diagonal entries
@@ -323,6 +323,10 @@ FractureMechanicsPreconditioner::solveMechanics(Opm::Vector& x, const Opm::Vecto
     }
 
     OPM_TIMEBLOCK(ApplyMechPreconditioner);
+    if (lapack_lu_) {
+        openBlockSolve(x, rhs);
+        return;
+    }
     auto tmp = rhs;
     backSolve(x, tmp);
 }
@@ -391,6 +395,110 @@ FractureMechanicsPreconditioner::applymech_last(Opm::VectorHP& v, const Opm::Vec
 
 
 };
+
+void
+FractureMechanicsPreconditioner::factorMechanics(const FMatrix& A)
+{
+    if (lapack_lu_) {
+        factorOpenBlock(A);
+        return;
+    }
+    luM_ = A;
+    if (lu_pivoting_) {
+        MyDenseMatrix<double>::luDecomp(luM_, lu_pivot_);
+    } else {
+        lu_pivot_.clear();
+        MyDenseMatrix<double>::luDecomp(luM_);
+    }
+    checkLuFactor();
+}
+
+void
+FractureMechanicsPreconditioner::factorOpenBlock(const FMatrix& A)
+{
+    const int n = A.N();
+    open_.clear();
+    closed_.clear();
+    for (int i = 0; i < n; ++i) {
+        bool diagonal = true;
+        for (int j = 0; j < n && diagonal; ++j) {
+            diagonal = (j == i || A[i][j] == 0.0);
+        }
+        (diagonal ? closed_ : open_).push_back(i);
+    }
+    const int m = open_.size();
+    const int k = closed_.size();
+
+    closed_diag_.resize(k);
+    for (int c = 0; c < k; ++c) {
+        closed_diag_[c] = A[closed_[c]][closed_[c]];
+        if (!std::isfinite(closed_diag_[c]) || closed_diag_[c] == 0.0)
+            OPM_THROW(std::runtime_error,
+                      "mechanics LAPACK LU: bad diagonal row " + std::to_string(closed_[c]));
+    }
+    open_lu_.resize(std::size_t(m) * m);
+    open_closed_.resize(std::size_t(m) * k);
+    for (int r = 0; r < m; ++r) {
+        for (int q = 0; q < m; ++q)
+            open_lu_[std::size_t(r) * m + q] = A[open_[r]][open_[q]];
+        for (int c = 0; c < k; ++c)
+            open_closed_[std::size_t(r) * k + c] = A[open_[r]][closed_[c]];
+    }
+    open_pivot_.resize(m);
+    open_rhs_.resize(m);
+    if (m == 0)
+        return;
+    int info = 0;
+    dgetrf_(&m, &m, open_lu_.data(), &m, open_pivot_.data(), &info);
+    bool finite = (info == 0);
+    for (int r = 0; r < m && finite; ++r)
+        finite = std::isfinite(open_lu_[std::size_t(r) * m + r]);
+    if (!finite)
+        OPM_THROW(std::runtime_error, "mechanics LAPACK LU: dgetrf failed, info " + std::to_string(info));
+    if (lapack_inv_) {
+        int lwork = -1;
+        double wsize = 0.0;
+        dgetri_(&m, open_lu_.data(), &m, open_pivot_.data(), &wsize, &lwork, &info);
+        lwork = std::max(m, static_cast<int>(wsize));
+        std::vector<double> work(lwork);
+        dgetri_(&m, open_lu_.data(), &m, open_pivot_.data(), work.data(), &lwork, &info);
+        if (info != 0)
+            OPM_THROW(std::runtime_error, "mechanics LAPACK inverse: dgetri failed, info " + std::to_string(info));
+    }
+}
+
+void
+FractureMechanicsPreconditioner::openBlockSolve(Vector& x, const Vector& rhs) const
+{
+    const int m = open_.size();
+    const int k = closed_.size();
+    for (int c = 0; c < k; ++c)
+        x[closed_[c]][0] = rhs[closed_[c]][0] / closed_diag_[c];
+    if (m == 0)
+        return;
+    for (int r = 0; r < m; ++r) {
+        double v = rhs[open_[r]][0];
+        const double* a = open_closed_.data() + std::size_t(r) * k;
+        for (int c = 0; c < k; ++c)
+            v -= a[c] * x[closed_[c]][0];
+        open_rhs_[r] = v;
+    }
+    // the row-major copy is the transpose in LAPACK's column-major layout
+    const char trans = 'T';
+    const int one = 1;
+    if (lapack_inv_) {
+        const double alpha = 1.0, beta = 0.0;
+        open_x_.resize(m);
+        dgemv_(&trans, &m, &m, &alpha, open_lu_.data(), &m, open_rhs_.data(), &one, &beta, open_x_.data(), &one);
+        for (int r = 0; r < m; ++r)
+            x[open_[r]][0] = open_x_[r];
+        return;
+    }
+    int info = 0;
+    dgetrs_(&trans, &m, &one, open_lu_.data(), &m, open_pivot_.data(), open_rhs_.data(), &m, &info);
+    for (int r = 0; r < m; ++r)
+        x[open_[r]][0] = open_rhs_[r];
+}
 
 void
 FractureMechanicsPreconditioner::checkLuFactor() const

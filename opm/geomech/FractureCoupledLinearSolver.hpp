@@ -52,6 +52,7 @@ public:
         int verbosity{0};
         int restart{100};
         bool gmresFallback{true};
+        bool blasOperator{false}; // apply the dense mechanics block with dgemv
         static Options read(const PropertyTree& prm);
     };
 
@@ -80,7 +81,7 @@ public:
     bool scaled() const;
 
 private:
-    using Operator = Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP>;
+    using Operator = Dune::LinearOperator<VectorHP, VectorHP>;
     using Solver = Dune::InverseOperator<VectorHP, VectorHP>;
 
     void scaleMatrix(int sign);

@@ -120,7 +120,7 @@ class FractureMechanicsPreconditioner :
 public:
   // prm expects the fracture linsolver preconditioner subtree. The relevant
   // switches are diag_mech, diag_flow, mech_first, fixed_stress,
-  // mech_press_coupling, and flow_solver.*.
+  // mech_press_coupling, lu_pivoting, mech_solver.type and flow_solver.*.
   FractureMechanicsPreconditioner(const FractureSystemMatrix& S, Opm::PropertyTree prm);
   virtual void apply(VectorHP& v, const VectorHP& d);
     virtual void post(VectorHP& /*v*/) { };
@@ -170,12 +170,27 @@ Vector diagvec(const Mat& M)
   void updateFixedStressFlowMatrix(const Opm::FractureSystemMatrix& S);
   void solveMechanics(Vector& x, const Vector& rhs) const;
   void solveFlow(Vector& x, const Vector& rhs);
+  void factorMechanics(const FMatrix& A);
+  void factorOpenBlock(const FMatrix& A);
   void backSolve(Vector& x,const Vector& rhs_in) const;
+  void openBlockSolve(Vector& x, const Vector& rhs) const;
   void checkLuFactor() const;
     const FractureSystemMatrix& A_;
     mutable FMatrix luM_;
     std::vector<MyDenseMatrix<double>::pivot_index> lu_pivot_;
     bool lu_pivoting_{false};
+    // mech_solver.type: "dune_lu" (default), "lapack_lu" or "lapack_inv"
+    bool lapack_lu_{false};
+    // lapack_inv: open_lu_ holds the explicit inverse, applied with dgemv
+    bool lapack_inv_{false};
+    // lapack_lu: rows of A with only a diagonal entry are solved directly, the rest by dgetrf
+    std::vector<int> open_, closed_;
+    std::vector<double> open_lu_;   // row-major open block, factored as its transpose
+    std::vector<int> open_pivot_;
+    std::vector<double> closed_diag_;
+    std::vector<double> open_closed_; // A(open, closed), row-major
+    mutable std::vector<double> open_rhs_;
+    mutable std::vector<double> open_x_;
     mutable Vector A_diag_;
     mutable Vector M_diag_;
     Opm::PropertyTree prm_;

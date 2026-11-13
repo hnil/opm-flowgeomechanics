@@ -83,6 +83,62 @@ scale_dense(FMatrix& m, const double factor)
 
 } // anonymous namespace
 
+extern "C" void dgemv_(const char* trans, const int* m, const int* n, const double* alpha,
+                       const double* a, const int* lda, const double* x, const int* incx,
+                       const double* beta, double* y, const int* incy);
+
+namespace
+{
+// S with the dense mechanics block copied to contiguous storage; refresh() after S changes.
+class DenseBlasSystemOperator : public Dune::LinearOperator<Opm::VectorHP, Opm::VectorHP>
+{
+public:
+    using SystemMatrix = Opm::FractureSystemMatrix;
+    explicit DenseBlasSystemOperator(const SystemMatrix& S) : S_(S) {}
+
+    void refresh()
+    {
+        using namespace Dune::Indices;
+        const auto& A = S_[_0][_0];
+        n_ = static_cast<int>(A.N());
+        a_.resize(static_cast<std::size_t>(n_) * n_);
+        for (int i = 0; i < n_; ++i)
+            std::copy(A[i].begin(), A[i].end(), a_.begin() + static_cast<std::size_t>(i) * n_);
+    }
+
+    void apply(const Opm::VectorHP& x, Opm::VectorHP& y) const override
+    {
+        y = 0.0;
+        applyscaleadd(1.0, x, y);
+    }
+
+    void applyscaleadd(field_type alpha, const Opm::VectorHP& x, Opm::VectorHP& y) const override
+    {
+        using namespace Dune::Indices;
+        if (n_ > 0) {
+            // row-major A is column-major A^T
+            const char trans = 'T';
+            const int one = 1;
+            const double beta = 1.0;
+            dgemv_(&trans, &n_, &n_, &alpha, a_.data(), &n_, &x[_0][0][0], &one, &beta, &y[_0][0][0], &one);
+        }
+        S_[_0][_1].usmv(alpha, x[_1], y[_0]);
+        S_[_1][_0].usmv(alpha, x[_0], y[_1]);
+        S_[_1][_1].usmv(alpha, x[_1], y[_1]);
+    }
+
+    Dune::SolverCategory::Category category() const override
+    {
+        return Dune::SolverCategory::sequential;
+    }
+
+private:
+    const SystemMatrix& S_;
+    int n_{0};
+    std::vector<double> a_;
+};
+} // namespace
+
 namespace Opm
 {
 
@@ -103,6 +159,7 @@ FractureCoupledLinearSolver::Options::read(const PropertyTree& prm)
     o.verbosity = static_cast<int>(prm.get<double>("solver.linsolver.verbosity", 0));
     o.restart = prm.get<int>("solver.linsolver.restart", 100);
     o.gmresFallback = prm.get<bool>("solver.linsolver.fallback_gmres_on_breakdown", true);
+    o.blasOperator = prm.get<bool>("solver.linsolver.blas_operator", false);
     return o;
 }
 
@@ -183,8 +240,13 @@ FractureCoupledLinearSolver::solve(VectorHP& rhs,
     Dune::InverseOperatorResult iores;
 
     if (it.newSystem) {
-        operator_ = std::make_unique<Operator>(S);
+        if (opt_.blasOperator)
+            operator_ = std::make_unique<DenseBlasSystemOperator>(S);
+        else
+            operator_ = std::make_unique<Dune::MatrixAdapter<SystemMatrix, VectorHP, VectorHP>>(S);
     }
+    if (auto* blas = dynamic_cast<DenseBlasSystemOperator*>(operator_.get()))
+        blas->refresh();
     const bool new_precond = it.newSystem || it.contactChanged;
     if (new_precond) {
         precond_.reset(new FractureMechanicsPreconditioner(S, opt_.precond));
