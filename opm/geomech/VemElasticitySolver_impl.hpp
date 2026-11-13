@@ -234,6 +234,45 @@ void VemDiscretisation<GridType>::toGlobal(V& u) const
 }
 
 template<class GridType>
+const std::vector<Vector>& VemDiscretisation<GridType>::rotationModes()
+{
+    const std::size_t nn = coords_.size() / 3;
+    // Common centre on all ranks, so each mode is one rigid rotation globally.
+    std::array<double, 4> sum = {0.0, 0.0, 0.0, double(nn)};
+    for (std::size_t k = 0; k < nn; ++k) {
+        for (int d = 0; d < 3; ++d) {
+            sum[d] += coords_[3 * k + d];
+        }
+    }
+    grid_.comm().sum(sum.data(), 4);
+    const double c[3] = {sum[0] / sum[3], sum[1] / sum[3], sum[2] / sum[3]};
+    rotation_modes_.assign(3, Vector(3 * nn));
+    for (std::size_t k = 0; k < nn; ++k) {
+        const double x = coords_[3 * k] - c[0];
+        const double y = coords_[3 * k + 1] - c[1];
+        const double z = coords_[3 * k + 2] - c[2];
+        const double r[3][3] = {{-y, x, 0.0}, {0.0, -z, y}, {z, 0.0, -x}};
+        for (int m = 0; m < 3; ++m) {
+            for (int d = 0; d < 3; ++d) {
+                rotation_modes_[m][3 * k + d] = r[m][d];
+            }
+        }
+    }
+    for (auto& mode : rotation_modes_) {
+        toLocal(mode);
+        for (const int dof : std::get<1>(dirichlet_)) {
+            mode[dof] = 0.0;
+        }
+        if (scale_.size() == mode.size()) {
+            for (std::size_t i = 0; i < mode.size(); ++i) {
+                mode[i] /= scale_[i];
+            }
+        }
+    }
+    return rotation_modes_;
+}
+
+template<class GridType>
 void VemDiscretisation<GridType>::setBodyForce(double gravity, const std::vector<double>& density)
 {
     const int num_cells = grid_.leafGridView().size(0);
@@ -497,13 +536,28 @@ void MechLinearSolver<GridType>::setCopyRowsToZero(Matrix& A)
 }
 
 template<class GridType>
-void MechLinearSolver<GridType>::setup(const PropertyTree& prm, Matrix& A,
-                                       const std::vector<double>& coords)
+void MechLinearSolver<GridType>::setup(const PropertyTree& prm_in, Matrix& A,
+                                       const std::vector<double>& coords,
+                                       const std::vector<Vector>& modes)
 {
     OPM_TIMEBLOCK(setupLinearSolver);
     tsolver_.reset();
     A_ = &A;
-    addMechLinePlanePreconditioner(coords);
+    addMechPreconditioners(coords, modes);
+    // hypre with interp_vec_variant needs the rotations, which only mech_hypre passes;
+    // hypre uses them with nodal coarsening only.
+    PropertyTree prm = prm_in;
+    for (const std::string path : {"preconditioner", "preconditioner.inner"}) {
+        if (prm.get<std::string>(path + ".type", "") != "hypre"
+            || prm.get<int>(path + ".interp_vec_variant", 0) <= 0) {
+            continue;
+        }
+        if (prm.get<int>(path + ".nodal", 0) > 0) {
+            prm.put(path + ".type", std::string("mech_hypre"));
+        } else if (grid_.comm().rank() == 0) {
+            OpmLog::warning("mech solver: interp_vec_variant ignored, it needs nodal > 0");
+        }
+    }
     // Opt-in: stop the warm-started solve when the residual of the full
     // load is below tol, not when the correction's own residual is.
     tol_relative_to_load_ = prm.get<bool>("tol_relative_to_load", true);

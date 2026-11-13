@@ -373,7 +373,7 @@ namespace Opm{
                         OpmLog::note(os.str());
                     }
                 }
-                mechLinSolver_->setup(prm, mechDisc_->matrix(), mechDisc_->coords());
+                mechLinSolver_->setup(prm, mechDisc_->matrix(), mechDisc_->coords(), mechDisc_->rotationModes());
                 mechLinSolver_->comm()->communicator().barrier();
                 assembledGravity_ = gravity;
                 write_system_ = prm.get<int>("verbosity", 0) > 10;

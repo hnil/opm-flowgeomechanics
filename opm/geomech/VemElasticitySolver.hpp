@@ -43,6 +43,7 @@
 
 #include <memory>
 #include <tuple>
+#include <array>
 #include <vector>
 
 namespace Opm {
@@ -115,6 +116,8 @@ public:
     //! Jacobi factors when the matrix is S A S (diagonal_scaling), else empty.
     const Vector& scale() const { return scale_; }
     const std::vector<double>& coords() const { return coords_; }
+    //! The three rigid rotations in the solver's unknowns, zero on fixed dofs.
+    const std::vector<Vector>& rotationModes();
 
     //! Between global displacement and the solver's unknowns (rotated nodes in their frame).
     template<class V> void toLocal(V& u) const;
@@ -149,6 +152,7 @@ private:
     Matrix stressmat_; // from all dofs (no elimination) to cell stress
     Matrix strainmat_;
     Vector scale_;
+    std::vector<Vector> rotation_modes_;
 
     vem::StabilityChoice stability_choice_ = vem::SIMPLE;
     bool stab_on_stress_ = false;
@@ -166,7 +170,8 @@ public:
     {}
 
     //! Sets up the preconditioner on A; in parallel, A's copy rows become identity rows.
-    void setup(const PropertyTree& prm, Matrix& A, const std::vector<double>& coords);
+    void setup(const PropertyTree& prm, Matrix& A, const std::vector<double>& coords,
+               const std::vector<Vector>& modes);
     //! x is the unscaled solution and, unless cold, the warm start; scale is empty or
     //! the Jacobi factors of A. On failure x is left unchanged.
     MechSolveResult solve(const Vector& b, const Vector& scale, Vector& x, bool cold = false);

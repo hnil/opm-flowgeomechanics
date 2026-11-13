@@ -21,6 +21,7 @@
 #include <opm/common/TimingMacros.hpp>
 #include <opm/simulators/linalg/FlexibleSolver_impl.hpp>
 #include <opm/simulators/linalg/PreconditionerFactory_impl.hpp>
+#include <opm/geomech/MechHyprePreconditioner.hpp>
 #include <opm/geomech/MechLinePlanePreconditioner.hpp>
 template <int N>
 using OBMMec = Dune::BCRSMatrix<Dune::FieldMatrix<double, N, N>>;
@@ -40,7 +41,8 @@ INSTANTIATE_FLEXIBLESOLVER_OP(ParOpMec<1>);
 
 namespace Opm
 {
-void addMechLinePlanePreconditioner(const std::vector<double>& coords)
+void addMechPreconditioners(const std::vector<double>& coords,
+                            const std::vector<Dune::BlockVector<Dune::FieldVector<double, 1>>>& modes)
 {
     using SeqInfo = Dune::Amg::SequentialInformation;
     using SeqPrec = MechLinePlanePreconditioner<OBMMec<1>, BVMec<1>, SeqInfo>;
@@ -62,5 +64,20 @@ void addMechLinePlanePreconditioner(const std::vector<double>& coords)
             auto inner = PreconditionerFactory<ParOpMec<1>, CommMec>::create(op, prm.get_child("inner"), comm);
             return std::make_shared<ParPrec>(op.getmat(), coords, prm, inner, comm);
         });
+    using SeqHypre = MechHyprePreconditioner<OBMMec<1>, BVMec<1>, SeqInfo>;
+    PreconditionerFactory<SeqOpMec<1>, SeqInfo>::addCreator(
+        "mech_hypre",
+        [&modes](const SeqOpMec<1>& op, const PropertyTree& prm, const std::function<BVMec<1>()>&, std::size_t) {
+            static const SeqInfo seq;
+            return std::make_shared<SeqHypre>(op.getmat(), prm, modes, seq);
+        });
+    using ParHypre = MechHyprePreconditioner<OBMMec<1>, BVMec<1>, CommMec>;
+    PreconditionerFactory<ParOpMec<1>, CommMec>::addCreator(
+        "mech_hypre",
+        [&modes](const ParOpMec<1>& op,
+                 const PropertyTree& prm,
+                 const std::function<BVMec<1>()>&,
+                 std::size_t,
+                 const CommMec& comm) { return std::make_shared<ParHypre>(op.getmat(), prm, modes, comm); });
 }
 } // namespace Opm

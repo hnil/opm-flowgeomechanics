@@ -26,7 +26,9 @@
 #include <opm/simulators/linalg/PropertyTree.hpp>
 
 #include <dune/common/parallel/mpihelper.hh>
+#include <dune/common/fvector.hh>
 #include <dune/common/timer.hh>
+#include <dune/istl/bvector.hh>
 #include <dune/istl/owneroverlapcopy.hh>
 #include <dune/istl/paamg/pinfo.hh>
 #include <dune/istl/solvercategory.hh>
@@ -45,8 +47,10 @@
 namespace Opm
 {
 
-// Registers type "mech_lines" for the mechanics operators; coords must outlive the solver.
-void addMechLinePlanePreconditioner(const std::vector<double>& coords);
+// Registers "mech_lines" and "mech_hypre" for the mechanics operators; both arguments must
+// outlive the solver.
+void addMechPreconditioners(const std::vector<double>& coords,
+                            const std::vector<Dune::BlockVector<Dune::FieldVector<double, 1>>>& modes);
 
 // Symmetric block Gauss-Seidel over vertical lines and lateral plane blocks, around an inner
 // preconditioner. Dofs are three per node, coords three per node. Blocks hold owned nodes only.
