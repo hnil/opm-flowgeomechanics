@@ -557,6 +557,9 @@ public:
                     }
                     wellModel.wellState() = wellStateIt;
                     well.updatePrimaryVariables(wellModel.groupStateHelper());
+                    refreshCache();
+                    // the well update below must use equations of this point, not of the rejected one
+                    well.assembleWellEq(simulator_, dt, wellModel.groupStateHelper(), wellModel.wellState());
                 }
                 dxGlobal = 0.0;
                 auto xStep = xDom;
@@ -564,7 +567,12 @@ public:
                 Details::setGlobal(xStep, domain.cells, dxGlobal);
                 model.newtonMethod().update_(solution, solution, dxGlobal, dxGlobal, domain.cells);
                 refreshCache();
-                well.recoverWellSolutionAndUpdateWellState(simulator_, dxGlobal,
+                // the well's B block is indexed by perforation, not by global DOF
+                GlobalEqVector dxWell(well.cells().size());
+                for (std::size_t i = 0; i < well.cells().size(); ++i) {
+                    dxWell[i] = dxGlobal[well.cells()[i]];
+                }
+                well.recoverWellSolutionAndUpdateWellState(simulator_, dxWell,
                                                            wellModel.groupStateHelper(),
                                                            wellModel.wellState());
                 rnorm = assembleAndMeasure(rmax, wmax);
