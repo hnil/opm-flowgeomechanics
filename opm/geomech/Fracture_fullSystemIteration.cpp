@@ -1001,7 +1001,9 @@ Fracture::makePressureAssemblyInput() const
 {
     const size_t nc = numFractureCells();
     const size_t nw = numWellEquations();
-    const bool have_water_phase_props = static_cast<bool>(fracture_water_property_evaluator_);
+    // The (historically named) *_water_* options select the fluid-system properties of
+    // the injected phase that fills the fracture, which is water only for water injectors.
+    const bool have_water_phase_props = static_cast<bool>(fracture_fluid_property_evaluator_);
     const bool use_fluid_system_water_properties =
         have_water_phase_props
         && prm_.get<bool>("solver.use_fluid_system_water_properties", false);
@@ -1019,10 +1021,10 @@ Fracture::makePressureAssemblyInput() const
     input.num_well_equations = nw;
     input.perfinj.assign(perfinj_.begin(), perfinj_.end());
     input.total_wellindex = total_wellindex_;
-    input.mobility_water_perf = mobility_water_perf_;
+    input.mobility_perf = mobility_injected_perf_;
     input.face_mobility.resize(nc + nw, 0.0);
     for (size_t i = 0; i < reservoir_mobility_.size() && i < nc; ++i)
-        input.face_mobility[i] = reservoir_mobility_[i];
+        input.face_mobility[i] = fractureFlowMobility(i);
     input.leakof = leakof_;
     input.use_fluid_mobility_for_internal_faces =
         use_fluid_system_water_properties
@@ -1046,7 +1048,7 @@ Fracture::makePressureAssemblyInput() const
 
     for (size_t i = 0; i < nc; ++i) {
         if (use_fluid_system_water_properties) {
-            const auto fluid_properties = fracture_water_property_evaluator_(i, fracture_pressure_[i][0]);
+            const auto fluid_properties = fracture_fluid_property_evaluator_(i, fracture_pressure_[i][0]);
             input.density[i] = fluid_properties.first;
             input.viscosity[i] = fluid_properties.second;
         }
@@ -1264,7 +1266,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
                              fracture_pressure_,
                              fracture_width_,
                              closed_cells,
-                             reservoir_mobility_,
+                             fractureFlowMobilities(),
                              min_width_);
     }
     // setup the full system

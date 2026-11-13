@@ -19,6 +19,7 @@
 
 #include "config.h"
 
+#include <numeric>
 #include <set>
 
 #include <iostream> // std::cout
@@ -234,27 +235,33 @@ Fracture::removeCells()
 
 void
 Fracture::updateFilterCakeProps(const Opm::Connection& connection,
-                                const Opm::SingleWellState<double,Fracture::IndexTraits>& wellstate,double dt)
+                                const Opm::SingleWellState<double,Fracture::IndexTraits>& wellstate,
+                                double dt,
+                                bool surface_conc_basis)
 {
     OPM_TIMEFUNCTION();
     // potentially remap filtercake thikness if grid has changed
     assert(filtercake_thikness_.size() == reservoir_cells_.size());
     const auto& perfdata = wellstate.perf_data;
     std::map<int, double> WI_fluxes;
-    int water_index = 0;
-    int np = 3;
+    // the filtrate is carried by the injected phase; phase_rates is laid out by
+    // active phase index
+    const auto& pu = wellstate.pu;
+    const int np = pu.numActivePhases();
+    const int inj_index = pu.phaseIsActive(injected_phase_idx_)
+        ? pu.canonicalToActivePhaseIdx(injected_phase_idx_) : -1;
 
     double qw_sum = 0.0;
     double qwpos_sum = 0.0;
     // should we do this based on fracture cross flow?
-    for (size_t i = 0; i < perfdata.cell_index.size(); ++i) {
+    for (size_t i = 0; i < perfdata.cell_index.size() && inj_index >= 0; ++i) {
         int cell_index = perfdata.cell_index[i];
         // similar as in WellFilterCake.cpp:148
         const auto& connection_rates = perfdata.phase_rates;
-        const double water_rate = std::max(0.0, connection_rates[i * np + water_index]);
-        qwpos_sum += std::max(0.0, water_rate);
-        qw_sum += water_rate;
-        WI_fluxes[cell_index] = water_rate;
+        const double inj_rate = std::max(0.0, connection_rates[i * np + inj_index]);
+        qwpos_sum += std::max(0.0, inj_rate);
+        qw_sum += inj_rate;
+        WI_fluxes[cell_index] = inj_rate;
     }
     double xfact = 1.0;
     if (qwpos_sum > 1.0e-12) {
@@ -266,14 +273,27 @@ Fracture::updateFilterCakeProps(const Opm::Connection& connection,
         xfact = 0.0;
       }
     }
-    //NB need to be checked
+    // Leak-off is a reservoir (fracture fluid) volume rate. Convert it to the volume
+    // basis of the concentration: surface volumes with b of the injected fluid (taken
+    // at the well cell, the fracture pressure being near uniform), or as is for a
+    // reservoir basis. With scale_filtrate the conversion cancels against the flow
+    // model's (surface) fracture rate; without it, deposits for water differ from the
+    // former reservoir-volume treatment by b_w (a few percent).
+    const double b_frac = (inv_b_perf_ > 0.0) ? inv_b_perf_ : 1.0;
+    const double basis_factor = surface_conc_basis ? b_frac : 1.0;
     bool scale_filtrate = prm_.get<bool>("config.scale_filtrate", false);
     double scale_factor = 1.0;
     if(scale_filtrate){
         // overkill but simplest
         auto frac_prop = this->calculateFractureProperties();
-        double frac_flux = frac_prop.flux; // m3/s
-        double sim_frac_flux = wellstate.frac_rate;
+        // Both rates in the concentration basis: the fracture solution's leak-off
+        // and the flow model's fracture-routed rate (a surface rate).
+        double frac_flux = frac_prop.flux * basis_factor;
+        // Local sum, as the former SingleWellState::frac_rate: the fracture update
+        // does not run collectively over the ranks of a well.
+        const auto& frac_rates = wellstate.perf_data.fracture_data.injected_rate;
+        const double sim_frac_rate = std::accumulate(frac_rates.begin(), frac_rates.end(), 0.0);
+        double sim_frac_flux = sim_frac_rate * basis_factor / b_frac;
         //NB maybe we should only use posive fluxes (cross flow problems)
         if(frac_flux > 1.0e-12){
             scale_factor = std::max(0.0,sim_frac_flux) / frac_flux;
@@ -310,9 +330,9 @@ Fracture::updateFilterCakeProps(const Opm::Connection& connection,
                     }
                     flux = 0.0;
                 }
-                double water_rate = flux;
-                double water_rate_scaled = water_rate*scale_factor;// account for difference fracture and flow solution
-                double filtrate_volume = water_rate_scaled*filtrate_conn* dt; // m3
+                double inj_rate = flux * basis_factor; // in the concentration basis
+                double inj_rate_scaled = inj_rate*scale_factor;// account for difference fracture and flow solution
+                double filtrate_volume = inj_rate_scaled*filtrate_conn* dt; // m3
                 double dh = filtrate_volume / (area * (1 - filtercake_poro_));
                 assert(dh >= 0);
                 filtercake_thikness_[eIdx] += dh;
@@ -1011,7 +1031,7 @@ Fracture::updateReservoirProperties()
     reservoir_pressure_.resize(nc, 100.0e5);
     reservoir_stress_.resize(nc);
     reservoir_cstress_.resize(nc, cstress);
-    fracture_water_property_evaluator_ = {};
+    fracture_fluid_property_evaluator_ = {};
 
     for (size_t i = 0; i != nc; ++i)
         reservoir_stress_[i] = Dune::FieldVector<double, 6> {0, 0, 0, 0, 0, 0};
@@ -1071,7 +1091,7 @@ Fracture::addSource()
         // harmonic mean of surface flow
         double value = 12. / (h1 * h1 * h1 * t1) + 12. / (h2 * h2 * h2 * t2);
 
-        const double mobility = 0.5 * (reservoir_mobility_[i] + reservoir_mobility_[j]);//NB shoul chane to mobility_water_perf_;
+        const double mobility = 0.5 * (fractureFlowMobility(i) + fractureFlowMobility(j));
         value = 1 / value;
         value *= mobility;
         rhs_pressure_[i] += value * face_dgh[k];
@@ -2082,10 +2102,51 @@ Fracture::leakoffDistanceFactor() const
     return prm_.get<double>("solver.leakoff_distance_factor", factor);
 }
 
+// The legacy fracture flow model takes the mobility inside the fracture, across the
+// well-to-fracture connection and through the filter cake from the reservoir (summed
+// phase mobilities resp. the well cell's water mobility). That is only meaningful for
+// water injection; for gas and oil injectors the fracture is filled with the injected
+// fluid at kr = 1, so the default there is its 1/mu.
+bool
+Fracture::useInjectedFluidMobility() const
+{
+    const std::string mode = prm_.get<std::string>("solver.fracture_fluid_mobility",
+                                                   injectsWater() ? "legacy" : "injected_fluid");
+    if (mode == "legacy") {
+        return false;
+    }
+    if (mode == "injected_fluid") {
+        return true;
+    }
+    OPM_THROW(std::runtime_error, "Unknown solver.fracture_fluid_mobility: " + mode);
+}
+
+double
+Fracture::fractureFlowMobility(const std::size_t cell) const
+{
+    if (useInjectedFluidMobility() && cell < fracture_fluid_mobility_.size()) {
+        return fracture_fluid_mobility_[cell];
+    }
+    return reservoir_mobility_[cell];
+}
+
+std::vector<double>
+Fracture::fractureFlowMobilities() const
+{
+    if (!useInjectedFluidMobility()) {
+        return reservoir_mobility_;
+    }
+    std::vector<double> mob(reservoir_mobility_.size());
+    for (std::size_t i = 0; i < mob.size(); ++i) {
+        mob[i] = fractureFlowMobility(i);
+    }
+    return mob;
+}
+
 // Which mobility multiplies k*A/d on the leak-off connection. Legacy sums every
-// phase mobility of the reservoir cell; upwind mirrors the flow's water equation --
-// the fracture cell when it is feeding the formation, the reservoir cell's water
-// mobility when the flow reverses.
+// phase mobility of the reservoir cell; upwind mirrors the flow's equation for the
+// injected phase -- the fracture cell when it is feeding the formation, the reservoir
+// cell's mobility of the injected phase when the flow reverses.
 double
 Fracture::leakoffMobilityFor(const int eIdx, const bool upwind) const
 {
@@ -2100,20 +2161,20 @@ Fracture::leakoffMobilityFor(const int eIdx, const bool upwind) const
     }
 
     if (dpot > 0.0) {
-        // Out of the fracture: the fracture cell is water filled by construction, so
-        // its relative permeability is one and the mobility is the reciprocal
-        // viscosity. Without the fluid system's water properties there is nothing
-        // better than the legacy value.
-        if (!fracture_water_property_evaluator_) {
+        // Out of the fracture: the fracture cell is filled with the injected fluid by
+        // construction, so its relative permeability is one and the mobility is the
+        // reciprocal viscosity. Without the fluid system's properties there is
+        // nothing better than the legacy value.
+        if (!fracture_fluid_property_evaluator_) {
             return total;
         }
-        const auto props = fracture_water_property_evaluator_(eIdx, fracture_pressure_[eIdx][0]);
+        const auto props = fracture_fluid_property_evaluator_(eIdx, fracture_pressure_[eIdx][0]);
         const double mu = props.second.value;
         return (mu > 0.0) ? 1.0 / mu : total;
     }
 
-    return (static_cast<size_t>(eIdx) < reservoir_water_mobility_.size())
-        ? reservoir_water_mobility_[eIdx] : total;
+    return (static_cast<size_t>(eIdx) < reservoir_injected_mobility_.size())
+        ? reservoir_injected_mobility_[eIdx] : total;
 }
 
 // Fracture minus reservoir potential across the leak-off connection; NaN without a state.
@@ -2188,9 +2249,9 @@ Fracture::updateLeakoff()
     leakof_.resize(nc, 0.0);
     leakoff_mobility_.resize(nc, 0.0);
     // "reservoir_total" (legacy): the reservoir cell's summed phase mobilities.
-    // "upwind": what the flow's water equation actually applies across the same
-    // connection, so that the embedded representation and the fracture's own solve
-    // form the same conductance instead of differing by a mobility ratio.
+    // "upwind": what the flow's equation for the injected phase actually applies across
+    // the same connection, so that the embedded representation and the fracture's own
+    // solve form the same conductance instead of differing by a mobility ratio.
     const std::string mob_mode =
         prm_.get<std::string>("solver.leakoff_mobility", "reservoir_total");
     const bool upwind_mobility = (mob_mode == "upwind");
@@ -2198,6 +2259,7 @@ Fracture::updateLeakoff()
     // per leaking face: reservoir path in series with its share of the cake
     // (filtercake_thikness_ is the total over all faces); faces act in parallel
     const double sides = leakoffSides();
+    const bool injected_fluid_cake = useInjectedFluidMobility();
     for (auto& element : Dune::elements(grid_->leafGridView())) {
         const int eIdx = mapper.index(element);
         const auto geom = element.geometry();
@@ -2209,7 +2271,10 @@ Fracture::updateLeakoff()
         if (has_filtercake_) {
             assert(filtercake_thikness_[eIdx] >= 0.0);
             if (filtercake_thikness_[eIdx] > 0.0) {
-                double fitercaketrans = res_mob * filtercake_perm_ * area / (filtercake_thikness_[eIdx]/sides);
+                // the cake is crossed by the injected fluid alone
+                const double cake_mob = (injected_fluid_cake && static_cast<size_t>(eIdx) < fracture_fluid_mobility_.size())
+                    ? fracture_fluid_mobility_[eIdx] : res_mob;
+                double fitercaketrans = cake_mob * filtercake_perm_ * area / (filtercake_thikness_[eIdx]/sides);
                 invtrans += 1 / fitercaketrans;
             }
         }

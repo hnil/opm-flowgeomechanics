@@ -776,6 +776,20 @@ add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_damage
 						 PREFIX geomech_frac_damage
 						 TEST_ARGS --fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_frac_postsolve_legacy_full.json)
 
+# Gas-injector counterpart of REGTEST_geomech_frac_damage: the fracture is
+# filled with gas (1/mu_gas fracture and cake mobility, gas density head), the
+# WINJFCNC concentration is on a reservoir volume basis (RES), filtrate deposits
+# on both the perforation and the fracture faces, and the fracture-routed gas
+# rate is reported as WGIRFRAC/CGIRFRAC.
+add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_damage_gas
+                         FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_DAMAGE_GAS
+                         SIMULATOR flow_energy_geomech
+                         ABS_TOL ${abs_tol}
+                         REL_TOL ${rel_tol}
+                         DIR ${CMAKE_CURRENT_LIST_DIR}/data/
+						 PREFIX geomech_frac_damage_gas
+						 TEST_ARGS --fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/fracture_simple_frac_postsolve_legacy_full.json)
+
 add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp
                          FILENAME SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ
                          SIMULATOR flow_energy_geomech

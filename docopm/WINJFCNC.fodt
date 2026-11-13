@@ -3384,7 +3384,7 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
        <text:p text:style-name="P106">FCONCPPM</text:p>
       </table:table-cell>
       <table:table-cell table:style-name="Table115.C2" table:number-columns-spanned="3" office:value-type="string">
-       <text:p text:style-name="P19">A real positive value that defines the <text:span text:style-name="T61">volumetric concentration of filtrate in the injected water</text:span>. </text:p>
+       <text:p text:style-name="P19">A real positive value that defines the <text:span text:style-name="T61">volumetric concentration of filtrate in the injected fluid</text:span> (water, gas or oil, depending on the injector type), with the volume basis given by item 3. </text:p>
        <text:p text:style-name="P107">Note this can be defined by a user-defined argument (UDA).</text:p>
       </table:table-cell>
       <table:covered-table-cell/>
@@ -3406,6 +3406,25 @@ Updated with AFR/TSA Rev-D comments and new keywords.</dc:description><meta:init
        <text:p text:style-name="P105">ppm</text:p>
       </table:table-cell>
       <table:covered-table-cell table:style-name="Table115.F4"/>
+     </table:table-row>
+     <table:table-row table:style-name="Table115.1">
+      <table:table-cell table:style-name="Table115.C2" office:value-type="string">
+       <text:p text:style-name="P57">3</text:p>
+      </table:table-cell>
+      <table:table-cell table:style-name="Table115.C2" office:value-type="string">
+       <text:p text:style-name="P21">CONCBASIS</text:p>
+      </table:table-cell>
+      <table:table-cell table:style-name="Table115.C2" table:number-columns-spanned="3" office:value-type="string">
+       <text:p text:style-name="P4">A defined character string that sets the volume basis of the concentration FCONCPPM, i.e. the volume of injected fluid the filtrate volume is relative to:</text:p>
+       <text:p text:style-name="P20">SURF: injected fluid volume at surface conditions.</text:p>
+       <text:p text:style-name="P20">RES: injected fluid volume at reservoir conditions, converted with the formation volume factor of the injected phase in the connection cell (and, for fractures, in the well cell).</text:p>
+       <text:p text:style-name="P20">For water the two are nearly equal, but for gas injectors they differ by the gas formation volume factor (typically a factor 100-300), so the basis should be chosen to match how the particle content of the injected gas is specified.</text:p>
+      </table:table-cell>
+      <table:covered-table-cell/>
+      <table:covered-table-cell/>
+      <table:table-cell table:style-name="Table115.F3" office:value-type="string">
+       <text:p text:style-name="P3">SURF</text:p>
+      </table:table-cell>
      </table:table-row>
      <table:table-row table:style-name="Table115.1">
       <table:table-cell table:style-name="Table115.A6" table:number-columns-spanned="6" office:value-type="string">

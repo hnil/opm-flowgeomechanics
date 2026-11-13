@@ -397,6 +397,13 @@ namespace Opm {
                           [&](const auto& w) { return w->name() == wells_[i].name(); });
                       if (well_it != wells.end()) {
                       const auto& well = *well_it;
+                      // the phase the well injects, and the fracture is filled with
+                      using IndexTraits = typename FluidSystem::IndexTraitsType;
+                      unsigned inj_phase = FluidSystem::waterPhaseIdx;
+                      if (const auto ph = injectedCanonicalPhaseIdx<IndexTraits>(well->wellEcl().injectorType());
+                          !wellstate.producer && ph.has_value() && FluidSystem::phaseIsActive(*ph)) {
+                          inj_phase = *ph;
+                      }
 
                       for (int perf_index=0; perf_index < wellstate.perf_data.cell_index.size(); ++perf_index) {
                             const int cell_idx = wellstate.perf_data.cell_index[perf_index];
@@ -444,15 +451,20 @@ namespace Opm {
                                     }
                             }
                             const auto effective_well_index   =  effective_well_index_perf*lambda;
-                            double density = intQuants.fluidState().density(FluidSystem::waterPhaseIdx).value();
+                            double density = intQuants.fluidState().density(inj_phase).value();
                             total_wellindex += effective_well_index;
                             double dzwell = (well->perfDepth()[perf_index]- well->refDepth());
                             wi_dz += effective_well_index*dzwell;
-                            double pressure = intQuants.fluidState().pressure(FluidSystem::waterPhaseIdx).value();
+                            double pressure = intQuants.fluidState().pressure(inj_phase).value();
                             wi_respress += effective_well_index*pressure;
 
                         }
-                        injection_rate = wellstate.reservoir_rates[FluidSystem::waterPhaseIdx];
+                        // reservoir_rates is laid out by active phase index; producers and
+                        // MULTI injectors in runs without water keep the historical slot 0
+                        const auto& pu = wellstate.pu;
+                        const int rate_pos = pu.phaseIsActive(inj_phase)
+                            ? pu.canonicalToActivePhaseIdx(inj_phase) : 0;
+                        injection_rate = wellstate.reservoir_rates[rate_pos];
                         well_depth = well->refDepth();
                         perf_depths = well->perfDepth();
                       } // well found in localNonshutWells
