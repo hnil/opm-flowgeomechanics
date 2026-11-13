@@ -20,6 +20,7 @@
 #pragma once
 
 #include <opm/common/OpmLog/OpmLog.hpp>
+#include <opm/geomech/MechGridPartition.hpp>
 #include <opm/material/common/MathToolbox.hpp>
 
 #include <opm/simulators/linalg/PropertyTree.hpp>
@@ -166,6 +167,8 @@ namespace Opm {
                     if (warn_keep_state) {
                         try {
                             fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator, mode);
+                        } catch (const Fracture::IncompleteReservoirCoverage&) {
+                            throw;
                         } catch (const std::exception& e) {
                             last_solve_stats_.converged = false;
                             OpmLog::warning("Fracture solve FAILED for " + fractures[j].name()
