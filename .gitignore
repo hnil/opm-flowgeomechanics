@@ -3,3 +3,6 @@ opm-grid/
 opm-simulators/
 opm-upscaling/
 build/
+
+# Physics baseline output artifacts
+/physics-baselines/
