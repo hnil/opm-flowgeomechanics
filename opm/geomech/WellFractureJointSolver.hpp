@@ -511,7 +511,8 @@ private:
     template <class Model>
     void evaluateContact_(FractureBlock& b, const Model& model, const double mu) const
     {
-        const auto waterIdx = FluidSystem::waterPhaseIdx;
+        // the fluid filling the fracture, i.e. the one the well injects
+        const auto fluidIdx = b.fracture->injectedPhaseIdx();
         const auto& A = b.fracture->jointElasticMatrix();
         const auto& w = b.fracture->fractureWidth();
         const auto& pOwn = b.fracture->fracturePressure();
@@ -525,7 +526,7 @@ private:
         constexpr double eps = 1e-30;
         for (std::size_t i = 0; i < b.nc; ++i) {
             const double p = (b.dof[i] >= 0)
-                ? getValue(model.intensiveQuantities(b.dof[i], 0).fluidState().pressure(waterIdx))
+                ? getValue(model.intensiveQuantities(b.dof[i], 0).fluidState().pressure(fluidIdx))
                 : pOwn[i][0];
             b.pressure[i] = p;
             double lambda = b.traction[i][0] - p;
@@ -677,7 +678,7 @@ private:
     {
         const auto& model = simulator_.model();
         const auto& A = b.fracture->jointElasticMatrix();
-        const auto waterIdx = FluidSystem::waterPhaseIdx;
+        const auto fluidIdx = b.fracture->injectedPhaseIdx();
         const std::size_t first = nFlow + b.offset;
         for (std::size_t i = 0; i < b.nc; ++i) {
             for (std::size_t j = 0; j < b.nc; ++j) {
@@ -687,7 +688,7 @@ private:
             if (b.dof[i] >= 0) {
                 const auto loc = localOf.find(b.dof[i]);
                 if (loc != localOf.end()) {
-                    const auto& pw = model.intensiveQuantities(b.dof[i], 0).fluidState().pressure(waterIdx);
+                    const auto& pw = model.intensiveQuantities(b.dof[i], 0).fluidState().pressure(fluidIdx);
                     for (int pv = 0; pv < numEq; ++pv) {
                         entries.emplace_back(first + i, loc->second * numEq + pv,
                                              -b.db[i] * pw.derivative(pv));
