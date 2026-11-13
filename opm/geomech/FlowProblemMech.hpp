@@ -76,6 +76,9 @@ namespace Opm::Parameters {
     struct FractureParamFile {
         inline static std::string value{"notafile"};
     };
+    struct MechPartitionGroupFile {
+        inline static std::string value{"none"};
+    };
     struct MechCoarsenFile {
         inline static std::string value{"none"};
     };
@@ -193,6 +196,7 @@ namespace Opm{
             Base::registerParameters();
 	    Parameters::Register<Parameters::SaveAtDay>("write a checkpoint after the first sub-step reaching this day, also within a report step; load it with --load-step=<report step + 1>");
 	    Parameters::Register<Parameters::FractureParamFile>("json file defining fracture setting or alias: standard, sequential_implicit");
+        Parameters::Register<Parameters::MechPartitionGroupFile>("file of 1-based inclusive I1 I2 J1 J2 K1 K2 regions kept on one rank as whole mechanics blocks; requires mech-coarsen-file and rejects incomplete fracture coverage");
 	    Parameters::Register<Parameters::MechCoarsenFile>("file of COARSEN records (I1 I2 J1 J2 K1 K2 NX NY NZ, one per line) giving a mechanics grid coarser than the flow grid");
 	    Parameters::Register<Parameters::VtkWriteMechGrid>("write VTK on a mechanics grid of its own (mech/ under the output directory), with the flow quantities where flow cells exist");
 	    Parameters::Register<Parameters::MechSectorFile>("json file giving the mechanics grid as a box of the deck's grid with padding around it");

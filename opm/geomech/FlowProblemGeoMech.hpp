@@ -641,6 +641,10 @@ namespace Opm{
             const auto& simulator = this->simulator();
             const auto& eclState = simulator.vanguard().eclState();
             if(eclState.runspec().mech()){
+                if (MechPartition::Registry::protectedFractures()
+                    && this->getFractureParam().template get<bool>("solver.well_joint_solve", false))
+                    OPM_THROW(std::runtime_error,
+                              "solver.well_joint_solve is unsupported with protected partitions");
                 const double thin = Parameters::Get<Parameters::MechThinCellThickness>();
                 const std::string mechGrid = Parameters::Get<Parameters::MechGrid>();
                 if (mechGrid != "flow" && mechGrid != "separate") {
