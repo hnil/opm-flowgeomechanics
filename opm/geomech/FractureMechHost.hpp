@@ -265,6 +265,11 @@ namespace Opm{
             }
         }
 
+        std::vector<RuntimePerforation> getFlowWellIndices(const std::string& wellname){
+            return fracturemodel_ ? fracturemodel_->getFlowWellIndices(wellname)
+                                  : std::vector<RuntimePerforation>();
+        }
+
         bool fractureModelActive() const{
             if(!fracturemodel_){
                 return false;

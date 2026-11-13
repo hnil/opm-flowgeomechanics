@@ -75,6 +75,7 @@ namespace Opm
             bool legacyChangeLogic{false};
             bool legacyParentSetup{true};
             bool requireConvergedFractureForWi{true};
+            bool requireConvergedFractureForFlow{false};
             bool addConnections{false};
             bool valueOnlyWiUpdate{false};
             bool residualMode{false};
@@ -95,6 +96,8 @@ namespace Opm
                 c.legacyParentSetup = prm.get<bool>("fractureparam.solver.legacy_parent_setup_iteration", true);
                 c.requireConvergedFractureForWi =
                     prm.get<bool>("fractureparam.require_converged_fracture_for_wi_update", true);
+                c.requireConvergedFractureForFlow =
+                    prm.get<bool>("fractureparam.require_converged_fracture_for_flow", false);
                 c.addConnections = prm.get<bool>("fractureparam.addconnections");
                 c.valueOnlyWiUpdate = prm.get<bool>("fractureparam.solver.value_only_wi_update", false);
                 c.residualMode = prm.get<std::string>("fractureparam.solver.coupling_convergence_mode",
@@ -170,6 +173,8 @@ namespace Opm
         mutable int growth_rounds_this_step_{0};
         // The legacy setup iteration left an unconverged Newton update in the flow state.
         mutable bool flow_state_modified_by_setup_{false};
+        // false when the well/fracture Picard loop stopped without settling
+        bool picard_converged_{true};
         // Coupling accepted; flow must re-converge before the step may end.
         mutable bool reconverge_flow_pending_{false};
 
@@ -406,8 +411,8 @@ namespace Opm
                 return;
             }
             const auto cfg = CouplingConfig::read(problem.getGeoMechParam());
-            const bool fractureConvergedLocal =
-                problem.fractureHost().fractureModel().lastSolveStats().converged;
+            const bool fractureConvergedLocal = picard_converged_
+                && problem.fractureHost().fractureModel().lastSolveStats().converged;
             auto& comm = derived().simulator_.gridView().comm();
             const bool fractureConverged = comm.min(fractureConvergedLocal);
             // Computed on embedded runs too: the mech skip reads its composite norm.
@@ -428,6 +433,7 @@ namespace Opm
         void solveFracturesThisIteration(const SimulatorTimerInterface& timer)
         {
             auto& problem = derived().simulator_.problem();
+            picard_converged_ = true;
             if (!problem.fractureFlowIsEmbedded()) {
                 problem.fractureHost().solveFractures();
                 return;
@@ -482,9 +488,11 @@ namespace Opm
             auto& problem = derived().simulator_.problem();
             auto& comm = derived().simulator_.gridView().comm();
             // A grown fracture needs a restructure, which a value-only refresh cannot express.
-            problem.bindFractureAuxCells(
-                /*allowTopologyChange=*/cfg.rebindAfterGrowth && fractureConverged,
-                /*requireStableLayout=*/true);
+            if (fractureConverged || !cfg.requireConvergedFractureForFlow) {
+                problem.bindFractureAuxCells(
+                    /*allowTopologyChange=*/cfg.rebindAfterGrowth && fractureConverged,
+                    /*requireStableLayout=*/true);
+            }
 
             // The residual is the change in what the flow was fed (total conductance and
             // pore volume of the binding); contact chatter cancels in these aggregates.
@@ -504,8 +512,10 @@ namespace Opm
                 problem.fractureHost().solveFractures();
                 setSuppressed(false);
                 const bool confirmed = comm.min(fractureModel.lastSolveStats().converged);
-                problem.bindFractureAuxCells(/*allowTopologyChange=*/confirmed,
-                                             /*requireStableLayout=*/true);
+                if (confirmed || !cfg.requireConvergedFractureForFlow) {
+                    problem.bindFractureAuxCells(/*allowTopologyChange=*/confirmed,
+                                                 /*requireStableLayout=*/true);
+                }
             }
 
             if (problem.embeddedRestructuredMidStep()) {

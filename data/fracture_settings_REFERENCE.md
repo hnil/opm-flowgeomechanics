@@ -46,6 +46,7 @@ configs) is **dead**. It now lives under `fractureparam.solver` in the final con
 |---|---|---|
 | `addconnections` | — | allow the fracture to add/modify well connections (CTF) in the schedule |
 | `require_converged_fracture_for_wi_update` | true | only push new well indices to the reservoir when the fracture solve converged (avoids feeding garbage CTF) |
+| `require_converged_fracture_for_flow` | false | the flow only ever sees a converged fracture solve: upscaled wells keep the well indices of the last converged solve, also after the end-of-step solve and well rebuilds; embedded keeps its binding (in the loop, in the `pressure_from_flow` Picard loop, and at the step boundary), and an unsettled Picard loop keeps the outer loop open. A safeguard, not a cure: with a contact policy that never converges the flow stays on an old fracture |
 | `topology_hysteresis.enable` | false | enable hysteresis so connection-set changes don't chatter between outer iterations |
 | `topology_hysteresis.on_threshold` | 1.0 | composite coupling-change norm above which a topology update is *armed* |
 | `topology_hysteresis.off_threshold` | 0.3 | norm below which the pending update is disarmed |

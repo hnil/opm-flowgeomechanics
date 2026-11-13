@@ -843,6 +843,9 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         if (prm_.get<std::string>("solver.wi_vector_acceleration", "none") != "none") {
             well_indices_accel_ = applyVectorCouplingUpdate(well_indices_new);
         }
+        if (last_solve_stats_.converged) {
+            converged_well_indices_ = wellIndices();
+        }
         last_solve_stats_.solve_time_seconds = solve_timer.stop();
         // summary of solve
         summary_of_solve();

@@ -311,6 +311,8 @@ public:
     FractureProperties calculateFractureProperties() const;
     void setFractureGrid(std::unique_ptr<Fracture::Grid> gptr);
     std::vector<RuntimePerforation> wellIndices() const;
+    //! well indices as of the last converged solve; empty before the first one
+    const std::vector<RuntimePerforation>& convergedWellIndices() const { return converged_well_indices_; }
     std::vector<RuntimePerforation> wellIndicesAvrg(const std::vector<std::vector<RuntimePerforation>>& well_indices) const;
     WellInfo& wellInfo();
     const WellInfo& wellInfo() const { return wellinfo_; }
@@ -950,6 +952,7 @@ private:
     VectorMixState wi_vec_mix_{};
     // mixed CTF vector returned by wellIndices() when wi_vector_acceleration is on
     std::vector<RuntimePerforation> well_indices_accel_;
+    std::vector<RuntimePerforation> converged_well_indices_;
     double density_{1000.0};// default to water
     double density_perf_{1000.0};
     double mobility_injected_perf_{1000.0};

@@ -178,6 +178,10 @@ namespace Opm{
            return fracHost_.getExtraWellIndices(wellname);
        }
 
+       std::vector<RuntimePerforation> getFlowWellIndices(const std::string& wellname){
+           return fracHost_.getFlowWellIndices(wellname);
+       }
+
        bool fractureModelActive() const{ return fracHost_.fractureModelActive(); }
 
        void updateFilterCakePropertiesOnFractures(){ fracHost_.updateFilterCakePropertiesOnFractures(); }

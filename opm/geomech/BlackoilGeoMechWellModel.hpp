@@ -109,7 +109,7 @@ public:
                 for (auto& wellPtr : this->well_container_) {
                     auto wellName = wellPtr->name();
                     const auto& fracturemodel = fractureHost.fractureModel();
-                    auto wellIndices = fracturemodel.getExtraWellIndices(wellName);
+                    auto wellIndices = fracturemodel.getFlowWellIndices(wellName);
                     wellPtr->addFracturePerforations(wellIndices);
                 }
             }

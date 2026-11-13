@@ -124,6 +124,8 @@ namespace Opm
             const int maxIt = prm.get<int>("fractureparam.solver.pressure_from_flow_iterations", 10);
             const double tolBar = prm.get<double>("fractureparam.solver.pressure_from_flow_tolerance", 0.1);
             const int verbosity = prm.get<int>("fractureparam.solver.pressure_from_flow_verbosity", 0);
+            const bool requireConverged =
+                prm.get<bool>("fractureparam.require_converged_fracture_for_flow", false);
             using Solver = WellLocalSolver<TypeTag>;
             typename Solver::Settings settings;
             settings.ring = prm.get<int>("solver.well_local_ring", 1);
@@ -148,10 +150,18 @@ namespace Opm
                 return p;
             };
 
+            bool settled = false;
             for (int it = 0; it < maxIt; ++it) {
                 const auto pBefore = pressures();
                 problem.pushAuxPressuresToFractures();
                 problem.fractureHost().solveFractures();
+                if (requireConverged
+                    && !this->simulator_.gridView().comm().min(
+                        problem.fractureHost().fractureModel().lastSolveStats().converged)) {
+                    OpmLog::info(fmt::format("WellFracturePicard it {}: fracture solve did not converge; "
+                                             "keeping the last converged binding", it));
+                    break;
+                }
                 problem.bindFractureAuxCells(
                     /*allowTopologyChange=*/prm.get<bool>(
                         "fractureparam.solver.rebind_after_growth", true),
@@ -176,8 +186,12 @@ namespace Opm
                                              it, dp / 1e5, dbind));
                 }
                 if (dp / 1e5 < tolBar && it > 0) {
+                    settled = true;
                     break;
                 }
+            }
+            if (requireConverged && !settled) {
+                this->picard_converged_ = false;
             }
         }
 

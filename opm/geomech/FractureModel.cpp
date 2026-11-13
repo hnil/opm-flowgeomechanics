@@ -328,7 +328,7 @@ FractureModel::updateReservoirProperties()
 }
 
 std::vector<RuntimePerforation>
-FractureModel::getExtraWellIndices(const std::string& wellname) const
+FractureModel::wellIndicesOf_(const std::string& wellname, const bool convergedOnly) const
 {
     // for now just do a search
     bool addconnections = prm_.get<bool>("addconnections");
@@ -344,7 +344,7 @@ FractureModel::getExtraWellIndices(const std::string& wellname) const
                     if (!frac.isActive()) {
                         continue;
                     }
-                    auto perfs = frac.wellIndices();
+                    auto perfs = convergedOnly ? frac.convergedWellIndices() : frac.wellIndices();
                     wellindices.insert(wellindices.end(), perfs.begin(), perfs.end());
                 }
                 return wellindices;
@@ -352,6 +352,18 @@ FractureModel::getExtraWellIndices(const std::string& wellname) const
         }
     }
     return {};
+}
+
+std::vector<RuntimePerforation>
+FractureModel::getExtraWellIndices(const std::string& wellname) const
+{
+    return wellIndicesOf_(wellname, false);
+}
+
+std::vector<RuntimePerforation>
+FractureModel::getFlowWellIndices(const std::string& wellname) const
+{
+    return wellIndicesOf_(wellname, flowSeesConvergedFractureOnly());
 }
 
 template <typename Scalar,typename IndexTraits>

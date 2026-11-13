@@ -581,6 +581,17 @@ namespace Opm{
         { return this->simulator().vanguard().eclState().getTableManager().stCond().temperature; }
 
         //! Whether the fracture flows through degrees of freedom of its own.
+        //! require_converged_fracture_for_flow: an unconverged fracture solve is not bound.
+        bool keepsConvergedBinding() const
+        {
+            if (!this->geoMechModel().fractureModelActive()) {
+                return false;
+            }
+            const auto& fractureModel = this->geoMechModel().fractureModel();
+            return fractureModel.flowSeesConvergedFractureOnly()
+                && !this->gridView().comm().min(fractureModel.lastSolveStats().converged);
+        }
+
         bool fractureFlowIsEmbedded() const
         { return fractureAuxCells_ != nullptr; }
 
@@ -865,7 +876,12 @@ namespace Opm{
                     if (this->fractureFlowIsEmbedded()) {
                         // The fracture is part of the flow problem in its own right, so
                         // the reservoir has to be told what it now looks like.
-                        this->bindFractureAuxCells();
+                        if (this->keepsConvergedBinding()) {
+                            OpmLog::info("Last fracture solve did not converge; the flow keeps "
+                                         "the fracture of the last converged solve");
+                        } else {
+                            this->bindFractureAuxCells();
+                        }
 
                         // The well perforates the fracture, not the reservoir cells the
                         // fracture leaks into.  Registered before the well model starts

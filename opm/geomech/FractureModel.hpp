@@ -138,6 +138,10 @@ public:
 
 
         std::vector<RuntimePerforation> getExtraWellIndices(const std::string& wellname) const;
+        //! What the wells get: with require_converged_fracture_for_flow, the last converged solve's.
+        std::vector<RuntimePerforation> getFlowWellIndices(const std::string& wellname) const;
+        bool flowSeesConvergedFractureOnly() const
+        { return prm_.get<bool>("require_converged_fracture_for_flow", false); }
 
         template <typename Scalar, typename IndexTraits>
         void assignGeoMechWellState(WellState<Scalar, IndexTraits> & wellState) const;
@@ -219,6 +223,7 @@ public:
         }
 
     private:
+        std::vector<RuntimePerforation> wellIndicesOf_(const std::string& wellname, bool convergedOnly) const;
         bool vtkwritewells_ = false; // write wells to VTK files
         template <class TypeTag, class Simulator>
         void updateReservoirProperties(const Simulator& simulator);

@@ -167,6 +167,7 @@ namespace Opm {
                         try {
                             fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator, mode);
                         } catch (const std::exception& e) {
+                            last_solve_stats_.converged = false;
                             OpmLog::warning("Fracture solve FAILED for " + fractures[j].name()
                                             + "; solve_failure_policy=warn_keep_state, continuing: "
                                             + e.what());

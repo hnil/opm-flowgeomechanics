@@ -518,7 +518,7 @@ namespace Opm{
             auto& wellcontainer = this->wellModel().localNonshutWells();
             for (auto& wellPtr : wellcontainer) {
                 auto wellName = wellPtr->name();
-                const auto& wellcons = this->derived().fractureHost().getExtraWellIndices(wellName);
+                const auto& wellcons = this->derived().fractureHost().getFlowWellIndices(wellName);
 
                 wellPtr->addFracturePerforations(wellcons);
             }
@@ -577,7 +577,7 @@ namespace Opm{
             int old_conns = 0;
             std::string outsideLgr;
             for (const auto& wellName : schedule.wellNames(reportStep)) {
-                const auto wellcons = this->derived().fractureHost().getExtraWellIndices(wellName);
+                const auto wellcons = this->derived().fractureHost().getFlowWellIndices(wellName);
 
                 if (wellcons.empty()) {
                     // No extra connections for this well.
