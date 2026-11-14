@@ -413,6 +413,10 @@ namespace Opm{
             }
 
             this->refreshAuxCellModules_(topologyChanged);
+            if (!topologyChanged
+                && this->getFractureParam().template get<bool>("solver.embedded_refresh_trans", true)) {
+                this->model().linearizer().updateDiscretizationParameters();
+            }
 
             if (topologyChanged) {
                 const auto& newborn = fractureAuxCells_->newbornDofs();
