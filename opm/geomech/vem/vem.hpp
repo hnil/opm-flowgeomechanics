@@ -46,8 +46,10 @@ namespace vem
     FACE_ANISO_HARMONIC = 12,
     FACE_SIMPLE = 13,
     TRACE = 14,     // mu-scaled boundary (trace) term: robust to short edges and small faces
-    SMOOTH_HOURGLASS = 15 // hexes: energy of the smooth (Q1 + bubble) field, exact in bending/twist
-                          // at any aspect; TRACE on the extra nodes of polyhedra and as fallback
+    SMOOTH_HOURGLASS = 15, // hexes: energy of the smooth (Q1 + bubble) field, exact in bending/twist
+                           // at any aspect; TRACE on the extra nodes of polyhedra and as fallback
+    CONTINUOUS_SIMPLE = 16 // SIMPLE on plain hexes; continuous as extra nodes of a hex approach its
+                           // corners (faults, refinement steps); SIMPLE where no hex is found
   };
   // Face integrals of the basis functions in the strain projection (3D).
   // KITE: per-face kite areas and one averaged normal; exact on planar faces only.
@@ -55,7 +57,7 @@ namespace vem
   enum class FaceQuadrature { KITE = 0, TRIANGULATED = 1 };
   void set_face_quadrature(FaceQuadrature q);
   FaceQuadrature face_quadrature();
-  constexpr int STABILITY_CHOICE_MAX = 15;
+  constexpr int STABILITY_CHOICE_MAX = 16;
   // true for choices that request Q1 FEM assembly on cells where it is applicable
   inline bool is_fem_choice(StabilityChoice c) { return c == FEM || c == FEM_BBAR; }
   inline bool is_face_weighted_choice(StabilityChoice c) { return c >= FACE_D_RECIPE && c <= FACE_SIMPLE; }

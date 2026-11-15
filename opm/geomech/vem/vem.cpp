@@ -759,6 +759,8 @@ std::vector<double> getStabilityMatrix(vem::StabilityChoice stability_choice,con
     if(is_fem_choice(stability_choice)){
         stability_choice = ANISO_DIAG;
     }
+    if (stability_choice == CONTINUOUS_SIMPLE)
+        stability_choice = SIMPLE;
     if (is_face_weighted_choice(stability_choice)) {
         const auto base = stability_choice == FACE_D_RECIPE ? D_RECIPE
             : stability_choice == FACE_ANISO_HARMONIC       ? ANISO_HARMONIC
@@ -3296,6 +3298,42 @@ logical_hex(const double* const corners,
 // S = C^T K_smooth C + R^T S_trace R, C the corner selection and R = I - (trilinear interpolation
 // of the corners); R = 0 on plain hexes. Pure TRACE when no well-conditioned corner hex exists.
 // hex_corners: the cell's 8 corners (local node ids, Dune order) if the grid knows them.
+// The cell's 8 hex corners (right-handed order) and the reference coordinates xi of every other
+// node; plain = no other nodes. False when the cell is no usable hex.
+bool
+hex_frame_3D(const double* const corners,
+             const int num_corners,
+             const int* const faces,
+             const int* const num_face_edges,
+             const int num_faces,
+             const int* const hex_corners,
+             array<int, 8>& order,
+             vector<array<double, 3>>& xi,
+             bool& plain)
+{
+    plain = false;
+    if (hex_corners) {
+        // collapsed corners share a node: a degenerate hex whose tied corners add up below
+        copy(hex_corners, hex_corners + 8, order.begin());
+        const int distinct = int(set<int>(order.begin(), order.end()).size());
+        if (distinct < 4)
+            return false;
+        array<double, 24> hc;
+        for (int k = 0; k != 8; ++k)
+            for (int d = 0; d != 3; ++d)
+                hc[3 * k + d] = corners[3 * order[k] + d];
+        double g[8][3];
+        const double centre[3] = {0.5, 0.5, 0.5};
+        if (hex_physical_gradients(&hc[0], centre, g) < 0) // left-handed: mirror in x
+            for (int k = 0; k != 8; k += 2)
+                swap(order[k], order[k + 1]);
+        plain = num_corners == distinct;
+        return plain || extra_node_xi(corners, num_corners, order, xi);
+    }
+    plain = hex_corner_ordering(corners, num_corners, faces, num_face_edges, num_faces, order);
+    return plain || logical_hex(corners, num_corners, faces, num_face_edges, num_faces, order, xi);
+}
+
 vector<double>
 compute_S_smooth_hg_3D(const double* const corners,
                        const int num_corners,
@@ -3315,29 +3353,8 @@ compute_S_smooth_hg_3D(const double* const corners,
     array<int, 8> order;
     vector<array<double, 3>> xi;
     bool plain = false;
-    if (hex_corners) {
-        // collapsed corners share a node: a degenerate hex whose tied corners add up below
-        copy(hex_corners, hex_corners + 8, order.begin());
-        const int distinct = int(set<int>(order.begin(), order.end()).size());
-        if (distinct < 4)
-            return trace();
-        array<double, 24> hc;
-        for (int k = 0; k != 8; ++k)
-            for (int d = 0; d != 3; ++d)
-                hc[3 * k + d] = corners[3 * order[k] + d];
-        double g[8][3];
-        const double centre[3] = {0.5, 0.5, 0.5};
-        if (hex_physical_gradients(&hc[0], centre, g) < 0) // left-handed: mirror in x
-            for (int k = 0; k != 8; k += 2)
-                swap(order[k], order[k + 1]);
-        plain = num_corners == distinct;
-        if (!plain && !extra_node_xi(corners, num_corners, order, xi))
-            return trace();
-    } else {
-        plain = hex_corner_ordering(corners, num_corners, faces, num_face_edges, num_faces, order);
-        if (!plain && !logical_hex(corners, num_corners, faces, num_face_edges, num_faces, order, xi))
-            return trace();
-    }
+    if (!hex_frame_3D(corners, num_corners, faces, num_face_edges, num_faces, hex_corners, order, xi, plain))
+        return trace();
     array<double, 24> hc;
     for (int k = 0; k != 8; ++k)
         for (int d = 0; d != 3; ++d)
@@ -3385,6 +3402,93 @@ compute_S_smooth_hg_3D(const double* const corners,
                     for (int d = 0; d != 3; ++d)
                         S[(3 * i + d) * n + 3 * j + d] += v;
                 }
+    return S;
+}
+
+// SIMPLE's alpha I on plain hexes. With extra nodes: alpha (I - 1/8) on the 8 corners, alpha w on
+// each extra node (w -> 0 at a corner) and a pin to the corners' trilinear field that grows like 1/t
+// there, so K tends to the plain hex's as extra nodes merge with corners. Empty if no hex frame.
+vector<double>
+compute_S_continuous_simple_3D(const double* const corners,
+                               const int num_corners,
+                               const int* const faces,
+                               const int* const num_face_edges,
+                               const int num_faces,
+                               const double volume,
+                               const double young,
+                               const double poisson,
+                               const int* const hex_corners)
+{
+    array<int, 8> order;
+    vector<array<double, 3>> xi;
+    bool plain = false;
+    if (!hex_frame_3D(corners, num_corners, faces, num_face_edges, num_faces, hex_corners, order, xi, plain))
+        return {};
+    array<double, 24> hc;
+    double mid[3] = {0, 0, 0};
+    for (int k = 0; k != 8; ++k)
+        for (int d = 0; d != 3; ++d) {
+            hc[3 * k + d] = corners[3 * order[k] + d];
+            mid[d] += hc[3 * k + d] / 8;
+        }
+    const int m = num_corners;
+    const int n = 3 * m;
+    const double trD = trace(compute_D_3D(young, poisson));
+    double tn = 0;
+    for (double v : compute_Nc_3D(&hc[0], 8))
+        tn += v * v;
+    if (plain)
+        return identity_matrix(volume * trD / tn, n);
+
+    vector<bool> is_corner(m, false);
+    for (int k = 0; k != 8; ++k)
+        is_corner[order[k]] = true;
+    // t: reference distance of an extra node to the nearest corner, in (0, 1/2]
+    vector<double> t(m, 0.0), w(m, 1.0);
+    for (int v = 0; v != m; ++v) {
+        if (is_corner[v])
+            continue;
+        for (int d = 0; d != 3; ++d)
+            t[v] = max(t[v], min(xi[v][d], 1 - xi[v][d]));
+        t[v] = max(t[v], 1e-300);
+        w[v] = min(1.0, 2 * t[v]);
+        // the extra node's |Nc|^2 about the corner mean, weighted like its alpha term
+        double p[6];
+        for (int d = 0; d != 3; ++d)
+            p[d] = corners[3 * v + d], p[3 + d] = 2 * mid[d] - corners[3 * v + d];
+        double tv = 0;
+        for (double x : compute_Nc_3D(p, 2))
+            tv += x * x;
+        tn += w[v] * tv / 2;
+    }
+    const double alpha = volume * trD / tn;
+
+    vector<double> S(n * n, 0.0);
+    vector<double> R(m);
+    for (int v = 0; v != m; ++v) {
+        if (is_corner[v]) { // blind to the node mean, which the extra nodes shift
+            for (int k = 0; k != 8; ++k)
+                for (int d = 0; d != 3; ++d)
+                    S[(3 * v + d) * n + 3 * order[k] + d] += alpha * ((order[k] == v) - 0.125);
+            continue;
+        }
+        for (int d = 0; d != 3; ++d)
+            S[(3 * v + d) * n + 3 * v + d] += alpha * w[v];
+        const double pin = alpha * max(0.0, 0.5 / t[v] - 1);
+        if (pin == 0)
+            continue;
+        fill(R.begin(), R.end(), 0.0); // departure of node v from the corners' trilinear field
+        R[v] = 1;
+        for (int k = 0; k != 8; ++k)
+            R[order[k]] -= hex_shape_value(k, &xi[v][0]);
+        for (int i = 0; i != m; ++i)
+            for (int j = 0; j != m; ++j) {
+                const double val = pin * R[i] * R[j];
+                if (val != 0)
+                    for (int d = 0; d != 3; ++d)
+                        S[(3 * i + d) * n + 3 * j + d] += val;
+            }
+    }
     return S;
 }
 
@@ -3595,6 +3699,14 @@ assemble_stiffness_matrix_3D(const double* const points,
             : compute_S_smooth_hg_3D(&corners_loc[0], num_corners, &faces_loc[0], num_face_edges, num_faces,
                                      volume, young, poisson, have_hex ? &hex_loc[0] : nullptr, corner_mask);
         final_assembly(Wc, D, Nc, ImP, corners_loc, stability_choice, volume, num_corners, 3, &target[0], &S);
+        return;
+    }
+    if (stability_choice == CONTINUOUS_SIMPLE) {
+        const auto S = compute_S_continuous_simple_3D(&corners_loc[0], num_corners, &faces_loc[0], num_face_edges,
+                                                      num_faces, volume, young, poisson,
+                                                      have_hex ? &hex_loc[0] : nullptr);
+        final_assembly(Wc, D, Nc, ImP, corners_loc, stability_choice, volume, num_corners, 3, &target[0],
+                       S.empty() ? nullptr : &S);
         return;
     }
     const auto node_weights = is_face_weighted_choice(stability_choice)

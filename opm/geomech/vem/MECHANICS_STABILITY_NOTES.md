@@ -179,6 +179,26 @@ bending or under-stabilizes twist.  The smooth field gets both right on boxes at
   Q1 0.016 at 25); 0.96 at nu = 0.4999; frame invariant; 6 zero modes.
 - Sheared cells (inclined pillars): 0.99 / 0.99 / 0.99 / 0.98 at 10 / 20 / 30 / 45 deg,
   where every other choice locks (ANISO_HARMONIC already 0.034 at 10 deg).
+- Not continuous at faults: as an extra node approaches a corner the pin `R^T S_trace R` grows
+  like 1/eps^2 while the mismatch shrinks like eps, so a near-zero throw stays a stiffer fault
+  than the plain hex (plume across an equal-layer fault: error about 9x SIMPLE's at any throw).
+
+## Continuous SIMPLE (November 2026)
+
+`CONTINUOUS_SIMPLE` (16), opt-in.  `SIMPLE`'s `alpha I` on plain hexes; on hexes with extra
+nodes (same corner detection as 15):
+- corners: `alpha (I - 1/8)`, blind to the node mean (SIMPLE's `P` uses the mean of all
+  nodes, so adding a node changes it — the source of SIMPLE's jump at zero throw);
+- extra node at reference distance `t` to its nearest corner: `alpha min(1, 2t)`, plus a pin
+  `alpha (1/(2t) - 1) R^T R` to the corners' trilinear field (`R` as in 15). The pin grows like
+  1/t, so `K` tends to the plain hex's as the node merges with a corner, and is 0 mid-edge;
+- `alpha = V tr(D) / (|Nc_corners|^2 + sum_j w_j |Nc_j|^2)`, so cells with many hanging nodes are
+  not over-stabilized. SIMPLE where no hex is found and in 2D.
+
+Exact in the patch test on faults, collapse/LGR steps and merged layers. Standalone bench
+(Gaussian eigenstrain, exact solution): faults with equal layers go continuously from the hex
+result through small throws; fault-column error 0.2× SIMPLE's in bending, 0.85× under a plume; 4:1 refinement step worst
+cell −15 %; identical to SIMPLE where the load sits in plain hexes. CG iterations as SIMPLE.
 
 ## Load regularization for under-resolved fronts (June 2026)
 
