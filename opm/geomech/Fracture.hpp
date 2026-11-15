@@ -616,6 +616,7 @@ private:
    struct RegridMaps
    {
        std::vector<std::vector<CellRef>> before; // grid_mesh_map_ before the regrid
+       int before_level{0};                      // trimesh level of the refs in before
        std::vector<std::vector<CellRef>> after;
        std::map<CellRef, int> boundary;          // trimesh boundary cell -> grid cell
    };
@@ -647,7 +648,7 @@ private:
    bool suppress_propagation_ = false;
    void composeFlowStateDonor(const std::vector<std::vector<CellRef>>& map1,
                               const std::vector<std::vector<CellRef>>& map2,
-                              const int level);
+                              const int level, const int map1_level = 0);
    RegularTrimesh::CellVolumes filterCakeVolumesByCell() const;
    std::vector<double> remapFilterCakeConservative(const RegularTrimesh::CellVolumes& source,
                                                    const std::vector<std::vector<CellRef>>& source_map,
@@ -657,13 +658,13 @@ private:
                                         const std::vector<std::vector<CellRef>>& map1,
                                         const std::vector<std::vector<CellRef>>& map2,
                                         const int level,
-                                                     bool point_wise);
+                                                     bool point_wise, const int map1_level = 0);
 
    void redistribute_values(Dune::BlockVector<Dune::FieldVector<double, 1>>& values,
                                         const std::vector<std::vector<CellRef>>& map1,
                                         const std::vector<std::vector<CellRef>>& map2,
                                         const int level,
-                             bool point_wise);
+                             bool point_wise, const int map1_level = 0);
 
     using ResVector = ::Opm::Fracture::Vector;
     using VectorHP = Dune::MultiTypeBlockVector<ResVector, ResVector>;
@@ -721,6 +722,7 @@ private:
     std::unique_ptr<Opm::RegularTrimesh> trimesh_; // experimental, implicitly defined grids
 
     std::vector<std::vector<CellRef>> grid_mesh_map_; // index mapping from cells in grid_ to trimesh_.
+    int grid_mesh_level_ = 0; // level of grid_mesh_map_ refs; nonzero only inside a propagation
                                                       // NB: in general many-to-many
     std::vector<CellRef> grid_fixed_cells_; // cells kept fine when grid_ was built from trimesh_
     std::unique_ptr<Grid> grid_;

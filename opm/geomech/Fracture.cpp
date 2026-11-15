@@ -147,6 +147,7 @@ Fracture::init(const std::string& well,
         auto [grid, fsmap, bmap] = trimesh_->createDuneGrid(1, well_source_cellref_);
         grid_mesh_map_ = fsmap;
         grid_fixed_cells_ = well_source_cellref_;
+        grid_mesh_level_ = 0;
 
         setFractureGrid(std::move(grid)); // create the physical grid from trimesh
     }
@@ -1872,7 +1873,8 @@ Fracture::remapState_(const RegridMaps& maps, const int level, const Propagation
             assert(std::abs(fracture_width_[i][0]) < 0.6);
         }
         const auto old_size = fracture_width_.size();
-        redistribute_values(fracture_width_, maps.before, maps.after, level, /*point_wise*/ true);
+        redistribute_values(fracture_width_, maps.before, maps.after, level, /*point_wise*/ true,
+                            maps.before_level);
         double well_value = 0.0;
         if (numWellEquations() > 0) {
             well_value = fracture_pressure_[fracture_pressure_.size() - 1];
@@ -1883,7 +1885,8 @@ Fracture::remapState_(const RegridMaps& maps, const int level, const Propagation
             for (size_t i = 0; i < m.size(); ++i) {
                 m[i] = external_cell_mask_[i] ? 1.0 : 0.0;
             }
-            redistribute_values(m, maps.before, maps.after, level, /*point_wise*/ true);
+            redistribute_values(m, maps.before, maps.after, level, /*point_wise*/ true,
+                                maps.before_level);
             external_cell_mask_.assign(m.size(), 0);
             for (size_t i = 0; i < m.size(); ++i) {
                 external_cell_mask_[i] = (m[i][0] > 0.5) ? 1 : 0;
@@ -1891,7 +1894,8 @@ Fracture::remapState_(const RegridMaps& maps, const int level, const Propagation
         } else {
             external_cell_mask_.clear();
         }
-        redistribute_values(fracture_pressure_, maps.before, maps.after, level, /*point_wise*/ true);
+        redistribute_values(fracture_pressure_, maps.before, maps.after, level, /*point_wise*/ true,
+                            maps.before_level);
         if (numWellEquations() > 0) {
             assert(fracture_pressure_.size() == fracture_width_.size());
             fracture_pressure_.resize(fracture_pressure_.size() + 1);
@@ -2408,6 +2412,7 @@ void Fracture::resetFracture()
         trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources, smooth_boundary, numcell_threshold);
     grid_mesh_map_ = fsmap;
     grid_fixed_cells_ = wsources;
+    grid_mesh_level_ = 0;
     // Restore grid and cell normals (setFractureGrid clears reservoir_map_.cells;
     // they will be repopulated by FractureModel::resetFractures via
     // updateFractureReservoirCells + initReservoirProperties).
@@ -2447,6 +2452,7 @@ void Fracture::rebuildGridForLoad(const std::vector<std::vector<CellRef>>& saved
                   "these cannot change after a load.");
     }
     grid_mesh_map_ = saved_map;
+    grid_mesh_level_ = 0;
     setFractureGrid(std::move(std::get<0>(built)));
 }
 
@@ -2538,10 +2544,10 @@ void Fracture::moveForwardInTime(double dt_last)
 void
 Fracture::composeFlowStateDonor(const std::vector<std::vector<CellRef>>& map1,
                                 const std::vector<std::vector<CellRef>>& map2,
-                                const int level)
+                                const int level, const int map1_level)
 {
     // dominant overlap wins: the flow state is a set of primary variables, not averaged
-    const auto g2g = RegularTrimesh::createGridToGridMap(map1, map2, level);
+    const auto g2g = RegularTrimesh::createGridToGridMap(map1, map2, level, map1_level);
     std::vector<int> donor(map2.size(), -1);
     std::vector<double> best(map2.size(), 0.0);
     for (const auto& [i, j, w] : g2g) {
@@ -2563,13 +2569,13 @@ Fracture::redistribute_values(Dune::BlockVector<Dune::FieldVector<double, 1>>& v
                               const std::vector<std::vector<CellRef>>& map1,
                               const std::vector<std::vector<CellRef>>& map2,
                               const int level,
-                              bool point_wise)
+                              bool point_wise, const int map1_level)
 {
     std::vector<double> tmp_values(values.size());
     for (size_t i = 0; i < values.size(); ++i) {
         tmp_values[i] = values[i][0]; // assuming values is a BlockVector with one component
     }
-    tmp_values = redistribute_values(tmp_values, map1, map2, level, point_wise);
+    tmp_values = redistribute_values(tmp_values, map1, map2, level, point_wise, map1_level);
     values.resize(tmp_values.size());
     for (size_t i = 0; i < values.size(); ++i) {
         values[i][0] = tmp_values[i]; // assuming values is a BlockVector with one component
@@ -2582,10 +2588,10 @@ Fracture::redistribute_values(const std::vector<double>& values,
                               const std::vector<std::vector<CellRef>>& map1,
                               const std::vector<std::vector<CellRef>>& map2,
                               const int level,
-                              bool point_wise)
+                              bool point_wise, const int map1_level)
 // ----------------------------------------------------------------------------
 {
-    const auto g2gmap = RegularTrimesh::createGridToGridMap(map1, map2, level);
+    const auto g2gmap = RegularTrimesh::createGridToGridMap(map1, map2, level, map1_level);
 
     std::vector<double> redistributed_values(map2.size(), 0.0);
     std::vector<double> weight(map2.size(), 0.0);

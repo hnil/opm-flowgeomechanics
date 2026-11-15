@@ -189,7 +189,8 @@ public:
     static std::vector<std::tuple<unsigned int, unsigned int, double>>
     createGridToGridMap(const std::vector<std::vector<CellRef>>& map1,
                         const std::vector<std::vector<CellRef>>& map2,
-                        const int level);
+                        const int level,
+                        const int map1_level = 0);
 
     // Cell-wise quantity on a mesh, with what is needed to place a share that no
     // cell of another mesh covers: first a cell in the same group, else the nearest.

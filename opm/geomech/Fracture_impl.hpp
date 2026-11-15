@@ -757,6 +757,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             // note that the well_source_cellref_ is already set from the last call to the score function
             for (auto& cell : well_source_cellref_)
                 cell = RegularTrimesh::fine_to_coarse(cell, cur_level);
+            grid_mesh_level_ = 0;
 
             // volume pacing: the drawn-down BC was for the expansion rounds only;
             // the coupling continues from the flow's perf pressure
@@ -824,9 +825,12 @@ Fracture::regridTo_(const RegularTrimesh& trimesh, const int level, const Propag
                                                         opt.smoothBoundary, opt.numcellThreshold);
     RegridMaps maps;
     maps.before = grid_mesh_map_;
+    // false matches maps.before as if it were at level 0
+    maps.before_level = prm_.get<bool>("solver.level_aware_remap", true) ? grid_mesh_level_ : 0;
     grid_mesh_map_ = fsmap;
+    grid_mesh_level_ = level;
     grid_fixed_cells_ = wsources;
-    composeFlowStateDonor(maps.before, fsmap, level);
+    composeFlowStateDonor(maps.before, fsmap, level, maps.before_level);
     setFractureGrid(std::move(grid));
 
     std::map<CellRef, size_t> fsmap_inv;
