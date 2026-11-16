@@ -1931,10 +1931,10 @@ Fracture::remapState_(const RegridMaps& maps, const int level, const Propagation
         const size_t num_press_cells = fracture_pressure_.size() - numWellEquations();
         const std::string front_init = prm_.get<std::string>("solver.front_cell_init", "reservoir");
         if (front_init == "neighbour" || front_init == "mech") {
-            initNewCellsFromNeighbours_(num_press_cells);
-        }
-        if (front_init == "mech") {
-            initWidthFromElasticity_(num_press_cells);
+            const std::vector<char> is_new = initNewCellsFromNeighbours_(num_press_cells);
+            if (front_init == "mech") {
+                initNewWidthFromElasticity_(is_new);
+            }
         }
         for (size_t i = 0; i < num_press_cells; ++i) {
             if (fracture_pressure_[i] == 0.0) {
@@ -1963,7 +1963,8 @@ Fracture::remapState_(const RegridMaps& maps, const int level, const Propagation
 
 // Cells without a remapped value (pressure 0) take the mean pressure and a fraction of the
 // mean width of their remapped neighbours, swept outwards; leftovers keep the reservoir fill.
-void
+// Returns the mask of cells that had no remapped value.
+std::vector<char>
 Fracture::initNewCellsFromNeighbours_(const size_t num_press_cells)
 {
     const double width_fac = prm_.get<double>("solver.front_cell_width_fac", 0.5);
@@ -1978,8 +1979,10 @@ Fracture::initNewCellsFromNeighbours_(const size_t num_press_cells)
         }
     }
     std::vector<char> known(num_press_cells);
+    std::vector<char> is_new(num_press_cells);
     for (size_t i = 0; i < num_press_cells; ++i) {
         known[i] = fracture_pressure_[i][0] != 0.0;
+        is_new[i] = !known[i];
     }
     bool changed = true;
     while (changed) {
@@ -2009,25 +2012,27 @@ Fracture::initNewCellsFromNeighbours_(const size_t num_press_cells)
         }
         changed = !filled.empty();
     }
+    return is_new;
 }
 
-// Width from elasticity alone at the current pressure: zero contact force on open cells,
-// cells with negative width closed and the open set re-solved.
+// Widths of new cells from elasticity alone at the current pressure, other widths fixed:
+// zero contact force on the open new cells, negative ones closed and the rest re-solved.
 void
-Fracture::initWidthFromElasticity_(const size_t num_press_cells)
+Fracture::initNewWidthFromElasticity_(const std::vector<char>& is_new)
 {
     const auto& A = fractureMatrix();
     const size_t nc = A.N();
-    if (nc == 0 || nc > num_press_cells) {
+    if (nc == 0 || nc > is_new.size()) {
         return;
     }
     ResVector traction;
     normalFractureTraction(traction, true);
-    ResVector zero(nc);
-    zero = 0.0;
-    const ResVector f0 = contactForce(A, zero, fracture_pressure_, traction);
-    std::vector<char> open(nc, 1);
-    ResVector w(nc);
+    ResVector w_old(nc);
+    for (size_t i = 0; i < nc; ++i) {
+        w_old[i] = is_new[i] ? 0.0 : fracture_width_[i][0];
+    }
+    const ResVector f0 = contactForce(A, w_old, fracture_pressure_, traction);
+    std::vector<char> open(is_new.begin(), is_new.begin() + nc);
     for (int sweep = 0; sweep < 3; ++sweep) {
         std::vector<size_t> idx;
         for (size_t i = 0; i < nc; ++i) {
@@ -2036,7 +2041,7 @@ Fracture::initWidthFromElasticity_(const size_t num_press_cells)
             }
         }
         if (idx.empty()) {
-            return;
+            break;
         }
         FMatrix Ao(idx.size(), idx.size());
         Dune::DynamicVector<double> rhs(idx.size()), wo(idx.size());
@@ -2047,10 +2052,14 @@ Fracture::initWidthFromElasticity_(const size_t num_press_cells)
             }
         }
         Ao.solve(wo, rhs);
-        w = 0.0;
         bool closed_any = false;
+        for (size_t i = 0; i < nc; ++i) {
+            if (is_new[i]) {
+                fracture_width_[i] = 0.0;
+            }
+        }
         for (size_t a = 0; a < idx.size(); ++a) {
-            w[idx[a]] = wo[a];
+            fracture_width_[idx[a]] = std::max(wo[a], 0.0);
             if (wo[a] < 0.0) {
                 open[idx[a]] = 0;
                 closed_any = true;
@@ -2059,9 +2068,6 @@ Fracture::initWidthFromElasticity_(const size_t num_press_cells)
         if (!closed_any) {
             break;
         }
-    }
-    for (size_t i = 0; i < nc; ++i) {
-        fracture_width_[i] = std::max(w[i][0], 0.0);
     }
 }
 

@@ -647,8 +647,8 @@ private:
                         const external::cvf::ref<external::cvf::BoundingBoxTree>& cell_search_tree,
                         const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& entity_seeds,
                         const Simulator& simulator);
-   void initNewCellsFromNeighbours_(size_t num_press_cells);
-   void initWidthFromElasticity_(size_t num_press_cells);
+   std::vector<char> initNewCellsFromNeighbours_(size_t num_press_cells);
+   void initNewWidthFromElasticity_(const std::vector<char>& is_new);
    void remapState_(const RegridMaps& maps, int level, const PropagationOptions& opt,
                     const FilterCakeSnapshot& cake0);
    GridSolve solveOnCurrentGrid_(const PropagationOptions& opt);
