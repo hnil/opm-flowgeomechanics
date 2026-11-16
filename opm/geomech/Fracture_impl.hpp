@@ -164,6 +164,9 @@ Fracture::maxFlowTimeStep() const
     if (stress_dt_cap_ > 0.0) {
         cap = (cap > 0.0) ? std::min(cap, stress_dt_cap_) : stress_dt_cap_;
     }
+    if (area_dt_cap_ > 0.0) {
+        cap = (cap > 0.0) ? std::min(cap, area_dt_cap_) : area_dt_cap_;
+    }
     if (onset_dt > 0.0 && onsetHoldActive()) {
         return (cap > 0.0) ? std::min(cap, onset_dt * 86400.0) : onset_dt * 86400.0;
     }
@@ -199,6 +202,19 @@ Fracture::growthGuardViolation() const
             + std::to_string(allowed) + "); rejecting step";
     }
     return {};
+}
+
+inline bool
+Fracture::growthSettled(const double rel_tol) const
+{
+    return !active_ || (!last_growth_capped_ && last_solve_rel_growth_ < rel_tol);
+}
+
+inline double
+Fracture::relativeStepGrowth() const
+{
+    if (!active_ || area_step_start_ <= 0.0) return 0.0;
+    return calculateFractureProperties().area / area_step_start_ - 1.0;
 }
 
 inline int
@@ -742,6 +758,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
         };
 
         const FractureProperties& fprop_before = calculateFractureProperties();
+        last_growth_capped_ = false;
         auto stop_criterion= [&]() -> bool
         {
           // a joint round scores the current state once; the well's solve comes next
@@ -751,8 +768,10 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
           const bool area_stop = expantionMax(fprop_before);
           if (pacing.on && pacing.budgetSpent) {
               if (pacing.verbosity > 0) OpmLog::debug("VolumePacing: stopping expansion (budget spent)");
+              last_growth_capped_ = true;
               return true;
           }
+          last_growth_capped_ = area_stop;
           return area_stop;
         };
 
@@ -804,6 +823,12 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             // volume pacing: the drawn-down BC was for the expansion rounds only;
             // the coupling continues from the flow's perf pressure
             pacing.restorePerfPressure(*this);
+            {
+                const double area_after = calculateFractureProperties().area;
+                last_solve_rel_growth_ = (fprop_before.area > 0.0)
+                    ? std::abs(area_after / fprop_before.area - 1.0)
+                    : (area_after > 0.0 ? std::numeric_limits<double>::infinity() : 0.0);
+            }
 
             // Opt-in damped fixed point on the width exposed to the coupling
             // (WI, volume, K1 all derive from it): prevents the contact
@@ -985,6 +1010,7 @@ Fracture::serializeState(Serializer& serializer)
     serializer(coupling_dt_cap_);
     serializer(traction_step_start_);
     serializer(stress_dt_cap_);
+    serializer(area_dt_cap_);
     serializer(well_control_is_rate_);
     serializer(well_target_bhp_);
     serializer(effective_control_latched_);

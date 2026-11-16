@@ -124,6 +124,11 @@ public:
     template <class TypeTag, class Simulator>
     std::pair<double, double> drivingStateChange(const Simulator& simulator, bool record);
     void setAreaChangeFactorOverride(double fac);
+    //! all active fractures' last solves settled (Fracture::growthSettled); not MPI-reduced
+    bool growthSettled(double rel_tol) const;
+    //! largest relative area growth since the step checkpoint; not MPI-reduced
+    double maxRelativeStepGrowth() const;
+    void markBurstStep();
     void writeIterationSnapshots(int step, int round, const std::string& tag) const;
 
         void updateReservoirProperties(); // for testing without simulator

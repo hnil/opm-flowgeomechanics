@@ -177,6 +177,12 @@ namespace Opm
         bool picard_converged_{true};
         // Coupling accepted; flow must re-converge before the step may end.
         mutable bool reconverge_flow_pending_{false};
+        // Area burst test (solver.area_dt_target): the attempt that was cut, to
+        // compare its growth with the retry's.
+        mutable bool burst_attempt_valid_{false};
+        mutable double burst_attempt_time_{0.0};
+        mutable double burst_attempt_dt_{0.0};
+        mutable double burst_attempt_growth_{0.0};
 
         struct StorageCacheBackup
         {

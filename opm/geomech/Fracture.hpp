@@ -513,6 +513,13 @@ public:
     // (relative factor; the absolute floor solver.min_area_growth_guard lets a
     // small seed open freely). Empty string = fine / guard off.
     std::string growthGuardViolation() const;
+    // Last solve stopped on the front criterion (not the area cap or volume
+    // budget) and changed the area by less than rel_tol.
+    bool growthSettled(double rel_tol) const;
+    // (area now - area at the step checkpoint) / checkpoint area; 0 before a checkpoint.
+    double relativeStepGrowth() const;
+    // The step ending now was accepted as a burst: the area dt controller holds dt.
+    void markBurstStep() { burst_step_ = true; }
     // Onset dt-hold: true while the fracture is still an unopened seed and the
     // perf pressure is rising (solver.onset_dt_limit > 0 arms it).
     bool onsetHoldActive() const;
@@ -910,6 +917,12 @@ private:
     // problem of the coupling-rate controller
     double traction_step_start_{std::numeric_limits<double>::quiet_NaN()};
     double stress_dt_cap_{-1.0};
+    // area-growth dt controller (opt-in, solver.area_dt_target)
+    double area_dt_cap_{-1.0};
+    bool burst_step_{false};
+    // outcome of the last solve, for solver.growth_stop=criterion
+    bool last_growth_capped_{false};
+    double last_solve_rel_growth_{0.0};
     bool well_control_is_rate_{true}; // active well constraint (from the well state)
     double well_target_bhp_{-1.0};    // active BHP (bhp_well constraint target)
     // control.type=="well": the BC resolved at the start of the current solve.

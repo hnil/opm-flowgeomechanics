@@ -1792,7 +1792,9 @@ Fracture::expantionMax(const FractureProperties& fprop)
     const double dt_lim = prm_.get<double>("solver.dt_limit")*86400.0;
     if (fprop_current.area > area_change_fac * fprop.area) {
         OpmLog::debug("Fracture area doubled, stopping expansion");
-        max_flow_time_step_  = dt_lim;
+        // the area dt controller replaces the fixed dt_limit
+        max_flow_time_step_ = prm_.get<double>("solver.area_dt_target", 0.0) > 0.0
+            ? std::numeric_limits<double>::max() : dt_lim;
         return true;
     } else {
       max_flow_time_step_  = std::numeric_limits<double>::max();// no limit
@@ -2739,6 +2741,16 @@ void Fracture::moveForwardInTime(double dt_last)
             }
             traction_step_start_ = tmean;
         }
+        // Area-growth dt controller (opt-in, solver.area_dt_target = relative area
+        // growth per step). A burst step holds dt: its growth does not shrink with dt.
+        const double relA_target = prm_.get<double>("solver.area_dt_target", 0.0);
+        if (relA_target > 0.0 && dt_last > 0.0 && area_step_start_ > 0.0) {
+            const double relA = std::max(fp.area / area_step_start_ - 1.0, 1.0e-3 * relA_target);
+            const double dt_min = prm_.get<double>("solver.area_dt_min", 0.1) * 86400.0;
+            const double fac = burst_step_ ? 1.0 : std::clamp(std::sqrt(relA_target / relA), 0.5, 2.0);
+            area_dt_cap_ = std::max(dt_last * fac, dt_min);
+        }
+        burst_step_ = false;
         area_step_start_ = fp.area;
         volume_step_start_ = fp.volume;
     } else {

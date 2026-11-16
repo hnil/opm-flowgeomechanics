@@ -307,6 +307,34 @@ namespace Opm {
                 fracture.setAreaChangeFactorOverride(fac);
     }
 
+    inline bool
+    FractureModel::growthSettled(const double rel_tol) const
+    {
+        for (size_t i = 0; i < wells_.size(); ++i)
+            for (const auto& fracture : well_fractures_[i])
+                if (!fracture.growthSettled(rel_tol))
+                    return false;
+        return true;
+    }
+
+    inline double
+    FractureModel::maxRelativeStepGrowth() const
+    {
+        double g = 0.0;
+        for (size_t i = 0; i < wells_.size(); ++i)
+            for (const auto& fracture : well_fractures_[i])
+                g = std::max(g, fracture.relativeStepGrowth());
+        return g;
+    }
+
+    inline void
+    FractureModel::markBurstStep()
+    {
+        for (size_t i = 0; i < wells_.size(); ++i)
+            for (auto& fracture : well_fractures_[i])
+                fracture.markBurstStep();
+    }
+
     inline std::string
     FractureModel::growthGuardViolation() const
     {

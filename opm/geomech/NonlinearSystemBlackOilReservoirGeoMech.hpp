@@ -343,6 +343,46 @@ namespace Opm
             }
         }
 
+        // A step that grew more than solver.area_burst_growth is cut once. If the
+        // retry grows at least area_burst_ratio as much, growth does not scale with
+        // dt (a burst): accept it and let the area dt controller hold dt.
+        void areaBurstTest_(const SimulatorTimerInterface& timer, const PropertyTree& prm)
+        {
+            auto& fractures = this->simulator_.problem().geoMechModel().fractureModel();
+            const double growth =
+                this->simulator_.vanguard().grid().comm().max(fractures.maxRelativeStepGrowth());
+            const double limit = prm.get<double>("fractureparam.solver.area_burst_growth", 1.0);
+            if (growth <= limit) {
+                this->burst_attempt_valid_ = false;
+                return;
+            }
+            const double t0 = timer.simulationTimeElapsed();
+            const double dt = timer.currentStepLength();
+            const bool retry = this->burst_attempt_valid_ && std::abs(this->burst_attempt_time_ - t0) < 1.0
+                && dt < this->burst_attempt_dt_;
+            const double ratio = prm.get<double>("fractureparam.solver.area_burst_ratio", 0.7);
+            const double dt_min = prm.get<double>("fractureparam.solver.area_dt_min", 0.1) * 86400.0;
+            if (retry && growth >= ratio * this->burst_attempt_growth_) {
+                OpmLog::info(fmt::format("Fracture burst: relative area growth {:.3g} at dt {:.3g} d "
+                                         "vs {:.3g} at {:.3g} d; accepting", growth, dt / 86400.0,
+                                         this->burst_attempt_growth_, this->burst_attempt_dt_ / 86400.0));
+                fractures.markBurstStep();
+                this->burst_attempt_valid_ = false;
+            } else if (dt <= dt_min) {
+                OpmLog::warning(fmt::format("Fracture area growth {:.3g} at minimum dt; accepting",
+                                            growth));
+                this->burst_attempt_valid_ = false;
+            } else {
+                this->burst_attempt_valid_ = true;
+                this->burst_attempt_time_ = t0;
+                this->burst_attempt_dt_ = dt;
+                this->burst_attempt_growth_ = growth;
+                OpmLog::info(fmt::format("Fracture area growth {:.3g} in one step: cutting dt "
+                                         "to test for a burst", growth));
+                OPM_THROW_NOLOG(NumericalProblem, "fracture area burst test: dt cut");
+            }
+        }
+
         template <class NonlinearSolverType>
         SimulatorReportSingle nonlinearIterationSeqMechFrac(const SimulatorTimerInterface& timer,
                                             NonlinearSolverType& nonlinear_solver){
@@ -465,10 +505,37 @@ namespace Opm
                         .template maxFlowTimeStep<TypeTag, Simulator>(this->simulator_)
                         < std::numeric_limits<double>::max();
                 };
-                if (growth_switch && !report.converged && !fracture_at_growth_cap()
+                // growth_stop=criterion: accept once the last fracture solve stopped on
+                // the front criterion and changed the area by less than growth_stop_tol.
+                const std::string growth_stop = prm.get<std::string>("solver.growth_stop", "cap");
+                if (growth_stop != "cap" && growth_stop != "criterion") {
+                    OPM_THROW(std::runtime_error,
+                              "solver.growth_stop must be 'cap' or 'criterion', got '" + growth_stop + "'");
+                }
+                const bool stop_on_criterion = (growth_stop == "criterion");
+                const double area_dt_target = prm.get<double>("fractureparam.solver.area_dt_target", 0.0);
+                if (area_dt_target > 0.0 && growth_switch && !stop_on_criterion) {
+                    OPM_THROW(std::runtime_error,
+                              "fractureparam.solver.area_dt_target replaces the dt_limit signal that "
+                              "growth_driven_switch reads; use it with solver.growth_stop=criterion");
+                }
+                auto accept_lagged = [&]() {
+                    if (!stop_on_criterion)
+                        return growth_switch && !fracture_at_growth_cap();
+                    if (!have_fracture)
+                        return true;
+                    const double tol = prm.get<double>("solver.growth_stop_tol", 0.01);
+                    const int settled = this->simulator_.problem().geoMechModel().fractureModel()
+                        .growthSettled(tol) ? 1 : 0;
+                    return this->simulator_.vanguard().grid().comm().min(settled) == 1;
+                };
+                const std::string accept_msg = stop_on_criterion
+                    ? "Fracture growth settled (growth_stop=criterion): accepting the coupling"
+                    : "Fracture coupling change accepted lagged (growth_driven_switch: "
+                      "no fracture at its growth cap this round)";
+                if (!report.converged && accept_lagged()
                     && !this->simulator_.problem().embeddedHoldOuterLoop()) {
-                    OpmLog::info("Fracture coupling change accepted lagged (growth_driven_switch: "
-                                 "no fracture at its growth cap this round)");
+                    OpmLog::info(accept_msg);
                     report.converged = true;
                 }
                 while (max_growth_it > 0 && implicit_flow && !report.converged
@@ -515,10 +582,12 @@ namespace Opm
                         this->simulator_.problem().geoMechModel().fractureModel()
                             .writeIterationSnapshots(timer.currentStepNum(), 1000 + growth_round, "growth");
                     report.converged = round_report.converged;
-                    if (growth_switch && !report.converged && !fracture_at_growth_cap()
+                    if (!report.converged && accept_lagged()
                     && !this->simulator_.problem().embeddedHoldOuterLoop()) {
-                        OpmLog::info("Fracture growth stopped; accepting lagged coupling "
-                                     "(growth_driven_switch)");
+                        OpmLog::info(stop_on_criterion
+                                     ? accept_msg
+                                     : "Fracture growth stopped; accepting lagged coupling "
+                                       "(growth_driven_switch)");
                         report.converged = true;
                     }
                     OpmLog::info("Fracture growth sub-iteration "
@@ -577,6 +646,9 @@ namespace Opm
                             OPM_THROW_NOLOG(NumericalProblem, "fracture growth guard: " + violation);
                         }
                     }
+                }
+                if (report.converged && have_fracture && area_dt_target > 0.0) {
+                    this->areaBurstTest_(timer, prm);
                 }
             }
 
