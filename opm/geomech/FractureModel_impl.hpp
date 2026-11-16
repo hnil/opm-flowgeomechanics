@@ -416,9 +416,10 @@ namespace Opm {
                       // the phase the well injects, and the fracture is filled with
                       using IndexTraits = typename FluidSystem::IndexTraitsType;
                       unsigned inj_phase = FluidSystem::waterPhaseIdx;
-                      if (const auto ph = injectedCanonicalPhaseIdx<IndexTraits>(well->wellEcl().injectorType());
-                          !wellstate.producer && ph.has_value() && FluidSystem::phaseIsActive(*ph)) {
-                          inj_phase = *ph;
+                      if (!wellstate.producer) {
+                          const auto ph = injectedCanonicalPhaseIdx<IndexTraits>(well->wellEcl().injectorType());
+                          if (ph.has_value() && FluidSystem::phaseIsActive(*ph))
+                              inj_phase = *ph;
                       }
 
                       for (int perf_index=0; perf_index < wellstate.perf_data.cell_index.size(); ++perf_index) {

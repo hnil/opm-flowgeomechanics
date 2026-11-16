@@ -824,9 +824,10 @@ FractureAuxCells<TypeTag>::perforationReport() const
         {
             using IndexTraits = typename FluidSystem::IndexTraitsType;
             const auto& well = schedule[step].wells(wname);
-            const auto ph = injectedCanonicalPhaseIdx<IndexTraits>(well.injectorType());
-            if (well.isInjector() && ph.has_value() && FluidSystem::phaseIsActive(*ph)) {
-                injPos = *ph;
+            if (well.isInjector()) {
+                const auto ph = injectedCanonicalPhaseIdx<IndexTraits>(well.injectorType());
+                if (ph.has_value() && FluidSystem::phaseIsActive(*ph))
+                    injPos = *ph;
             }
         }
         const auto injActive = FluidSystem::canonicalToActivePhaseIdx(injPos);
