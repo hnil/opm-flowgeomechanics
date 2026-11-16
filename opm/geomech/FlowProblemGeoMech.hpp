@@ -937,14 +937,12 @@ namespace Opm{
         { return geoMechModel_; }
 
     private:
-        //! Water rate into each fracture's cells: the well's fracture rate, and the
-        //! seed connection's, which also carries the fracture's area and WI.
+        //! Injected-phase rate into each fracture's cells, stored on the seed connection,
+        //! which also carries the fracture's area and WI.
         void assignEmbeddedFractureRates_()
         {
             auto& wellState = this->wellModel_.wellState();
             const int np = wellState.numPhases();
-            const int water = FluidSystem::canonicalToActivePhaseIdx(FluidSystem::waterPhaseIdx);
-            std::map<std::size_t, Scalar> wellRate;
             std::size_t fidx = 0;
             for (const auto& wellFractures : this->geoMechModel_.fractureModel().wellFractures()) {
                 for (const auto& fracture : wellFractures) {
@@ -953,25 +951,27 @@ namespace Opm{
                     if (!wsIx.has_value()) {
                         continue;
                     }
+                    const unsigned phase = fracture.injectedPhaseIdx();
+                    if (!FluidSystem::phaseIsActive(phase)) {
+                        continue;
+                    }
+                    const int pos = FluidSystem::canonicalToActivePhaseIdx(phase);
                     auto& pd = wellState[*wsIx].perf_data;
                     const std::set<int> fractureDofs(dofs.begin(), dofs.end());
                     Scalar rate = 0.0;
                     for (std::size_t perf = 0; perf < pd.size(); ++perf) {
                         if (fractureDofs.count(pd.cell_index[perf]) > 0) {
-                            rate += pd.phase_rates[perf * np + water];
+                            rate += pd.phase_rates[perf * np + pos];
                         }
                     }
-                    wellRate[*wsIx] += rate;
                     const auto seed = std::find(pd.cell_index.begin(), pd.cell_index.end(),
                                                 fracture.wellInfo().well_cell);
                     if (seed != pd.cell_index.end()
-                        && pd.fracture_data.water_rate.size() == pd.size()) {
-                        pd.fracture_data.water_rate[seed - pd.cell_index.begin()] = rate;
+                        && pd.fracture_data.injected_rate.size() == pd.size()) {
+                        pd.fracture_data.injected_rate[seed - pd.cell_index.begin()] = rate;
+                        pd.fracture_data.injected_phase = static_cast<int>(phase);
                     }
                 }
-            }
-            for (const auto& [wsIx, rate] : wellRate) {
-                wellState[wsIx].frac_rate = rate;
             }
         }
 
