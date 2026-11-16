@@ -712,6 +712,10 @@ private:
         bool fbScaledConvergence{false};
         bool fbLineSearch{false};
         double fbLineSearchMin{0.0625};
+        bool fbAcceptConverged{false};
+        bool fbNonmonotone{false};
+        bool fbTrace{false};
+        double flowTolerance{-1.0}; // < 0: same as the mechanics tolerance
         bool dropCoupling{true};
         bool storageTerm{false};
         FractureCoupledLinearSolver::Options linear;
@@ -805,7 +809,8 @@ private:
     void assembleSystemMatrix_(const std::vector<int>& closed_cells, bool first_iteration);
     VectorHP assembleResidual_(const VectorHP& x, const ResVector& mech_rhs, const FbRows& fb) const;
     bool isConverged_(const VectorHP& rhs, const FbRows& fb, double tol) const;
-    void limitStep_(const VectorHP& x, VectorHP& dx, const ResVector& mech_rhs, const FbRows& fb) const;
+    void limitStep_(const VectorHP& x, VectorHP& dx, const ResVector& mech_rhs, const FbRows& fb,
+                    double tol, double flow_res, int nlin_iteration) const;
     void applyUpdate_(VectorHP& x, const VectorHP& dx);
 
     void assembleFractureMatrix() const;
@@ -928,6 +933,7 @@ private:
 
     mutable std::unique_ptr<Matrix> pressure_matrix_;
     mutable std::unique_ptr<Matrix> coupling_matrix_; // will be updated by `fullSystemIteration`
+    mutable double fb_prev_flow_res_ = 0.0; // flow residual at the previous FB iteration
 
     using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView>;
     mutable std::unique_ptr<DynamicMatrix> fracture_matrix_;
