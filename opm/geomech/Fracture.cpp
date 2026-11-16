@@ -1929,6 +1929,13 @@ Fracture::remapState_(const RegridMaps& maps, const int level, const Propagation
         }
         // cell entries only: reservoir_.pressure has no well-equation entry
         const size_t num_press_cells = fracture_pressure_.size() - numWellEquations();
+        const std::string front_init = prm_.get<std::string>("solver.front_cell_init", "reservoir");
+        if (front_init == "neighbour" || front_init == "mech") {
+            initNewCellsFromNeighbours_(num_press_cells);
+        }
+        if (front_init == "mech") {
+            initWidthFromElasticity_(num_press_cells);
+        }
         for (size_t i = 0; i < num_press_cells; ++i) {
             if (fracture_pressure_[i] == 0.0) {
                 fracture_pressure_[i] = hydrostaticReservoirPressure(i);
@@ -1951,6 +1958,110 @@ Fracture::remapState_(const RegridMaps& maps, const int level, const Propagation
         OpmLog::debug(fmt::format("Total filtercake thickness before remapping: {}\n"
                                   "Total filtercake thickness after remapping: {}",
                                   cake0.total, total_filtercake));
+    }
+}
+
+// Cells without a remapped value (pressure 0) take the mean pressure and a fraction of the
+// mean width of their remapped neighbours, swept outwards; leftovers keep the reservoir fill.
+void
+Fracture::initNewCellsFromNeighbours_(const size_t num_press_cells)
+{
+    const double width_fac = prm_.get<double>("solver.front_cell_width_fac", 0.5);
+    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+    std::vector<std::vector<int>> nbs(num_press_cells);
+    for (const auto& elem : elements(grid_->leafGridView())) {
+        const int ci = mapper.index(elem);
+        for (const auto& is : Dune::intersections(grid_->leafGridView(), elem)) {
+            if (is.neighbor()) {
+                nbs[ci].push_back(mapper.index(is.outside()));
+            }
+        }
+    }
+    std::vector<char> known(num_press_cells);
+    for (size_t i = 0; i < num_press_cells; ++i) {
+        known[i] = fracture_pressure_[i][0] != 0.0;
+    }
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        std::vector<size_t> filled;
+        for (size_t i = 0; i < num_press_cells; ++i) {
+            if (known[i]) {
+                continue;
+            }
+            double p = 0.0, w = 0.0;
+            int n = 0;
+            for (const int j : nbs[i]) {
+                if (known[j]) {
+                    p += fracture_pressure_[j][0];
+                    w += fracture_width_[j][0];
+                    ++n;
+                }
+            }
+            if (n > 0) {
+                fracture_pressure_[i] = p / n;
+                fracture_width_[i] = std::max(fracture_width_[i][0], width_fac * w / n);
+                filled.push_back(i);
+            }
+        }
+        for (const auto i : filled) {
+            known[i] = 1;
+        }
+        changed = !filled.empty();
+    }
+}
+
+// Width from elasticity alone at the current pressure: zero contact force on open cells,
+// cells with negative width closed and the open set re-solved.
+void
+Fracture::initWidthFromElasticity_(const size_t num_press_cells)
+{
+    const auto& A = fractureMatrix();
+    const size_t nc = A.N();
+    if (nc == 0 || nc > num_press_cells) {
+        return;
+    }
+    ResVector traction;
+    normalFractureTraction(traction, true);
+    ResVector zero(nc);
+    zero = 0.0;
+    const ResVector f0 = contactForce(A, zero, fracture_pressure_, traction);
+    std::vector<char> open(nc, 1);
+    ResVector w(nc);
+    for (int sweep = 0; sweep < 3; ++sweep) {
+        std::vector<size_t> idx;
+        for (size_t i = 0; i < nc; ++i) {
+            if (open[i]) {
+                idx.push_back(i);
+            }
+        }
+        if (idx.empty()) {
+            return;
+        }
+        FMatrix Ao(idx.size(), idx.size());
+        Dune::DynamicVector<double> rhs(idx.size()), wo(idx.size());
+        for (size_t a = 0; a < idx.size(); ++a) {
+            rhs[a] = f0[idx[a]][0];
+            for (size_t b = 0; b < idx.size(); ++b) {
+                Ao[a][b] = A[idx[a]][idx[b]];
+            }
+        }
+        Ao.solve(wo, rhs);
+        w = 0.0;
+        bool closed_any = false;
+        for (size_t a = 0; a < idx.size(); ++a) {
+            w[idx[a]] = wo[a];
+            if (wo[a] < 0.0) {
+                open[idx[a]] = 0;
+                closed_any = true;
+            }
+        }
+        if (!closed_any) {
+            break;
+        }
+    }
+    for (size_t i = 0; i < nc; ++i) {
+        fracture_width_[i] = std::max(w[i][0], 0.0);
     }
 }
 
