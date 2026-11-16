@@ -296,7 +296,6 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         using ScalarFluidState = Opm::BlackOilFluidState<double, FluidSystem>;
         const auto& problem = simulator.problem();
         const auto& grid = simulator.vanguard().grid();
-        GeometryHelper ghelper(grid);
         const auto value_of = [](const auto& value) { return Opm::scalarValue(value); };
         // NB reservoir dist not calculated
         size_t ncf = reservoir_map_.cells.size();

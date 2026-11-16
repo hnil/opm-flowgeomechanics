@@ -472,15 +472,39 @@ FractureMechanicsPreconditioner::openBlockSolve(Vector& x, const Vector& rhs) co
 {
     const int m = open_.size();
     const int k = closed_.size();
-    for (int c = 0; c < k; ++c)
-        x[closed_[c]][0] = rhs[closed_[c]][0] / closed_diag_[c];
+    closed_x_.resize(k);
+    for (int c = 0; c < k; ++c) {
+        closed_x_[c] = rhs[closed_[c]][0] / closed_diag_[c];
+        x[closed_[c]][0] = closed_x_[c];
+    }
     if (m == 0)
         return;
-    for (int r = 0; r < m; ++r) {
+    const double* xc = closed_x_.data();
+    // four rows at a time; each row keeps its own summation order
+    int r = 0;
+    for (; r + 4 <= m; r += 4) {
+        double v0 = rhs[open_[r]][0], v1 = rhs[open_[r + 1]][0];
+        double v2 = rhs[open_[r + 2]][0], v3 = rhs[open_[r + 3]][0];
+        const double* a0 = open_closed_.data() + std::size_t(r) * k;
+        const double* a1 = a0 + k;
+        const double* a2 = a1 + k;
+        const double* a3 = a2 + k;
+        for (int c = 0; c < k; ++c) {
+            v0 = std::fma(-a0[c], xc[c], v0);
+            v1 = std::fma(-a1[c], xc[c], v1);
+            v2 = std::fma(-a2[c], xc[c], v2);
+            v3 = std::fma(-a3[c], xc[c], v3);
+        }
+        open_rhs_[r] = v0;
+        open_rhs_[r + 1] = v1;
+        open_rhs_[r + 2] = v2;
+        open_rhs_[r + 3] = v3;
+    }
+    for (; r < m; ++r) {
         double v = rhs[open_[r]][0];
         const double* a = open_closed_.data() + std::size_t(r) * k;
         for (int c = 0; c < k; ++c)
-            v -= a[c] * x[closed_[c]][0];
+            v = std::fma(-a[c], xc[c], v);
         open_rhs_[r] = v;
     }
     // the row-major copy is the transpose in LAPACK's column-major layout

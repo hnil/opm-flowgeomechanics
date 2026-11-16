@@ -55,5 +55,9 @@ PlaneBasis make_basis(const Plane_3& plane, const Point_3& origin);
 Point_2 project(const Point_3& p, const PlaneBasis& B);
 void sortPoints(Polygon_2& pts);
 Mesh make_hex(const std::vector<std::array<double,3>>& hex);
+// Same cross-section as area_of_intersection, clipped in double precision (round-off
+// differences only); no CGAL constructions.
+double area_of_intersection_fast(const std::vector<std::array<double,3>>& hex,
+                                 const std::vector<std::array<double,3>>& tri);
 double area_of_intersection(const std::vector<std::array<double,3>>& hex_org,
                             const std::vector<std::array<double,3>>& tri_org);

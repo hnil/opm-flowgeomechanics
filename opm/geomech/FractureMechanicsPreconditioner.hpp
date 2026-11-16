@@ -191,6 +191,7 @@ Vector diagvec(const Mat& M)
     std::vector<double> open_closed_; // A(open, closed), row-major
     mutable std::vector<double> open_rhs_;
     mutable std::vector<double> open_x_;
+    mutable std::vector<double> closed_x_;
     mutable Vector A_diag_;
     mutable Vector M_diag_;
     Opm::PropertyTree prm_;

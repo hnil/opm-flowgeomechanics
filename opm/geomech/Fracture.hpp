@@ -30,6 +30,7 @@
 #include <opm/geomech/FractureConnectionId.hpp>
 #include <limits>
 #include <optional>
+#include <array>
 #include <unordered_map>
 
 #include <dune/common/exceptions.hh>
@@ -838,6 +839,18 @@ private:
         double mobility{}, density{}, cellZ{}, pressure{};
     };
     ReservoirMap reservoir_map_;
+    // Reservoir-cell mapping per fracture triangle, keyed on its exact corner coordinates
+    // (solver.cache_cell_mapping); valid while the reservoir grid is fixed.
+    struct TriCellMapping {
+        int centre_cell;
+        std::vector<int> cells;
+        std::vector<double> areas;
+        std::vector<Dune::FieldVector<double,3>> centers;
+    };
+    struct TriKeyHash {
+        std::size_t operator()(const std::array<double, 9>& k) const noexcept;
+    };
+    std::unordered_map<std::array<double, 9>, TriCellMapping, TriKeyHash> tri_mapping_cache_;
     ReservoirSamples reservoir_;
     std::map<int, ReservoirCellValues> off_centroid_cells_;
     using FluidPropertyEvaluator = std::function<std::pair<CellFluidProperty, CellFluidProperty>(size_t, double)>;

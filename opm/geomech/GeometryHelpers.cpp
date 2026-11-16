@@ -123,7 +123,8 @@ cellsOfTri(std::vector<int>& cells,
            const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
            const Dune::CpGrid& grid,
            const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& entity_seed,
-           const std::vector<std::array<double, 3>>& tri_corners)
+           const std::vector<std::array<double, 3>>& tri_corners,
+           const bool fast_area)
 {
     external::cvf::BoundingBox bb;
     for (const auto& tpoint : tri_corners) {
@@ -151,7 +152,8 @@ cellsOfTri(std::vector<int>& cells,
                 hex_corners.push_back(tmp);
             }
         }
-        double area = area_of_intersection(hex_corners, tri_corners);
+        const double area = fast_area ? area_of_intersection_fast(hex_corners, tri_corners)
+                                      : area_of_intersection(hex_corners, tri_corners);
         if (area > 1e-12) {
             cells.push_back(cell);
             areas.push_back(area);

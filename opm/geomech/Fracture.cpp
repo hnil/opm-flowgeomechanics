@@ -785,6 +785,15 @@ Fracture::writemulti(double time) const
     vtkmultiwriter_->endWrite(false);
 };
 
+std::size_t
+Fracture::TriKeyHash::operator()(const std::array<double, 9>& k) const noexcept
+{
+    std::size_t h = 1469598103934665603ULL;
+    for (const double v : k)
+        h = (h ^ std::hash<double>{}(v)) * 1099511628211ULL;
+    return h;
+}
+
 void
 Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
                                const Dune::CpGrid& grid,
@@ -800,14 +809,13 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
     reservoir_map_.allCells.resize(numFractureCells());
     reservoir_map_.allCenters.resize(numFractureCells());
     bool full_intersections = prm_.get<bool>("solver.divide_wellidx", false);
+    const bool use_cache = full_intersections && prm_.get<bool>("solver.cache_cell_mapping", false);
+    const std::string area_method = prm_.get<std::string>("solver.cell_mapping_area", "exact");
+    if (area_method != "exact" && area_method != "fast")
+        OPM_THROW(std::runtime_error, "Unknown solver.cell_mapping_area: " + area_method);
     for (auto& element : elements(grid_->leafGridView())) {
         const auto elemIdx = elemMapper.index(element);
         auto geom = element.geometry();
-        using Vec3d = external::cvf::Vec3d;
-        auto vertex = geom.center();
-        Vec3d point(vertex[0], vertex[1], vertex[2]);
-        reservoir_map_.cells[elemIdx]  = external::cellOfPoint(cellSearchTree, grid, entity_seeds, point);
-        // calculate area
         std::vector<std::array<double,3>> tri_corners;
         {
             for (size_t i = 0; i < geom.corners(); ++i) {
@@ -816,16 +824,40 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
                 tri_corners.push_back(tmp);
             }
         }
+        std::array<double, 9> key{};
+        if (use_cache && tri_corners.size() == 3) {
+            for (size_t i = 0; i < 3; ++i)
+                for (size_t d = 0; d < 3; ++d)
+                    key[3 * i + d] = tri_corners[i][d];
+            const auto hit = tri_mapping_cache_.find(key);
+            if (hit != tri_mapping_cache_.end()) {
+                reservoir_map_.cells[elemIdx] = hit->second.centre_cell;
+                reservoir_map_.allAreas[elemIdx] = hit->second.areas;
+                reservoir_map_.allCells[elemIdx] = hit->second.cells;
+                reservoir_map_.allCenters[elemIdx] = hit->second.centers;
+                continue;
+            }
+        }
+        using Vec3d = external::cvf::Vec3d;
+        auto vertex = geom.center();
+        Vec3d point(vertex[0], vertex[1], vertex[2]);
+        reservoir_map_.cells[elemIdx]  = external::cellOfPoint(cellSearchTree, grid, entity_seeds, point);
 
         if(full_intersections){
             std::vector<int> rcells;
             std::vector<double> areas;
             std::vector<Dune::FieldVector<double,3>> centers;
             std::vector<std::array<double,3>> hex_corners;
-            external::cellsOfTri(rcells, areas, centers, cellSearchTree, grid, entity_seeds, tri_corners);
+            external::cellsOfTri(rcells, areas, centers, cellSearchTree, grid, entity_seeds, tri_corners,
+                                 area_method == "fast");
             reservoir_map_.allAreas[elemIdx] = areas;
             reservoir_map_.allCells[elemIdx] = rcells;
             reservoir_map_.allCenters[elemIdx] = centers;
+            if (use_cache && tri_corners.size() == 3) {
+                if (tri_mapping_cache_.size() > 50000)
+                    tri_mapping_cache_.clear();
+                tri_mapping_cache_.emplace(key, TriCellMapping{reservoir_map_.cells[elemIdx], rcells, areas, centers});
+            }
         }
     }
     auto it = std::find(reservoir_map_.cells.begin(), reservoir_map_.cells.end(), -1);

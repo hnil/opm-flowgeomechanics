@@ -135,7 +135,8 @@ namespace external{
                   const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
                   const Dune::CpGrid& grid,
                 const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& entity_seed,
-                const std::vector<std::array<double,3>>& points);
+                const std::vector<std::array<double,3>>& points,
+                const bool fast_area = false);
 
     template<class Grid, class CellSeed>
     void buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,

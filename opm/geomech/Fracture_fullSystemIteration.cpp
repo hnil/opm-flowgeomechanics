@@ -750,8 +750,10 @@ Fracture::assembleResidual_(const VectorHP& x, const ResVector& mech_rhs, const 
     }
 
     S[_1][_1].mmv(x[_1], rhs[_1]);
-    S[_0][_0].mmv(x[_0], rhs[_0]);
-    S[_0][_1].mmv(x[_1], rhs[_0]);
+    if (!inner_.isFb) { // FB overwrites the mech rows with -phi_FB below
+        S[_0][_0].mmv(x[_0], rhs[_0]);
+        S[_0][_1].mmv(x[_1], rhs[_0]);
+    }
 
     // Fracture volume storage A_i (w_i - w_i^n)/dt: dominant while a cell opens
     // fast, where it makes opening cost pressure. Cells grown inside the step
