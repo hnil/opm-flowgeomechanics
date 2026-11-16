@@ -21,7 +21,9 @@
 #include <opm/simulators/flow/NewtonIterationContext.hpp>
 #include <opm/simulators/wells/BlackoilWellModel.hpp>
 #include <opm/common/OpmLog/OpmLog.hpp>
+#include <functional>
 #include <sstream>
+#include <utility>
 namespace Opm
 {
 template <typename TypeTag>
@@ -76,6 +78,20 @@ public:
         serializer(this->wellStructureChangedDynamically_);
     }
 
+    //! Runs after the parent's fracture flow split and before the summary is evaluated.
+    void setEndTimeStepHook(std::function<void()> hook)
+    {
+        endTimeStepHook_ = std::move(hook);
+    }
+
+    void endTimeStep()
+    {
+        Parent::endTimeStep();
+        if (endTimeStepHook_) {
+            endTimeStepHook_();
+        }
+    }
+
     void createWellContainer(const int reportStepIdx)
     {
         Parent::createWellContainer(reportStepIdx);
@@ -99,5 +115,8 @@ public:
             }
         }
     };
+
+private:
+    std::function<void()> endTimeStepHook_;
 };
 } // namespace Opm

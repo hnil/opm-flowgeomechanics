@@ -261,6 +261,12 @@ namespace Opm{
                                                              perfWiMode,
                                                              static_cast<Scalar>(perfWidth),
                                                              static_cast<Scalar>(perfRw)));
+            // The well model's flow split resets fracture rates; set them after it.
+            this->wellModel_.setEndTimeStepHook([this] {
+                if (this->geoMechModel_.fractureModelActive()) {
+                    this->assignEmbeddedFractureRates_();
+                }
+            });
 
             fractureAuxCells_->setRemapState(prm.get<bool>("solver.embedded_remap_state", false));
             fractureAuxCells_->setNewbornOwnPressure(
@@ -912,9 +918,6 @@ namespace Opm{
 
                     this->geoMechModel_.fractureModel().
                         assignGeoMechWellState(this->wellModel_.wellState());
-                    if (this->fractureFlowIsEmbedded()) {
-                        this->assignEmbeddedFractureRates_();
-                    }
                 }
             }
             OPM_END_PARALLEL_TRY_CATCH("End time step geomech failed: ", this->simulator().vanguard().grid().comm());
@@ -966,8 +969,10 @@ namespace Opm{
                     }
                     const auto seed = std::find(pd.cell_index.begin(), pd.cell_index.end(),
                                                 fracture.wellInfo().well_cell);
-                    if (seed != pd.cell_index.end()
-                        && pd.fracture_data.injected_rate.size() == pd.size()) {
+                    if (seed != pd.cell_index.end()) {
+                        if (pd.fracture_data.injected_rate.size() != pd.size()) {
+                            pd.fracture_data.resize(pd.size());
+                        }
                         pd.fracture_data.injected_rate[seed - pd.cell_index.begin()] = rate;
                         pd.fracture_data.injected_phase = static_cast<int>(phase);
                     }
