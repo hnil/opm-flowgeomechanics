@@ -261,6 +261,12 @@ namespace Opm
                 std::string method = prm.get<std::string>("solver.method");
                 if (method == "PostSolve") {
                     report = Parent::nonlinearIteration(timer, nonlinear_solver);
+                    // embedded fractures are bound to the flow problem: keep their end-of-step solve
+                    if (report.converged && this->simulator_.vanguard().eclState().runspec().mech()
+                        && prm.get<bool>("solver.unconverged_fracture_dt_cut", true)
+                        && !this->simulator_.problem().fractureFlowIsEmbedded()) {
+                        this->postSolveInStep_(timer, prm);
+                    }
                 } else if (method == "SeqMechFrac") {
                     report = this->nonlinearIterationSeqMechFrac(timer, nonlinear_solver);
                 } else if (method == "SeqMech") {
@@ -272,6 +278,44 @@ namespace Opm
                     Parent::nonlinearIterationNewton(timer, nonlinear_solver);
                 }
                 return report;
+        }
+
+        //! PostSolve on the converged flow state, still inside the retry scope: an
+        //! unconverged fracture (or, opt-in, mechanics) solve cuts dt, at most
+        //! solver.unconverged_fracture_max_cuts times per step and not below
+        //! solver.area_growth_guard_min_dt; after that the step is accepted as before.
+        void postSolveInStep_(const SimulatorTimerInterface& timer, const PropertyTree& prm)
+        {
+            const auto result = this->simulator_.problem().geoMechModel().solveGeoMechAndFractureInStep();
+            const auto& comm = this->simulator_.vanguard().grid().comm();
+            const bool fracture_bad = comm.max(result.fracture_converged ? 0 : 1) > 0;
+            const bool mech_bad = prm.get<bool>("solver.unconverged_mech_dt_cut", false)
+                && comm.max(result.mech_converged ? 0 : 1) > 0;
+            if (!fracture_bad && !mech_bad) {
+                return;
+            }
+            const double step_start = timer.simulationTimeElapsed();
+            if (step_start != postsolve_cut_step_start_) {
+                postsolve_cut_step_start_ = step_start;
+                postsolve_cuts_this_step_ = 0;
+            }
+            const std::string what = fracture_bad ? "fracture" : "mechanics";
+            const double min_dt = prm.get<double>("solver.area_growth_guard_min_dt", 0.05) * 86400.0;
+            const int max_cuts = prm.get<int>("solver.unconverged_fracture_max_cuts", 3);
+            if (timer.currentStepLength() <= min_dt || postsolve_cuts_this_step_ >= max_cuts) {
+                OpmLog::warning(fmt::format("PostSolve: {} solve unconverged after {} dt cuts "
+                                            "(dt {:.4g} days) - accepting the step",
+                                            what, postsolve_cuts_this_step_,
+                                            timer.currentStepLength() / 86400.0));
+                return;
+            }
+            ++postsolve_cuts_this_step_;
+            ++postsolve_cuts_total_;
+            OpmLog::warning(fmt::format("PostSolve: {} solve unconverged - cutting dt {:.4g} days "
+                                        "(cut {} this step, {} in total)",
+                                        what, timer.currentStepLength() / 86400.0,
+                                        postsolve_cuts_this_step_, postsolve_cuts_total_));
+            OPM_THROW_NOLOG(NumericalProblem, "PostSolve " + what + " solve unconverged: dt cut requested");
         }
 
         //! An unconverged mechanics solve inside a step cuts the step: the fracture
@@ -558,5 +602,10 @@ namespace Opm
             return report;
 
         }
+
+    private:
+        double postsolve_cut_step_start_{-1.0};
+        int postsolve_cuts_this_step_{0};
+        int postsolve_cuts_total_{0};
     };
 }

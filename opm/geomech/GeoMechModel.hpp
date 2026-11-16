@@ -110,6 +110,7 @@ namespace Opm{
             if(simulator_.gridView().comm().rank() == 0){
                 OpmLog::info("Geomech begin time step\n");
             }
+            solved_in_step_ = false;
             fracHost_.beginTimeStep();
         }
         void endTimeStep(){
@@ -117,7 +118,20 @@ namespace Opm{
             if(simulator_.gridView().comm().rank() == 0){
                 OpmLog::info("Geomech model endstimeStep\n");
             }
+            if (solved_in_step_) {
+                solved_in_step_ = false;
+                return;
+            }
             this->solveGeoMechAndFracture();
+        }
+        struct PostSolveResult {
+            bool mech_converged = true;
+            bool fracture_converged = true;
+        };
+        //! PostSolve inside the step's retry scope, so the caller can still reject the step.
+        PostSolveResult solveGeoMechAndFractureInStep(){
+            solved_in_step_ = true;
+            return this->solveGeoMechAndFracture();
         }
         //! solver.postsolve_mech_interval: "step" (default) or "report", which
         //! solves mechanics only on the last substep of a report step.
@@ -130,20 +144,26 @@ namespace Opm{
                 OPM_THROW(std::invalid_argument, "solver.postsolve_mech_interval must be 'step' or 'report'");
             return simulator_.episodeWillBeOver();
         }
-        void solveGeoMechAndFracture(){
+        PostSolveResult solveGeoMechAndFracture(){
+            PostSolveResult result;
             const auto& problem = simulator_.problem();
-            // the step is already accepted here: keep the result, but say so
-            if (this->mechSolveDueAtStepEnd_()
-                && !this->solveGeomechanics().converged && simulator_.gridView().comm().rank() == 0) {
-                OpmLog::warning(fmt::format("End-of-step mechanical solve not converged "
-                                            "({} unconverged mechanical solves so far)",
-                                            num_mech_unconverged_));
+            if (this->mechSolveDueAtStepEnd_()) {
+                result.mech_converged = this->solveGeomechanics().converged;
+                if (!result.mech_converged && simulator_.gridView().comm().rank() == 0) {
+                    OpmLog::warning(fmt::format("End-of-step mechanical solve not converged "
+                                                "({} unconverged mechanical solves so far)",
+                                                num_mech_unconverged_));
+                }
             }
             // the joint solve owns the fractures: growth only on a converged per-well state
             if(problem.hasFractures()
                && !problem.getGeoMechParam().template get<bool>("fractureparam.solver.well_joint_solve", false)){
                 this->solveFractures();
+                if (this->fractureModelActive()) {
+                    result.fracture_converged = !this->fractureModel().anyLastSolveUnconverged();
+                }
             }
+            return result;
         }
 
        //! Fracture driving is hosted by FractureMechHost (shared between
@@ -939,6 +959,7 @@ namespace Opm{
         std::optional<double> assembledGravity_; // body force of the assembled matrix
         int num_mech_solves_{0};
         int num_mech_unconverged_{0};
+        bool solved_in_step_{false};
         int total_mech_linear_iterations_{0};
         bool write_system_{false};
         std::optional<MechOptions> mechOptions_;
