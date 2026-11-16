@@ -619,6 +619,7 @@ private:
        int verbosity{0};
        bool disable{false};
        bool openFrontOnly{false};
+       double frontAdvanceFraction{0.0};
        static PropagationOptions read(const PropertyTree& prm);
    };
    // Stops expansion once new fracture volume exceeds what the well can deliver

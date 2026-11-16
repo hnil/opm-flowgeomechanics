@@ -775,7 +775,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
           return area_stop;
         };
 
-        const double threshold = 1.0;
+        const double threshold = prm_.get<double>("solver.expand_threshold", 1.0);
         const std::vector<CellRef> fixed_cells = well_source_cellref_;
         const int target_cellcount = prm_.get<int>("solver.target_cellcount");
         // expand_to_criterion refines back only after a re-solve per expansion, which a joint

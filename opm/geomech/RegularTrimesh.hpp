@@ -99,6 +99,10 @@ public:
     {
         return cellinfo_.size();
     }
+    double edgeLength() const
+    {
+        return std::min(edgelen_[0], edgelen_[1]);
+    }
     std::vector<CellRef> cellIndices() const; // result is sorted
     std::vector<EdgeRef> edgeIndices() const; // result is sorted
     std::vector<NodeRef> nodeIndices() const; // result is sorted

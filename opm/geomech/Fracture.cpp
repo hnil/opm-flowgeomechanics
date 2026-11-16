@@ -1827,6 +1827,7 @@ Fracture::PropagationOptions::read(const PropertyTree& prm)
     o.verbosity = prm.get<int>("verbosity", 0);
     o.disable = prm.get<bool>("solver.disable_propagation", false);
     o.openFrontOnly = prm.get<bool>("solver.propagate_open_front_only", false);
+    o.frontAdvanceFraction = prm.get<double>("solver.front_advance_fraction", 0.0);
     return o;
 }
 
@@ -2161,6 +2162,19 @@ Fracture::propagationScores_(std::map<CellRef, int>& boundary, const GridSolve& 
     std::vector<double> score(front.size());
     for (size_t i = 0; i != score.size(); ++i) {
         score[i] = K1[front[i]] / reservoir_.cstress[front[i]];
+    }
+    // At fixed net pressure K1 ~ sqrt(a), so K1/K1c = s puts the equilibrium front a(s^2-1)
+    // ahead; grow only once that reaches the given fraction of a cell row.
+    if (opt.frontAdvanceFraction > 0.0) {
+        const double edge = trimesh_->edgeLength();
+        const double row = 0.5 * std::sqrt(3.0) * edge;
+        const double radius = std::sqrt(0.25 * std::sqrt(3.0) * edge * edge * trimesh_->numCells() / M_PI);
+        const double scale = 1.0 / std::sqrt(1.0 + opt.frontAdvanceFraction * row / radius);
+        for (auto& s : score) {
+            if (s > 0.0) {
+                s *= scale;
+            }
+        }
     }
     vetoForceLimit_(score, front, opt);
     // K1 from an unconverged solve is unreliable, and growth on it cannot be undone.
