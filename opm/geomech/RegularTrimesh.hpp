@@ -157,7 +157,8 @@ public:
     createDuneGrid(const int coarsen_levels = 0,
                    const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(),
                    const bool add_smoothing_triangles = true,
-                   const int cellnum_threshold = 10) const;
+                   const int cellnum_threshold = 10,
+                   const int band_rings = 1) const;
     void writeMatlabTriangulation(std::ostream& out) const;
 
     // ------------- Functions for creating new RegularTrimesh objects -------------
@@ -181,7 +182,8 @@ public:
     // triangle before splitting.
     std::pair<std::vector<std::array<NodeRef, 3>>, std::vector<std::vector<CellRef>>>
     getMultiresTriangles(const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(),
-                        const int max_levels = 5, const int cellnum_threshold = 10) const;
+                        const int max_levels = 5, const int cellnum_threshold = 10,
+                        const int band_rings = 1) const;
 
     // static functions
     static std::vector<CellRef> coarse_to_fine(const CellRef& cell, const int levels=1);
@@ -189,7 +191,8 @@ public:
     static CellRef fine_to_coarse(const CellRef& cell, const int levels=1);
     static std::vector<CellRef> inner_ring_cells();
     static std::pair<RegularTrimesh, std::vector<CellRef>>
-    coarsen_mesh(const RegularTrimesh& mesh, const std::vector<CellRef>& fixed_cells);
+    coarsen_mesh(const RegularTrimesh& mesh, const std::vector<CellRef>& fixed_cells,
+                 const int band_rings = 1);
     static std::vector<std::tuple<unsigned int, unsigned int, double>>
     createGridToGridMap(const std::vector<std::vector<CellRef>>& map1,
                         const std::vector<std::vector<CellRef>>& map2,

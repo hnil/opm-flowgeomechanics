@@ -892,7 +892,8 @@ Fracture::regridTo_(const RegularTrimesh& trimesh, const int level, const Propag
         cell = RegularTrimesh::fine_to_coarse(cell, level);
 
     auto [grid, fsmap, bmap] = trimesh_->createDuneGrid(opt.maxNumCoarsening, wsources,
-                                                        opt.smoothBoundary, opt.numcellThreshold);
+                                                        opt.smoothBoundary, opt.numcellThreshold,
+                                                        opt.bandRings);
     RegridMaps maps;
     maps.before = grid_mesh_map_;
     // false matches maps.before as if it were at level 0

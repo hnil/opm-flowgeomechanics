@@ -683,7 +683,8 @@ RegularTrimesh::getTriangles() const
 std::pair<std::vector<std::array<NodeRef, 3>>, std::vector<std::vector<CellRef>>>
 RegularTrimesh::getMultiresTriangles(const vector<CellRef>& fixed_cells,
                                      const int max_levels,
-                                     const int cellnum_threshold) const
+                                     const int cellnum_threshold,
+                                     const int band_rings) const
 //------------------------------------------------------------------------------
 {
     RegularTrimesh mesh(*this);
@@ -695,7 +696,7 @@ RegularTrimesh::getMultiresTriangles(const vector<CellRef>& fixed_cells,
     while (mesh.numCells() > CELLNUM_THRESHOLD && level < max_levels) {
 
         // create new coarsened level
-        auto coarsened = coarsen_mesh(mesh, level == 0 ? fixed_cells : vector<CellRef>());
+        auto coarsened = coarsen_mesh(mesh, level == 0 ? fixed_cells : vector<CellRef>(), band_rings);
         auto& new_mesh = coarsened.first;
         auto& uncoarsened_cells = coarsened.second;
 
@@ -727,14 +728,16 @@ RegularTrimesh::getMultiresTriangles(const vector<CellRef>& fixed_cells,
 
 //------------------------------------------------------------------------------
 pair<RegularTrimesh, vector<CellRef>>
-RegularTrimesh::coarsen_mesh(const RegularTrimesh& mesh, const vector<CellRef>& fixed_cells)
+RegularTrimesh::coarsen_mesh(const RegularTrimesh& mesh, const vector<CellRef>& fixed_cells,
+                             const int band_rings)
 //------------------------------------------------------------------------------
 {
     RegularTrimesh tmp_mesh(mesh);
     for (const auto& cell : fixed_cells)
         tmp_mesh.setInactive(cell);
 
-    tmp_mesh.contractGrid(); // exclude boundary cells from coarsening
+    for (int r = 0; r < band_rings; ++r)
+        tmp_mesh.contractGrid(); // the outer band_rings rings stay at this level
 
     const RegularTrimesh coarsened = remove_mesh_corners(tmp_mesh.coarsen(true));
 
@@ -900,7 +903,8 @@ std::tuple<std::unique_ptr<Grid>, std::vector<std::vector<CellRef>>, std::map<Ce
 RegularTrimesh::createDuneGrid(const int coarsen_levels,
                                const vector<CellRef>& fixed_cells,
                                const bool add_smoothing_triangles,
-                               const int cellnum_threshold) const
+                               const int cellnum_threshold,
+                               const int band_rings) const
 //------------------------------------------------------------------------------
 {
     Dune::GridFactory<Grid> factory;
@@ -910,7 +914,7 @@ RegularTrimesh::createDuneGrid(const int coarsen_levels,
 
     // define triangles
 
-    auto tmp = coarsen_levels > 0 ? getMultiresTriangles(fixed_cells, coarsen_levels, cellnum_threshold)
+    auto tmp = coarsen_levels > 0 ? getMultiresTriangles(fixed_cells, coarsen_levels, cellnum_threshold, band_rings)
                                   : getTriangles();
     const auto& triangles = ref2index_(tmp.first); // vector<array<uint, 3>>
     auto& fsmap = tmp.second;

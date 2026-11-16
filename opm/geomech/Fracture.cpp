@@ -1826,6 +1826,10 @@ Fracture::PropagationOptions::read(const PropertyTree& prm)
     o.nlinVerbosity = prm.get<double>("solver.verbosity");
     o.maxNumCoarsening = prm.get<int>("solver.max_num_coarsening");
     o.numcellThreshold = prm.get<int>("solver.numcell_threshold");
+    o.bandRings = prm.get<int>("solver.band_rings", 1);
+    if (o.bandRings < 1) {
+        OPM_THROW(std::runtime_error, "solver.band_rings must be at least 1");
+    }
     o.smoothBoundary = prm.get<bool>("solver.smooth_boundary", false);
     o.remapSolution = prm.get<bool>("solver.remap_solution");
     const std::string cake_remap = prm.get<std::string>("solver.filtercake_remap", "legacy");
@@ -2656,9 +2660,10 @@ void Fracture::resetFracture()
     const int MAX_NUM_COARSENING = prm_.get<int>("solver.max_num_coarsening");
     const int numcell_threshold  = prm_.get<int>("solver.numcell_threshold");
     bool smooth_boundary = prm_.get<bool>("solver.smooth_boundary", false);
+    const int band_rings = prm_.get<int>("solver.band_rings", 1);
     std::vector<CellRef> wsources = well_source_cellref_prev_;
     auto [grid, fsmap, bmap] =
-        trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources, smooth_boundary, numcell_threshold);
+        trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources, smooth_boundary, numcell_threshold, band_rings);
     grid_mesh_map_ = fsmap;
     grid_fixed_cells_ = wsources;
     grid_mesh_level_ = 0;
@@ -2689,7 +2694,9 @@ void Fracture::rebuildGridForLoad(const std::vector<std::vector<CellRef>>& saved
     const int max_coarsening = prm_.get<int>("solver.max_num_coarsening");
     const int numcell_threshold = prm_.get<int>("solver.numcell_threshold");
     const bool smooth_boundary = prm_.get<bool>("solver.smooth_boundary", false);
-    auto built = trimesh_->createDuneGrid(max_coarsening, grid_fixed_cells_, smooth_boundary, numcell_threshold);
+    const int band_rings = prm_.get<int>("solver.band_rings", 1);
+    auto built = trimesh_->createDuneGrid(max_coarsening, grid_fixed_cells_, smooth_boundary, numcell_threshold,
+                                          band_rings);
     if (std::get<1>(built) != saved_map) {
         // a fracture that has not grown still has its seed grid, see init()
         built = trimesh_->createDuneGrid(1, grid_fixed_cells_);
@@ -2697,7 +2704,7 @@ void Fracture::rebuildGridForLoad(const std::vector<std::vector<CellRef>>& saved
     if (std::get<1>(built) != saved_map) {
         OPM_THROW(std::runtime_error,
                   "Fracture " + name() + ": the saved mesh gives another grid with this run's "
-                  "solver.max_num_coarsening, solver.numcell_threshold or solver.smooth_boundary; "
+                  "solver.max_num_coarsening, solver.numcell_threshold, solver.band_rings or solver.smooth_boundary; "
                   "these cannot change after a load.");
     }
     grid_mesh_map_ = saved_map;

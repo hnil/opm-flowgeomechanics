@@ -608,6 +608,7 @@ private:
        int nlinVerbosity{};
        int maxNumCoarsening{};
        int numcellThreshold{};
+       int bandRings{1};
        bool smoothBoundary{false};
        bool remapSolution{true};
        bool conservativeCake{false};
