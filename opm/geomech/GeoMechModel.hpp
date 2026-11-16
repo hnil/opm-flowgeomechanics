@@ -119,10 +119,22 @@ namespace Opm{
             }
             this->solveGeoMechAndFracture();
         }
+        //! solver.postsolve_mech_interval: "step" (default) or "report", which
+        //! solves mechanics only on the last substep of a report step.
+        bool mechSolveDueAtStepEnd_() const {
+            const std::string interval = simulator_.problem().getGeoMechParam()
+                .template get<std::string>("solver.postsolve_mech_interval", "step");
+            if (interval == "step")
+                return true;
+            if (interval != "report")
+                OPM_THROW(std::invalid_argument, "solver.postsolve_mech_interval must be 'step' or 'report'");
+            return simulator_.episodeWillBeOver();
+        }
         void solveGeoMechAndFracture(){
             const auto& problem = simulator_.problem();
             // the step is already accepted here: keep the result, but say so
-            if (!this->solveGeomechanics().converged && simulator_.gridView().comm().rank() == 0) {
+            if (this->mechSolveDueAtStepEnd_()
+                && !this->solveGeomechanics().converged && simulator_.gridView().comm().rank() == 0) {
                 OpmLog::warning(fmt::format("End-of-step mechanical solve not converged "
                                             "({} unconverged mechanical solves so far)",
                                             num_mech_unconverged_));
