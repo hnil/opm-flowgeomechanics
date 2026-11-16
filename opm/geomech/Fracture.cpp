@@ -443,6 +443,12 @@ Fracture::stressIntensityK1() const
     }
     const double corr_length = prm_.get<double>("solver.k1_correlation_length", 0.0);
     const double corr_cells = prm_.get<double>("solver.k1_correlation_cells", 3.0);
+    // Legacy K1 on a whole-cell front is low against the exact penny value: 0.958 for cells
+    // with one front edge, 0.74 for two (uniform pressure). Factor 2 is set above 0.74 because
+    // under a closing-stress gradient 0.74 overshoots; near-critical fronts stall from about 0.85.
+    const bool stair_cal = !correlate && prm_.get<bool>("solver.k1_stair_calibration", false);
+    const double stair_f1 = prm_.get<double>("solver.k1_stair_factor_1", 0.958);
+    const double stair_f2 = prm_.get<double>("solver.k1_stair_factor_2", 0.80);
 
     // cell adjacency, centers and areas (only needed for the correlation mode)
     std::vector<std::vector<int>> nbs;
@@ -465,6 +471,14 @@ Fracture::stressIntensityK1() const
     }
 
     for (const auto& elem : elements(grid_->leafGridView())) {
+        double stair_scale = 1.0;
+        if (stair_cal) {
+            int nfront = 0;
+            for (auto& is : Dune::intersections(grid_->leafGridView(), elem)) {
+                nfront += is.boundary() ? 1 : 0;
+            }
+            stair_scale = 1.0 / (nfront >= 2 ? stair_f2 : stair_f1);
+        }
         for (auto& is : Dune::intersections(grid_->leafGridView(), elem)) {
             if (is.boundary()) {
                 int nIdx = mapper.index(elem);
@@ -474,7 +488,7 @@ Fracture::stressIntensityK1() const
                 auto distC = vecC.two_norm();
                 if (!correlate) {
                     double K1 = ddm::fractureK1(distC, fracture_width_[nIdx], E_, nu_);
-                    stressIntensityK1[nIdx] = K1;
+                    stressIntensityK1[nIdx] = stair_scale * K1;
                     continue;
                 }
 
