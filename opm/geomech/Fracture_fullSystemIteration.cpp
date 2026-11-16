@@ -331,7 +331,7 @@ dump_linear_system_snapshot(const std::string& stem,
 
 // ----------------------------------------------------------------------------
 inline bool
-convergence_test(const VectorHP& res, const double tol_flow, double tol_mech, int verbosity)
+convergence_test(const VectorHP& res, const double tol_mech, double tol_flow, int verbosity)
 // ----------------------------------------------------------------------------
 {
     bool converged = res[_0].infinity_norm() < tol_mech && res[_1].infinity_norm() < tol_flow;
@@ -515,8 +515,12 @@ Fracture::InnerSolveOptions::read(const PropertyTree& prm)
         o.fbLineSearch = prm.get<bool>("solver.fb_line_search", false);
         if (o.fbLineSearch) {
             o.fbLineSearchMin = prm.get<double>("solver.fb_line_search_min", 0.0625);
+            o.fbAcceptConverged = prm.get<bool>("solver.fb_line_search_accept_converged", false);
+            o.fbNonmonotone = prm.get<bool>("solver.fb_line_search_nonmonotone", false);
         }
+        o.fbTrace = prm.get<bool>("solver.fb_trace", false);
     }
+    o.flowTolerance = prm.get<double>("solver.flow_tolerance", -1.0);
     o.dropCoupling = prm.get<bool>("solver.drop_fluid_mech_linearization", true);
     o.storageTerm = prm.get<bool>("solver.fracture_storage_term", false);
     o.linear = FractureCoupledLinearSolver::Options::read(prm);
@@ -802,8 +806,8 @@ bool
 Fracture::isConverged_(const VectorHP& rhs, const FbRows& fb, const double tol) const
 // ----------------------------------------------------------------------------
 {
-    // The same tolerance for both blocks, on the unscaled residual.
-    const double tol_flow = tol;
+    // flow rows are volume rates [m^3/s], mech rows forces: solver.flow_tolerance may differ
+    const double tol_flow = inner_.flowTolerance > 0.0 ? inner_.flowTolerance : tol;
     const double tol_mech = tol;
     // fb_scaled_convergence tests phi_i/(1+|a_i|+|b_i|), the same accuracy on every cell.
     if (inner_.isFb && inner_.fbScaledConvergence) {
@@ -897,14 +901,31 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     }
 
 
-    limitStep_(x, dx, mech_rhs, fb);
+    limitStep_(x, dx, mech_rhs, fb, tol, rhs_org[_1].infinity_norm(), nlin_iteration);
+    if (opt.isFb && opt.fbTrace) {
+        double phimax = 0.0;
+        int nbad = 0, nclamp = 0, nflip = 0;
+        for (size_t i = 0; i < fb.phi.size(); ++i) {
+            const double s = std::abs(fb.phi[i]) / fb.scale[i];
+            phimax = std::max(phimax, s);
+            nbad += (s >= tol);
+            nclamp += (std::abs(dx[_0][i][0]) >= opt.maxDwidth);
+            // width sign change of the iterate: the FB analogue of a contact toggle
+            nflip += ((x[_0][i][0] > 0.0) != (x[_0][i][0] + dx[_0][i][0] > 0.0));
+        }
+        OpmLog::debug(fmt::format("FBTRACE it {} n {} phi {:.3e} nbad {} flow {:.3e} lin {} clamp {} wflip {} dwmax {:.3e} dpmax {:.3e}",
+                                  nlin_iteration, fb.phi.size(), phimax, nbad, rhs_org[_1].infinity_norm(),
+                                  last_solve_stats_.linear_iterations, nclamp, nflip,
+                                  dx[_0].infinity_norm(), dx[_1].infinity_norm()));
+    }
     applyUpdate_(x, dx);
     return false;
 }
 
 // ----------------------------------------------------------------------------
 void
-Fracture::limitStep_(const VectorHP& x, VectorHP& dx, const ResVector& mech_rhs, const FbRows& fb) const
+Fracture::limitStep_(const VectorHP& x, VectorHP& dx, const ResVector& mech_rhs, const FbRows& fb,
+                     const double tol, const double flow_res, const int nlin_iteration) const
 // ----------------------------------------------------------------------------
 {
     const InnerSolveOptions& opt = inner_;
@@ -917,6 +938,11 @@ Fracture::limitStep_(const VectorHP& x, VectorHP& dx, const ResVector& mech_rhs,
         double merit0 = 0.0;
         for (size_t i = 0; i < n; ++i) merit0 += fb.phi[i] * fb.phi[i];
         const double s_min = opt.fbLineSearchMin;
+        // merit ignores flow: accept a step keeping phi within tolerance, unless flow grew last iteration
+        const bool flow_grew = nlin_iteration > 0 && flow_res > fb_prev_flow_res_;
+        fb_prev_flow_res_ = flow_res;
+        const bool accept_converged = opt.fbAcceptConverged && !flow_grew;
+        bool phi_converged_full = false;
         double sstep = 1.0, best_s = 1.0;
         double best_merit = std::numeric_limits<double>::max();
         ResVector w_t(n), p_t(n);
@@ -927,17 +953,25 @@ Fracture::limitStep_(const VectorHP& x, VectorHP& dx, const ResVector& mech_rhs,
                 p_t[i] = x[_1][i][0] + sstep * dx[_1][i][0];
             const ResVector lam = contactForce(Aorig, w_t, p_t, mech_rhs);
             double merit = 0.0;
+            double phi_scaled_max = 0.0;
             for (size_t i = 0; i < n; ++i) {
                 const double c_i = std::max(std::abs(Aorig[i][i]), 1e-30);
                 const double a = c_i * w_t[i][0];
                 const double b = lam[i][0];
                 const double phi = a + b - std::sqrt(a * a + b * b);
                 merit += phi * phi;
+                phi_scaled_max = std::max(phi_scaled_max, std::abs(phi) / (1.0 + std::abs(a) + std::abs(b)));
             }
+            if (sstep == 1.0) phi_converged_full = phi_scaled_max < tol;
             if (merit < best_merit) { best_merit = merit; best_s = sstep; }
             if (merit <= (1.0 - 1e-4 * sstep) * merit0) break; // sufficient decrease
+            if (accept_converged && phi_scaled_max < tol) { best_s = sstep; break; }
             sstep *= 0.5;
         }
+        // opening a shut cell is a fold: no step descends there, and a short step cycles;
+        // with phi already converged, a non-descent is round-off, not a fold
+        if (opt.fbNonmonotone && sstep < s_min && best_merit >= merit0 && !phi_converged_full)
+            best_s = 1.0;
         dx *= best_s;
         if (nlin_verbosity > 1 && best_s < 1.0)
             OpmLog::debug(fmt::format("FB line search: step {} merit {} -> {}", best_s, merit0, best_merit));
