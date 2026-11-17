@@ -714,6 +714,9 @@ private:
         double fbLineSearchMin{0.0625};
         bool fbAcceptConverged{false};
         bool fbNonmonotone{false};
+        bool fbClampBeforeLineSearch{false};
+        bool fbNoProjection{false};
+        double fbPhiAbsTol{0.0}; // [Pa]; |phi| below it passes regardless of the cell's scale
         bool fbTrace{false};
         double flowTolerance{-1.0}; // < 0: same as the mechanics tolerance
         bool dropCoupling{true};
@@ -934,6 +937,7 @@ private:
     mutable std::unique_ptr<Matrix> pressure_matrix_;
     mutable std::unique_ptr<Matrix> coupling_matrix_; // will be updated by `fullSystemIteration`
     mutable double fb_prev_flow_res_ = 0.0; // flow residual at the previous FB iteration
+    mutable double fb_last_step_ = 1.0; // line-search factor of the last FB step (trace only)
 
     using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView>;
     mutable std::unique_ptr<DynamicMatrix> fracture_matrix_;
