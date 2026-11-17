@@ -30,8 +30,10 @@ namespace vem
     SIMPLE = 1,     // the basic stability term described in (Gain et al., 2014)
     FEM_BBAR = 10,  // Q1 with B-bar (mean dilatation) on hexes; VEM with TRACE elsewhere
     TRACE = 14,     // mu-scaled boundary (trace) term: robust to short edges and small faces
-    SMOOTH_HOURGLASS = 15 // hexes: energy of the smooth (Q1 + bubble) field, exact in bending/twist
-                          // at any aspect; TRACE on the extra nodes of polyhedra and as fallback
+    SMOOTH_HOURGLASS = 15, // hexes: energy of the smooth (Q1 + bubble) field, exact in bending/twist
+                           // at any aspect; TRACE on the extra nodes of polyhedra and as fallback
+    CONTINUOUS_SIMPLE = 16 // SIMPLE on plain hexes; continuous as extra nodes of a hex approach its
+                           // corners (faults, refinement steps); SIMPLE where no hex is found
   };
   // Face integrals of the basis functions in the strain projection (3D).
   // KITE: per-face kite areas and one averaged normal; exact on planar faces only.
@@ -41,7 +43,7 @@ namespace vem
   FaceQuadrature face_quadrature();
   // true for choices that request Q1 FEM assembly on cells where it is applicable
   inline bool is_fem_choice(StabilityChoice c) { return c == FEM_BBAR; }
-  // throws std::invalid_argument for anything but 1, 10, 14, 15
+  // throws std::invalid_argument for anything but 1, 10, 14, 15, 16
   StabilityChoice check_stability_choice(int choice);
 
 // ============================================================================
