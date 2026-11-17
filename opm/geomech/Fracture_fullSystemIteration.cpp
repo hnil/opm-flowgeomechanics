@@ -517,6 +517,9 @@ Fracture::InnerSolveOptions::read(const PropertyTree& prm)
             o.fbLineSearchMin = prm.get<double>("solver.fb_line_search_min", 0.0625);
             o.fbAcceptConverged = prm.get<bool>("solver.fb_line_search_accept_converged", false);
             o.fbNonmonotone = prm.get<bool>("solver.fb_line_search_nonmonotone", false);
+            o.fbClampBeforeLineSearch = prm.get<bool>("solver.fb_clamp_before_line_search", false);
+            o.fbNoProjection = prm.get<bool>("solver.fb_no_projection", false);
+            o.fbPhiAbsTol = prm.get<double>("solver.fb_phi_abs_tol", 0.0);
         }
         o.fbTrace = prm.get<bool>("solver.fb_trace", false);
     }
@@ -812,8 +815,9 @@ Fracture::isConverged_(const VectorHP& rhs, const FbRows& fb, const double tol) 
     // fb_scaled_convergence tests phi_i/(1+|a_i|+|b_i|), the same accuracy on every cell.
     if (inner_.isFb && inner_.fbScaledConvergence) {
         VectorHP rtest(rhs);
+        const double floor = inner_.fbPhiAbsTol / tol_mech;
         for (size_t i = 0; i < fb.scale.size() && i < rtest[_0].size(); ++i)
-            rtest[_0][i][0] /= fb.scale[i];
+            rtest[_0][i][0] /= std::max(fb.scale[i], floor);
         return convergence_test(rtest, tol_mech, tol_flow, inner_.verbosity);
     }
     return convergence_test(rhs, tol_mech, tol_flow, inner_.verbosity);
@@ -903,20 +907,30 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
 
     limitStep_(x, dx, mech_rhs, fb, tol, rhs_org[_1].infinity_norm(), nlin_iteration);
     if (opt.isFb && opt.fbTrace) {
-        double phimax = 0.0;
+        const FMatrix& Aorig = fractureMatrix();
+        const ResVector force = contactForce(Aorig, x[_0], x[_1], mech_rhs);
+        double phimax = 0.0, bmax = 0.0;
+        size_t iphi = 0, iflow = 0;
         int nbad = 0, nclamp = 0, nflip = 0;
         for (size_t i = 0; i < fb.phi.size(); ++i) {
-            const double s = std::abs(fb.phi[i]) / fb.scale[i];
-            phimax = std::max(phimax, s);
+            const double s = std::abs(fb.phi[i]) / std::max(fb.scale[i], opt.fbPhiAbsTol / tol);
+            if (s > phimax) { phimax = s; iphi = i; }
+            bmax = std::max(bmax, std::abs(force[i][0]));
             nbad += (s >= tol);
             nclamp += (std::abs(dx[_0][i][0]) >= opt.maxDwidth);
             // width sign change of the iterate: the FB analogue of a contact toggle
             nflip += ((x[_0][i][0] > 0.0) != (x[_0][i][0] + dx[_0][i][0] > 0.0));
         }
-        OpmLog::debug(fmt::format("FBTRACE it {} n {} phi {:.3e} nbad {} flow {:.3e} lin {} clamp {} wflip {} dwmax {:.3e} dpmax {:.3e}",
-                                  nlin_iteration, fb.phi.size(), phimax, nbad, rhs_org[_1].infinity_norm(),
+        double flowmax = 0.0;
+        for (size_t i = 0; i < rhs_org[_1].size(); ++i)
+            if (std::abs(rhs_org[_1][i][0]) > flowmax) { flowmax = std::abs(rhs_org[_1][i][0]); iflow = i; }
+        const double wflow = iflow < x[_0].size() ? x[_0][iflow][0] : -1.0;
+        OpmLog::debug(fmt::format("FBTRACE it {} n {} phi {:.3e} nbad {} flow {:.3e} lin {} clamp {} wflip {} dwmax {:.3e} dpmax {:.3e}"
+                                  " step {:.4g} phiPa {:.3e} wphi {:.3e} bphi {:.3e} bmax {:.3e} iphi {} iflow {} wflow {:.3e}",
+                                  nlin_iteration, fb.phi.size(), phimax, nbad, flowmax,
                                   last_solve_stats_.linear_iterations, nclamp, nflip,
-                                  dx[_0].infinity_norm(), dx[_1].infinity_norm()));
+                                  dx[_0].infinity_norm(), dx[_1].infinity_norm(), fb_last_step_,
+                                  std::abs(fb.phi[iphi]), x[_0][iphi][0], force[iphi][0], bmax, iphi, iflow, wflow));
     }
     applyUpdate_(x, dx);
     return false;
@@ -930,6 +944,11 @@ Fracture::limitStep_(const VectorHP& x, VectorHP& dx, const ResVector& mech_rhs,
 {
     const InnerSolveOptions& opt = inner_;
     const int nlin_verbosity = opt.verbosity;
+    // the line search must judge the step that is taken, so clip it first
+    if (opt.fbClampBeforeLineSearch) {
+        for (size_t i = 0; i != fracture_width_.size(); ++i)
+            dx[_0][i][0] = std::max(-opt.maxDwidth, std::min(opt.maxDwidth, dx[_0][i][0]));
+    }
     // FB backtracking: far from the solution the full semismooth Newton step
     // overshoots; damp it until the merit ||phi||^2 decreases.
     if (opt.isFb && opt.fbLineSearch) {
@@ -943,12 +962,17 @@ Fracture::limitStep_(const VectorHP& x, VectorHP& dx, const ResVector& mech_rhs,
         fb_prev_flow_res_ = flow_res;
         const bool accept_converged = opt.fbAcceptConverged && !flow_grew;
         bool phi_converged_full = false;
+        const double scale_floor = opt.fbPhiAbsTol / tol;
+        double phi0_scaled_max = 0.0;
+        for (size_t i = 0; i < n; ++i)
+            phi0_scaled_max = std::max(phi0_scaled_max, std::abs(fb.phi[i]) / std::max(fb.scale[i], scale_floor));
         double sstep = 1.0, best_s = 1.0;
         double best_merit = std::numeric_limits<double>::max();
         ResVector w_t(n), p_t(n);
         while (sstep >= s_min) {
             for (size_t j = 0; j < n; ++j)
-                w_t[j] = std::max(0.0, x[_0][j][0] + sstep * dx[_0][j][0]);
+                w_t[j] = opt.fbNoProjection ? x[_0][j][0] + sstep * dx[_0][j][0]
+                                            : std::max(0.0, x[_0][j][0] + sstep * dx[_0][j][0]);
             for (size_t i = 0; i < n; ++i)
                 p_t[i] = x[_1][i][0] + sstep * dx[_1][i][0];
             const ResVector lam = contactForce(Aorig, w_t, p_t, mech_rhs);
@@ -960,7 +984,8 @@ Fracture::limitStep_(const VectorHP& x, VectorHP& dx, const ResVector& mech_rhs,
                 const double b = lam[i][0];
                 const double phi = a + b - std::sqrt(a * a + b * b);
                 merit += phi * phi;
-                phi_scaled_max = std::max(phi_scaled_max, std::abs(phi) / (1.0 + std::abs(a) + std::abs(b)));
+                phi_scaled_max = std::max(phi_scaled_max,
+                                          std::abs(phi) / std::max(1.0 + std::abs(a) + std::abs(b), scale_floor));
             }
             if (sstep == 1.0) phi_converged_full = phi_scaled_max < tol;
             if (merit < best_merit) { best_merit = merit; best_s = sstep; }
@@ -969,10 +994,12 @@ Fracture::limitStep_(const VectorHP& x, VectorHP& dx, const ResVector& mech_rhs,
             sstep *= 0.5;
         }
         // opening a shut cell is a fold: no step descends there, and a short step cycles;
-        // with phi already converged, a non-descent is round-off, not a fold
-        if (opt.fbNonmonotone && sstep < s_min && best_merit >= merit0 && !phi_converged_full)
+        // a non-descent from or to a converged phi is not a fold
+        if (opt.fbNonmonotone && sstep < s_min && best_merit >= merit0
+            && phi0_scaled_max >= tol && !phi_converged_full)
             best_s = 1.0;
         dx *= best_s;
+        fb_last_step_ = best_s;
         if (nlin_verbosity > 1 && best_s < 1.0)
             OpmLog::debug(fmt::format("FB line search: step {} merit {} -> {}", best_s, merit0, best_merit));
     }
@@ -992,9 +1019,10 @@ Fracture::applyUpdate_(VectorHP& x, const VectorHP& dx)
         OpmLog::debug(fmt::format("after: dx: {} {}", dx[_0].infinity_norm(), dx[_1].infinity_norm()));
     }
     fracture_width_ = x[_0];
-    for (size_t i = 0; i != fracture_width_.size(); ++i) {
-        fracture_width_[i][0] = std::max(0.0, fracture_width_[i][0]);
-    }
+    // FB keeps w >= 0 through phi; clipping a Newton iterate breaks the Newton step
+    if (!(inner_.isFb && inner_.fbNoProjection))
+        for (size_t i = 0; i != fracture_width_.size(); ++i)
+            fracture_width_[i][0] = std::max(0.0, fracture_width_[i][0]);
     fracture_pressure_ = x[_1];
 }
 

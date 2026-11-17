@@ -2083,6 +2083,9 @@ Fracture::solveOnCurrentGrid_(const PropagationOptions& opt)
         coupledSolver_.setOptions(inner_.linear);
         while (!(converged = fullSystemIteration(opt.tol, iter)) && iter++ < opt.maxIter) {
         }
+        if (inner_.isFb && inner_.fbNoProjection)
+            for (auto& w : fracture_width_)
+                w[0] = std::max(0.0, w[0]);
     }
     return {converged, iter};
 }
