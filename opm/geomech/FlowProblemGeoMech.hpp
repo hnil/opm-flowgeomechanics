@@ -928,7 +928,7 @@ namespace Opm{
                     this->geoMechModel_.updateFilterCakePropertiesOnFractures();
                 }
             }
-            if (this->simulator().episodeWillBeOver()) {
+            if (this->simulator().episodeWillBeOver() && mechGridVtkDue_()) {
                 this->writeMechGridVtk_(this->simulator().time() + this->simulator().timeStepSize());
             }
             if(Parameters::Get<Parameters::EnableWriteAllSolutions>()){
@@ -978,6 +978,14 @@ namespace Opm{
                     }
                 }
             }
+        }
+
+        bool mechGridVtkDue_() const
+        {
+            const int n = Parameters::Get<Parameters::VtkMechGridInterval>();
+            const int ep = this->episodeIndex();
+            const int last = static_cast<int>(this->simulator().vanguard().schedule().size()) - 2;
+            return n <= 1 || ep % n == 0 || ep >= last;
         }
 
         //! The mechanics grid as a geomechanical VTK case: total stress (compression positive,

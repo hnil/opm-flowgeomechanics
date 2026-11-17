@@ -101,6 +101,9 @@ namespace Opm::Parameters {
     struct VtkWriteMechGrid {
         static constexpr bool value = false;
     };
+    struct VtkMechGridInterval {
+        static constexpr int value = 1;
+    };
 }
 
 namespace Opm{
@@ -195,6 +198,7 @@ namespace Opm{
 	    Parameters::Register<Parameters::FractureParamFile>("json file defining fracture setting or alias: standard, sequential_implicit");
 	    Parameters::Register<Parameters::MechCoarsenFile>("file of COARSEN records (I1 I2 J1 J2 K1 K2 NX NY NZ, one per line) giving a mechanics grid coarser than the flow grid");
 	    Parameters::Register<Parameters::VtkWriteMechGrid>("write VTK on a mechanics grid of its own (mech/ under the output directory), with the flow quantities where flow cells exist");
+	    Parameters::Register<Parameters::VtkMechGridInterval>("with --vtk-write-mech-grid, write every this many report steps (the first and the last are always written)");
 	    Parameters::Register<Parameters::MechSectorFile>("json file giving the mechanics grid as a box of the deck's grid with padding around it");
 	    Parameters::Register<Parameters::MechGridCheck>("check that the mechanics grid is a geometric body (no voids, cracks or hanging nodes): error, warn or off");
 	    Parameters::Register<Parameters::MechGrid>("mechanics grid: flow (the flow grid itself) or separate (rebuilt edge-conformal from the same corner points, so flow may be processed without --edge-conformal)");
