@@ -78,6 +78,12 @@ public:
     bool hasFlowCells(std::size_t mechCell) const
     { return identity_ || mech_weight_[mechCell] > 0.0; }
 
+    /// donor[m] >= 0: cell m, which has no flow cells, takes the restricted value of cell donor[m].
+    void setDonors(std::vector<int> donor) { donor_ = std::move(donor); }
+
+    bool hasFlowState(std::size_t mechCell) const
+    { return hasFlowCells(mechCell) || (!donor_.empty() && donor_[mechCell] >= 0); }
+
     /// Volume-weighted mean over each mechanics cell's flow cells, which
     /// preserves the integral of a force density.
     template <class Vector>
@@ -98,6 +104,11 @@ public:
         for (std::size_t m = 0; m < num_mech_cells_; ++m) {
             if (mech_weight_[m] > 0.0) {
                 mech[m] /= mech_weight_[m];
+            }
+        }
+        for (std::size_t m = 0; m < donor_.size(); ++m) {
+            if (donor_[m] >= 0 && mech_weight_[m] == 0.0) {
+                mech[m] = mech[donor_[m]];
             }
         }
     }
@@ -125,6 +136,7 @@ private:
     std::vector<int> flow_to_mech_;
     std::vector<double> weight_;
     std::vector<double> mech_weight_;
+    std::vector<int> donor_;
 };
 
 } // namespace Opm

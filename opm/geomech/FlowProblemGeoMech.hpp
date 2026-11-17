@@ -681,7 +681,8 @@ namespace Opm{
                         RetainCornerPointInput::get(),
                         MechSector::readSpec(sector_file, {size[0], size[1], size[2]}),
                         simulator.vanguard().grid(),
-                        simulator.vanguard().cartesianIndexMapper());
+                        simulator.vanguard().cartesianIndexMapper(),
+                        &eclState.getInputGrid());
                     geoMechModel_.setMechGrid(*mechGridContext_);
                 }
                 else if(coarsen_file != "none" && !separate){
@@ -1066,7 +1067,7 @@ namespace Opm{
             for (const auto& e : elements(gv)) {
                 const std::size_t m = gv.indexSet().index(e);
                 const double z = e.geometry().center()[2];
-                const bool has = map.hasFlowCells(m);
+                const bool has = map.hasFlowState(m);
                 Dune::FieldVector<double,6> d(0.0);
                 for (int c = 0; c < 6; ++c) {
                     d[c] = -lin[m][c];
@@ -1090,7 +1091,7 @@ namespace Opm{
                 sw[m] = mech[SW][m]; so[m] = mech[SO][m]; sg[m] = mech[SG][m];
                 poro[m] = mech[PORO][m];
                 dp[m] = has ? mech[P][m] - mech[P0][m] : 0.0;
-                flowcell[m] = has ? 1.0 : 0.0;
+                flowcell[m] = map.hasFlowCells(m) ? 1.0 : (has ? 0.5 : 0.0);
                 padding[m] = ctx->isPadding(m) ? 1.0 : 0.0;
                 std::array<int,3> c3;
                 mapper.cartesianCoordinate(static_cast<int>(m), c3);

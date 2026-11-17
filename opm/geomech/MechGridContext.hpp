@@ -377,7 +377,8 @@ public:
     MechGridContext(Sector, const RetainedCornerPointInput* processed,
                     const MechSector::Spec& given,
                     const FlowGrid& flowGrid,
-                    const CartesianMapper& flowCartesianMapper)
+                    const CartesianMapper& flowCartesianMapper,
+                    const EclipseGrid* deckGrid = nullptr)
         : sector_(true)
     {
         auto spec = given;
@@ -407,14 +408,22 @@ public:
                 spec.box[2*a + 1] = std::min(dd[a], bb[2*a + 1] + spec.margin[a]);
             }
         }
-        // Every cell with volume is a mechanics cell, so gaps close whatever ACTNUM says.
+        // Mechanics needs the rock as the deck gives it: flow's MINPV/PINCH processing
+        // moves ZCORN and can leave gaps. Every cell with volume is a mechanics cell.
         RetainedCornerPointInput input(*processed);
-        if (!input.edgeConformal) {
-            input.actnum.clear();
-            closeVerticalGaps_(input);
+        const std::vector<double> flowZ = processed->zcorn; // building the mech grid replaces *processed
+        if (deckGrid != nullptr) {
+            if (deckGrid->getZCORN().size() != input.zcorn.size()
+                || deckGrid->getCOORD().size() != input.coord.size()) {
+                OPM_THROW(std::runtime_error, "Mechanics sector: deck grid and flow grid differ in size");
+            }
+            input.coord = deckGrid->getCOORD();
+            input.zcorn = deckGrid->getZCORN();
         }
-        // A pinched-out wedge has a side collapsed to an edge its top and bottom
-        // faces share, which edge-conformal processing leaves with hanging nodes.
+        input.actnum.clear();
+        closeVerticalGaps_(input);
+        const std::vector<double> deckZ = input.zcorn;
+        // Optional: slivers make the mechanics grid costly.
         std::vector<int> absorber;
         if (spec.wedgeMerge > 0.0) {
             input.actnum.clear();
@@ -458,6 +467,8 @@ public:
         buildMap(toMech, g.dims, flowGrid, flowCartesianMapper);
 
         const Dune::CartesianIndexMapper<Dune::CpGrid> mechMapper(*grid_);
+        setDonors_(toMech, deckZ, flowZ, dd, g.dims, mechMapper, flowGrid,
+                   flowCartesianMapper);
         padding_.assign(fine_of_mech_.size(), 0);
         std::size_t padding = 0;
         for (std::size_t m = 0; m < fine_of_mech_.size(); ++m) {
@@ -953,6 +964,84 @@ private:
         for (std::size_t f = 0; f < absorber.size(); ++f) {
             fineToMech_[f] = anchor[absorber[f]];
         }
+    }
+
+    /// Mechanics cells inside the flow box without a flow cell (removed by MINPV or PINCH)
+    /// take the state of the flow cell whose processed extent covers their centre, else
+    /// of the nearer flow cell when there is one above and one below in the column.
+    template <class FlowGrid, class CartesianMapper>
+    void setDonors_(const std::vector<int>& toMech, const std::vector<double>& deckZ,
+                    const std::vector<double>& flowZ, const std::array<int,3>& dd,
+                    const std::array<int,3>& mechDims,
+                    const Dune::CartesianIndexMapper<Dune::CpGrid>& mechMapper,
+                    const FlowGrid& flowGrid, const CartesianMapper& flowCartesianMapper)
+    {
+        const std::size_t nm = map_.numMechCells();
+        std::vector<int> mechOfCart(static_cast<std::size_t>(mechDims[0])*mechDims[1]*mechDims[2], -1);
+        for (std::size_t m = 0; m < nm; ++m) {
+            mechOfCart[mechMapper.cartesianIndex(static_cast<int>(m))] = static_cast<int>(m);
+        }
+        std::vector<char> isFlow(toMech.size(), 0);
+        const auto& view = flowGrid.leafGridView();
+        for (const auto& cell : elements(view)) {
+            isFlow[flowCartesianMapper.cartesianIndex(view.indexSet().index(cell))] = 1;
+        }
+        const int nx = dd[0], ny = dd[1], nz = dd[2];
+        const auto mean = [nx, ny](const std::vector<double>& z, int i, int j, int k, int dk) {
+            double s = 0.0;
+            for (int c = 0; c < 4; ++c) {
+                s += z[static_cast<std::size_t>((2*k + dk)*4*nx*ny + (2*j + (c >> 1))*2*nx + 2*i + (c & 1))];
+            }
+            return s/4.0;
+        };
+        const auto mechOf = [&](std::size_t c) {
+            return toMech[c] < 0 ? -1 : mechOfCart[toMech[c]];
+        };
+        std::vector<int> donor(nm, -1);
+        std::size_t covered = 0, nearest = 0;
+        for (int j = 0; j < ny; ++j)
+        for (int i = 0; i < nx; ++i) {
+            const auto cart = [&](int k) { return i + static_cast<std::size_t>(nx)*(j + static_cast<std::size_t>(ny)*k); };
+            const auto source = [&](int k) {
+                const int m = mechOf(cart(k));
+                return (isFlow[cart(k)] && m >= 0 && map_.hasFlowCells(m)) ? m : -1;
+            };
+            for (int k = 0; k < nz; ++k) {
+                const int m = mechOf(cart(k));
+                if (m < 0 || map_.hasFlowCells(m) || donor[m] >= 0) {
+                    continue;
+                }
+                const double zc = 0.5*(mean(deckZ, i, j, k, 0) + mean(deckZ, i, j, k, 1));
+                int above = -1, below = -1;
+                for (int kk = 0; kk < nz && donor[m] < 0; ++kk) {
+                    if (source(kk) < 0) {
+                        continue;
+                    }
+                    const double top = mean(flowZ, i, j, kk, 0), bottom = mean(flowZ, i, j, kk, 1);
+                    if (top <= zc && zc <= bottom) {
+                        donor[m] = source(kk);
+                        ++covered;
+                    } else if (bottom < zc) {
+                        above = kk;
+                    } else if (below < 0) {
+                        below = kk;
+                    }
+                }
+                if (donor[m] < 0 && above >= 0 && below >= 0) {
+                    const double dAbove = zc - mean(flowZ, i, j, above, 1);
+                    const double dBelow = mean(flowZ, i, j, below, 0) - zc;
+                    donor[m] = source(dAbove <= dBelow ? above : below);
+                    ++nearest;
+                }
+            }
+        }
+        if (covered + nearest > 0) {
+            OpmLog::info("Mechanics sector: " + std::to_string(covered + nearest)
+                         + " cells without a flow cell take the state of the flow cell that covers"
+                         " them (" + std::to_string(covered) + ") or of the nearer one in their column ("
+                         + std::to_string(nearest) + ")");
+        }
+        map_.setDonors(std::move(donor));
     }
 
     /// Without edge-conformal processing MINPV leaves its removed cells'
