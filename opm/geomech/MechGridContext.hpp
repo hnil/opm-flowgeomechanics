@@ -407,10 +407,28 @@ public:
                 spec.box[2*a + 1] = std::min(dd[a], bb[2*a + 1] + spec.margin[a]);
             }
         }
-        const MechSector::Grdecl deck{dd, processed->coord, processed->zcorn};
+        // Every cell with volume is a mechanics cell, so gaps close whatever ACTNUM says.
+        RetainedCornerPointInput input(*processed);
+        if (!input.edgeConformal) {
+            input.actnum.clear();
+            closeVerticalGaps_(input);
+        }
+        // A pinched-out wedge has a side collapsed to an edge its top and bottom
+        // faces share, which edge-conformal processing leaves with hanging nodes.
+        std::vector<int> absorber;
+        if (spec.wedgeMerge > 0.0) {
+            input.actnum.clear();
+            absorber = collapseThinCells_(input, spec.wedgeMerge, /*fillHoles*/ false,
+                                          LgrCollection{}, {}, /*byThinnestCorner*/ true);
+        }
+        const MechSector::Grdecl deck{dd, input.coord, input.zcorn};
         const auto built = MechSector::build(deck, spec);
         const auto& g = built.grid;
         const auto actnum = withVolume(g.dims, g.zcorn);
+        if (!spec.dump.empty()) {
+            // Written again below with FLOWCELL; this copy survives a failing grid build.
+            MechSector::writeGrdecl(spec.dump, g, actnum, {});
+        }
         const EclipseGrid mechInput(g.dims, g.coord, g.zcorn, actnum.data());
         grid_ = std::make_unique<Dune::CpGrid>(flowGrid.comm());
         grid_->processEclipseFormat(&mechInput, /*ecl_state*/ nullptr,
@@ -426,6 +444,16 @@ public:
         for (int i = b[0]; i < b[1]; ++i) {
             toMech[i + dd[0]*(j + dd[1]*k)] =
                 (i - b[0] + o[0]) + g.dims[0]*((j - b[2] + o[1]) + g.dims[1]*(k - b[4] + o[2]));
+        }
+        // A merged cell belongs to the cell that took it over.
+        for (std::size_t f = 0; f < absorber.size(); ++f) {
+            int a = static_cast<int>(f);
+            while (absorber[a] != a) {
+                a = absorber[a];
+            }
+            if (toMech[a] >= 0) {
+                toMech[f] = toMech[a];
+            }
         }
         buildMap(toMech, g.dims, flowGrid, flowCartesianMapper);
 
@@ -995,7 +1023,8 @@ private:
                                                const double thickness,
                                                const bool fillHoles,
                                                const LgrCollection& lgrs,
-                                               const std::vector<char>& keep = {})
+                                               const std::vector<char>& keep = {},
+                                               const bool byThinnestCorner = false)
     {
         const int nx = input.dims[0], ny = input.dims[1], nz = input.dims[2];
         auto& z = input.zcorn;
@@ -1039,7 +1068,11 @@ private:
             for (int i = 0; i < nx; ++i) {
                 const auto absorbable = [&](int k) {
                     const double t = meanThickness(i, j, k);
-                    return t > 0.0 && (active(i, j, k) ? t < thickness : fillHoles);
+                    double tc = t;
+                    for (int c = 0; byThinnestCorner && c < 4; ++c) {
+                        tc = std::min(tc, z[zi(i, j, k, c, 1)] - z[zi(i, j, k, c, 0)]);
+                    }
+                    return t > 0.0 && (active(i, j, k) ? tc < thickness : fillHoles);
                 };
                 for (int k = 0; k < nz; ++k) {
                     if (!absorbable(k)) {
@@ -1095,7 +1128,8 @@ private:
             return absorber;
         }
         std::ostringstream os;
-        os << "Mechanics grid: merged " << thin << " cells thinner than " << thickness
+        os << "Mechanics grid: merged " << thin << " cells "
+           << (byThinnestCorner ? "with a corner thinner than " : "thinner than ") << thickness
            << " m and " << holes << " inactive cells into a vertical neighbour";
         if (skipped > 0) {
             os << "; kept " << skipped << " (no touching active neighbour, or in an LGR box)";

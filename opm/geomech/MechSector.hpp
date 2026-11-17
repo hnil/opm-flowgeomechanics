@@ -66,6 +66,7 @@ struct Spec
     bool straighten = false;
     bool bendPillars = false;   // box pillars vertical above and below the box
     std::string dump;           // GRDECL file of the generated grid, if set
+    double wedgeMerge = 0.0;    // merge box cells with a corner thinner than this (m) into a neighbour
 };
 
 /// Vertical pillars through each pillar's point at the box's mean depth; the
@@ -606,6 +607,7 @@ inline Spec readSpec(const std::string& file, const std::array<int,3>& deckDims)
     spec.straighten = tree.get<bool>("straighten", false);
     spec.bendPillars = tree.get<bool>("bend_pillars", false);
     spec.dump = tree.get<std::string>("dump", "");
+    spec.wedgeMerge = tree.get<double>("wedge_merge", 0.0);
     if (const auto box = tree.get_child_items_as_vector<int>("box")) {
         if (box->size() != 6) {
             OPM_THROW(std::runtime_error, "Mechanics sector: \"box\" needs six numbers");

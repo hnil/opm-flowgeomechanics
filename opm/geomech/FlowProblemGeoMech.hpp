@@ -656,8 +656,10 @@ namespace Opm{
                     OPM_THROW(std::runtime_error, "--mech-grid must be flow or separate, not " + mechGrid);
                 }
                 const bool separate = mechGrid == "separate" || thin > 0.0;
-                // A separate mechanics grid is edge-conformal whatever flow is.
-                const bool flowOk = separate ? true : Parameters::Get<Parameters::EdgeConformal>();
+                const bool ownGrid = separate
+                    || Parameters::Get<Parameters::MechSectorFile>() != "none";
+                // A mechanics grid of its own is edge-conformal whatever flow is.
+                const bool flowOk = ownGrid ? true : Parameters::Get<Parameters::EdgeConformal>();
                 if (!flowOk || (eclState.getLgrs().size() > 0 &&
                                 Parameters::Get<Parameters::LgrBackend>() != std::string("conforming"))) {
                     OPM_THROW(std::runtime_error,
