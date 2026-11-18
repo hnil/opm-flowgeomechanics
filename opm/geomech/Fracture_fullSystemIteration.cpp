@@ -456,7 +456,7 @@ Fracture::makePressureAssemblyInput() const
     input.face_mobility.resize(nc + nw, 0.0);
     for (size_t i = 0; i < reservoir_.mobility.size() && i < nc; ++i)
         input.face_mobility[i] = fractureFlowMobility(i);
-    input.leakof = leakof_;
+    input.leakof = activeLeakof();
     input.use_fluid_mobility_for_internal_faces =
         use_fluid_system_water_properties
         && prm_.get<bool>("solver.use_water_phase_mobility_for_fracture_flow", false);

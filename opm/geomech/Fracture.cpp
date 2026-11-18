@@ -95,6 +95,14 @@ Fracture::init(const std::string& well,
     }
 
     min_width_ = prm_.get<double>("config.min_width", 1e-3);
+    {
+        const auto mode = prm_.get<std::string>("solver.closed_cell_leakoff", "full");
+        if (mode != "full" && mode != "none") {
+            OPM_THROW(std::runtime_error, "Unknown solver.closed_cell_leakoff: " + mode);
+        }
+        closed_cell_no_leakoff_ = (mode == "none");
+        closed_cell_leakoff_width_ = prm_.get<double>("solver.closed_cell_leakoff_width", 1e-6);
+    }
     wellinfo_ = WellInfo({well, perf, well_cell, global_index,
         connection_id,
         segment, perf_range});
@@ -972,13 +980,13 @@ Fracture::addSource()
     }
 
     for (size_t i = 0; i < reservoir_.pressure.size(); ++i) {
-        rhs_pressure_[i] += leakof_[i] * reservoir_.pressure[i];// gravity i handeld in next loop
+        rhs_pressure_[i] += activeLeakof(i) * reservoir_.pressure[i];// gravity i handeld in next loop
     }
     // gravity contribution from fracture to reservoir
     for (auto element : Dune::elements(grid_->leafGridView())) {
         int i = grid_->leafGridView().indexSet().index(element);
         double z = element.geometry().center()[2];
-        rhs_pressure_[i] += leakof_[i] * (z - reservoir_.cellZ[i]) * gravity_ * reservoir_.density[i];
+        rhs_pressure_[i] += activeLeakof(i) * (z - reservoir_.cellZ[i]) * gravity_ * reservoir_.density[i];
     }
     // gravity contributions between fracture cells
 
@@ -1103,7 +1111,7 @@ Fracture::leakOfRate() const
         double dh_res = reservoir_.cellZ[eIdx] * gravity_ * reservoir_.density[eIdx];
         double dh_frac = fracture_dgh_[eIdx];
         double dp = ((fracture_pressure_[eIdx]-dh_frac) - (reservoir_.pressure[eIdx]-dh_res));
-        double q = leakof_[eIdx] * dp;
+        double q = activeLeakof(eIdx) * dp;
         leakofrate[eIdx] = q / geom.volume();
     }
     return leakofrate;
@@ -1574,7 +1582,7 @@ Fracture::gatherCellExchange_(const WiOptions& opt) const
             c.q += area_frac * q;
             // leakof_ = mob*perm*area/dist >= 0, so this conductivity is never negative
             if (eIdx < static_cast<int>(leakof_.size()) && reservoir_.mobility[eIdx] > 0.0) {
-                c.trans += area_frac * leakof_[eIdx] / reservoir_.mobility[eIdx];
+                c.trans += area_frac * activeLeakof(eIdx) / reservoir_.mobility[eIdx];
             }
             if (reservoir_map_.cells[eIdx] == res_cell) {
                 c.p = reservoir_.pressure[eIdx];
@@ -1597,7 +1605,7 @@ Fracture::gatherCellExchange_(const WiOptions& opt) const
                 const double p_at_conn = fracture_pressure_[eIdx][0]
                     + gravity_ * reservoir_.density[eIdx] * (c.z - geom.center()[2]);
                 const double w_leak = (eIdx < static_cast<int>(leakof_.size()))
-                    ? area_frac * leakof_[eIdx] : 0.0;
+                    ? area_frac * activeLeakof(eIdx) : 0.0;
                 c.pfracLeak += w_leak * p_at_conn;
                 c.leak += w_leak;
                 c.pfracArea += loc_area * p_at_conn;
@@ -1772,7 +1780,7 @@ Fracture::assignGeoMechWellState(PerfData<Scalar>& perfData) const
         samplePoint[pressIx] = this->fracture_pressure_[cellIx][0];
         double dh_res = reservoir_.cellZ[cellIx] * gravity_ * reservoir_.density[cellIx];
         double dh_frac = fracture_dgh_[cellIx];
-        samplePoint[rateIx] = this->leakof_[cellIx]
+        samplePoint[rateIx] = this->activeLeakof(cellIx)
           * ((this->fracture_pressure_[cellIx][0]-dh_frac)- (this->reservoir_.pressure[cellIx]-dh_res));
 
         samplePoint[widthIx] = this->fracture_width_[cellIx][0];
@@ -2297,6 +2305,26 @@ Fracture::hydrostaticReservoirPressure(size_t i) const
 
 
 
+
+double
+Fracture::activeLeakof(std::size_t i) const
+{
+    if (closed_cell_no_leakoff_ && i < fracture_width_.size()
+        && fracture_width_[i][0] <= closed_cell_leakoff_width_) {
+        return 0.0;
+    }
+    return leakof_[i];
+}
+
+std::vector<double>
+Fracture::activeLeakof() const
+{
+    std::vector<double> lk(leakof_.size());
+    for (std::size_t i = 0; i < lk.size(); ++i) {
+        lk[i] = activeLeakof(i);
+    }
+    return lk;
+}
 
 bool
 Fracture::ensureLeakoffCurrent()

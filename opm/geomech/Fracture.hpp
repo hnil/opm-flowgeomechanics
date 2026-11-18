@@ -970,6 +970,11 @@ private:
     double E_;
     double nu_;
     double min_width_; // minimum width of fracture, used for convergence criterion
+    bool closed_cell_no_leakoff_{false};
+    double closed_cell_leakoff_width_{1e-6};
+    // leakof_ with cells at or below closed_cell_leakoff_width_ zeroed when solver.closed_cell_leakoff=none
+    double activeLeakof(std::size_t i) const;
+    std::vector<double> activeLeakof() const;
     double gravity_{Opm::unit::gravity}; // gravity acceleration, used for leakoff calculations
     std::vector<double> fracture_dgh_; // gravity contribution to fracture pressure, used for leakoff calculations
     PropertyTree prm_;
