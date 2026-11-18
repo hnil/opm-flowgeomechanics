@@ -520,6 +520,7 @@ Fracture::InnerSolveOptions::read(const PropertyTree& prm)
             o.fbClampBeforeLineSearch = prm.get<bool>("solver.fb_clamp_before_line_search", false);
             o.fbNoProjection = prm.get<bool>("solver.fb_no_projection", false);
             o.fbPhiAbsTol = prm.get<double>("solver.fb_phi_abs_tol", 0.0);
+            o.fbFlowMerit = prm.get<bool>("solver.fb_line_search_flow_merit", false);
         }
         o.fbTrace = prm.get<bool>("solver.fb_trace", false);
     }
@@ -907,7 +908,7 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     }
 
 
-    limitStep_(x, dx, mech_rhs, fb, tol, rhs_org[_1].infinity_norm(), nlin_iteration);
+    limitStep_(x, dx, mech_rhs, fb, tol, rhs_org[_1].infinity_norm(), nlin_iteration, closed_cells);
     if (opt.isFb && opt.fbTrace) {
         const FMatrix& Aorig = fractureMatrix();
         const ResVector force = contactForce(Aorig, x[_0], x[_1], mech_rhs);
@@ -941,7 +942,8 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
 // ----------------------------------------------------------------------------
 void
 Fracture::limitStep_(const VectorHP& x, VectorHP& dx, const ResVector& mech_rhs, const FbRows& fb,
-                     const double tol, const double flow_res, const int nlin_iteration) const
+                     const double tol, const double flow_res, const int nlin_iteration,
+                     const std::vector<int>& closed_cells)
 // ----------------------------------------------------------------------------
 {
     const InnerSolveOptions& opt = inner_;
@@ -956,15 +958,22 @@ Fracture::limitStep_(const VectorHP& x, VectorHP& dx, const ResVector& mech_rhs,
     if (opt.isFb && opt.fbLineSearch) {
         const FMatrix& Aorig = fractureMatrix();
         const size_t n = Aorig.N();
-        double merit0 = 0.0;
-        for (size_t i = 0; i < n; ++i) merit0 += fb.phi[i] * fb.phi[i];
         const double s_min = opt.fbLineSearchMin;
+        const double scale_floor = opt.fbPhiAbsTol / tol;
+        const double tol_flow = opt.flowTolerance > 0.0 ? opt.flowTolerance : tol;
+        // flow merit: both parts in units of their convergence tolerance
+        const auto phi_term = [&](double phi, double scale) {
+            return opt.fbFlowMerit ? std::pow(phi / (std::max(scale, scale_floor) * tol), 2) : phi * phi;
+        };
+        double merit0 = 0.0;
+        for (size_t i = 0; i < n; ++i) merit0 += phi_term(fb.phi[i], fb.scale[i]);
+        if (opt.fbFlowMerit)
+            merit0 += flowMeritAt_(x, closed_cells, tol_flow);
         // merit ignores flow: accept a step keeping phi within tolerance, unless flow grew last iteration
         const bool flow_grew = nlin_iteration > 0 && flow_res > fb_prev_flow_res_;
         fb_prev_flow_res_ = flow_res;
         const bool accept_converged = opt.fbAcceptConverged && !flow_grew;
         bool phi_converged_full = false;
-        const double scale_floor = opt.fbPhiAbsTol / tol;
         double phi0_scaled_max = 0.0;
         for (size_t i = 0; i < n; ++i)
             phi0_scaled_max = std::max(phi0_scaled_max, std::abs(fb.phi[i]) / std::max(fb.scale[i], scale_floor));
@@ -985,9 +994,14 @@ Fracture::limitStep_(const VectorHP& x, VectorHP& dx, const ResVector& mech_rhs,
                 const double a = c_i * w_t[i][0];
                 const double b = lam[i][0];
                 const double phi = a + b - std::sqrt(a * a + b * b);
-                merit += phi * phi;
+                merit += phi_term(phi, 1.0 + std::abs(a) + std::abs(b));
                 phi_scaled_max = std::max(phi_scaled_max,
                                           std::abs(phi) / std::max(1.0 + std::abs(a) + std::abs(b), scale_floor));
+            }
+            if (opt.fbFlowMerit) {
+                VectorHP xt(x);
+                xt.axpy(sstep, dx);
+                merit += flowMeritAt_(xt, closed_cells, tol_flow);
             }
             if (sstep == 1.0) phi_converged_full = phi_scaled_max < tol;
             if (merit < best_merit) { best_merit = merit; best_s = sstep; }
@@ -1000,6 +1014,8 @@ Fracture::limitStep_(const VectorHP& x, VectorHP& dx, const ResVector& mech_rhs,
         if (opt.fbNonmonotone && sstep < s_min && best_merit >= merit0
             && phi0_scaled_max >= tol && !phi_converged_full)
             best_s = 1.0;
+        if (opt.fbFlowMerit)
+            flowMeritAt_(x, closed_cells, tol_flow); // leave the flow assembly at the current iterate
         dx *= best_s;
         fb_last_step_ = best_s;
         if (nlin_verbosity > 1 && best_s < 1.0)
@@ -1009,6 +1025,35 @@ Fracture::limitStep_(const VectorHP& x, VectorHP& dx, const ResVector& mech_rhs,
     for (size_t i = 0; i != fracture_width_.size(); ++i) {
         dx0[i][0] = std::max(-opt.maxDwidth, std::min(opt.maxDwidth, dx0[i][0]));
     }
+}
+
+// ----------------------------------------------------------------------------
+double
+Fracture::flowMeritAt_(const VectorHP& xt, const std::vector<int>& closed_cells, const double tol_flow)
+// ----------------------------------------------------------------------------
+{
+    // sum of squared flow residuals at xt over tol_flow^2; reassembles the flow rows at xt
+    fracture_width_ = xt[_0];
+    if (!inner_.fbNoProjection)
+        for (auto& w : fracture_width_)
+            w[0] = std::max(0.0, w[0]);
+    fracture_pressure_ = xt[_1];
+    updateFlowCoefficients_();
+    assembleFlowRows_(closed_cells);
+    ResVector r = rhs_pressure_;
+    pressure_matrix_->mmv(xt[_1], r);
+    if (!external_pressure_ && inner_.storageTerm && current_dt_ > 0.0) {
+        const std::vector<double> areas = cellAreas();
+        const size_t ncell = std::min({areas.size(), numFractureCells(), r.size(), xt[_0].size()});
+        for (size_t i = 0; i < ncell; ++i) {
+            const double w_prev = (i < fracture_width_prev_.size()) ? fracture_width_prev_[i][0] : 0.0;
+            r[i][0] -= areas[i] * (xt[_0][i][0] - w_prev) / current_dt_;
+        }
+    }
+    double m = 0.0;
+    for (size_t i = 0; i < r.size(); ++i)
+        m += std::pow(r[i][0] / tol_flow, 2);
+    return m;
 }
 
 // ----------------------------------------------------------------------------
