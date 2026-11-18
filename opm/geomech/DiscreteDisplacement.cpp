@@ -24,7 +24,8 @@
 #include <opm/common/TimingMacros.hpp>
 #include <opm/geomech/DiscreteDisplacement.hpp>
 
-#include <map>
+#include <cmath>
+#include <limits>
 #include <utility>
 namespace ddm
 {
@@ -230,55 +231,200 @@ assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix,
 }
 
 void
-assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix,
-                    const double E,
-                    const double nu,
-                    const Dune::FoamGrid<2, 3>& grid,
-                    MatrixReuse& reuse)
+assembleMatrix_lattice(Dune::DynamicMatrix<double>& matrix,
+                       const double E,
+                       const double nu,
+                       const Dune::FoamGrid<2, 3>& grid,
+                       const LatticeFrame& frame,
+                       KernelTable& table)
 {
     OPM_TIMEFUNCTION();
+    using V = Dune::FieldVector<double, 3>;
     const int nc = grid.leafGridView().size(0);
     const auto cache = buildGeometryCache(grid);
 
-    std::vector<std::array<double, 9>> keys(nc);
+    const auto sameFrame = [](const LatticeFrame& f, const LatticeFrame& g) {
+        return f.origin == g.origin && f.e1 == g.e1 && f.e2 == g.e2;
+    };
+    if (table.E != E || table.nu != nu || !sameFrame(table.frame, frame)) {
+        table = KernelTable {};
+        table.E = E;
+        table.nu = nu;
+        table.frame = frame;
+    }
+
+    const V& e1 = frame.e1;
+    const V& e2 = frame.e2;
+    V normal {e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]};
+    normal /= normal.two_norm();
+    const double g11 = e1 * e1, g12 = e1 * e2, g22 = e2 * e2;
+    const double det = g11 * g22 - g12 * g12;
+    const double h = std::sqrt(std::min(g11, g22));
+    constexpr double tol = 1e-6; // in lattice units
+
+    // Shape index (-1: off lattice) and three times the centroid, in lattice coordinates.
+    std::vector<int> shape(nc, -1);
+    std::vector<std::array<int, 2>> c3(nc);
     for (int i = 0; i < nc; ++i) {
-        for (int c = 0; c < 3; ++c) {
-            keys[i][3 * c] = cache.tris[i][c].x;
-            keys[i][3 * c + 1] = cache.tris[i][c].y;
-            keys[i][3 * c + 2] = cache.tris[i][c].z;
+        if (std::abs(cache.normals[i] * normal) < 1.0 - 1e-9) {
+            continue;
+        }
+        std::array<std::array<int, 2>, 3> node;
+        bool onLattice = true;
+        for (int m = 0; m < 3 && onLattice; ++m) {
+            V p {cache.tris[i][m].x, cache.tris[i][m].y, cache.tris[i][m].z};
+            p -= frame.origin;
+            const double x = p * e1, y = p * e2;
+            const double a = (g22 * x - g12 * y) / det;
+            const double b = (g11 * y - g12 * x) / det;
+            onLattice = std::abs(a - std::round(a)) < tol && std::abs(b - std::round(b)) < tol
+                && std::abs(p * normal) < tol * h && std::abs(a) < 1e8 && std::abs(b) < 1e8;
+            node[m] = {static_cast<int>(std::lround(a)), static_cast<int>(std::lround(b))};
+        }
+        if (!onLattice) {
+            continue;
+        }
+        const std::array<int, 4> key {node[1][0] - node[0][0], node[1][1] - node[0][1],
+                                      node[2][0] - node[0][0], node[2][1] - node[0][1]};
+        const auto [it, inserted] = table.shapes.emplace(key, static_cast<int>(table.boxes.size()));
+        if (inserted) {
+            table.boxes.emplace_back();
+        }
+        shape[i] = it->second;
+        c3[i] = {node[0][0] + node[1][0] + node[2][0], node[0][1] + node[1][1] + node[2][1]};
+    }
+
+    // Grow each shape's box to cover every centroid offset of this grid.
+    const int nshape = static_cast<int>(table.boxes.size());
+    constexpr int big = std::numeric_limits<int>::max();
+    std::array<int, 2> imin {big, big}, imax {-big, -big};
+    std::vector<std::array<int, 4>> jrange(nshape, {big, big, -big, -big});
+    for (int i = 0; i < nc; ++i) {
+        if (shape[i] < 0) {
+            continue;
+        }
+        auto& r = jrange[shape[i]];
+        for (int d = 0; d < 2; ++d) {
+            imin[d] = std::min(imin[d], c3[i][d]);
+            imax[d] = std::max(imax[d], c3[i][d]);
+            r[d] = std::min(r[d], c3[i][d]);
+            r[2 + d] = std::max(r[2 + d], c3[i][d]);
         }
     }
-    std::vector<int> old(nc, -1);
-    if (reuse.E == E && reuse.nu == nu && !reuse.keys.empty()) {
-        std::map<std::array<double, 9>, int> index;
-        for (int i = 0; i < static_cast<int>(reuse.keys.size()); ++i) {
-            index.emplace(reuse.keys[i], i);
+    long total = 0;
+    for (int k = 0; k < nshape; ++k) {
+        const auto& r = jrange[k];
+        if (r[0] > r[2]) {
+            total += static_cast<long>(table.boxes[k].values.size());
+            continue;
         }
-        for (int i = 0; i < nc; ++i) {
-            const auto hit = index.find(keys[i]);
-            if (hit != index.end()) {
-                old[i] = hit->second;
+        auto& box = table.boxes[k];
+        const int lo0 = r[0] - imax[0], hi0 = r[2] - imin[0];
+        const int lo1 = r[1] - imax[1], hi1 = r[3] - imin[1];
+        const bool covered = !box.values.empty() && lo0 >= box.d0min && lo1 >= box.d1min
+            && hi0 < box.d0min + box.n0 && hi1 < box.d1min + box.n1;
+        if (!covered) {
+            // Margin so a growing fracture does not reallocate on every regrid.
+            const int m0 = (hi0 - lo0) / 4 + 6, m1 = (hi1 - lo1) / 4 + 6;
+            KernelTable::Box grown;
+            grown.d0min = (box.values.empty() ? lo0 : std::min(lo0, box.d0min)) - m0;
+            grown.d1min = (box.values.empty() ? lo1 : std::min(lo1, box.d1min)) - m1;
+            const int top0 = (box.values.empty() ? hi0 : std::max(hi0, box.d0min + box.n0 - 1)) + m0;
+            const int top1 = (box.values.empty() ? hi1 : std::max(hi1, box.d1min + box.n1 - 1)) + m1;
+            grown.n0 = top0 - grown.d0min + 1;
+            grown.n1 = top1 - grown.d1min + 1;
+            grown.values.assign(static_cast<std::size_t>(grown.n0) * grown.n1,
+                                std::numeric_limits<double>::quiet_NaN());
+            for (int d0 = 0; d0 < box.n0; ++d0) {
+                for (int d1 = 0; d1 < box.n1; ++d1) {
+                    grown.values[static_cast<std::size_t>(d0 + box.d0min - grown.d0min) * grown.n1
+                                 + (d1 + box.d1min - grown.d1min)]
+                        = box.values[static_cast<std::size_t>(d0) * box.n1 + d1];
+                }
             }
+            box = std::move(grown);
+        }
+        total += static_cast<long>(box.values.size());
+    }
+    if (total > 50'000'000) { // 400 MB: rather compute directly than hold such a table
+        table = KernelTable {};
+        assembleMatrix_fast(matrix, E, nu, grid);
+        return;
+    }
+
+    const auto entry = [&table](const int k, const std::array<int, 2>& ci, const std::array<int, 2>& cj) {
+        const auto& box = table.boxes[k];
+        return static_cast<std::size_t>(cj[0] - ci[0] - box.d0min) * box.n1 + (cj[1] - ci[1] - box.d1min);
+    };
+
+    std::vector<std::vector<unsigned char>> need(nshape);
+    for (int k = 0; k < nshape; ++k) {
+        need[k].assign(table.boxes[k].values.size(), 0);
+    }
+#pragma omp parallel for
+    for (int i = 0; i < nc; ++i) {
+        if (shape[i] < 0) {
+            continue;
+        }
+        for (int j = 0; j < nc; ++j) {
+            const int k = shape[j];
+            if (k >= 0) {
+                const auto e = entry(k, c3[i], c3[j]);
+                if (std::isnan(table.boxes[k].values[e])) {
+#pragma omp atomic write
+                    need[k][e] = 1;
+                }
+            }
+        }
+    }
+    std::vector<std::pair<int, std::size_t>> missing;
+    for (int k = 0; k < nshape; ++k) {
+        for (std::size_t e = 0; e < need[k].size(); ++e) {
+            if (need[k][e]) {
+                missing.emplace_back(k, e);
+            }
+        }
+    }
+    std::vector<std::array<int, 4>> offsets(nshape);
+    for (const auto& [key, k] : table.shapes) {
+        offsets[k] = key;
+    }
+    {
+        OPM_TIMEBLOCK(FillDDMTable);
+        const V obs(0.0);
+#pragma omp parallel for
+        for (std::size_t q = 0; q < missing.size(); ++q) {
+            const auto [k, e] = missing[q];
+            auto& box = table.boxes[k];
+            const int d0 = static_cast<int>(e / box.n1) + box.d0min;
+            const int d1 = static_cast<int>(e % box.n1) + box.d1min;
+            const auto& o = offsets[k];
+            // Corner m of element j relative to the centroid of element i, times three.
+            const std::array<std::array<int, 2>, 3> rel {{{d0 - o[0] - o[2], d1 - o[1] - o[3]},
+                                                          {d0 + 2 * o[0] - o[2], d1 + 2 * o[1] - o[3]},
+                                                          {d0 - o[0] + 2 * o[2], d1 - o[1] + 2 * o[3]}}};
+            std::array<Real3, 3> tri;
+            for (int m = 0; m < 3; ++m) {
+                V p = e1;
+                p *= rel[m][0] / 3.0;
+                p.axpy(rel[m][1] / 3.0, e2);
+                tri[m] = make3(p[0], p[1], p[2]);
+            }
+            box.values[e] = kernelNormalTraction(obs, normal, tri, 1.0, E, nu);
         }
     }
     {
         OPM_TIMEBLOCK(AssembleDDMMatrix);
 #pragma omp parallel for
-        for (int idx1 = 0; idx1 < nc; ++idx1) {
-            const int o1 = old[idx1];
-            for (int idx2 = 0; idx2 < nc; ++idx2) {
-                const int o2 = old[idx2];
-                matrix[idx1][idx2] = (o1 >= 0 && o2 >= 0)
-                    ? reuse.matrix[o1][o2]
-                    : kernelNormalTraction(cache.centers[idx1], cache.normals[idx1],
-                                           cache.tris[idx2], 1.0, E, nu);
+        for (int i = 0; i < nc; ++i) {
+            for (int j = 0; j < nc; ++j) {
+                const int k = shape[j];
+                matrix[i][j] = (shape[i] >= 0 && k >= 0)
+                    ? table.boxes[k].values[entry(k, c3[i], c3[j])]
+                    : kernelNormalTraction(cache.centers[i], cache.normals[i], cache.tris[j], 1.0, E, nu);
             }
         }
     }
-    reuse.E = E;
-    reuse.nu = nu;
-    reuse.keys = std::move(keys);
-    reuse.matrix = matrix;
 }
 
 void

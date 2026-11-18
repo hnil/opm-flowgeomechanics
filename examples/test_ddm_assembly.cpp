@@ -31,6 +31,8 @@
 
 #include <array>
 #include <cmath>
+#include <algorithm>
+#include <chrono>
 #include <iostream>
 #include <vector>
 
@@ -394,6 +396,100 @@ bool test_matrix_free_apply_matches_dense(int layers)
     return true;
 }
 
+double maxRelDiff(const FullMatrix& a, const FullMatrix& b)
+{
+    double diff = 0.0, scale = 0.0;
+    for (std::size_t i = 0; i < a.N(); ++i)
+        for (std::size_t j = 0; j < a.M(); ++j) {
+            diff = std::max(diff, std::abs(a[i][j] - b[i][j]));
+            scale = std::max(scale, std::abs(a[i][j]));
+        }
+    return diff / scale;
+}
+
+ddm::LatticeFrame frameOf(const Opm::RegularTrimesh& mesh)
+{
+    const auto v = [](const auto& c) { return Dune::FieldVector<double, 3> {c[0], c[1], c[2]}; };
+    ddm::LatticeFrame f;
+    f.origin = v(mesh.nodeCoord({0, 0}));
+    f.e1 = v(mesh.nodeCoord({1, 0})) - f.origin;
+    f.e2 = v(mesh.nodeCoord({0, 1})) - f.origin;
+    return f;
+}
+
+// Lattice table vs direct kernel on a tilted mesh at field coordinates, with coarsening,
+// smoothing triangles, growth (table reused) and a change of E (table reset).
+bool test_lattice_table()
+{
+    std::cout << "Test: assembleMatrix_lattice matches assembleMatrix_fast ..." << std::endl;
+    const std::array<double, 3> origin {456789.123, 7312345.678, 2543.21};
+    const std::array<double, 3> axis1 {0.8, 0.5, 0.33};
+    const std::array<double, 3> axis2 {-0.1, 0.9, 0.42};
+    Opm::RegularTrimesh mesh(5, origin, axis1, axis2, {14.7, 14.7});
+    ddm::KernelTable table;
+    bool ok = true;
+    const auto check = [&](const char* what, const Grid& grid, double E, double nu) {
+        const int nc = grid.leafGridView().size(0);
+        FullMatrix direct(nc, nc, 0.0), lattice(nc, nc, 0.0);
+        ddm::assembleMatrix_fast(direct, E, nu, grid);
+        ddm::assembleMatrix_lattice(lattice, E, nu, grid, frameOf(mesh), table);
+        const double err = maxRelDiff(direct, lattice);
+        std::cout << "  " << what << ": n = " << nc << ", shapes " << table.shapes.size()
+                  << ", max diff / max |A| = " << err << std::endl;
+        ok = ok && err < 1e-10;
+    };
+    {
+        auto [grid, map, b] = mesh.createDuneGrid(0, {}, false);
+        check("fine", *grid, 1e9, 0.25);
+    }
+    {
+        auto [grid, map, b] = mesh.createDuneGrid(2, {}, true, 10);
+        check("coarsened + smoothing", *grid, 1e9, 0.25);
+    }
+    mesh.expandGrid();
+    mesh.expandGrid();
+    {
+        auto [grid, map, b] = mesh.createDuneGrid(1, {}, true, 10);
+        check("grown, table reused", *grid, 1e9, 0.25);
+        check("E changed", *grid, 3e9, 0.2);
+    }
+    {
+        // At the origin the direct kernel has no cancellation in obs - corner.
+        Opm::RegularTrimesh local(5, {0, 0, 0}, axis1, axis2, {14.7, 14.7});
+        auto [grid, map, b] = local.createDuneGrid(0, {}, false);
+        const int nc = grid->leafGridView().size(0);
+        FullMatrix direct(nc, nc, 0.0), lattice(nc, nc, 0.0);
+        ddm::KernelTable t;
+        ddm::assembleMatrix_fast(direct, 1e9, 0.25, *grid);
+        ddm::assembleMatrix_lattice(lattice, 1e9, 0.25, *grid, frameOf(local), t);
+        const double err = maxRelDiff(direct, lattice);
+        std::cout << "  fine at origin: max diff / max |A| = " << err << std::endl;
+        ok = ok && err < 1e-13;
+    }
+    std::cout << (ok ? "  PASSED" : "  FAILED") << std::endl;
+    return ok;
+}
+
+// Timing only: direct vs table, cold and warm, on a larger mesh.
+void time_lattice_table(int layers)
+{
+    Opm::RegularTrimesh mesh(layers, {456789.1, 7312345.6, 2543.2}, {1, 0, 0}, {0.5, std::sqrt(3) / 2, 0}, {15, 15});
+    auto [grid, map, b] = mesh.createDuneGrid(0, {}, false);
+    const int nc = grid->leafGridView().size(0);
+    FullMatrix m(nc, nc, 0.0);
+    ddm::KernelTable table;
+    const auto time = [&](auto&& f) {
+        const auto t0 = std::chrono::steady_clock::now();
+        f();
+        return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    };
+    const double td = time([&] { ddm::assembleMatrix_fast(m, 1e9, 0.25, *grid); });
+    const double tc = time([&] { ddm::assembleMatrix_lattice(m, 1e9, 0.25, *grid, frameOf(mesh), table); });
+    const double tw = time([&] { ddm::assembleMatrix_lattice(m, 1e9, 0.25, *grid, frameOf(mesh), table); });
+    std::cout << "  timing n = " << nc << ": direct " << td << " s, table cold " << tc << " s, warm " << tw << " s"
+              << std::endl;
+}
+
 } // anonymous namespace
 
 // ============================================================================
@@ -410,6 +506,9 @@ int main()
     if (!test_reference_matrix_case())  ++failures;
     if (!test_matrix_free_apply_matches_dense(1)) ++failures;
     if (!test_matrix_free_apply_matches_dense(2)) ++failures;
+    if (!test_lattice_table()) ++failures;
+    time_lattice_table(10);
+    time_lattice_table(25);
 
     std::cout << "\n=== "
               << (failures == 0 ? "ALL TESTS PASSED" : "SOME TESTS FAILED")

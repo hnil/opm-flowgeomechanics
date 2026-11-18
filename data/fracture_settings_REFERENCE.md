@@ -71,7 +71,7 @@ configs) is **dead**. It now lives under `fractureparam.solver` in the final con
 | `embedded_wall_conduction` / `embedded_thermal_distance` | embedded flow only: heat conduction between each fracture cell and its reservoir cell, as geometric half transmissibilities (faces·area over half the aperture on the fracture side, faces·area over the leak-off distance on the rock side, or over `embedded_thermal_distance` m when given). Default on. Without it a fracture cell exchanges heat only by advection, and on a small seed fed from the ring the energy residual of the weakly flowing cells never converges. |
 | `smooth_boundary`, `full_intersections`, `divide_wellidx`, `no_leakof_outercells`, `remap_solution` | geometry / remap options (`remap_solution=true` carries width/pressure across grid changes instead of re-initialising) |
 | `cache_cell_mapping` (default `true`), `cell_mapping_area` (`exact`/`fast`) | with `divide_wellidx`: reuse the triangle→cell mapping for triangles whose corners are unchanged (exact, same results); `fast` clips in double precision instead of CGAL |
-| `reuse_ddm_entries` (default `true`) | copy the elasticity-matrix entries of triangle pairs whose corners are unchanged since the last assembly (exact, same results) |
+| `ddm_lattice_table` (default `true`) | fill the elasticity matrix from a table of kernel values keyed by element shape and lattice offset, kept across regrids; off-lattice (smoothing) triangles use the direct kernel. Same matrix up to round-off |
 
 ## 4. `fractureparam.solver` — inner nonlinear (width/pressure) solve  *(group `__2`)*
 

@@ -964,7 +964,7 @@ private:
 
     using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView>;
     mutable std::unique_ptr<DynamicMatrix> fracture_matrix_;
-    mutable ddm::MatrixReuse ddm_reuse_; // entries of the last fracture_matrix_ assembly
+    mutable ddm::KernelTable ddm_table_; // DDM kernel values on the trimesh lattice
 
     // function ensuring that the fracture matrix exists, and returning a reference to it
     DynamicMatrix& fractureMatrix() const;

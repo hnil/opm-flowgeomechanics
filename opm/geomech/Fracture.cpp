@@ -3207,8 +3207,13 @@ Fracture::assembleFractureMatrix() const
     }
     fracture_matrix_->resize(nc, nc);
     *fracture_matrix_ = 0.0;
-    if (prm_.get<bool>("solver.reuse_ddm_entries", true)) {
-        ddm::assembleMatrix_fast(*fracture_matrix_, E_, nu_, *grid_, ddm_reuse_);
+    if (trimesh_ && prm_.get<bool>("solver.ddm_lattice_table", true)) {
+        const auto toVec = [](const auto& c) { return Dune::FieldVector<double, 3> {c[0], c[1], c[2]}; };
+        ddm::LatticeFrame frame;
+        frame.origin = toVec(trimesh_->nodeCoord({0, 0}));
+        frame.e1 = toVec(trimesh_->nodeCoord({1, 0})) - frame.origin;
+        frame.e2 = toVec(trimesh_->nodeCoord({0, 1})) - frame.origin;
+        ddm::assembleMatrix_lattice(*fracture_matrix_, E_, nu_, *grid_, frame, ddm_table_);
     } else {
         ddm::assembleMatrix_fast(*fracture_matrix_, E_, nu_, *grid_);
     }

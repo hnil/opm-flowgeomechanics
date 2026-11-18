@@ -19,6 +19,7 @@
 
 #pragma once
 #include <array>
+#include <map>
 #include <vector>
 
 #include <dune/common/dynmatrix.hh>
@@ -126,18 +127,33 @@ tractionVoigt(Dune::FieldVector<double,6> voigt, Dune::FieldVector<double,3> nor
 void assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);
 void assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);
 
-// Entries of the last assembly, keyed by each element's exact corners.
-struct MatrixReuse
+// Planar lattice the fracture mesh lives on: node (i, j) sits at origin + i*e1 + j*e2.
+struct LatticeFrame
 {
-    double E = 0.0;
-    double nu = 0.0;
-    std::vector<std::array<double, 9>> keys;
-    Dune::DynamicMatrix<double> matrix;
+    Dune::FieldVector<double, 3> origin;
+    Dune::FieldVector<double, 3> e1;
+    Dune::FieldVector<double, 3> e2;
 };
 
-// Copies the entries of element pairs whose corners and E, nu equal the last call's; computes the rest.
-void assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix, const double E, const double nu,
-                         const Dune::FoamGrid<2, 3>& grid, MatrixReuse& reuse);
+// Kernel values of lattice element pairs, keyed by element shape and centroid offset in lattice units.
+// Kept across regrids; cleared when E, nu or the frame change.
+struct KernelTable
+{
+    struct Box
+    {
+        int d0min = 0, d1min = 0, n0 = 0, n1 = 0;
+        std::vector<double> values; // NaN marks an entry not yet computed
+    };
+    double E = 0.0;
+    double nu = 0.0;
+    LatticeFrame frame;
+    std::map<std::array<int, 4>, int> shapes; // corner offsets from corner 0 -> shape index
+    std::vector<Box> boxes; // one per shape
+};
+
+// Same matrix as assembleMatrix_fast up to round-off; pairs of off-lattice elements use the direct kernel.
+void assembleMatrix_lattice(Dune::DynamicMatrix<double>& matrix, const double E, const double nu,
+                            const Dune::FoamGrid<2, 3>& grid, const LatticeFrame& frame, KernelTable& table);
 void applyMatrix_fast(Dune::DynamicVector<double>& result,
                       const Dune::DynamicVector<double>& x,
                       const double E,
