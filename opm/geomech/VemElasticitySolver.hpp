@@ -179,6 +179,7 @@ public:
 
 private:
     void setCopyRowsToZero(Matrix& A);
+    void buildStructureAxis(const Matrix& A, const std::vector<double>& coords);
 
     using SeqOperatorType = Dune::MatrixAdapter<Matrix, Vector, Vector>;
     using ParOperatorType = Dune::OverlappingSchwarzOperator<Matrix, Vector, Vector, MechCommunication>;
@@ -194,6 +195,7 @@ private:
     bool tol_relative_to_load_ = true;
     bool warm_start_ = true;
     double linear_tol_ = 1e-5;
+    std::vector<double> axis_; // per node: pillar direction, layer normal
 };
 
 } // namespace Elasticity

@@ -42,27 +42,28 @@ INSTANTIATE_FLEXIBLESOLVER_OP(ParOpMec<1>);
 namespace Opm
 {
 void addMechPreconditioners(const std::vector<double>& coords,
-                            const std::vector<Dune::BlockVector<Dune::FieldVector<double, 1>>>& modes)
+                            const std::vector<Dune::BlockVector<Dune::FieldVector<double, 1>>>& modes,
+                            const std::vector<double>& axis)
 {
     using SeqInfo = Dune::Amg::SequentialInformation;
     using SeqPrec = MechLinePlanePreconditioner<OBMMec<1>, BVMec<1>, SeqInfo>;
     PreconditionerFactory<SeqOpMec<1>, SeqInfo>::addCreator(
         "mech_lines",
-        [&coords](const SeqOpMec<1>& op, const PropertyTree& prm, const std::function<BVMec<1>()>&, std::size_t) {
+        [&coords, &axis](const SeqOpMec<1>& op, const PropertyTree& prm, const std::function<BVMec<1>()>&, std::size_t) {
             static const SeqInfo seq;
             auto inner = PreconditionerFactory<SeqOpMec<1>, SeqInfo>::create(op, prm.get_child("inner"));
-            return std::make_shared<SeqPrec>(op.getmat(), coords, prm, inner, seq);
+            return std::make_shared<SeqPrec>(op.getmat(), coords, prm, inner, seq, &axis);
         });
     using ParPrec = MechLinePlanePreconditioner<OBMMec<1>, BVMec<1>, CommMec>;
     PreconditionerFactory<ParOpMec<1>, CommMec>::addCreator(
         "mech_lines",
-        [&coords](const ParOpMec<1>& op,
+        [&coords, &axis](const ParOpMec<1>& op,
                   const PropertyTree& prm,
                   const std::function<BVMec<1>()>&,
                   std::size_t,
                   const CommMec& comm) {
             auto inner = PreconditionerFactory<ParOpMec<1>, CommMec>::create(op, prm.get_child("inner"), comm);
-            return std::make_shared<ParPrec>(op.getmat(), coords, prm, inner, comm);
+            return std::make_shared<ParPrec>(op.getmat(), coords, prm, inner, comm, &axis);
         });
     using SeqHypre = MechHyprePreconditioner<OBMMec<1>, BVMec<1>, SeqInfo>;
     PreconditionerFactory<SeqOpMec<1>, SeqInfo>::addCreator(

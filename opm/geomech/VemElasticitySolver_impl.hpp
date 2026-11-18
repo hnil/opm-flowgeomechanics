@@ -535,6 +535,69 @@ void MechLinearSolver<GridType>::setCopyRowsToZero(Matrix& A)
     }
 }
 
+// Per node: unit pillar direction (cell k-edges, corners c and c^4) and layer normal (i-edge x j-edge,
+// oriented along the pillar); nodes on no cell corner (hanging nodes) take their matrix neighbours' mean.
+template<class GridType>
+void MechLinearSolver<GridType>::buildStructureAxis(const Matrix& A, const std::vector<double>& coords)
+{
+    const std::size_t nn = coords.size() / 3;
+    axis_.assign(6 * nn, 0.0);
+    const auto& gv = grid_.leafGridView();
+    auto add = [&](std::size_t node, int off, const double* t) {
+        const double l = std::sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]);
+        if (l > 1e-8) {
+            for (int d = 0; d < 3; ++d) {
+                axis_[6 * node + off + d] += t[d] / l;
+            }
+        }
+    };
+    for (const auto& e : elements(gv)) {
+        std::size_t v[8];
+        for (int c = 0; c < 8; ++c) {
+            v[c] = gv.indexSet().subIndex(e, c, 3);
+        }
+        for (int c = 0; c < 8; ++c) {
+            const double sk = (c & 4) ? -1.0 : 1.0;
+            const double si = (c & 1) ? -1.0 : 1.0;
+            const double sj = (c & 2) ? -1.0 : 1.0;
+            double t[3], ei[3], ej[3];
+            for (int d = 0; d < 3; ++d) {
+                t[d] = sk * (coords[3 * v[c ^ 4] + d] - coords[3 * v[c] + d]);
+                ei[d] = si * (coords[3 * v[c ^ 1] + d] - coords[3 * v[c] + d]);
+                ej[d] = sj * (coords[3 * v[c ^ 2] + d] - coords[3 * v[c] + d]);
+            }
+            double n[3] = {ei[1] * ej[2] - ei[2] * ej[1], ei[2] * ej[0] - ei[0] * ej[2],
+                           ei[0] * ej[1] - ei[1] * ej[0]};
+            if (n[0] * t[0] + n[1] * t[1] + n[2] * t[2] < 0) {
+                for (double& x : n) {
+                    x = -x;
+                }
+            }
+            add(v[c], 0, t);
+            add(v[c], 3, n);
+        }
+    }
+    const std::vector<double> sum = axis_;
+    for (std::size_t k = 0; k < nn && 3 * k < A.N(); ++k) {
+        for (int h = 0; h < 2; ++h) {
+            double* t = &axis_[6 * k + 3 * h];
+            if (t[0] == 0 && t[1] == 0 && t[2] == 0) {
+                for (auto c = A[3 * k].begin(); c != A[3 * k].end(); ++c) {
+                    if (c.index() % 3 == 0) {
+                        for (int d = 0; d < 3; ++d) {
+                            t[d] += sum[6 * (c.index() / 3) + 3 * h + d];
+                        }
+                    }
+                }
+            }
+            const double l = std::sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]);
+            for (int d = 0; d < 3 && l > 0; ++d) {
+                t[d] /= l;
+            }
+        }
+    }
+}
+
 template<class GridType>
 void MechLinearSolver<GridType>::setup(const PropertyTree& prm_in, Matrix& A,
                                        const std::vector<double>& coords,
@@ -543,7 +606,11 @@ void MechLinearSolver<GridType>::setup(const PropertyTree& prm_in, Matrix& A,
     OPM_TIMEBLOCK(setupLinearSolver);
     tsolver_.reset();
     A_ = &A;
-    addMechPreconditioners(coords, modes);
+    axis_.clear();
+    if (prm_in.get<bool>("preconditioner.structure_axis", false)) {
+        buildStructureAxis(A, coords);
+    }
+    addMechPreconditioners(coords, modes, axis_);
     // hypre with interp_vec_variant needs the rotations, which only mech_hypre passes;
     // hypre uses them with nodal coarsening only.
     PropertyTree prm = prm_in;
