@@ -97,10 +97,11 @@ Fracture::init(const std::string& well,
     min_width_ = prm_.get<double>("config.min_width", 1e-3);
     {
         const auto mode = prm_.get<std::string>("solver.closed_cell_leakoff", "full");
-        if (mode != "full" && mode != "none") {
+        if (mode != "full" && mode != "none" && mode != "ramp") {
             OPM_THROW(std::runtime_error, "Unknown solver.closed_cell_leakoff: " + mode);
         }
-        closed_cell_no_leakoff_ = (mode == "none");
+        closed_cell_no_leakoff_ = (mode != "full");
+        closed_cell_leakoff_ramp_ = (mode == "ramp");
         closed_cell_leakoff_width_ = prm_.get<double>("solver.closed_cell_leakoff_width", 1e-6);
     }
     wellinfo_ = WellInfo({well, perf, well_cell, global_index,
@@ -2311,7 +2312,10 @@ Fracture::activeLeakof(std::size_t i) const
 {
     if (closed_cell_no_leakoff_ && i < fracture_width_.size()
         && fracture_width_[i][0] <= closed_cell_leakoff_width_) {
-        return 0.0;
+        // ramp keeps the residual continuous in the width
+        return closed_cell_leakoff_ramp_
+            ? leakof_[i] * std::max(fracture_width_[i][0], 0.0) / closed_cell_leakoff_width_
+            : 0.0;
     }
     return leakof_[i];
 }
