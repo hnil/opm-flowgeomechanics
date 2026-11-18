@@ -46,6 +46,7 @@
 #include <limits>
 #include <map>
 #include <numeric>
+#include <set>
 #include <utility>
 #include <type_traits>
 #include <memory>
@@ -467,8 +468,7 @@ public:
         buildMap(toMech, g.dims, flowGrid, flowCartesianMapper);
 
         const Dune::CartesianIndexMapper<Dune::CpGrid> mechMapper(*grid_);
-        setDonors_(toMech, deckZ, flowZ, dd, g.dims, mechMapper, flowGrid,
-                   flowCartesianMapper);
+        setDonors_(toMech, deckZ, flowZ, dd, g.dims, mechMapper, flowGrid, flowCartesianMapper);
         padding_.assign(fine_of_mech_.size(), 0);
         std::size_t padding = 0;
         for (std::size_t m = 0; m < fine_of_mech_.size(); ++m) {
@@ -966,13 +966,12 @@ private:
         }
     }
 
-    /// Mechanics cells inside the flow box without a flow cell (removed by MINPV or PINCH)
-    /// take the state of the flow cell whose processed extent covers their centre, else
-    /// of the nearer flow cell when there is one above and one below in the column.
+    /// A box cell without a flow cell takes the nearest flow cells above and below: interpolated by
+    /// deck depth if they share a face, else the covering, else the nearer one; one side only: none.
     template <class FlowGrid, class CartesianMapper>
     void setDonors_(const std::vector<int>& toMech, const std::vector<double>& deckZ,
-                    const std::vector<double>& flowZ, const std::array<int,3>& dd,
-                    const std::array<int,3>& mechDims,
+                    const std::vector<double>& flowZ,
+                    const std::array<int,3>& dd, const std::array<int,3>& mechDims,
                     const Dune::CartesianIndexMapper<Dune::CpGrid>& mechMapper,
                     const FlowGrid& flowGrid, const CartesianMapper& flowCartesianMapper)
     {
@@ -981,65 +980,104 @@ private:
         for (std::size_t m = 0; m < nm; ++m) {
             mechOfCart[mechMapper.cartesianIndex(static_cast<int>(m))] = static_cast<int>(m);
         }
-        std::vector<char> isFlow(toMech.size(), 0);
+        std::vector<int> flowOf(toMech.size(), -1);
         const auto& view = flowGrid.leafGridView();
         for (const auto& cell : elements(view)) {
-            isFlow[flowCartesianMapper.cartesianIndex(view.indexSet().index(cell))] = 1;
+            const int f = view.indexSet().index(cell);
+            flowOf[flowCartesianMapper.cartesianIndex(f)] = f;
         }
         const int nx = dd[0], ny = dd[1], nz = dd[2];
-        const auto mean = [nx, ny](const std::vector<double>& z, int i, int j, int k, int dk) {
+        const auto meanZ = [nx, ny](const std::vector<double>& z, int i, int j, int k, int dk) {
             double s = 0.0;
             for (int c = 0; c < 4; ++c) {
                 s += z[static_cast<std::size_t>((2*k + dk)*4*nx*ny + (2*j + (c >> 1))*2*nx + 2*i + (c & 1))];
             }
             return s/4.0;
         };
+        const auto centre = [&](int i, int j, int k) {
+            return 0.5*(meanZ(deckZ, i, j, k, 0) + meanZ(deckZ, i, j, k, 1));
+        };
         const auto mechOf = [&](std::size_t c) {
             return toMech[c] < 0 ? -1 : mechOfCart[toMech[c]];
         };
-        std::vector<int> donor(nm, -1);
-        std::size_t covered = 0, nearest = 0;
+        struct Candidate { int m, fa, fb, ma, mb, cover; double w; };
+        std::vector<Candidate> cand;
+        std::vector<char> seen(nm, 0);
         for (int j = 0; j < ny; ++j)
         for (int i = 0; i < nx; ++i) {
             const auto cart = [&](int k) { return i + static_cast<std::size_t>(nx)*(j + static_cast<std::size_t>(ny)*k); };
             const auto source = [&](int k) {
                 const int m = mechOf(cart(k));
-                return (isFlow[cart(k)] && m >= 0 && map_.hasFlowCells(m)) ? m : -1;
+                return (flowOf[cart(k)] >= 0 && m >= 0 && map_.hasFlowCells(m)) ? m : -1;
             };
             for (int k = 0; k < nz; ++k) {
                 const int m = mechOf(cart(k));
-                if (m < 0 || map_.hasFlowCells(m) || donor[m] >= 0) {
+                if (m < 0 || map_.hasFlowCells(m) || seen[m]) {
                     continue;
                 }
-                const double zc = 0.5*(mean(deckZ, i, j, k, 0) + mean(deckZ, i, j, k, 1));
-                int above = -1, below = -1;
-                for (int kk = 0; kk < nz && donor[m] < 0; ++kk) {
-                    if (source(kk) < 0) {
-                        continue;
-                    }
-                    const double top = mean(flowZ, i, j, kk, 0), bottom = mean(flowZ, i, j, kk, 1);
-                    if (top <= zc && zc <= bottom) {
-                        donor[m] = source(kk);
-                        ++covered;
-                    } else if (bottom < zc) {
-                        above = kk;
-                    } else if (below < 0) {
-                        below = kk;
+                seen[m] = 1;
+                int above = k - 1, below = k + 1;
+                while (above >= 0 && source(above) < 0) --above;
+                while (below < nz && source(below) < 0) ++below;
+                Candidate c{m, -1, -1, -1, -1, -1, 0.0};
+                if (above >= 0) { c.fa = flowOf[cart(above)]; c.ma = source(above); }
+                if (below < nz) { c.fb = flowOf[cart(below)]; c.mb = source(below); }
+                const double zc = centre(i, j, k);
+                for (const int kk : {above, below}) {
+                    if (kk >= 0 && kk < nz && meanZ(flowZ, i, j, kk, 0) <= zc
+                        && zc <= meanZ(flowZ, i, j, kk, 1)) {
+                        c.cover = source(kk);
                     }
                 }
-                if (donor[m] < 0 && above >= 0 && below >= 0) {
-                    const double dAbove = zc - mean(flowZ, i, j, above, 1);
-                    const double dBelow = mean(flowZ, i, j, below, 0) - zc;
-                    donor[m] = source(dAbove <= dBelow ? above : below);
-                    ++nearest;
+                if (c.cover < 0 && (c.fa < 0 || c.fb < 0)) {
+                    continue;
+                }
+                if (c.fa >= 0 && c.fb >= 0) {
+                    const double za = centre(i, j, above), zb = centre(i, j, below);
+                    c.w = zb > za ? std::clamp((centre(i, j, k) - za)/(zb - za), 0.0, 1.0) : 0.5;
+                }
+                cand.push_back(c);
+            }
+        }
+        std::set<std::pair<int,int>> wanted, connected;
+        for (const auto& c : cand) {
+            if (c.fa >= 0 && c.fb >= 0) {
+                wanted.emplace(c.fa, c.fb);
+            }
+        }
+        for (const auto& cell : elements(view)) {
+            const int f = view.indexSet().index(cell);
+            for (const auto& is : intersections(view, cell)) {
+                if (is.neighbor()) {
+                    const std::pair<int,int> p{f, view.indexSet().index(is.outside())};
+                    if (wanted.count(p) > 0) {
+                        connected.insert(p);
+                    }
                 }
             }
         }
-        if (covered + nearest > 0) {
-            OpmLog::info("Mechanics sector: " + std::to_string(covered + nearest)
-                         + " cells without a flow cell take the state of the flow cell that covers"
-                         " them (" + std::to_string(covered) + ") or of the nearer one in their column ("
-                         + std::to_string(nearest) + ")");
+        std::vector<MechFlowMap::Donor> donor(nm);
+        std::size_t interpolated = 0, covered = 0, nearer = 0;
+        for (const auto& c : cand) {
+            auto& d = donor[c.m];
+            if (c.fa >= 0 && c.fb >= 0 && connected.count({c.fa, c.fb}) > 0) {
+                d = {c.ma, c.mb, c.w};
+                ++interpolated;
+            } else if (c.cover >= 0) {
+                d = {c.cover, c.cover, 0.0};
+                ++covered;
+            } else {
+                const bool up = c.fb < 0 || (c.fa >= 0 && c.w <= 0.5);
+                d = up ? MechFlowMap::Donor{c.ma, c.ma, 0.0} : MechFlowMap::Donor{c.mb, c.mb, 0.0};
+                ++nearer;
+            }
+        }
+        if (!cand.empty()) {
+            OpmLog::info("Mechanics sector: " + std::to_string(cand.size())
+                         + " cells without a flow cell take the state of the flow cells above and"
+                         " below, interpolated across a shared face (" + std::to_string(interpolated)
+                         + "), of the flow cell covering them (" + std::to_string(covered)
+                         + ") or of the nearer one (" + std::to_string(nearer) + ")");
         }
         map_.setDonors(std::move(donor));
     }

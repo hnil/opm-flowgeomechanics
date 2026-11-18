@@ -78,11 +78,12 @@ public:
     bool hasFlowCells(std::size_t mechCell) const
     { return identity_ || mech_weight_[mechCell] > 0.0; }
 
-    /// donor[m] >= 0: cell m, which has no flow cells, takes the restricted value of cell donor[m].
-    void setDonors(std::vector<int> donor) { donor_ = std::move(donor); }
+    /// Cell m without flow cells takes (1 - w) v[a] + w v[b] of cells a, b that have them; a < 0: none.
+    struct Donor { int a = -1; int b = -1; double w = 0.0; };
+    void setDonors(std::vector<Donor> donor) { donor_ = std::move(donor); }
 
     bool hasFlowState(std::size_t mechCell) const
-    { return hasFlowCells(mechCell) || (!donor_.empty() && donor_[mechCell] >= 0); }
+    { return hasFlowCells(mechCell) || (!donor_.empty() && donor_[mechCell].a >= 0); }
 
     /// Volume-weighted mean over each mechanics cell's flow cells, which
     /// preserves the integral of a force density.
@@ -107,8 +108,9 @@ public:
             }
         }
         for (std::size_t m = 0; m < donor_.size(); ++m) {
-            if (donor_[m] >= 0 && mech_weight_[m] == 0.0) {
-                mech[m] = mech[donor_[m]];
+            const auto& d = donor_[m];
+            if (d.a >= 0 && mech_weight_[m] == 0.0) {
+                mech[m] = mech[d.a]*(1.0 - d.w) + mech[d.b]*d.w;
             }
         }
     }
@@ -136,7 +138,7 @@ private:
     std::vector<int> flow_to_mech_;
     std::vector<double> weight_;
     std::vector<double> mech_weight_;
-    std::vector<int> donor_;
+    std::vector<Donor> donor_;
 };
 
 } // namespace Opm
