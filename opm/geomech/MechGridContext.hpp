@@ -421,6 +421,11 @@ public:
             input.coord = deckGrid->getCOORD();
             input.zcorn = deckGrid->getZCORN();
         }
+        // Active before MINPV/PINCH; the flow grid's own ACTNUM no longer says.
+        std::vector<int> deckActive = input.actnum;
+        if (deckActive.size() != static_cast<std::size_t>(dd[0])*dd[1]*dd[2]) {
+            deckActive.assign(static_cast<std::size_t>(dd[0])*dd[1]*dd[2], 1);
+        }
         input.actnum.clear();
         closeVerticalGaps_(input);
         const std::vector<double> deckZ = input.zcorn;
@@ -428,8 +433,10 @@ public:
         std::vector<int> absorber;
         if (spec.wedgeMerge > 0.0) {
             input.actnum.clear();
+            // Pore and rock cells stay apart, so no mechanics cell mixes the two.
             absorber = collapseThinCells_(input, spec.wedgeMerge, /*fillHoles*/ false,
-                                          LgrCollection{}, {}, /*byThinnestCorner*/ true);
+                                          LgrCollection{}, {}, /*byThinnestCorner*/ true,
+                                          deckActive);
         }
         const MechSector::Grdecl deck{dd, input.coord, input.zcorn};
         const auto built = MechSector::build(deck, spec);
@@ -468,7 +475,7 @@ public:
         buildMap(toMech, g.dims, flowGrid, flowCartesianMapper);
 
         const Dune::CartesianIndexMapper<Dune::CpGrid> mechMapper(*grid_);
-        setDonors_(toMech, deckZ, flowZ, dd, g.dims, mechMapper, flowGrid, flowCartesianMapper);
+        setDonors_(toMech, deckZ, flowZ, deckActive, dd, g.dims, mechMapper, flowGrid, flowCartesianMapper);
         padding_.assign(fine_of_mech_.size(), 0);
         std::size_t padding = 0;
         for (std::size_t m = 0; m < fine_of_mech_.size(); ++m) {
@@ -966,11 +973,11 @@ private:
         }
     }
 
-    /// A box cell without a flow cell takes the nearest flow cells above and below: interpolated by
-    /// deck depth if they share a face, else the covering, else the nearer one; one side only: none.
+    /// A deck-active box cell without a flow cell takes the nearest flow cells above and below:
+    /// interpolated by deck depth if they share a face, else the covering, else the nearer one.
     template <class FlowGrid, class CartesianMapper>
     void setDonors_(const std::vector<int>& toMech, const std::vector<double>& deckZ,
-                    const std::vector<double>& flowZ,
+                    const std::vector<double>& flowZ, const std::vector<int>& deckActive,
                     const std::array<int,3>& dd, const std::array<int,3>& mechDims,
                     const Dune::CartesianIndexMapper<Dune::CpGrid>& mechMapper,
                     const FlowGrid& flowGrid, const CartesianMapper& flowCartesianMapper)
@@ -1012,7 +1019,8 @@ private:
             };
             for (int k = 0; k < nz; ++k) {
                 const int m = mechOf(cart(k));
-                if (m < 0 || map_.hasFlowCells(m) || seen[m]) {
+                // Inactive in the deck: rock, as without the processing.
+                if (m < 0 || map_.hasFlowCells(m) || seen[m] || deckActive[cart(k)] == 0) {
                     continue;
                 }
                 seen[m] = 1;
@@ -1029,7 +1037,7 @@ private:
                         c.cover = source(kk);
                     }
                 }
-                if (c.cover < 0 && (c.fa < 0 || c.fb < 0)) {
+                if (c.fa < 0 && c.fb < 0) {
                     continue;
                 }
                 if (c.fa >= 0 && c.fb >= 0) {
@@ -1151,7 +1159,8 @@ private:
                                                const bool fillHoles,
                                                const LgrCollection& lgrs,
                                                const std::vector<char>& keep = {},
-                                               const bool byThinnestCorner = false)
+                                               const bool byThinnestCorner = false,
+                                               const std::vector<int>& group = {})
     {
         const int nx = input.dims[0], ny = input.dims[1], nz = input.dims[2];
         auto& z = input.zcorn;
@@ -1188,6 +1197,10 @@ private:
             return true;
         };
 
+        // A cell merges only into a cell of its own group.
+        const auto sameGroup = [&group](int a, int b) {
+            return group.empty() || group[a] == group[b];
+        };
         std::vector<int> absorber(static_cast<std::size_t>(nx)*ny*nz);
         std::iota(absorber.begin(), absorber.end(), 0);
         int thin = 0, holes = 0, skipped = 0;
@@ -1213,7 +1226,8 @@ private:
                         // Down, also into a hole that is absorbed in its turn.
                         if (k + 1 < nz && meanThickness(i, j, k + 1) > 0.0
                             && (active(i, j, k + 1) || fillHoles)
-                            && !inLgr(i, j, k + 1) && touches(i, j, k, k + 1)) {
+                            && !inLgr(i, j, k + 1) && touches(i, j, k, k + 1)
+                            && sameGroup(self, self + nx*ny)) {
                             for (int c = 0; c < 4; ++c) {
                                 const double top = z[zi(i, j, k, c, 0)];
                                 z[zi(i, j, k, c, 1)] = top;
@@ -1228,7 +1242,8 @@ private:
                         while (a >= 0 && meanThickness(i, j, a) <= 0.0) {
                             --a;
                         }
-                        if (a >= 0 && active(i, j, a) && !inLgr(i, j, a) && touches(i, j, a, k)) {
+                        if (a >= 0 && active(i, j, a) && !inLgr(i, j, a) && touches(i, j, a, k)
+                            && sameGroup(self, i + nx*(j + ny*a))) {
                             for (int c = 0; c < 4; ++c) {
                                 const double bottom = z[zi(i, j, k, c, 1)];
                                 for (int kk = a + 1; kk <= k; ++kk) {
