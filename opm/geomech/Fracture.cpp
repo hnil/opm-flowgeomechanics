@@ -2519,6 +2519,32 @@ Fracture::updateLeakoff()
         }
         }
     }
+    // cells whose centre lies within this distance [m] of the fracture boundary get no leak-off
+    const double no_leakof_front_distance = prm_.get<double>("solver.no_leakof_front_distance", 0.0);
+    std::vector<bool> inFrontBand(gv.size(codimCell), false);
+    if (no_leakof_front_distance > 0.0) {
+        std::vector<std::pair<Dune::FieldVector<double, 3>, Dune::FieldVector<double, 3>>> segs;
+        for (const auto& element : elements(gv)) {
+            for (const auto& is : intersections(gv, element)) {
+                if (is.boundary()) {
+                    const auto g = is.geometry();
+                    segs.emplace_back(g.corner(0), g.corner(1));
+                }
+            }
+        }
+        for (const auto& element : elements(gv)) {
+            const auto c = element.geometry().center();
+            double dmin = std::numeric_limits<double>::max();
+            for (const auto& [a, b] : segs) {
+                auto ab = b - a;
+                auto ac = c - a;
+                const double t = std::clamp((ac * ab) / std::max(ab * ab, 1e-30), 0.0, 1.0);
+                ab *= t;
+                dmin = std::min(dmin, (ac - ab).two_norm());
+            }
+            inFrontBand[indexSet.index(element)] = dmin < no_leakof_front_distance;
+        }
+    }
     bool no_leakof_outercells = prm_.get<bool>("solver.no_leakof_outercells",false);
     const size_t nc = numFractureCells();
     leakof_.resize(nc, 0.0);
@@ -2554,7 +2580,7 @@ Fracture::updateLeakoff()
             }
         }
         leakof_[eIdx] = sides / invtrans;
-        if(elementHasBoundaryNode[eIdx] && no_leakof_outercells){
+        if((elementHasBoundaryNode[eIdx] && no_leakof_outercells) || inFrontBand[eIdx]){
           leakof_[eIdx] = 0.0;
         }
     }
