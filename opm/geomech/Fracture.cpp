@@ -824,7 +824,7 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
     reservoir_map_.allCells.resize(numFractureCells());
     reservoir_map_.allCenters.resize(numFractureCells());
     bool full_intersections = prm_.get<bool>("solver.divide_wellidx", false);
-    const bool use_cache = full_intersections && prm_.get<bool>("solver.cache_cell_mapping", false);
+    const bool use_cache = full_intersections && prm_.get<bool>("solver.cache_cell_mapping", true);
     const std::string area_method = prm_.get<std::string>("solver.cell_mapping_area", "exact");
     if (area_method != "exact" && area_method != "fast")
         OPM_THROW(std::runtime_error, "Unknown solver.cell_mapping_area: " + area_method);
@@ -3207,7 +3207,11 @@ Fracture::assembleFractureMatrix() const
     }
     fracture_matrix_->resize(nc, nc);
     *fracture_matrix_ = 0.0;
-    ddm::assembleMatrix_fast(*fracture_matrix_, E_, nu_, *grid_);
+    if (prm_.get<bool>("solver.reuse_ddm_entries", true)) {
+        ddm::assembleMatrix_fast(*fracture_matrix_, E_, nu_, *grid_, ddm_reuse_);
+    } else {
+        ddm::assembleMatrix_fast(*fracture_matrix_, E_, nu_, *grid_);
+    }
 }
 
 

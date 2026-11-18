@@ -18,6 +18,9 @@
 */
 
 #pragma once
+#include <array>
+#include <vector>
+
 #include <dune/common/dynmatrix.hh>
 #include <dune/common/dynvector.hh>
 #include <dune/common/fvector.hh>
@@ -122,6 +125,19 @@ tractionVoigt(Dune::FieldVector<double,6> voigt, Dune::FieldVector<double,3> nor
 
 void assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);
 void assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);
+
+// Entries of the last assembly, keyed by each element's exact corners.
+struct MatrixReuse
+{
+    double E = 0.0;
+    double nu = 0.0;
+    std::vector<std::array<double, 9>> keys;
+    Dune::DynamicMatrix<double> matrix;
+};
+
+// Copies the entries of element pairs whose corners and E, nu equal the last call's; computes the rest.
+void assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix, const double E, const double nu,
+                         const Dune::FoamGrid<2, 3>& grid, MatrixReuse& reuse);
 void applyMatrix_fast(Dune::DynamicVector<double>& result,
                       const Dune::DynamicVector<double>& x,
                       const double E,

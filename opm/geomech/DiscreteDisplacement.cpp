@@ -24,6 +24,7 @@
 #include <opm/common/TimingMacros.hpp>
 #include <opm/geomech/DiscreteDisplacement.hpp>
 
+#include <map>
 #include <utility>
 namespace ddm
 {
@@ -226,6 +227,58 @@ assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix,
             }
         }
     }
+}
+
+void
+assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix,
+                    const double E,
+                    const double nu,
+                    const Dune::FoamGrid<2, 3>& grid,
+                    MatrixReuse& reuse)
+{
+    OPM_TIMEFUNCTION();
+    const int nc = grid.leafGridView().size(0);
+    const auto cache = buildGeometryCache(grid);
+
+    std::vector<std::array<double, 9>> keys(nc);
+    for (int i = 0; i < nc; ++i) {
+        for (int c = 0; c < 3; ++c) {
+            keys[i][3 * c] = cache.tris[i][c].x;
+            keys[i][3 * c + 1] = cache.tris[i][c].y;
+            keys[i][3 * c + 2] = cache.tris[i][c].z;
+        }
+    }
+    std::vector<int> old(nc, -1);
+    if (reuse.E == E && reuse.nu == nu && !reuse.keys.empty()) {
+        std::map<std::array<double, 9>, int> index;
+        for (int i = 0; i < static_cast<int>(reuse.keys.size()); ++i) {
+            index.emplace(reuse.keys[i], i);
+        }
+        for (int i = 0; i < nc; ++i) {
+            const auto hit = index.find(keys[i]);
+            if (hit != index.end()) {
+                old[i] = hit->second;
+            }
+        }
+    }
+    {
+        OPM_TIMEBLOCK(AssembleDDMMatrix);
+#pragma omp parallel for
+        for (int idx1 = 0; idx1 < nc; ++idx1) {
+            const int o1 = old[idx1];
+            for (int idx2 = 0; idx2 < nc; ++idx2) {
+                const int o2 = old[idx2];
+                matrix[idx1][idx2] = (o1 >= 0 && o2 >= 0)
+                    ? reuse.matrix[o1][o2]
+                    : kernelNormalTraction(cache.centers[idx1], cache.normals[idx1],
+                                           cache.tris[idx2], 1.0, E, nu);
+            }
+        }
+    }
+    reuse.E = E;
+    reuse.nu = nu;
+    reuse.keys = std::move(keys);
+    reuse.matrix = matrix;
 }
 
 void
