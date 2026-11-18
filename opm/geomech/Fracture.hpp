@@ -719,6 +719,7 @@ private:
         double flowTolerance{-1.0}; // < 0: same as the mechanics tolerance
         bool dropCoupling{true};
         bool storageTerm{false};
+        bool storageJacobian{false}; // storage d/dw in C also when the rest of C is dropped
         FractureCoupledLinearSolver::Options linear;
         int dumpMinNonlinIter{0};
         bool writeCoupledSystem{false};
