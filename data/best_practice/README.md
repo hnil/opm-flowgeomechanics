@@ -73,6 +73,18 @@ cell's pore volume) is ineffective, ~1e11 too lenient.
 
 ---
 
+### `norne_fb_blas.json` + `mech_lines.json` — fast Norne sector settings
+`norne_fb_blas.json` is `seq_implicit_fb_robust_v2_test3` (the Norne sector delivery) with
+`wi_fracture_pressure=false`, `linsolver.blas_operator=true` and
+`preconditioner.mech_solver.type=lapack_inv`. `mech_lines.json` is a `--linear-solver-mech`
+file, not a fracture file: `cg` with the `mech_lines` preconditioner (line and plane blocks
+around one-sweep BoomerAMG), stop at 7e-6 relative to the load.
+
+Use them with `--threads-per-process=4`. On the 9-year Norne sector run this is 5.2×
+faster (8 521 s against 44 187 s). Mechanics is 12.8× faster. The final BHP,
+WWIRFRAC/WWIR, fracture area and fracture height match the delivered solver.
+`fixed_tests/NORNE_PERFORMANCE_2026-11-14.md` has the numbers.
+
 ## Correspondence to the built-in aliases
 
 `--fracture-param-file` accepts two **built-in alias names** (no file needed); they are
@@ -97,7 +109,10 @@ edit copies here instead.
 ## Example commands
 
 Paths below are relative to the superbuild directory. The mech linear
-solver JSON and `myparamsfrac*.ini` live in `opm-flowgeomechanics/data/`.
+solver JSON lives in `opm-flowgeomechanics/data/`. `params_seq.ini` / `params.ini` here are
+`data/myparamsfrac_seq.ini` / `myparamsfrac.ini` (which the REGTESTs use unchanged) with
+`LinearSolver=cprw` and `MatrixAddWellContributions=false`: with wells in the matrix each
+fracture connection joins a dense well clique, and CPR setup grows with the fracture.
 
 ```bash
 BIN=builds/release/opm-flowgeomechanics/bin/flow_energy_geomech
@@ -105,28 +120,28 @@ DATA=opm-flowgeomechanics/data
 BP=$DATA/best_practice
 
 # --- General sequential-implicit (BHP), explicit file ---
-$BIN --parameter-file=$DATA/myparamsfrac_seq.ini \
+$BIN --parameter-file=$BP/params_seq.ini \
      $DATA/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA \
      --fracture-param-file=$BP/seq_implicit_bhp.json \
      --linear-solver-mech=$DATA/amgmechsolverhypre_geosxcpu_new_nv.json \
      --enable-write-all-solutions=true --output-dir=/tmp/run_seq_bhp
 
 # --- Same thing via the built-in alias (no file) ---
-$BIN --parameter-file=$DATA/myparamsfrac_seq.ini \
+$BIN --parameter-file=$BP/params_seq.ini \
      $DATA/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA \
      --fracture-param-file=sequential_implicit \
      --linear-solver-mech=$DATA/amgmechsolverhypre_geosxcpu_new_nv.json \
      --output-dir=/tmp/run_seq_alias
 
 # --- Rate-controlled well (the hard case) + small max step ---
-$BIN --parameter-file=$DATA/myparamsfrac_seq.ini \
+$BIN --parameter-file=$BP/params_seq.ini \
      $DATA/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA \
      --fracture-param-file=$BP/seq_implicit_rate.json \
      --linear-solver-mech=$DATA/amgmechsolverhypre_geosxcpu_new_nv.json \
      --solver-max-time-step-in-days=2 --output-dir=/tmp/run_seq_rate
 
 # --- Post-solve (cheaper, lagged) ---
-$BIN --parameter-file=$DATA/myparamsfrac.ini \
+$BIN --parameter-file=$BP/params.ini \
      $DATA/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC.DATA \
      --fracture-param-file=$BP/postsolve.json \
      --linear-solver-mech=$DATA/amgmechsolverhypre_geosxcpu_new_nv.json \
@@ -134,14 +149,14 @@ $BIN --parameter-file=$DATA/myparamsfrac.ini \
 #   or:  --fracture-param-file=standard
 
 # --- Large / grid-refined run (mech-skip + Anderson) ---
-$BIN --parameter-file=$DATA/myparamsfrac_seq.ini \
+$BIN --parameter-file=$BP/params_seq.ini \
      data/test_oss/refine/CASE_REFINE_nx_31_ny_31_nz_25.DATA \
      --fracture-param-file=$BP/seq_implicit_performance.json \
      --linear-solver-mech=$DATA/amgmechsolverhypre_geosxcpu_new_nv.json \
      --output-dir=/tmp/run_perf
 
 # --- MPI: same options, just launch under mpirun ---
-mpirun -np 2 $BIN --parameter-file=$DATA/myparamsfrac_seq.ini \
+mpirun -np 2 $BIN --parameter-file=$BP/params_seq.ini \
      $DATA/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA \
      --fracture-param-file=$BP/seq_implicit_bhp.json \
      --linear-solver-mech=$DATA/amgmechsolverhypre_geosxcpu_new_nv.json \
