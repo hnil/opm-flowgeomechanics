@@ -714,6 +714,7 @@ private:
         bool fbClampBeforeLineSearch{false};
         bool fbNoProjection{false};
         double fbPhiAbsTol{0.0}; // [Pa]; |phi| below it passes regardless of the cell's scale
+        bool fbFlowMerit{false};
         bool fbTrace{false};
         double flowTolerance{-1.0}; // < 0: same as the mechanics tolerance
         bool dropCoupling{true};
@@ -810,7 +811,9 @@ private:
     VectorHP assembleResidual_(const VectorHP& x, const ResVector& mech_rhs, const FbRows& fb) const;
     bool isConverged_(const VectorHP& rhs, const FbRows& fb, double tol) const;
     void limitStep_(const VectorHP& x, VectorHP& dx, const ResVector& mech_rhs, const FbRows& fb,
-                    double tol, double flow_res, int nlin_iteration) const;
+                    double tol, double flow_res, int nlin_iteration,
+                    const std::vector<int>& closed_cells);
+    double flowMeritAt_(const VectorHP& xt, const std::vector<int>& closed_cells, double tol_flow);
     void applyUpdate_(VectorHP& x, const VectorHP& dx);
 
     void assembleFractureMatrix() const;
