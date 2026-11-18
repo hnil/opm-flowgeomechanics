@@ -37,6 +37,7 @@ namespace Opm {
     {
         for (auto& well_fracture : well_fractures_) {
             for (auto& fracture : well_fracture) {
+                fracture.setMechLookup(mechLookup_());
                 fracture.updateReservoirCells(cell_search_tree_, cpgrid, cell_seeds_);
             }
         }
@@ -163,6 +164,7 @@ namespace Opm {
             for (size_t j = 0; j < fractures.size(); ++j) {
                 if (fractures[j].isActive()) {
                     OpmLog::debug(fmt::format("Solving fracture {}", fractures[j].name()));
+                    fractures[j].setMechLookup(mechLookup_());
                     if (warn_keep_state) {
                         try {
                             fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator, mode);

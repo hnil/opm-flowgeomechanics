@@ -1229,6 +1229,9 @@ namespace Opm{
         Dune::FieldVector<double,6> stress(size_t globalIdx) const{
             return geoMechModel_.stress(globalIdx);
         }
+        Dune::FieldVector<double,6> mechCellStress(int mechIdx) const{
+            return geoMechModel_.mechCellStress(mechIdx);
+        }
         void advanceTimeLevel(){
             Parent::advanceTimeLevel();
         }

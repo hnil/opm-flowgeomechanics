@@ -281,6 +281,14 @@ public:
     void updateReservoirCells(const external::cvf::ref<external::cvf::BoundingBoxTree>& cellSearchTree,
                             const Dune::CpGrid& grid,
                             const std::vector<EntitySeed>& entity_seeds);
+    //! Cell search on a separate mechanics grid, for fracture cells outside the flow grid.
+    struct MechLookup
+    {
+        const external::cvf::ref<external::cvf::BoundingBoxTree>* tree = nullptr;
+        const Dune::CpGrid* grid = nullptr;
+        const std::vector<EntitySeed>* seeds = nullptr;
+    };
+    void setMechLookup(const MechLookup& lookup) { mech_lookup_ = lookup; }
     template <class TypeTag, class Simulator>
     void updateFilterCakePropertiesPost(const Simulator& simulator);
     // solver related
@@ -843,6 +851,7 @@ private:
     struct ReservoirMap
     {
         std::vector<int> cells; // the cell holding the fracture cell's centroid
+        std::vector<int> mechCells; // mechanics cell of a centroid outside the flow grid, else -1
         std::vector<std::vector<int>> allCells;
         std::vector<std::vector<double>> allAreas;
         std::vector<std::vector<Dune::FieldVector<double, 3>>> allCenters;
@@ -864,6 +873,7 @@ private:
         double mobility{}, density{}, cellZ{}, pressure{};
     };
     ReservoirMap reservoir_map_;
+    MechLookup mech_lookup_;
     // Reservoir-cell mapping per fracture triangle, keyed on its exact corner coordinates
     // (solver.cache_cell_mapping); valid while the reservoir grid is fixed.
     struct TriCellMapping {

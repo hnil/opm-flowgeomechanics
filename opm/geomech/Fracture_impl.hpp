@@ -461,6 +461,7 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
 
         reservoir_.injectedMobility.resize(ncf, 0.0);
         reservoir_.fluidMobility.resize(ncf, 1000.0);
+        std::vector<size_t> mech_only;
         for (size_t i = 0; i < ncf; ++i) {
             int cell = reservoir_map_.cells[i];
             if (!(cell < 0)) {
@@ -566,8 +567,31 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                 reservoir_.cstress[i]  = 1e99;
                 reservoir_map_.dist[i] = 1e99;
                 reservoir_.cellZ[i] = origo_[2];// should maybe be cell center of triangle
+                if constexpr (requires { problem.mechCellStress(0); }) {
+                    const int m = i < reservoir_map_.mechCells.size() ? reservoir_map_.mechCells[i] : -1;
+                    if (m >= 0) {
+                        reservoir_.stress[i] = problem.mechCellStress(m);
+                        mech_only.push_back(i);
+                    }
+                }
             }
             // assume reservoir distance is calculated
+        }
+
+        if (!mech_only.empty()) {
+            // Rock without a flow cell: no leak-off or WI, toughness from the flow cells.
+            double toughness = prm_.get<double>("reservoir.mech_only_toughness", -1.0);
+            if (!(toughness > 0.0)) {
+                toughness = 0.0;
+                for (size_t i = 0; i < ncf; ++i) {
+                    if (reservoir_map_.cells[i] >= 0) {
+                        toughness = std::max(toughness, reservoir_.cstress[i]);
+                    }
+                }
+            }
+            for (const size_t i : mech_only) {
+                reservoir_.cstress[i] = toughness > 0.0 ? toughness : 1e99;
+            }
         }
 
         if (stress_mode != centre_stress::Mode::None && stress_sides_.size() != stress_sides_logged) {

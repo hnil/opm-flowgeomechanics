@@ -795,6 +795,21 @@ namespace Opm{
             return effStress;
          }
 
+        //! Total stress (compression positive) of a cell of the separate mechanics grid, as
+        //! stress() gives for a flow cell; cells without flow state start from STREQUIL.
+        SymTensor mechCellStress(int m) const
+        {
+            if (mechInitStress_.size() != mechState_.stress.size()) {
+                buildMechInitStress_();
+            }
+            SymTensor s = mechInitStress_[m];
+            s.axpy(-1.0, mechState_.stress[m]);
+            for (int i = 0; i < 3; ++i) {
+                s[i] += this->mechLoad()[m][0];
+            }
+            return s;
+        }
+
          const SymTensor fractureStress(size_t globalIdx) const{
             // need to know effect of absolute pressure
 	   const auto& iq = simulator_.model().intensiveQuantities(globalIdx,0);
@@ -815,6 +830,30 @@ namespace Opm{
 
         // A flow vertex that is a mechanics vertex copies it; any other is
         // trilinear in the corners of its flow cell's mechanics cell.
+        void buildMechInitStress_() const
+        {
+            const auto& problem = simulator_.problem();
+            const std::size_t nf = simulator_.model().numGridDof();
+            std::vector<double> flow(nf), mech;
+            mechInitStress_.assign(mechMap_.numMechCells(), SymTensor(0.0));
+            for (int c = 0; c < 6; ++c) {
+                for (std::size_t f = 0; f < nf; ++f) {
+                    flow[f] = problem.initStress(f)[c];
+                }
+                mechMap_.restrict(flow, mech);
+                for (std::size_t m = 0; m < mech.size(); ++m) {
+                    mechInitStress_[m][c] = mech[m];
+                }
+            }
+            const auto& grid = this->mechGrid();
+            for (std::size_t m = 0; m < mechInitStress_.size(); ++m) {
+                if (!mechMap_.hasFlowState(m)) {
+                    const Dune::cpgrid::Entity<0> e(*grid.currentData().back(), static_cast<int>(m), true);
+                    mechInitStress_[m] = problem.stressEquilAt(e.geometry().center()[2], 1);
+                }
+            }
+        }
+
         void buildFlowVertexSource_()
         {
             const auto& mgv = this->mechGrid().leafGridView();
@@ -1032,6 +1071,8 @@ namespace Opm{
         // Only filled when the mechanics grid is a coarsening of the flow grid.
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialForceMech_;
         MechFlowMap mechMap_;
+        // Initial stress per mechanics cell, built on first use by mechCellStress().
+        mutable std::vector<SymTensor> mechInitStress_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialPressForce_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialPressForceFracture_;
         Dune::BlockVector<Dune::FieldVector<double,1>> mechPotentialTempForce_;
