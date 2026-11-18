@@ -2519,8 +2519,10 @@ Fracture::updateLeakoff()
         }
         }
     }
-    // cells whose centre lies within this distance [m] of the fracture boundary get no leak-off
+    // cells whose centre lies within this distance [m] of the fracture boundary get almost no leak-off
     const double no_leakof_front_distance = prm_.get<double>("solver.no_leakof_front_distance", 0.0);
+    // nonzero so that pieces joined to the rest only at a vertex keep a sink
+    const double front_band_factor = prm_.get<double>("solver.front_band_leakoff_factor", 1e-3);
     std::vector<bool> inFrontBand(gv.size(codimCell), false);
     if (no_leakof_front_distance > 0.0) {
         std::vector<std::pair<Dune::FieldVector<double, 3>, Dune::FieldVector<double, 3>>> segs;
@@ -2580,8 +2582,10 @@ Fracture::updateLeakoff()
             }
         }
         leakof_[eIdx] = sides / invtrans;
-        if((elementHasBoundaryNode[eIdx] && no_leakof_outercells) || inFrontBand[eIdx]){
+        if(elementHasBoundaryNode[eIdx] && no_leakof_outercells){
           leakof_[eIdx] = 0.0;
+        } else if (inFrontBand[eIdx]) {
+          leakof_[eIdx] *= front_band_factor;
         }
     }
 }
