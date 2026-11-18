@@ -103,6 +103,27 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
 
             const auto firstSlot = nextSlot;
 
+            // A newborn cell fills with the fluid already in the fracture, not the rock's.
+            Scalar meanT = -1.0;
+            if constexpr (getPropValue<TypeTag, Properties::EnableEnergy>()) {
+                if (this->simulator_.problem().getFractureParam().template get<bool>(
+                        "solver.embedded_newborn_fracture_temperature", false)) {
+                    Scalar sumT = 0.0;
+                    int nT = 0;
+                    for (std::size_t cell = 0; cell < numCells && firstSlot + cell < wasActive.size(); ++cell) {
+                        if (wasActive[firstSlot + cell]) {
+                            const auto dof = static_cast<unsigned>(this->localToGlobalDof(firstSlot + cell));
+                            sumT += getValue(this->simulator_.model().intensiveQuantities(dof, 0)
+                                                 .fluidState().temperature(0));
+                            ++nT;
+                        }
+                    }
+                    if (nT > 0) {
+                        meanT = sumT / nT;
+                    }
+                }
+            }
+
             // A newborn cell starts at the fracture's own pressure, shifted to the flow's
             // level by the mean offset over the cells that were already bound.
             const auto& ownPressure = fracture.fracturePressure();
@@ -132,6 +153,7 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
                 const auto slot = firstSlot + cell;
                 this->slotOf_.emplace_back(fractureIdx, cell);
                 this->newbornPressure_[slot] = (ownAt(cell) > 0) ? ownAt(cell) + offset : Scalar{-1};
+                this->newbornTemperature_[slot] = meanT;
                 this->phase_[slot] = fracture.injectedPhaseIdx();
 
                 // The aperture is the volume; below the floor a cell is treated as having
@@ -241,6 +263,13 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
             const auto p = this->newbornPressureMode_ ? this->newbornPressure_[slot] : Scalar{-1};
             this->assignStateFromPartner(solution, slot, /*useCurrentState=*/true, p);
             this->assignStateFromPartner(solutionOld, slot, /*useCurrentState=*/true, p);
+            if constexpr (getPropValue<TypeTag, Properties::EnableEnergy>()) {
+                if (this->newbornTemperature_[slot] > 0) {
+                    const auto dof = static_cast<unsigned>(this->localToGlobalDof(slot));
+                    solution[dof][Indices::temperatureIdx] = this->newbornTemperature_[slot];
+                    solutionOld[dof][Indices::temperatureIdx] = this->newbornTemperature_[slot];
+                }
+            }
             this->newbornDofs_.push_back(static_cast<unsigned>(this->localToGlobalDof(slot)));
             // Its old state is its current one, so its old volume is too; otherwise the
             // storage term would read the birth as a volume change and inject mass.
@@ -255,22 +284,26 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
         const auto prevNow = solution;
         const auto prevOld = solutionOld;
         std::size_t fIdx = 0;
+        std::size_t remapDiagCount = 0, skipInactive = 0, skipNoDonor = 0, skipRange = 0, skipWasInactive = 0;
         for (const auto& wellFractures : fractures.wellFractures()) {
             for (const auto& fracture : wellFractures) {
                 const bool known = fIdx < this->boundLayout_.size();
+                OpmLog::info(fmt::format("REMAPDIAG fracture {} remapped={} donor={} cells={} known={}",
+                    fIdx, fracture.flowStateRemapped(), fracture.flowStateDonor().size(),
+                    newLayout[fIdx].second, known));
                 if (known && fracture.flowStateRemapped()
                     && fracture.flowStateDonor().size() == newLayout[fIdx].second) {
                     const auto [oldFirst, oldCells] = this->boundLayout_[fIdx];
                     const auto& donor = fracture.flowStateDonor();
                     for (std::size_t cell = 0; cell < donor.size(); ++cell) {
                         const auto slot = newLayout[fIdx].first + cell;
-                        if (!this->active_[slot] || donor[cell] < 0
-                            || static_cast<std::size_t>(donor[cell]) >= oldCells
-                            || !wasActive[oldFirst + donor[cell]]) {
-                            continue;
-                        }
+                        if (!this->active_[slot]) { ++skipInactive; continue; }
+                        if (donor[cell] < 0) { ++skipNoDonor; continue; }
+                        if (static_cast<std::size_t>(donor[cell]) >= oldCells) { ++skipRange; continue; }
+                        if (!wasActive[oldFirst + donor[cell]]) { ++skipWasInactive; continue; }
                         const auto dof = static_cast<unsigned>(this->localToGlobalDof(slot));
                         const auto from = this->localToGlobalDof(oldFirst + donor[cell]);
+                        ++remapDiagCount;
                         solution[dof] = prevNow[from];
                         solutionOld[dof] = prevOld[from];
                         this->simulator_.model().setDofTotalVolumeOld(dof, this->bulkVolume_[slot]);
@@ -283,6 +316,7 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
                 ++fIdx;
             }
         }
+        OpmLog::info(fmt::format("REMAPDIAG copied {} cell states; skipped inactive {} nodonor {} range {} wasinactive {}", remapDiagCount, skipInactive, skipNoDonor, skipRange, skipWasInactive));
     }
     this->boundLayout_ = newLayout;
 

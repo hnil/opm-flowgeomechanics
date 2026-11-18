@@ -103,6 +103,7 @@ public:
         , depth_(capacity, 0.0)
         , partner_(capacity, 0)
         , newbornPressure_(capacity, -1.0)
+        , newbornTemperature_(capacity, -1.0)
         , phase_(capacity, FluidSystem::waterPhaseIdx)
     {}
 
@@ -200,8 +201,16 @@ public:
      */
     void linearize(SparseMatrixAdapter& matrix, GlobalEqVector& residual) override
     {
+        if (pinWaterCells_ < 0) {
+            pinWaterCells_ = this->simulator_.problem().getFractureParam()
+                .template get<bool>("solver.embedded_pin_water_cells", false) ? 1 : 0;
+        }
         for (unsigned localIdx = 0; localIdx < this->numDofs(); ++localIdx) {
             if (this->active_[localIdx]) {
+                if (pinWaterCells_ == 1) {
+                    this->pinWaterCell_(matrix, residual,
+                                        static_cast<unsigned>(this->localToGlobalDof(localIdx)));
+                }
                 continue;
             }
 
@@ -600,8 +609,35 @@ private:
     bool remapState_{false}; // see setRemapState()
     bool newbornPressureMode_{true}; // see setNewbornOwnPressure()
     std::vector<Scalar> newbornPressure_{}; // per slot; negative = use the partner's
+    std::vector<Scalar> newbornTemperature_{}; // per slot; negative = use the partner's
     bool leakoffTotalMobility_{false}; // see setLeakoffTotalMobility()
     bool residualCheck_{false}; // see cnvReferencePoreVolume()
+    mutable int pinWaterCells_{-1};
+
+    // A cell holding only water: its oil and gas rows have no storage to act on (pv is an
+    // aperture times an area), so they pin the two saturations, as in the joint solve.
+    void pinWaterCell_(SparseMatrixAdapter& matrix, GlobalEqVector& residual, unsigned dof)
+    {
+        const auto& fs = this->simulator_.model().intensiveQuantities(dof, 0).fluidState();
+        if (getValue(fs.saturation(FluidSystem::waterPhaseIdx)) < 1.0 - 1e-6) {
+            return;
+        }
+        const int waterEq = Indices::conti0EqIdx
+            + FluidSystem::canonicalToActiveCompIdx(FluidSystem::waterCompIdx);
+        auto& row = matrix.istlMatrix()[dof];
+        int k = 0;
+        for (int e = Indices::conti0EqIdx; e < Indices::conti0EqIdx + Indices::numPhases; ++e) {
+            if (e == waterEq) {
+                continue;
+            }
+            const int pvIdx = (k++ == 0) ? Indices::waterSwitchIdx : Indices::compositionSwitchIdx;
+            for (auto col = row.begin(); col != row.end(); ++col) {
+                (*col)[e] = 0.0;
+            }
+            row[dof][e][pvIdx] = 1.0;
+            residual[dof][e] = 0.0;
+        }
+    }
     typename ParentType::LocalStepTolerance stepTolerance_{};
     double maxTempChange_{0.0}; // Newton step limit [K]; <= 0: the global one
 };
