@@ -184,11 +184,16 @@ std::vector<MechanicalConstraintComponent> mechanicalConstraintRanks(
     }
     // Collapse rank-local cell connectivity before communication: one pair
     // per local vertex, rather than transmitting every cell's corner list.
+    // Face vertices, not only the 8 corners: edge-conformal faces carry extra nodes.
     Components local;
     for (const auto& cell : elements(gv)) {
+        const int c = gv.indexSet().index(cell);
         const auto first = ids[gv.indexSet().subIndex(cell, 0, 3)];
-        for (unsigned corner = 0; corner < cell.subEntities(3); ++corner) {
-            local.join(first, ids[gv.indexSet().subIndex(cell, corner, 3)]);
+        for (int f = 0; f < grid.numCellFaces(c); ++f) {
+            const int face = grid.cellFace(c, f);
+            for (int v = 0; v < grid.numFaceVertices(face); ++v) {
+                local.join(first, ids[grid.faceVertex(face, v)]);
+            }
         }
     }
     std::vector<std::int64_t> localEdges;
