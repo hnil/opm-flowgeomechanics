@@ -176,3 +176,6 @@ dependency options. A face-only overlap can change the mechanics equations at
 partition junctions. An incomplete overlap now raises a collective initialization
 error before adaptive timestepping; reducing the timestep cannot repair it.
 See [the operator regression](../tests/mechanical_vertex_stencils.md).
+
+For parallel fracture runs with LGRs, keep `--refine-before-redistribute=false`
+so the partitioner keeps each refinement region and its halo together.

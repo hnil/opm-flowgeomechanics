@@ -724,9 +724,12 @@ namespace Opm{
             }
 
             if (this->gridView().comm().max(static_cast<int>(!outsideLgr.empty())) > 0) {
-                const std::string msg = outsideLgr.empty()
+                std::string msg = outsideLgr.empty()
                     ? std::string("A fracture reaches outside the LGR its well is completed in.")
                     : outsideLgr;
+                if (this->gridView().comm().size() > 1
+                    && this->simulator().vanguard().refineBeforeRedistribute())
+                    msg += " Retry with --refine-before-redistribute=false.";
                 OPM_THROW(std::runtime_error, msg);
             }
 
