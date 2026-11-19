@@ -26,6 +26,8 @@
 #include <opm/geomech/vem/vem.hpp>
 #include <opm/geomech/vem/vemutils.hpp>
 
+#include <dune/common/timer.hh>
+
 #include <fmt/format.h>
 
 #include <algorithm>
@@ -604,6 +606,7 @@ void MechLinearSolver<GridType>::setup(const PropertyTree& prm_in, Matrix& A,
                                        const std::vector<Vector>& modes)
 {
     OPM_TIMEBLOCK(setupLinearSolver);
+    Dune::Timer setup_timer;
     tsolver_.reset();
     A_ = &A;
     axis_.clear();
@@ -658,6 +661,10 @@ void MechLinearSolver<GridType>::setup(const PropertyTree& prm_in, Matrix& A,
         tsolver_ = std::make_unique<FlexibleSolverType>(*sop, prm, weightsCalculator,
                                                         pressureIndex);
         sop_ = std::move(sop);
+    }
+    const double setup_s = grid_.comm().max(setup_timer.elapsed());
+    if (grid_.comm().rank() == 0) {
+        OpmLog::info(fmt::format("Mechanical solver setup: {:.3f} s", setup_s));
     }
 }
 
