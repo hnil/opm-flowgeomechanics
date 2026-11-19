@@ -1964,10 +1964,22 @@ Fracture::remapState_(const RegridMaps& maps, const int level, const Propagation
         if (opt.keepOpen) {
             const auto w = remapFilterCakeConservative(maps.width_volumes, maps.before, level,
                                                        maps.before_level);
-            fracture_width_.resize(w.size());
-            for (size_t i = 0; i < w.size(); ++i) {
-                fracture_width_[i][0] = w[i];
+            size_t open_before = 0, open_after = 0;
+            double vol_before = 0.0, vol_after = 0.0;
+            for (size_t i = 0; i < old_size; ++i) {
+                open_before += fracture_width_[i][0] > opt.openWidth;
+                vol_before += maps.width_volumes.volume[i];
             }
+            fracture_width_.resize(w.size());
+            ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+            for (const auto& element : Dune::elements(grid_->leafGridView())) {
+                const auto i = mapper.index(element);
+                fracture_width_[i][0] = w[i];
+                open_after += w[i] > opt.openWidth;
+                vol_after += w[i] * element.geometry().volume();
+            }
+            OpmLog::debug(fmt::format("keep-open remap: open cells {} -> {}, volume {:.6e} -> {:.6e} m3",
+                                      open_before, open_after, vol_before, vol_after));
         } else {
             redistribute_values(fracture_width_, maps.before, maps.after, level, /*point_wise*/ true,
                                 maps.before_level);
