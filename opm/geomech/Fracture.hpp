@@ -612,6 +612,8 @@ private:
        bool smoothBoundary{false};
        bool remapSolution{true};
        bool conservativeCake{false};
+       bool keepOpen{false};       // coarsening keeps open cells; width remapped by volume
+       double openWidth{1e-6};
        double forceLimit{0.0};
        bool conservative{false};
        bool convergedCellsOnly{false};
@@ -653,6 +655,7 @@ private:
        int before_level{0};                      // trimesh level of the refs in before
        std::vector<std::vector<CellRef>> after;
        std::map<CellRef, int> boundary;          // trimesh boundary cell -> grid cell
+       RegularTrimesh::CellVolumes width_volumes; // on the grid before the regrid, keepOpen only
    };
    struct GridSolve
    {
@@ -686,9 +689,12 @@ private:
                               const std::vector<std::vector<CellRef>>& map2,
                               const int level, const int map1_level = 0);
    RegularTrimesh::CellVolumes filterCakeVolumesByCell() const;
+   RegularTrimesh::CellVolumes volumesByCell_(const std::vector<double>& thickness) const;
+   std::vector<CellRef> openTrimeshCells_(double open_width) const;
    std::vector<double> remapFilterCakeConservative(const RegularTrimesh::CellVolumes& source,
                                                    const std::vector<std::vector<CellRef>>& source_map,
-                                                   const int level) const;
+                                                   const int level,
+                                                   const int source_level = 0) const;
 
    std::vector<double> redistribute_values(const std::vector<double>& values,
                                         const std::vector<std::vector<CellRef>>& map1,

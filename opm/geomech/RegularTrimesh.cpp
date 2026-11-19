@@ -798,13 +798,14 @@ RegularTrimesh::conservativeRemap(const CellVolumes& source,
                                   const int level,
                                   const vector<double>& target_area,
                                   const vector<int>& target_group,
-                                  const vector<Coord3D>& target_centre)
+                                  const vector<Coord3D>& target_centre,
+                                  const int map1_level)
 //------------------------------------------------------------------------------
 {
     const size_t nt = map2.size();
     vector<double> volume(nt, 0.0);
     vector<double> mapped(source.volume.size(), 0.0);
-    for (const auto& [i, j, w] : createGridToGridMap(map1, map2, level)) {
+    for (const auto& [i, j, w] : createGridToGridMap(map1, map2, level, map1_level)) {
         volume[j] += source.volume[i] * w;
         mapped[i] += w;
     }
@@ -1363,7 +1364,7 @@ RegularTrimesh::refine() const
 
 // ----------------------------------------------------------------------------
 RegularTrimesh
-RegularTrimesh::coarsen(bool strict) const
+RegularTrimesh::coarsen(bool strict, const vector<CellRef>& keep) const
 // ----------------------------------------------------------------------------
 {
     map<CellRef, CellAttributes> new_cells;
@@ -1374,6 +1375,10 @@ RegularTrimesh::coarsen(bool strict) const
                 || (std::abs(c[0]) % 2 == 0 && std::abs(c[1]) % 2 == 0 && c[2] == 1))
                 new_cells[fine_to_coarse(c)] = e.second;
     }
+    // the anchor rule above drops a parent whose anchor child is absent or on the boundary
+    for (const auto& c : keep)
+        if (const auto it = cellinfo_.find(c); it != cellinfo_.end())
+            new_cells.try_emplace(fine_to_coarse(c), it->second);
 
     return RegularTrimesh {new_cells, origin_, axis1_, axis2_, {edgelen_[0] * 2, edgelen_[1] * 2}};
 }
@@ -1490,7 +1495,8 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
                     const int target_cellcount,
                     const int cellcount_threshold,
                     const int max_iter,
-                    function<bool()> stop_criterion
+                    function<bool()> stop_criterion,
+                    const std::vector<CellRef>& keep_cells
                  )
 {
     OPM_TIMEFUNCTION();
@@ -1518,9 +1524,16 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
         }
     };
 
+    auto keep_on_level = [&keep_cells](const int level) -> vector<CellRef> {
+        vector<CellRef> result;
+        for (const auto& cell : keep_cells)
+            result.push_back(RegularTrimesh::fine_to_coarse(cell, level));
+        return result;
+    };
+
     while (working_mesh.numCells() > cellcount_threshold) {
         last_meshes.push_back(working_mesh);
-        working_mesh = working_mesh.coarsen(true);
+        working_mesh = working_mesh.coarsen(true, keep_on_level(cur_level));
         working_mesh.setCellFlags(fixed_on_level(cur_level), 1); // set fixed cells at this level
         working_mesh.removeSawtooths();
         cur_level++;
@@ -1570,7 +1583,7 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
             // expansion is going too slowly, move to coarser level
             last_meshes.push_back(working_mesh);
 
-            working_mesh = working_mesh.coarsen(true);
+            working_mesh = working_mesh.coarsen(true, keep_on_level(cur_level));
             working_mesh.setCellFlags(fixed_on_level(cur_level), 1); // set fixed cells at this level
             working_mesh.removeSawtooths();
             cur_level++;

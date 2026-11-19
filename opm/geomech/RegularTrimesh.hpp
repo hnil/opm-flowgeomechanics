@@ -163,7 +163,8 @@ public:
 
     // ------------- Functions for creating new RegularTrimesh objects -------------
     RegularTrimesh refine() const;
-    RegularTrimesh coarsen(bool strict = false) const;
+    // keep: cells of this mesh whose coarse parent must exist after coarsening
+    RegularTrimesh coarsen(bool strict = false, const std::vector<CellRef>& keep = {}) const;
 
     // -------------- Functions for getting the triangles of the mesh --------------
 
@@ -216,7 +217,8 @@ public:
                       const int level,
                       const std::vector<double>& target_area,
                       const std::vector<int>& target_group,
-                      const std::vector<Coord3D>& target_centre);
+                      const std::vector<Coord3D>& target_centre,
+                      const int map1_level = 0);
 
     template <class Serializer>
     void serializeOp(Serializer& serializer)
@@ -302,6 +304,7 @@ expand_to_criterion(const RegularTrimesh& mesh,
         const int target_cellcount, // target number of cells in final mesh
                     const int cellcount_threshold, // target number of cells in initial mesh to expand (start level will be determined by this)
         const int max_iteration_on_coarse_level,
-        std::function<bool()> stop_criterion = []() { return false; }
+        std::function<bool()> stop_criterion = []() { return false; },
+        const std::vector<CellRef>& keep_cells = {} // level-0 cells that coarsening must not drop
         );
 } // namespace Opm

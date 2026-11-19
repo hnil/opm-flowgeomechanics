@@ -1846,6 +1846,9 @@ Fracture::PropagationOptions::read(const PropertyTree& prm)
         OPM_THROW(std::runtime_error, "Unknown solver.filtercake_remap: " + cake_remap);
     }
     o.conservativeCake = (cake_remap == "conservative");
+    o.keepOpen = prm.get<bool>("solver.coarsen_keep_open", false);
+    o.openWidth = prm.get<double>("solver.coarsen_open_width", 1e-6);
+    o.conservativeCake = o.conservativeCake || o.keepOpen;
     o.forceLimit = prm.get<double>("solver.force_limit", 0.0);
     o.conservative = prm.get<bool>("solver.conservative_propagation", false);
     o.convergedCellsOnly = prm.get<bool>("solver.propagate_converged_cells_only", false);
@@ -1957,8 +1960,17 @@ Fracture::remapState_(const RegridMaps& maps, const int level, const Propagation
             assert(std::abs(fracture_width_[i][0]) < 0.6);
         }
         const auto old_size = fracture_width_.size();
-        redistribute_values(fracture_width_, maps.before, maps.after, level, /*point_wise*/ true,
-                            maps.before_level);
+        if (opt.keepOpen) {
+            const auto w = remapFilterCakeConservative(maps.width_volumes, maps.before, level,
+                                                       maps.before_level);
+            fracture_width_.resize(w.size());
+            for (size_t i = 0; i < w.size(); ++i) {
+                fracture_width_[i][0] = w[i];
+            }
+        } else {
+            redistribute_values(fracture_width_, maps.before, maps.after, level, /*point_wise*/ true,
+                                maps.before_level);
+        }
         double well_value = 0.0;
         if (numWellEquations() > 0) {
             well_value = fracture_pressure_[fracture_pressure_.size() - 1];
@@ -2666,6 +2678,22 @@ Fracture::filterCakeVolume() const
 RegularTrimesh::CellVolumes
 Fracture::filterCakeVolumesByCell() const
 {
+    return volumesByCell_(filtercake_thikness_);
+}
+
+std::vector<CellRef>
+Fracture::openTrimeshCells_(const double open_width) const
+{
+    std::vector<CellRef> open;
+    for (size_t i = 0; i < grid_mesh_map_.size() && i < fracture_width_.size(); ++i)
+        if (fracture_width_[i][0] > open_width)
+            open.insert(open.end(), grid_mesh_map_[i].begin(), grid_mesh_map_[i].end());
+    return open;
+}
+
+RegularTrimesh::CellVolumes
+Fracture::volumesByCell_(const std::vector<double>& thickness) const
+{
     RegularTrimesh::CellVolumes cake;
     const size_t nc = numFractureCells();
     cake.volume.resize(nc, 0.0);
@@ -2677,8 +2705,8 @@ Fracture::filterCakeVolumesByCell() const
         const auto geom = element.geometry();
         const auto c = geom.center();
         cake.centre[eIdx] = {c[0], c[1], c[2]};
-        if (eIdx < filtercake_thikness_.size()) {
-            cake.volume[eIdx] = filtercake_thikness_[eIdx] * geom.volume();
+        if (eIdx < thickness.size()) {
+            cake.volume[eIdx] = thickness[eIdx] * geom.volume();
         }
         if (eIdx < reservoir_map_.cells.size()) {
             cake.group[eIdx] = reservoir_map_.cells[eIdx];
@@ -2690,7 +2718,8 @@ Fracture::filterCakeVolumesByCell() const
 std::vector<double>
 Fracture::remapFilterCakeConservative(const RegularTrimesh::CellVolumes& source,
                                       const std::vector<std::vector<CellRef>>& source_map,
-                                      const int level) const
+                                      const int level,
+                                      const int source_level) const
 {
     const size_t nc = numFractureCells();
     std::vector<double> area(nc, 0.0);
@@ -2705,7 +2734,8 @@ Fracture::remapFilterCakeConservative(const RegularTrimesh::CellVolumes& source,
         group[eIdx] = reservoir_map_.cells[eIdx];
         centre[eIdx] = {c[0], c[1], c[2]};
     }
-    return RegularTrimesh::conservativeRemap(source, source_map, grid_mesh_map_, level, area, group, centre);
+    return RegularTrimesh::conservativeRemap(source, source_map, grid_mesh_map_, level, area, group, centre,
+                                             source_level);
 }
 
 void Fracture::resetFracture()
