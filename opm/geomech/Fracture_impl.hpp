@@ -794,7 +794,7 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                                 target_cellcount,
                                 cellcount_threshold,
                                 max_iter_on_same_level, stop_criterion,
-                                opt.keepOpen ? openTrimeshCells_(opt.openWidth) : std::vector<CellRef>{});
+                                opt.majorityCoarsen);
 
 
 
@@ -896,12 +896,16 @@ Fracture::regridTo_(const RegularTrimesh& trimesh, const int level, const Propag
                                                         opt.smoothBoundary, opt.numcellThreshold,
                                                         opt.bandRings);
     RegridMaps maps;
-    if (opt.keepOpen && opt.remapSolution) {
+    if (opt.majorityCoarsen && opt.remapSolution) {
         std::vector<double> w(fracture_width_.size());
         for (size_t i = 0; i < w.size(); ++i) {
             w[i] = fracture_width_[i][0];
         }
         maps.width_volumes = volumesByCell_(w);
+        ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+        for (const auto& element : Dune::elements(grid_->leafGridView()))
+            if (w[mapper.index(element)] > 1e-6)
+                maps.open_area_before += element.geometry().volume();
     }
     maps.before = grid_mesh_map_;
     // false matches maps.before as if it were at level 0

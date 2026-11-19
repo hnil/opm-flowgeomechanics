@@ -1847,9 +1847,8 @@ Fracture::PropagationOptions::read(const PropertyTree& prm)
         OPM_THROW(std::runtime_error, "Unknown solver.filtercake_remap: " + cake_remap);
     }
     o.conservativeCake = (cake_remap == "conservative");
-    o.keepOpen = prm.get<bool>("solver.coarsen_keep_open", false);
-    o.openWidth = prm.get<double>("solver.coarsen_open_width", 1e-6);
-    o.conservativeCake = o.conservativeCake || o.keepOpen;
+    o.majorityCoarsen = prm.get<bool>("solver.coarsen_majority", false);
+    o.conservativeCake = o.conservativeCake || o.majorityCoarsen;
     o.forceLimit = prm.get<double>("solver.force_limit", 0.0);
     o.conservative = prm.get<bool>("solver.conservative_propagation", false);
     o.convergedCellsOnly = prm.get<bool>("solver.propagate_converged_cells_only", false);
@@ -1961,13 +1960,14 @@ Fracture::remapState_(const RegridMaps& maps, const int level, const Propagation
             assert(std::abs(fracture_width_[i][0]) < 0.6);
         }
         const auto old_size = fracture_width_.size();
-        if (opt.keepOpen) {
+        if (opt.majorityCoarsen) {
             const auto w = remapFilterCakeConservative(maps.width_volumes, maps.before, level,
                                                        maps.before_level);
+            constexpr double open_width = 1e-6; // for the debug line only
             size_t open_before = 0, open_after = 0;
-            double vol_before = 0.0, vol_after = 0.0;
+            double vol_before = 0.0, vol_after = 0.0, area_after = 0.0;
             for (size_t i = 0; i < old_size; ++i) {
-                open_before += fracture_width_[i][0] > opt.openWidth;
+                open_before += fracture_width_[i][0] > open_width;
                 vol_before += maps.width_volumes.volume[i];
             }
             fracture_width_.resize(w.size());
@@ -1975,11 +1975,13 @@ Fracture::remapState_(const RegridMaps& maps, const int level, const Propagation
             for (const auto& element : Dune::elements(grid_->leafGridView())) {
                 const auto i = mapper.index(element);
                 fracture_width_[i][0] = w[i];
-                open_after += w[i] > opt.openWidth;
+                open_after += w[i] > open_width;
+                area_after += (w[i] > open_width) * element.geometry().volume();
                 vol_after += w[i] * element.geometry().volume();
             }
-            OpmLog::debug(fmt::format("keep-open remap: open cells {} -> {}, volume {:.6e} -> {:.6e} m3",
-                                      open_before, open_after, vol_before, vol_after));
+            OpmLog::debug(fmt::format("volume remap: open cells {} -> {}, open area {:.1f} -> {:.1f} m2, volume {:.6e} -> {:.6e} m3",
+                                      open_before, open_after, maps.open_area_before, area_after,
+                                      vol_before, vol_after));
         } else {
             redistribute_values(fracture_width_, maps.before, maps.after, level, /*point_wise*/ true,
                                 maps.before_level);
@@ -2692,16 +2694,6 @@ RegularTrimesh::CellVolumes
 Fracture::filterCakeVolumesByCell() const
 {
     return volumesByCell_(filtercake_thikness_);
-}
-
-std::vector<CellRef>
-Fracture::openTrimeshCells_(const double open_width) const
-{
-    std::vector<CellRef> open;
-    for (size_t i = 0; i < grid_mesh_map_.size() && i < fracture_width_.size(); ++i)
-        if (fracture_width_[i][0] > open_width)
-            open.insert(open.end(), grid_mesh_map_[i].begin(), grid_mesh_map_[i].end());
-    return open;
 }
 
 RegularTrimesh::CellVolumes

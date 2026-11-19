@@ -163,8 +163,8 @@ public:
 
     // ------------- Functions for creating new RegularTrimesh objects -------------
     RegularTrimesh refine() const;
-    // keep: cells of this mesh whose coarse parent must exist after coarsening
-    RegularTrimesh coarsen(bool strict = false, const std::vector<CellRef>& keep = {}) const;
+    // majority: a coarse cell exists iff at least half of its children do (strict ignored)
+    RegularTrimesh coarsen(bool strict = false, bool majority = false) const;
 
     // -------------- Functions for getting the triangles of the mesh --------------
 
@@ -305,6 +305,6 @@ expand_to_criterion(const RegularTrimesh& mesh,
                     const int cellcount_threshold, // target number of cells in initial mesh to expand (start level will be determined by this)
         const int max_iteration_on_coarse_level,
         std::function<bool()> stop_criterion = []() { return false; },
-        const std::vector<CellRef>& keep_cells = {} // level-0 cells that coarsening must not drop
+        const bool majority_coarsen = false
         );
 } // namespace Opm

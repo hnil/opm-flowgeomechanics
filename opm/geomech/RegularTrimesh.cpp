@@ -1364,21 +1364,33 @@ RegularTrimesh::refine() const
 
 // ----------------------------------------------------------------------------
 RegularTrimesh
-RegularTrimesh::coarsen(bool strict, const vector<CellRef>& keep) const
+RegularTrimesh::coarsen(bool strict, bool majority) const
 // ----------------------------------------------------------------------------
 {
+    const auto is_anchor = [](const CellRef& c) {
+        return (std::abs(c[0]) % 2 == 1 && std::abs(c[1]) % 2 == 1 && c[2] == 0)
+            || (std::abs(c[0]) % 2 == 0 && std::abs(c[1]) % 2 == 0 && c[2] == 1);
+    };
     map<CellRef, CellAttributes> new_cells;
-    for (const auto& e : cellinfo_) {
-        const CellRef& c = e.first;
-        if (!strict || !is_boundary_cell(c, *this))
-            if ((std::abs(c[0]) % 2 == 1 && std::abs(c[1]) % 2 == 1 && c[2] == 0)
-                || (std::abs(c[0]) % 2 == 0 && std::abs(c[1]) % 2 == 0 && c[2] == 1))
+    if (majority) {
+        // a parent exists iff at least two of its four (equal-area) children do
+        map<CellRef, int> count;
+        for (const auto& e : cellinfo_) {
+            const CellRef parent = fine_to_coarse(e.first);
+            ++count[parent];
+            if (is_anchor(e.first) || new_cells.count(parent) == 0)
+                new_cells[parent] = e.second;
+        }
+        for (const auto& [parent, n] : count)
+            if (n < 2)
+                new_cells.erase(parent);
+    } else {
+        for (const auto& e : cellinfo_) {
+            const CellRef& c = e.first;
+            if ((!strict || !is_boundary_cell(c, *this)) && is_anchor(c))
                 new_cells[fine_to_coarse(c)] = e.second;
+        }
     }
-    // the anchor rule above drops a parent whose anchor child is absent or on the boundary
-    for (const auto& c : keep)
-        if (const auto it = cellinfo_.find(c); it != cellinfo_.end())
-            new_cells.try_emplace(fine_to_coarse(c), it->second);
 
     return RegularTrimesh {new_cells, origin_, axis1_, axis2_, {edgelen_[0] * 2, edgelen_[1] * 2}};
 }
@@ -1496,7 +1508,7 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
                     const int cellcount_threshold,
                     const int max_iter,
                     function<bool()> stop_criterion,
-                    const std::vector<CellRef>& keep_cells
+                    const bool majority_coarsen
                  )
 {
     OPM_TIMEFUNCTION();
@@ -1524,16 +1536,9 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
         }
     };
 
-    auto keep_on_level = [&keep_cells](const int level) -> vector<CellRef> {
-        vector<CellRef> result;
-        for (const auto& cell : keep_cells)
-            result.push_back(RegularTrimesh::fine_to_coarse(cell, level));
-        return result;
-    };
-
     while (working_mesh.numCells() > cellcount_threshold) {
         last_meshes.push_back(working_mesh);
-        working_mesh = working_mesh.coarsen(true, keep_on_level(cur_level));
+        working_mesh = working_mesh.coarsen(true, majority_coarsen);
         working_mesh.setCellFlags(fixed_on_level(cur_level), 1); // set fixed cells at this level
         working_mesh.removeSawtooths();
         cur_level++;
@@ -1583,7 +1588,7 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
             // expansion is going too slowly, move to coarser level
             last_meshes.push_back(working_mesh);
 
-            working_mesh = working_mesh.coarsen(true, keep_on_level(cur_level));
+            working_mesh = working_mesh.coarsen(true, majority_coarsen);
             working_mesh.setCellFlags(fixed_on_level(cur_level), 1); // set fixed cells at this level
             working_mesh.removeSawtooths();
             cur_level++;
