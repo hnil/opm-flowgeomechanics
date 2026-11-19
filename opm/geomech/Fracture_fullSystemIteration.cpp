@@ -342,38 +342,6 @@ convergence_test(const VectorHP& res, const double tol_mech, double tol_flow, in
     return converged;
 }
 
-// ----------------------------------------------------------------------------
-FMatrix
-modified_fracture_matrix(const FMatrix& A, const std::vector<int>& closed_cells)
-// ----------------------------------------------------------------------------
-{
-    OPM_TIMEFUNCTION();
-    Dune::DynamicMatrix result(A);
-
-    for (size_t row = 0; row != A.N(); ++row)
-        if (closed_cells[row])
-            for (size_t col = 0; col != A.N(); ++col)
-                result[row][col] = (row == col);
-    return result;
-}
-
-void modified_fracture_matrix(FMatrix& Aold, const FMatrix& A, const std::vector<int>& closed_cells)
-// ----------------------------------------------------------------------------
-{
-    OPM_TIMEFUNCTION();
-    assert(Aold.N() == A.N());
-    assert(Aold.M() == A.M());
-    for(size_t i=0; i < A.N(); ++i){
-      for(size_t j=0; j < A.M(); ++j){
-        Aold[i][j] = A[i][j];
-      }
-    }
-    for (size_t row = 0; row != A.N(); ++row)
-        if (closed_cells[row])
-            for (size_t col = 0; col != A.N(); ++col)
-                Aold[row][col] = (row == col);
-}
-
 }; // end anonymous namespace
 
 namespace Opm
@@ -616,12 +584,12 @@ Fracture::assembleMechanicsRows_(const VectorHP& x,
         fb.phi.assign(n, 0.0);
         fb.scale.assign(n, 1.0);
         fb_cell_residual_.assign(n, 0.0);
-        if (first_iteration) A_.reset(new FMatrix(Aorig));
-        FMatrix& Afb = *A_;
         if (first_iteration) I_.reset(new SMatrix(makeIdentity(n, numWellEquations())));
         SMatrix& Ifb = *I_;
         const double eps = 1e-30;
         const ResVector force = contactForce(Aorig, w, p, mech_rhs);
+        mech_alpha_.resize(n);
+        mech_beta_.resize(n);
         for (size_t i = 0; i < n; ++i) {
             const double c_i = std::max(std::abs(Aorig[i][i]), eps);
             const double a = c_i * w[i][0];
@@ -632,20 +600,21 @@ Fracture::assembleMechanicsRows_(const VectorHP& x,
             fb.phi[i] = a + b - std::sqrt(a * a + b * b);
             fb.scale[i] = 1.0 + std::abs(a) + std::abs(b);
             fb_cell_residual_[i] = std::abs(fb.phi[i]) / fb.scale[i];
-            for (size_t j = 0; j < n; ++j) Afb[i][j] = -db * Aorig[i][j];
-            Afb[i][i] += da * c_i;
             Ifb[i][i] = -db;
+            mech_alpha_[i] = -db;
+            mech_beta_[i] = da * c_i;
         }
     } else {
-        if (first_iteration) {
-            A_.reset(new FMatrix(modified_fracture_matrix(fractureMatrix(), closed_cells)));
-        }else{
-            modified_fracture_matrix(*A_, fractureMatrix(), closed_cells);
-        }
         // Closed cells are held fixed in the mechanics residual and Jacobian block.
         for (size_t i = 0; i != closed_cells.size(); ++i)
             if (closed_cells[i])
                 mech_rhs[i] = 0;
+        mech_alpha_.resize(closed_cells.size());
+        mech_beta_.resize(closed_cells.size());
+        for (size_t i = 0; i != closed_cells.size(); ++i) {
+            mech_alpha_[i] = closed_cells[i] ? 0.0 : 1.0;
+            mech_beta_[i] = closed_cells[i] ? 1.0 : 0.0;
+        }
     }
     return fb;
 }
@@ -693,33 +662,52 @@ void
 Fracture::assembleSystemMatrix_(const std::vector<int>& closed_cells, const bool first_iteration)
 // ----------------------------------------------------------------------------
 {
-    const auto& A = *A_;
+    const auto& A = fractureMatrix();
     const auto& M = *pressure_matrix_;
     const auto& C = *coupling_matrix_;
+    const size_t n = A.N();
     // Fischer-Burmeister already built I_ with its smooth -db_i weights.
     if (!inner_.isFb) {
         if (first_iteration) {
-            I_.reset(new SMatrix(makeIdentity(A.N(), numWellEquations(), 1, closed_cells)));
+            I_.reset(new SMatrix(makeIdentity(n, numWellEquations(), 1, closed_cells)));
         }else{
             modifyIdentity(*I_, 1, closed_cells);
         }
     }
     const auto& I = *I_;
     if(first_iteration){
-        S_.reset(new SystemMatrix({{A, I},
-                                   {C, M}}));
+        S_.reset();
+        S_ = std::make_unique<SystemMatrix>();
+        auto& S = *S_;
+        S[_0][_0].resize(n, n);
+        S[_0][_1] = I;
+        S[_1][_0] = C;
+        S[_1][_1] = M;
     } else{
         OPM_TIMEBLOCK(Modify_System_Matrix);
-        // modify S in place to avoid copying the whole matrix
         auto& S = *S_;
-        for(size_t i=0; i!=A.N(); ++i){
-            for(size_t j=0; j!=A.M(); ++j){
-                S[_0][_0][i][j] = A[i][j];
-            }
-        }
         copyMatrixValuesWithSameSparsity(S[_0][_1], I);
         copyMatrixValuesWithSameSparsity(S[_1][_0], C);
         copyMatrixValuesWithSameSparsity(S[_1][_1], M);
+    }
+    // mechanics block diag(mech_alpha_) A + diag(mech_beta_), written without a copy of A
+    auto& B = (*S_)[_0][_0];
+    if (inner_.isFb) {
+        for (size_t i = 0; i < n; ++i) {
+            const double a = mech_alpha_[i];
+            for (size_t j = 0; j < n; ++j)
+                B[i][j] = a * A[i][j];
+            B[i][i] += mech_beta_[i];
+        }
+    } else {
+        for (size_t i = 0; i < n; ++i) {
+            if (closed_cells[i]) {
+                for (size_t j = 0; j < n; ++j)
+                    B[i][j] = (i == j);
+            } else {
+                std::copy(A[i].begin(), A[i].end(), B[i].begin());
+            }
+        }
     }
 }
 
@@ -869,6 +857,8 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     it.numClosed = std::accumulate(closed_cells.begin(), closed_cells.end(), 0);
     it.newSystem = first_iteration;
     it.contactChanged = closed_cells_changed;
+    const MechRows mechRows {&fractureMatrix(), &mech_alpha_, &mech_beta_, ddm_generation_};
+    it.mechRows = &mechRows;
     // dump_case_min_nonlin_iter > 0 captures the systems of struggling solves for replay
     it.dump = opt.writeCoupledSystem
         || (opt.dumpMinNonlinIter > 0 && nlin_iteration >= opt.dumpMinNonlinIter);

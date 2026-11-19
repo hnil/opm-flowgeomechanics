@@ -21,6 +21,7 @@
 
 #include <opm/geomech/FractureCoupledLinearSolver.hpp>
 
+#include <chrono>
 #include <cmath>
 #include <stdexcept>
 
@@ -160,6 +161,18 @@ FractureCoupledLinearSolver::Options::read(const PropertyTree& prm)
     o.restart = prm.get<int>("solver.linsolver.restart", 100);
     o.gmresFallback = prm.get<bool>("solver.linsolver.fallback_gmres_on_breakdown", true);
     o.blasOperator = prm.get<bool>("solver.linsolver.blas_operator", false);
+    const auto reuse = o.precond.get<std::string>("mech_solver.reuse", "none");
+    if (reuse != "none" && reuse != "rank_update") {
+        OPM_THROW(std::runtime_error, "Unknown fracture mech_solver.reuse: " + reuse);
+    }
+    o.rankUpdate = (reuse == "rank_update") && !o.precond.get<bool>("diag_mech");
+    o.mechFactor.inverse = o.precond.get<std::string>("mech_solver.type", "dune_lu") == "lapack_inv";
+    o.mechFactor.tol = o.precond.get<double>("mech_solver.rank_update_tol", o.mechFactor.tol);
+    o.mechFactor.maxRankFraction
+        = o.precond.get<double>("mech_solver.rank_update_max_fraction", o.mechFactor.maxRankFraction);
+    o.mechFactor.maxRankMin = o.precond.get<int>("mech_solver.rank_update_max_min", o.mechFactor.maxRankMin);
+    o.mechFactor.refactorIterations
+        = o.precond.get<int>("mech_solver.rank_update_refactor_iterations", o.mechFactor.refactorIterations);
     return o;
 }
 
@@ -247,12 +260,41 @@ FractureCoupledLinearSolver::solve(VectorHP& rhs,
     }
     if (auto* blas = dynamic_cast<DenseBlasSystemOperator*>(operator_.get()))
         blas->refresh();
+    using Clock = std::chrono::steady_clock;
+    const auto since = [](const Clock::time_point& t0) {
+        return std::chrono::duration<double>(Clock::now() - t0).count();
+    };
+    const DenseMechFactor* mech = nullptr;
+    if (opt_.rankUpdate && it.mechRows) {
+        if (!mechFactor_)
+            mechFactor_ = std::make_unique<DenseMechFactor>(opt_.mechFactor);
+        const auto t0 = Clock::now();
+        const bool refactored = mechFactor_->update(S[_0][_0], scaleMech_ * scaleMech_, *it.mechRows);
+        stats.mech_factor_seconds += since(t0);
+        if (refactored) {
+            ++stats.mech_factorizations;
+        } else if (mechFactor_->rank() > 0) {
+            ++stats.mech_rank_updates;
+            stats.mech_rank_sum += mechFactor_->rank();
+        }
+        mech = mechFactor_.get();
+    }
     const bool new_precond = it.newSystem || it.contactChanged;
     if (new_precond) {
-        precond_.reset(new FractureMechanicsPreconditioner(S, opt_.precond));
+        // free the old factor before building the new one
+        precond_.reset();
+        precond_.reset(new FractureMechanicsPreconditioner(S, opt_.precond, mech));
+        stats.mech_factorizations += precond_->factorizations();
+        stats.mech_factor_seconds += precond_->factorSeconds();
     } else {
+        const int f0 = precond_->factorizations();
+        const double s0 = precond_->factorSeconds();
         precond_->update(S, opt_.updateMechOnReuse);
+        stats.mech_factorizations += precond_->factorizations() - f0;
+        stats.mech_factor_seconds += precond_->factorSeconds() - s0;
     }
+    const double apply0 = precond_->applySeconds();
+    const auto krylov0 = Clock::now();
     // atol is an absolute tolerance on the squared residual norm
     const double res = rhs.two_norm2();
     const double lintol = std::max(opt_.tol, opt_.atol / res);
@@ -341,7 +383,7 @@ FractureCoupledLinearSolver::solve(VectorHP& rhs,
         // rung 2: fixed-stress (Schur) preconditioner + flexible GMRES.
         if (!iores.converged) {
             try {
-                FractureMechanicsPreconditioner fsprecond(S, fixed_stress_prm());
+                FractureMechanicsPreconditioner fsprecond(S, fixed_stress_prm(), mech);
                 auto s = makeSolver("fgmres", fsprecond, lintol);
                 run_solver(*s);
             } catch (const std::exception&) {}
@@ -352,7 +394,7 @@ FractureCoupledLinearSolver::solve(VectorHP& rhs,
         if (!iores.converged) {
             try {
                 S[_1][_0] = 0;
-                FractureMechanicsPreconditioner dcprecond(S, fixed_stress_prm());
+                FractureMechanicsPreconditioner dcprecond(S, fixed_stress_prm(), mech);
                 auto s = makeSolver("fgmres", dcprecond, lintol);
                 run_solver(*s);
             } catch (const std::exception&) {}
@@ -366,6 +408,12 @@ FractureCoupledLinearSolver::solve(VectorHP& rhs,
             }
         }
     }
+
+    stats.linear_solve_seconds += since(krylov0);
+    if (mechFactor_ && opt_.mechFactor.refactorIterations > 0
+        && (!iores.converged || iores.iterations > opt_.mechFactor.refactorIterations))
+        mechFactor_->invalidate();
+    stats.precond_apply_seconds += precond_->applySeconds() - apply0;
 
     if (!iores.converged) {
         // the dump is the physical system; the throw makes a re-scale unnecessary

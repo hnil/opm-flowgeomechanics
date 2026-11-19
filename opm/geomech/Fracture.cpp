@@ -3207,6 +3207,7 @@ Fracture::assembleFractureMatrix() const
     }
     fracture_matrix_->resize(nc, nc);
     *fracture_matrix_ = 0.0;
+    ++ddm_generation_;
     if (trimesh_ && prm_.get<bool>("solver.ddm_lattice_table", true)) {
         const auto toVec = [](const auto& c) { return Dune::FieldVector<double, 3> {c[0], c[1], c[2]}; };
         ddm::LatticeFrame frame;

@@ -21,6 +21,7 @@
 #include "FractureMechanicsPreconditioner.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <sstream>
 #include <utility>
@@ -38,7 +39,19 @@ void dgetrs_(const char* trans, const int* n, const int* nrhs, const double* a, 
 void dgetri_(const int* n, double* a, const int* lda, const int* ipiv, double* work, const int* lwork, int* info);
 void dgemv_(const char* trans, const int* m, const int* n, const double* alpha, const double* a, const int* lda,
             const double* x, const int* incx, const double* beta, double* y, const int* incy);
+void dgemm_(const char* transa, const char* transb, const int* m, const int* n, const int* k, const double* alpha,
+            const double* a, const int* lda, const double* b, const int* ldb, const double* beta, double* c,
+            const int* ldc);
 }
+
+namespace
+{
+double
+secondsSince(const std::chrono::steady_clock::time_point& t0)
+{
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+}
+} // namespace
 
 namespace Opm
 {
@@ -142,8 +155,10 @@ FractureMechanicsPreconditioner::rebuildFlowSolver(const Opm::FractureSystemMatr
 }
 
 FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::FractureSystemMatrix& S,
-                                                                 Opm::PropertyTree prm)
+                                                                 Opm::PropertyTree prm,
+                                                                 const DenseMechFactor* mech)
     : A_(S)
+    , mech_(mech)
     , A_diag_(diagvec(S[_0][_0]))
     , M_diag_(diagvec(S[_1][_1]))
     , prm_(prm)
@@ -164,12 +179,15 @@ FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::Frac
     }
     lapack_inv_ = (mech_solver == "lapack_inv");
     lapack_lu_ = (mech_solver == "lapack_lu") || lapack_inv_;
-    if (!diag_mech_) {
+    if (!diag_mech_ && !mech_) {
         OPM_TIMEBLOCK(SetupLuFactorization);
         if(verbosity>0){
         OpmLog::debug("FractureMechanicsPreconditioner: using full mechanics preconditioner, " + mech_solver);
         }
+        const auto t0 = std::chrono::steady_clock::now();
         factorMechanics(S[_0][_0]);
+        ++factorizations_;
+        factor_seconds_ += secondsSince(t0);
     }
     active_mode_ = selectMode(S);
     if (verbosity > 0 && mode_policy_ == "manual") {
@@ -181,9 +199,12 @@ void FractureMechanicsPreconditioner::update(const Opm::FractureSystemMatrix& S,
 
     setDiagvec(A_diag_, S[_0][_0]);
 
-    if (!diag_mech_ && new_lu_mech) {
+    if (!diag_mech_ && !mech_ && new_lu_mech) {
         OPM_TIMEBLOCK(SetupLuFactorization);
+        const auto t0 = std::chrono::steady_clock::now();
         factorMechanics(S[_0][_0]);
+        ++factorizations_;
+        factor_seconds_ += secondsSince(t0);
     }
     if(diag_mech_ && new_lu_mech){
         // if we are using a diagonal mechanics preconditioner, we need to update the diagonal entries
@@ -217,15 +238,15 @@ void
 FractureMechanicsPreconditioner::apply(Opm::VectorHP& v, const Opm::VectorHP& d)
 {
     OPM_TIMEFUNCTION();
+    const auto t0 = std::chrono::steady_clock::now();
     if (active_mode_ == ApplyMode::FixedStress) {
         applyfixed_stress(v, d);
-        return;
-    }
-    if (active_mode_ == ApplyMode::MechFirst){
+    } else if (active_mode_ == ApplyMode::MechFirst){
         applymech_first(v, d);
     } else {
         applymech_last(v, d);
     }
+    apply_seconds_ += secondsSince(t0);
 }
 
 void
@@ -323,6 +344,10 @@ FractureMechanicsPreconditioner::solveMechanics(Opm::Vector& x, const Opm::Vecto
     }
 
     OPM_TIMEBLOCK(ApplyMechPreconditioner);
+    if (mech_) {
+        mech_->solve(x, rhs);
+        return;
+    }
     if (lapack_lu_) {
         openBlockSolve(x, rhs);
         return;
@@ -559,5 +584,229 @@ FractureMechanicsPreconditioner::backSolve(Opm::Vector& x, const Opm::Vector& rh
         }
         x[i] /= luM_[i][i];
     }
+}
+// ---------------------------------------------------------------------------
+// DenseMechFactor
+
+void
+DenseMechFactor::factor(const FMatrix& B, const double scale, const MechRows& rows)
+{
+    const int n = B.N();
+    n_ = n;
+    generation_ = rows.generation;
+    s0_ = scale;
+    ratio_ = 1.0;
+    alpha0_ = *rows.alpha;
+    beta0_ = *rows.beta;
+    f_.resize(std::size_t(n) * n);
+    for (int i = 0; i < n; ++i)
+        std::copy(B[i].begin(), B[i].end(), f_.begin() + std::size_t(i) * n);
+    piv_.resize(n);
+    int info = 0;
+    if (n > 0)
+        dgetrf_(&n, &n, f_.data(), &n, piv_.data(), &info);
+    bool finite = (info == 0);
+    for (int r = 0; r < n && finite; ++r)
+        finite = std::isfinite(f_[std::size_t(r) * n + r]);
+    if (!finite)
+        OPM_THROW(std::runtime_error, "mechanics dense factor: dgetrf failed, info " + std::to_string(info));
+    if (opt_.inverse && n > 0) {
+        int lwork = -1;
+        double wsize = 0.0;
+        dgetri_(&n, f_.data(), &n, piv_.data(), &wsize, &lwork, &info);
+        lwork = std::max(n, static_cast<int>(wsize));
+        std::vector<double> work(lwork);
+        dgetri_(&n, f_.data(), &n, piv_.data(), work.data(), &lwork, &info);
+        if (info != 0)
+            OPM_THROW(std::runtime_error, "mechanics dense inverse: dgetri failed, info " + std::to_string(info));
+    }
+    maxRank_ = std::min(n, std::max(opt_.maxRankMin, static_cast<int>(opt_.maxRankFraction * n)));
+    slotOf_.assign(n, -1);
+    slotRow_.clear();
+    z_.resize(std::size_t(n) * maxRank_);
+    ar_.resize(std::size_t(n) * maxRank_);
+    g_.assign(std::size_t(maxRank_) * maxRank_, 0.0);
+    cap_.clear();
+    y_.resize(n);
+    t_.resize(maxRank_);
+}
+
+bool
+DenseMechFactor::addRows(const std::vector<int>& rows_in)
+{
+    const int n = n_;
+    const int r0 = rank();
+    const int nnew = rows_in.size();
+    const int r1 = r0 + nnew;
+    for (int q = 0; q < nnew; ++q) {
+        const int j = rows_in[q];
+        const int k = r0 + q;
+        slotOf_[j] = k;
+        slotRow_.push_back(j);
+        double* z = z_.data() + std::size_t(k) * n;
+        if (opt_.inverse) {
+            // f_ is B0^{-1} row-major: gather column j
+            for (int i = 0; i < n; ++i)
+                z[i] = f_[std::size_t(i) * n + j];
+        } else {
+            std::fill(z, z + n, 0.0);
+            z[j] = 1.0;
+        }
+    }
+    if (!opt_.inverse) {
+        const char trans = 'T';
+        int info = 0;
+        dgetrs_(&trans, &n, &nnew, f_.data(), &n, piv_.data(), z_.data() + std::size_t(r0) * n, &n, &info);
+        if (info != 0)
+            return false;
+    }
+    for (int k = r0; k < r1; ++k)
+        for (int i = 0; i < n; ++i)
+            if (!std::isfinite(z_[std::size_t(k) * n + i]))
+                return false;
+    return true;
+}
+
+bool
+DenseMechFactor::factorCapacitance(const MechRows& rows)
+{
+    const int n = n_;
+    const int r = rank();
+    cap_.clear();
+    if (r == 0)
+        return true;
+    const auto& alpha = *rows.alpha;
+    const auto& beta = *rows.beta;
+    va_.resize(r);
+    vb_.resize(r);
+    for (int k = 0; k < r; ++k) {
+        const int j = slotRow_[k];
+        va_[k] = s0_ * (alpha[j] - alpha0_[j]);
+        vb_[k] = s0_ * (beta[j] - beta0_[j]);
+    }
+    // C = I + V^T Z, V^T(k,:) = va_k A(row_k,:) + vb_k e_{row_k}^T
+    cap_.resize(std::size_t(r) * r);
+    const int ld = maxRank_;
+    for (int l = 0; l < r; ++l) {
+        const double* z = z_.data() + std::size_t(l) * n;
+        for (int k = 0; k < r; ++k)
+            cap_[std::size_t(l) * r + k] = (k == l ? 1.0 : 0.0) + va_[k] * g_[std::size_t(l) * ld + k]
+                + vb_[k] * z[slotRow_[k]];
+    }
+    capPiv_.resize(r);
+    int info = 0;
+    dgetrf_(&r, &r, cap_.data(), &r, capPiv_.data(), &info);
+    if (info != 0)
+        return false;
+    for (int k = 0; k < r; ++k)
+        if (!std::isfinite(cap_[std::size_t(k) * r + k]))
+            return false;
+    return true;
+}
+
+bool
+DenseMechFactor::update(const FMatrix& B, const double scale, const MechRows& rows)
+{
+    const int n = B.N();
+    if (!rows.ddm || !rows.alpha || !rows.beta || int(rows.ddm->N()) != n
+        || int(rows.alpha->size()) != n || int(rows.beta->size()) != n)
+        OPM_THROW(std::runtime_error, "mechanics dense factor: row coefficients do not match the block");
+    if (f_.empty() || n != n_ || rows.generation != generation_ || stale_) {
+        stale_ = false;
+        factor(B, scale, rows);
+        return true;
+    }
+    ratio_ = s0_ / scale;
+    const auto& A = *rows.ddm;
+    const auto& alpha = *rows.alpha;
+    const auto& beta = *rows.beta;
+    std::vector<std::pair<double, int>> moved; // relative row change, row
+    for (int i = 0; i < n; ++i) {
+        if (slotOf_[i] >= 0)
+            continue;
+        const double da = alpha[i] - alpha0_[i];
+        const double db = beta[i] - beta0_[i];
+        if (da == 0.0 && db == 0.0)
+            continue;
+        const double c = std::abs(A[i][i]);
+        const double change = std::abs(da) * c + std::abs(db);
+        const double size = std::abs(alpha[i]) * c + std::abs(beta[i]);
+        if (change > opt_.tol * size)
+            moved.emplace_back(size > 0.0 ? change / size : 1e300, i);
+    }
+    const int room = maxRank_ - rank();
+    if (int(moved.size()) > room) {
+        if (opt_.refactorIterations <= 0) {
+            factor(B, scale, rows);
+            return true;
+        }
+        // keep the largest changes; the rest only weaken the preconditioner
+        std::nth_element(moved.begin(), moved.begin() + room, moved.end(),
+                         [](const auto& a, const auto& b) { return a.first > b.first; });
+        moved.resize(room);
+    }
+    std::vector<int> added;
+    added.reserve(moved.size());
+    for (const auto& m : moved)
+        added.push_back(m.second);
+    std::sort(added.begin(), added.end());
+    if (!added.empty()) {
+        const int r0 = rank();
+        if (!addRows(added)) {
+            factor(B, scale, rows);
+            return true;
+        }
+        const int r1 = rank();
+        for (int k = r0; k < r1; ++k) {
+            const auto& row = A[slotRow_[k]];
+            std::copy(row.begin(), row.end(), ar_.begin() + std::size_t(k) * n);
+        }
+        // new entries of G = Ar^T Z: columns r0..r1 for all rows, then rows r0..r1 of the old columns
+        const char tr = 'T', nt = 'N';
+        const double one = 1.0, zero = 0.0;
+        const int ld = maxRank_;
+        const int nnew = r1 - r0;
+        dgemm_(&tr, &nt, &r1, &nnew, &n, &one, ar_.data(), &n, z_.data() + std::size_t(r0) * n, &n, &zero,
+               g_.data() + std::size_t(r0) * ld, &ld);
+        if (r0 > 0)
+            dgemm_(&tr, &nt, &nnew, &r0, &n, &one, ar_.data() + std::size_t(r0) * n, &n, z_.data(), &n, &zero,
+                   g_.data() + r0, &ld);
+    }
+    if (!factorCapacitance(rows)) {
+        factor(B, scale, rows);
+        return true;
+    }
+    return false;
+}
+
+void
+DenseMechFactor::solve(Vector& x, const Vector& rhs) const
+{
+    const int n = n_;
+    if (n == 0)
+        return;
+    const char trans = 'T', notrans = 'N';
+    const int one = 1;
+    if (opt_.inverse) {
+        const double a = 1.0, b = 0.0;
+        dgemv_(&trans, &n, &n, &a, f_.data(), &n, &rhs[0][0], &one, &b, y_.data(), &one);
+    } else {
+        for (int i = 0; i < n; ++i)
+            y_[i] = rhs[i][0];
+        int info = 0;
+        dgetrs_(&trans, &n, &one, f_.data(), &n, piv_.data(), y_.data(), &n, &info);
+    }
+    const int r = rank();
+    if (r > 0) {
+        const double a = 1.0, b = 0.0, m1 = -1.0;
+        dgemv_(&trans, &n, &r, &a, ar_.data(), &n, y_.data(), &one, &b, t_.data(), &one);
+        for (int k = 0; k < r; ++k)
+            t_[k] = va_[k] * t_[k] + vb_[k] * y_[slotRow_[k]];
+        int info = 0;
+        dgetrs_(&notrans, &r, &one, cap_.data(), &r, capPiv_.data(), t_.data(), &r, &info);
+        dgemv_(&notrans, &n, &r, &m1, z_.data(), &n, t_.data(), &one, &a, y_.data(), &one);
+    }
+    for (int i = 0; i < n; ++i)
+        x[i][0] = ratio_ * y_[i];
 }
 } // namespace Opm

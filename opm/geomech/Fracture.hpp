@@ -227,6 +227,13 @@ struct WellInfo
     // and how many of those were recovered by the fallback ladder.
     int linear_solve_failures = 0;
     int ladder_rescues = 0;
+    // Dense mechanics factorisations, Woodbury-updated iterations and their time split.
+    int mech_factorizations = 0;
+    int mech_rank_updates = 0;
+    long mech_rank_sum = 0;
+    double mech_factor_seconds = 0.0;
+    double linear_solve_seconds = 0.0;
+    double precond_apply_seconds = 0.0;
 
     FractureSolveStats& operator+=(const FractureSolveStats& other)
     {
@@ -239,6 +246,12 @@ struct WellInfo
       closed_cell_toggles += other.closed_cell_toggles;
       linear_solve_failures += other.linear_solve_failures;
       ladder_rescues += other.ladder_rescues;
+      mech_factorizations += other.mech_factorizations;
+      mech_rank_updates += other.mech_rank_updates;
+      mech_rank_sum += other.mech_rank_sum;
+      mech_factor_seconds += other.mech_factor_seconds;
+      linear_solve_seconds += other.linear_solve_seconds;
+      precond_apply_seconds += other.precond_apply_seconds;
       return *this;
     }
   };
@@ -965,6 +978,9 @@ private:
     using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView>;
     mutable std::unique_ptr<DynamicMatrix> fracture_matrix_;
     mutable ddm::KernelTable ddm_table_; // DDM kernel values on the trimesh lattice
+    mutable std::uint64_t ddm_generation_{0}; // bumped at every assembly of fracture_matrix_
+    // mechanics block of the coupled system = diag(mech_alpha_) * fractureMatrix() + diag(mech_beta_)
+    std::vector<double> mech_alpha_, mech_beta_;
 
     // function ensuring that the fracture matrix exists, and returning a reference to it
     DynamicMatrix& fractureMatrix() const;
@@ -982,7 +998,6 @@ private:
     using SystemMatrixRef = Dune::MultiTypeBlockMatrixRef<Dune::MultiTypeBlockVectorRef<FMatrix, SMatrix>,
                                                      Dune::MultiTypeBlockVectorRef<SMatrix, SMatrix>>;
     std::unique_ptr<SystemMatrix> S_;
-    std::unique_ptr<FMatrix> A_; // system matrix without coupling terms
     std::unique_ptr<SMatrix> I_; // system matrix without coupling terms
     std::vector<std::vector<RuntimePerforation>> well_indices_; // for each perf, the corresponding well index info
     double max_flow_time_step_{-1.0};
