@@ -95,6 +95,16 @@ using FractureSystemMatrix = Dune::MultiTypeBlockMatrix<Dune::MultiTypeBlockVect
 using Dune::Indices::_0;
 using Dune::Indices::_1;
 
+// Explicit inverse of the elasticity (DDM) matrix K of one fracture mesh; valid while K and version (the DDM generation) match.
+struct DdmInverse
+{
+    std::uint64_t version{0};
+    const FMatrix* K{nullptr};
+    int n{0};
+    std::vector<double> kinv; // row-major
+};
+std::shared_ptr<const DdmInverse> makeDdmInverse(const FMatrix& K, std::uint64_t version);
+
 
 // Unscaled mechanics block as diag(alpha) * A + diag(beta), A the elasticity matrix.
 // generation changes whenever A is reassembled.
@@ -214,7 +224,8 @@ public:
   // mech_press_coupling, lu_pivoting, mech_solver.type and flow_solver.*.
   // A non-null mech replaces the internal mechanics factorisation; it must outlive this object.
   FractureMechanicsPreconditioner(const FractureSystemMatrix& S, Opm::PropertyTree prm,
-                                  const MechBlockSolver* mech = nullptr);
+                                  const MechBlockSolver* mech = nullptr,
+                                  std::shared_ptr<const DdmInverse> ddm = {});
   virtual void apply(VectorHP& v, const VectorHP& d);
     virtual void post(VectorHP& /*v*/) { };
     virtual void pre(VectorHP& /*x*/, VectorHP& /*b*/) { };
@@ -225,7 +236,8 @@ public:
     // Refresh the internal factors after the outer nonlinear step assembles a
     // new coupled system. new_lu_mech controls whether the dense mechanics LU is
     // rebuilt or only the flow-side data is refreshed.
-    void update(const Opm::FractureSystemMatrix& S,bool new_lu_mech);
+    void update(const Opm::FractureSystemMatrix& S, bool new_lu_mech,
+                std::shared_ptr<const DdmInverse> ddm = {});
     int factorizations() const { return factorizations_; }
     double factorSeconds() const { return factor_seconds_; }
     double applySeconds() const { return apply_seconds_; }
@@ -268,6 +280,8 @@ Vector diagvec(const Mat& M)
   void solveFlow(Vector& x, const Vector& rhs);
   void factorMechanics(const FMatrix& A);
   void factorOpenBlock(const FMatrix& A);
+  bool factorSplit(const FMatrix& A);
+  void splitSolve(Vector& x, const Vector& rhs) const;
   void backSolve(Vector& x,const Vector& rhs_in) const;
   void openBlockSolve(Vector& x, const Vector& rhs) const;
   void checkLuFactor() const;
@@ -292,6 +306,21 @@ Vector diagvec(const Mat& M)
     mutable std::vector<double> open_rhs_;
     mutable std::vector<double> open_x_;
     mutable std::vector<double> closed_x_;
+    // fb_split: rows of A of the form -s_i K_i + g_i e_i with small g_i are taken as -s_i K_i
+    // and solved with K^{-1}; the other rows R enter exactly through a |R|x|R| Woodbury correction.
+    bool fb_split_{false};
+    bool split_active_{false};
+    double split_tol_{1e-2};
+    double split_max_fraction_{0.5};
+    std::shared_ptr<const DdmInverse> ddm_;
+    std::vector<int> split_rows_;
+    std::vector<double> split_scale_; // 1/s_i, or 1 on rows in R
+    std::vector<double> split_Ar_;    // A(R, :), row-major
+    std::vector<double> split_KR_;    // K^{-1}(:, R), row-major
+    std::vector<double> split_G_;     // LU of A(R,:) K^{-1}(:,R)
+    std::vector<int> split_piv_;
+    mutable std::vector<double> split_z_, split_y_, split_t_;
+    int verbosity_{0};
     mutable Vector A_diag_;
     mutable Vector M_diag_;
     Opm::PropertyTree prm_;

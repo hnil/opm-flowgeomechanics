@@ -32,6 +32,8 @@
 #include <opm/common/ErrorMacros.hpp>
 #include <opm/common/OpmLog/OpmLog.hpp>
 
+#include <fmt/format.h>
+
 #include <stdexcept>
 #include <string>
 
@@ -157,9 +159,42 @@ FractureMechanicsPreconditioner::rebuildFlowSolver(const Opm::FractureSystemMatr
     }
 }
 
+std::shared_ptr<const DdmInverse>
+makeDdmInverse(const FMatrix& K, const std::uint64_t version)
+{
+    OPM_TIMEFUNCTION();
+    auto inv = std::make_shared<DdmInverse>();
+    const int n = K.N();
+    inv->version = version;
+    inv->K = &K;
+    inv->n = n;
+    inv->kinv.resize(std::size_t(n) * n);
+    for (int i = 0; i < n; ++i)
+        for (int j = 0; j < n; ++j)
+            inv->kinv[std::size_t(i) * n + j] = K[i][j];
+    if (n == 0)
+        return inv;
+    // the row-major buffer is K^T for LAPACK; inverting it gives K^{-1} row-major
+    std::vector<int> piv(n);
+    int info = 0;
+    dgetrf_(&n, &n, inv->kinv.data(), &n, piv.data(), &info);
+    if (info != 0)
+        OPM_THROW(std::runtime_error, "DDM inverse: dgetrf failed, info " + std::to_string(info));
+    int lwork = -1;
+    double wsize = 0.0;
+    dgetri_(&n, inv->kinv.data(), &n, piv.data(), &wsize, &lwork, &info);
+    lwork = std::max(n, static_cast<int>(wsize));
+    std::vector<double> work(lwork);
+    dgetri_(&n, inv->kinv.data(), &n, piv.data(), work.data(), &lwork, &info);
+    if (info != 0)
+        OPM_THROW(std::runtime_error, "DDM inverse: dgetri failed, info " + std::to_string(info));
+    return inv;
+}
+
 FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::FractureSystemMatrix& S,
                                                                  Opm::PropertyTree prm,
-                                                                 const MechBlockSolver* mech)
+                                                                 const MechBlockSolver* mech,
+                                                                 std::shared_ptr<const DdmInverse> ddm)
     : A_(S)
     , mech_(mech)
     , A_diag_(diagvec(S[_0][_0]))
@@ -178,11 +213,16 @@ FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::Frac
     lu_pivoting_ = prm_.get<bool>("lu_pivoting", false);
     const auto mech_solver = prm_.get<std::string>("mech_solver.type", "dune_lu");
     if (mech_solver != "dune_lu" && mech_solver != "lapack_lu" && mech_solver != "lapack_inv"
-        && mech_solver != "nearfield_ilu") {
+        && mech_solver != "nearfield_ilu" && mech_solver != "fb_split") {
         OPM_THROW(std::invalid_argument, "Unknown fracture preconditioner mech_solver.type: " + mech_solver);
     }
     lapack_inv_ = (mech_solver == "lapack_inv");
-    lapack_lu_ = (mech_solver == "lapack_lu") || lapack_inv_;
+    fb_split_ = (mech_solver == "fb_split");
+    lapack_lu_ = (mech_solver == "lapack_lu") || lapack_inv_ || fb_split_;
+    split_tol_ = prm_.get<double>("mech_solver.split_tol", 1e-2);
+    split_max_fraction_ = prm_.get<double>("mech_solver.split_max_fraction", 0.5);
+    ddm_ = std::move(ddm);
+    verbosity_ = prm_.get<int>("mech_solver.verbosity", verbosity);
     if (!diag_mech_ && !mech_) {
         OPM_TIMEBLOCK(SetupLuFactorization);
         if(verbosity>0){
@@ -199,11 +239,15 @@ FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::Frac
     }
     rebuildFlowSolver(S);
 }
-void FractureMechanicsPreconditioner::update(const Opm::FractureSystemMatrix& S,bool new_lu_mech){
+void FractureMechanicsPreconditioner::update(const Opm::FractureSystemMatrix& S, bool new_lu_mech,
+                                             std::shared_ptr<const DdmInverse> ddm){
 
     setDiagvec(A_diag_, S[_0][_0]);
+    if (ddm)
+        ddm_ = std::move(ddm);
 
-    if (!diag_mech_ && !mech_ && new_lu_mech) {
+    // fb_split is cheap to rebuild, so it always follows the current matrix
+    if (!diag_mech_ && !mech_ && (new_lu_mech || fb_split_)) {
         OPM_TIMEBLOCK(SetupLuFactorization);
         const auto t0 = std::chrono::steady_clock::now();
         factorMechanics(S[_0][_0]);
@@ -352,6 +396,10 @@ FractureMechanicsPreconditioner::solveMechanics(Opm::Vector& x, const Opm::Vecto
         mech_->solve(x, rhs);
         return;
     }
+    if (split_active_) {
+        splitSolve(x, rhs);
+        return;
+    }
     if (lapack_lu_) {
         openBlockSolve(x, rhs);
         return;
@@ -428,6 +476,9 @@ FractureMechanicsPreconditioner::applymech_last(Opm::VectorHP& v, const Opm::Vec
 void
 FractureMechanicsPreconditioner::factorMechanics(const FMatrix& A)
 {
+    split_active_ = fb_split_ && factorSplit(A);
+    if (split_active_)
+        return;
     if (lapack_lu_) {
         factorOpenBlock(A);
         return;
@@ -551,6 +602,117 @@ FractureMechanicsPreconditioner::openBlockSolve(Vector& x, const Vector& rhs) co
     dgetrs_(&trans, &m, &one, open_lu_.data(), &m, open_pivot_.data(), open_rhs_.data(), &m, &info);
     for (int r = 0; r < m; ++r)
         x[open_[r]][0] = open_rhs_[r];
+}
+
+bool
+FractureMechanicsPreconditioner::factorSplit(const FMatrix& A)
+{
+    OPM_TIMEFUNCTION();
+    const int n = A.N();
+    if (!ddm_ || ddm_->n != n || ddm_->K == nullptr || n < 2) {
+        if (verbosity_ > 0)
+            OpmLog::debug("fb_split: no DDM inverse for this matrix, full factorisation");
+        return false;
+    }
+    const FMatrix& K = *ddm_->K;
+    split_rows_.clear();
+    split_scale_.assign(n, 1.0);
+    int n_shape = 0, n_diag = 0, n_zero = 0;
+    double max_off = 0.0, max_g = 0.0;
+    for (int i = 0; i < n; ++i) {
+        int j0 = -1;
+        double kmax = 0.0;
+        for (int j = 0; j < n; ++j)
+            if (j != i && std::abs(K[i][j]) > kmax) {
+                kmax = std::abs(K[i][j]);
+                j0 = j;
+            }
+        const double s = (j0 >= 0) ? -A[i][j0] / K[i][j0] : 0.0;
+        bool reference = (s != 0.0) && std::isfinite(s);
+        if (s == 0.0) {
+            bool zero = true;
+            for (int j = 0; j < n && zero; ++j)
+                zero = (j == i || A[i][j] == 0.0);
+            n_zero += zero;
+        }
+        // every off-diagonal must be -s K_ij, else the row is taken exactly
+        double off = 0.0;
+        for (int j = 0; j < n && reference; ++j)
+            if (j != i)
+                off = std::max(off, std::abs(A[i][j] + s * K[i][j]) / (std::abs(s) * kmax));
+        if (reference && verbosity_ > 1) max_off = std::max(max_off, off);
+        if (reference && off > 1e-10) { reference = false; ++n_shape; }
+        if (reference) {
+            const double g = std::abs(A[i][i] + s * K[i][i]) / std::abs(s * K[i][i]);
+            if (verbosity_ > 1) max_g = std::max(max_g, g);
+            if (g > split_tol_) { reference = false; ++n_diag; }
+        }
+        if (reference)
+            split_scale_[i] = 1.0 / s;
+        else
+            split_rows_.push_back(i);
+    }
+    const int k = split_rows_.size();
+    if (verbosity_ > 0)
+        OpmLog::debug(fmt::format("fb_split: n {} exact rows {} ({:.3f}) diagonal-only {} shape {} diag {} max_off {:.2e} max_g {:.2e}",
+                                  n, k, double(k) / n, n_zero, n_shape, n_diag, max_off, max_g));
+    // the fallback LU factors only the m rows that are not diagonal-only: ~2/3 m^3 against ~2 n k^2
+    const double m = n - n_zero;
+    if (k > split_max_fraction_ * n || 3.0 * double(n) * k * k > m * m * m)
+        return false;
+
+    const double* kinv = ddm_->kinv.data();
+    split_Ar_.resize(std::size_t(k) * n);
+    split_KR_.resize(std::size_t(n) * k);
+    for (int c = 0; c < k; ++c)
+        for (int j = 0; j < n; ++j)
+            split_Ar_[std::size_t(c) * n + j] = A[split_rows_[c]][j];
+    for (int r = 0; r < n; ++r)
+        for (int c = 0; c < k; ++c)
+            split_KR_[std::size_t(r) * k + c] = kinv[std::size_t(r) * n + split_rows_[c]];
+    split_G_.resize(std::size_t(k) * k);
+    split_piv_.resize(k);
+    split_z_.resize(n);
+    split_y_.resize(n);
+    split_t_.resize(k);
+    if (k == 0)
+        return true;
+    // G = A(R,:) K^{-1}(:,R), computed as G^T = KR^T Ar^T in column-major
+    const double one = 1.0, zero = 0.0;
+    const char nt = 'N';
+    dgemm_(&nt, &nt, &k, &k, &n, &one, split_KR_.data(), &k, split_Ar_.data(), &n, &zero, split_G_.data(), &k);
+    int info = 0;
+    dgetrf_(&k, &k, split_G_.data(), &k, split_piv_.data(), &info);
+    if (info != 0) {
+        if (verbosity_ > 0)
+            OpmLog::debug(fmt::format("fb_split: capacitance LU failed (info {}), full factorisation", info));
+        return false;
+    }
+    return true;
+}
+
+// x = y - K^{-1}(:,R) G^{-1} (A(R,:) y - z_R) with z = scale .* rhs and y = -K^{-1} z
+void
+FractureMechanicsPreconditioner::splitSolve(Vector& x, const Vector& rhs) const
+{
+    const int n = split_scale_.size();
+    const int k = split_rows_.size();
+    for (int i = 0; i < n; ++i)
+        split_z_[i] = rhs[i][0] * split_scale_[i];
+    const char tr = 'T';
+    const int inc = 1;
+    const double one = 1.0, mone = -1.0, zero = 0.0;
+    dgemv_(&tr, &n, &n, &mone, ddm_->kinv.data(), &n, split_z_.data(), &inc, &zero, split_y_.data(), &inc);
+    if (k > 0) {
+        dgemv_(&tr, &n, &k, &one, split_Ar_.data(), &n, split_y_.data(), &inc, &zero, split_t_.data(), &inc);
+        for (int c = 0; c < k; ++c)
+            split_t_[c] -= split_z_[split_rows_[c]];
+        int info = 0;
+        dgetrs_(&tr, &k, &inc, split_G_.data(), &k, split_piv_.data(), split_t_.data(), &k, &info);
+        dgemv_(&tr, &k, &n, &mone, split_KR_.data(), &k, split_t_.data(), &inc, &one, split_y_.data(), &inc);
+    }
+    for (int i = 0; i < n; ++i)
+        x[i][0] = split_y_[i];
 }
 
 void

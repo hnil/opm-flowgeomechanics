@@ -178,6 +178,9 @@ FractureCoupledLinearSolver::Options::read(const PropertyTree& prm)
     o.nearFieldRadius = o.precond.get<double>("mech_solver.nearfield_radius", o.nearFieldRadius);
     if (o.nearField && o.rankUpdate)
         OPM_THROW(std::invalid_argument, "mech_solver: nearfield_ilu and reuse=rank_update exclude each other");
+    o.fbSplit = o.precond.get<std::string>("mech_solver.type", "dune_lu") == "fb_split";
+    if (o.fbSplit && o.rankUpdate)
+        OPM_THROW(std::invalid_argument, "mech_solver: fb_split and reuse=rank_update exclude each other");
     return o;
 }
 
@@ -295,17 +298,24 @@ FractureCoupledLinearSolver::solve(VectorHP& rhs,
         }
         mech = mechFactor_.get();
     }
+    std::shared_ptr<const DdmInverse> ddm;
+    if (opt_.fbSplit && it.mechRows && it.mechRows->ddm) {
+        const auto& r = *it.mechRows;
+        if (!ddmInv_ || ddmInv_->K != r.ddm || ddmInv_->version != r.generation)
+            ddmInv_ = makeDdmInverse(*r.ddm, r.generation);
+        ddm = ddmInv_;
+    }
     const bool new_precond = it.newSystem || it.contactChanged;
     if (new_precond) {
         // free the old factor before building the new one
         precond_.reset();
-        precond_.reset(new FractureMechanicsPreconditioner(S, opt_.precond, mech));
+        precond_.reset(new FractureMechanicsPreconditioner(S, opt_.precond, mech, ddm));
         stats.mech_factorizations += precond_->factorizations();
         stats.mech_factor_seconds += precond_->factorSeconds();
     } else {
         const int f0 = precond_->factorizations();
         const double s0 = precond_->factorSeconds();
-        precond_->update(S, opt_.updateMechOnReuse);
+        precond_->update(S, opt_.updateMechOnReuse, ddm);
         stats.mech_factorizations += precond_->factorizations() - f0;
         stats.mech_factor_seconds += precond_->factorSeconds() - s0;
     }

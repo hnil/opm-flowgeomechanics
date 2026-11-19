@@ -57,6 +57,7 @@ public:
         DenseMechFactor::Options mechFactor;
         bool nearField{false}; // mech_solver.type=nearfield_ilu
         double nearFieldRadius{6.0};
+        bool fbSplit{false}; // mech_solver.type=fb_split: needs mechRows
         static Options read(const PropertyTree& prm);
     };
 
@@ -102,6 +103,7 @@ private:
     std::unique_ptr<NearFieldMechILU> nearField_;
     std::unique_ptr<FractureMechanicsPreconditioner> precond_;
     std::unique_ptr<Solver> solver_;
+    std::shared_ptr<const DdmInverse> ddmInv_;
 };
 
 } // namespace Opm
