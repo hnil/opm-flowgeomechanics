@@ -55,6 +55,8 @@ public:
         bool blasOperator{false}; // apply the dense mechanics block with dgemv
         bool rankUpdate{false}; // mech_solver.reuse=rank_update: keep a DenseMechFactor
         DenseMechFactor::Options mechFactor;
+        bool nearField{false}; // mech_solver.type=nearfield_ilu
+        double nearFieldRadius{6.0};
         static Options read(const PropertyTree& prm);
     };
 
@@ -97,6 +99,7 @@ private:
     double scalePressure_{1.0};
     std::unique_ptr<Operator> operator_;
     std::unique_ptr<DenseMechFactor> mechFactor_;
+    std::unique_ptr<NearFieldMechILU> nearField_;
     std::unique_ptr<FractureMechanicsPreconditioner> precond_;
     std::unique_ptr<Solver> solver_;
 };

@@ -979,6 +979,8 @@ private:
     mutable std::unique_ptr<DynamicMatrix> fracture_matrix_;
     mutable ddm::KernelTable ddm_table_; // DDM kernel values on the trimesh lattice
     mutable std::uint64_t ddm_generation_{0}; // bumped at every assembly of fracture_matrix_
+    mutable std::vector<double> mech_centres_; // xyz per cell, element-mapper order
+    mutable std::uint64_t mech_centres_generation_{0};
     // mechanics block of the coupled system = diag(mech_alpha_) * fractureMatrix() + diag(mech_beta_)
     std::vector<double> mech_alpha_, mech_beta_;
 

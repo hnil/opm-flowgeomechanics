@@ -857,7 +857,20 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     it.numClosed = std::accumulate(closed_cells.begin(), closed_cells.end(), 0);
     it.newSystem = first_iteration;
     it.contactChanged = closed_cells_changed;
-    const MechRows mechRows {&fractureMatrix(), &mech_alpha_, &mech_beta_, ddm_generation_};
+    const auto& ddm = fractureMatrix();
+    if (mech_centres_generation_ != ddm_generation_) {
+        ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+        mech_centres_.assign(3 * numFractureCells(), 0.0);
+        for (const auto& e : elements(grid_->leafGridView())) {
+            const auto c = e.geometry().center();
+            const auto i = 3 * mapper.index(e);
+            mech_centres_[i] = c[0];
+            mech_centres_[i + 1] = c[1];
+            mech_centres_[i + 2] = c[2];
+        }
+        mech_centres_generation_ = ddm_generation_;
+    }
+    const MechRows mechRows {&ddm, &mech_alpha_, &mech_beta_, ddm_generation_, &mech_centres_};
     it.mechRows = &mechRows;
     // dump_case_min_nonlin_iter > 0 captures the systems of struggling solves for replay
     it.dump = opt.writeCoupledSystem

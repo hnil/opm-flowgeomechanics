@@ -173,6 +173,11 @@ FractureCoupledLinearSolver::Options::read(const PropertyTree& prm)
     o.mechFactor.maxRankMin = o.precond.get<int>("mech_solver.rank_update_max_min", o.mechFactor.maxRankMin);
     o.mechFactor.refactorIterations
         = o.precond.get<int>("mech_solver.rank_update_refactor_iterations", o.mechFactor.refactorIterations);
+    o.nearField = o.precond.get<std::string>("mech_solver.type", "dune_lu") == "nearfield_ilu"
+        && !o.precond.get<bool>("diag_mech");
+    o.nearFieldRadius = o.precond.get<double>("mech_solver.nearfield_radius", o.nearFieldRadius);
+    if (o.nearField && o.rankUpdate)
+        OPM_THROW(std::invalid_argument, "mech_solver: nearfield_ilu and reuse=rank_update exclude each other");
     return o;
 }
 
@@ -264,7 +269,18 @@ FractureCoupledLinearSolver::solve(VectorHP& rhs,
     const auto since = [](const Clock::time_point& t0) {
         return std::chrono::duration<double>(Clock::now() - t0).count();
     };
-    const DenseMechFactor* mech = nullptr;
+    const MechBlockSolver* mech = nullptr;
+    if (opt_.nearField) {
+        if (!it.mechRows)
+            OPM_THROW(std::runtime_error, "mech_solver nearfield_ilu needs the mechanics rows");
+        if (!nearField_)
+            nearField_ = std::make_unique<NearFieldMechILU>(opt_.nearFieldRadius);
+        const auto t0 = Clock::now();
+        nearField_->update(S[_0][_0], *it.mechRows);
+        stats.mech_factor_seconds += since(t0);
+        ++stats.mech_factorizations;
+        mech = nearField_.get();
+    }
     if (opt_.rankUpdate && it.mechRows) {
         if (!mechFactor_)
             mechFactor_ = std::make_unique<DenseMechFactor>(opt_.mechFactor);

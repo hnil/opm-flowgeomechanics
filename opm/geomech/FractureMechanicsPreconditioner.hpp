@@ -104,13 +104,22 @@ struct MechRows
     const std::vector<double>* alpha{nullptr};
     const std::vector<double>* beta{nullptr};
     std::uint64_t generation{0};
+    const std::vector<double>* centres{nullptr}; // cell centres, xyz per cell
+};
+
+// Approximate solve with the mechanics block, used by the preconditioner.
+class MechBlockSolver
+{
+public:
+    virtual ~MechBlockSolver() = default;
+    virtual void solve(Vector& x, const Vector& rhs) const = 0;
 };
 
 // Dense LU (or inverse) of the mechanics block B = s * (diag(alpha) A + diag(beta)),
 // kept across Newton iterations and fracture solves while A is unchanged. Rows whose
 // coefficients moved since the factorisation are added as a Woodbury update; rows that
 // moved by less than tol are ignored, so the result is a preconditioner, exact when tol=0.
-class DenseMechFactor
+class DenseMechFactor : public MechBlockSolver
 {
 public:
     struct Options
@@ -125,7 +134,7 @@ public:
     explicit DenseMechFactor(const Options& opt) : opt_(opt) {}
     // B is the current (scaled) block; returns true if it was refactored.
     bool update(const FMatrix& B, double scale, const MechRows& rows);
-    void solve(Vector& x, const Vector& rhs) const;
+    void solve(Vector& x, const Vector& rhs) const override;
     int rank() const { return static_cast<int>(slotRow_.size()); }
     // the next update refactors
     void invalidate() { stale_ = true; }
@@ -156,6 +165,27 @@ private:
     mutable std::vector<double> y_, t_;
 };
 
+// ILU(0) of the mechanics block restricted to cell pairs closer than radius times the
+// typical cell spacing. Cheap enough to refactor at every Newton iteration.
+class NearFieldMechILU : public MechBlockSolver
+{
+public:
+    explicit NearFieldMechILU(double radius) : radius_(radius) {}
+    void update(const FMatrix& B, const MechRows& rows);
+    void solve(Vector& x, const Vector& rhs) const override;
+    double nnzPerRow() const { return n_ > 0 ? double(col_.size()) / n_ : 0.0; }
+
+private:
+    void buildPattern(const std::vector<double>& xyz);
+
+    double radius_;
+    int n_{0};
+    std::uint64_t generation_{0};
+    bool havePattern_{false};
+    std::vector<int> ptr_, col_, diag_;
+    std::vector<double> val_;
+};
+
 // Block preconditioner for the coupled fracture width / pressure linear system.
 //
 // The operator is assembled as
@@ -184,7 +214,7 @@ public:
   // mech_press_coupling, lu_pivoting, mech_solver.type and flow_solver.*.
   // A non-null mech replaces the internal mechanics factorisation; it must outlive this object.
   FractureMechanicsPreconditioner(const FractureSystemMatrix& S, Opm::PropertyTree prm,
-                                  const DenseMechFactor* mech = nullptr);
+                                  const MechBlockSolver* mech = nullptr);
   virtual void apply(VectorHP& v, const VectorHP& d);
     virtual void post(VectorHP& /*v*/) { };
     virtual void pre(VectorHP& /*x*/, VectorHP& /*b*/) { };
@@ -242,7 +272,7 @@ Vector diagvec(const Mat& M)
   void openBlockSolve(Vector& x, const Vector& rhs) const;
   void checkLuFactor() const;
     const FractureSystemMatrix& A_;
-    const DenseMechFactor* mech_{nullptr};
+    const MechBlockSolver* mech_{nullptr};
     int factorizations_{0};
     double factor_seconds_{0.0};
     double apply_seconds_{0.0};

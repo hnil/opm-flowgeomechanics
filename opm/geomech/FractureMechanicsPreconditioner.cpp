@@ -23,7 +23,10 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
+#include <limits>
 #include <sstream>
+#include <unordered_map>
 #include <utility>
 
 #include <opm/common/ErrorMacros.hpp>
@@ -156,7 +159,7 @@ FractureMechanicsPreconditioner::rebuildFlowSolver(const Opm::FractureSystemMatr
 
 FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::FractureSystemMatrix& S,
                                                                  Opm::PropertyTree prm,
-                                                                 const DenseMechFactor* mech)
+                                                                 const MechBlockSolver* mech)
     : A_(S)
     , mech_(mech)
     , A_diag_(diagvec(S[_0][_0]))
@@ -174,7 +177,8 @@ FractureMechanicsPreconditioner::FractureMechanicsPreconditioner(const Opm::Frac
     mech_first_ = prm_.get<bool>("mech_first");
     lu_pivoting_ = prm_.get<bool>("lu_pivoting", false);
     const auto mech_solver = prm_.get<std::string>("mech_solver.type", "dune_lu");
-    if (mech_solver != "dune_lu" && mech_solver != "lapack_lu" && mech_solver != "lapack_inv") {
+    if (mech_solver != "dune_lu" && mech_solver != "lapack_lu" && mech_solver != "lapack_inv"
+        && mech_solver != "nearfield_ilu") {
         OPM_THROW(std::invalid_argument, "Unknown fracture preconditioner mech_solver.type: " + mech_solver);
     }
     lapack_inv_ = (mech_solver == "lapack_inv");
@@ -808,5 +812,123 @@ DenseMechFactor::solve(Vector& x, const Vector& rhs) const
     }
     for (int i = 0; i < n; ++i)
         x[i][0] = ratio_ * y_[i];
+}
+
+void
+NearFieldMechILU::buildPattern(const std::vector<double>& xyz)
+{
+    const int n = n_;
+    const auto d2 = [&](int i, int j) {
+        double s = 0.0;
+        for (int a = 0; a < 3; ++a) {
+            const double d = xyz[3 * i + a] - xyz[3 * j + a];
+            s += d * d;
+        }
+        return s;
+    };
+    // typical spacing: median nearest-neighbour distance over a sample of cells
+    std::vector<double> nn;
+    const int stride = std::max(1, n / 256);
+    for (int i = 0; i < n; i += stride) {
+        double best = std::numeric_limits<double>::max();
+        for (int j = 0; j < n; ++j)
+            if (j != i)
+                best = std::min(best, d2(i, j));
+        nn.push_back(best);
+    }
+    std::nth_element(nn.begin(), nn.begin() + nn.size() / 2, nn.end());
+    const double h = nn.empty() ? 1.0 : std::sqrt(nn[nn.size() / 2]);
+    const double R = radius_ * h;
+    const double R2 = R * R;
+
+    const auto bin = [&](int i, int a) { return static_cast<std::int64_t>(std::floor(xyz[3 * i + a] / R)); };
+    const auto key = [](std::int64_t x, std::int64_t y, std::int64_t z) {
+        return (x * 73856093) ^ (y * 19349663) ^ (z * 83492791);
+    };
+    std::unordered_map<std::int64_t, std::vector<int>> bins;
+    for (int i = 0; i < n; ++i)
+        bins[key(bin(i, 0), bin(i, 1), bin(i, 2))].push_back(i);
+
+    ptr_.assign(1, 0);
+    col_.clear();
+    diag_.resize(n);
+    std::vector<int> row;
+    for (int i = 0; i < n; ++i) {
+        row.clear();
+        const std::int64_t bx = bin(i, 0), by = bin(i, 1), bz = bin(i, 2);
+        for (int dx = -1; dx <= 1; ++dx)
+            for (int dy = -1; dy <= 1; ++dy)
+                for (int dz = -1; dz <= 1; ++dz) {
+                    const auto it = bins.find(key(bx + dx, by + dy, bz + dz));
+                    if (it == bins.end())
+                        continue;
+                    for (int j : it->second)
+                        if (j == i || d2(i, j) <= R2)
+                            row.push_back(j);
+                }
+        std::sort(row.begin(), row.end());
+        row.erase(std::unique(row.begin(), row.end()), row.end()); // hash collisions
+        for (int j : row) {
+            if (j == i)
+                diag_[i] = col_.size();
+            col_.push_back(j);
+        }
+        ptr_.push_back(col_.size());
+    }
+    val_.resize(col_.size());
+    havePattern_ = true;
+}
+
+void
+NearFieldMechILU::update(const FMatrix& B, const MechRows& rows)
+{
+    const int n = B.N();
+    if (!rows.centres || int(rows.centres->size()) != 3 * n)
+        OPM_THROW(std::runtime_error, "near-field mechanics ILU: cell centres do not match the block");
+    if (!havePattern_ || n != n_ || rows.generation != generation_) {
+        n_ = n;
+        generation_ = rows.generation;
+        buildPattern(*rows.centres);
+    }
+    for (int i = 0; i < n; ++i)
+        for (int k = ptr_[i]; k < ptr_[i + 1]; ++k)
+            val_[k] = B[i][col_[k]];
+    // ILU(0), IKJ order on the fixed pattern
+    std::vector<int> pos(n, -1);
+    for (int i = 0; i < n; ++i) {
+        for (int k = ptr_[i]; k < ptr_[i + 1]; ++k)
+            pos[col_[k]] = k;
+        for (int k = ptr_[i]; k < diag_[i]; ++k) {
+            const int c = col_[k];
+            const double l = (val_[k] /= val_[diag_[c]]);
+            for (int q = diag_[c] + 1; q < ptr_[c + 1]; ++q)
+                if (pos[col_[q]] >= 0)
+                    val_[pos[col_[q]]] -= l * val_[q];
+        }
+        for (int k = ptr_[i]; k < ptr_[i + 1]; ++k)
+            pos[col_[k]] = -1;
+        double& p = val_[diag_[i]];
+        if (!std::isfinite(p) || std::abs(p) <= 1e-12 * std::abs(B[i][i]))
+            p = B[i][i]; // keep the factor usable on a breakdown
+    }
+}
+
+void
+NearFieldMechILU::solve(Vector& x, const Vector& rhs) const
+{
+    const int n = n_;
+    x.resize(n);
+    for (int i = 0; i < n; ++i) {
+        double v = rhs[i][0];
+        for (int k = ptr_[i]; k < diag_[i]; ++k)
+            v -= val_[k] * x[col_[k]][0];
+        x[i][0] = v;
+    }
+    for (int i = n - 1; i >= 0; --i) {
+        double v = x[i][0];
+        for (int k = diag_[i] + 1; k < ptr_[i + 1]; ++k)
+            v -= val_[k] * x[col_[k]][0];
+        x[i][0] = v / val_[diag_[i]];
+    }
 }
 } // namespace Opm
