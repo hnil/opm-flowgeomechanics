@@ -211,6 +211,25 @@ private:
     }
 };
 
+/// Rank of each mechanics-sector column, chosen with the flow partition.
+class SectorColumns
+{
+public:
+    static void set(std::vector<int> partOfColumn) { instance() = std::move(partOfColumn); }
+    static const std::vector<int>& get() { return instance(); }
+
+private:
+    static std::vector<int>& instance()
+    {
+        static std::vector<int> part;
+        return part;
+    }
+};
+
+/// Flow partition for a mechanics sector, by mechanics columns balanced by mechanics
+/// cells; rank 0, serial grid. Defined in MechGridContext.hpp.
+std::vector<int> sectorFlowPartition(const Dune::CpGrid& grid, const std::string& sectorFile);
+
 /// The rank of every flow cell: the rank of the coarse cell it belongs to.
 /// Install with GenericCpGridVanguard::setExternalLoadBalancer so that flow is
 /// partitioned this way from the start.
@@ -282,6 +301,13 @@ void installFlowPartition(int argc, char** argv)
             && argFromArgs(argc, argv, "--mech-sector-file") != "none")) {
         // The mechanics grid is rebuilt from the corner-point input.
         RetainCornerPointInput::enable();
+    }
+    const auto sector = argFromArgs(argc, argv, "--mech-sector-file");
+    if (!sector.empty() && sector != "none") {
+        using Vanguard = GetPropType<TypeTag, Properties::Vanguard>;
+        Vanguard::setExternalLoadBalancer(
+            [sector](const Dune::CpGrid& grid) { return sectorFlowPartition(grid, sector); });
+        return;
     }
     const auto file = argFromArgs(argc, argv, "--mech-coarsen-file");
     if (file.empty() || file == "none") {

@@ -371,48 +371,34 @@ public:
 
     struct Sector {};
 
-    /// The mechanics grid is a box of the deck's grid with padding around it
-    /// (MechSector). Box cells map to deck cells by offset; padding cells take
-    /// the properties of the nearest box cell.
-    template <class FlowGrid, class CartesianMapper>
-    MechGridContext(Sector, const RetainedCornerPointInput* processed,
-                    const MechSector::Spec& given,
-                    const FlowGrid& flowGrid,
-                    const CartesianMapper& flowCartesianMapper,
-                    const EclipseGrid* deckGrid = nullptr)
-        : sector_(true)
+    /// The mechanics sector as rank 0 builds it from the corner-point input.
+    struct SectorBuild
     {
-        auto spec = given;
-        if (flowGrid.comm().size() > 1) {
-            OPM_THROW(std::runtime_error, "A mechanics sector runs in serial only so far");
-        }
-        if (processed == nullptr) {
-            OPM_THROW(std::runtime_error, "The mechanics sector needs the corner-point input "
-                      "the flow grid was built from (RetainCornerPointInput)");
-        }
-        const auto size = flowGrid.logicalCartesianSize();
-        const std::array<int,3> dd{size[0], size[1], size[2]};
+        MechSector::Spec spec;          // box resolved
+        MechSector::Result built;
+        std::vector<int> actnum;        // of built.grid
+        std::vector<int> toMech;        // deck Cartesian -> mechanics Cartesian, -1 outside
+        std::vector<int> deckActive;
+        std::vector<double> deckZ;
+    };
+
+    /// `flowBox` is the flow cells' bounding box (I1 I2 J1 J2 K1 K2, end exclusive).
+    static SectorBuild buildSector(const RetainedCornerPointInput& processed,
+                                   const MechSector::Spec& given, const std::array<int,3>& dd,
+                                   const std::array<int,6>& flowBox, const EclipseGrid* deckGrid)
+    {
+        SectorBuild s;
+        s.spec = given;
+        auto& spec = s.spec;
         if (spec.boxFromFlow) {
-            std::array<int,6> bb{dd[0], 0, dd[1], 0, dd[2], 0};
-            const auto& view = flowGrid.leafGridView();
-            for (const auto& cell : elements(view)) {
-                int c = flowCartesianMapper.cartesianIndex(view.indexSet().index(cell));
-                for (int a = 0; a < 3; ++a) {
-                    const int x = c % dd[a];
-                    c /= dd[a];
-                    bb[2*a] = std::min(bb[2*a], x);
-                    bb[2*a + 1] = std::max(bb[2*a + 1], x + 1);
-                }
-            }
             for (int a = 0; a < 3; ++a) {
-                spec.box[2*a] = std::max(0, bb[2*a] - spec.margin[a]);
-                spec.box[2*a + 1] = std::min(dd[a], bb[2*a + 1] + spec.margin[a]);
+                spec.box[2*a] = std::max(0, flowBox[2*a] - spec.margin[a]);
+                spec.box[2*a + 1] = std::min(dd[a], flowBox[2*a + 1] + spec.margin[a]);
             }
         }
         // Mechanics needs the rock as the deck gives it: flow's MINPV/PINCH processing
         // moves ZCORN and can leave gaps. Every cell with volume is a mechanics cell.
-        RetainedCornerPointInput input(*processed);
-        const std::vector<double> flowZ = processed->zcorn; // building the mech grid replaces *processed
+        RetainedCornerPointInput input(processed);
         if (deckGrid != nullptr) {
             if (deckGrid->getZCORN().size() != input.zcorn.size()
                 || deckGrid->getCOORD().size() != input.coord.size()) {
@@ -422,13 +408,14 @@ public:
             input.zcorn = deckGrid->getZCORN();
         }
         // Active before MINPV/PINCH; the flow grid's own ACTNUM no longer says.
-        std::vector<int> deckActive = input.actnum;
-        if (deckActive.size() != static_cast<std::size_t>(dd[0])*dd[1]*dd[2]) {
-            deckActive.assign(static_cast<std::size_t>(dd[0])*dd[1]*dd[2], 1);
+        s.deckActive = input.actnum;
+        if (s.deckActive.size() != static_cast<std::size_t>(dd[0])*dd[1]*dd[2]) {
+            s.deckActive.assign(static_cast<std::size_t>(dd[0])*dd[1]*dd[2], 1);
         }
+        const auto& deckActive = s.deckActive;
         input.actnum.clear();
         closeVerticalGaps_(input);
-        const std::vector<double> deckZ = input.zcorn;
+        s.deckZ = input.zcorn;
         // Optional: slivers make the mechanics grid costly.
         std::vector<int> absorber;
         if (spec.wedgeMerge > 0.0) {
@@ -463,23 +450,14 @@ public:
             }
         }
         const MechSector::Grdecl deck{dd, input.coord, input.zcorn};
-        const auto built = MechSector::build(deck, spec);
-        const auto& g = built.grid;
-        const auto actnum = withVolume(g.dims, g.zcorn);
-        if (!spec.dump.empty()) {
-            // Written again below with FLOWCELL; this copy survives a failing grid build.
-            MechSector::writeGrdecl(spec.dump, g, actnum, {});
-        }
-        const EclipseGrid mechInput(g.dims, g.coord, g.zcorn, actnum.data());
-        grid_ = std::make_unique<Dune::CpGrid>(flowGrid.comm());
-        grid_->processEclipseFormat(&mechInput, /*ecl_state*/ nullptr,
-                                    /*periodic_extension*/ false, /*turn_normals*/ false,
-                                    /*clip_z*/ false, /*pinchActive*/ false,
-                                    /*edge_conformal*/ true, /*merge_tolerance*/ 0.0, g.bend);
+        s.built = MechSector::build(deck, spec);
+        const auto& g = s.built.grid;
+        s.actnum = withVolume(g.dims, g.zcorn);
 
         const auto& b = spec.box;
-        const auto& o = built.origin;
-        std::vector<int> toMech(static_cast<std::size_t>(dd[0])*dd[1]*dd[2], -1);
+        const auto& o = s.built.origin;
+        auto& toMech = s.toMech;
+        toMech.assign(static_cast<std::size_t>(dd[0])*dd[1]*dd[2], -1);
         for (int k = b[4]; k < b[5]; ++k)
         for (int j = b[2]; j < b[3]; ++j)
         for (int i = b[0]; i < b[1]; ++i) {
@@ -496,10 +474,152 @@ public:
                 toMech[f] = toMech[a];
             }
         }
-        buildMap(toMech, g.dims, flowGrid, flowCartesianMapper);
+        return s;
+    }
+
+    /// Rank of each mechanics column (I + NI*J), balanced by mechanics cells. Merges only
+    /// join cells of one column, so a column keeps its flow cells and its vertical lines.
+    static std::vector<int> partitionSectorColumns(const SectorBuild& s, const int numRanks)
+    {
+        const auto& d = s.built.grid.dims;
+        std::vector<double> weight(static_cast<std::size_t>(d[0])*d[1], 0.0);
+        for (int k = 0; k < d[2]; ++k)
+        for (int c = 0; c < d[0]*d[1]; ++c) {
+            weight[c] += s.actnum[c + static_cast<std::size_t>(d[0])*d[1]*k] != 0;
+        }
+        return MechPartition::partitionCoarseCells({d[0], d[1], 1}, weight, numRanks);
+    }
+
+    /// Mechanics column of a deck column; deck columns beside the box take the nearest.
+    static int sectorColumnOfDeck(const SectorBuild& s, const int i, const int j)
+    {
+        const auto& d = s.built.grid.dims;
+        const auto& b = s.spec.box;
+        const auto& o = s.built.origin;
+        const int I = std::clamp(i - b[0] + o[0], 0, d[0] - 1);
+        const int J = std::clamp(j - b[2] + o[1], 0, d[1] - 1);
+        return I + d[0]*J;
+    }
+
+    /// The mechanics grid is a box of the deck's grid with padding around it
+    /// (MechSector). Box cells map to deck cells by offset; padding cells take
+    /// the properties of the nearest box cell. In parallel, rank 0 builds it and
+    /// distributes it by the columns MechPartition::sectorFlowPartition chose for flow.
+    template <class FlowGrid, class CartesianMapper>
+    MechGridContext(Sector, const RetainedCornerPointInput* processed,
+                    const MechSector::Spec& given,
+                    const FlowGrid& flowGrid,
+                    const CartesianMapper& flowCartesianMapper,
+                    const EclipseGrid* deckGrid = nullptr)
+        : sector_(true)
+    {
+        const auto& comm = flowGrid.comm();
+        const bool isRoot = comm.rank() == 0;
+        const bool parallel = comm.size() > 1;
+        // Decided on rank 0 and thrown on all, so no rank is left in a collective call.
+        int problem = 0;
+        if (isRoot) {
+            problem = (processed == nullptr) ? 1
+                    : (parallel && MechPartition::SectorColumns::get().empty()) ? 2 : 0;
+        }
+        problem = comm.max(problem);
+        if (problem == 1) {
+            OPM_THROW_NOLOG(std::runtime_error, "The mechanics sector needs the corner-point input "
+                            "the flow grid was built from (RetainCornerPointInput)");
+        }
+        if (problem == 2) {
+            OPM_THROW_NOLOG(std::runtime_error, "In parallel the flow grid must be partitioned by "
+                            "the mechanics sector: install MechPartition::installFlowPartition in "
+                            "main() before the simulator is created.");
+        }
+        const auto size = flowGrid.logicalCartesianSize();
+        const std::array<int,3> dd{size[0], size[1], size[2]};
+        std::array<int,6> flowBox{dd[0], 0, dd[1], 0, dd[2], 0};
+        if (given.boxFromFlow) {
+            const auto& view = flowGrid.leafGridView();
+            for (const auto& cell : elements(view)) {
+                int c = flowCartesianMapper.cartesianIndex(view.indexSet().index(cell));
+                for (int a = 0; a < 3; ++a) {
+                    const int x = c % dd[a];
+                    c /= dd[a];
+                    flowBox[2*a] = std::min(flowBox[2*a], x);
+                    flowBox[2*a + 1] = std::max(flowBox[2*a + 1], x + 1);
+                }
+            }
+            for (int a = 0; a < 3; ++a) {
+                flowBox[2*a] = comm.min(flowBox[2*a]);
+                flowBox[2*a + 1] = comm.max(flowBox[2*a + 1]);
+            }
+        }
+
+        SectorBuild s;
+        std::vector<double> flowZ;
+        std::vector<int> partOfMech;
+        int mismatch = 0;
+        if (isRoot) {
+            flowZ = processed->zcorn; // building the mech grid replaces *processed
+            s = buildSector(*processed, given, dd, flowBox, deckGrid);
+            const auto& g = s.built.grid;
+            if (!s.spec.dump.empty()) {
+                // Written again below with FLOWCELL; this copy survives a failing grid build.
+                MechSector::writeGrdecl(s.spec.dump, g, s.actnum, {});
+            }
+            if (parallel) {
+                const auto& column = MechPartition::SectorColumns::get();
+                const std::size_t nc = static_cast<std::size_t>(g.dims[0])*g.dims[1];
+                mismatch = column.size() != nc;
+                if (!mismatch) {
+                    partOfMech.resize(nc*g.dims[2]);
+                    for (std::size_t c = 0; c < partOfMech.size(); ++c) {
+                        partOfMech[c] = column[c % nc];
+                    }
+                }
+            }
+        }
+        if (comm.max(mismatch) != 0) {
+            OPM_THROW_NOLOG(std::runtime_error, "Mechanics sector: the grid differs from the one "
+                            "the flow partition was made for");
+        }
+        grid_ = std::make_unique<Dune::CpGrid>(comm);
+        // Corner-point processing is a rank-0 job with collective steps.
+        if (isRoot) {
+            const auto& g = s.built.grid;
+            const EclipseGrid mechInput(g.dims, g.coord, g.zcorn, s.actnum.data());
+            grid_->processEclipseFormat(&mechInput, /*ecl_state*/ nullptr,
+                                        /*periodic_extension*/ false, /*turn_normals*/ false,
+                                        /*clip_z*/ false, /*pinchActive*/ false,
+                                        /*edge_conformal*/ true, /*merge_tolerance*/ 0.0, g.bend);
+        } else {
+            grid_->processEclipseFormat(nullptr, /*ecl_state*/ nullptr,
+                                        /*periodic_extension*/ false, /*turn_normals*/ false,
+                                        /*clip_z*/ false, /*pinchActive*/ false,
+                                        /*edge_conformal*/ true, /*merge_tolerance*/ 0.0, {});
+        }
+
+        std::array<int,3> mdims = s.built.grid.dims;
+        std::array<int,3> o = s.built.origin;
+        std::array<int,6> b = s.spec.box;
+        if (parallel) {
+            distribute(partOfMech);
+            const auto bcast = [&comm](auto& v) {
+                std::size_t n = v.size();
+                comm.broadcast(&n, 1, 0);
+                v.resize(n);
+                comm.broadcast(v.data(), static_cast<int>(n), 0);
+            };
+            comm.broadcast(mdims.data(), 3, 0);
+            comm.broadcast(o.data(), 3, 0);
+            comm.broadcast(b.data(), 6, 0);
+            bcast(s.toMech);
+            bcast(s.deckActive);
+            bcast(s.deckZ);
+            bcast(flowZ);
+        }
+        buildMap(s.toMech, mdims, flowGrid, flowCartesianMapper);
 
         const Dune::CartesianIndexMapper<Dune::CpGrid> mechMapper(*grid_);
-        setDonors_(toMech, deckZ, flowZ, deckActive, dd, g.dims, mechMapper, flowGrid, flowCartesianMapper);
+        setDonors_(s.toMech, s.deckZ, flowZ, s.deckActive, dd, mdims, mechMapper, flowGrid,
+                   flowCartesianMapper);
         padding_.assign(fine_of_mech_.size(), 0);
         std::size_t padding = 0;
         for (std::size_t m = 0; m < fine_of_mech_.size(); ++m) {
@@ -509,19 +629,25 @@ public:
             int c = mechMapper.cartesianIndex(static_cast<int>(m));
             std::array<int,3> ijk;
             for (int a = 0; a < 3; ++a) {
-                ijk[a] = c % g.dims[a];
-                c /= g.dims[a];
+                ijk[a] = c % mdims[a];
+                c /= mdims[a];
                 ijk[a] = std::clamp(ijk[a] - o[a], 0, b[2*a + 1] - b[2*a] - 1) + b[2*a];
             }
             fine_of_mech_[m].push_back(ijk[0] + dd[0]*(ijk[1] + dd[1]*ijk[2]));
             padding_[m] = 1;
             ++padding;
         }
+        if (!isRoot) {
+            return;
+        }
+        const auto& spec = s.spec;
+        const auto& built = s.built;
+        const auto& g = built.grid;
         std::ostringstream os;
         os << "Mechanics sector: box " << b[1] - b[0] << "x" << b[3] - b[2] << "x" << b[5] - b[4]
            << " at (" << b[0] + 1 << "," << b[2] + 1 << "," << b[4] + 1 << "), padded to "
            << g.dims[0] << "x" << g.dims[1] << "x" << g.dims[2] << "; " << padding
-           << " padding cells";
+           << " padding cells" << (parallel ? " on rank 0" : "");
         if (spec.straighten) {
             os << "; pillars straightened, corners moved up to " << built.moved << " m";
         }
@@ -536,7 +662,10 @@ public:
                             "cross or fold within their depths");
         }
 
-        if (!spec.dump.empty()) {
+        if (!spec.dump.empty() && parallel) {
+            OpmLog::info("Mechanics sector: grid written to " + spec.dump
+                         + " without PADDING/FLOWCELL (serial only)");
+        } else if (!spec.dump.empty()) {
             const std::size_t nc = static_cast<std::size_t>(g.dims[0])*g.dims[1]*g.dims[2];
             std::vector<int> pad(nc, 1), flow(nc, 0);
             for (int k = 0; k < g.dims[2]; ++k)
@@ -550,7 +679,7 @@ public:
             for (std::size_t m = 0; m < fine_of_mech_.size(); ++m) {
                 flow[mechMapper.cartesianIndex(static_cast<int>(m))] = map_.hasFlowCells(m) ? 1 : 0;
             }
-            MechSector::writeGrdecl(spec.dump, g, actnum, {{"PADDING", pad}, {"FLOWCELL", flow}});
+            MechSector::writeGrdecl(spec.dump, g, s.actnum, {{"PADDING", pad}, {"FLOWCELL", flow}});
             OpmLog::info("Mechanics sector: grid written to " + spec.dump
                          + (g.bend.empty() ? "" : " (straight pillars; GRDECL cannot hold the bends)"));
         }
@@ -1548,6 +1677,55 @@ private:
     std::vector<int> mechCellOfMechCart_;
     std::vector<Coarsening::Block> blocks_;
 };
+
+namespace MechPartition
+{
+
+inline std::vector<int> sectorFlowPartition(const Dune::CpGrid& grid, const std::string& sectorFile)
+{
+    const auto* processed = RetainCornerPointInput::get();
+    if (processed == nullptr) {
+        OPM_THROW(std::runtime_error, "Mechanics sector partition: no corner-point input retained");
+    }
+    const auto size = grid.logicalCartesianSize();
+    const std::array<int,3> dd{size[0], size[1], size[2]};
+    const auto spec = MechSector::readSpec(sectorFile, dd);
+    std::array<int,6> flowBox{dd[0], 0, dd[1], 0, dd[2], 0};
+    for (int c : grid.globalCell()) {
+        for (int a = 0; a < 3; ++a) {
+            const int x = c % dd[a];
+            c /= dd[a];
+            flowBox[2*a] = std::min(flowBox[2*a], x);
+            flowBox[2*a + 1] = std::max(flowBox[2*a + 1], x + 1);
+        }
+    }
+    // Without the deck's own corners (not reachable here): the columns and their
+    // cell counts are what matter, and they follow the same build.
+    const auto s = MechGridContext::buildSector(*processed, spec, dd, flowBox, nullptr);
+    const int ranks = grid.comm().size();
+    auto column = MechGridContext::partitionSectorColumns(s, ranks);
+    std::vector<int> part(grid.globalCell().size());
+    std::vector<double> flowCells(ranks, 0.0), mechCells(ranks, 0.0);
+    for (std::size_t f = 0; f < part.size(); ++f) {
+        const int c = grid.globalCell()[f];
+        part[f] = column[MechGridContext::sectorColumnOfDeck(s, c % dd[0], (c / dd[0]) % dd[1])];
+        flowCells[part[f]] += 1.0;
+    }
+    const auto& d = s.built.grid.dims;
+    for (std::size_t c = 0; c < s.actnum.size(); ++c) {
+        mechCells[column[c % (static_cast<std::size_t>(d[0])*d[1])]] += s.actnum[c] != 0;
+    }
+    std::ostringstream os;
+    os << "Mechanics sector partition by " << d[0]*d[1] << " columns; mechanics / flow cells per rank:";
+    for (int r = 0; r < ranks; ++r) {
+        os << " " << mechCells[r] << "/" << flowCells[r];
+    }
+    OpmLog::info(os.str());
+    SectorColumns::set(std::move(column));
+    return part;
+}
+
+} // namespace MechPartition
 
 } // namespace Opm
 
