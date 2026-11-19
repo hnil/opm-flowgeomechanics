@@ -95,6 +95,7 @@ Fracture::init(const std::string& well,
     }
 
     min_width_ = prm_.get<double>("config.min_width", 1e-3);
+    max_flow_width_ = prm_.get<double>("solver.max_flow_width", std::numeric_limits<double>::infinity());
     {
         const auto mode = prm_.get<std::string>("solver.closed_cell_leakoff", "full");
         if (mode != "full" && mode != "none" && mode != "ramp") {
@@ -732,7 +733,7 @@ Fracture::writemulti(double time) const
 
         for (size_t i = 0; i < fracture_width_.size(); ++i) {
             fracture_width[i] = fracture_width_[i][0];
-            flow_width[i] = std::max(fracture_width_[i][0], min_width_);
+            flow_width[i] = flowWidth(fracture_width_[i][0]);
             fracture_pressure[i] = fracture_pressure_[i][0];
             reservoir_cells[i] = reservoir_map_.cells[i]; // only converts to double
             reservoir_traction[i] = reservoirTraction(i);
@@ -968,8 +969,8 @@ Fracture::addSource()
         size_t j = std::get<1>(matel);
         double t1 = std::get<2>(matel);
         double t2 = std::get<3>(matel);
-        const double h1 = std::max(fracture_width_[i][0],min_width_);
-        const double h2 = std::max(fracture_width_[j][0],min_width_);
+        const double h1 = flowWidth(fracture_width_[i][0]);
+        const double h2 = flowWidth(fracture_width_[j][0]);
         // harmonic mean of surface flow
         double value = 12. / (h1 * h1 * h1 * t1) + 12. / (h2 * h2 * h2 * t2);
 
@@ -3062,8 +3063,7 @@ Fracture::initPressureMatrix()
         cell_area[wsmapper.index(e)] = e.geometry().volume();
     auto fwi_for = [&](int cell) {
         if (fwi_mode != "estimate") return fWI_cfg;
-        const double w = std::max(cell < static_cast<int>(fracture_width_.size()) ? fracture_width_[cell][0] : 0.0,
-                                  min_width_);
+        const double w = flowWidth(cell < static_cast<int>(fracture_width_.size()) ? fracture_width_[cell][0] : 0.0);
         const double re = std::sqrt(std::max(cell_area[cell], 1e-12) / M_PI);
         const double lnTerm = std::log(std::max(re / fwi_rw, 1.1));
         return 2.0 * M_PI * (w * w * w / 12.0) / lnTerm;

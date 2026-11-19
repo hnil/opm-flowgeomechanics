@@ -28,6 +28,7 @@
 
 #include <opm/geomech/CentreStressInterpolation.hpp>
 #include <opm/geomech/FractureConnectionId.hpp>
+#include <algorithm>
 #include <limits>
 #include <optional>
 #include <array>
@@ -976,6 +977,8 @@ private:
     double E_;
     double nu_;
     double min_width_; // minimum width of fracture, used for convergence criterion
+    double max_flow_width_{std::numeric_limits<double>::infinity()}; // cubic-law width cap
+    double flowWidth(double w) const { return std::clamp(w, min_width_, max_flow_width_); }
     bool closed_cell_no_leakoff_{false};
     bool closed_cell_leakoff_ramp_{false};
     double closed_cell_leakoff_width_{1e-6};

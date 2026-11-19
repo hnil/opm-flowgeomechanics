@@ -22,6 +22,7 @@
 
 #include <array>
 #include <algorithm>
+#include <limits>
 #include <cassert>
 #include <cmath>
 #include <memory>
@@ -165,6 +166,12 @@ LocalAD<N> adMax(const LocalAD<N>& a, double threshold)
         return LocalAD<N>::constant(threshold);
 }
 
+template <int N>
+LocalAD<N> adMin(const LocalAD<N>& a, double cap)
+{
+    return a.value <= cap ? a : LocalAD<N>::constant(cap);
+}
+
 // ============================================================================
 // Data types used by the assembler
 // ============================================================================
@@ -193,6 +200,7 @@ struct FracturePressureInput
     std::vector<CellFluidProperty> viscosity;  // per-cell viscosity with pressure derivative
     std::vector<double> leakof;
     double min_width = 1e-6;
+    double max_width = std::numeric_limits<double>::infinity(); // cubic-law width cap
     size_t num_cells = 0;
 
     // Well data
@@ -535,8 +543,8 @@ assemblePressureAD(const FracturePressureInput& input)
         AD4 w_j_ad = AD4::variable(input.fracture_width[j], W_J);
 
         // apply minimum width (matches original std::max(width, min_width))
-        AD4 h1 = adMax(w_i_ad, input.min_width);
-        AD4 h2 = adMax(w_j_ad, input.min_width);
+        AD4 h1 = adMin(adMax(w_i_ad, input.min_width), input.max_width);
+        AD4 h2 = adMin(adMax(w_j_ad, input.min_width), input.max_width);
 
         // Poiseuille (cubic law) transmissibility – same formula as Fracture::assemblePressure
         AD4 h1_cubed = h1 * h1 * h1;
@@ -614,8 +622,8 @@ assemblePressureOriginal(const FracturePressureInput& input)
         const double t1 = std::get<2>(ht);
         const double t2 = std::get<3>(ht);
 
-        const double h1 = std::max(input.fracture_width[i], input.min_width);
-        const double h2 = std::max(input.fracture_width[j], input.min_width);
+        const double h1 = std::clamp(input.fracture_width[i], input.min_width, input.max_width);
+        const double h2 = std::clamp(input.fracture_width[j], input.min_width, input.max_width);
 
         double value = 12.0 / (h1 * h1 * h1 * t1) + 12.0 / (h2 * h2 * h2 * t2);
         const double mobility = faceMobilityValue(input, i, j);

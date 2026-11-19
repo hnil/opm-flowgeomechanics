@@ -442,6 +442,7 @@ Fracture::makePressureAssemblyInput() const
     FracturePressureInput input;
     input.num_cells = nc;
     input.min_width = min_width_;
+    input.max_width = max_flow_width_;
     input.htrans = htrans_;
     input.control_type = effectiveControlType();
     if (input.control_type == "bhp_well" && !perfinj_.empty()) {
