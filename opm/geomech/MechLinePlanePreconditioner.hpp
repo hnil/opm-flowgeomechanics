@@ -22,6 +22,7 @@
 
 #include <opm/common/ErrorMacros.hpp>
 #include <opm/common/OpmLog/OpmLog.hpp>
+#include <opm/common/TimingMacros.hpp>
 #include <opm/simulators/linalg/PreconditionerWithUpdate.hpp>
 #include <opm/simulators/linalg/PropertyTree.hpp>
 
@@ -109,20 +110,29 @@ public:
         if (!part_.empty())
             x0_ = v;
         // Ghost values stay frozen within a sweep, so the backward sweep is the forward sweep's transpose.
-        for (std::size_t i = 0; i < blocks_.size(); ++i)
-            sweep(blocks_[i], v, d);
-        comm_.copyOwnerToAll(v, v);
-        r_ = d;
-        M_.mmv(v, r_);
-        comm_.project(r_);
+        {
+            OPM_TIMEBLOCK(MechLinesSweep);
+            for (std::size_t i = 0; i < blocks_.size(); ++i)
+                sweep(blocks_[i], v, d);
+            comm_.copyOwnerToAll(v, v);
+        }
+        {
+            OPM_TIMEBLOCK(MechLinesResidual);
+            r_ = d;
+            M_.mmv(v, r_);
+            comm_.project(r_);
+        }
         c_ = 0.0; // the inner preconditioner takes this as its initial guess
         inner_->apply(c_, r_);
         v += c_;
         if (!part_.empty())
             x0_ = v;
-        for (std::size_t i = blocks_.size(); i-- > 0;)
-            sweep(blocks_[i], v, d);
-        comm_.copyOwnerToAll(v, v);
+        {
+            OPM_TIMEBLOCK(MechLinesSweep);
+            for (std::size_t i = blocks_.size(); i-- > 0;)
+                sweep(blocks_[i], v, d);
+            comm_.copyOwnerToAll(v, v);
+        }
     }
 
     void post(Vector& v) override
