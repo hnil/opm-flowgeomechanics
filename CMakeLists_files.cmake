@@ -67,6 +67,7 @@ list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/FracturePressureAssemblerAD.hpp
 	opm/geomech/FractureConnectionId.hpp
 	opm/geomech/FractureCoupledLinearSolver.hpp
+	opm/geomech/FractureStorageCheckpoint.hpp
 	opm/geomech/Fracture.hpp
 	opm/geomech/Fracture_impl.hpp
 	opm/geomech/FractureAuxCells.hpp

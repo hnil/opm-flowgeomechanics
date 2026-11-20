@@ -1,0 +1,61 @@
+Accepted-step fracture fluid balance diagnostic
+
+Enable fractureparam.solver.write_fluid_balance=true in a copy of the selected
+configuration. It is off by default. The VEM problem writes one CSV per local
+active fracture and MPI rank, in the simulation output directory. No output is
+emitted for rejected nonlinear trials: the adaptive timestepper calls
+problem.endTimeStep only in its accepted branch (which can also accept an
+unconverged solution if explicitly configured). The completion log and inner
+convergence columns must therefore still be checked.
+
+Phases:
+- flow_converged: at entry to the accepted endTimeStep hook, before its extra
+  mechanics/fracture solve. The label denotes the call site; inspect convergence
+  flags rather than assuming the optional accept-unconverged mode was disabled.
+- accepted_end: after that extra solve, well-state assignment, parent endTimeStep,
+  filter-cake update and optional output. No physical solve is added by this
+  diagnostic. start_s and end_s explicitly identify the accepted time interval;
+  native fracture PVD labels still follow their existing time convention.
+
+Sign convention: well inflow is positive into the fracture; leakoff is positive
+out to the reservoir. Rates are reservoir-volume m3/s in the audited legacy
+volumetric representation. Integrated fluxes use backward-Euler end-state rates.
+The diagnostic isolates the production well pressure operator and calls the
+same well-source routine used by addSource. It does not substitute the well
+rate target, original-perforation input rate or WWIRFRAC for fracture inflow.
+LeakOfRate is multiplied by each triangle's area before summation.
+
+Two storage rates and defects are reported:
+  physical storage = (current total volume - checkpoint total volume) / dt
+  model storage = (current volume - old volume represented on current mesh)
+                  / fracture_dt, when the aperture storage term is enabled
+  physical defect = Q_well - Q_leakoff - physical storage
+  equation defect = Q_well - Q_leakoff - model storage.
+Their difference reveals missing old-domain volume or a disabled storage term.
+The cached assembled pressure-row residual is also summed independently, with
+its cell infinity norm and configured flow tolerance. Subtracting large pressure
+matrix contributions has roundoff, so report the actual cross-check difference
+and compare it to the existing solver tolerance; no new conservation acceptance
+band is introduced. The model's approximate Newton policy is unchanged.
+
+The diagnostic flags applicability for the legacy coupled RegularTrimesh mode.
+External/embedded pressure or optional density/viscosity-dependent flux modes
+are not certified by this audit. The input well reservoir-water rate and input
+original-perforation total reservoir-volume rate are context, not independently
+measured fracture injection; the former can be damped by native coupling.
+WWIRFRAC uses the reservoir well model's CTF split of surface water rates
+(WellFractureFlowSplit.hpp), a different observable. This local fracture budget
+does not alone establish conservation between that reservoir booking and the
+fracture's rate-well stand-in.
+
+Analyze with:
+  python3 scripts/fracture_fluid_balance.py --run-dir RUN --log RUN.log
+      --ranks 4 --report-dir NEW_ANALYSIS_DIRECTORY
+
+The analyzer requires completed-run MPI provenance, finite values, paired phases,
+unique owner/step rows, contiguous intervals and checkpoint-volume continuity.
+It reports signed and absolute cumulative defects relative to BOTH delivered
+fluid and aperture-volume change, so large throughputs cannot hide storage error.
+It reports measurements, without automatically declaring full conservation.
+The analyzer currently expects contiguous active-fracture histories; inactive
+periods, restart appends or missing rows are flagged rather than filled in.
