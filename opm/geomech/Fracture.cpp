@@ -332,11 +332,8 @@ Fracture::updateFilterCakeProps(const Opm::Connection& connection,
              > 0)) { // should be first step with seed fracture is clean could have used rates from solve
             std::vector<double> leakof_rate = leakOfRate();
             assert(leakof_.size() == fracture_pressure_.size()-numWellEquations());
-            ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
-            for (auto& element : Dune::elements(grid_->leafGridView())) {
-                int eIdx = mapper.index(element);
-                auto geom = element.geometry();
-                double area = geom.volume(); // is the area of this face
+            for (int eIdx = 0; eIdx < mesh_.numCells(); ++eIdx) {
+                double area = mesh_.cellArea(eIdx);
                 int res_cell = reservoir_map_.cells[eIdx];
                 reservoir_areas[res_cell] += area;
                 double flux = leakof_rate[eIdx]*area; // m3/s
@@ -358,7 +355,6 @@ Fracture::updateFilterCakeProps(const Opm::Connection& connection,
         }
 
         /// for setting or controling the fluxes between multiphase and single phase
-        ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
         for (const auto& [res_cell, flux] : reservoir_flux) {
             if (reservoir_areas.find(res_cell) == reservoir_areas.end()) {
                 OpmLog::warning(fmt::format("Reservoir area not found for element index {}", res_cell));
@@ -460,7 +456,6 @@ Fracture::stressIntensityK1() const
 {
     size_t nc = numFractureCells();
     std::vector<double> stressIntensityK1(nc, std::nan("0"));
-    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
 
     // Opt-in displacement-correlation K1 extraction: instead of evaluating the
     // asymptotic opening w(s) = C*sqrt(s) from the single boundary cell (legacy
@@ -490,32 +485,32 @@ Fracture::stressIntensityK1() const
         nbs.resize(nc);
         centers.resize(nc);
         areas.resize(nc);
-        for (const auto& elem : elements(grid_->leafGridView())) {
-            const int ci = mapper.index(elem);
-            centers[ci] = elem.geometry().center();
-            areas[ci] = elem.geometry().volume();
-            for (auto& is : Dune::intersections(grid_->leafGridView(), elem)) {
-                if (is.neighbor()) {
-                    nbs[ci].push_back(mapper.index(is.outside()));
+        for (int ci = 0; ci < mesh_.numCells(); ++ci) {
+            centers[ci] = mesh_.cellCentroid(ci);
+            areas[ci] = mesh_.cellArea(ci);
+            for (const int nb : mesh_.cellNeighbours(ci)) {
+                if (nb >= 0) {
+                    nbs[ci].push_back(nb);
                 }
             }
         }
     }
 
-    for (const auto& elem : elements(grid_->leafGridView())) {
+    for (int ci = 0; ci < mesh_.numCells(); ++ci) {
+        const auto cell_nbs = mesh_.cellNeighbours(ci);
         double stair_scale = 1.0;
         if (stair_cal) {
             int nfront = 0;
-            for (auto& is : Dune::intersections(grid_->leafGridView(), elem)) {
-                nfront += is.boundary() ? 1 : 0;
+            for (const int nb : cell_nbs) {
+                nfront += nb < 0 ? 1 : 0;
             }
             stair_scale = 1.0 / (nfront >= 2 ? stair_f2 : stair_f1);
         }
-        for (auto& is : Dune::intersections(grid_->leafGridView(), elem)) {
-            if (is.boundary()) {
-                int nIdx = mapper.index(elem);
-                auto isCenter = is.geometry().center();
-                auto elCenter = elem.geometry().center();
+        for (int j = 0; j < static_cast<int>(cell_nbs.size()); ++j) {
+            if (cell_nbs[j] < 0) {
+                int nIdx = ci;
+                auto isCenter = mesh_.cellFaceCentroid(ci, j);
+                auto elCenter = mesh_.cellCentroid(ci);
                 auto vecC = isCenter - elCenter;
                 auto distC = vecC.two_norm();
                 if (!correlate) {
@@ -682,7 +677,6 @@ Fracture::writeIterationSnapshot(int step, int round, const std::string& tag) co
     const std::vector<double> leak = leakOfRate();
     std::map<int, double> wimap;
     for (const auto& w : wellIndices()) wimap.insert_or_assign(w.cell, w.ctf);
-    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     double area = 0, open_area = 0, vol = 0, qleak = 0, wisum = 0, psum = 0, wmax = 0;
     int nclosed = 0;
     std::ofstream cf;
@@ -694,11 +688,9 @@ Fracture::writeIterationSnapshot(int step, int round, const std::string& tag) co
             headers_written.insert(base + "_iter.csv");
         }
     }
-    for (const auto& e : Dune::elements(grid_->leafGridView())) {
-        const int i = mapper.index(e);
-        const auto g = e.geometry();
-        const double a = g.volume();
-        const auto c = g.center();
+    for (int i = 0; i < mesh_.numCells(); ++i) {
+        const double a = mesh_.cellArea(i);
+        const auto& c = mesh_.cellCentroid(i);
         const double w = fracture_width_[i][0];
         const double pf = fracture_pressure_[i][0];
         const int closed = (i < static_cast<int>(closed_cells_.size())) ? closed_cells_[i] : 0;
@@ -867,8 +859,6 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
 {
     OPM_TIMEFUNCTION();
     reservoir_map_.cells.resize(numFractureCells());
-    using GridView = typename Grid::LeafGridView;
-    ElementMapper elemMapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     int tri_divide = 0;
     int tri_outside = 0;
     reservoir_map_.allAreas.resize(numFractureCells());
@@ -879,13 +869,10 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
     const std::string area_method = prm_.get<std::string>("solver.cell_mapping_area", "exact");
     if (area_method != "exact" && area_method != "fast")
         OPM_THROW(std::runtime_error, "Unknown solver.cell_mapping_area: " + area_method);
-    for (auto& element : elements(grid_->leafGridView())) {
-        const auto elemIdx = elemMapper.index(element);
-        auto geom = element.geometry();
+    for (int elemIdx = 0; elemIdx < mesh_.numCells(); ++elemIdx) {
         std::vector<std::array<double,3>> tri_corners;
         {
-            for (size_t i = 0; i < geom.corners(); ++i) {
-                auto corner = geom.corner(i);
+            for (const auto& corner : mesh_.cellCorners(elemIdx)) {
                 std::array<double,3> tmp({corner[0], corner[1], corner[2]});
                 tri_corners.push_back(tmp);
             }
@@ -905,7 +892,7 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
             }
         }
         using Vec3d = external::cvf::Vec3d;
-        auto vertex = geom.center();
+        const auto& vertex = mesh_.cellCentroid(elemIdx);
         Vec3d point(vertex[0], vertex[1], vertex[2]);
         reservoir_map_.cells[elemIdx]  = external::cellOfPoint(cellSearchTree, grid, entity_seeds, point);
 
@@ -928,12 +915,11 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
     }
     reservoir_map_.mechCells.assign(numFractureCells(), -1);
     if (mech_lookup_.grid != nullptr) {
-        for (const auto& element : elements(grid_->leafGridView())) {
-            const auto elemIdx = elemMapper.index(element);
+        for (int elemIdx = 0; elemIdx < mesh_.numCells(); ++elemIdx) {
             if (reservoir_map_.cells[elemIdx] >= 0) {
                 continue;
             }
-            const auto c = element.geometry().center();
+            const auto& c = mesh_.cellCentroid(elemIdx);
             reservoir_map_.mechCells[elemIdx] = external::cellOfPoint(
                 *mech_lookup_.tree, *mech_lookup_.grid, *mech_lookup_.seeds, external::cvf::Vec3d(c[0], c[1], c[2]));
         }
@@ -993,10 +979,9 @@ Fracture::updateReservoirProperties()
 std::vector<double>
 Fracture::faceGravityHeads() const
 {
-    const auto& gv = grid_->leafGridView();
-    std::vector<double> z(gv.size(0), 0.0);
-    for (const auto& element : Dune::elements(gv)) {
-        z[gv.indexSet().index(element)] = element.geometry().center()[2];
+    std::vector<double> z(mesh_.numCells(), 0.0);
+    for (int c = 0; c < mesh_.numCells(); ++c) {
+        z[c] = mesh_.cellCentroid(c)[2];
     }
     std::vector<double> dgh(htrans_.size(), 0.0);
     for (size_t k = 0; k < htrans_.size(); ++k) {
@@ -1018,11 +1003,10 @@ Fracture::addSource()
     assert(rhs_pressure_.size() == numFractureCells() + numWellEquations());
     rhs_pressure_ = 0;
     // add contributions for fracture fracture gravity contributions
-    int nc = grid_->leafGridView().size(0);
+    int nc = mesh_.numCells();
     fracture_dgh_.resize(nc, 0.0);
-    for (auto element : Dune::elements(grid_->leafGridView())) {
-        int i = grid_->leafGridView().indexSet().index(element);
-        double z = element.geometry().center()[2];
+    for (int i = 0; i < nc; ++i) {
+        double z = mesh_.cellCentroid(i)[2];
         fracture_dgh_[i] = gravity_ * reservoir_.density[i] * z;
     }
     // could be put into the assemble loop
@@ -1048,9 +1032,8 @@ Fracture::addSource()
         rhs_pressure_[i] += activeLeakof(i) * reservoir_.pressure[i];// gravity i handeld in next loop
     }
     // gravity contribution from fracture to reservoir
-    for (auto element : Dune::elements(grid_->leafGridView())) {
-        int i = grid_->leafGridView().indexSet().index(element);
-        double z = element.geometry().center()[2];
+    for (int i = 0; i < nc; ++i) {
+        double z = mesh_.cellCentroid(i)[2];
         rhs_pressure_[i] += activeLeakof(i) * (z - reservoir_.cellZ[i]) * gravity_ * reservoir_.density[i];
     }
     // gravity contributions between fracture cells
@@ -1168,16 +1151,13 @@ Fracture::leakOfRate() const
         std::vector<double> rate;
         return rate;
     }
-    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     std::vector<double> leakofrate(numFractureCells(), 0);
-    for (auto& element : Dune::elements(grid_->leafGridView())) {
-        int eIdx = mapper.index(element);
-        auto geom = element.geometry();
+    for (int eIdx = 0; eIdx < mesh_.numCells(); ++eIdx) {
         double dh_res = reservoir_.cellZ[eIdx] * gravity_ * reservoir_.density[eIdx];
         double dh_frac = fracture_dgh_[eIdx];
         double dp = ((fracture_pressure_[eIdx]-dh_frac) - (reservoir_.pressure[eIdx]-dh_res));
         double q = activeLeakof(eIdx) * dp;
-        leakofrate[eIdx] = q / geom.volume();
+        leakofrate[eIdx] = q / mesh_.cellArea(eIdx);
     }
     return leakofrate;
 }
@@ -1610,11 +1590,8 @@ Fracture::gatherCellExchange_(const WiOptions& opt) const
     }
     const bool fracture_pressure_drive = (opt.mode == WiMode::FracturePressure);
     const std::vector<double> leakofrate = this->leakOfRate();
-    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
-    for (auto& element : Dune::elements(grid_->leafGridView())) {
-        const int eIdx = mapper.index(element);
-        const auto geom = element.geometry();
-        const double q = leakofrate[eIdx] * geom.volume();
+    for (int eIdx = 0; eIdx < mesh_.numCells(); ++eIdx) {
+        const double q = leakofrate[eIdx] * mesh_.cellArea(eIdx);
 
         std::vector<int> local_res_cells;
         if (only_to_one) {
@@ -1631,7 +1608,7 @@ Fracture::gatherCellExchange_(const WiOptions& opt) const
             const auto it = std::lower_bound(res_cells.begin(), res_cells.end(), res_cell);
             assert(it != res_cells.end() && *it == res_cell);
             auto& c = ex[it - res_cells.begin()];
-            const double loc_area = area_frac * element.geometry().volume();
+            const double loc_area = area_frac * mesh_.cellArea(eIdx);
             c.area += loc_area;
             c.q += area_frac * q;
             // leakof_ = mob*perm*area/dist >= 0, so this conductivity is never negative
@@ -1657,7 +1634,7 @@ Fracture::gatherCellExchange_(const WiOptions& opt) const
             if (fracture_pressure_drive) {
                 // fracture pressure moved hydrostatically to the connection depth
                 const double p_at_conn = fracture_pressure_[eIdx][0]
-                    + gravity_ * reservoir_.density[eIdx] * (c.z - geom.center()[2]);
+                    + gravity_ * reservoir_.density[eIdx] * (c.z - mesh_.cellCentroid(eIdx)[2]);
                 const double w_leak = (eIdx < static_cast<int>(leakof_.size()))
                     ? area_frac * activeLeakof(eIdx) : 0.0;
                 c.pfracLeak += w_leak * p_at_conn;
@@ -2047,13 +2024,11 @@ Fracture::remapState_(const RegridMaps& maps, const int level, const Propagation
                 vol_before += maps.width_volumes.volume[i];
             }
             fracture_width_.resize(w.size());
-            ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
-            for (const auto& element : Dune::elements(grid_->leafGridView())) {
-                const auto i = mapper.index(element);
+            for (int i = 0; i < mesh_.numCells(); ++i) {
                 fracture_width_[i][0] = w[i];
                 open_after += w[i] > open_width;
-                area_after += (w[i] > open_width) * element.geometry().volume();
-                vol_after += w[i] * element.geometry().volume();
+                area_after += (w[i] > open_width) * mesh_.cellArea(i);
+                vol_after += w[i] * mesh_.cellArea(i);
             }
             OpmLog::debug(fmt::format("volume remap: open cells {} -> {}, open area {:.1f} -> {:.1f} m2, volume {:.6e} -> {:.6e} m3",
                                       open_before, open_after, maps.open_area_before, area_after,
@@ -2130,13 +2105,11 @@ std::vector<char>
 Fracture::initNewCellsFromNeighbours_(const size_t num_press_cells)
 {
     const double width_fac = prm_.get<double>("solver.front_cell_width_fac", 0.5);
-    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     std::vector<std::vector<int>> nbs(num_press_cells);
-    for (const auto& elem : elements(grid_->leafGridView())) {
-        const int ci = mapper.index(elem);
-        for (const auto& is : Dune::intersections(grid_->leafGridView(), elem)) {
-            if (is.neighbor()) {
-                nbs[ci].push_back(mapper.index(is.outside()));
+    for (int ci = 0; ci < mesh_.numCells(); ++ci) {
+        for (const int nb : mesh_.cellNeighbours(ci)) {
+            if (nb >= 0) {
+                nbs[ci].push_back(nb);
             }
         }
     }
@@ -2583,37 +2556,18 @@ Fracture::updateLeakoff()
 {
 
     // find boundary nodes.
-    constexpr int dim = 2;
-    constexpr Dune::Codim<2> codimVertex;
-    constexpr Dune::Codim<1> codimFace;
-    constexpr Dune::Codim<0> codimCell;
-    auto gv = grid_->leafGridView();
-    auto& indexSet = gv.indexSet();
-    std::vector<bool> isBoundaryNode(indexSet.size(codimVertex), false);
-    for (const auto& element : elements(gv)) {
-        for (const auto& is : intersections(gv, element)) {
-            if (is.boundary()) {
-               auto lf = is.indexInInside();
-               auto face = element.subEntity<codimFace>(lf);
-               int nv = face.subEntities(codimVertex);
-               assert(nv == 2);
-               const auto refElement = Dune::ReferenceElements<double,dim>::general(element.type());
-               for (int v = 0; v < nv; v++) {
-                 auto&& vertex = element.template subEntity<dim>(refElement.subEntity(lf, dim-1, v, dim));
-                 auto vid = indexSet.index(vertex);
-                 isBoundaryNode[vid] = true;
-               }
+    std::vector<bool> isBoundaryNode(mesh_.numNodes(), false);
+    for (int f = 0; f < mesh_.numFaces(); ++f) {
+        if (mesh_.isBoundaryFace(f)) {
+            for (const int n : mesh_.faceNodes(f)) {
+                isBoundaryNode[n] = true;
             }
         }
     }
     // find all cells with  aboundary node
-    std::vector<bool> elementHasBoundaryNode(gv.size(codimCell), false);
-    for (const auto& element : elements(gv)) {
-        auto eidx = indexSet.index(element);
-        int nv = element.subEntities(codimVertex);
-        for (int i = 0; i < nv; i++) {
-            auto vertex = element.subEntity<codimVertex>(i);
-            auto vid = indexSet.index(vertex);
+    std::vector<bool> elementHasBoundaryNode(mesh_.numCells(), false);
+    for (int eidx = 0; eidx < mesh_.numCells(); ++eidx) {
+        for (const int vid : mesh_.cellNodes(eidx)) {
             if (isBoundaryNode[vid]) {
                 elementHasBoundaryNode[eidx] = true;
                 break;
@@ -2624,19 +2578,20 @@ Fracture::updateLeakoff()
     const double no_leakof_front_distance = prm_.get<double>("solver.no_leakof_front_distance", 0.0);
     // nonzero so that pieces joined to the rest only at a vertex keep a sink
     const double front_band_factor = prm_.get<double>("solver.front_band_leakoff_factor", 1e-3);
-    std::vector<bool> inFrontBand(gv.size(codimCell), false);
+    std::vector<bool> inFrontBand(mesh_.numCells(), false);
     if (no_leakof_front_distance > 0.0) {
         std::vector<std::pair<Dune::FieldVector<double, 3>, Dune::FieldVector<double, 3>>> segs;
-        for (const auto& element : elements(gv)) {
-            for (const auto& is : intersections(gv, element)) {
-                if (is.boundary()) {
-                    const auto g = is.geometry();
-                    segs.emplace_back(g.corner(0), g.corner(1));
+        for (int c = 0; c < mesh_.numCells(); ++c) {
+            const auto cell_nbs = mesh_.cellNeighbours(c);
+            for (int j = 0; j < static_cast<int>(cell_nbs.size()); ++j) {
+                if (cell_nbs[j] < 0) {
+                    const auto& g = mesh_.cellFaceCorners(c, j);
+                    segs.emplace_back(g[0], g[1]);
                 }
             }
         }
-        for (const auto& element : elements(gv)) {
-            const auto c = element.geometry().center();
+        for (int eidx = 0; eidx < mesh_.numCells(); ++eidx) {
+            const auto& c = mesh_.cellCentroid(eidx);
             double dmin = std::numeric_limits<double>::max();
             for (const auto& [a, b] : segs) {
                 auto ab = b - a;
@@ -2645,7 +2600,7 @@ Fracture::updateLeakoff()
                 ab *= t;
                 dmin = std::min(dmin, (ac - ab).two_norm());
             }
-            inFrontBand[indexSet.index(element)] = dmin < no_leakof_front_distance;
+            inFrontBand[eidx] = dmin < no_leakof_front_distance;
         }
     }
     bool no_leakof_outercells = prm_.get<bool>("solver.no_leakof_outercells",false);
@@ -2659,16 +2614,13 @@ Fracture::updateLeakoff()
     const std::string mob_mode =
         prm_.get<std::string>("solver.leakoff_mobility", "reservoir_total");
     const bool upwind_mobility = (mob_mode == "upwind");
-    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     // per leaking face: reservoir path in series with its share of the cake
     // (filtercake_thikness_ is the total over all faces); faces act in parallel
     const double sides = leakoffSides();
     const bool injected_fluid_cake = useInjectedFluidMobility();
     std::vector<double> full_leakof(nc, 0.0);
-    for (auto& element : Dune::elements(grid_->leafGridView())) {
-        const int eIdx = mapper.index(element);
-        const auto geom = element.geometry();
-        double area = geom.volume();
+    for (int eIdx = 0; eIdx < mesh_.numCells(); ++eIdx) {
+        double area = mesh_.cellArea(eIdx);
         double res_mob = leakoffMobilityFor(eIdx, upwind_mobility);
         leakoff_mobility_[eIdx] = res_mob;
         leakof_[eIdx] = res_mob * reservoir_.perm[eIdx] * area / reservoir_map_.dist[eIdx];
@@ -2744,26 +2696,23 @@ Fracture::currentHalfTrans() const
 {
     std::vector<Htrans> htrans;
     const bool own_cell = halfTransOwnCell_();
-    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
-    for (const auto& element : Dune::elements(grid_->leafGridView())) {
-        const int eIdx = mapper.index(element);
-        const auto geom = element.geometry();
-        for (const auto& is : Dune::intersections(grid_->leafGridView(), element)) {
-            if (is.boundary()) {
+    for (int eIdx = 0; eIdx < mesh_.numCells(); ++eIdx) {
+        const auto cell_nbs = mesh_.cellNeighbours(eIdx);
+        for (int j = 0; j < static_cast<int>(cell_nbs.size()); ++j) {
+            const int nIdx = cell_nbs[j];
+            if (nIdx < 0) {
                 continue;
             }
-
-            const int nIdx = mapper.index(is.outside());
             if (eIdx >= nIdx) {
                 continue; // each interior face once
             }
 
-            const auto eCenter = geom.center();
-            const auto nCenter = is.outside().geometry().center();
-            const auto isCenter = is.geometry().center();
+            const auto& eCenter = mesh_.cellCentroid(eIdx);
+            const auto& nCenter = mesh_.cellCentroid(nIdx);
+            const auto& isCenter = mesh_.cellFaceCentroid(eIdx, j);
             const auto d_inside = eCenter - isCenter;
             const auto d_outside = nCenter - isCenter;
-            const double area = is.geometry().volume();
+            const double area = mesh_.cellFaceLength(eIdx, j);
 
             const double t_e = area / d_inside.two_norm();
             const double t_n = area / d_outside.two_norm();
@@ -2783,9 +2732,8 @@ Fracture::cellAreas() const
 {
     std::vector<double> areas(numFractureCells(), 0.0);
 
-    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
-    for (const auto& element : Dune::elements(grid_->leafGridView())) {
-        areas[mapper.index(element)] = element.geometry().volume();
+    for (int c = 0; c < mesh_.numCells(); ++c) {
+        areas[c] = mesh_.cellArea(c);
     }
 
     return areas;
@@ -2796,9 +2744,8 @@ Fracture::cellDepths() const
 {
     std::vector<double> depths(numFractureCells(), 0.0);
 
-    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
-    for (const auto& element : Dune::elements(grid_->leafGridView())) {
-        depths[mapper.index(element)] = element.geometry().center()[2];
+    for (int c = 0; c < mesh_.numCells(); ++c) {
+        depths[c] = mesh_.cellCentroid(c)[2];
     }
 
     return depths;
@@ -2808,10 +2755,8 @@ double
 Fracture::filterCakeVolume() const
 {
     double total_filtercake_0 = 0.0;
-    for (const auto& elment : Dune::elements(grid_->leafGridView())) {
-        int i = grid_->leafGridView().indexSet().index(elment);
-        auto geom = elment.geometry();
-        double area = geom.volume();
+    for (int i = 0; i < mesh_.numCells(); ++i) {
+        double area = mesh_.cellArea(i);
         total_filtercake_0 += filtercake_thikness_[i] * area;
     }
     return total_filtercake_0;
@@ -2831,14 +2776,11 @@ Fracture::volumesByCell_(const std::vector<double>& thickness) const
     cake.volume.resize(nc, 0.0);
     cake.group.assign(nc, -1);
     cake.centre.resize(nc);
-    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
-    for (const auto& element : Dune::elements(grid_->leafGridView())) {
-        const auto eIdx = mapper.index(element);
-        const auto geom = element.geometry();
-        const auto c = geom.center();
+    for (size_t eIdx = 0; eIdx < nc; ++eIdx) {
+        const auto& c = mesh_.cellCentroid(eIdx);
         cake.centre[eIdx] = {c[0], c[1], c[2]};
         if (eIdx < thickness.size()) {
-            cake.volume[eIdx] = thickness[eIdx] * geom.volume();
+            cake.volume[eIdx] = thickness[eIdx] * mesh_.cellArea(eIdx);
         }
         if (eIdx < reservoir_map_.cells.size()) {
             cake.group[eIdx] = reservoir_map_.cells[eIdx];
@@ -2857,12 +2799,9 @@ Fracture::remapFilterCakeConservative(const RegularTrimesh::CellVolumes& source,
     std::vector<double> area(nc, 0.0);
     std::vector<int> group(nc, -1);
     std::vector<Coord3D> centre(nc);
-    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
-    for (const auto& element : Dune::elements(grid_->leafGridView())) {
-        const auto eIdx = mapper.index(element);
-        const auto geom = element.geometry();
-        const auto c = geom.center();
-        area[eIdx] = geom.volume();
+    for (size_t eIdx = 0; eIdx < nc; ++eIdx) {
+        const auto& c = mesh_.cellCentroid(eIdx);
+        area[eIdx] = mesh_.cellArea(eIdx);
         group[eIdx] = reservoir_map_.cells[eIdx];
         centre[eIdx] = {c[0], c[1], c[2]};
     }
@@ -3200,15 +3139,13 @@ Fracture::calculateFractureProperties() const
     double volume(0.0);
     double filter_volume(0.0);
     std::vector<double> leak_of_rate = leakOfRate();
-    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
-    for (auto& element : Dune::elements(grid_->leafGridView())) {
+    for (int eIdx = 0; eIdx < mesh_.numCells(); ++eIdx) {
       //NB we do not filter on with
-        int eIdx = mapper.index(element);
-        auto geom = element.geometry();
-        area += geom.volume();
-        volume += geom.volume() * (fracture_width_[eIdx]);
-        filter_volume += geom.volume() * filtercake_thikness_[eIdx];
-        auto dist = geom.center() - origo_;
+        const double cell_area = mesh_.cellArea(eIdx);
+        area += cell_area;
+        volume += cell_area * (fracture_width_[eIdx]);
+        filter_volume += cell_area * filtercake_thikness_[eIdx];
+        auto dist = mesh_.cellCentroid(eIdx) - origo_;
         double dh = dist.dot(naxis_[0]);
         double dw = dist.dot(naxis_[1]);
         updateMaxMinVector(dhvec, dh);
@@ -3216,7 +3153,7 @@ Fracture::calculateFractureProperties() const
         if(leak_of_rate.size() != numFractureCells()){
             continue;
         }
-        total_flux += leak_of_rate[eIdx] * geom.volume();
+        total_flux += leak_of_rate[eIdx] * cell_area;
     }
     double height = (dhvec[1] - dhvec[0])/2.0;
     double length = (dwvec[1] - dwvec[0])/2.0;
@@ -3384,10 +3321,9 @@ Fracture::initPressureMatrix()
     perfinj_.clear();
     htrans_.clear();
     const bool half_trans_own_cell = halfTransOwnCell_();
-    ElementMapper wsmapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     std::vector<double> cell_area(numFractureCells(), 0.0);
-    for (const auto& e : Dune::elements(grid_->leafGridView()))
-        cell_area[wsmapper.index(e)] = e.geometry().volume();
+    for (int c = 0; c < mesh_.numCells(); ++c)
+        cell_area[c] = mesh_.cellArea(c);
     auto fwi_for = [&](int cell) {
         if (fwi_mode != "estimate") return fWI_cfg;
         const double w = flowWidth(cell < static_cast<int>(fracture_width_.size()) ? fracture_width_[cell][0] : 0.0);
@@ -3440,12 +3376,11 @@ Fracture::initPressureMatrix()
             if (wn > 1e-12) wdir /= wn;
         }
         std::set<int> perfcells(well_perf_cells_.begin(), well_perf_cells_.end());
-        for (const auto& e : Dune::elements(grid_->leafGridView())) {
-            const int i = wsmapper.index(e);
+        for (int i = 0; i < mesh_.numCells(); ++i) {
             if (i >= static_cast<int>(reservoir_map_.cells.size())) continue;
             if (!perfcells.count(reservoir_map_.cells[i])) continue;
             if (wsr > 0.0) {
-                const auto c = e.geometry().center();
+                const auto& c = mesh_.cellCentroid(i);
                 Point3D r({c[0] - origo_[0], c[1] - origo_[1], c[2] - origo_[2]});
                 const double along = r * wdir;
                 for (int d = 0; d < 3; ++d) r[d] -= along * wdir[d];
@@ -3459,25 +3394,21 @@ Fracture::initPressureMatrix()
     }
     // flow between fracture cells
     const size_t nc = numFractureCells() + numWellEquations();
-    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
-    for (auto& element : Dune::elements(grid_->leafGridView())) {
-        int eIdx = mapper.index(element);
-        auto geom = element.geometry();
-        // iterator over all intersections
-        for (auto& is : Dune::intersections(grid_->leafGridView(), element)) {
+    for (int eIdx = 0; eIdx < mesh_.numCells(); ++eIdx) {
+        const auto cell_nbs = mesh_.cellNeighbours(eIdx);
+        for (int j = 0; j < static_cast<int>(cell_nbs.size()); ++j) {
 
-            if (!is.boundary()) {
-                auto eCenter = geom.center();
-                int nIdx = mapper.index(is.outside());
+            if (cell_nbs[j] >= 0) {
+                const auto& eCenter = mesh_.cellCentroid(eIdx);
+                int nIdx = cell_nbs[j];
                 if (eIdx < nIdx) {
                     // calculate distance between the midpoints
-                    auto nCenter = is.outside().geometry().center();
-                    auto isCenter = is.geometry().center();
+                    const auto& nCenter = mesh_.cellCentroid(nIdx);
+                    const auto& isCenter = mesh_.cellFaceCentroid(eIdx, j);
                     auto d_inside = eCenter - isCenter;
                     auto d_outside = nCenter - isCenter;
                     // probably should use projected distance
-                    auto igeom = is.geometry();
-                    double area = igeom.volume();
+                    double area = mesh_.cellFaceLength(eIdx, j);
                     double h1 = area / d_inside.two_norm();
                     double h2 = area / d_outside.two_norm();
 
@@ -3540,11 +3471,7 @@ Fracture::removeNewZeroWithCells(RegularTrimesh& mesh,
     const bool retract_established =
         prm_.get<bool>("solver.retract_established_compressed", false);
     bool any_removed = false;
-    using GridView = typename Grid::LeafGridView;
-    using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
-    ElementMapper elemMapper(grid_->leafGridView(), Dune::mcmgElementLayout());
-    for (auto& cell : elements(grid_->leafGridView())) {
-        const auto index = elemMapper.index(cell);
+    for (int index = 0; index < mesh_.numCells(); ++index) {
         if ((fracture_width_[index][0] == 0) || (fractureForce(index) > force_limit)) { // maybe to strong.
             auto cellrefs = grid_mesh_map_[index];
             for (const auto& cellref : cellrefs) {
@@ -3594,12 +3521,10 @@ Fracture::warnIfOpenButNotConducting() const
     // "Open" means mechanically open, not merely meshed: cells carrying real
     // aperture above the flow floor.
     double open_area = 0.0;
-    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
-    for (const auto& e : Dune::elements(grid_->leafGridView())) {
-        const int i = mapper.index(e);
+    for (int i = 0; i < mesh_.numCells(); ++i) {
         if (i < static_cast<int>(fracture_width_.size())
             && fracture_width_[i][0] > min_width_)
-            open_area += e.geometry().volume();
+            open_area += mesh_.cellArea(i);
     }
     const double min_open = prm_.get<double>("solver.warn_open_area", 1.0); // m2
     const double q_tol = prm_.get<double>("solver.warn_flux_tol", 1e-12);   // m3/s
