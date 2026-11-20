@@ -67,6 +67,8 @@ struct Spec
     bool bendPillars = false;   // box pillars vertical above and below the box
     std::string dump;           // GRDECL file of the generated grid, if set
     double wedgeMerge = 0.0;    // merge box cells with a corner thinner than this (m) into a neighbour
+    double columnMerge = 0.0;   // merge cells outside columnKeep down each column into blocks of this (m)
+    std::array<int,6> columnKeep{}; // deck I1 I2 J1 J2 K1 K2, zero-based, end exclusive; empty keeps nothing
 };
 
 /// Vertical pillars through each pillar's point at the box's mean depth; the
@@ -608,6 +610,20 @@ inline Spec readSpec(const std::string& file, const std::array<int,3>& deckDims)
     spec.bendPillars = tree.get<bool>("bend_pillars", false);
     spec.dump = tree.get<std::string>("dump", "");
     spec.wedgeMerge = tree.get<double>("wedge_merge", 0.0);
+    spec.columnMerge = tree.get<double>("column_merge.thickness", 0.0);
+    if (const auto keep = tree.get_child_items_as_vector<int>("column_merge.keep")) {
+        if (keep->size() != 6) {
+            OPM_THROW(std::runtime_error, "Mechanics sector: \"column_merge.keep\" needs six numbers");
+        }
+        for (int a = 0; a < 3; ++a) {
+            const int lo = (*keep)[2*a] - 1, hi = (*keep)[2*a + 1];
+            if (lo < 0 || hi > deckDims[a] || lo >= hi) {
+                OPM_THROW(std::runtime_error, "Mechanics sector: \"column_merge.keep\" is outside the grid");
+            }
+            spec.columnKeep[2*a] = lo;
+            spec.columnKeep[2*a + 1] = hi;
+        }
+    }
     if (const auto box = tree.get_child_items_as_vector<int>("box")) {
         if (box->size() != 6) {
             OPM_THROW(std::runtime_error, "Mechanics sector: \"box\" needs six numbers");

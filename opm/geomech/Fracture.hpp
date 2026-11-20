@@ -78,6 +78,7 @@
 #include <opm/material/fluidsystems/BlackOilDefaultFluidSystemIndices.hpp>
 #include <dune/istl/matrixmarket.hh>
 
+#include <opm/geomech/DiscreteDisplacement.hpp>
 #include <opm/geomech/RegularTrimesh.hpp>
 #include <opm/geomech/FracturePressureAssemblerAD.hpp>
 
@@ -966,6 +967,7 @@ private:
 
     using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView>;
     mutable std::unique_ptr<DynamicMatrix> fracture_matrix_;
+    mutable ddm::KernelTable ddm_table_; // DDM kernel values on the trimesh lattice
 
     // function ensuring that the fracture matrix exists, and returning a reference to it
     DynamicMatrix& fractureMatrix() const;

@@ -47,10 +47,11 @@
 namespace Opm
 {
 
-// Registers "mech_lines" and "mech_hypre" for the mechanics operators; both arguments must
-// outlive the solver.
+// Registers "mech_lines" and "mech_hypre" for the mechanics operators; all arguments must
+// outlive the solver; axis is per node (pillar direction, layer normal) or empty.
 void addMechPreconditioners(const std::vector<double>& coords,
-                            const std::vector<Dune::BlockVector<Dune::FieldVector<double, 1>>>& modes);
+                            const std::vector<Dune::BlockVector<Dune::FieldVector<double, 1>>>& modes,
+                            const std::vector<double>& axis);
 
 // Symmetric block Gauss-Seidel over vertical lines and lateral plane blocks, around an inner
 // preconditioner. Dofs are three per node, coords three per node. Blocks hold owned nodes only.
@@ -64,7 +65,8 @@ public:
                                 const std::vector<double>& coords,
                                 const PropertyTree& prm,
                                 std::shared_ptr<Inner> inner,
-                                const Comm& comm)
+                                const Comm& comm,
+                                const std::vector<double>* axis = nullptr)
         : M_(M)
         , coords_(coords)
         , inner_(std::move(inner))
@@ -72,6 +74,7 @@ public:
         , plane_theta_(prm.get<double>("plane_theta", 0.3))
         , plane_comps_(prm.get<int>("plane_comps", 3))
         , plane_cap_(prm.get<int>("plane_cap", 200))
+        , axis_(prm.get<bool>("structure_axis", false) && axis && !axis->empty() ? axis : nullptr)
     {
         setup();
     }
@@ -170,7 +173,7 @@ private:
             for (const auto& [o, s] : coupling) {
                 if (o == n || !owned_[o] || lateral(n, o))
                     continue;
-                const double dz = coords_[3 * o + 2] - coords_[3 * n + 2];
+                const double dz = along(n, o);
                 if (dz > 0 && s > sup[n]) {
                     sup[n] = s;
                     up[n] = o;
@@ -237,12 +240,54 @@ private:
         }
     }
 
+    // With axis_ (per node: pillar direction t, layer normal n) an offset d splits as d = a t + (in-layer
+    // part), a = d.n / t.n, so lines follow the pillars and planes the layers; otherwise t = n = z.
+    void split(const int n, const int o, double& a, double& inlayer) const
+    {
+        double d[3], t[3] = {0, 0, 1}, m[3] = {0, 0, 1};
+        for (int i = 0; i < 3; ++i)
+            d[i] = coords_[3 * o + i] - coords_[3 * n + i];
+        if (axis_) {
+            for (int i = 0; i < 3; ++i) {
+                t[i] = (*axis_)[6 * n + i] + (*axis_)[6 * o + i];
+                m[i] = (*axis_)[6 * n + 3 + i] + (*axis_)[6 * o + 3 + i];
+            }
+            const double tl = std::sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]);
+            const double ml = std::sqrt(m[0] * m[0] + m[1] * m[1] + m[2] * m[2]);
+            if (tl > 0 && t[0] * m[0] + t[1] * m[1] + t[2] * m[2] > 1e-3 * tl * ml) {
+                for (double& x : t)
+                    x /= tl;
+            } else {
+                t[0] = t[1] = m[0] = m[1] = 0;
+                t[2] = m[2] = 1;
+            }
+        }
+        a = (d[0] * m[0] + d[1] * m[1] + d[2] * m[2]) / (t[0] * m[0] + t[1] * m[1] + t[2] * m[2]);
+        double r2 = 0;
+        for (int i = 0; i < 3; ++i)
+            r2 += (d[i] - a * t[i]) * (d[i] - a * t[i]);
+        inlayer = std::sqrt(r2);
+    }
+
+    double along(const int n, const int o) const
+    {
+        if (!axis_)
+            return coords_[3 * o + 2] - coords_[3 * n + 2];
+        double a, r;
+        split(n, o, a, r);
+        return a;
+    }
+
     bool lateral(const int n, const int o) const
     {
-        const double dx = coords_[3 * o] - coords_[3 * n];
-        const double dy = coords_[3 * o + 1] - coords_[3 * n + 1];
-        const double dz = coords_[3 * o + 2] - coords_[3 * n + 2];
-        return std::abs(dz) <= std::hypot(dx, dy);
+        if (!axis_) {
+            const double dx = coords_[3 * o] - coords_[3 * n];
+            const double dy = coords_[3 * o + 1] - coords_[3 * n + 1];
+            return std::abs(coords_[3 * o + 2] - coords_[3 * n + 2]) <= std::hypot(dx, dy);
+        }
+        double a, r;
+        split(n, o, a, r);
+        return std::abs(a) <= r;
     }
 
     // Band Cholesky of the block's dofs in the order given.
@@ -310,6 +355,7 @@ private:
     double plane_theta_;
     int plane_comps_;
     int plane_cap_;
+    const std::vector<double>* axis_;
     std::vector<Block> blocks_;
     std::vector<char> owned_;
     std::vector<int> where_;

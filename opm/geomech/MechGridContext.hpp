@@ -438,6 +438,30 @@ public:
                                           LgrCollection{}, {}, /*byThinnestCorner*/ true,
                                           deckActive);
         }
+        if (spec.columnMerge > 0.0) {
+            // Kept cells form their own group, so nothing merges across the keep box.
+            const auto& kb = spec.columnKeep;
+            std::vector<int> group(deckActive.size());
+            std::vector<char> keep(deckActive.size(), 0);
+            for (int k = 0; k < dd[2]; ++k)
+            for (int j = 0; j < dd[1]; ++j)
+            for (int i = 0; i < dd[0]; ++i) {
+                const std::size_t c = i + dd[0]*(j + static_cast<std::size_t>(dd[1])*k);
+                keep[c] = i >= kb[0] && i < kb[1] && j >= kb[2] && j < kb[3] && k >= kb[4] && k < kb[5];
+                group[c] = (deckActive[c] != 0) + 2*keep[c];
+            }
+            input.actnum.clear();
+            const auto second = collapseThinCells_(input, spec.columnMerge, /*fillHoles*/ false,
+                                                   LgrCollection{}, keep, /*byThinnestCorner*/ false,
+                                                   group);
+            if (absorber.empty()) {
+                absorber = second;
+            } else {
+                for (auto& a : absorber) {
+                    a = second[a];
+                }
+            }
+        }
         const MechSector::Grdecl deck{dd, input.coord, input.zcorn};
         const auto built = MechSector::build(deck, spec);
         const auto& g = built.grid;
