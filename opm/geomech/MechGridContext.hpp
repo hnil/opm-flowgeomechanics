@@ -42,6 +42,7 @@
 #include <dune/grid/common/mcmgmapper.hh>
 
 #include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <limits>
 #include <map>
@@ -1704,6 +1705,48 @@ inline std::vector<int> sectorFlowPartition(const Dune::CpGrid& grid, const std:
     const auto s = MechGridContext::buildSector(*processed, spec, dd, flowBox, nullptr);
     const int ranks = grid.comm().size();
     auto column = MechGridContext::partitionSectorColumns(s, ranks);
+    // A fracture finds its cells on its well's rank only, so a well and the zone
+    // its fracture can reach go to one rank.
+    const auto& d0 = s.built.grid.dims;
+    const auto& coord = s.built.grid.coord;
+    auto centre = [&](const int c) {
+        const int I = c % d0[0], J = c / d0[0];
+        std::array<double,2> x{0.0, 0.0};
+        for (const int p : {J*(d0[0]+1) + I, J*(d0[0]+1) + I + 1,
+                            (J+1)*(d0[0]+1) + I, (J+1)*(d0[0]+1) + I + 1}) {
+            x[0] += 0.25 * coord[6*p];
+            x[1] += 0.25 * coord[6*p + 1];
+        }
+        return x;
+    };
+    std::size_t zoneColumns = 0;
+    for (const auto& w : SectorWells::get()) {
+        std::vector<int> cols;
+        for (const auto& ij : w.ij) {
+            cols.push_back(MechGridContext::sectorColumnOfDeck(s, ij[0], ij[1]));
+        }
+        if (cols.empty()) {
+            continue;
+        }
+        const int rank = column[cols.front()];
+        if (w.fracturing && spec.wellZone > 0.0) {
+            const auto own = cols;
+            for (int c = 0; c < d0[0]*d0[1]; ++c) {
+                const auto xc = centre(c);
+                for (const int o : own) {
+                    const auto xo = centre(o);
+                    if (std::hypot(xc[0] - xo[0], xc[1] - xo[1]) <= spec.wellZone) {
+                        cols.push_back(c);
+                        break;
+                    }
+                }
+            }
+        }
+        for (const int c : cols) {
+            zoneColumns += column[c] != rank;
+            column[c] = rank;
+        }
+    }
     std::vector<int> part(grid.globalCell().size());
     std::vector<double> flowCells(ranks, 0.0), mechCells(ranks, 0.0);
     for (std::size_t f = 0; f < part.size(); ++f) {
@@ -1716,7 +1759,8 @@ inline std::vector<int> sectorFlowPartition(const Dune::CpGrid& grid, const std:
         mechCells[column[c % (static_cast<std::size_t>(d[0])*d[1])]] += s.actnum[c] != 0;
     }
     std::ostringstream os;
-    os << "Mechanics sector partition by " << d[0]*d[1] << " columns; mechanics / flow cells per rank:";
+    os << "Mechanics sector partition by " << d[0]*d[1] << " columns (" << zoneColumns
+       << " moved to keep wells and fracture zones whole); mechanics / flow cells per rank:";
     for (int r = 0; r < ranks; ++r) {
         os << " " << mechCells[r] << "/" << flowCells[r];
     }

@@ -69,6 +69,7 @@ struct Spec
     double wedgeMerge = 0.0;    // merge box cells with a corner thinner than this (m) into a neighbour
     double columnMerge = 0.0;   // merge cells outside columnKeep down each column into blocks of this (m)
     std::array<int,6> columnKeep{}; // deck I1 I2 J1 J2 K1 K2, zero-based, end exclusive; empty keeps nothing
+    double wellZone = 1000.0;   // parallel: columns this close (m) to a fracturing well stay on its rank
 };
 
 /// Vertical pillars through each pillar's point at the box's mean depth; the
@@ -610,6 +611,7 @@ inline Spec readSpec(const std::string& file, const std::array<int,3>& deckDims)
     spec.bendPillars = tree.get<bool>("bend_pillars", false);
     spec.dump = tree.get<std::string>("dump", "");
     spec.wedgeMerge = tree.get<double>("wedge_merge", 0.0);
+    spec.wellZone = tree.get<double>("parallel.well_zone", 1000.0);
     spec.columnMerge = tree.get<double>("column_merge.thickness", 0.0);
     if (const auto keep = tree.get_child_items_as_vector<int>("column_merge.keep")) {
         if (keep->size() != 6) {

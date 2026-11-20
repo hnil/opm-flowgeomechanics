@@ -24,6 +24,11 @@
 
 #include <opm/common/ErrorMacros.hpp>
 #include <opm/grid/CpGrid.hpp>
+#include <opm/input/eclipse/Schedule/Schedule.hpp>
+#include <opm/input/eclipse/Schedule/ScheduleState.hpp>
+#include <opm/input/eclipse/Schedule/Well/Connection.hpp>
+#include <opm/input/eclipse/Schedule/Well/Well.hpp>
+#include <opm/input/eclipse/Schedule/Well/WellConnections.hpp>
 #include <opm/models/utils/basicproperties.hh>
 #include <opm/models/utils/propertysystem.hh>
 
@@ -223,6 +228,43 @@ private:
     {
         static std::vector<int> part;
         return part;
+    }
+};
+
+/// Wells the sector partition keeps on one rank, captured from the schedule
+/// before the grid is distributed.
+class SectorWells
+{
+public:
+    struct Well
+    {
+        std::vector<std::array<int,2>> ij; // deck columns of its connections, zero-based
+        bool fracturing = false;           // has WSEED at some report step
+    };
+    static void capture(const Schedule& schedule)
+    {
+        auto& wells = instance();
+        wells.clear();
+        for (const auto& well : schedule.getWellsatEnd()) {
+            Well w;
+            for (const auto& c : well.getConnections()) {
+                if (c.get_lgr_level() <= 0) {
+                    w.ij.push_back({c.getI(), c.getJ()});
+                }
+            }
+            for (std::size_t step = 0; step < schedule.size() && !w.fracturing; ++step) {
+                w.fracturing = schedule[step].wseed.has(well.name());
+            }
+            wells.push_back(std::move(w));
+        }
+    }
+    static const std::vector<Well>& get() { return instance(); }
+
+private:
+    static std::vector<Well>& instance()
+    {
+        static std::vector<Well> wells;
+        return wells;
     }
 };
 

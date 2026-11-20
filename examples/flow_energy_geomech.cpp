@@ -49,6 +49,29 @@ namespace Properties
 } // namespace Properties
 } // namespace Opm
 
+namespace {
+// Main::runStatic, with the schedule's wells handed to the mechanics sector
+// partition, which runs while the vanguard is built.
+struct GeoMechMain : public Opm::Main
+{
+    using Opm::Main::Main;
+
+    template <class TypeTag>
+    int run()
+    {
+        int exitCode = EXIT_SUCCESS;
+        if (this->initialize_<TypeTag>(exitCode)) {
+            this->setupVanguard();
+            if (const auto& schedule = Opm::FlowGenericVanguard::modelParams_.eclSchedule_) {
+                Opm::MechPartition::SectorWells::capture(*schedule);
+            }
+            return Opm::flowMain<TypeTag>(argc_, argv_, outputCout_, outputFiles_);
+        }
+        return exitCode;
+    }
+};
+} // namespace
+
 int
 main(int argc, char** argv)
 {
@@ -59,6 +82,6 @@ main(int argc, char** argv)
     Opm::MechPartition::installFlowPartition<TypeTag>(argc, argv);
     // The mechanics grid may extend past a USEFLUX sector.
     Opm::retainBeforeUseFlux({"YMODULE", "PRATIO"});
-    auto mainObject = Opm::Main(argc, argv);
-    return mainObject.runStatic<TypeTag>();
+    auto mainObject = GeoMechMain(argc, argv);
+    return mainObject.run<TypeTag>();
 }
