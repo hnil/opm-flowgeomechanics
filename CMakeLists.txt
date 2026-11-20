@@ -506,6 +506,18 @@ add_test(NAME Test.DDMAssembly
 	COMMAND test_ddm_assembly
 )
 
+add_executable(test_dense_mech_factor
+	examples/test_dense_mech_factor.cpp
+)
+target_link_libraries(test_dense_mech_factor
+	PUBLIC
+		opmflowgeomechanics
+)
+
+add_test(NAME Test.DenseMechFactor
+	COMMAND test_dense_mech_factor
+)
+
 add_executable(example_penny_crack_ddm
 	examples/example_penny_crack_ddm.cpp
 )

@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <vector>
 #include <memory>
 #include <string>
@@ -95,6 +96,96 @@ using Dune::Indices::_0;
 using Dune::Indices::_1;
 
 
+// Unscaled mechanics block as diag(alpha) * A + diag(beta), A the elasticity matrix.
+// generation changes whenever A is reassembled.
+struct MechRows
+{
+    const FMatrix* ddm{nullptr};
+    const std::vector<double>* alpha{nullptr};
+    const std::vector<double>* beta{nullptr};
+    std::uint64_t generation{0};
+    const std::vector<double>* centres{nullptr}; // cell centres, xyz per cell
+};
+
+// Approximate solve with the mechanics block, used by the preconditioner.
+class MechBlockSolver
+{
+public:
+    virtual ~MechBlockSolver() = default;
+    virtual void solve(Vector& x, const Vector& rhs) const = 0;
+};
+
+// Dense LU (or inverse) of the mechanics block B = s * (diag(alpha) A + diag(beta)),
+// kept across Newton iterations and fracture solves while A is unchanged. Rows whose
+// coefficients moved since the factorisation are added as a Woodbury update; rows that
+// moved by less than tol are ignored, so the result is a preconditioner, exact when tol=0.
+class DenseMechFactor : public MechBlockSolver
+{
+public:
+    struct Options
+    {
+        bool inverse{true};
+        double tol{0.01};
+        double maxRankFraction{0.05};
+        int maxRankMin{32};
+        // refactor once a Krylov solve needs more iterations; 0: refactor when the slots are full
+        int refactorIterations{10};
+    };
+    explicit DenseMechFactor(const Options& opt) : opt_(opt) {}
+    // B is the current (scaled) block; returns true if it was refactored.
+    bool update(const FMatrix& B, double scale, const MechRows& rows);
+    void solve(Vector& x, const Vector& rhs) const override;
+    int rank() const { return static_cast<int>(slotRow_.size()); }
+    // the next update refactors
+    void invalidate() { stale_ = true; }
+
+private:
+    void factor(const FMatrix& B, double scale, const MechRows& rows);
+    bool addRows(const std::vector<int>& rows);
+    bool factorCapacitance(const MechRows& rows);
+
+    Options opt_;
+    int n_{0};
+    std::uint64_t generation_{0};
+    double s0_{1.0};
+    double ratio_{1.0}; // s0 / s
+    std::vector<double> alpha0_, beta0_;
+    std::vector<double> f_; // row-major B0: LU of its transpose, or B0^{-1}
+    std::vector<int> piv_;
+    // Woodbury: one slot per updated row j, Z(:,k) = B0^{-1} e_j, Ar(:,k) = A(j,:)^T
+    std::vector<int> slotOf_;
+    std::vector<int> slotRow_;
+    std::vector<double> z_, ar_;
+    std::vector<double> g_; // G(k,l) = A(row_k,:) z_l, column-major, leading dimension maxRank_
+    int maxRank_{0};
+    bool stale_{false};
+    std::vector<double> va_, vb_;
+    std::vector<double> cap_;
+    std::vector<int> capPiv_;
+    mutable std::vector<double> y_, t_;
+};
+
+// ILU(0) of the mechanics block restricted to cell pairs closer than radius times the
+// typical cell spacing. Cheap enough to refactor at every Newton iteration.
+class NearFieldMechILU : public MechBlockSolver
+{
+public:
+    explicit NearFieldMechILU(double radius) : radius_(radius) {}
+    void update(const FMatrix& B, const MechRows& rows);
+    void solve(Vector& x, const Vector& rhs) const override;
+    double nnzPerRow() const { return n_ > 0 ? double(col_.size()) / n_ : 0.0; }
+
+private:
+    void buildPattern(const std::vector<double>& xyz);
+
+    double radius_;
+    int n_{0};
+    std::uint64_t generation_{0};
+    bool havePattern_{false};
+    std::vector<int> ptr_, col_, diag_;
+    std::vector<double> val_;
+};
+
 // Block preconditioner for the coupled fracture width / pressure linear system.
 //
 // The operator is assembled as
@@ -121,7 +212,9 @@ public:
   // prm expects the fracture linsolver preconditioner subtree. The relevant
   // switches are diag_mech, diag_flow, mech_first, fixed_stress,
   // mech_press_coupling, lu_pivoting, mech_solver.type and flow_solver.*.
-  FractureMechanicsPreconditioner(const FractureSystemMatrix& S, Opm::PropertyTree prm);
+  // A non-null mech replaces the internal mechanics factorisation; it must outlive this object.
+  FractureMechanicsPreconditioner(const FractureSystemMatrix& S, Opm::PropertyTree prm,
+                                  const MechBlockSolver* mech = nullptr);
   virtual void apply(VectorHP& v, const VectorHP& d);
     virtual void post(VectorHP& /*v*/) { };
     virtual void pre(VectorHP& /*x*/, VectorHP& /*b*/) { };
@@ -133,6 +226,9 @@ public:
     // new coupled system. new_lu_mech controls whether the dense mechanics LU is
     // rebuilt or only the flow-side data is refreshed.
     void update(const Opm::FractureSystemMatrix& S,bool new_lu_mech);
+    int factorizations() const { return factorizations_; }
+    double factorSeconds() const { return factor_seconds_; }
+    double applySeconds() const { return apply_seconds_; }
 private:
 enum class ApplyMode {
   MechLast,
@@ -176,6 +272,10 @@ Vector diagvec(const Mat& M)
   void openBlockSolve(Vector& x, const Vector& rhs) const;
   void checkLuFactor() const;
     const FractureSystemMatrix& A_;
+    const MechBlockSolver* mech_{nullptr};
+    int factorizations_{0};
+    double factor_seconds_{0.0};
+    double apply_seconds_{0.0};
     mutable FMatrix luM_;
     std::vector<MyDenseMatrix<double>::pivot_index> lu_pivot_;
     bool lu_pivoting_{false};

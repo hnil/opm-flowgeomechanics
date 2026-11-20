@@ -33,12 +33,26 @@
 #include <opm/simulators/utils/DeferredLoggingErrorHelpers.hpp>
 #include <opm/simulators/wells/RuntimePerforation.hpp>
 
+#include <sys/resource.h>
+
 #include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
 
 namespace Opm{
+// Peak resident set size of this process (ru_maxrss is bytes on macOS, KiB on Linux).
+inline long peakRssMb()
+{
+    rusage ru {};
+    getrusage(RUSAGE_SELF, &ru);
+#ifdef __APPLE__
+    return ru.ru_maxrss / (1024 * 1024);
+#else
+    return ru.ru_maxrss / 1024;
+#endif
+}
+
     template<typename TypeTag>
     class FractureMechHost
     {
@@ -227,9 +241,21 @@ namespace Opm{
                        << " (total " << total_stats.linear_solve_failures << ")"
                        << ", ladder_rescues=" << last_stats.ladder_rescues
                        << " (total " << total_stats.ladder_rescues << ")"
+                       << ", mech_factorizations=" << last_stats.mech_factorizations
+                       << " (total " << total_stats.mech_factorizations << ")"
+                       << ", mech_rank_updates=" << last_stats.mech_rank_updates
+                       << " (total " << total_stats.mech_rank_updates << ")"
+                       << ", mech_rank_sum=" << last_stats.mech_rank_sum
+                       << ", mech_factor_s=" << last_stats.mech_factor_seconds
+                       << " (total " << total_stats.mech_factor_seconds << ")"
+                       << ", krylov_s=" << last_stats.linear_solve_seconds
+                       << " (total " << total_stats.linear_solve_seconds << ")"
+                       << ", precond_apply_s=" << last_stats.precond_apply_seconds
+                       << " (total " << total_stats.precond_apply_seconds << ")"
                        << ", solve_time_s=" << last_stats.solve_time_seconds
                        << " (total " << total_stats.solve_time_seconds << ")"
-                       << ", converged=" << (last_stats.converged ? "true" : "false");
+                       << ", converged=" << (last_stats.converged ? "true" : "false")
+                       << ", peak_rss_mb=" << peakRssMb();
                     OpmLog::info(os.str());
                 }
             }else{

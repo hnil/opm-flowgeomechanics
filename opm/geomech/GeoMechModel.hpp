@@ -1042,6 +1042,9 @@ namespace Opm{
                 report_count("Overall Fracture Nl Iters:", total_stats.nonlinear_iterations);
                 report_count("Overall Fracture Lin Solves:", total_stats.linear_solves);
                 report_count("Overall Fracture Lin Iters:", total_stats.linear_iterations);
+                report_count("Fracture Mech Factorizations:", total_stats.mech_factorizations);
+                report_time("  Fracture mech factor time:", total_stats.mech_factor_seconds);
+                report_time("  Fracture Krylov time:", total_stats.linear_solve_seconds);
             }
 
             return os.str();

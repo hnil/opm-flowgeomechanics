@@ -53,6 +53,10 @@ public:
         int restart{100};
         bool gmresFallback{true};
         bool blasOperator{false}; // apply the dense mechanics block with dgemv
+        bool rankUpdate{false}; // mech_solver.reuse=rank_update: keep a DenseMechFactor
+        DenseMechFactor::Options mechFactor;
+        bool nearField{false}; // mech_solver.type=nearfield_ilu
+        double nearFieldRadius{6.0};
         static Options read(const PropertyTree& prm);
     };
 
@@ -69,6 +73,7 @@ public:
         bool newSystem{false}; // S was rebuilt: new operator, preconditioner and solver
         bool contactChanged{false};
         bool dump{false}; // call the hook with tag "manual" before solving
+        const MechRows* mechRows{nullptr};
     };
 
     void setOptions(const Options& options) { opt_ = options; }
@@ -93,6 +98,8 @@ private:
     double scaleMech_{1.0};
     double scalePressure_{1.0};
     std::unique_ptr<Operator> operator_;
+    std::unique_ptr<DenseMechFactor> mechFactor_;
+    std::unique_ptr<NearFieldMechILU> nearField_;
     std::unique_ptr<FractureMechanicsPreconditioner> precond_;
     std::unique_ptr<Solver> solver_;
 };
