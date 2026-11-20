@@ -834,7 +834,7 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
     reservoir_map_.allCells.resize(numFractureCells());
     reservoir_map_.allCenters.resize(numFractureCells());
     bool full_intersections = prm_.get<bool>("solver.divide_wellidx", false);
-    const bool use_cache = full_intersections && prm_.get<bool>("solver.cache_cell_mapping", true);
+    const bool use_cache = full_intersections && prm_.get<bool>("solver.cache_cell_mapping", false);
     const std::string area_method = prm_.get<std::string>("solver.cell_mapping_area", "exact");
     if (area_method != "exact" && area_method != "fast")
         OPM_THROW(std::runtime_error, "Unknown solver.cell_mapping_area: " + area_method);
@@ -3317,7 +3317,7 @@ Fracture::assembleFractureMatrix() const
     fracture_matrix_->resize(nc, nc);
     *fracture_matrix_ = 0.0;
     ++ddm_generation_;
-    if (trimesh_ && prm_.get<bool>("solver.ddm_lattice_table", true)) {
+    if (trimesh_ && prm_.get<bool>("solver.ddm_lattice_table", false)) {
         const auto toVec = [](const auto& c) { return Dune::FieldVector<double, 3> {c[0], c[1], c[2]}; };
         ddm::LatticeFrame frame;
         frame.origin = toVec(trimesh_->nodeCoord({0, 0}));
