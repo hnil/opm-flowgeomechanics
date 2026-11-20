@@ -499,6 +499,8 @@ namespace Opm{
             const auto& simulator = this->simulator();
             double dt_max_frac = this->derived().fractureHost().fractureModel().template maxFlowTimeStep<TypeTag,Simulator>(simulator);
             dt_max = std::min(dt_max,dt_max_frac);
+            // kept out of FractureModel::maxFlowTimeStep, which growth_driven_switch reads as "at growth cap"
+            dt_max = std::min(dt_max, this->derived().fractureHost().fractureModel().methodDtCap());
         }
         return dt_max;
       }

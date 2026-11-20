@@ -42,6 +42,7 @@
 #include <array>
 #include <cstddef>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -135,6 +136,14 @@ public:
     //! largest relative area growth since the step checkpoint; not MPI-reduced
     double maxRelativeStepGrowth() const;
     void markBurstStep();
+    // Method-aware dt controller (fractureparam.solver.method_dt_controller), see
+    // GeoMechModel::updateMethodDtCap_. Getters are not MPI-reduced.
+    void setStepGrowthRounds(int rounds) { step_growth_rounds_ = rounds; }
+    int stepGrowthRounds() const { return step_growth_rounds_; }
+    double maxLastFrontScore() const;
+    double maxRelativeStepRateChange() const;
+    void setMethodDtCap(double cap) { method_dt_cap_ = cap; }
+    double methodDtCap() const { return method_dt_cap_; }
     void writeIterationSnapshots(int step, int round, const std::string& tag) const;
 
         void updateReservoirProperties(); // for testing without simulator
@@ -251,6 +260,8 @@ public:
         Opm::PropertyTree prm_;
         FractureSolveStats last_solve_stats_{};
         FractureSolveStats total_solve_stats_{};
+        int step_growth_rounds_{0};
+        double method_dt_cap_{std::numeric_limits<double>::max()};
         external::cvf::ref<external::cvf::BoundingBoxTree> cell_search_tree_;
         std::vector<EntitySeed> cell_seeds_;
         const Dune::CpGrid* mech_grid_ = nullptr;

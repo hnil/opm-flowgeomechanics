@@ -217,6 +217,13 @@ Fracture::relativeStepGrowth() const
     return calculateFractureProperties().area / area_step_start_ - 1.0;
 }
 
+inline double
+Fracture::relativeStepRateChange() const
+{
+    if (!active_ || !std::isfinite(rate_step_start_) || std::abs(rate_step_start_) <= 0.0) return 0.0;
+    return std::abs(well_rate_ - rate_step_start_) / std::abs(rate_step_start_);
+}
+
 inline int
 Fracture::numWellEquations() const
 {
@@ -778,7 +785,9 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             const auto solve = solveOnCurrentGrid_(opt);
             pacing.afterSolve(*this);
             reportGridSolve_(solve, opt);
-            return propagationScores_(maps.boundary, solve, opt);
+            auto scores = propagationScores_(maps.boundary, solve, opt);
+            last_front_score_ = scores.empty() ? -1.0 : *std::max_element(scores.begin(), scores.end());
+            return scores;
         };
 
         const FractureProperties& fprop_before = calculateFractureProperties();

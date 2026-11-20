@@ -329,6 +329,27 @@ namespace Opm {
         return g;
     }
 
+    inline double
+    FractureModel::maxLastFrontScore() const
+    {
+        double s = -1.0;
+        for (size_t i = 0; i < wells_.size(); ++i)
+            for (const auto& fracture : well_fractures_[i])
+                if (fracture.isActive())
+                    s = std::max(s, fracture.lastFrontScore());
+        return s;
+    }
+
+    inline double
+    FractureModel::maxRelativeStepRateChange() const
+    {
+        double r = 0.0;
+        for (size_t i = 0; i < wells_.size(); ++i)
+            for (const auto& fracture : well_fractures_[i])
+                r = std::max(r, fracture.relativeStepRateChange());
+        return r;
+    }
+
     inline void
     FractureModel::markBurstStep()
     {
@@ -352,6 +373,7 @@ namespace Opm {
     inline void
     FractureModel::moveForwardInTime(double dt_last)
     {
+        step_growth_rounds_ = 0;
         for (size_t i = 0; i < wells_.size(); ++i) {
             for (auto& fracture : well_fractures_[i]) {
                 fracture.moveForwardInTime(dt_last);
