@@ -185,6 +185,14 @@ namespace Opm{
             OpmLog::info(os.str());
 
             hasFractures_ = this->simulator().vanguard().eclState().runspec().frac();
+            const auto& vanguard = this->simulator().vanguard();
+            if (hasFractures_ && vanguard.eclState().getLgrs().size() > 0
+                && vanguard.grid().comm().size() > 1
+                && vanguard.refineBeforeRedistribute()) {
+                OPM_THROW(std::runtime_error,
+                          "Parallel fractures with LGRs require --refine-before-redistribute=false "
+                          "so the partitioner keeps each refinement region and its halo together.");
+            }
                         const bool waterActive = this->simulator().vanguard().eclState().runspec().phases().active(Opm::Phase::WATER);
                         if (hasFractures_ && !waterActive) {
                                 OPM_THROW(std::runtime_error,
