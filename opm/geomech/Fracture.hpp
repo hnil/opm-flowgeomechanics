@@ -865,6 +865,8 @@ private:
 
     void assembleFractureMatrix() const;
     std::vector<double> stressIntensityK1() const;
+    // Output only: (flag, WI) per fracture cell; flag 2 = seed ring, 1 = other fed cell.
+    std::pair<std::vector<double>, std::vector<double>> wellSourceFields() const;
     int numWellEquations() const;
 
     std::vector<CellRef> well_source_cellref_; // references to well cells in the fully resolved TriMesh

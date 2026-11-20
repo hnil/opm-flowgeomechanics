@@ -575,6 +575,19 @@ Fracture::summary_of_solve(){
   }
 }
 
+std::pair<std::vector<double>, std::vector<double>>
+Fracture::wellSourceFields() const
+{
+    const int nc = numFractureCells();
+    std::vector<double> flag(nc, 0.0), wi(nc, 0.0);
+    const std::set<int> ring(well_source_.begin(), well_source_.end());
+    for (const auto& [cell, w] : perfinj_) {
+        if (cell < 0 || cell >= nc) continue;
+        flag[cell] = ring.count(cell) ? 2.0 : 1.0;
+        wi[cell] = w;
+    }
+    return {std::move(flag), std::move(wi)};
+}
 
 void
 Fracture::write(int reportStep) const
@@ -583,6 +596,9 @@ Fracture::write(int reportStep) const
     std::vector<double> K1; // need to be in scope until written
     auto tmp(fracture_pressure_);
     tmp.resize(numFractureCells());
+    const auto [well_source, well_source_wi] = wellSourceFields();
+    vtkwriter_->addCellData(well_source, "WellSource");
+    vtkwriter_->addCellData(well_source_wi, "WellSourceWI");
     if (reservoir_map_.cells.size() > 0) {
         vtkwriter_->addCellData(reservoir_map_.cells, "ReservoirCell");
     }
@@ -719,6 +735,7 @@ Fracture::writemulti(double time) const
     std::vector<double> well_index(numFractureCells(), 0.0);
     std::map<int, double> wellIndMap;
     std::vector<double> leakofrate = leakOfRate();
+    auto [well_source, well_source_wi] = wellSourceFields();
     {
         // make map to do it easy
         for (const auto& wind : this->wellIndices()) {
@@ -802,6 +819,8 @@ Fracture::writemulti(double time) const
     if (well_index.size() > 0) {
         vtkmultiwriter_->attachScalarElementData(well_index, "WellIndex");
     }
+    vtkmultiwriter_->attachScalarElementData(well_source, "WellSource");
+    vtkmultiwriter_->attachScalarElementData(well_source_wi, "WellSourceWI");
     if (fracture_width.size() > 0) {
         vtkmultiwriter_->attachScalarElementData(fracture_width, "FractureWidth");
         vtkmultiwriter_->attachScalarElementData(flow_width, "FlowWidth");
