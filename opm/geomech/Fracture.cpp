@@ -18,6 +18,7 @@
 */
 
 #include "config.h"
+#include <opm/geomech/MechGridPartition.hpp>
 
 #include <numeric>
 #include <set>
@@ -823,8 +824,9 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
     reservoir_map_.allAreas.resize(numFractureCells());
     reservoir_map_.allCells.resize(numFractureCells());
     reservoir_map_.allCenters.resize(numFractureCells());
-    bool full_intersections = prm_.get<bool>("solver.divide_wellidx", false);
-    const bool use_cache = full_intersections && prm_.get<bool>("solver.cache_cell_mapping", false);
+    const bool require_coverage = MechPartition::Registry::protectedFractures();
+    const bool full_intersections = require_coverage || prm_.get<bool>("solver.divide_wellidx", false);
+    const bool use_cache = !require_coverage && full_intersections && prm_.get<bool>("solver.cache_cell_mapping", false);
     const std::string area_method = prm_.get<std::string>("solver.cell_mapping_area", "exact");
     if (area_method != "exact" && area_method != "fast")
         OPM_THROW(std::runtime_error, "Unknown solver.cell_mapping_area: " + area_method);
@@ -864,7 +866,13 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
             std::vector<Dune::FieldVector<double,3>> centers;
             std::vector<std::array<double,3>> hex_corners;
             external::cellsOfTri(rcells, areas, centers, cellSearchTree, grid, entity_seeds, tri_corners,
-                                 area_method == "fast");
+                                 !require_coverage && area_method == "fast");
+            const double covered = std::accumulate(areas.begin(), areas.end(), 0.0);
+            if (require_coverage && (reservoir_map_.cells[elemIdx] < 0
+                || covered < geom.volume() - 1e-8*std::max(1.0, geom.volume())))
+                OPM_THROW(std::runtime_error,
+                    "Incomplete owned reservoir coverage for fracture " + name()
+                    + "; enlarge the mechanics partition group before continuing");
             reservoir_map_.allAreas[elemIdx] = areas;
             reservoir_map_.allCells[elemIdx] = rcells;
             reservoir_map_.allCenters[elemIdx] = centers;
