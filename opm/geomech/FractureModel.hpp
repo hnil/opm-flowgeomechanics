@@ -89,6 +89,12 @@ public:
                       const LgrLookup* lgrs = nullptr);
 
      void updateFractureReservoirCells(const Dune::CpGrid& cpgrid);
+    //! Fracture cells outside the flow grid take their stress from this mechanics grid.
+    void setMechGrid(const Dune::CpGrid& mechGrid)
+    {
+        mech_grid_ = &mechGrid;
+        external::buildBoundingBoxTree(mech_search_tree_, mech_seeds_, mechGrid);
+    }
 
 
 
@@ -247,6 +253,16 @@ public:
         FractureSolveStats total_solve_stats_{};
         external::cvf::ref<external::cvf::BoundingBoxTree> cell_search_tree_;
         std::vector<EntitySeed> cell_seeds_;
+        const Dune::CpGrid* mech_grid_ = nullptr;
+        external::cvf::ref<external::cvf::BoundingBoxTree> mech_search_tree_;
+        std::vector<EntitySeed> mech_seeds_;
+        Fracture::MechLookup mechLookup_() const
+        {
+            if (mech_grid_ == nullptr) {
+                return {};
+            }
+            return {&mech_search_tree_, mech_grid_, &mech_seeds_};
+        }
         /// Initialise fractures in each seed identified in the WSEED keyword.
         ///
         /// \param[in] sched Dynamic objects in current run, especially

@@ -77,6 +77,9 @@ namespace Opm{
                                                                  std::vector<Opm::Well>{},
                                                                  param);
             }
+            if (!serializer.isSerializing()) {
+                attachMechGrid_();
+            }
             fracturemodel_->serializeWells(serializer);
             if (!serializer.isSerializing()) {
                 const LgrLookup lookup(simulator_.vanguard().eclState().getLgrs(),
@@ -179,6 +182,7 @@ namespace Opm{
                         schedule[end_step],
                         &lgrs);
 
+                    attachMechGrid_();
                     fracturemodel_->updateFractureReservoirCells(grid);
                     fracturemodel_->initReservoirProperties<TypeTag,Simulator>(simulator_);
                     fracturemodel_->updateReservoirAndWellProperties<TypeTag,Simulator>(simulator_);
@@ -313,6 +317,28 @@ namespace Opm{
         Simulator& simulator_;
         int solves_this_step_{0};
         bool include_fracture_contributions_{false};
+
+        // Opt-in (reservoir.mech_cells_beyond_flow): fracture cells outside the flow grid
+        // take stress from the separate mechanics grid instead of a closing wall.
+        void attachMechGrid_()
+        {
+            if (!simulator_.problem().getFractureParam().template get<bool>(
+                    "reservoir.mech_cells_beyond_flow", false)) {
+                return;
+            }
+            if constexpr (requires { simulator_.problem().geoMechModel().mechContext(); }) {
+                const auto* ctx = simulator_.problem().geoMechModel().mechContext();
+                if (ctx == nullptr) {
+                    return;
+                }
+                if (simulator_.gridView().comm().size() > 1) {
+                    OpmLog::warning("reservoir.mech_cells_beyond_flow is serial only; ignored");
+                    return;
+                }
+                fracturemodel_->setMechGrid(ctx->grid());
+                OpmLog::info("Fracture cells outside the flow grid take stress from the mechanics grid");
+            }
+        }
         int model_creation_step_{0};
         std::unique_ptr<FractureModel> fracturemodel_;
     };

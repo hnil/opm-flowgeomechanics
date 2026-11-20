@@ -875,6 +875,18 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
             }
         }
     }
+    reservoir_map_.mechCells.assign(numFractureCells(), -1);
+    if (mech_lookup_.grid != nullptr) {
+        for (const auto& element : elements(grid_->leafGridView())) {
+            const auto elemIdx = elemMapper.index(element);
+            if (reservoir_map_.cells[elemIdx] >= 0) {
+                continue;
+            }
+            const auto c = element.geometry().center();
+            reservoir_map_.mechCells[elemIdx] = external::cellOfPoint(
+                *mech_lookup_.tree, *mech_lookup_.grid, *mech_lookup_.seeds, external::cvf::Vec3d(c[0], c[1], c[2]));
+        }
+    }
     auto it = std::find(reservoir_map_.cells.begin(), reservoir_map_.cells.end(), -1);
     auto extended_fractures = prm_.get<bool>("extended_fractures");
     if (!(it == reservoir_map_.cells.end()) && !(extended_fractures)) {
