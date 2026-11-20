@@ -458,6 +458,8 @@ public:
     // fracture's), used by solver.well_source_all_perfs to feed the fracture
     // wherever the well crosses it.
     void setWellPerfCells(std::vector<int> cells) { well_perf_cells_ = std::move(cells); }
+    //! Well path as a polyline in connection order (solver.well_source_mode=trajectory).
+    void setWellPath(std::vector<Point3D> points) { well_path_ = std::move(points); }
     //! current flow timestep (s); needed by the opt-in fracture storage term
     void setTimeStep(double dt) { current_dt_ = dt; }
     //! Back to solving the fracture's own pressure (see setExternalPressure).
@@ -975,6 +977,9 @@ private:
     std::vector<Htrans> htrans_;
     std::vector<std::tuple<int,double>> perfinj_;
     std::vector<int> well_perf_cells_; // see setWellPerfCells
+    std::vector<Point3D> well_path_; // see setWellPath
+    bool well_path_fallback_logged_ = false;
+    std::vector<int> wellPathSourceCells() const;
     //! Per-cell scaled FB complementarity residual |phi|/(1+|a|+|b|) from the last
     //! assembled iterate; empty unless closed_cell_policy=fischer_burmeister.
     //! Lets propagation veto individual untrustworthy cells instead of all growth.

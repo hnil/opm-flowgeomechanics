@@ -3066,6 +3066,120 @@ Fracture::calculateFractureProperties() const
     return fracprop;
 }
 
+std::vector<int>
+Fracture::wellPathSourceCells() const
+{
+    if (well_path_.empty()) {
+        return {};
+    }
+    // The well touches the fracture where its path is within a wellbore radius of the plane.
+    const double tol = prm_.get<double>("solver.well_source_plane_tol",
+                                        prm_.get<double>("solver.fractureWI_rw", 0.1));
+    using P2 = std::array<double, 2>;
+    auto proj = [&](Point3D x) {
+        x -= origo_;
+        return P2 {x * naxis_[0], x * naxis_[1]};
+    };
+    // Path points are connection-cell centres; extend past both ends to cover the end cells
+    // (a single connection is taken as vertical). The perforated-cell filter trims the excess.
+    std::vector<Point3D> path = well_path_;
+    if (path.size() == 1) {
+        const Point3D c = path[0];
+        path = {c, c};
+        path[0][2] -= 1.0e4;
+        path[1][2] += 1.0e4;
+    } else {
+        auto mirror = [](const Point3D& end, const Point3D& next) {
+            Point3D x = end;
+            x *= 2.0;
+            x -= next;
+            return x;
+        };
+        path.insert(path.begin(), mirror(path[0], path[1]));
+        path.push_back(mirror(path.back(), path[path.size() - 2]));
+    }
+    std::vector<std::pair<P2, P2>> pieces; // path within tol of the plane, projected
+    for (std::size_t s = 0; s + 1 < path.size(); ++s) {
+        const Point3D& a = path[s];
+        Point3D ab = path[s + 1];
+        ab -= a;
+        Point3D ra = a;
+        ra -= origo_;
+        const double da = ra * naxis_[2];
+        const double dd = ab * naxis_[2];
+        double t0 = 0.0, t1 = 1.0;
+        if (std::abs(dd) < 1e-14) {
+            if (std::abs(da) > tol) continue;
+        } else {
+            double ta = (-tol - da) / dd, tb = (tol - da) / dd;
+            if (ta > tb) std::swap(ta, tb);
+            t0 = std::max(t0, ta);
+            t1 = std::min(t1, tb);
+            if (t0 > t1) continue;
+        }
+        Point3D x0 = ab, x1 = ab;
+        x0 *= t0;
+        x0 += a;
+        x1 *= t1;
+        x1 += a;
+        pieces.emplace_back(proj(x0), proj(x1));
+    }
+    if (pieces.empty()) {
+        return {};
+    }
+
+    const std::set<int> perfcells(well_perf_cells_.begin(), well_perf_cells_.end());
+    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
+    std::set<int> fed;
+    // A piece of near-zero projected length is a crossing point: fed to the one triangle containing it best.
+    std::vector<std::pair<double, int>> best_point(pieces.size(), {-1e-9, -1});
+    for (const auto& e : Dune::elements(grid_->leafGridView())) {
+        const int i = mapper.index(e);
+        if (!perfcells.empty()
+            && (i >= static_cast<int>(reservoir_map_.cells.size()) || !perfcells.count(reservoir_map_.cells[i]))) {
+            continue;
+        }
+        const auto geom = e.geometry();
+        const std::array<P2, 3> p {proj(geom.corner(0)), proj(geom.corner(1)), proj(geom.corner(2))};
+        auto cross = [](const P2& u, const P2& v) { return u[0] * v[1] - u[1] * v[0]; };
+        auto sub = [](const P2& u, const P2& v) { return P2 {u[0] - v[0], u[1] - v[1]}; };
+        const double area2 = cross(sub(p[1], p[0]), sub(p[2], p[0]));
+        if (std::abs(area2) < 1e-20) continue;
+        const double h = std::sqrt(std::abs(area2));
+        for (std::size_t k = 0; k < pieces.size(); ++k) {
+            const auto& [A, B] = pieces[k];
+            const P2 AB = sub(B, A);
+            if (std::hypot(AB[0], AB[1]) < 1e-6 * h) {
+                double lmin = 1.0;
+                for (int c = 0; c < 3; ++c) {
+                    lmin = std::min(lmin, cross(sub(p[(c + 2) % 3], p[(c + 1) % 3]), sub(A, p[(c + 1) % 3])) / area2);
+                }
+                if (lmin > best_point[k].first) best_point[k] = {lmin, i};
+                continue;
+            }
+            // clip AB to the triangle; fed if a part of positive length is inside
+            double t0 = 0.0, t1 = 1.0;
+            for (int c = 0; c < 3 && t0 <= t1; ++c) {
+                const P2 edge = sub(p[(c + 1) % 3], p[c]);
+                const double f0 = cross(edge, sub(A, p[c])) / area2;
+                const double df = cross(edge, AB) / area2;
+                if (std::abs(df) < 1e-14) {
+                    if (f0 < 0.0) t1 = -1.0;
+                } else if (df > 0.0) {
+                    t0 = std::max(t0, -f0 / df);
+                } else {
+                    t1 = std::min(t1, -f0 / df);
+                }
+            }
+            if ((t1 - t0) * std::hypot(AB[0], AB[1]) > 1e-8 * h) fed.insert(i);
+        }
+    }
+    for (const auto& [lmin, i] : best_point) {
+        if (i >= 0) fed.insert(i);
+    }
+    return {fed.begin(), fed.end()};
+}
+
 void
 Fracture::initPressureMatrix()
 {
@@ -3107,7 +3221,20 @@ Fracture::initPressureMatrix()
             OPM_THROW(std::runtime_error, "Unknown solver.embedded_well_source: " + ews);
         }
     }
-    if (!embedded_ring && prm_.get<bool>("solver.well_source_all_perfs", false) && !well_perf_cells_.empty()) {
+    const auto ws_mode = prm_.get<std::string>("solver.well_source_mode", "radius");
+    if (ws_mode != "radius" && ws_mode != "trajectory") {
+        OPM_THROW(std::runtime_error, "Unknown solver.well_source_mode: " + ws_mode);
+    }
+    if (!embedded_ring && ws_mode == "trajectory") {
+        const auto cells = wellPathSourceCells();
+        if (!cells.empty()) {
+            sources = std::set<int>(cells.begin(), cells.end());
+        } else if (!well_path_fallback_logged_) {
+            OpmLog::warning("Fracture " + name() + ": the well path crosses no fracture cell in a "
+                            "perforated reservoir cell; feeding the seed ring");
+            well_path_fallback_logged_ = true;
+        }
+    } else if (!embedded_ring && prm_.get<bool>("solver.well_source_all_perfs", false) && !well_perf_cells_.empty()) {
         // The wellbore cuts the fracture along a line, so only cells within about a
         // wellbore radius of it are fed directly; on a coarse grid "shares a reservoir
         // cell with a perforation" is the whole fracture and short-circuits the cubic

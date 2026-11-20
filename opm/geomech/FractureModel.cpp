@@ -223,6 +223,12 @@ FractureModel::addFractures(const ScheduleState& sched,
         OPM_THROW(std::runtime_error, "Fracture type '" + fracture_type + "' is not supported");
     }
 
+    for (auto i = 0 * well_fractures_.size(); i < well_fractures_.size(); ++i) {
+        for (auto& fracture : well_fractures_[i]) {
+            fracture.setWellPath(wells_[i].connectionCentres());
+        }
+    }
+
     std::ostringstream msg;
     msg << "Added fractures to " << wells_.size() << " wells\n"
         << "Total number of fractures_wells: " << well_fractures_.size() << '\n';

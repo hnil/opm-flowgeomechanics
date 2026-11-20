@@ -614,6 +614,7 @@ namespace Opm {
               }
               fracture.setWellProps(injection_rate,  total_wellindex,  wi_dz,  wi_respress,  well_depth);
               fracture.setWellPerfCells(perf_cell_indices);
+              fracture.setWellPath(wells_[i].connectionCentres());
                 // do update wells
                 // set well properties
 

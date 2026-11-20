@@ -111,6 +111,12 @@ public:
     const Grid& grid() const{return *grid_;}
     const std::vector<Connection>& connections() const { return conns_; }
     const std::vector<Point3D>& definingPoints() const { return points_; }
+    //! Connection-cell centres in connection order (definingPoints() without the reference point).
+    std::vector<Point3D> connectionCentres() const
+    {
+        return points_.empty() ? std::vector<Point3D> {}
+                               : std::vector<Point3D>(points_.begin() + 1, points_.end());
+    }
     const std::vector<Segment>& definingSegments() const { return segments_; }
 
     //! The state that is not fixed by the constructor arguments.
