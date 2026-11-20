@@ -33,6 +33,8 @@ list (APPEND MAIN_SOURCE_FILES
 	opm/geomech/FractureCoupledLinearSolver.cpp
 	opm/geomech/FractureMechanicsPreconditioner.cpp
 	opm/geomech/Fracture.cpp
+	opm/geomech/FractureMesh.cpp
+	opm/geomech/FractureMeshFoamGrid.cpp
 	opm/geomech/FractureModel.cpp
 	opm/geomech/FractureWell.cpp
 	opm/geomech/GeometryHelpers.cpp
@@ -69,6 +71,8 @@ list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/FractureCoupledLinearSolver.hpp
 	opm/geomech/Fracture.hpp
 	opm/geomech/Fracture_impl.hpp
+	opm/geomech/FractureMesh.hpp
+	opm/geomech/FractureMeshFoamGrid.hpp
 	opm/geomech/FractureAuxCells.hpp
 	opm/geomech/FracturePieces.hpp
   opm/geomech/FractureAuxCells_impl.hpp
