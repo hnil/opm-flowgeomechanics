@@ -41,6 +41,7 @@
 #include <dune/grid/utility/persistentcontainer.hh>
 #include <dune/istl/io.hh> // needed for printSparseMatrix??
 #include <opm/geomech/DiscreteDisplacement.hpp>
+#include <opm/geomech/FractureMeshFoamGrid.hpp>
 #include <opm/geomech/FracturePressureAssemblerAD.hpp>
 
 #include <opm/grid/polyhedralgrid.hh>
@@ -382,11 +383,9 @@ Fracture::updateFilterCakeProps(const Opm::Connection& connection,
 Dune::BlockVector<Dune::FieldVector<double, 3>>
 Fracture::all_slips() const
 {
-    Dune::BlockVector<Dune::FieldVector<double, 3>> slips(grid_->leafGridView().size(0));
+    Dune::BlockVector<Dune::FieldVector<double, 3>> slips(numFractureCells());
     slips = 0;
-    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
-    for (const auto& elem : Dune::elements(grid_->leafGridView())) {
-        size_t eIdx = mapper.index(elem);
+    for (size_t eIdx = 0; eIdx < numFractureCells(); ++eIdx) {
         // only normal slip for now
         slips[eIdx][0] = fracture_width_[eIdx];
     }
@@ -397,7 +396,7 @@ Dune::FieldVector<double, 3>
 Fracture::disp(Dune::FieldVector<double, 3> obs) const
 {
     auto slips = all_slips();
-    Dune::FieldVector<double, 3> disp = ddm::disp(obs, slips, *grid_, E_, nu_);
+    Dune::FieldVector<double, 3> disp = ddm::disp(obs, slips, mesh_, E_, nu_);
     return disp;
 }
 
@@ -406,7 +405,7 @@ Fracture::strain(Dune::FieldVector<double, 3> obs) const
 {
     // for now use full slip in interface even we only calculate normal slip
     Dune::BlockVector<Dune::FieldVector<double, 3>> slips = all_slips();
-    Dune::FieldVector<double, 6> strain = ddm::strain(obs, slips, *grid_, E_, nu_);
+    Dune::FieldVector<double, 6> strain = ddm::strain(obs, slips, mesh_, E_, nu_);
     return strain;
 }
 
@@ -415,7 +414,7 @@ Fracture::stress(Dune::FieldVector<double, 3> obs) const
 {
     // for now use full slip in interface even we only calculate normal slip
     Dune::BlockVector<Dune::FieldVector<double, 3>> slips = all_slips();
-    Dune::FieldVector<double, 6> strain = ddm::strain(obs, slips, *grid_, E_, nu_);
+    Dune::FieldVector<double, 6> strain = ddm::strain(obs, slips, mesh_, E_, nu_);
     Dune::FieldVector<double, 6> stress = ddm::strainToStress(E_, nu_, strain);
     return stress;
 }
@@ -432,9 +431,8 @@ void
 Fracture::updateCellNormals()
 {
     cell_normals_.resize(numFractureCells());
-    ElementMapper elemMapper(grid_->leafGridView(), Dune::mcmgElementLayout());
-    for (auto& element : elements(grid_->leafGridView()))
-        cell_normals_[elemMapper.index(element)] = ddm::normalOfElement(element);
+    for (size_t c = 0; c < numFractureCells(); ++c)
+        cell_normals_[c] = mesh_.cellNormal(c);
 }
 
 void
@@ -442,6 +440,7 @@ Fracture::setFractureGrid(std::unique_ptr<Fracture::Grid> gptr)
 {
     assert(gptr != nullptr);
     grid_ = std::move(gptr);
+    mesh_ = buildFractureMesh(*grid_);
     // compute the cell normals
     updateCellNormals();
 
@@ -3647,9 +3646,9 @@ Fracture::assembleFractureMatrix() const
         frame.origin = toVec(trimesh_->nodeCoord({0, 0}));
         frame.e1 = toVec(trimesh_->nodeCoord({1, 0})) - frame.origin;
         frame.e2 = toVec(trimesh_->nodeCoord({0, 1})) - frame.origin;
-        ddm::assembleMatrix_lattice(*fracture_matrix_, E_, nu_, *grid_, frame, ddm_table_);
+        ddm::assembleMatrix_lattice(*fracture_matrix_, E_, nu_, mesh_, frame, ddm_table_);
     } else {
-        ddm::assembleMatrix_fast(*fracture_matrix_, E_, nu_, *grid_);
+        ddm::assembleMatrix_fast(*fracture_matrix_, E_, nu_, mesh_);
     }
 }
 

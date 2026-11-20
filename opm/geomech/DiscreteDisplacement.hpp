@@ -27,6 +27,7 @@
 #include <dune/common/fvector.hh>
 #include <dune/istl/bvector.hh>
 #include "CutDe.hpp"
+#include <opm/geomech/FractureMesh.hpp>
 #include <opm/geomech/Math.hpp>
 #include <dune/grid/common/entity.hh>
 #include <dune/foamgrid/foamgrid.hh>
@@ -71,6 +72,12 @@ getTri(const Element& elem){
     }
     return tri;
 }
+Dune::FieldVector<double, 3>
+TDDispFSTri(const Dune::FieldVector<double, 3>& obs,
+            const std::array<Real3, 3>& tri,
+            const Dune::FieldVector<double, 3>& slip,
+            double nu);
+
 template <class Element>
 Dune::FieldVector<double, 3>
 TDDispFS(const Dune::FieldVector<double, 3>& obs,
@@ -124,8 +131,8 @@ tractionSymTensor(const Dune::FieldVector<double,6> symtensor, Dune::FieldVector
 double
 tractionVoigt(Dune::FieldVector<double,6> voigt, Dune::FieldVector<double,3> normal);
 
-void assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);
-void assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);
+void assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Opm::FractureMesh& mesh);
+void assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Opm::FractureMesh& mesh);
 
 // Planar lattice the fracture mesh lives on: node (i, j) sits at origin + i*e1 + j*e2.
 struct LatticeFrame
@@ -153,26 +160,36 @@ struct KernelTable
 
 // Same matrix as assembleMatrix_fast up to round-off; pairs of off-lattice elements use the direct kernel.
 void assembleMatrix_lattice(Dune::DynamicMatrix<double>& matrix, const double E, const double nu,
-                            const Dune::FoamGrid<2, 3>& grid, const LatticeFrame& frame, KernelTable& table);
+                            const Opm::FractureMesh& mesh, const LatticeFrame& frame, KernelTable& table);
 void applyMatrix_fast(Dune::DynamicVector<double>& result,
                       const Dune::DynamicVector<double>& x,
                       const double E,
                       const double nu,
-                      const Dune::FoamGrid<2, 3>& grid);
+                      const Opm::FractureMesh& mesh);
 
 Dune::FieldVector<double, 6>
 strain(const Dune::FieldVector<double, 3>& obs,
        const Dune::BlockVector<Dune::FieldVector<double, 3>>& slips,
-       const Dune::FoamGrid<2, 3>& grid,
+       const Opm::FractureMesh& mesh,
        const double E,
        const double nu);
 
 Dune::FieldVector<double, 3>
 disp(const Dune::FieldVector<double, 3>& obs,
        const Dune::BlockVector<Dune::FieldVector<double, 3>>& slips,
-       const Dune::FoamGrid<2, 3>& grid,
+       const Opm::FractureMesh& mesh,
        const double E,
        const double nu);
 
+// FoamGrid forms for tools and tests: build the mesh and forward.
+void assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);
+void assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);
+void assembleMatrix_lattice(Dune::DynamicMatrix<double>& matrix, const double E, const double nu,
+                            const Dune::FoamGrid<2, 3>& grid, const LatticeFrame& frame, KernelTable& table);
+void applyMatrix_fast(Dune::DynamicVector<double>& result,
+                      const Dune::DynamicVector<double>& x,
+                      const double E,
+                      const double nu,
+                      const Dune::FoamGrid<2, 3>& grid);
 
 } // namespace ddm

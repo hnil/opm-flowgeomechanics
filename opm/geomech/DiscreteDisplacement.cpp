@@ -23,6 +23,7 @@
 #endif
 #include <opm/common/TimingMacros.hpp>
 #include <opm/geomech/DiscreteDisplacement.hpp>
+#include <opm/geomech/FractureMeshFoamGrid.hpp>
 
 #include <cmath>
 #include <limits>
@@ -31,10 +32,6 @@ namespace ddm
 {
 namespace
 {
-using DDMGrid = Dune::FoamGrid<2, 3>;
-using DDMGridView = DDMGrid::LeafGridView;
-using DDMElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<DDMGridView>;
-
 struct GeometryCache
 {
     std::vector<Dune::FieldVector<double, 3>> centers;
@@ -42,10 +39,18 @@ struct GeometryCache
     std::vector<std::array<Real3, 3>> tris;
 };
 
-GeometryCache buildGeometryCache(const DDMGrid& grid)
+std::array<Real3, 3> toReal3(const Opm::FractureMesh::Triangle& t)
 {
-    DDMElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
-    const int nc = grid.leafGridView().size(0);
+    std::array<Real3, 3> tri;
+    for (int i = 0; i < 3; ++i) {
+        tri[i] = make3(t[i][0], t[i][1], t[i][2]);
+    }
+    return tri;
+}
+
+GeometryCache buildGeometryCache(const Opm::FractureMesh& mesh)
+{
+    const int nc = mesh.numCells();
 
     GeometryCache cache;
     cache.centers.resize(nc);
@@ -53,11 +58,10 @@ GeometryCache buildGeometryCache(const DDMGrid& grid)
     cache.tris.resize(nc);
 
     OPM_TIMEBLOCK(GeometryOFfoamgrid);
-    for (auto elem : elements(grid.leafGridView())) {
-        const int idx = mapper.index(elem);
-        cache.centers[idx] = elem.geometry().center();
-        cache.normals[idx] = normalOfElement(elem);
-        cache.tris[idx] = getTri(elem);
+    for (int idx = 0; idx < nc; ++idx) {
+        cache.centers[idx] = mesh.cellCentroid(idx);
+        cache.normals[idx] = mesh.cellNormal(idx);
+        cache.tris[idx] = toReal3(mesh.cellTriangles(idx)[0]);
     }
 
     return cache;
@@ -171,22 +175,35 @@ TDStrainFSTri(const Dune::FieldVector<double, 3>& obs,
     strain[5] = strain_tmp.c;
     return strain;
 }
+Dune::FieldVector<double, 3>
+TDDispFSTri(const Dune::FieldVector<double, 3>& obs,
+            const std::array<Real3, 3>& tri,
+            const Dune::FieldVector<double, 3>& slip,
+            double nu)
+{
+    Real3 obs_tmp = make3(obs[0], obs[1], obs[2]);
+    Real3 slip_tmp = make3(slip[0], slip[1], slip[2]);
+    Real3 disp_tmp = disp_fs(obs_tmp, tri, slip_tmp, nu);
+    Dune::FieldVector<double, 3> disp;
+    disp[0] = disp_tmp.x;
+    disp[1] = disp_tmp.y;
+    disp[2] = disp_tmp.z;
+    return disp;
+}
+
 void
 assembleMatrix(Dune::DynamicMatrix<double>& matrix,
                const double E,
                const double nu,
-               const Dune::FoamGrid<2, 3>& grid)
+               const Opm::FractureMesh& mesh)
 
 {
     OPM_TIMEFUNCTION();
-    DDMElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
-    for (auto elem1 : elements(grid.leafGridView())) {
-        int idx1 = mapper.index(elem1);
-        auto geom = elem1.geometry();
-        auto center = geom.center();
-        auto normal = normalOfElement(elem1);
-        for (auto elem2 : elements(grid.leafGridView())) {
-            int idx2 = mapper.index(elem2);
+    const int nc = mesh.numCells();
+    for (int idx1 = 0; idx1 < nc; ++idx1) {
+        auto center = mesh.cellCentroid(idx1);
+        auto normal = mesh.cellNormal(idx1);
+        for (int idx2 = 0; idx2 < nc; ++idx2) {
             // check if this is defined in relative coordinates
             Dune::FieldVector<double, 3> slip; // = make3(1.0,0.0, 0.0);
             slip[0] = 1;
@@ -194,7 +211,8 @@ assembleMatrix(Dune::DynamicMatrix<double>& matrix,
             slip[2] = 0;
 
             // symmetric stress voit notation
-            Dune::FieldVector<double, 6> strain = TDStrainFS(center, elem2, slip, nu);
+            Dune::FieldVector<double, 6> strain
+                = TDStrainFSTri(center, toReal3(mesh.cellTriangles(idx2)[0]), slip, nu);
             Dune::FieldVector<double, 6> stress = strainToStress(E, nu, strain);
 
             double ntraction = tractionSymTensor(stress, normal);
@@ -208,12 +226,12 @@ void
 assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix,
                     const double E,
                     const double nu,
-                    const Dune::FoamGrid<2, 3>& grid)
+                    const Opm::FractureMesh& mesh)
 
 {
     OPM_TIMEFUNCTION();
-    const int nc = grid.leafGridView().size(0);
-    const auto cache = buildGeometryCache(grid);
+    const int nc = mesh.numCells();
+    const auto cache = buildGeometryCache(mesh);
     {
         OPM_TIMEBLOCK(AssembleDDMMatrix);
 #pragma omp parallel for
@@ -234,14 +252,14 @@ void
 assembleMatrix_lattice(Dune::DynamicMatrix<double>& matrix,
                        const double E,
                        const double nu,
-                       const Dune::FoamGrid<2, 3>& grid,
+                       const Opm::FractureMesh& mesh,
                        const LatticeFrame& frame,
                        KernelTable& table)
 {
     OPM_TIMEFUNCTION();
     using V = Dune::FieldVector<double, 3>;
-    const int nc = grid.leafGridView().size(0);
-    const auto cache = buildGeometryCache(grid);
+    const int nc = mesh.numCells();
+    const auto cache = buildGeometryCache(mesh);
 
     const auto sameFrame = [](const LatticeFrame& f, const LatticeFrame& g) {
         return f.origin == g.origin && f.e1 == g.e1 && f.e2 == g.e2;
@@ -348,7 +366,7 @@ assembleMatrix_lattice(Dune::DynamicMatrix<double>& matrix,
     }
     if (total > 50'000'000) { // 400 MB: rather compute directly than hold such a table
         table = KernelTable {};
-        assembleMatrix_fast(matrix, E, nu, grid);
+        assembleMatrix_fast(matrix, E, nu, mesh);
         return;
     }
 
@@ -432,14 +450,14 @@ applyMatrix_fast(Dune::DynamicVector<double>& result,
                  const Dune::DynamicVector<double>& x,
                  const double E,
                  const double nu,
-                 const Dune::FoamGrid<2, 3>& grid)
+                 const Opm::FractureMesh& mesh)
 {
     OPM_TIMEFUNCTION();
-    const int nc = grid.leafGridView().size(0);
+    const int nc = mesh.numCells();
     assert(static_cast<int>(x.size()) == nc);
 
     result.resize(nc);
-    const auto cache = buildGeometryCache(grid);
+    const auto cache = buildGeometryCache(mesh);
 
     OPM_TIMEBLOCK(ApplyDDMMatrix);
 #pragma omp parallel for
@@ -463,19 +481,14 @@ applyMatrix_fast(Dune::DynamicVector<double>& result,
 Dune::FieldVector<double, 6>
 strain(const Dune::FieldVector<double, 3>& obs,
        const Dune::BlockVector<Dune::FieldVector<double, 3>>& slips,
-       const Dune::FoamGrid<2, 3>& grid,
+       const Opm::FractureMesh& mesh,
        const double /*E*/,
        const double nu)
 {
     Dune::FieldVector<double, 6> strain;
     strain = 0.0;
-    using Grid = Dune::FoamGrid<2, 3>;
-    using GridView = typename Grid::LeafGridView;
-    using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
-    ElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
-    for (auto elem1 : elements(grid.leafGridView())) {
-        int idx1 = mapper.index(elem1);
-        strain += TDStrainFS(obs, elem1, slips[idx1], nu);
+    for (int idx1 = 0; idx1 < mesh.numCells(); ++idx1) {
+        strain += TDStrainFSTri(obs, toReal3(mesh.cellTriangles(idx1)[0]), slips[idx1], nu);
     }
     return strain;
 }
@@ -483,20 +496,51 @@ strain(const Dune::FieldVector<double, 3>& obs,
 Dune::FieldVector<double, 3>
 disp(const Dune::FieldVector<double, 3>& obs,
      const Dune::BlockVector<Dune::FieldVector<double, 3>>& slips,
-     const Dune::FoamGrid<2, 3>& grid,
+     const Opm::FractureMesh& mesh,
      const double /*E*/,
      const double nu)
 {
     Dune::FieldVector<double, 3> disp;
     disp = 0.0;
-    using Grid = Dune::FoamGrid<2, 3>;
-    using GridView = typename Grid::LeafGridView;
-    using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<GridView>;
-    ElementMapper mapper(grid.leafGridView(), Dune::mcmgElementLayout());
-    for (auto elem1 : elements(grid.leafGridView())) {
-        int idx1 = mapper.index(elem1);
-        disp += TDDispFS(obs, elem1, slips[idx1], nu);
+    for (int idx1 = 0; idx1 < mesh.numCells(); ++idx1) {
+        disp += TDDispFSTri(obs, toReal3(mesh.cellTriangles(idx1)[0]), slips[idx1], nu);
     }
     return disp;
+}
+
+void
+assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid)
+{
+    assembleMatrix(matrix, E, nu, Opm::buildFractureMesh(grid));
+}
+
+void
+assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix,
+                    const double E,
+                    const double nu,
+                    const Dune::FoamGrid<2, 3>& grid)
+{
+    assembleMatrix_fast(matrix, E, nu, Opm::buildFractureMesh(grid));
+}
+
+void
+assembleMatrix_lattice(Dune::DynamicMatrix<double>& matrix,
+                       const double E,
+                       const double nu,
+                       const Dune::FoamGrid<2, 3>& grid,
+                       const LatticeFrame& frame,
+                       KernelTable& table)
+{
+    assembleMatrix_lattice(matrix, E, nu, Opm::buildFractureMesh(grid), frame, table);
+}
+
+void
+applyMatrix_fast(Dune::DynamicVector<double>& result,
+                 const Dune::DynamicVector<double>& x,
+                 const double E,
+                 const double nu,
+                 const Dune::FoamGrid<2, 3>& grid)
+{
+    applyMatrix_fast(result, x, E, nu, Opm::buildFractureMesh(grid));
 }
 } // namespace ddm

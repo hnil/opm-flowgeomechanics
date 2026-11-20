@@ -28,6 +28,7 @@
 
 #include <opm/geomech/CentreStressInterpolation.hpp>
 #include <opm/geomech/FractureConnectionId.hpp>
+#include <opm/geomech/FractureMesh.hpp>
 #include <algorithm>
 #include <limits>
 #include <optional>
@@ -748,7 +749,8 @@ private:
     using SMatrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>; // sparse matrix
     using FMatrix = Dune::DynamicMatrix<double>;                       // full matrix
 
-    size_t numFractureCells() const { return grid_->leafGridView().size(0); }
+    size_t numFractureCells() const { return mesh_.numCells(); }
+    const FractureMesh& mesh() const { return mesh_; }
     std::vector<int> identify_closed(const FMatrix& A,
                                      const VectorHP& x,
                                      const ResVector& rhs);
@@ -822,6 +824,7 @@ private:
     bool reset_pending_ = false; // set by resetFracture, consumed by finishReset
     bool grid_changed_since_checkpoint_ = false; // grid_ changed since the checkpoint: reset must rebuild perfinj_, htrans_, pressure_matrix_
     std::unique_ptr<Grid> grid_;
+    FractureMesh mesh_; // rebuilt whenever grid_ changes
     // grid definition in case of step fails
     std::unique_ptr<Opm::RegularTrimesh> trimesh_prev_; // experimental, implicitly defined grids
     std::vector<std::vector<CellRef>> grid_mesh_map_prev_; // index mapping from cells in grid_ to trimesh_.
