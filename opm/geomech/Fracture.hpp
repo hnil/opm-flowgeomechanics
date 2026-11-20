@@ -521,6 +521,10 @@ public:
     double relativeStepGrowth() const;
     // The step ending now was accepted as a burst: the area dt controller holds dt.
     void markBurstStep() { burst_step_ = true; }
+    // Largest K1/K1c on the front the last solve left (vetoed cells score -1).
+    double lastFrontScore() const { return last_front_score_; }
+    // |well rate - rate at the step checkpoint| / |rate at the checkpoint|; 0 before a checkpoint.
+    double relativeStepRateChange() const;
     // Onset dt-hold: true while the fracture is still an unopened seed and the
     // perf pressure is rising (solver.onset_dt_limit > 0 arms it).
     bool onsetHoldActive() const;
@@ -931,6 +935,8 @@ private:
     // outcome of the last solve, for solver.growth_stop=criterion
     bool last_growth_capped_{false};
     double last_solve_rel_growth_{0.0};
+    double last_front_score_{-1.0};
+    double rate_step_start_{std::numeric_limits<double>::quiet_NaN()};
     bool well_control_is_rate_{true}; // active well constraint (from the well state)
     double well_target_bhp_{-1.0};    // active BHP (bhp_well constraint target)
     // control.type=="well": the BC resolved at the start of the current solve.

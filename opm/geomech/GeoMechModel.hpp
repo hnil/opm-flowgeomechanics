@@ -117,6 +117,68 @@ namespace Opm{
             if(simulator_.gridView().comm().rank() == 0){
                 OpmLog::info("Geomech model endstimeStep\n");
             }
+            this->endTimeStepSolve_();
+            this->updateMethodDtCap_();
+        }
+
+        //! Opt-in fractureparam.solver.method_dt_controller: caps the next step by the growth work
+        //! the accepted step needed (SeqMechFrac: growth rounds; PostSolve: front K1/K1c left behind).
+        void updateMethodDtCap_()
+        {
+            const auto& prm = simulator_.problem().getGeoMechParam();
+            if (!prm.template get<bool>("fractureparam.solver.method_dt_controller", false)
+                || !this->fractureModelActive()) {
+                return;
+            }
+            const auto par = [&prm](const std::string& key, double def) {
+                return prm.template get<double>("fractureparam.solver.method_dt_" + key, def);
+            };
+            auto& fm = this->fractureModel();
+            const auto& comm = simulator_.gridView().comm();
+            const std::string method = prm.template get<std::string>("solver.method");
+            const double big = std::numeric_limits<double>::max();
+            double fac = big;
+            double signal = 0.0;
+            double growth = 0.0;
+            if (method == "SeqMechFrac") {
+                signal = fm.stepGrowthRounds();
+                if (signal > 0.0) {
+                    fac = par("rounds_target", 2.0) / signal;
+                }
+            } else {
+                // a front above target that did not move is stalled (new rings close), not unfinished
+                signal = comm.max(fm.maxLastFrontScore());
+                growth = comm.max(fm.maxRelativeStepGrowth());
+                const double target = par("k1_target", 1.5);
+                if (signal > target && growth > par("stall_growth", 0.01)) {
+                    fac = target / signal;
+                }
+            }
+            double rate_change = 0.0;
+            const double rate_target = par("rate_target", 0.0);
+            if (rate_target > 0.0) {
+                rate_change = comm.max(fm.maxRelativeStepRateChange());
+                if (rate_change > 0.0) {
+                    fac = std::min(fac, rate_target / rate_change);
+                }
+            }
+            const double dt = simulator_.timeStepSize();
+            const double cap = (fac >= par("grow_max", 2.0))
+                ? big
+                : std::max(dt * std::max(fac, par("shrink_min", 0.25)), par("min", 0.1) * 86400.0);
+            fm.setMethodDtCap(cap);
+            if (comm.rank() == 0) {
+                OpmLog::info(fmt::format("Method dt controller ({}): {} {:.3g}{}, rate change {:.3g}, dt {:.4g} d -> {}",
+                                         method, method == "SeqMechFrac" ? "growth rounds" : "front K1/K1c",
+                                         signal, method == "SeqMechFrac" ? std::string()
+                                                                         : fmt::format(" (area growth {:.3g})", growth),
+                                         rate_change, dt / 86400.0,
+                                         cap == big ? std::string("released")
+                                                    : fmt::format("next step cap {:.4g} d", cap / 86400.0)));
+            }
+        }
+
+        void endTimeStepSolve_(){
             if (solved_in_step_) {
                 solved_in_step_ = false;
                 return;

@@ -2885,6 +2885,7 @@ void Fracture::moveForwardInTime(double dt_last)
         burst_step_ = false;
         area_step_start_ = fp.area;
         volume_step_start_ = fp.volume;
+        rate_step_start_ = well_rate_;
     } else {
         area_step_start_ = -1.0;
         volume_step_start_ = -1.0;

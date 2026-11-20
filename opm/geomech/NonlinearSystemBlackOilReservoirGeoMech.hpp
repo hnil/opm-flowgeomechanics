@@ -596,6 +596,9 @@ namespace Opm
                                  + (round_report.converged ? ": coupling settled"
                                                            : ": still growing"));
                 }
+                if (have_fracture)
+                    this->simulator_.problem().geoMechModel().fractureModel()
+                        .setStepGrowthRounds(this->growth_rounds_this_step_);
                 // Per-step growth guard (opt-in): a fracture that grew more than
                 // allowed within this step propagated on a pressure the flow had
                 // not yet responded to. Raised here, inside the retry scope, so
