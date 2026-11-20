@@ -798,13 +798,14 @@ RegularTrimesh::conservativeRemap(const CellVolumes& source,
                                   const int level,
                                   const vector<double>& target_area,
                                   const vector<int>& target_group,
-                                  const vector<Coord3D>& target_centre)
+                                  const vector<Coord3D>& target_centre,
+                                  const int map1_level)
 //------------------------------------------------------------------------------
 {
     const size_t nt = map2.size();
     vector<double> volume(nt, 0.0);
     vector<double> mapped(source.volume.size(), 0.0);
-    for (const auto& [i, j, w] : createGridToGridMap(map1, map2, level)) {
+    for (const auto& [i, j, w] : createGridToGridMap(map1, map2, level, map1_level)) {
         volume[j] += source.volume[i] * w;
         mapped[i] += w;
     }
@@ -1363,16 +1364,32 @@ RegularTrimesh::refine() const
 
 // ----------------------------------------------------------------------------
 RegularTrimesh
-RegularTrimesh::coarsen(bool strict) const
+RegularTrimesh::coarsen(bool strict, bool majority) const
 // ----------------------------------------------------------------------------
 {
+    const auto is_anchor = [](const CellRef& c) {
+        return (std::abs(c[0]) % 2 == 1 && std::abs(c[1]) % 2 == 1 && c[2] == 0)
+            || (std::abs(c[0]) % 2 == 0 && std::abs(c[1]) % 2 == 0 && c[2] == 1);
+    };
     map<CellRef, CellAttributes> new_cells;
-    for (const auto& e : cellinfo_) {
-        const CellRef& c = e.first;
-        if (!strict || !is_boundary_cell(c, *this))
-            if ((std::abs(c[0]) % 2 == 1 && std::abs(c[1]) % 2 == 1 && c[2] == 0)
-                || (std::abs(c[0]) % 2 == 0 && std::abs(c[1]) % 2 == 0 && c[2] == 1))
+    if (majority) {
+        // a parent exists iff at least two of its four (equal-area) children do
+        map<CellRef, int> count;
+        for (const auto& e : cellinfo_) {
+            const CellRef parent = fine_to_coarse(e.first);
+            ++count[parent];
+            if (is_anchor(e.first) || new_cells.count(parent) == 0)
+                new_cells[parent] = e.second;
+        }
+        for (const auto& [parent, n] : count)
+            if (n < 2)
+                new_cells.erase(parent);
+    } else {
+        for (const auto& e : cellinfo_) {
+            const CellRef& c = e.first;
+            if ((!strict || !is_boundary_cell(c, *this)) && is_anchor(c))
                 new_cells[fine_to_coarse(c)] = e.second;
+        }
     }
 
     return RegularTrimesh {new_cells, origin_, axis1_, axis2_, {edgelen_[0] * 2, edgelen_[1] * 2}};
@@ -1490,7 +1507,8 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
                     const int target_cellcount,
                     const int cellcount_threshold,
                     const int max_iter,
-                    function<bool()> stop_criterion
+                    function<bool()> stop_criterion,
+                    const bool majority_coarsen
                  )
 {
     OPM_TIMEFUNCTION();
@@ -1520,7 +1538,7 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
 
     while (working_mesh.numCells() > cellcount_threshold) {
         last_meshes.push_back(working_mesh);
-        working_mesh = working_mesh.coarsen(true);
+        working_mesh = working_mesh.coarsen(true, majority_coarsen);
         working_mesh.setCellFlags(fixed_on_level(cur_level), 1); // set fixed cells at this level
         working_mesh.removeSawtooths();
         cur_level++;
@@ -1570,7 +1588,7 @@ expand_to_criterion(const RegularTrimesh& mesh, // remember that this is changed
             // expansion is going too slowly, move to coarser level
             last_meshes.push_back(working_mesh);
 
-            working_mesh = working_mesh.coarsen(true);
+            working_mesh = working_mesh.coarsen(true, majority_coarsen);
             working_mesh.setCellFlags(fixed_on_level(cur_level), 1); // set fixed cells at this level
             working_mesh.removeSawtooths();
             cur_level++;
