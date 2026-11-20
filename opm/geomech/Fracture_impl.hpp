@@ -389,9 +389,8 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
                           "reservoir.stress_interpolation and reservoir.interpolate_stress exclude each other");
             }
             frac_centroids.resize(ncf);
-            ElementMapper fracElemMapper(grid_->leafGridView(), Dune::mcmgElementLayout());
-            for (const auto& element : elements(grid_->leafGridView()))
-                frac_centroids[fracElemMapper.index(element)] = element.geometry().center();
+            for (int c = 0; c < mesh_.numCells(); ++c)
+                frac_centroids[c] = mesh_.cellCentroid(c);
         }
         const std::size_t stress_sides_logged = stress_sides_.size();
         const auto centre_of_cell = [&grid](int c) {
@@ -440,9 +439,8 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
             }
             nodal_stress = vem::patchRecoveryNodal6(grid, cell_stress);
             frac_centroids.resize(ncf);
-            ElementMapper fracElemMapper(grid_->leafGridView(), Dune::mcmgElementLayout());
-            for (const auto& element : elements(grid_->leafGridView()))
-                frac_centroids[fracElemMapper.index(element)] = element.geometry().center();
+            for (int c = 0; c < mesh_.numCells(); ++c)
+                frac_centroids[c] = mesh_.cellCentroid(c);
         }
 
         std::vector<int> unique_reservoir_cells_;
@@ -663,9 +661,8 @@ void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_c
         };
 
         fracture_dgh_.resize(ncf);
-        for (auto element : Dune::elements(grid_->leafGridView())) {
-            int i = grid_->leafGridView().indexSet().index(element);
-            double z = element.geometry().center()[2];
+        for (int i = 0; i < mesh_.numCells(); ++i) {
+            double z = mesh_.cellCentroid(i)[2];
             fracture_dgh_[i] = gravity_ * reservoir_.density[i] * z;
         }
         int reportStepIdx = simulator.episodeIndex();
@@ -952,10 +949,9 @@ Fracture::regridTo_(const RegularTrimesh& trimesh, const int level, const Propag
             w[i] = fracture_width_[i][0];
         }
         maps.width_volumes = volumesByCell_(w);
-        ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
-        for (const auto& element : Dune::elements(grid_->leafGridView()))
-            if (w[mapper.index(element)] > 1e-6)
-                maps.open_area_before += element.geometry().volume();
+        for (int c = 0; c < mesh_.numCells(); ++c)
+            if (w[c] > 1e-6)
+                maps.open_area_before += mesh_.cellArea(c);
     }
     maps.before = grid_mesh_map_;
     // false matches maps.before as if it were at level 0

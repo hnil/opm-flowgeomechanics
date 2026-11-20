@@ -913,11 +913,10 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     it.contactChanged = closed_cells_changed;
     const auto& ddm = fractureMatrix();
     if (mech_centres_generation_ != ddm_generation_) {
-        ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
         mech_centres_.assign(3 * numFractureCells(), 0.0);
-        for (const auto& e : elements(grid_->leafGridView())) {
-            const auto c = e.geometry().center();
-            const auto i = 3 * mapper.index(e);
+        for (int cell = 0; cell < mesh_.numCells(); ++cell) {
+            const auto& c = mesh_.cellCentroid(cell);
+            const auto i = 3 * cell;
             mech_centres_[i] = c[0];
             mech_centres_[i + 1] = c[1];
             mech_centres_[i + 2] = c[2];
