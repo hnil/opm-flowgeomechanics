@@ -762,16 +762,21 @@ Fracture::assembleResidual_(const VectorHP& x, const ResVector& mech_rhs, const 
         S[_0][_1].mmv(x[_1], rhs[_0]);
     }
 
-    // Fracture volume storage A_i (w_i - w_i^n)/dt: dominant while a cell opens
-    // fast, where it makes opening cost pressure. Cells grown inside the step
-    // store their full opening; assumes no renumbering within the step.
+    // Fracture volume storage (opt-in solver.fracture_storage_term): the cell mass
+    // balance carries an accumulation term A_i (w_i - w_i^n)/dt that the
+    // steady-state pressure equation omits. It is negligible once the fracture is
+    // established (m3 stored vs hundreds delivered) but dominant exactly while a
+    // cell is opening fast, where it makes opening cost pressure - the physical
+    // form of a drawdown-on-growth feedback, and a damping diagonal for the solve.
+    // Integrate the checkpoint aperture over each current triangle. This keeps
+    // old fluid volume independent of cell renumbering, coarsening and growth;
+    // genuinely new area has zero old volume. The rollback vectors stay intact.
     if (!external_pressure_ && inner_.storageTerm && current_dt_ > 0.0) {
         const std::vector<double> areas = cellAreas();
+        const auto& old_volumes = storage_checkpoint_.volumes(storageTriangles());
         const size_t ncell = std::min(areas.size(), numFractureCells());
         for (size_t i = 0; i < ncell && i < rhs[_1].size() && i < x[_0].size(); ++i) {
-            const double w_prev = (i < fracture_width_prev_.size())
-                ? fracture_width_prev_[i][0] : 0.0;
-            rhs[_1][i][0] -= areas[i] * (x[_0][i][0] - w_prev) / current_dt_;
+            rhs[_1][i][0] -= (areas[i] * x[_0][i][0] - old_volumes.at(i)) / current_dt_;
         }
     }
 
