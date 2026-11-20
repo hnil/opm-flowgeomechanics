@@ -693,7 +693,8 @@ namespace Opm{
                         MechSector::readSpec(sector_file, {size[0], size[1], size[2]}),
                         simulator.vanguard().grid(),
                         simulator.vanguard().cartesianIndexMapper(),
-                        &eclState.getInputGrid());
+                        simulator.vanguard().grid().comm().rank() == 0 ? &eclState.getInputGrid()
+                                                                       : nullptr);
                     geoMechModel_.setMechGrid(*mechGridContext_);
                 }
                 else if(coarsen_file != "none" && !separate){
@@ -804,6 +805,28 @@ namespace Opm{
             const auto* ymodule = retainedBeforeUseFlux("YMODULE");
             const auto* pratio = retainedBeforeUseFlux("PRATIO");
             std::vector<double> ymoduleDeck, pratioDeck;
+            const auto& comm = this->gridView().comm();
+            // Only rank 0 retains the arrays; get_global_double is collective.
+            if (comm.size() > 1 && mechGridContext_ && mechGridContext_->isSector()) {
+                int retained = (ymodule && pratio) ? 1 : 0;
+                comm.broadcast(&retained, 1, 0);
+                if (retained) {
+                    if (comm.rank() == 0) {
+                        ymoduleDeck = *ymodule;
+                        pratioDeck = *pratio;
+                    }
+                    std::size_t n = ymoduleDeck.size();
+                    comm.broadcast(&n, 1, 0);
+                    ymoduleDeck.resize(n);
+                    pratioDeck.resize(n);
+                    comm.broadcast(ymoduleDeck.data(), n, 0);
+                    comm.broadcast(pratioDeck.data(), n, 0);
+                    ymodule = &ymoduleDeck;
+                    pratio = &pratioDeck;
+                } else {
+                    ymodule = nullptr;
+                }
+            }
             if (!ymodule && mechGridContext_ && mechGridContext_->isSector()) {
                 const auto& fp = this->simulator().vanguard().eclState().fieldProps();
                 ymoduleDeck = fp.get_global_double("YMODULE");

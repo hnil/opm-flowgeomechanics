@@ -37,6 +37,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <type_traits>
 #include <vector>
 namespace Opm{
     namespace Elasticity{
@@ -269,6 +270,47 @@ namespace Opm{
             return c;
         }
 
+        template<class GridView>
+        struct NormalsHandle {
+            const GridView& gv;
+            const std::vector<std::vector<double>>& own;
+            std::vector<std::vector<double>>& recv;
+            using DataType = double;
+            bool contains(int, int codim) const { return codim == 3; }
+            bool fixedSize(int, int) const { return false; }
+            template <class E> std::size_t size(const E& e) const
+            { return own[gv.indexSet().index(e)].size(); }
+            template <class B, class E> void gather(B& b, const E& e) const
+            { for (const double x : own[gv.indexSet().index(e)]) b.write(x); }
+            template <class B, class E> void scatter(B& b, const E& e, std::size_t n)
+            {
+                auto& r = recv[gv.indexSet().index(e)];
+                for (std::size_t k = 0; k < n; ++k) { double x; b.read(x); r.push_back(x); }
+            }
+        };
+
+        /// Boundary faces are found from interior cells only, so a vertex shared
+        /// between ranks gets its normals from every rank; all ranks must then
+        /// constrain it alike, as the elimination is symmetric.
+        template<class Grid>
+        void exchangeBoundaryNormals(const Grid& grid,
+            std::vector<std::pair<std::size_t, std::array<double,3>>>& nodeNormals)
+        {
+            const auto gv = grid.leafGridView();
+            using GridView = std::decay_t<decltype(gv)>;
+            std::vector<std::vector<double>> own(gv.size(3)), recv(gv.size(3));
+            for (const auto& [node, n] : nodeNormals) {
+                own[node].insert(own[node].end(), n.begin(), n.end());
+            }
+            NormalsHandle<GridView> handle{gv, own, recv};
+            grid.communicate(handle, Dune::All_All_Interface, Dune::ForwardCommunication);
+            for (std::size_t v = 0; v < recv.size(); ++v) {
+                for (std::size_t k = 0; k + 2 < recv[v].size(); k += 3) {
+                    nodeNormals.emplace_back(v, std::array<double,3>{recv[v][k], recv[v][k+1], recv[v][k+2]});
+                }
+            }
+        }
+
         /// Every node of a boundary face, not just the cell's eight corners: a
         /// cell merged from several others has faces with more nodes than
         /// that, and leaving them free would make the boundary soft.
@@ -311,6 +353,10 @@ namespace Opm{
                     }
                 }
             }
+            const bool parallel = gv.comm().size() > 1;
+            if (parallel) {
+                exchangeBoundaryNormals(grid, nodeNormals);
+            }
             std::stable_sort(nodeNormals.begin(), nodeNormals.end(),
                              [](const auto& a, const auto& b) { return a.first < b.first; });
             constraints.clear();
@@ -320,6 +366,10 @@ namespace Opm{
                 normals.clear();
                 for (; i < nodeNormals.size() && nodeNormals[i].first == node; ++i) {
                     normals.push_back(nodeNormals[i].second);
+                }
+                if (parallel) {
+                    // received normals arrive in rank order; the roller frame must not
+                    std::sort(normals.begin(), normals.end());
                 }
                 if (mode == OuterBoundary::Fixed) {
                     NodeConstraint c;

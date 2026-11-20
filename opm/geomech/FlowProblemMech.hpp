@@ -51,6 +51,7 @@
 #include <opm/simulators/flow/FlowProblemParameters.hpp>
 #include <opm/simulators/linalg/PropertyTree.hpp>
 #include <opm/simulators/utils/MPIPacker.hpp>
+#include <opm/simulators/utils/MPISerializer.hpp>
 #include <opm/simulators/utils/ParallelCommunication.hpp>
 #include <opm/simulators/wells/RuntimePerforation.hpp>
 
@@ -721,6 +722,30 @@ namespace Opm{
 
                     extra_perfs.insert_or_assign(wellName, std::move(extra));
                 }
+            }
+
+            // Each rank finds the fracture cells it holds; every rank's schedule
+            // must get the same connections (ParallelWellInfo compares them).
+            if (this->gridView().comm().size() > 1) {
+                std::map<std::string, std::vector<Connection>> merged;
+                Parallel::MpiSerializer ser(this->gridView().comm());
+                for (int root = 0; root < this->gridView().comm().size(); ++root) {
+                    auto part = extra_perfs;
+                    ser.broadcast(Parallel::RootRank{root}, part);
+                    for (auto& [well, conns] : part) {
+                        auto& all = merged[well];
+                        for (auto& c : conns) {
+                            const bool dup = std::any_of(all.begin(), all.end(), [&c](const auto& o) {
+                                return o.global_index() == c.global_index()
+                                    && o.get_lgr_level() == c.get_lgr_level();
+                            });
+                            if (!dup) {
+                                all.push_back(std::move(c));
+                            }
+                        }
+                    }
+                }
+                extra_perfs = std::move(merged);
             }
 
             if (this->gridView().comm().max(static_cast<int>(!outsideLgr.empty())) > 0) {

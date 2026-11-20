@@ -24,6 +24,11 @@
 
 #include <opm/common/ErrorMacros.hpp>
 #include <opm/grid/CpGrid.hpp>
+#include <opm/input/eclipse/Schedule/Schedule.hpp>
+#include <opm/input/eclipse/Schedule/ScheduleState.hpp>
+#include <opm/input/eclipse/Schedule/Well/Connection.hpp>
+#include <opm/input/eclipse/Schedule/Well/Well.hpp>
+#include <opm/input/eclipse/Schedule/Well/WellConnections.hpp>
 #include <opm/models/utils/basicproperties.hh>
 #include <opm/models/utils/propertysystem.hh>
 
@@ -211,6 +216,62 @@ private:
     }
 };
 
+/// Rank of each mechanics-sector column, chosen with the flow partition.
+class SectorColumns
+{
+public:
+    static void set(std::vector<int> partOfColumn) { instance() = std::move(partOfColumn); }
+    static const std::vector<int>& get() { return instance(); }
+
+private:
+    static std::vector<int>& instance()
+    {
+        static std::vector<int> part;
+        return part;
+    }
+};
+
+/// Wells the sector partition keeps on one rank, captured from the schedule
+/// before the grid is distributed.
+class SectorWells
+{
+public:
+    struct Well
+    {
+        std::vector<std::array<int,2>> ij; // deck columns of its connections, zero-based
+        bool fracturing = false;           // has WSEED at some report step
+    };
+    static void capture(const Schedule& schedule)
+    {
+        auto& wells = instance();
+        wells.clear();
+        for (const auto& well : schedule.getWellsatEnd()) {
+            Well w;
+            for (const auto& c : well.getConnections()) {
+                if (c.get_lgr_level() <= 0) {
+                    w.ij.push_back({c.getI(), c.getJ()});
+                }
+            }
+            for (std::size_t step = 0; step < schedule.size() && !w.fracturing; ++step) {
+                w.fracturing = schedule[step].wseed.has(well.name());
+            }
+            wells.push_back(std::move(w));
+        }
+    }
+    static const std::vector<Well>& get() { return instance(); }
+
+private:
+    static std::vector<Well>& instance()
+    {
+        static std::vector<Well> wells;
+        return wells;
+    }
+};
+
+/// Flow partition for a mechanics sector, by mechanics columns balanced by mechanics
+/// cells; rank 0, serial grid. Defined in MechGridContext.hpp.
+std::vector<int> sectorFlowPartition(const Dune::CpGrid& grid, const std::string& sectorFile);
+
 /// The rank of every flow cell: the rank of the coarse cell it belongs to.
 /// Install with GenericCpGridVanguard::setExternalLoadBalancer so that flow is
 /// partitioned this way from the start.
@@ -282,6 +343,13 @@ void installFlowPartition(int argc, char** argv)
             && argFromArgs(argc, argv, "--mech-sector-file") != "none")) {
         // The mechanics grid is rebuilt from the corner-point input.
         RetainCornerPointInput::enable();
+    }
+    const auto sector = argFromArgs(argc, argv, "--mech-sector-file");
+    if (!sector.empty() && sector != "none") {
+        using Vanguard = GetPropType<TypeTag, Properties::Vanguard>;
+        Vanguard::setExternalLoadBalancer(
+            [sector](const Dune::CpGrid& grid) { return sectorFlowPartition(grid, sector); });
+        return;
     }
     const auto file = argFromArgs(argc, argv, "--mech-coarsen-file");
     if (file.empty() || file == "none") {
