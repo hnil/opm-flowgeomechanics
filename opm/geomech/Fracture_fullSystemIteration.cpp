@@ -496,6 +496,7 @@ Fracture::InnerSolveOptions::read(const PropertyTree& prm)
     o.flowTolerance = prm.get<double>("solver.flow_tolerance", -1.0);
     o.dropCoupling = prm.get<bool>("solver.drop_fluid_mech_linearization", true);
     o.storageTerm = prm.get<bool>("solver.fracture_storage_term", false);
+    o.storageJacobian = prm.get<bool>("solver.storage_jacobian_with_drop", false);
     o.linear = FractureCoupledLinearSolver::Options::read(prm);
     o.dumpMinNonlinIter = prm.get<int>("solver.dump_case_min_nonlin_iter", 0);
     o.writeCoupledSystem = prm.get<bool>("solver.write_coupled_linear_system", false);
@@ -629,6 +630,15 @@ Fracture::assembleFlowRows_(const std::vector<int>& closed_cells)
     assemblePressureAndCouplingAD(closed_cells);
     if (inner_.dropCoupling) {
         *coupling_matrix_ = 0;
+    }
+    // d/dw of the storage term that assembleResidual_ adds to the flow rows
+    if (!external_pressure_ && inner_.storageTerm && current_dt_ > 0.0
+        && (!inner_.dropCoupling || inner_.storageJacobian)) {
+        const std::vector<double> areas = cellAreas();
+        auto& Cs = *coupling_matrix_;
+        for (size_t i = 0; i < std::min(areas.size(), Cs.N()); ++i)
+            if (Cs.exists(i, i))
+                Cs[i][i] += areas[i] / current_dt_;
     }
     // External-pressure mode: pressure rows become p = p_external (identity,
     // zero residual, no width coupling), so the Newton reduces to mechanics
