@@ -40,6 +40,14 @@ typedef std::array<double, 3> Coord3D;
 using Grid = Dune::FoamGrid<2, 3>;
 
 
+// Nodes and triangles in the order createDuneGrid inserts them, with its cell maps.
+struct Triangulation {
+    std::vector<Coord3D> nodes;
+    std::vector<std::array<unsigned int, 3>> triangles;
+    std::vector<std::vector<CellRef>> fsmap;
+    std::map<CellRef, int> boundary_map;
+};
+
 struct CellAttributes {
     CellAttributes()
         : flag(0) {};
@@ -160,6 +168,12 @@ public:
                    const bool add_smoothing_triangles = true,
                    const int cellnum_threshold = 10,
                    const int band_rings = 1) const;
+    Triangulation createTriangulation(const int coarsen_levels = 0,
+                                      const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(),
+                                      const bool add_smoothing_triangles = true,
+                                      const int cellnum_threshold = 10,
+                                      const int band_rings = 1) const;
+    static std::unique_ptr<Grid> createDuneGrid(const Triangulation& tri);
     void writeMatlabTriangulation(std::ostream& out) const;
 
     // ------------- Functions for creating new RegularTrimesh objects -------------

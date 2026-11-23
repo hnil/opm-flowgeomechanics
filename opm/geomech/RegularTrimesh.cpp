@@ -889,29 +889,21 @@ RegularTrimesh::ref2index_(const vector<array<NodeRef, 3>>& vec) const
 }
 
 //------------------------------------------------------------------------------
-std::tuple<std::unique_ptr<Grid>, std::vector<std::vector<CellRef>>, std::map<CellRef, int>>
-RegularTrimesh::createDuneGrid(const int coarsen_levels,
-                               const vector<CellRef>& fixed_cells,
-                               const bool add_smoothing_triangles,
-                               const int cellnum_threshold,
-                               const int band_rings) const
+Triangulation
+RegularTrimesh::createTriangulation(const int coarsen_levels,
+                                    const vector<CellRef>& fixed_cells,
+                                    const bool add_smoothing_triangles,
+                                    const int cellnum_threshold,
+                                    const int band_rings) const
 //------------------------------------------------------------------------------
 {
-    Dune::GridFactory<Grid> factory;
-    // define points
-    for (const auto& node : nodeCoords())
-        factory.insertVertex(Dune::FieldVector<double, 3> {node[0], node[1], node[2]});
-
-    // define triangles
+    Triangulation result;
+    result.nodes = nodeCoords();
 
     auto tmp = coarsen_levels > 0 ? getMultiresTriangles(fixed_cells, coarsen_levels, cellnum_threshold, band_rings)
                                   : getTriangles();
-    const auto& triangles = ref2index_(tmp.first); // vector<array<uint, 3>>
+    result.triangles = ref2index_(tmp.first);
     auto& fsmap = tmp.second;
-
-    for (const auto& tri : triangles)
-        factory.insertElement(Dune::GeometryTypes::simplex(2),
-                              vector<unsigned int> {tri[0], tri[1], tri[2]});
 
     // create map from trimesh boundary cells to Dune grid cells
     std::map<CellRef, int> boundary_map, fsmap_inv;
@@ -924,8 +916,7 @@ RegularTrimesh::createDuneGrid(const int coarsen_levels,
     if (add_smoothing_triangles) {
         const auto smoothing_triangles = boundary_smoothing_triangles_();
         for (const auto& tri : smoothing_triangles) {
-            factory.insertElement(Dune::GeometryTypes::simplex(2),
-                                  vector<unsigned int> {tri.first[0], tri.first[1], tri.first[2]});
+            result.triangles.push_back({tri.first[0], tri.first[1], tri.first[2]});
             // make the associated boundary cells in the TriMesh map to the
             // smoothing triangle in the Dune grid
             boundary_map[tri.second[0]] = fsmap.size();
@@ -933,7 +924,36 @@ RegularTrimesh::createDuneGrid(const int coarsen_levels,
             fsmap.push_back(vector<CellRef> {tri.second[0], tri.second[1]});
         }
     }
-    return make_tuple(factory.createGrid(), fsmap, boundary_map);
+    result.fsmap = std::move(fsmap);
+    result.boundary_map = std::move(boundary_map);
+    return result;
+}
+
+//------------------------------------------------------------------------------
+std::unique_ptr<Grid>
+RegularTrimesh::createDuneGrid(const Triangulation& tri)
+//------------------------------------------------------------------------------
+{
+    Dune::GridFactory<Grid> factory;
+    for (const auto& node : tri.nodes)
+        factory.insertVertex(Dune::FieldVector<double, 3> {node[0], node[1], node[2]});
+    for (const auto& t : tri.triangles)
+        factory.insertElement(Dune::GeometryTypes::simplex(2), vector<unsigned int> {t[0], t[1], t[2]});
+    return factory.createGrid();
+}
+
+//------------------------------------------------------------------------------
+std::tuple<std::unique_ptr<Grid>, std::vector<std::vector<CellRef>>, std::map<CellRef, int>>
+RegularTrimesh::createDuneGrid(const int coarsen_levels,
+                               const vector<CellRef>& fixed_cells,
+                               const bool add_smoothing_triangles,
+                               const int cellnum_threshold,
+                               const int band_rings) const
+//------------------------------------------------------------------------------
+{
+    auto tri = createTriangulation(coarsen_levels, fixed_cells, add_smoothing_triangles, cellnum_threshold, band_rings);
+    auto grid = createDuneGrid(tri);
+    return make_tuple(std::move(grid), std::move(tri.fsmap), std::move(tri.boundary_map));
 }
 
 // ----------------------------------------------------------------------------

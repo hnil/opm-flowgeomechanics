@@ -609,6 +609,11 @@ add_executable(test_vertex_joined_pieces tests/test_vertex_joined_pieces.cpp)
 target_link_libraries(test_vertex_joined_pieces PRIVATE opmflowgeomechanics)
 add_test(NAME Unit.VertexJoinedPieces COMMAND $<TARGET_FILE:test_vertex_joined_pieces>)
 set_tests_properties(Unit.VertexJoinedPieces PROPERTIES TIMEOUT 30 LABELS "physics;unit")
+# The trimesh-built fracture mesh must match the FoamGrid-built one bitwise.
+add_executable(test_fracture_mesh tests/test_fracture_mesh.cpp)
+target_link_libraries(test_fracture_mesh PRIVATE opmflowgeomechanics)
+add_test(NAME Unit.FractureMesh COMMAND $<TARGET_FILE:test_fracture_mesh>)
+set_tests_properties(Unit.FractureMesh PROPERTIES TIMEOUT 30 LABELS "unit")
 
 # Interpolated stress must keep cell values and stop at faults.
 add_executable(test_centre_stress tests/test_centre_stress.cpp)

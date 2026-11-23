@@ -105,4 +105,9 @@ private:
     Arrays a_;
 };
 
+// Same numbering and floating-point operations as buildFractureMesh on a FoamGrid made from these
+// vertices and triangles (insertion order), so the two agree bitwise.
+FractureMesh buildFractureMesh(const std::vector<std::array<double, 3>>& nodes,
+                               const std::vector<std::array<unsigned int, 3>>& triangles);
+
 } // namespace Opm
