@@ -125,56 +125,6 @@ public:
     virtual void solve(Vector& x, const Vector& rhs) const = 0;
 };
 
-// Dense LU (or inverse) of the mechanics block B = s * (diag(alpha) A + diag(beta)),
-// kept across Newton iterations and fracture solves while A is unchanged. Rows whose
-// coefficients moved since the factorisation are added as a Woodbury update; rows that
-// moved by less than tol are ignored, so the result is a preconditioner, exact when tol=0.
-class DenseMechFactor : public MechBlockSolver
-{
-public:
-    struct Options
-    {
-        bool inverse{true};
-        double tol{0.01};
-        double maxRankFraction{0.05};
-        int maxRankMin{32};
-        // refactor once a Krylov solve needs more iterations; 0: refactor when the slots are full
-        int refactorIterations{10};
-    };
-    explicit DenseMechFactor(const Options& opt) : opt_(opt) {}
-    // B is the current (scaled) block; returns true if it was refactored.
-    bool update(const FMatrix& B, double scale, const MechRows& rows);
-    void solve(Vector& x, const Vector& rhs) const override;
-    int rank() const { return static_cast<int>(slotRow_.size()); }
-    // the next update refactors
-    void invalidate() { stale_ = true; }
-
-private:
-    void factor(const FMatrix& B, double scale, const MechRows& rows);
-    bool addRows(const std::vector<int>& rows);
-    bool factorCapacitance(const MechRows& rows);
-
-    Options opt_;
-    int n_{0};
-    std::uint64_t generation_{0};
-    double s0_{1.0};
-    double ratio_{1.0}; // s0 / s
-    std::vector<double> alpha0_, beta0_;
-    std::vector<double> f_; // row-major B0: LU of its transpose, or B0^{-1}
-    std::vector<int> piv_;
-    // Woodbury: one slot per updated row j, Z(:,k) = B0^{-1} e_j, Ar(:,k) = A(j,:)^T
-    std::vector<int> slotOf_;
-    std::vector<int> slotRow_;
-    std::vector<double> z_, ar_;
-    std::vector<double> g_; // G(k,l) = A(row_k,:) z_l, column-major, leading dimension maxRank_
-    int maxRank_{0};
-    bool stale_{false};
-    std::vector<double> va_, vb_;
-    std::vector<double> cap_;
-    std::vector<int> capPiv_;
-    mutable std::vector<double> y_, t_;
-};
-
 // ILU(0) of the mechanics block restricted to cell pairs closer than radius times the
 // typical cell spacing. Cheap enough to refactor at every Newton iteration.
 class NearFieldMechILU : public MechBlockSolver

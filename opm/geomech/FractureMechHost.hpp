@@ -243,9 +243,6 @@ inline long peakRssMb()
                        << " (total " << total_stats.ladder_rescues << ")"
                        << ", mech_factorizations=" << last_stats.mech_factorizations
                        << " (total " << total_stats.mech_factorizations << ")"
-                       << ", mech_rank_updates=" << last_stats.mech_rank_updates
-                       << " (total " << total_stats.mech_rank_updates << ")"
-                       << ", mech_rank_sum=" << last_stats.mech_rank_sum
                        << ", mech_factor_s=" << last_stats.mech_factor_seconds
                        << " (total " << total_stats.mech_factor_seconds << ")"
                        << ", krylov_s=" << last_stats.linear_solve_seconds

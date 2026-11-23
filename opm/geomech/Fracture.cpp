@@ -1255,7 +1255,7 @@ double Fracture::applyCouplingUpdate(double current,
 std::vector<RuntimePerforation>
 Fracture::applyVectorCouplingUpdate(const std::vector<RuntimePerforation>& target)
 {
-    // Vector Aitken / depth-1 Anderson acceleration of the per-cell CTF fixed
+    // Depth-1 Anderson acceleration of the per-cell CTF fixed
     // point g(x) (opt-in via solver.wi_vector_acceleration). The legacy path
     // (wellIndicesAvrg) is the damped Picard x_k = (g_k + d*x_{k-1})/(1+d);
     // here the relaxation/mixing coefficient is computed from the residual
@@ -1272,6 +1272,9 @@ Fracture::applyVectorCouplingUpdate(const std::vector<RuntimePerforation>& targe
     const double acceptance = prm_.get<double>("solver.coupling_acceptance_factor", 1.0);
     const bool fallback_legacy = prm_.get<bool>("solver.coupling_fallback_legacy", true);
     const int verbosity = prm_.get<int>("solver.verbosity", 0);
+    if (mode != "anderson") {
+        OPM_THROW(std::invalid_argument, "solver.wi_vector_acceleration must be none or anderson, got " + mode);
+    }
 
     auto clamp = [](const double v, const double lo, const double hi)
     { return std::max(lo, std::min(v, hi)); };
@@ -1298,7 +1301,7 @@ Fracture::applyVectorCouplingUpdate(const std::vector<RuntimePerforation>& targe
     // residual r_k = g_k - x_{k-1} on cells with history; brand-new cells (the
     // fracture grew) have no history and take the target directly below.
     std::map<int, double> resid;
-    double r_norm2 = 0.0, dr_norm2 = 0.0, r_dot_dr = 0.0, rprev_dot_dr = 0.0;
+    double r_norm2 = 0.0, dr_norm2 = 0.0, r_dot_dr = 0.0;
     for (const auto& [cell, g] : tgt) {
         const auto it = st.prev_mixed.find(cell);
         if (it == st.prev_mixed.end()) {
@@ -1313,7 +1316,6 @@ Fracture::applyVectorCouplingUpdate(const std::vector<RuntimePerforation>& targe
                 const double dr = r - rp->second;
                 dr_norm2 += dr * dr;
                 r_dot_dr += r * dr;
-                rprev_dot_dr += rp->second * dr;
             }
         }
     }
@@ -1322,27 +1324,14 @@ Fracture::applyVectorCouplingUpdate(const std::vector<RuntimePerforation>& targe
     bool accelerated = false;
     std::string detail;
     if (st.has_prev_residual && dr_norm2 > 1e-28) {
-        if (mode == "anderson") {
-            const double alpha = clamp(-r_dot_dr / dr_norm2, alpha_min, alpha_max);
-            for (const auto& [cell, g] : tgt) {
-                const auto gp = st.prev_target.find(cell);
-                const double gprev = (gp != st.prev_target.end()) ? gp->second : g;
-                mixed[cell] = std::max(0.0, alpha * gprev + (1.0 - alpha) * g);
-            }
-            accelerated = true;
-            detail = "alpha=" + std::to_string(alpha);
-        } else { // aitken
-            const double omega = clamp(-st.omega * rprev_dot_dr / dr_norm2, relax_min, relax_max);
-            for (const auto& [cell, g] : tgt) {
-                const auto xp = st.prev_mixed.find(cell);
-                mixed[cell] = (xp != st.prev_mixed.end())
-                    ? std::max(0.0, xp->second + omega * resid[cell])
-                    : g;
-            }
-            st.omega = omega;
-            accelerated = true;
-            detail = "omega=" + std::to_string(omega);
+        const double alpha = clamp(-r_dot_dr / dr_norm2, alpha_min, alpha_max);
+        for (const auto& [cell, g] : tgt) {
+            const auto gp = st.prev_target.find(cell);
+            const double gprev = (gp != st.prev_target.end()) ? gp->second : g;
+            mixed[cell] = std::max(0.0, alpha * gprev + (1.0 - alpha) * g);
         }
+        accelerated = true;
+        detail = "alpha=" + std::to_string(alpha);
         if (acceptance > 0.0 && fallback_legacy) {
             double cand2 = 0.0;
             for (const auto& [cell, r] : resid) {
@@ -2186,9 +2175,6 @@ Fracture::solveOnCurrentGrid_(const PropagationOptions& opt)
         coupledSolver_.setOptions(inner_.linear);
         while (!(converged = fullSystemIteration(opt.tol, iter)) && iter++ < opt.maxIter) {
         }
-        if (inner_.isFb && inner_.fbNoProjection)
-            for (auto& w : fracture_width_)
-                w[0] = std::max(0.0, w[0]);
     }
     return {converged, iter};
 }

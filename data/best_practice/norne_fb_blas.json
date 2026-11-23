@@ -95,8 +95,6 @@
    "max_closed_cell_toggle_fraction": 1.0,
    "__4_fracture_flow_mech_coupling": "--- coupling block C inside the fracture system ---",
    "drop_fluid_mech_linearization": true,
-   "drop_tol_h": 100.0,
-   "drop_tol_p": 1.0,
    "use_ad_pressure_assembly": true,
    "__5_state_guards": "--- robustness guards on the nonlinear state ---",
    "guard_state": true,

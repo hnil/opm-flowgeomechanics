@@ -230,8 +230,6 @@ struct WellInfo
     int ladder_rescues = 0;
     // Dense mechanics factorisations, Woodbury-updated iterations and their time split.
     int mech_factorizations = 0;
-    int mech_rank_updates = 0;
-    long mech_rank_sum = 0;
     double mech_factor_seconds = 0.0;
     double linear_solve_seconds = 0.0;
     double precond_apply_seconds = 0.0;
@@ -248,8 +246,6 @@ struct WellInfo
       linear_solve_failures += other.linear_solve_failures;
       ladder_rescues += other.ladder_rescues;
       mech_factorizations += other.mech_factorizations;
-      mech_rank_updates += other.mech_rank_updates;
-      mech_rank_sum += other.mech_rank_sum;
       mech_factor_seconds += other.mech_factor_seconds;
       linear_solve_seconds += other.linear_solve_seconds;
       precond_apply_seconds += other.precond_apply_seconds;
@@ -763,7 +759,6 @@ private:
         bool fbAcceptConverged{false};
         bool fbNonmonotone{false};
         bool fbClampBeforeLineSearch{false};
-        bool fbNoProjection{false};
         double fbPhiAbsTol{0.0}; // [Pa]; |phi| below it passes regardless of the cell's scale
         bool fbFlowMerit{false};
         bool fbTrace{false};

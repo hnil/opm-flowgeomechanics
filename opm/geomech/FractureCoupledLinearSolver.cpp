@@ -161,26 +161,13 @@ FractureCoupledLinearSolver::Options::read(const PropertyTree& prm)
     o.restart = prm.get<int>("solver.linsolver.restart", 100);
     o.gmresFallback = prm.get<bool>("solver.linsolver.fallback_gmres_on_breakdown", true);
     o.blasOperator = prm.get<bool>("solver.linsolver.blas_operator", false);
-    const auto reuse = o.precond.get<std::string>("mech_solver.reuse", "none");
-    if (reuse != "none" && reuse != "rank_update") {
-        OPM_THROW(std::runtime_error, "Unknown fracture mech_solver.reuse: " + reuse);
+    if (o.precond.get<std::string>("mech_solver.reuse", "none") != "none") {
+        OPM_THROW(std::runtime_error, "fracture mech_solver.reuse is no longer supported");
     }
-    o.rankUpdate = (reuse == "rank_update") && !o.precond.get<bool>("diag_mech");
-    o.mechFactor.inverse = o.precond.get<std::string>("mech_solver.type", "dune_lu") == "lapack_inv";
-    o.mechFactor.tol = o.precond.get<double>("mech_solver.rank_update_tol", o.mechFactor.tol);
-    o.mechFactor.maxRankFraction
-        = o.precond.get<double>("mech_solver.rank_update_max_fraction", o.mechFactor.maxRankFraction);
-    o.mechFactor.maxRankMin = o.precond.get<int>("mech_solver.rank_update_max_min", o.mechFactor.maxRankMin);
-    o.mechFactor.refactorIterations
-        = o.precond.get<int>("mech_solver.rank_update_refactor_iterations", o.mechFactor.refactorIterations);
     o.nearField = o.precond.get<std::string>("mech_solver.type", "dune_lu") == "nearfield_ilu"
         && !o.precond.get<bool>("diag_mech");
     o.nearFieldRadius = o.precond.get<double>("mech_solver.nearfield_radius", o.nearFieldRadius);
-    if (o.nearField && o.rankUpdate)
-        OPM_THROW(std::invalid_argument, "mech_solver: nearfield_ilu and reuse=rank_update exclude each other");
     o.fbSplit = o.precond.get<std::string>("mech_solver.type", "dune_lu") == "fb_split";
-    if (o.fbSplit && o.rankUpdate)
-        OPM_THROW(std::invalid_argument, "mech_solver: fb_split and reuse=rank_update exclude each other");
     return o;
 }
 
@@ -283,20 +270,6 @@ FractureCoupledLinearSolver::solve(VectorHP& rhs,
         stats.mech_factor_seconds += since(t0);
         ++stats.mech_factorizations;
         mech = nearField_.get();
-    }
-    if (opt_.rankUpdate && it.mechRows) {
-        if (!mechFactor_)
-            mechFactor_ = std::make_unique<DenseMechFactor>(opt_.mechFactor);
-        const auto t0 = Clock::now();
-        const bool refactored = mechFactor_->update(S[_0][_0], scaleMech_ * scaleMech_, *it.mechRows);
-        stats.mech_factor_seconds += since(t0);
-        if (refactored) {
-            ++stats.mech_factorizations;
-        } else if (mechFactor_->rank() > 0) {
-            ++stats.mech_rank_updates;
-            stats.mech_rank_sum += mechFactor_->rank();
-        }
-        mech = mechFactor_.get();
     }
     std::shared_ptr<const DdmInverse> ddm;
     if (opt_.fbSplit && it.mechRows && it.mechRows->ddm) {
@@ -436,9 +409,6 @@ FractureCoupledLinearSolver::solve(VectorHP& rhs,
     }
 
     stats.linear_solve_seconds += since(krylov0);
-    if (mechFactor_ && opt_.mechFactor.refactorIterations > 0
-        && (!iores.converged || iores.iterations > opt_.mechFactor.refactorIterations))
-        mechFactor_->invalidate();
     stats.precond_apply_seconds += precond_->applySeconds() - apply0;
 
     if (!iores.converged) {

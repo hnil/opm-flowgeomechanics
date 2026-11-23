@@ -487,7 +487,6 @@ Fracture::InnerSolveOptions::read(const PropertyTree& prm)
             o.fbAcceptConverged = prm.get<bool>("solver.fb_line_search_accept_converged", false);
             o.fbNonmonotone = prm.get<bool>("solver.fb_line_search_nonmonotone", false);
             o.fbClampBeforeLineSearch = prm.get<bool>("solver.fb_clamp_before_line_search", false);
-            o.fbNoProjection = prm.get<bool>("solver.fb_no_projection", false);
             o.fbPhiAbsTol = prm.get<double>("solver.fb_phi_abs_tol", 0.0);
             o.fbFlowMerit = prm.get<bool>("solver.fb_line_search_flow_merit", false);
         }
@@ -996,8 +995,7 @@ Fracture::limitStep_(const VectorHP& x, VectorHP& dx, const ResVector& mech_rhs,
         ResVector w_t(n), p_t(n);
         while (sstep >= s_min) {
             for (size_t j = 0; j < n; ++j)
-                w_t[j] = opt.fbNoProjection ? x[_0][j][0] + sstep * dx[_0][j][0]
-                                            : std::max(0.0, x[_0][j][0] + sstep * dx[_0][j][0]);
+                w_t[j] = std::max(0.0, x[_0][j][0] + sstep * dx[_0][j][0]);
             for (size_t i = 0; i < n; ++i)
                 p_t[i] = x[_1][i][0] + sstep * dx[_1][i][0];
             const ResVector lam = contactForce(Aorig, w_t, p_t, mech_rhs);
@@ -1048,9 +1046,8 @@ Fracture::flowMeritAt_(const VectorHP& xt, const std::vector<int>& closed_cells,
 {
     // sum of squared flow residuals at xt over tol_flow^2; reassembles the flow rows at xt
     fracture_width_ = xt[_0];
-    if (!inner_.fbNoProjection)
-        for (auto& w : fracture_width_)
-            w[0] = std::max(0.0, w[0]);
+    for (auto& w : fracture_width_)
+        w[0] = std::max(0.0, w[0]);
     fracture_pressure_ = xt[_1];
     updateFlowCoefficients_();
     assembleFlowRows_(closed_cells);
@@ -1080,10 +1077,8 @@ Fracture::applyUpdate_(VectorHP& x, const VectorHP& dx)
         OpmLog::debug(fmt::format("after: dx: {} {}", dx[_0].infinity_norm(), dx[_1].infinity_norm()));
     }
     fracture_width_ = x[_0];
-    // FB keeps w >= 0 through phi; clipping a Newton iterate breaks the Newton step
-    if (!(inner_.isFb && inner_.fbNoProjection))
-        for (size_t i = 0; i != fracture_width_.size(); ++i)
-            fracture_width_[i][0] = std::max(0.0, fracture_width_[i][0]);
+    for (size_t i = 0; i != fracture_width_.size(); ++i)
+        fracture_width_[i][0] = std::max(0.0, fracture_width_[i][0]);
     fracture_pressure_ = x[_1];
 }
 
