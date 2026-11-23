@@ -133,11 +133,14 @@ endmacro (opm-flowgeomechanics_config_hook)
 # link the module library against its prerequisites; this hook runs
 # right after OpmLibMain has created the opmflowgeomechanics target
 macro (opm-flowgeomechanics_prereqs_hook)
+	find_package(ZLIB REQUIRED)
 	target_link_libraries(opmflowgeomechanics
 		PUBLIC
 			opmsimulators
 			Dune::FoamGrid
 			CGAL::CGAL GMP::gmp GMP::gmpxx
+		PRIVATE
+			ZLIB::ZLIB
 	)
 
 	if(HAVE_HYPRE)
@@ -611,7 +614,7 @@ add_test(NAME Unit.VertexJoinedPieces COMMAND $<TARGET_FILE:test_vertex_joined_p
 set_tests_properties(Unit.VertexJoinedPieces PROPERTIES TIMEOUT 30 LABELS "physics;unit")
 # The trimesh-built fracture mesh must match the FoamGrid-built one bitwise.
 add_executable(test_fracture_mesh tests/test_fracture_mesh.cpp)
-target_link_libraries(test_fracture_mesh PRIVATE opmflowgeomechanics)
+target_link_libraries(test_fracture_mesh PRIVATE opmflowgeomechanics ZLIB::ZLIB)
 add_test(NAME Unit.FractureMesh COMMAND $<TARGET_FILE:test_fracture_mesh>)
 set_tests_properties(Unit.FractureMesh PROPERTIES TIMEOUT 30 LABELS "unit")
 
