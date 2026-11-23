@@ -934,14 +934,15 @@ Fracture::regridTo_(const RegularTrimesh& trimesh, const int level, const Propag
 {
     const auto& cpgrid = simulator.vanguard().grid();
     *trimesh_ = trimesh;
-    // well sources at this level; their cells are kept intact by createDuneGrid
+    // well sources at this level; their cells are kept intact by createTriangulation
     std::vector<CellRef> wsources = well_source_cellref_;
     for (auto& cell : wsources)
         cell = RegularTrimesh::fine_to_coarse(cell, level);
 
-    auto [grid, fsmap, bmap] = trimesh_->createDuneGrid(opt.maxNumCoarsening, wsources,
-                                                        opt.smoothBoundary, opt.numcellThreshold,
-                                                        opt.bandRings);
+    auto tri = trimesh_->createTriangulation(opt.maxNumCoarsening, wsources, opt.smoothBoundary,
+                                             opt.numcellThreshold, opt.bandRings);
+    auto& fsmap = tri.fsmap;
+    auto& bmap = tri.boundary_map;
     RegridMaps maps;
     if (opt.majorityCoarsen && opt.remapSolution) {
         std::vector<double> w(fracture_width_.size());
@@ -960,7 +961,7 @@ Fracture::regridTo_(const RegularTrimesh& trimesh, const int level, const Propag
     grid_mesh_level_ = level;
     grid_fixed_cells_ = wsources;
     grid_tri_args_ = {opt.maxNumCoarsening, opt.smoothBoundary, opt.numcellThreshold, opt.bandRings};
-    setFractureGrid(std::move(grid));
+    setFractureGrid(tri);
 
     std::map<CellRef, size_t> fsmap_inv;
     for (int i = 0; i != fsmap.size(); ++i)

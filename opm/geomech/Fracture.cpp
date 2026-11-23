@@ -166,13 +166,13 @@ Fracture::init(const std::string& well,
         for (const auto& cell : well_source_cellref_)
             well_source_.push_back(trimesh_->linearCellIndex(cell));
 
-        auto [grid, fsmap, bmap] = trimesh_->createDuneGrid(1, well_source_cellref_);
-        grid_mesh_map_ = fsmap;
+        const auto tri = trimesh_->createTriangulation(1, well_source_cellref_);
+        grid_mesh_map_ = tri.fsmap;
         grid_fixed_cells_ = well_source_cellref_;
         grid_mesh_level_ = 0;
         grid_tri_args_ = {};
 
-        setFractureGrid(std::move(grid)); // create the physical grid from trimesh
+        setFractureGrid(tri); // create the physical grid from trimesh
     }
 
 
@@ -437,6 +437,20 @@ Fracture::setFractureGrid(std::unique_ptr<Fracture::Grid> gptr)
     assert(gptr != nullptr);
     grid_ = std::move(gptr);
     mesh_ = buildFractureMesh(*grid_);
+    finishGridChange_();
+}
+
+void
+Fracture::setFractureGrid(const Triangulation& tri)
+{
+    grid_ = RegularTrimesh::createDuneGrid(tri); // for VTK output and removeCells only
+    mesh_ = buildFractureMesh(tri.nodes, tri.triangles);
+    finishGridChange_();
+}
+
+void
+Fracture::finishGridChange_()
+{
     // compute the cell normals
     updateCellNormals();
 
@@ -2847,16 +2861,16 @@ void Fracture::resetFracture()
     bool smooth_boundary = prm_.get<bool>("solver.smooth_boundary", false);
     const int band_rings = prm_.get<int>("solver.band_rings", 1);
     std::vector<CellRef> wsources = well_source_cellref_prev_;
-    auto [grid, fsmap, bmap] =
-        trimesh_->createDuneGrid(MAX_NUM_COARSENING, wsources, smooth_boundary, numcell_threshold, band_rings);
-    grid_mesh_map_ = fsmap;
+    const auto tri =
+        trimesh_->createTriangulation(MAX_NUM_COARSENING, wsources, smooth_boundary, numcell_threshold, band_rings);
+    grid_mesh_map_ = tri.fsmap;
     grid_fixed_cells_ = wsources;
     grid_mesh_level_ = 0;
     grid_tri_args_ = {MAX_NUM_COARSENING, smooth_boundary, numcell_threshold, band_rings};
     // Restore grid and cell normals (setFractureGrid clears reservoir_map_.cells;
     // they will be repopulated by FractureModel::resetFractures via
     // updateFractureReservoirCells + initReservoirProperties).
-    setFractureGrid(std::move(grid));
+    setFractureGrid(tri);
     // Restore well source indices from checkpoint
     well_source_cellref_ = well_source_cellref_prev_;
     well_source_         = well_source_prev_;
@@ -2882,14 +2896,14 @@ void Fracture::rebuildGridForLoad(const std::vector<std::vector<CellRef>>& saved
     const bool smooth_boundary = prm_.get<bool>("solver.smooth_boundary", false);
     const int band_rings = prm_.get<int>("solver.band_rings", 1);
     grid_tri_args_ = {max_coarsening, smooth_boundary, numcell_threshold, band_rings};
-    auto built = trimesh_->createDuneGrid(max_coarsening, grid_fixed_cells_, smooth_boundary, numcell_threshold,
-                                          band_rings);
-    if (std::get<1>(built) != saved_map) {
+    auto built = trimesh_->createTriangulation(max_coarsening, grid_fixed_cells_, smooth_boundary,
+                                               numcell_threshold, band_rings);
+    if (built.fsmap != saved_map) {
         // a fracture that has not grown still has its seed grid, see init()
         grid_tri_args_ = {};
-        built = trimesh_->createDuneGrid(1, grid_fixed_cells_);
+        built = trimesh_->createTriangulation(1, grid_fixed_cells_);
     }
-    if (std::get<1>(built) != saved_map) {
+    if (built.fsmap != saved_map) {
         OPM_THROW(std::runtime_error,
                   "Fracture " + name() + ": the saved mesh gives another grid with this run's "
                   "solver.max_num_coarsening, solver.numcell_threshold, solver.band_rings or solver.smooth_boundary; "
@@ -2897,7 +2911,7 @@ void Fracture::rebuildGridForLoad(const std::vector<std::vector<CellRef>>& saved
     }
     grid_mesh_map_ = saved_map;
     grid_mesh_level_ = 0;
-    setFractureGrid(std::move(std::get<0>(built)));
+    setFractureGrid(built);
 }
 
 // closed_cells_ and the toggle/FB arrays are indexed by the old grid; with

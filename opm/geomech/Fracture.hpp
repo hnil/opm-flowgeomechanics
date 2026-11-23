@@ -339,6 +339,8 @@ public:
                SolveMode mode = SolveMode::Full);
     FractureProperties calculateFractureProperties() const;
     void setFractureGrid(std::unique_ptr<Fracture::Grid> gptr);
+    void setFractureGrid(const Triangulation& tri);
+    void finishGridChange_();
     std::vector<RuntimePerforation> wellIndices() const;
     //! well indices as of the last converged solve; empty before the first one
     const std::vector<RuntimePerforation>& convergedWellIndices() const { return converged_well_indices_; }
