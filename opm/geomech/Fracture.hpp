@@ -29,6 +29,7 @@
 #include <opm/geomech/CentreStressInterpolation.hpp>
 #include <opm/geomech/FractureConnectionId.hpp>
 #include <opm/geomech/FractureMesh.hpp>
+#include <opm/geomech/FractureVtkWriter.hpp>
 #include <algorithm>
 #include <limits>
 #include <optional>
@@ -36,11 +37,6 @@
 #include <unordered_map>
 
 #include <dune/common/exceptions.hh>
-#include <dune/foamgrid/foamgrid.hh>
-#include <dune/grid/common/mcmgmapper.hh> // mapper class
-#include <dune/grid/io/file/vtk.hh>
-#include <dune/grid/io/file/vtk/vtkwriter.hh>
-#include <dune/grid/utility/persistentcontainer.hh>
 #include <opm/grid/CpGrid.hpp>
 #include <opm/input/eclipse/Units/Units.hpp>
 #include "GeometryHelpers.hpp"
@@ -71,7 +67,6 @@
 #include <opm/geomech/FractureCoupledLinearSolver.hpp>
 #include <opm/geomech/FractureMechanicsPreconditioner.hpp>
 // for linear solve
-#include <opm/models/io/vtkmultiwriter.hh>
 #include <opm/models/utils/propertysystem.hh>
 #include <opm/simulators/linalg/FlexibleSolver.hpp>
 #include <opm/simulators/linalg/PropertyTree.hpp>
@@ -262,7 +257,6 @@ class Fracture
 {
 public:
     using IndexTraits = Opm::BlackOilDefaultFluidSystemIndices;
-    using Grid = Dune::FoamGrid<2, 3>;
     using Point3D = Dune::FieldVector<double, 3>;
     using Vector = Dune::BlockVector<Dune::FieldVector<double, 1>>;
     using Matrix = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>;
@@ -338,7 +332,6 @@ public:
                const Simulator& simulator,
                SolveMode mode = SolveMode::Full);
     FractureProperties calculateFractureProperties() const;
-    void setFractureGrid(std::unique_ptr<Fracture::Grid> gptr);
     void setFractureGrid(const Triangulation& tri);
     void finishGridChange_();
     std::vector<RuntimePerforation> wellIndices() const;
@@ -810,26 +803,25 @@ private:
 
     std::unique_ptr<Opm::RegularTrimesh> trimesh_; // experimental, implicitly defined grids
 
-    std::vector<std::vector<CellRef>> grid_mesh_map_; // index mapping from cells in grid_ to trimesh_.
+    std::vector<std::vector<CellRef>> grid_mesh_map_; // index mapping from cells in mesh_ to trimesh_.
     int grid_mesh_level_ = 0; // level of grid_mesh_map_ refs; nonzero only inside a propagation
                                                       // NB: in general many-to-many
-    std::vector<CellRef> grid_fixed_cells_; // cells kept fine when grid_ was built from trimesh_
+    std::vector<CellRef> grid_fixed_cells_; // cells kept fine when mesh_ was built from trimesh_
     struct TriangulationArgs {
         int coarsen_levels = 1;
         bool smooth = true;
         int cellnum_threshold = 10;
         int band_rings = 1;
     };
-    TriangulationArgs grid_tri_args_; // with grid_fixed_cells_: the createDuneGrid call grid_ came from
+    TriangulationArgs grid_tri_args_; // with grid_fixed_cells_: the createTriangulation call mesh_ came from
     std::optional<std::map<CellRef, int>> removal_boundary_map_; // boundary map of the last removeCells
     std::set<CellRef> removed_cells_; // trimesh_ cells dropped by removeCells since the last regrid
     bool reset_pending_ = false; // set by resetFracture, consumed by finishReset
-    bool grid_changed_since_checkpoint_ = false; // grid_ changed since the checkpoint: reset must rebuild perfinj_, htrans_, pressure_matrix_
-    std::unique_ptr<Grid> grid_;
-    FractureMesh mesh_; // rebuilt whenever grid_ changes
+    bool grid_changed_since_checkpoint_ = false; // mesh_ changed since the checkpoint: reset must rebuild perfinj_, htrans_, pressure_matrix_
+    FractureMesh mesh_; // rebuilt from trimesh_ at every regrid
     // grid definition in case of step fails
     std::unique_ptr<Opm::RegularTrimesh> trimesh_prev_; // experimental, implicitly defined grids
-    std::vector<std::vector<CellRef>> grid_mesh_map_prev_; // index mapping from cells in grid_ to trimesh_.
+    std::vector<std::vector<CellRef>> grid_mesh_map_prev_; // index mapping from cells in mesh_ to trimesh_.
                                                       // NB: in general many-to-many
     std::vector<double> filtercake_thikness_prev_; // properties of filter cake, if any
     // well source checkpoints (needed to rebuild the dune grid on reset)
@@ -848,9 +840,7 @@ private:
     int joint_scores_{0};
     bool joint_grew_{false};
     bool joint_level_held_{false}; // the seed was coarsened once; growth keeps that level
-    std::unique_ptr<Dune::VTKWriter<Grid::LeafGridView>> vtkwriter_;
-    static constexpr auto VTKFormat = Dune::VTK::ascii;
-    std::unique_ptr<::Opm::VtkMultiWriter<Grid::LeafGridView, VTKFormat>> vtkmultiwriter_;
+    std::unique_ptr<FractureVtkSeriesWriter> vtkmultiwriter_;
 
     std::vector<double> filtercake_thikness_; // properties of filter cake, if any
     double filtercake_perm_{0.0}; // permeability of filter cake, if any
@@ -1038,7 +1028,6 @@ private:
     long stage_iters_on_ = 0;
     long stage_iters_total_ = 0;
 
-    using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView>;
     mutable std::unique_ptr<DynamicMatrix> fracture_matrix_;
     mutable ddm::KernelTable ddm_table_; // DDM kernel values on the trimesh lattice
     mutable std::uint64_t ddm_generation_{0}; // bumped at every assembly of fracture_matrix_

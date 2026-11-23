@@ -38,10 +38,8 @@
 
 #include <dune/common/filledarray.hh> // needed for printSparseMatrix??
 #include <dune/common/fmatrixev.hh>
-#include <dune/grid/utility/persistentcontainer.hh>
 #include <dune/istl/io.hh> // needed for printSparseMatrix??
 #include <opm/geomech/DiscreteDisplacement.hpp>
-#include <opm/geomech/FractureMeshFoamGrid.hpp>
 #include <opm/geomech/FracturePressureAssemblerAD.hpp>
 
 #include <opm/grid/polyhedralgrid.hh>
@@ -188,18 +186,11 @@ Fracture::init(const std::string& well,
 void
 Fracture::resetWriters()
 {
-    // nead to be reseat if grid is changed ??
-    vtkwriter_ = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid_->leafGridView(),
-                                                                       Dune::VTK::nonconforming);
-
-    std::string outputdir = prm_.get<std::string>("outputdir");
-    std::string simName = prm_.get<std::string>("casename") + this->name();
-    std::string multiFileName = "";
     if (!vtkmultiwriter_) {
-        vtkmultiwriter_ = std::make_unique<Opm::VtkMultiWriter<Grid::LeafGridView, VTKFormat>>(
-            /*async*/ false, grid_->leafGridView(), outputdir, simName, multiFileName);
-    } else {
-        vtkmultiwriter_->gridViewChanged(grid_->leafGridView()); // need to be called if grid is changed
+        vtkmultiwriter_ = std::make_unique<FractureVtkSeriesWriter>(
+            prm_.get<std::string>("outputdir"),
+            prm_.get<std::string>("casename") + this->name(),
+            FractureVtkWriter::formatFromString(prm_.get<std::string>("vtk_format", "ascii")));
     }
 }
 
@@ -209,7 +200,7 @@ bool
 Fracture::removeCells()
 {
     bool changed = false;
-    for (std::size_t c = 0; c < numFractureCells(); ++c) {
+    for (int c = 0; c < mesh_.numCells(); ++c) {
         if (reservoir_map_.cells[c] >= 0) {
             continue;
         }
@@ -226,12 +217,12 @@ Fracture::removeCells()
         return false;
     }
     const auto& args = grid_tri_args_;
-    auto [grid, fsmap, bmap] = trimesh_->createDuneGrid(
+    auto tri = trimesh_->createTriangulation(
         args.coarsen_levels, grid_fixed_cells_, args.smooth, args.cellnum_threshold, args.band_rings);
     std::map<CellRef, std::size_t> fsmap_inv;
-    for (std::size_t i = 0; i != fsmap.size(); ++i) {
-        if (fsmap[i].size() == 1) {
-            fsmap_inv[fsmap[i].front()] = i;
+    for (std::size_t i = 0; i != tri.fsmap.size(); ++i) {
+        if (tri.fsmap[i].size() == 1) {
+            fsmap_inv[tri.fsmap[i].front()] = i;
         }
     }
     well_source_.clear();
@@ -245,15 +236,15 @@ Fracture::removeCells()
             old_width[grid_mesh_map_[i]] = fracture_width_[i][0];
         }
         const double w0 = prm_.get<double>("config.initial_fracture_width");
-        fracture_width_.resize(fsmap.size());
-        for (std::size_t i = 0; i != fsmap.size(); ++i) {
-            const auto it = old_width.find(fsmap[i]);
+        fracture_width_.resize(tri.fsmap.size());
+        for (std::size_t i = 0; i != tri.fsmap.size(); ++i) {
+            const auto it = old_width.find(tri.fsmap[i]);
             fracture_width_[i] = (it != old_width.end()) ? it->second : w0;
         }
     }
-    grid_mesh_map_ = std::move(fsmap);
-    removal_boundary_map_ = std::move(bmap);
-    setFractureGrid(std::move(grid));
+    grid_mesh_map_ = tri.fsmap;
+    removal_boundary_map_ = tri.boundary_map;
+    setFractureGrid(tri);
     grid_changed_since_checkpoint_ = true;
     clearContactMemoryOnRegrid_();
     return true;
@@ -432,18 +423,8 @@ Fracture::updateCellNormals()
 }
 
 void
-Fracture::setFractureGrid(std::unique_ptr<Fracture::Grid> gptr)
-{
-    assert(gptr != nullptr);
-    grid_ = std::move(gptr);
-    mesh_ = buildFractureMesh(*grid_);
-    finishGridChange_();
-}
-
-void
 Fracture::setFractureGrid(const Triangulation& tri)
 {
-    grid_ = RegularTrimesh::createDuneGrid(tri); // for VTK output and removeCells only
     mesh_ = buildFractureMesh(tri.nodes, tri.triangles);
     finishGridChange_();
 }
@@ -624,39 +605,38 @@ void
 Fracture::write(int reportStep) const
 {
     OPM_TIMEFUNCTION();
-    std::vector<double> K1; // need to be in scope until written
+    FractureVtkWriter vtkwriter;
     auto tmp(fracture_pressure_);
     tmp.resize(numFractureCells());
     const auto [well_source, well_source_wi] = wellSourceFields();
-    vtkwriter_->addCellData(well_source, "WellSource");
-    vtkwriter_->addCellData(well_source_wi, "WellSourceWI");
+    vtkwriter.addCellData(well_source, "WellSource");
+    vtkwriter.addCellData(well_source_wi, "WellSourceWI");
     if (reservoir_map_.cells.size() > 0) {
-        vtkwriter_->addCellData(reservoir_map_.cells, "ReservoirCell");
+        vtkwriter.addCellData(reservoir_map_.cells, "ReservoirCell");
     }
     if (reservoir_.perm.size() > 0) {
-        vtkwriter_->addCellData(reservoir_.perm, "ReservoirPerm");
+        vtkwriter.addCellData(reservoir_.perm, "ReservoirPerm");
     }
     if (reservoir_.cstress.size() > 0) {
-        vtkwriter_->addCellData(reservoir_.cstress, "ReservoirCStress");
+        vtkwriter.addCellData(reservoir_.cstress, "ReservoirCStress");
     }
     if (reservoir_map_.dist.size() > 0) {
-        vtkwriter_->addCellData(reservoir_map_.dist, "ReservoirDist");
+        vtkwriter.addCellData(reservoir_map_.dist, "ReservoirDist");
     }
     if (fracture_pressure_.size() > 0) {
         // fracture_pressure_ may carry an extra well-pressure entry, so pass a
         // copy truncated to the cell count
-        vtkwriter_->addCellData(tmp, "FracturePressure");
+        vtkwriter.addCellData(tmp, "FracturePressure");
     }
     if (reservoir_.pressure.size() > 0) {
-        vtkwriter_->addCellData(reservoir_.pressure, "ReservoirPressure");
+        vtkwriter.addCellData(reservoir_.pressure, "ReservoirPressure");
     }
     if (reservoir_.mobility.size() > 0) {
-        vtkwriter_->addCellData(reservoir_.mobility, "ReservoirMobility");
+        vtkwriter.addCellData(reservoir_.mobility, "ReservoirMobility");
     }
     if (fracture_width_.size() > 0) {
-        vtkwriter_->addCellData(fracture_width_, "FractureWidth");
-        K1 = this->stressIntensityK1();
-        vtkwriter_->addCellData(K1, "stressIntensityK1");
+        vtkwriter.addCellData(fracture_width_, "FractureWidth");
+        vtkwriter.addCellData(this->stressIntensityK1(), "stressIntensityK1");
     }
     std::string outputdir = prm_.get<std::string>("outputdir");
     std::string simName = prm_.get<std::string>("casename");
@@ -664,7 +644,8 @@ Fracture::write(int reportStep) const
     if (reportStep > 0) {
         filename = filename + "_step_" + std::to_string(reportStep);
     }
-    vtkwriter_->write(filename.c_str());
+    vtkwriter.write(filename, mesh_, /*conforming*/ false, Dune::VTK::Precision::float32,
+                    FractureVtkWriter::formatFromString(prm_.get<std::string>("vtk_format", "ascii")));
 };
 
 double Fracture::reservoirTraction(int i) const{
@@ -796,65 +777,65 @@ Fracture::writemulti(double time) const
         }
 
     }
-    vtkmultiwriter_->beginWrite(time);
+    auto& vtkwriter = vtkmultiwriter_->beginWrite(time);
 
 
     if (reservoir_cells.size() > 0) {
-        vtkmultiwriter_->attachScalarElementData(reservoir_cells, "ReservoirCell");
+        vtkwriter.addCellData(reservoir_cells, "ReservoirCell");
     }
     if (reservoir_perm.size() > 0) {
-        vtkmultiwriter_->attachScalarElementData(reservoir_perm, "ReservoirPerm");
+        vtkwriter.addCellData(reservoir_perm, "ReservoirPerm");
     }
     if (reservoir_dist.size() > 0) {
-        vtkmultiwriter_->attachScalarElementData(reservoir_dist, "ReservoirDist");
+        vtkwriter.addCellData(reservoir_dist, "ReservoirDist");
     }
 
     if (reservoir_cstress.size() > 0) {
-        vtkmultiwriter_->attachScalarElementData(reservoir_cstress, "ReservoirCStres");
+        vtkwriter.addCellData(reservoir_cstress, "ReservoirCStres");
     }
     if (fracture_pressure.size() > 0) {
-        vtkmultiwriter_->attachScalarElementData(fracture_pressure, "FracturePressure");
+        vtkwriter.addCellData(fracture_pressure, "FracturePressure");
     }
     if (fracture_head.size() > 0) {
-        vtkmultiwriter_->attachScalarElementData(fracture_head, "FractureHead");
+        vtkwriter.addCellData(fracture_head, "FractureHead");
     }
     if (reservoir_pressure.size() > 0) {
-        vtkmultiwriter_->attachScalarElementData(reservoir_pressure, "ReservoirPressure");
+        vtkwriter.addCellData(reservoir_pressure, "ReservoirPressure");
     }
     if (leakof_dp.size() > 0) {
-        vtkmultiwriter_->attachScalarElementData(leakof_dp, "LeakofDP");
+        vtkwriter.addCellData(leakof_dp, "LeakofDP");
     }
     if (filtercake_thikness.size() > 0) {
-        vtkmultiwriter_->attachScalarElementData(filtercake_thikness, "FilterCakeThickness");
+        vtkwriter.addCellData(filtercake_thikness, "FilterCakeThickness");
     }
     if (reservoir_traction.size() > 0) {
-        vtkmultiwriter_->attachScalarElementData(reservoir_traction, "ReservoirTraction");
+        vtkwriter.addCellData(reservoir_traction, "ReservoirTraction");
     }
     if (fracture_force.size() > 0) {
-        vtkmultiwriter_->attachScalarElementData(fracture_force, "FractureForce");
+        vtkwriter.addCellData(fracture_force, "FractureForce");
     }
 
     if (reservoir_mobility.size() > 0) {
-        vtkmultiwriter_->attachScalarElementData(reservoir_mobility, "ReservoirMobility");
+        vtkwriter.addCellData(reservoir_mobility, "ReservoirMobility");
     }
     if (rhs_width.size() > 0) {
-        vtkmultiwriter_->attachScalarElementData(rhs_width, "ForceOnFracture");
+        vtkwriter.addCellData(rhs_width, "ForceOnFracture");
     }
     if (leakofrate.size() > 0) {
-        vtkmultiwriter_->attachScalarElementData(leakofrate, "LeakOfRate");
+        vtkwriter.addCellData(leakofrate, "LeakOfRate");
     }
 
     if (well_index.size() > 0) {
-        vtkmultiwriter_->attachScalarElementData(well_index, "WellIndex");
+        vtkwriter.addCellData(well_index, "WellIndex");
     }
-    vtkmultiwriter_->attachScalarElementData(well_source, "WellSource");
-    vtkmultiwriter_->attachScalarElementData(well_source_wi, "WellSourceWI");
+    vtkwriter.addCellData(well_source, "WellSource");
+    vtkwriter.addCellData(well_source_wi, "WellSourceWI");
     if (fracture_width.size() > 0) {
-        vtkmultiwriter_->attachScalarElementData(fracture_width, "FractureWidth");
-        vtkmultiwriter_->attachScalarElementData(flow_width, "FlowWidth");
-        vtkmultiwriter_->attachScalarElementData(K1, "stressIntensityK1");
+        vtkwriter.addCellData(fracture_width, "FractureWidth");
+        vtkwriter.addCellData(flow_width, "FlowWidth");
+        vtkwriter.addCellData(K1, "stressIntensityK1");
     }
-    vtkmultiwriter_->endWrite(false);
+    vtkmultiwriter_->endWrite(mesh_);
 };
 
 std::size_t
@@ -940,9 +921,9 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
     }
     int clipped = 0;
     if (grid.comm().size() > 1) {
-        for (const auto& element : elements(grid_->leafGridView())) {
-            if (reservoir_map_.cells[elemMapper.index(element)] < 0) {
-                const auto c = element.geometry().center();
+        for (int elemIdx = 0; elemIdx < mesh_.numCells(); ++elemIdx) {
+            if (reservoir_map_.cells[elemIdx] < 0) {
+                const auto& c = mesh_.cellCentroid(elemIdx);
                 clipped += external::nearNonInteriorCell(cellSearchTree, grid, entity_seeds,
                                                          external::cvf::Vec3d(c[0], c[1], c[2]));
             }
@@ -2665,15 +2646,12 @@ Fracture::updateLeakoff()
 void
 Fracture::restoreLeakoffOfIsolatedPieces_(const std::vector<double>& full_leakof)
 {
-    const auto gv = grid_->leafGridView();
-    ElementMapper mapper(gv, Dune::mcmgElementLayout());
     const std::size_t nc = numFractureCells();
     std::vector<std::vector<int>> nbs(nc);
-    for (const auto& element : Dune::elements(gv)) {
-        const int e = mapper.index(element);
-        for (const auto& is : Dune::intersections(gv, element)) {
-            if (is.neighbor()) {
-                nbs[e].push_back(mapper.index(is.outside()));
+    for (int e = 0; e < mesh_.numCells(); ++e) {
+        for (const int n : mesh_.cellNeighbours(e)) {
+            if (n >= 0) {
+                nbs[e].push_back(n);
             }
         }
     }
@@ -3262,19 +3240,17 @@ Fracture::wellPathSourceCells() const
     }
 
     const std::set<int> perfcells(well_perf_cells_.begin(), well_perf_cells_.end());
-    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     std::set<int> fed;
     const double wsr = prm_.get<double>("solver.well_source_radius", 0.0);
     // A piece of near-zero projected length is a crossing point: fed to the one triangle containing it best.
     std::vector<std::pair<double, int>> best_point(pieces.size(), {-1e-9, -1});
-    for (const auto& e : Dune::elements(grid_->leafGridView())) {
-        const int i = mapper.index(e);
+    for (int i = 0; i < mesh_.numCells(); ++i) {
         if (!perfcells.empty()
             && (i >= static_cast<int>(reservoir_map_.cells.size()) || !perfcells.count(reservoir_map_.cells[i]))) {
             continue;
         }
-        const auto geom = e.geometry();
-        const std::array<P2, 3> p {proj(geom.corner(0)), proj(geom.corner(1)), proj(geom.corner(2))};
+        const auto corners = mesh_.cellCorners(i);
+        const std::array<P2, 3> p {proj(corners[0]), proj(corners[1]), proj(corners[2])};
         auto cross = [](const P2& u, const P2& v) { return u[0] * v[1] - u[1] * v[0]; };
         auto sub = [](const P2& u, const P2& v) { return P2 {u[0] - v[0], u[1] - v[1]}; };
         const double area2 = cross(sub(p[1], p[0]), sub(p[2], p[0]));
