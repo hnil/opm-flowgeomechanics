@@ -26,6 +26,7 @@
 
 
 
+#include <stdexcept>
 #include <opm/geomech/CentreStressInterpolation.hpp>
 #include <opm/geomech/FractureConnectionId.hpp>
 #include <limits>
@@ -248,6 +249,10 @@ struct RuntimePerforation;
 class Fracture
 {
 public:
+    struct IncompleteReservoirCoverage : std::runtime_error {
+        using std::runtime_error::runtime_error;
+    };
+
     using IndexTraits = Opm::BlackOilDefaultFluidSystemIndices;
     using Grid = Dune::FoamGrid<2, 3>;
     using Point3D = Dune::FieldVector<double, 3>;

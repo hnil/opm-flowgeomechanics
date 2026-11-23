@@ -20,6 +20,7 @@
 #include <config.h>
 
 #include <opm/geomech/MechanicalPartitionValidation.hpp>
+#include <opm/geomech/MechGridPartition.hpp>
 
 #include <dune/common/parallel/mpihelper.hh>
 
@@ -92,6 +93,23 @@ int main(int argc, char** argv)
         return 1;
     }
     try {
+        Dune::CpGrid grouped;
+        grouped.createCartesian({2, 1, 5}, {1, 1, 1});
+        if (helper.rank() == 0) {
+            Opm::Coarsening::CoarsenRequest coarse;
+            coarse.startIJK = {0, 0, 0}; coarse.endIJK = {2, 1, 5};
+            coarse.cellsPerDim = {1, 1, 5};
+            auto region = coarse;
+            region.startIJK = {0, 0, 1}; region.endIJK = {1, 1, 3};
+            const auto parts = Opm::MechPartition::flowPartition(grouped, {coarse}, {region});
+            if (parts[2] != parts[3] || parts[2] != parts[4] || parts[2] != parts[5])
+                throw std::logic_error("partition region split a mechanics block or growth region");
+            region.endIJK[2] = 6;
+            expectAbort("out-of-grid growth region", [&] {
+                Opm::MechPartition::flowPartition(grouped, {coarse}, {region});
+            });
+        }
+
         Dune::CpGrid good;
         balance(good, true, true);
         Opm::Elasticity::validateMechanicalPartition(good);
