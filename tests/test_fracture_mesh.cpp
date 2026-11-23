@@ -20,11 +20,15 @@
 #include <config.h>
 
 #include <opm/geomech/FractureMesh.hpp>
-#include <opm/geomech/FractureMeshFoamGrid.hpp>
 #include <opm/geomech/FractureVtkWriter.hpp>
 #include <opm/geomech/RegularTrimesh.hpp>
 
+#if HAVE_DUNE_FOAMGRID
+#include <opm/geomech/FractureMeshFoamGrid.hpp>
+#include <dune/foamgrid/foamgrid.hh>
+#include <dune/grid/common/mcmgmapper.hh>
 #include <dune/grid/io/file/vtk/vtkwriter.hh>
+#endif
 
 #include <zlib.h>
 
@@ -47,6 +51,13 @@ namespace
 {
 int failures = 0;
 
+void check(bool ok, const std::string& what, int i)
+{
+    if (!ok && failures++ < 20)
+        std::cerr << "differs: " << what << " at " << i << '\n';
+}
+
+#if HAVE_DUNE_FOAMGRID
 bool same(double a, double b) { return std::memcmp(&a, &b, sizeof(double)) == 0; }
 bool same(const FractureMesh::Vec3& a, const FractureMesh::Vec3& b)
 {
@@ -68,11 +79,6 @@ bool same(std::span<const T> a, std::span<const T> b)
     return true;
 }
 
-void check(bool ok, const std::string& what, int i)
-{
-    if (!ok && failures++ < 20)
-        std::cerr << "differs: " << what << " at " << i << '\n';
-}
 
 // Both builders must give the same numbering and the same bits.
 void compare(const Triangulation& tri, const std::string& name)
@@ -115,6 +121,7 @@ void compare(const Triangulation& tri, const std::string& name)
     std::cout << name << ": " << g.numCells() << " cells, " << g.numFaces() << " faces, "
               << (failures == before ? "identical" : "DIFFER") << '\n';
 }
+#endif
 
 std::string slurp(const std::string& file)
 {
@@ -193,11 +200,11 @@ std::string decodeZlib(const std::string& text)
     return out;
 }
 
-// The mesh writer must give Dune::VTKWriter's bytes on the FoamGrid of the same triangulation.
+// The mesh writer must give Dune::VTKWriter's bytes on the FoamGrid of the same triangulation;
+// zlib arrays must inflate to the binary ones.
 void compareVtk(const Triangulation& tri, const std::string& name)
 {
     using Format = FractureVtkWriter::Format;
-    const auto grid = RegularTrimesh::createDuneGrid(tri);
     const auto mesh = buildFractureMesh(tri.nodes, tri.triangles);
     std::vector<double> a(mesh.numCells()), b(mesh.numCells());
     for (int c = 0; c < mesh.numCells(); ++c) {
@@ -212,6 +219,8 @@ void compareVtk(const Triangulation& tri, const std::string& name)
         FractureVtkWriter mine;
         mine.addCellData(a, "A");
         mine.addCellData(b, "B");
+#if HAVE_DUNE_FOAMGRID
+        const auto grid = RegularTrimesh::createDuneGrid(tri);
         Dune::VTKWriter dune(grid->leafGridView(), conforming ? Dune::VTK::conforming : Dune::VTK::nonconforming,
                              prec);
         dune.addCellData(a, "A");
@@ -224,6 +233,7 @@ void compareVtk(const Triangulation& tri, const std::string& name)
             const auto d = slurp(dune.write(dir + "/fvw_dune", df));
             check(m == d, tag + " format " + std::to_string(static_cast<int>(mf)), 0);
         }
+#endif
         const auto bin = payloads(slurp(mine.write(dir + "/fvw_mine", mesh, conforming, prec, Format::binary)));
         const auto zlib = slurp(mine.write(dir + "/fvw_mine", mesh, conforming, prec, Format::zlib));
         check(zlib.find("compressor=\"vtkZLibDataCompressor\"") != std::string::npos, tag + " zlib attribute", 0);
@@ -234,6 +244,56 @@ void compareVtk(const Triangulation& tri, const std::string& name)
     }
     std::cout << name << " vtk: " << (failures == before ? "identical" : "DIFFER") << '\n';
 }
+#if HAVE_DUNE_FOAMGRID
+// A well trajectory as line cells must match Dune::VTKWriter on FoamGrid<1,3>.
+void compareWellVtk()
+{
+    using Format = FractureVtkWriter::Format;
+    VtkCellList cells;
+    for (int i = 0; i < 9; ++i)
+        cells.nodes.push_back({456789.123 + 13.7 * i, 7123456.789 - 3.1 * i * i, 2534.5 + 21.3 * i});
+    for (unsigned i = 0; i + 1 < 7; ++i)
+        cells.cells.push_back({i, i + 1});
+    cells.cells.push_back({3, 7}); // a branch
+    cells.cells.push_back({7, 8});
+    Dune::GridFactory<Dune::FoamGrid<1, 3>> factory;
+    for (const auto& x : cells.nodes)
+        factory.insertVertex(Dune::FieldVector<double, 3> {x[0], x[1], x[2]});
+    for (const auto& c : cells.cells)
+        factory.insertElement(Dune::GeometryTypes::line, std::vector<unsigned> {c[0], c[1]});
+    const auto grid = factory.createGrid();
+    const auto gv = grid->leafGridView();
+    const Dune::MultipleCodimMultipleGeomTypeMapper emap(gv, Dune::mcmgElementLayout());
+    for (const auto& e : elements(gv)) {
+        const auto i = emap.index(e);
+        const auto& end = cells.nodes[cells.cells[i][1]];
+        const auto x = e.geometry().corner(1);
+        check(same(x[0], end[0]) && same(x[1], end[1]) && same(x[2], end[2]), "well segment end", i);
+    }
+    std::vector<double> a(cells.cells.size());
+    for (std::size_t c = 0; c < a.size(); ++c)
+        a[c] = 1.0e7 + 12.345 * c;
+    const std::string dir = std::filesystem::temp_directory_path().string();
+    const int before = failures;
+    for (const bool conforming : {true, false}) {
+        const auto prec = conforming ? Dune::VTK::Precision::float64 : Dune::VTK::Precision::float32;
+        FractureVtkWriter mine;
+        Dune::VTKWriter dune(gv, conforming ? Dune::VTK::conforming : Dune::VTK::nonconforming, prec);
+        if (conforming) {
+            mine.addCellData(a, "A");
+            dune.addCellData(a, "A");
+        }
+        for (const auto& [mf, df] : {std::pair {Format::ascii, Dune::VTK::ascii},
+                                     std::pair {Format::binary, Dune::VTK::base64}}) {
+            const auto m = slurp(mine.write(dir + "/fvw_well_mine", cells, conforming, prec, mf));
+            const auto d = slurp(dune.write(dir + "/fvw_well_dune", df));
+            check(m == d, std::string("well ") + (conforming ? "conforming" : "nonconforming"),
+                  static_cast<int>(mf));
+        }
+    }
+    std::cout << "well vtk: " << (failures == before ? "identical" : "DIFFER") << '\n';
+}
+#endif
 } // namespace
 
 int main()
@@ -250,10 +310,12 @@ int main()
     mesh.removeSawtooths();
     const auto ring = RegularTrimesh::inner_ring_cells();
 
+#if HAVE_DUNE_FOAMGRID
     compare(mesh.createTriangulation(1, ring), "seed level 1");
     compare(mesh.createTriangulation(0, {}, true), "fine, smoothing");
     compare(mesh.createTriangulation(3, ring, false, 10, 1), "coarsen 3");
     compare(mesh.createTriangulation(3, ring, true, 4, 2), "coarsen 3, smoothing, band 2");
+#endif
     compareVtk(mesh.createTriangulation(1, ring), "seed level 1");
     compareVtk(mesh.createTriangulation(3, ring, true, 4, 2), "coarsen 3, smoothing, band 2");
 
@@ -270,6 +332,9 @@ int main()
             big.triangles.push_back({v, v + n + 2, v + n + 1});
         }
     compareVtk(big, "60x60 squares");
+#if HAVE_DUNE_FOAMGRID
+    compareWellVtk();
+#endif
 
     std::cout << (failures == 0 ? "PASSED" : "FAILED") << '\n';
     return failures == 0 ? 0 : 1;

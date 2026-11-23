@@ -30,7 +30,9 @@
 #include <opm/geomech/FractureMesh.hpp>
 #include <opm/geomech/Math.hpp>
 #include <dune/grid/common/entity.hh>
+#if HAVE_DUNE_FOAMGRID
 #include <dune/foamgrid/foamgrid.hh>
+#endif
 #include <dune/grid/common/mcmgmapper.hh>
 namespace ddm
 {
@@ -181,6 +183,7 @@ disp(const Dune::FieldVector<double, 3>& obs,
        const double E,
        const double nu);
 
+#if HAVE_DUNE_FOAMGRID
 // FoamGrid forms for tools and tests: build the mesh and forward.
 void assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);
 void assembleMatrix_fast(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid);
@@ -191,5 +194,6 @@ void applyMatrix_fast(Dune::DynamicVector<double>& result,
                       const double E,
                       const double nu,
                       const Dune::FoamGrid<2, 3>& grid);
+#endif
 
 } // namespace ddm

@@ -34,12 +34,10 @@ list (APPEND MAIN_SOURCE_FILES
 	opm/geomech/FractureMechanicsPreconditioner.cpp
 	opm/geomech/Fracture.cpp
 	opm/geomech/FractureMesh.cpp
-	opm/geomech/FractureMeshFoamGrid.cpp
 	opm/geomech/FractureVtkWriter.cpp
 	opm/geomech/FractureModel.cpp
 	opm/geomech/FractureWell.cpp
 	opm/geomech/GeometryHelpers.cpp
-	opm/geomech/GridStretcher.cpp
 	opm/geomech/MechanicalConstraintValidation.cpp
 	opm/geomech/ParamInterior.cpp
 	opm/geomech/RegularTrimesh.cpp
@@ -73,7 +71,6 @@ list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/Fracture.hpp
 	opm/geomech/Fracture_impl.hpp
 	opm/geomech/FractureMesh.hpp
-	opm/geomech/FractureMeshFoamGrid.hpp
 	opm/geomech/FractureVtkWriter.hpp
 	opm/geomech/FractureAuxCells.hpp
 	opm/geomech/FracturePieces.hpp
@@ -83,7 +80,6 @@ list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/FractureModel_impl.hpp
 	opm/geomech/FractureWell.hpp
 	opm/geomech/GeometryHelpers.hpp
-	opm/geomech/GridStretcher.hpp
 	opm/geomech/Math.hpp
 	opm/geomech/MechanicalConstraintValidation.hpp
 	opm/geomech/NodeConstraint.hpp
@@ -99,3 +95,14 @@ list (APPEND PUBLIC_HEADER_FILES
 	opm/geomech/vem/vemutils.hpp
 	opm/geomech/VtkGeoMechModule.hpp
 )
+
+if(dune-foamgrid_FOUND)
+	list (APPEND MAIN_SOURCE_FILES
+		opm/geomech/FractureMeshFoamGrid.cpp
+		opm/geomech/GridStretcher.cpp
+	)
+	list (APPEND PUBLIC_HEADER_FILES
+		opm/geomech/FractureMeshFoamGrid.hpp
+		opm/geomech/GridStretcher.hpp
+	)
+endif()

@@ -36,6 +36,7 @@
 #include <filesystem>
 #include <iomanip>
 #include <memory>
+#include <span>
 #include <sstream>
 #include <stdexcept>
 
@@ -115,8 +116,8 @@ private:
 class ZlibVTUWriter : public Dune::VTK::VTUWriter
 {
 public:
-    explicit ZlibVTUWriter(std::ostream& s)
-        : VTUWriter(s, Dune::VTK::ascii, Dune::VTK::unstructuredGrid)
+    ZlibVTUWriter(std::ostream& s, Dune::VTK::FileType file_type)
+        : VTUWriter(s, Dune::VTK::ascii, file_type)
     {
     }
     Dune::VTK::DataArrayWriter*
@@ -127,45 +128,78 @@ public:
 };
 
 struct Piece {
-    std::vector<FractureMesh::Vec3> points;
+    std::vector<std::array<double, 3>> points;
     std::vector<int> connectivity;
+    std::vector<int> offsets;
+    Dune::VTK::GeometryType type;
+
+    // Dune::VTKWriter writes 1D grids as PolyData lines.
+    bool lines() const { return type == Dune::VTK::line; }
+    Dune::VTK::FileType fileType() const { return lines() ? Dune::VTK::polyData : Dune::VTK::unstructuredGrid; }
+    std::string extension() const { return lines() ? ".vtp" : ".vtu"; }
 };
 
+std::array<double, 3>
+xyz(const FractureMesh::Vec3& x)
+{
+    return {x[0], x[1], x[2]};
+}
+
 // Point order and numbering of Dune::VTKWriter: first visit over cells and their corners.
+template <class NodesOf, class CornerOf>
+Piece
+makePiece(int ncells, int nnodes, NodesOf nodes_of, CornerOf corner_of, Dune::VTK::GeometryType type,
+          bool conforming)
+{
+    Piece p;
+    p.type = type;
+    std::vector<int> number(conforming ? nnodes : 0, -1);
+    for (int c = 0; c < ncells; ++c) {
+        const auto nodes = nodes_of(c);
+        for (std::size_t i = 0; i < nodes.size(); ++i) {
+            const int n = static_cast<int>(nodes[i]);
+            if (!conforming) {
+                p.connectivity.push_back(static_cast<int>(p.points.size()));
+                p.points.push_back(corner_of(c, i));
+                continue;
+            }
+            if (number[n] < 0) {
+                number[n] = static_cast<int>(p.points.size());
+                p.points.push_back(corner_of(c, i));
+            }
+            p.connectivity.push_back(number[n]);
+        }
+        p.offsets.push_back(static_cast<int>(p.connectivity.size()));
+    }
+    return p;
+}
+
 Piece
 makePiece(const FractureMesh& mesh, bool conforming)
 {
-    Piece p;
-    std::vector<int> number(conforming ? mesh.numNodes() : 0, -1);
-    for (int c = 0; c < mesh.numCells(); ++c) {
-        const auto nodes = mesh.cellNodes(c);
-        const auto corners = mesh.cellCorners(c);
-        for (std::size_t i = 0; i < nodes.size(); ++i) {
-            if (!conforming) {
-                p.connectivity.push_back(static_cast<int>(p.points.size()));
-                p.points.push_back(corners[i]);
-                continue;
-            }
-            if (number[nodes[i]] < 0) {
-                number[nodes[i]] = static_cast<int>(p.points.size());
-                p.points.push_back(corners[i]);
-            }
-            p.connectivity.push_back(number[nodes[i]]);
-        }
-    }
-    return p;
+    return makePiece(
+        mesh.numCells(), mesh.numNodes(), [&mesh](int c) { return mesh.cellNodes(c); },
+        [&mesh](int c, std::size_t i) { return xyz(mesh.cellCorners(c)[i]); }, Dune::VTK::triangle, conforming);
+}
+
+Piece
+makePiece(const VtkCellList& list, bool conforming)
+{
+    return makePiece(
+        static_cast<int>(list.cells.size()), static_cast<int>(list.nodes.size()),
+        [&list](int c) { return std::span<const unsigned>(list.cells[c]); },
+        [&list](int c, std::size_t i) { return list.nodes[list.cells[c][i]]; }, list.type, conforming);
 }
 
 template <class Writer>
 void
 writeArrays(Writer& w,
-            const FractureMesh& mesh,
             const Piece& p,
             const std::vector<std::pair<std::string, std::vector<double>>>& cell_data,
             Dune::VTK::Precision coord_prec)
 {
     using Dune::VTK::Precision;
-    const unsigned ncells = mesh.numCells();
+    const unsigned ncells = p.offsets.size();
     auto array = [&w](const std::string& name, unsigned ncomps, unsigned n, Precision prec) {
         return std::unique_ptr<Dune::VTK::DataArrayWriter>(w.makeArrayWriter(name, ncomps, n, prec));
     };
@@ -208,18 +242,16 @@ writeArrays(Writer& w,
     {
         auto a = array("offsets", 1, ncells, Precision::int32);
         if (!a->writeIsNoop()) {
-            int offset = 0;
-            for (unsigned c = 0; c < ncells; ++c) {
-                offset += static_cast<int>(mesh.cellNodes(c).size());
+            for (int offset : p.offsets) {
                 a->write(offset);
             }
         }
     }
-    {
+    if (!p.lines()) {
         auto a = array("types", 1, ncells, Precision::uint8);
         if (!a->writeIsNoop()) {
             for (unsigned c = 0; c < ncells; ++c) {
-                a->write(static_cast<int>(Dune::VTK::triangle));
+                a->write(static_cast<int>(p.type));
             }
         }
     }
@@ -229,19 +261,49 @@ writeArrays(Writer& w,
 template <class Writer>
 void
 writePiece(Writer& w,
-           const FractureMesh& mesh,
+           const Piece& p,
            const std::vector<std::pair<std::string, std::vector<double>>>& cell_data,
-           Dune::VTK::Precision coord_prec,
-           bool conforming)
+           Dune::VTK::Precision coord_prec)
 {
-    const Piece p = makePiece(mesh, conforming);
-    w.beginMain(mesh.numCells(), p.points.size());
-    writeArrays(w, mesh, p, cell_data, coord_prec);
+    w.beginMain(p.offsets.size(), p.points.size());
+    writeArrays(w, p, cell_data, coord_prec);
     w.endMain();
     if (w.beginAppended()) {
-        writeArrays(w, mesh, p, cell_data, coord_prec);
+        writeArrays(w, p, cell_data, coord_prec);
     }
     w.endAppended();
+}
+
+void
+writeFile(const std::string& file_name,
+          const Piece& p,
+          const std::vector<std::pair<std::string, std::vector<double>>>& cell_data,
+          Dune::VTK::Precision coord_prec,
+          FractureVtkWriter::Format format)
+{
+    using Format = FractureVtkWriter::Format;
+    std::ofstream file;
+    file.exceptions(std::ios_base::badbit | std::ios_base::failbit | std::ios_base::eofbit);
+    file.open(file_name, std::ios::binary);
+
+    if (format == Format::zlib) {
+        std::ostringstream os;
+        {
+            ZlibVTUWriter w(os, p.fileType());
+            writePiece(w, p, cell_data, coord_prec);
+        }
+        std::string text = os.str();
+        const std::string key = "byte_order=\"" + Dune::VTK::getEndiannessString() + "\"";
+        text.insert(text.find(key) + key.size(), " compressor=\"vtkZLibDataCompressor\"");
+        file << text;
+    } else {
+        const auto type = format == Format::binary ? Dune::VTK::base64
+            : format == Format::appended           ? Dune::VTK::appendedraw
+                                                   : Dune::VTK::ascii;
+        Dune::VTK::VTUWriter w(file, type, p.fileType());
+        writePiece(w, p, cell_data, coord_prec);
+    }
+    file.close();
 }
 
 } // namespace
@@ -271,30 +333,21 @@ FractureVtkWriter::write(const std::string& name,
                          Dune::VTK::Precision coord_prec,
                          Format format) const
 {
-    const std::string file_name = name + ".vtu";
-    std::ofstream file;
-    file.exceptions(std::ios_base::badbit | std::ios_base::failbit | std::ios_base::eofbit);
-    file.open(file_name, std::ios::binary);
+    const auto p = makePiece(mesh, conforming);
+    writeFile(name + p.extension(), p, cell_data_, coord_prec, format);
+    return name + p.extension();
+}
 
-    if (format == Format::zlib) {
-        std::ostringstream os;
-        {
-            ZlibVTUWriter w(os);
-            writePiece(w, mesh, cell_data_, coord_prec, conforming);
-        }
-        std::string text = os.str();
-        const std::string key = "byte_order=\"" + Dune::VTK::getEndiannessString() + "\"";
-        text.insert(text.find(key) + key.size(), " compressor=\"vtkZLibDataCompressor\"");
-        file << text;
-    } else {
-        const auto type = format == Format::binary ? Dune::VTK::base64
-            : format == Format::appended           ? Dune::VTK::appendedraw
-                                                   : Dune::VTK::ascii;
-        Dune::VTK::VTUWriter w(file, type, Dune::VTK::unstructuredGrid);
-        writePiece(w, mesh, cell_data_, coord_prec, conforming);
-    }
-    file.close();
-    return file_name;
+std::string
+FractureVtkWriter::write(const std::string& name,
+                         const VtkCellList& cells,
+                         bool conforming,
+                         Dune::VTK::Precision coord_prec,
+                         Format format) const
+{
+    const auto p = makePiece(cells, conforming);
+    writeFile(name + p.extension(), p, cell_data_, coord_prec, format);
+    return name + p.extension();
 }
 
 FractureVtkSeriesWriter::FractureVtkSeriesWriter(std::string output_dir,
@@ -323,18 +376,31 @@ FractureVtkSeriesWriter::beginWrite(double time)
     return writer_;
 }
 
+template <class Cells>
 void
-FractureVtkSeriesWriter::endWrite(const FractureMesh& mesh)
+FractureVtkSeriesWriter::endWrite_(const Cells& cells)
 {
     std::ostringstream base;
     base << sim_name_ << "-" << std::setw(5) << std::setfill('0') << num_written_++;
-    const std::string file = writer_.write(output_dir_ + "/" + base.str(), mesh, true,
+    const std::string file = writer_.write(output_dir_ + "/" + base.str(), cells, true,
                                            Dune::VTK::Precision::float64, format_);
     writer_.clear();
     pvd_.precision(16);
     pvd_ << "   <DataSet timestep=\"" << time_ << "\" file=\""
          << std::filesystem::path(file).filename().string() << "\"/>\n";
     finishCollection_();
+}
+
+void
+FractureVtkSeriesWriter::endWrite(const FractureMesh& mesh)
+{
+    endWrite_(mesh);
+}
+
+void
+FractureVtkSeriesWriter::endWrite(const VtkCellList& cells)
+{
+    endWrite_(cells);
 }
 
 // Keeps the .pvd valid after every step: closing tags are written, then overwritten by the next entry.

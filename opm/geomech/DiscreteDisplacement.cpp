@@ -23,7 +23,9 @@
 #endif
 #include <opm/common/TimingMacros.hpp>
 #include <opm/geomech/DiscreteDisplacement.hpp>
+#if HAVE_DUNE_FOAMGRID
 #include <opm/geomech/FractureMeshFoamGrid.hpp>
+#endif
 
 #include <cmath>
 #include <limits>
@@ -508,6 +510,7 @@ disp(const Dune::FieldVector<double, 3>& obs,
     return disp;
 }
 
+#if HAVE_DUNE_FOAMGRID
 void
 assembleMatrix(Dune::DynamicMatrix<double>& matrix, const double E, const double nu, const Dune::FoamGrid<2, 3>& grid)
 {
@@ -543,4 +546,5 @@ applyMatrix_fast(Dune::DynamicVector<double>& result,
 {
     applyMatrix_fast(result, x, E, nu, Opm::buildFractureMesh(grid));
 }
+#endif
 } // namespace ddm

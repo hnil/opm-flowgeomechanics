@@ -31,6 +31,7 @@ if(GEOMECH_ASAN)
 endif()
 option(USE_TRACY_PROFILER "Enable tracy profiling" OFF)
 option(USE_HYPRE "Use the Hypre library for linear solvers?" OFF)
+option(USE_DUNE_FOAMGRID "Build the dune-foamgrid tools and tests if dune-foamgrid is found" ON)
 
 # Adapted from CMakeLists.txt in opm-common, extended to all OPM modules
 # this module depends on, so a plain sibling build (<module>/build) works.
@@ -137,7 +138,6 @@ macro (opm-flowgeomechanics_prereqs_hook)
 	target_link_libraries(opmflowgeomechanics
 		PUBLIC
 			opmsimulators
-			Dune::FoamGrid
 			CGAL::CGAL GMP::gmp GMP::gmpxx
 		PRIVATE
 			ZLIB::ZLIB
@@ -148,6 +148,10 @@ macro (opm-flowgeomechanics_prereqs_hook)
 			PUBLIC
 				HYPRE::HYPRE
 		)
+	endif()
+
+	if(dune-foamgrid_FOUND)
+		target_link_libraries(opmflowgeomechanics PUBLIC Dune::FoamGrid)
 	endif()
 endmacro (opm-flowgeomechanics_prereqs_hook)
 
@@ -281,13 +285,16 @@ target_link_libraries(padmodel
 		opmsimulators
 )
 
+if(dune-foamgrid_FOUND)
 add_executable(test_foamgrid
 	examples/test_foamgrid.cpp
 )
 target_link_libraries(test_foamgrid
 	PUBLIC
 		opmsimulators
+		Dune::FoamGrid
 )
+endif()
 
 add_executable(test_vem_elements
 	examples/test_vem_elements.cpp
@@ -303,6 +310,7 @@ if(USE_TRACY_PROFILER AND Tracy_FOUND)
 	)
 endif()
 
+if(dune-foamgrid_FOUND)
 add_executable(paramtest
 	examples/paramtest.cpp
 )
@@ -310,6 +318,7 @@ target_link_libraries(paramtest
 	PUBLIC
 		opmflowgeomechanics
 )
+endif()
 
 add_executable(test_aspect_ratio
 	examples/test_aspect_ratio.cpp
@@ -330,6 +339,7 @@ target_link_libraries(test_trimesh
 		opmflowgeomechanics
 )
 
+if(dune-foamgrid_FOUND)
 add_executable(test_gridstretch
 	examples/test_gridstretch.cpp
 )
@@ -337,7 +347,9 @@ target_link_libraries(test_gridstretch
 	PUBLIC
 		opmflowgeomechanics
 )
+endif()
 
+if(dune-foamgrid_FOUND)
 add_executable(coupled_standalone_test
 	examples/coupled_standalone_test.cpp
 )
@@ -345,7 +357,9 @@ target_link_libraries(coupled_standalone_test
 	PUBLIC
 		opmflowgeomechanics
 )
+endif()
 
+if(dune-foamgrid_FOUND)
 add_executable(standalone_sim_test
 	examples/standalone_sim_test.cpp
 )
@@ -353,6 +367,7 @@ target_link_libraries(standalone_sim_test
 	PUBLIC
 		opmflowgeomechanics
 )
+endif()
 
 add_executable(test_fracture_pressure_ad
 	examples/test_fracture_pressure_ad.cpp
@@ -509,6 +524,7 @@ add_test(NAME Test.FractureMechCoupling
 	COMMAND test_fracture_mech_coupling
 )
 
+if(dune-foamgrid_FOUND)
 add_executable(test_ddm_assembly
 	examples/test_ddm_assembly.cpp
 )
@@ -520,6 +536,7 @@ target_link_libraries(test_ddm_assembly
 add_test(NAME Test.DDMAssembly
 	COMMAND test_ddm_assembly
 )
+endif()
 
 add_executable(test_nearfield_mech_ilu
 	examples/test_nearfield_mech_ilu.cpp
@@ -533,6 +550,7 @@ add_test(NAME Test.NearFieldMechILU
 	COMMAND test_nearfield_mech_ilu
 )
 
+if(dune-foamgrid_FOUND)
 add_executable(example_penny_crack_ddm
 	examples/example_penny_crack_ddm.cpp
 )
@@ -554,6 +572,7 @@ add_test(NAME Regression.DDM.PennyCrack.Assembly
 		--cod-tol=0.6
 		--k1-tol=0.6
 )
+endif()
 
 # Completion identity must survive LGR index collisions and rank-local filtering.
 add_executable(test_fracture_connection_identity tests/test_fracture_connection_identity.cpp)
@@ -612,7 +631,7 @@ add_executable(test_vertex_joined_pieces tests/test_vertex_joined_pieces.cpp)
 target_link_libraries(test_vertex_joined_pieces PRIVATE opmflowgeomechanics)
 add_test(NAME Unit.VertexJoinedPieces COMMAND $<TARGET_FILE:test_vertex_joined_pieces>)
 set_tests_properties(Unit.VertexJoinedPieces PROPERTIES TIMEOUT 30 LABELS "physics;unit")
-# The trimesh-built fracture mesh must match the FoamGrid-built one bitwise.
+# The fracture mesh and its VTU output must match the FoamGrid-built ones bitwise.
 add_executable(test_fracture_mesh tests/test_fracture_mesh.cpp)
 target_link_libraries(test_fracture_mesh PRIVATE opmflowgeomechanics ZLIB::ZLIB)
 add_test(NAME Unit.FractureMesh COMMAND $<TARGET_FILE:test_fracture_mesh>)
@@ -640,6 +659,7 @@ foreach(constraint_np 1 2 4)
         TIMEOUT 60 PROCESSORS ${constraint_np} LABELS "mechanics;mpi;unit")
 endforeach()
 
+if(dune-foamgrid_FOUND)
 # Stored-solution regression test: checks the DDM matrix assembly bit-for-bit
 # against known opening values for a 2-layer mesh.
 add_executable(test_penny_crack_regression
@@ -652,6 +672,7 @@ target_link_libraries(test_penny_crack_regression
 add_test(NAME Regression.DDM.PennyCrack.StoredSolution
 	COMMAND test_penny_crack_regression
 )
+endif()
 
 # ---------------------------------------------------------------------------
 

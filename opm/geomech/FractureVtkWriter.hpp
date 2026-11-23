@@ -21,6 +21,7 @@
 
 #include <dune/grid/io/file/vtk/common.hh>
 
+#include <array>
 #include <cstddef>
 #include <fstream>
 #include <string>
@@ -31,6 +32,13 @@ namespace Opm
 {
 
 class FractureMesh;
+
+// Cells of one VTK type given by node lists, e.g. a well trajectory as line segments.
+struct VtkCellList {
+    std::vector<std::array<double, 3>> nodes;
+    std::vector<std::vector<unsigned>> cells;
+    Dune::VTK::GeometryType type = Dune::VTK::line;
+};
 
 // VTU output of a FractureMesh with cell data, laid out as Dune::VTKWriter lays out the same triangles.
 class FractureVtkWriter
@@ -51,9 +59,14 @@ public:
     }
     void clear() { cell_data_.clear(); }
 
-    // Writes <name>.vtu and returns that file name.
+    // Writes <name>.vtu (.vtp for line cells) and returns that file name.
     std::string write(const std::string& name,
                       const FractureMesh& mesh,
+                      bool conforming,
+                      Dune::VTK::Precision coord_prec,
+                      Format format) const;
+    std::string write(const std::string& name,
+                      const VtkCellList& cells,
                       bool conforming,
                       Dune::VTK::Precision coord_prec,
                       Format format) const;
@@ -70,8 +83,11 @@ public:
 
     FractureVtkWriter& beginWrite(double time);
     void endWrite(const FractureMesh& mesh);
+    void endWrite(const VtkCellList& cells);
 
 private:
+    template <class Cells>
+    void endWrite_(const Cells& cells);
     void finishCollection_();
 
     std::string output_dir_;

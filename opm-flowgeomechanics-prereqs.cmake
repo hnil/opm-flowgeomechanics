@@ -13,6 +13,7 @@ set (opm-flowgeomechanics_CONFIG_VAR
   HAVE_HDF5
   USE_TRACY
   HAVE_DUNE_PDELAB
+  HAVE_DUNE_FOAMGRID
   )
 
 # dependencies; transitive requirements of the upstream OPM modules are
@@ -20,7 +21,10 @@ set (opm-flowgeomechanics_CONFIG_VAR
 find_package(Boost COMPONENTS date_time unit_test_framework REQUIRED)
 find_package(dune-common REQUIRED)
 find_package(dune-istl REQUIRED)
-find_package(dune-foamgrid REQUIRED)
+# only tools, tests and the FoamGrid DDM overloads need it
+if(NOT DEFINED USE_DUNE_FOAMGRID OR USE_DUNE_FOAMGRID)
+  find_package(dune-foamgrid)
+endif()
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
 find_package(CGAL REQUIRED)

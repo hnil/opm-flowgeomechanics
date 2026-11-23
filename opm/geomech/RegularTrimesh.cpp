@@ -28,8 +28,12 @@
 #include <set>
 #include <tuple>
 
-#include <dune/grid/io/file/vtk/vtkwriter.hh>
-#include <dune/grid/utility/structuredgridfactory.hh>
+#include <opm/geomech/FractureMesh.hpp>
+#include <opm/geomech/FractureVtkWriter.hpp>
+
+#if HAVE_DUNE_FOAMGRID
+#include <dune/grid/common/gridfactory.hh>
+#endif
 #include <opm/common/OpmLog/OpmLog.hpp>
 #include <opm/common/TimingMacros.hpp>
 
@@ -929,6 +933,7 @@ RegularTrimesh::createTriangulation(const int coarsen_levels,
     return result;
 }
 
+#if HAVE_DUNE_FOAMGRID
 //------------------------------------------------------------------------------
 std::unique_ptr<Grid>
 RegularTrimesh::createDuneGrid(const Triangulation& tri)
@@ -955,6 +960,7 @@ RegularTrimesh::createDuneGrid(const int coarsen_levels,
     auto grid = createDuneGrid(tri);
     return make_tuple(std::move(grid), std::move(tri.fsmap), std::move(tri.boundary_map));
 }
+#endif
 
 // ----------------------------------------------------------------------------
 pair<NodeRef, NodeRef>
@@ -1095,25 +1101,16 @@ writeMeshToVTK(const RegularTrimesh& mesh,
                const bool add_smoothing_triangles)
 // ----------------------------------------------------------------------------
 {
-    const auto grid = mesh.createDuneGrid(coarsen_levels, fixed_cells, add_smoothing_triangles);
-
-    const auto& g = get<0>(grid);
-    const auto mesh_fsmap = get<1>(grid);
-    const auto boundary_map = get<2>(grid);
-
-    // write grid to file
-    auto vtkwriter = make_unique<Dune::VTKWriter<Grid::LeafGridView>>(get<0>(grid)->leafGridView(),
-                                                                      Dune::VTK::nonconforming);
-    // write flag to file
+    const auto tri = mesh.createTriangulation(coarsen_levels, fixed_cells, add_smoothing_triangles);
+    FractureVtkWriter writer;
     if (coarsen_levels == 0) {
         vector<int> flags = mesh.getCellFlags();
         if (add_smoothing_triangles)
-            flags.resize(std::get<0>(grid)->size(0), -1);
-        vtkwriter->addCellData(flags, "flag");
-        vtkwriter->write(filename);
-    } else {
-        vtkwriter->write(filename);
+            flags.resize(tri.triangles.size(), -1);
+        writer.addCellData(flags, "flag");
     }
+    writer.write(filename, buildFractureMesh(tri.nodes, tri.triangles), false, Dune::VTK::Precision::float32,
+                 FractureVtkWriter::Format::ascii);
 }
 
 // ----------------------------------------------------------------------------

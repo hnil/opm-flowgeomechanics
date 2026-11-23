@@ -485,8 +485,6 @@ Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched,
         return;
     }
 
-    using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<FractureWell::Grid::LeafGridView>;
-
     for (auto wellIx = 0 * this->wells_.size(); wellIx < this->wells_.size(); ++wellIx) {
         const auto& fracWell = this->wells_[wellIx];
 
@@ -499,10 +497,7 @@ Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched,
             = localSeedCells(fracWell, sched.wells(fracWell.name()).getConnections(), wseed,
                              lgrs);
 
-        const auto emap = ElementMapper {fracWell.grid().leafGridView(), Dune::mcmgElementLayout()};
-
-        for (const auto& elem : elements(fracWell.grid().leafGridView())) {
-            const auto elemIdx = emap.index(elem);
+        for (int elemIdx = 0; elemIdx < static_cast<int>(fracWell.numSegments()); ++elemIdx) {
             const auto seedPos = localSeeds.find(fracWell.reservoirCell(elemIdx));
             if (seedPos == localSeeds.end()) {
                 continue;
@@ -555,7 +550,7 @@ Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched,
                 /*global_index */ globalIndex,
                 /* well segment */ fracWell.segment(elemIdx),
                 /* distance range */ fracWell.perfRange(elemIdx),
-                /* seed origin */ elem.geometry().corner(1),
+                /* seed origin */ fracWell.segmentEnd(elemIdx),
                 /* fracturing plane's normal vector */ normal,
                 this->prm_,
                 fracWell.connectionIdentity(elemIdx));

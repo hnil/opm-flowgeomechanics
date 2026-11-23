@@ -19,12 +19,13 @@
 
 #include "config.h"
 
+#include "opm/geomech/FractureMesh.hpp"
+#include "opm/geomech/FractureVtkWriter.hpp"
 #include "opm/geomech/RegularTrimesh.hpp"
 #include <fstream>
 #include <iostream>
 #include <vector>
 
-#include <dune/grid/io/file/vtk/vtkwriter.hh>
 
 using namespace Opm;
 using namespace std;
@@ -145,12 +146,9 @@ irregular_grid_test()
     mesh.writeMatlabTriangulation(file);
     file.close();
 
-    const auto [grid, fsmap, bcells] = mesh.createDuneGrid();
-
-    // write grid to file
-    auto vtkwriter = std::make_unique<Dune::VTKWriter<Grid::LeafGridView>>(grid->leafGridView(),
-                                                                           Dune::VTK::nonconforming);
-    vtkwriter->write("mesh");
+    const auto tri = mesh.createTriangulation();
+    FractureVtkWriter().write("mesh", buildFractureMesh(tri.nodes, tri.triangles), false,
+                              Dune::VTK::Precision::float32, FractureVtkWriter::Format::ascii);
 
     // write outer boundary edges to file
     vector<pair<Coord3D, Coord3D>> outer_boundary_edges;

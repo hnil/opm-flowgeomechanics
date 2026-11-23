@@ -23,11 +23,8 @@
 
 #include <dune/common/fvector.hh>
 
-#include <dune/grid/io/file/vtk/vtkwriter.hh>
+#include <opm/geomech/FractureVtkWriter.hpp>
 
-#include <dune/foamgrid/foamgrid.hh>
-
-#include <opm/models/io/vtkmultiwriter.hh>
 #include <opm/models/utils/propertysystem.hh>
 
 #include <array>
@@ -52,8 +49,6 @@ class FractureWell
     using Segment = std::array<unsigned,2>;
 
 public:
-    using Grid = Dune::FoamGrid<1,3>;
-
     struct Connection
     {
         int cell{};
@@ -85,7 +80,7 @@ public:
     void updateReservoirProperties(const Simulator& simulator)
     {
         using FluidSystem = GetPropType<TypeTag, Properties::FluidSystem>;
-        assert(grid_->leafGridView().size(0) == this->conns_.size());
+        assert(segments_.size() == this->conns_.size());
 
         this->perf_pressure_.resize(this->conns_.size());
         this->perf_active_.resize(this->conns_.size(), false);
@@ -108,7 +103,8 @@ public:
         }
     }
     void setPerfPressure(int perf_index, double pressure){perf_pressure_[perf_index] = pressure;}
-    const Grid& grid() const{return *grid_;}
+    std::size_t numSegments() const { return segments_.size(); }
+    const Point3D& segmentEnd(std::size_t segment) const { return points_[segments_[segment][1]]; }
     const std::vector<Connection>& connections() const { return conns_; }
     const std::vector<Point3D>& definingPoints() const { return points_; }
     //! Connection-cell centres in connection order (definingPoints() without the reference point).
@@ -168,8 +164,6 @@ private:
     std::vector<Point3D> points_;
     std::vector<Segment> segments_;
 
-    std::unique_ptr<Grid> grid_{};
-    std::unique_ptr<Dune::VTKWriter<Grid::LeafGridView>> vtkwriter_{};
 
     // reservoir data
     std::vector<Dune::FieldVector<double,6>> reservoir_stress_{};
@@ -180,10 +174,8 @@ private:
     std::vector<double> perf_pressure_{};
     std::vector<double> perf_active_{};
     bool active_ = false; // if the well is active
-  //
-  // welldata : state, WI, ?
-    static constexpr auto VTKFormat = Dune::VTK::ascii;
-    std::unique_ptr<Opm::VtkMultiWriter<Grid::LeafGridView, VTKFormat>> vtkmultiwriter_{};
+    VtkCellList vtkCells_() const;
+    std::unique_ptr<FractureVtkSeriesWriter> vtkmultiwriter_{};
 };
 
 } // namespace Opm

@@ -28,7 +28,9 @@
 #include <tuple>
 
 #include <dune/common/exceptions.hh>
+#if HAVE_DUNE_FOAMGRID
 #include <dune/foamgrid/foamgrid.hh>
+#endif
 
 namespace Opm
 {
@@ -37,7 +39,9 @@ typedef std::array<int, 3> CellRef; // (i, j, [0 | 1])
 typedef std::array<int, 3> EdgeRef; // (i, j, [0 | 1 | 2])
 typedef std::array<int, 2> NodeRef; // (i, j)
 typedef std::array<double, 3> Coord3D;
+#if HAVE_DUNE_FOAMGRID
 using Grid = Dune::FoamGrid<2, 3>;
+#endif
 
 
 // Nodes and triangles in the order createDuneGrid inserts them, with its cell maps.
@@ -158,6 +162,7 @@ public:
     void swap(RegularTrimesh& other);
     // ---------------------- Functions for outputting other grid types -------------
 
+#if HAVE_DUNE_FOAMGRID
     // first return value is the Dune grid, second is a map from Dune cells to
     // Trimesh cells, third is a map from TriMesh boundary cells to the relevant
     // boundary cell in the Dune grid (not always trivial, due to smoothing
@@ -168,12 +173,13 @@ public:
                    const bool add_smoothing_triangles = true,
                    const int cellnum_threshold = 10,
                    const int band_rings = 1) const;
+    static std::unique_ptr<Grid> createDuneGrid(const Triangulation& tri);
+#endif
     Triangulation createTriangulation(const int coarsen_levels = 0,
                                       const std::vector<CellRef>& fixed_cells = std::vector<CellRef>(),
                                       const bool add_smoothing_triangles = true,
                                       const int cellnum_threshold = 10,
                                       const int band_rings = 1) const;
-    static std::unique_ptr<Grid> createDuneGrid(const Triangulation& tri);
     void writeMatlabTriangulation(std::ostream& out) const;
 
     // ------------- Functions for creating new RegularTrimesh objects -------------
