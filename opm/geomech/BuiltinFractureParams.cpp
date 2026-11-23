@@ -302,9 +302,30 @@ const char* sequentialImplicitFractureParamJson()
 } // namespace
 
 namespace Opm::Detail {
+namespace {
+struct FracturePreset
+{
+    const char* name;
+    const char* json;
+};
+constexpr FracturePreset fracturePresets[] = {
+#include "BuiltinFracturePresets.hpp"
+};
+
+const char* presetJson(const std::string& name)
+{
+    for (const auto& p : fracturePresets) {
+        if (name == p.name) {
+            return p.json;
+        }
+    }
+    return nullptr;
+}
+} // namespace
+
 bool isBuiltinFractureParamAlias(const std::string& filename)
 {
-    return filename == "standard" || filename == "sequential_implicit";
+    return filename == "standard" || filename == "sequential_implicit" || presetJson(filename) != nullptr;
 }
 
 Opm::PropertyTree builtinFractureParam(const std::string& filename)
@@ -315,6 +336,10 @@ Opm::PropertyTree builtinFractureParam(const std::string& filename)
 
     if (filename == "sequential_implicit") {
         return Opm::PropertyTree::fromJsonString(sequentialImplicitFractureParamJson());
+    }
+
+    if (const char* json = presetJson(filename)) {
+        return Opm::PropertyTree::fromJsonString(json);
     }
 
     OPM_THROW(std::invalid_argument, "Unknown built-in fracture parameter alias: " + filename);

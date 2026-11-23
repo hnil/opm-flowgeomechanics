@@ -161,8 +161,20 @@ macro (opm-flowgeomechanics_files_hook)
 	endif()
 endmacro (opm-flowgeomechanics_files_hook)
 
+# fracture presets in data/best_practice/ that are also built-in --fracture-param-file aliases
+set(_fracture_presets "")
+foreach(_preset IN ITEMS seq_fast postsolve_nocap)
+	set(_preset_file ${CMAKE_CURRENT_SOURCE_DIR}/data/best_practice/${_preset}.json)
+	file(READ ${_preset_file} _preset_json)
+	string(APPEND _fracture_presets "    {\"${_preset}\", R\"opmjson(${_preset_json})opmjson\"},\n")
+	set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${_preset_file})
+endforeach()
+file(CONFIGURE OUTPUT ${PROJECT_BINARY_DIR}/BuiltinFracturePresets.hpp
+	CONTENT "// generated from data/best_practice/*.json\n@_fracture_presets@" @ONLY)
+
 # all setup common to the OPM library modules is done here
 include (OpmLibMain)
+target_include_directories(opmflowgeomechanics PRIVATE "${PROJECT_BINARY_DIR}")
 
 include(OpmBashCompletion)
 

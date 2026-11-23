@@ -87,13 +87,20 @@ WWIRFRAC/WWIR, fracture area and fracture height match the delivered solver.
 
 ## Correspondence to the built-in aliases
 
-`--fracture-param-file` accepts two **built-in alias names** (no file needed); they are
-compiled into the binary in `opm/geomech/BuiltinFractureParams.cpp`:
+`--fracture-param-file` accepts these **built-in alias names** (no file needed). `seq_fast` and
+`postsolve_nocap` are compiled from the files of the same name here, so the two cannot drift; the
+other two are in `opm/geomech/BuiltinFractureParams.cpp`:
 
 | alias | method | equivalent file here |
 |---|---|---|
+| `seq_fast` | SeqMechFrac, FB contact | `seq_fast.json` — **the default for SeqMechFrac** |
+| `postsolve_nocap` | PostSolve, no area cap, pressure-target dt | `postsolve_nocap.json` — cheap long runs |
 | `sequential_implicit` | SeqMechFrac (implicit_flow) | ≈ `seq_implicit_bhp.json` |
 | `standard` | PostSolve | ≈ `postsolve.json` (both use `vem_stability_choice=1`) |
+
+Run flags that belong to them: `seq_fast` with `--linear-solver-mech=mech_lines.json
+--solver-max-time-step-in-days=5 --save-step=last`; `postsolve_nocap` with
+`--solver-max-time-step-in-days=30`. Put `WSEED` width in item 10 (3e-4).
 
 So for the two main schemes you can skip the file entirely and pass the alias. The files in
 this directory are the place to start when you need to change control (rate), turn on a
