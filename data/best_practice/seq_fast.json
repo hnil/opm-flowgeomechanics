@@ -164,6 +164,7 @@
    "fracture_storage_term": true,
    "wi_upscaling": "conductivity",
    "well_source_radius": 1.0,
+   "well_source_mode": "trajectory",
    "band_rings": "3",
    "no_leakof_front_distance": "4",
    "coarsen_majority": "true",

@@ -162,6 +162,7 @@
    "fracture_storage_term": true,
    "wi_upscaling": "conductivity",
    "well_source_radius": 1.0,
+   "well_source_mode": "trajectory",
    "coupling_dt_pressure_target": "5",
    "coupling_dt_area_target": "0"
   },
