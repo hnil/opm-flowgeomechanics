@@ -3131,6 +3131,7 @@ Fracture::wellPathSourceCells() const
     const std::set<int> perfcells(well_perf_cells_.begin(), well_perf_cells_.end());
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     std::set<int> fed;
+    const double wsr = prm_.get<double>("solver.well_source_radius", 0.0);
     // A piece of near-zero projected length is a crossing point: fed to the one triangle containing it best.
     std::vector<std::pair<double, int>> best_point(pieces.size(), {-1e-9, -1});
     for (const auto& e : Dune::elements(grid_->leafGridView())) {
@@ -3146,9 +3147,16 @@ Fracture::wellPathSourceCells() const
         const double area2 = cross(sub(p[1], p[0]), sub(p[2], p[0]));
         if (std::abs(area2) < 1e-20) continue;
         const double h = std::sqrt(std::abs(area2));
+        const P2 pc {(p[0][0] + p[1][0] + p[2][0]) / 3.0, (p[0][1] + p[1][1] + p[2][1]) / 3.0};
         for (std::size_t k = 0; k < pieces.size(); ++k) {
             const auto& [A, B] = pieces[k];
             const P2 AB = sub(B, A);
+            if (wsr > 0.0) {
+                const double ab2 = AB[0] * AB[0] + AB[1] * AB[1];
+                const P2 Ac = sub(pc, A);
+                const double t = ab2 > 0.0 ? std::clamp((Ac[0] * AB[0] + Ac[1] * AB[1]) / ab2, 0.0, 1.0) : 0.0;
+                if (std::hypot(Ac[0] - t * AB[0], Ac[1] - t * AB[1]) <= wsr) fed.insert(i);
+            }
             if (std::hypot(AB[0], AB[1]) < 1e-6 * h) {
                 double lmin = 1.0;
                 for (int c = 0; c < 3; ++c) {
