@@ -143,7 +143,6 @@
    "coupling_state_relaxation": 0.5,
    "onset_dt_limit": "0.1",
    "write_iteration_snapshots": "false",
-   "iteration_snapshot_dir": "/private/tmp/claude-501/-Users-hnil-Documents-OPM-opm-geomech/712ed68d-f90e-47da-8a8c-7e431a8009a6/scratchpad/runs/short_ad_rw_iter",
    "iteration_snapshot_cells": "false",
    "well_source_all_perfs": "true",
    "write_fracture_system": "false",

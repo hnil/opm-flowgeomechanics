@@ -94,13 +94,15 @@ other two are in `opm/geomech/BuiltinFractureParams.cpp`:
 | alias | method | equivalent file here |
 |---|---|---|
 | `seq_fast` | SeqMechFrac, FB contact | `seq_fast.json` — **the default for SeqMechFrac** |
-| `postsolve_nocap` | PostSolve, no area cap, pressure-target dt | `postsolve_nocap.json` — cheap long runs |
+| `postsolve_nocap` | PostSolve, no area cap, pressure-target dt | `postsolve_nocap.json` — cheap long runs on rate-controlled wells; not for BHP control (see below) |
 | `sequential_implicit` | SeqMechFrac (implicit_flow) | ≈ `seq_implicit_bhp.json` |
 | `standard` | PostSolve | ≈ `postsolve.json` (both use `vem_stability_choice=1`) |
 
 Run flags that belong to them: `seq_fast` with `--linear-solver-mech=mech_lines.json
 --solver-max-time-step-in-days=5 --save-step=last`; `postsolve_nocap` with
 `--solver-max-time-step-in-days=30`. Put `WSEED` width in item 10 (3e-4).
+`postsolve_nocap` has no per-solve area cap: at a fixed BHP, K1 grows with fracture length, so the first
+fracture solve can run to the model edge. Use `seq_fast` for BHP-controlled injectors.
 
 So for the two main schemes you can skip the file entirely and pass the alias. The files in
 this directory are the place to start when you need to change control (rate), turn on a

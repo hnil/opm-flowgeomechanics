@@ -3,3 +3,4 @@ opm-grid/
 opm-simulators/
 opm-upscaling/
 build/
+__pycache__/
