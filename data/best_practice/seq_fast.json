@@ -139,7 +139,8 @@
      },
      "lu_pivoting": true,
      "mech_solver": {
-      "type": "lapack_inv"
+      "type": "nearfield_ilu",
+      "nearfield_radius": 6
      }
     },
     "scaling": "blockmax",
