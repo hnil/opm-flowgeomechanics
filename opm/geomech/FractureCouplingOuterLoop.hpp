@@ -59,6 +59,7 @@ namespace Opm
             bool ctf_changed{false};
             double max_ctf_change_abs{0.0};
             double max_ctf_change_rel{0.0};
+            double max_ctf_change_well{0.0};
             double composite_norm{0.0};
 
             bool changed() const
@@ -319,6 +320,7 @@ namespace Opm
             const double ctf_threshold_abs = prm.get("solver.ctf_change_threshold", 1e-15);
             const double ctf_threshold_rel = prm.get("solver.ctf_change_threshold_rel", 0.0);
             const double ctf_rel_scale = prm.get("solver.ctf_relative_scale", 1.0);
+            const double ctf_threshold_well = prm.get("solver.ctf_change_threshold_well", 0.0);
             const int verbosity = prm.get("solver.verbosity", 1);
 
             CouplingChangeMetrics metrics;
@@ -336,6 +338,8 @@ namespace Opm
                 }
 
                 const size_t num_perfs = std::min(wellIndices.size(), wellIndices_new.size());
+                double well_change = 0.0;
+                double well_ctf = 0.0;
                 for (size_t i = 0; i < num_perfs; ++i) {
                     if (wellIndices[i].cell != wellIndices_new[i].cell) {
                         metrics.structure_changed = true;
@@ -349,10 +353,19 @@ namespace Opm
 
                     metrics.max_ctf_change_abs = std::max(metrics.max_ctf_change_abs, ctf_change_abs);
                     metrics.max_ctf_change_rel = std::max(metrics.max_ctf_change_rel, ctf_change_rel);
+                    well_change += ctf_change_abs;
+                    well_ctf += std::max(std::abs(ctf_old), std::abs(ctf_new));
+                }
+                if (well_ctf > 0.0) {
+                    metrics.max_ctf_change_well = std::max(metrics.max_ctf_change_well, well_change / well_ctf);
                 }
             }
 
-            if (ctf_threshold_rel > 0.0) {
+            if (ctf_threshold_well > 0.0) {
+                // Relative to the well's fracture CTF sum, so independent of its magnitude.
+                metrics.ctf_changed = metrics.max_ctf_change_well > ctf_threshold_well;
+            }
+            else if (ctf_threshold_rel > 0.0) {
                 metrics.ctf_changed = metrics.max_ctf_change_abs > ctf_threshold_abs
                                    && metrics.max_ctf_change_rel > ctf_threshold_rel;
             }
@@ -360,8 +373,9 @@ namespace Opm
                 metrics.ctf_changed = metrics.max_ctf_change_abs > ctf_threshold_abs;
             }
 
-            const double ctf_abs_norm = (ctf_threshold_abs > 0.0)
-                ? metrics.max_ctf_change_abs / ctf_threshold_abs
+            const double ctf_abs_norm = (ctf_threshold_well > 0.0)
+                ? metrics.max_ctf_change_well / ctf_threshold_well
+                : (ctf_threshold_abs > 0.0) ? metrics.max_ctf_change_abs / ctf_threshold_abs
                 : 0.0;
             const double ctf_rel_norm = (ctf_threshold_rel > 0.0)
                 ? metrics.max_ctf_change_rel / ctf_threshold_rel
@@ -376,6 +390,7 @@ namespace Opm
                    << ", ctf_changed=" << (metrics.ctf_changed ? "true" : "false")
                    << ", max_ctf_change_abs=" << metrics.max_ctf_change_abs
                    << ", max_ctf_change_rel=" << metrics.max_ctf_change_rel
+                   << ", max_ctf_change_well=" << metrics.max_ctf_change_well
                    << ", composite_norm=" << metrics.composite_norm
                    << ", abs_threshold=" << ctf_threshold_abs;
                 if (ctf_threshold_rel > 0.0) {

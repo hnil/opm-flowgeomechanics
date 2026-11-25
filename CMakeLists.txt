@@ -566,6 +566,12 @@ target_link_libraries(test_cake_remap PRIVATE opmflowgeomechanics)
 add_test(NAME Unit.CakeRemap COMMAND $<TARGET_FILE:test_cake_remap>)
 set_tests_properties(Unit.CakeRemap PROPERTIES TIMEOUT 30 LABELS "physics;unit")
 
+# The well-relative fracture CTF change test must not depend on the CTF magnitude.
+add_executable(test_ctf_change_metric tests/test_ctf_change_metric.cpp)
+target_link_libraries(test_ctf_change_metric PRIVATE opmflowgeomechanics)
+add_test(NAME Unit.CtfChangeMetric COMMAND $<TARGET_FILE:test_ctf_change_metric>)
+set_tests_properties(Unit.CtfChangeMetric PROPERTIES TIMEOUT 30 LABELS "physics;unit")
+
 # Interpolated stress must keep cell values and stop at faults.
 add_executable(test_centre_stress tests/test_centre_stress.cpp)
 target_link_libraries(test_centre_stress PRIVATE opmflowgeomechanics)
