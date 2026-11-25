@@ -55,6 +55,21 @@ namespace Opm {
         return n;
     }
 
+    inline std::string
+    FractureModel::partitionClippedReport() const
+    {
+        std::string report;
+        for (const auto& well_fracture : well_fractures_) {
+            for (const auto& fracture : well_fracture) {
+                if (fracture.numPartitionClipped() > 0) {
+                    report += (report.empty() ? "" : ", ") + fracture.name() + " ("
+                        + std::to_string(fracture.numPartitionClipped()) + " elements)";
+                }
+            }
+        }
+        return report;
+    }
+
     template<class Grid>
     FractureModel::FractureModel(const Grid&              grid,
                                  const std::vector<Well>& wells,

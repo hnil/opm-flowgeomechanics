@@ -71,7 +71,7 @@
 #include <vector>
 
 namespace Opm::Parameters {
-struct FracturePartitionStop { static constexpr bool value = false; };
+struct FracturePartitionStop { static constexpr bool value = true; };
 }
 
 namespace Opm{
@@ -707,7 +707,7 @@ namespace Opm{
             VtkGeoMechModule<TypeTag>::registerParameters();
             FlowLinearSolverParametersGeoMech::registerParameters<TypeTag>();
 	    Parameters::Register<Parameters::FracturePartitionStop>
-	        ("Stop a parallel run when a fracture reaches cells owned by another rank (default: warn once)");
+	        ("Stop a parallel run when a fracture reaches cells owned by another rank; false warns once and continues");
 	    Parameters::Register<Parameters::MechPorosityCoupling>
 	        ("Feed the geomechanical pore-volume change back into the flow "
 	         "equations");
@@ -1011,10 +1011,26 @@ namespace Opm{
                 || !this->geoMechModel().fractureModelActive()) {
                 return;
             }
-            const int clipped = this->gridView().comm().sum(
-                this->geoMechModel().fractureModel().numPartitionClipped());
+            const auto& comm = this->gridView().comm();
+            const auto& model = this->geoMechModel().fractureModel();
+            const int clipped = comm.sum(model.numPartitionClipped());
             if (clipped == 0) {
                 return;
+            }
+            // Fixed width so a plain allgather carries every rank's report.
+            constexpr int width = 256;
+            std::array<char, width> mine{};
+            const std::string own = model.partitionClippedReport();
+            std::copy_n(own.begin(), std::min<std::size_t>(own.size(), width - 1), mine.begin());
+            std::vector<char> all(static_cast<std::size_t>(width) * comm.size());
+            comm.allgather(mine.data(), width, all.data());
+            std::string where;
+            for (int r = 0; r < comm.size(); ++r) {
+                const std::string s(all.data() + static_cast<std::size_t>(r) * width);
+                if (!s.empty()) {
+                    where += " Rank " + std::to_string(r) + ": " + s + " reached the edge of rank "
+                        + std::to_string(r) + "'s partition.";
+                }
             }
             const double day = 86400.0;
             const double t0 = this->simulator().time() / day;
@@ -1024,14 +1040,16 @@ namespace Opm{
                 + " fracture elements reach cells owned by another MPI rank in the step "
                 + fmt::format("{:.1f} -> {:.1f}", t0, t1) + " days."
                 + " Those elements get no flow coupling and no well index (or are removed when"
-                + " extended_fractures is off), so results from here on depend on the partition.";
+                + " extended_fractures is off), so results from here on depend on the partition." + where;
             if (Parameters::Get<Parameters::FracturePartitionStop>()) {
                 const std::string stop = msg + " Stopping before this step is written; output up to day "
-                    + fmt::format("{:.1f}", t0) + " is unaffected. Rerun serial or on fewer ranks.";
+                    + fmt::format("{:.1f}", t0) + " is unaffected. Repartition and rerun: use another"
+                    + " partition method or keep the fractured well's region on one rank (or run serial)."
+                    + " --fracture-partition-stop=false continues instead.";
                 OPM_THROW(std::runtime_error, stop);
             }
             if (!partitionClipWarned_) {
-                OpmLog::warning(msg + " Continuing; --fracture-partition-stop=true stops here instead.");
+                OpmLog::warning(msg + " Continuing because --fracture-partition-stop=false.");
                 partitionClipWarned_ = true;
             }
         }

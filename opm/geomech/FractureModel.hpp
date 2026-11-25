@@ -91,6 +91,7 @@ public:
 
      void updateFractureReservoirCells(const Dune::CpGrid& cpgrid);
     int numPartitionClipped() const;
+    std::string partitionClippedReport() const;
     //! Fracture cells outside the flow grid take their stress from this mechanics grid.
     void setMechGrid(const Dune::CpGrid& mechGrid)
     {
