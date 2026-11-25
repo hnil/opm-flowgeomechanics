@@ -73,7 +73,7 @@
    "divide_wellidx": "true",
    "no_leakof_outercells": "false",
    "__2_inner_nonlinear_solve": "--- inner width/pressure Newton (per fixed geometry) ---",
-   "max_iter": "100",
+   "max_iter": "400",
    "tolerance": "1e-6",
    "min_width": "0.001",
    "max_width": "0.5",
