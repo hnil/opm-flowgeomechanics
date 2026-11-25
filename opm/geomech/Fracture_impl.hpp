@@ -963,6 +963,7 @@ Fracture::regridTo_(const RegularTrimesh& trimesh, const int level, const Propag
     composeFlowStateDonor(maps.before, grid_mesh_map_, level, maps.before_level);
     updateReservoirProperties<TypeTag, Simulator>(simulator, true, false);
     initPressureMatrix();
+    grid_changed_since_checkpoint_ = true;
     rhs_pressure_.resize(0);
     coupling_matrix_ = nullptr;
 

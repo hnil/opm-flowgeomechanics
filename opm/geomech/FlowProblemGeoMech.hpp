@@ -466,15 +466,6 @@ namespace Opm{
             this->checkFractureCouplingIfRequested_();
         }
 
-        /*!
-         * \brief Verify the fracture <-> mechanics coupling blocks against finite
-         *        differences (opt-in, fractureparam.solver.check_coupling_fd).
-         *
-         * The blocks themselves are built with AD; this differentiates the same
-         * residual kernels numerically and compares. check_coupling_fd_columns
-         * keeps the cost bounded by checking only that many columns per
-         * fracture, spread over the matrix; -1 checks every one.
-         */
         // Start-of-step water and energy per fracture: storage(old state) * V_old. With
         // remappedFromCurrent, remapped cells use their current state instead.
         std::vector<std::array<Scalar, 2>> embeddedOldInventory_(const bool remappedFromCurrent) const
@@ -527,6 +518,15 @@ namespace Opm{
             }
         }
 
+        /*!
+         * \brief Verify the fracture <-> mechanics coupling blocks against finite
+         *        differences (opt-in, fractureparam.solver.check_coupling_fd).
+         *
+         * The blocks themselves are built with AD; this differentiates the same
+         * residual kernels numerically and compares. check_coupling_fd_columns
+         * keeps the cost bounded by checking only that many columns per
+         * fracture, spread over the matrix; -1 checks every one.
+         */
         void checkFractureCouplingIfRequested_()
         {
             if ((fractureAuxCells_ == nullptr) || !this->geoMechModel().fractureModelActive()) {

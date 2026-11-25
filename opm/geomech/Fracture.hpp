@@ -551,6 +551,8 @@ public:
     bool onsetHoldActive() const;
     double filterCakeVolume() const;
     void resetFracture();
+    // after resetFracture and the reservoir-cell update: rebuild well sources and pressure matrix if the grid changed
+    void finishReset();
     void moveForwardInTime(double dt_last = -1.0);
 
     //! Checkpoint of everything a solve leaves behind. Loading rebuilds the grid from
@@ -809,6 +811,7 @@ private:
     TriangulationArgs grid_tri_args_; // with grid_fixed_cells_: the createDuneGrid call grid_ came from
     std::optional<std::map<CellRef, int>> removal_boundary_map_; // boundary map of the last removeCells
     std::set<CellRef> removed_cells_; // trimesh_ cells dropped by removeCells since the last regrid
+    bool grid_changed_since_checkpoint_ = false; // grid_ changed since the checkpoint: reset must rebuild perfinj_, htrans_, pressure_matrix_
     std::unique_ptr<Grid> grid_;
     // grid definition in case of step fails
     std::unique_ptr<Opm::RegularTrimesh> trimesh_prev_; // experimental, implicitly defined grids

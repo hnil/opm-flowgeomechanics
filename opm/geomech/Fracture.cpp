@@ -226,7 +226,7 @@ Fracture::removeCells()
     }
     well_source_.clear();
     for (const auto& cell : grid_fixed_cells_) {
-        well_source_.push_back(fsmap_inv[cell]);
+        well_source_.push_back(fsmap_inv.at(cell));
     }
     // keep the width of cells the rebuild left unchanged, so callers holding a width stay consistent
     if (fracture_width_.size() == grid_mesh_map_.size()) {
@@ -244,6 +244,7 @@ Fracture::removeCells()
     grid_mesh_map_ = std::move(fsmap);
     removal_boundary_map_ = std::move(bmap);
     setFractureGrid(std::move(grid));
+    grid_changed_since_checkpoint_ = true;
     return true;
 }
 
@@ -2786,6 +2787,20 @@ Fracture::remapFilterCakeConservative(const RegularTrimesh::CellVolumes& source,
                                              source_level);
 }
 
+void Fracture::finishReset()
+{
+    if (grid_changed_since_checkpoint_) {
+        const std::size_t htrans_before = htrans_.size();
+        const std::size_t perfinj_before = perfinj_.size();
+        initPressureMatrix();
+        grid_changed_since_checkpoint_ = false;
+        OpmLog::debug(fmt::format("Fracture {}: reset rebuilt the pressure system on the restored grid "
+                                  "({} cells; faces {} -> {}, perforations {} -> {})",
+                                  name(), numFractureCells(), htrans_before, htrans_.size(),
+                                  perfinj_before, perfinj_.size()));
+    }
+}
+
 void Fracture::resetFracture()
 {
     if (!trimesh_prev_) {
@@ -2947,6 +2962,7 @@ void Fracture::moveForwardInTime(double dt_last)
     // save well source indices (needed to rebuild the dune grid on reset)
     well_source_cellref_prev_ = well_source_cellref_;
     well_source_prev_ = well_source_;
+    grid_changed_since_checkpoint_ = false;
     // reservoir cell mappings are NOT stored here; they are recomputed on reset
     // via FractureModel::resetFractures → updateFractureReservoirCells + initReservoirProperties.
 }

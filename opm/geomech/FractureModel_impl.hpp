@@ -279,6 +279,11 @@ namespace Opm {
         const auto& cpgrid = simulator.vanguard().grid();
         updateFractureReservoirCells(cpgrid);
         this->initReservoirProperties<TypeTag, Simulator>(simulator);
+        for (auto& fractures : well_fractures_) {
+            for (auto& fracture : fractures) {
+                fracture.finishReset();
+            }
+        }
         this->updateReservoirProperties<TypeTag, Simulator>(simulator);
         this->updateWellProperties<TypeTag, Simulator>(simulator);
     }
