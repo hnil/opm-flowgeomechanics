@@ -1827,6 +1827,16 @@ Fracture::assignGeoMechWellState(PerfData<Scalar>& perfData) const
     frac_prop.inj_pressure[perfIx] = fprop.inj_pressure;
     frac_prop.inj_bhp[perfIx] = fprop.inj_bhp;
     frac_prop.inj_wellrate[perfIx] = fprop.inj_wellrate;
+    if (frac_prop.open_area.size() == frac_prop.area.size()) {
+        const auto areas = cellAreas();
+        double open_area = 0.0;
+        for (std::size_t i = 0; i < areas.size(); ++i) {
+            if (i >= closed_cells_.size() || closed_cells_[i] == 0) {
+                open_area += areas[i];
+            }
+        }
+        frac_prop.open_area[perfIx] = open_area;
+    }
 }
 
 bool
