@@ -772,6 +772,8 @@ private:
         bool fbClampBeforeLineSearch{false};
         double fbPhiAbsTol{0.0}; // [Pa]; |phi| below it passes regardless of the cell's scale
         bool fbFlowMerit{false};
+        // > 0: coupling_matrix_ kept only once the open set is this many iterations stable (and, with FB, phi < 10 tol)
+        int keepCouplingAfterStableIters{0};
         bool fbTrace{false};
         double flowTolerance{-1.0}; // < 0: same as the mechanics tolerance
         bool dropCoupling{true};
@@ -1025,6 +1027,11 @@ private:
     mutable std::unique_ptr<Matrix> coupling_matrix_; // will be updated by `fullSystemIteration`
     mutable double fb_prev_flow_res_ = 0.0; // flow residual at the previous FB iteration
     mutable double fb_last_step_ = 1.0; // line-search factor of the last FB step (trace only)
+    std::vector<char> stage_open_; // w >= min_width per cell at the previous iteration
+    int stage_stable_iters_ = 0;
+    bool stage_coupling_on_ = false;
+    long stage_iters_on_ = 0;
+    long stage_iters_total_ = 0;
 
     using ElementMapper = Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView>;
     mutable std::unique_ptr<DynamicMatrix> fracture_matrix_;

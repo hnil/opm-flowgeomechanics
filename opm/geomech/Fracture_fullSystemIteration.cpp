@@ -499,6 +499,7 @@ Fracture::InnerSolveOptions::read(const PropertyTree& prm)
     }
     o.flowTolerance = prm.get<double>("solver.flow_tolerance", -1.0);
     o.dropCoupling = prm.get<bool>("solver.drop_fluid_mech_linearization", true);
+    o.keepCouplingAfterStableIters = prm.get<int>("solver.keep_coupling_after_stable_iters", 0);
     o.storageTerm = prm.get<bool>("solver.fracture_storage_term", false);
     o.storageJacobian = prm.get<bool>("solver.storage_jacobian_with_drop", false);
     o.linear = FractureCoupledLinearSolver::Options::read(prm);
@@ -854,7 +855,44 @@ Fracture::fullSystemIteration(const double tol, const int nlin_iteration)
     const bool closed_cells_changed = contact.changed;
     const bool first_iteration = (nlin_iteration == 0);
     const FbRows fb = assembleMechanicsRows_(x, mech_rhs, closed_cells, first_iteration);
-    assembleFlowRows_(closed_cells);
+    // staged coupling: C changes which sub-floor cells close, so keep it out until the open set settles
+    const bool staged = !opt.dropCoupling && opt.keepCouplingAfterStableIters > 0;
+    bool drop_c_now = opt.dropCoupling;
+    if (staged) {
+        const size_t nc = x[_0].size();
+        std::vector<char> open(nc);
+        for (size_t i = 0; i < nc; ++i)
+            open[i] = x[_0][i][0] >= min_width_;
+        if (first_iteration || open != stage_open_) {
+            stage_stable_iters_ = 0;
+        } else {
+            ++stage_stable_iters_;
+        }
+        stage_open_ = std::move(open);
+        double phi_inf = 0.0;
+        const double floor = opt.fbPhiAbsTol / tol;
+        for (size_t i = 0; i < fb.phi.size(); ++i) {
+            const double scale = (opt.isFb && opt.fbScaledConvergence) ? std::max(fb.scale[i], floor) : 1.0;
+            phi_inf = std::max(phi_inf, std::abs(fb.phi[i]) / scale);
+        }
+        const bool on = stage_stable_iters_ >= opt.keepCouplingAfterStableIters && phi_inf < 10.0 * tol;
+        ++stage_iters_total_;
+        stage_iters_on_ += on;
+        if (on != stage_coupling_on_ || first_iteration) {
+            OpmLog::debug(fmt::format("Staged coupling {} at iteration {} (on in {} of {} iterations)",
+                                      on ? "on" : "off", nlin_iteration, stage_iters_on_, stage_iters_total_));
+        }
+        stage_coupling_on_ = on;
+        drop_c_now = !on;
+        inner_.dropCoupling = drop_c_now;
+    }
+    try {
+        assembleFlowRows_(closed_cells);
+    } catch (...) {
+        if (staged) inner_.dropCoupling = false;
+        throw;
+    }
+    if (staged) inner_.dropCoupling = false;
     assembleSystemMatrix_(closed_cells, first_iteration);
     auto& S = *S_;
 
