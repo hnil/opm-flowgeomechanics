@@ -803,7 +803,7 @@ add_test(NAME Run.SIMPLE_MECH_FRAC_LGR.EnergyGeomech
 )
 
 # Fracture grows out of a one-layer LGR into the main grid; saved at step 2
-# and restarted from there.  Run-only.
+# and restarted from there.
 add_test(NAME Run.SIMPLE_MECH_FRAC_LGR_CROSS.EnergyGeomech
 	COMMAND
 	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
@@ -828,7 +828,16 @@ add_test(NAME Run.SIMPLE_MECH_FRAC_LGR_CROSS.Restart.EnergyGeomech
 	--output-dir=test_simple_mech_frac_lgr_cross_restart
 )
 set_tests_properties(Run.SIMPLE_MECH_FRAC_LGR_CROSS.Restart.EnergyGeomech
-	PROPERTIES FIXTURES_REQUIRED frac_lgr_cross_save)
+	PROPERTIES FIXTURES_REQUIRED frac_lgr_cross_save FIXTURES_SETUP frac_lgr_cross_restart)
+# The restarted run's summary starts at the load step, so compare the final state.
+add_test(NAME Compare.SIMPLE_MECH_FRAC_LGR_CROSS.Restart.EnergyGeomech
+	COMMAND $<TARGET_FILE:compareECL> -t UNRST -l
+	test_simple_mech_frac_lgr_cross/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_LGR_CROSS
+	test_simple_mech_frac_lgr_cross_restart/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_LGR_CROSS
+	1e-5 1e-5
+)
+set_tests_properties(Compare.SIMPLE_MECH_FRAC_LGR_CROSS.Restart.EnergyGeomech
+	PROPERTIES FIXTURES_REQUIRED "frac_lgr_cross_save;frac_lgr_cross_restart")
 
 ## regressuin
 opm_set_test_driver(${PROJECT_SOURCE_DIR}/tests/run-mechRegressionTest.sh "")
