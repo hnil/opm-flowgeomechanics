@@ -706,6 +706,7 @@ private:
    // K1/K1c per trimesh front cell; -1 where a veto forbids growth
    std::vector<double> propagationScores_(std::map<CellRef, int>& boundary, const GridSolve& solve,
                                           const PropagationOptions& opt) const;
+   void logDtCaps_() const;
    void vetoForceLimit_(std::vector<double>& score, const std::vector<int>& front,
                         const PropagationOptions& opt) const;
    void vetoUnconvergedCells_(std::vector<double>& score, const std::vector<int>& front,

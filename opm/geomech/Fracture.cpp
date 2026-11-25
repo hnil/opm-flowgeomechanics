@@ -2916,6 +2916,27 @@ void Fracture::rebuildGridForLoad(const std::vector<std::vector<CellRef>>& saved
     setFractureGrid(std::move(std::get<0>(built)));
 }
 
+void Fracture::logDtCaps_() const
+{
+    const double cap = maxFlowTimeStep();
+    if (!(cap > 0.0) || cap >= std::numeric_limits<double>::max()) {
+        return;
+    }
+    std::string binding = "max_flow_time_step";
+    if (onsetHoldActive() && prm_.get<double>("solver.onset_dt_limit", 0.0) * 86400.0 == cap) {
+        binding = "onset_dt_limit";
+    } else if (coupling_dt_cap_ == cap) {
+        binding = "coupling_dt";
+    } else if (stress_dt_cap_ == cap) {
+        binding = "stress_dt";
+    } else if (area_dt_cap_ == cap) {
+        binding = "area_dt";
+    }
+    OpmLog::debug(fmt::format("Fracture {}: dt cap {:.4g} d set by {} (coupling {:.4g}, stress {:.4g}, area {:.4g} d)",
+                              name(), cap / 86400.0, binding, coupling_dt_cap_ / 86400.0,
+                              stress_dt_cap_ / 86400.0, area_dt_cap_ / 86400.0));
+}
+
 void Fracture::moveForwardInTime(double dt_last)
 {
     // CTF-vector acceleration: the secant information is only meaningful within
@@ -2944,6 +2965,9 @@ void Fracture::moveForwardInTime(double dt_last)
             // multiplicative cap would ratchet dt to useless values.
             const double dt_min = prm_.get<double>("solver.coupling_dt_min", 0.1) * 86400.0;
             const int quiet_needed = prm_.get<int>("solver.coupling_dt_quiet_steps", 5);
+            // dt_last is clipped by report-step splitting, so release and hold from the cap itself when asked
+            const bool from_cap = prm_.get<bool>("solver.coupling_dt_from_cap", false);
+            const double dt_base = from_cap ? std::max(dt_last, coupling_dt_cap_) : dt_last;
             if (violated) {
                 // shrink immediately, proportionally to the excursion
                 double fac = 1.0;
@@ -2955,9 +2979,12 @@ void Fracture::moveForwardInTime(double dt_last)
             } else if (++coupling_quiet_steps_ >= quiet_needed) {
                 // transients settle in episodes: release only after a run of
                 // quiet steps, and gently
-                coupling_dt_cap_ = std::max(dt_last * 1.5, dt_min);
+                coupling_dt_cap_ = std::max(dt_base * 1.5, dt_min);
+                if (from_cap) {
+                    coupling_quiet_steps_ = 0; // at most one x1.5 per run of quiet steps
+                }
             } else {
-                coupling_dt_cap_ = std::max(dt_last, dt_min); // hold
+                coupling_dt_cap_ = std::max(dt_base, dt_min); // hold
             }
         }
         // Stress-rate dt controller (opt-in via solver.stress_dt_target, bar per
@@ -2993,6 +3020,7 @@ void Fracture::moveForwardInTime(double dt_last)
         area_step_start_ = fp.area;
         volume_step_start_ = fp.volume;
         rate_step_start_ = well_rate_;
+        logDtCaps_();
     } else {
         area_step_start_ = -1.0;
         volume_step_start_ = -1.0;
