@@ -43,6 +43,18 @@ namespace Opm {
         }
     }
 
+    inline int
+    FractureModel::numPartitionClipped() const
+    {
+        int n = 0;
+        for (const auto& well_fracture : well_fractures_) {
+            for (const auto& fracture : well_fracture) {
+                n += fracture.numPartitionClipped();
+            }
+        }
+        return n;
+    }
+
     template<class Grid>
     FractureModel::FractureModel(const Grid&              grid,
                                  const std::vector<Well>& wells,

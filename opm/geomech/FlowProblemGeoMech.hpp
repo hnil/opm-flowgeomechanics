@@ -70,6 +70,10 @@
 #include <tuple>
 #include <vector>
 
+namespace Opm::Parameters {
+struct FracturePartitionStop { static constexpr bool value = false; };
+}
+
 namespace Opm{
 
     template<typename TypeTag>
@@ -116,6 +120,7 @@ namespace Opm{
         bool embeddedLeakoffReport_ = false;
         bool embeddedRestructuredMidStep_ = false; // see embeddedRestructuredMidStep()
         bool embeddedLayoutPending_ = false;
+        bool partitionClipWarned_ = false;
         bool embeddedHoldOuterLoop_ = false;
         int embeddedPendingRounds_ = 0; // per step, see takeEmbeddedPendingRound()
 
@@ -710,6 +715,8 @@ namespace Opm{
             MechParent::registerParameters();
             VtkGeoMechModule<TypeTag>::registerParameters();
             FlowLinearSolverParametersGeoMech::registerParameters<TypeTag>();
+	    Parameters::Register<Parameters::FracturePartitionStop>
+	        ("Stop a parallel run when a fracture reaches cells owned by another rank (default: warn once)");
 	    Parameters::Register<Parameters::MechPorosityCoupling>
 	        ("Feed the geomechanical pore-volume change back into the flow "
 	         "equations");
@@ -1005,6 +1012,38 @@ namespace Opm{
             OPM_END_PARALLEL_TRY_CATCH("Begin time step geomech failed:",this->simulator().vanguard().grid().comm());
             this->emptyFractureLogger();
         }
+        // Thrown before this step's output, so the written results end with the last unclipped step.
+        void checkFracturePartition_()
+        {
+            if (!this->simulator().vanguard().eclState().runspec().mech() || !this->hasFractures()
+                || !this->geoMechModel().fractureModelActive()) {
+                return;
+            }
+            const int clipped = this->gridView().comm().sum(
+                this->geoMechModel().fractureModel().numPartitionClipped());
+            if (clipped == 0) {
+                return;
+            }
+            const double day = 86400.0;
+            const double t0 = this->simulator().time() / day;
+            const double t1 = t0 + this->simulator().timeStepSize() / day;
+            // Counts only elements over this rank's overlap cells, so it is a lower bound.
+            const std::string msg = "Fracture partition: at least " + std::to_string(clipped)
+                + " fracture elements reach cells owned by another MPI rank in the step "
+                + fmt::format("{:.1f} -> {:.1f}", t0, t1) + " days."
+                + " Those elements get no flow coupling and no well index (or are removed when"
+                + " extended_fractures is off), so results from here on depend on the partition.";
+            if (Parameters::Get<Parameters::FracturePartitionStop>()) {
+                const std::string stop = msg + " Stopping before this step is written; output up to day "
+                    + fmt::format("{:.1f}", t0) + " is unaffected. Rerun serial or on fewer ranks.";
+                OPM_THROW(std::runtime_error, stop);
+            }
+            if (!partitionClipWarned_) {
+                OpmLog::warning(msg + " Continuing; --fracture-partition-stop=true stops here instead.");
+                partitionClipWarned_ = true;
+            }
+        }
+
         void endTimeStep() override{
             // The state the step just converged on is still bound; compare the two
             // representations' view of the leak-off before anything moves.
@@ -1038,6 +1077,7 @@ namespace Opm{
             }
             OPM_END_PARALLEL_TRY_CATCH("End time step geomech failed: ", this->simulator().vanguard().grid().comm());
             this->emptyFractureLogger();
+            checkFracturePartition_();
             Parent::endTimeStep();
             if(this->simulator().vanguard().eclState().runspec().mech()){
                 if(this->hasFractures() ){

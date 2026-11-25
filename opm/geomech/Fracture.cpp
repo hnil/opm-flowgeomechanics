@@ -932,11 +932,24 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
                 *mech_lookup_.tree, *mech_lookup_.grid, *mech_lookup_.seeds, external::cvf::Vec3d(c[0], c[1], c[2]));
         }
     }
+    int clipped = 0;
+    if (grid.comm().size() > 1) {
+        for (const auto& element : elements(grid_->leafGridView())) {
+            if (reservoir_map_.cells[elemMapper.index(element)] < 0) {
+                const auto c = element.geometry().center();
+                clipped += external::nearNonInteriorCell(cellSearchTree, grid, entity_seeds,
+                                                         external::cvf::Vec3d(c[0], c[1], c[2]));
+            }
+        }
+    }
+    partition_clipped_ = clipped;
     auto it = std::find(reservoir_map_.cells.begin(), reservoir_map_.cells.end(), -1);
     auto extended_fractures = prm_.get<bool>("extended_fractures");
     if (!(it == reservoir_map_.cells.end()) && !(extended_fractures) && this->removeCells()) {
-        OpmLog::warning("Remove fracture outside of model");
+        OpmLog::warning(clipped > 0 ? "Remove fracture cells outside this rank's part of the model"
+                                    : "Remove fracture outside of model");
         this->updateReservoirCells(cellSearchTree, grid, entity_seeds);
+        partition_clipped_ = std::max(partition_clipped_, clipped);
     }else{
       if(!(it == reservoir_map_.cells.end())){
           OpmLog::warning("Fracture outside of model");

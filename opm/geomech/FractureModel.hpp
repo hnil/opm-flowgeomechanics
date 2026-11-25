@@ -90,6 +90,7 @@ public:
                       const LgrLookup* lgrs = nullptr);
 
      void updateFractureReservoirCells(const Dune::CpGrid& cpgrid);
+    int numPartitionClipped() const;
     //! Fracture cells outside the flow grid take their stress from this mechanics grid.
     void setMechGrid(const Dune::CpGrid& mechGrid)
     {

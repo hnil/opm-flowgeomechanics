@@ -116,6 +116,21 @@ int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
      }
 }
 
+bool nearNonInteriorCell(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
+                         const Dune::CpGrid& grid,
+                         const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& entity_seed,
+                         const cvf::Vec3d& point)
+{
+    external::cvf::BoundingBox bb;
+    bb.add(point);
+    for (const auto& cell : external::findCloseCellIndices(m_cellSearchTree, bb)) {
+        if (grid.entity(entity_seed[cell]).partitionType() != Dune::InteriorEntity) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void
 cellsOfTri(std::vector<int>& cells,
            std::vector<double>& areas,
