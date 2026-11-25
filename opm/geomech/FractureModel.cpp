@@ -444,7 +444,8 @@ localSeedCells(const Opm::FractureWell& fracWell,
             // connections (in connection order).
             auto matches = std::vector<Opm::WellConnections::const_iterator> {};
             for (auto it = conns.begin(); it != conns.end(); ++it) {
-                if (it->get_lgr_level() <= 0) {
+                // connections added by fracturing would shift the middle pick on restart
+                if (it->get_lgr_level() <= 0 || it->kind() == Opm::Connection::CTFKind::DynamicFracturing) {
                     continue;
                 }
                 const auto father = lgrs->father(it->get_lgr_level(), it->global_index());
