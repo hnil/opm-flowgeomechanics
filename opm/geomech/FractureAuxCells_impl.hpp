@@ -93,12 +93,17 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
             const auto depths = fracture.cellDepths();
 
             if (nextSlot + numCells > this->capacity_) {
-                OPM_THROW(std::runtime_error,
-                          fmt::format("The fracture cells need more degrees of freedom than "
-                                      "were reserved for them: {} in use, {} more wanted, {} "
-                                      "reserved. Raise "
-                                      "fractureparam.solver.embedded_capacity.",
-                                      nextSlot, numCells, this->capacity_));
+                // logged here: the time-step retry loop treats the throw as an ordinary substep failure
+                const auto msg = fmt::format("The fracture cells need more degrees of freedom than "
+                                             "were reserved for them: {} in use, {} more wanted, {} "
+                                             "reserved. Raise "
+                                             "fractureparam.solver.embedded_capacity.",
+                                             nextSlot, numCells, this->capacity_);
+                if (!this->capacityErrorLogged_) {
+                    OpmLog::error(msg);
+                    this->capacityErrorLogged_ = true;
+                }
+                OPM_THROW(std::runtime_error, msg);
             }
 
             const auto firstSlot = nextSlot;

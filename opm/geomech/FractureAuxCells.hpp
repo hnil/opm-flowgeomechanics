@@ -542,6 +542,7 @@ private:
     Simulator& simulator_;
 
     unsigned capacity_{};
+    bool capacityErrorLogged_ = false;
     Scalar minWidth_{};
     // The flow applies its upwind mobility; the total weighting folds in the ratio, lagged to the last bind.
     Scalar leakoffTrans_(const auto& fracture, std::size_t cell, double leakOf, double mob) const
