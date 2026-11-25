@@ -2640,11 +2640,18 @@ Fracture::updateLeakoff()
         }
     }
 }
+// Consumers pair the half-transmissibility t1 with the first index; legacy (false) gives it the other cell's.
+bool
+Fracture::halfTransOwnCell_() const
+{
+    return prm_.get<bool>("solver.half_trans_own_cell", false);
+}
+
 std::vector<Fracture::Htrans>
 Fracture::currentHalfTrans() const
 {
     std::vector<Htrans> htrans;
-
+    const bool own_cell = halfTransOwnCell_();
     ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     for (const auto& element : Dune::elements(grid_->leafGridView())) {
         const int eIdx = mapper.index(element);
@@ -2666,9 +2673,13 @@ Fracture::currentHalfTrans() const
             const auto d_outside = nCenter - isCenter;
             const double area = is.geometry().volume();
 
-            htrans.emplace_back(nIdx, eIdx,
-                                area / d_inside.two_norm(),
-                                area / d_outside.two_norm());
+            const double t_e = area / d_inside.two_norm();
+            const double t_n = area / d_outside.two_norm();
+            if (own_cell) {
+                htrans.emplace_back(nIdx, eIdx, t_n, t_e);
+            } else {
+                htrans.emplace_back(nIdx, eIdx, t_e, t_n);
+            }
         }
     }
 
@@ -3228,6 +3239,7 @@ Fracture::initPressureMatrix()
     const double fwi_rw = prm_.get<double>("solver.fractureWI_rw", 0.1);
     perfinj_.clear();
     htrans_.clear();
+    const bool half_trans_own_cell = halfTransOwnCell_();
     ElementMapper wsmapper(grid_->leafGridView(), Dune::mcmgElementLayout());
     std::vector<double> cell_area(numFractureCells(), 0.0);
     for (const auto& e : Dune::elements(grid_->leafGridView()))
@@ -3326,7 +3338,7 @@ Fracture::initPressureMatrix()
                     double h2 = area / d_outside.two_norm();
 
                     {
-                        Htrans matel(nIdx, eIdx, h1, h2);
+                        Htrans matel = half_trans_own_cell ? Htrans(nIdx, eIdx, h2, h1) : Htrans(nIdx, eIdx, h1, h2);
                         htrans_.push_back(matel);
                     }
                 }

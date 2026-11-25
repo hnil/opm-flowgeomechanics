@@ -849,6 +849,7 @@ private:
     void assemblePressureAndCouplingAD(const std::vector<int>& closed_cells);
     void addSource();
     void initPressureMatrix();
+    bool halfTransOwnCell_() const;
     void updateLeakoff();
     double leakoffMobilityFor(int eIdx, bool upwind) const;
     double leakoffPotentialDifference(int eIdx) const;
