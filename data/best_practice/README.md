@@ -87,16 +87,19 @@ WWIRFRAC/WWIR, fracture area and fracture height match the delivered solver.
 
 ## Correspondence to the built-in aliases
 
-`--fracture-param-file` accepts these **built-in alias names** (no file needed). `seq_fast` and
-`postsolve_nocap` are compiled from the files of the same name here, so the two cannot drift; the
-other two are in `opm/geomech/BuiltinFractureParams.cpp`:
+`--fracture-param-file` accepts these **built-in alias names** (no file needed). All but the two
+`_legacy` ones are compiled from the files named here, so alias and file cannot drift; the `_legacy`
+ones are in `opm/geomech/BuiltinFractureParams.cpp`:
 
 | alias | method | equivalent file here |
 |---|---|---|
-| `seq_fast` | SeqMechFrac, FB contact | `seq_fast.json` — **the default for SeqMechFrac** |
+| `sequential_implicit` | SeqMechFrac | `seq_record.json` — **the default for SeqMechFrac** |
+| `standard` | PostSolve | `postsolve_record.json` — **the default for PostSolve** |
+| `seq_fast` | SeqMechFrac, FB contact | `seq_fast.json` (= `seq_record` without staged keep-C) |
 | `postsolve_nocap` | PostSolve, no area cap, pressure-target dt | `postsolve_nocap.json` — cheap long runs on rate-controlled wells; not for BHP control (see below) |
-| `sequential_implicit` | SeqMechFrac (implicit_flow) | ≈ `seq_implicit_bhp.json` |
-| `standard` | PostSolve | ≈ `postsolve.json` (both use `vem_stability_choice=1`) |
+| `seq_record`, `postsolve_record` | | the files of the same name |
+| `sequential_implicit_legacy` | SeqMechFrac (implicit_flow) | ≈ `seq_implicit_bhp.json`; what `sequential_implicit` gave before 2026-11-25 |
+| `standard_legacy` | PostSolve | ≈ `postsolve.json` (both use `vem_stability_choice=1`); what `standard` gave before 2026-11-25 |
 
 Run flags that belong to them: `seq_fast` with `--linear-solver-mech=mech_lines.json
 --solver-max-time-step-in-days=5 --save-step=last`; `postsolve_nocap` with
@@ -106,7 +109,7 @@ fracture solve can run to the model edge. Use `seq_fast` for BHP-controlled inje
 
 ## Presets of record (2026-11-25)
 
-Not compiled in; the code defaults are unchanged.
+Compiled in as the aliases `sequential_implicit` and `standard`.
 
 | file | = | note |
 |---|---|---|
@@ -121,7 +124,7 @@ case-specific lever (performance), or pin settings for reproducibility.
 
 The committed regression decks use the frozen reference configs in the parent directory
 (`fracture_simple_bhp_seq_final.json`, `fracture_simple_bhp_seq_legacy_full.json`,
-`fracture_simple_rate_seq_full.json`, alias `sequential_implicit`) — do **not** edit those;
+`fracture_simple_rate_seq_full.json`, aliases `sequential_implicit_legacy`, `standard_legacy`) — do **not** edit those;
 edit copies here instead.
 
 ---
@@ -146,11 +149,11 @@ $BIN --parameter-file=$BP/params_seq.ini \
      --linear-solver-mech=$DATA/amgmechsolverhypre_geosxcpu_new_nv.json \
      --enable-write-all-solutions=true --output-dir=/tmp/run_seq_bhp
 
-# --- Same thing via the built-in alias (no file) ---
+# --- The SeqMechFrac default via the built-in alias (no file) ---
 $BIN --parameter-file=$BP/params_seq.ini \
      $DATA/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_SEQ.DATA \
      --fracture-param-file=sequential_implicit \
-     --linear-solver-mech=$DATA/amgmechsolverhypre_geosxcpu_new_nv.json \
+     --linear-solver-mech=$BP/mech_lines.json --solver-max-time-step-in-days=5 \
      --output-dir=/tmp/run_seq_alias
 
 # --- Rate-controlled well (the hard case) + small max step ---
@@ -166,7 +169,7 @@ $BIN --parameter-file=$BP/params.ini \
      --fracture-param-file=$BP/postsolve.json \
      --linear-solver-mech=$DATA/amgmechsolverhypre_geosxcpu_new_nv.json \
      --output-dir=/tmp/run_post
-#   or:  --fracture-param-file=standard
+#   or the PostSolve default:  --fracture-param-file=standard
 
 # --- Large / grid-refined run (mech-skip + Anderson) ---
 $BIN --parameter-file=$BP/params_seq.ini \

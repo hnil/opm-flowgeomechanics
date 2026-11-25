@@ -321,24 +321,37 @@ const char* presetJson(const std::string& name)
     }
     return nullptr;
 }
+
+// the default alias of each solve mode names its preset of record
+std::string aliasPreset(const std::string& name)
+{
+    if (name == "sequential_implicit") {
+        return "seq_record";
+    }
+    if (name == "standard") {
+        return "postsolve_record";
+    }
+    return name;
+}
 } // namespace
 
 bool isBuiltinFractureParamAlias(const std::string& filename)
 {
-    return filename == "standard" || filename == "sequential_implicit" || presetJson(filename) != nullptr;
+    return filename == "standard_legacy" || filename == "sequential_implicit_legacy"
+        || presetJson(aliasPreset(filename)) != nullptr;
 }
 
 Opm::PropertyTree builtinFractureParam(const std::string& filename)
 {
-    if (filename == "standard") {
+    if (filename == "standard_legacy") {
         return Opm::PropertyTree::fromJsonString(standardFractureParamJson());
     }
 
-    if (filename == "sequential_implicit") {
+    if (filename == "sequential_implicit_legacy") {
         return Opm::PropertyTree::fromJsonString(sequentialImplicitFractureParamJson());
     }
 
-    if (const char* json = presetJson(filename)) {
+    if (const char* json = presetJson(aliasPreset(filename))) {
         return Opm::PropertyTree::fromJsonString(json);
     }
 

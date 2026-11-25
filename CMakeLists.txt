@@ -170,7 +170,7 @@ endmacro (opm-flowgeomechanics_files_hook)
 
 # fracture presets in data/best_practice/ that are also built-in --fracture-param-file aliases
 set(_fracture_presets "")
-foreach(_preset IN ITEMS seq_fast postsolve_nocap)
+foreach(_preset IN ITEMS seq_fast postsolve_nocap seq_record postsolve_record)
 	set(_preset_file ${CMAKE_CURRENT_SOURCE_DIR}/data/best_practice/${_preset}.json)
 	file(READ ${_preset_file} _preset_json)
 	string(APPEND _fracture_presets "    {\"${_preset}\", R\"opmjson(${_preset_json})opmjson\"},\n")
@@ -933,7 +933,7 @@ add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_standard
 						 REL_TOL ${rel_tol}
 						 DIR ${CMAKE_CURRENT_LIST_DIR}/data/
 						 PREFIX geomech_frac
-						 TEST_ARGS --fracture-param-file=standard)
+						 TEST_ARGS --fracture-param-file=standard_legacy)
 
 # Formation damage (WINJDAM/WINJFCNC) + fracture: verifies the filter-cake
 # transmissibility damage on the original perforation, the matrix/fracture
@@ -1003,7 +1003,7 @@ add_mechtest_compareECLFiles(CASENAME REGTEST_geomech_frac_seq_bhp_sequential_im
                          DIR ${CMAKE_CURRENT_LIST_DIR}/data/
 						 PREFIX geomech_frac_seq_bhp_recommended
 						 TEST_ARGS --parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac_seq.ini
-						 --fracture-param-file=sequential_implicit
+						 --fracture-param-file=sequential_implicit_legacy
 						 --enable-write-all-solutions=true
 						 --linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/amgmechsolverhypre_geosxcpu_new_nv.json
 						 --threads-per-process=4)
