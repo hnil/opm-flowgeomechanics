@@ -43,7 +43,7 @@ BCCON sits on the outer faces of the padded grid.
 ```bash
 BIN=build/opm-flowgeomechanics/bin/flow_energy_geomech
 $BIN --output-dir=/tmp/coarsen/T1_PAD_FINE \
-     --fracture-param-file=sequential_implicit \
+     --fracture-param-file=sequential_implicit_legacy \
      --enable-write-all-solutions=true T1_PAD_FINE.DATA
 ```
 
@@ -75,7 +75,7 @@ coarse one.
 
 ```bash
 $BIN --output-dir=/tmp/coarsen/twogrid \
-     --fracture-param-file=sequential_implicit \
+     --fracture-param-file=sequential_implicit_legacy \
      --mech-coarsen-file=mech_coarsen_T1.txt T1_PAD_FINE.DATA
 ```
 
@@ -88,7 +88,7 @@ cell and all of its flow cells share a rank:
 
 ```bash
 mpirun -np 4 $BIN --threads-per-process=1 --output-dir=/tmp/coarsen/twogrid_np4 \
-     --fracture-param-file=sequential_implicit \
+     --fracture-param-file=sequential_implicit_legacy \
      --mech-coarsen-file=mech_coarsen_T1.txt T1_PAD_FINE.DATA
 ```
 
@@ -100,7 +100,7 @@ coarsened block takes back as rock — the run warns and says how much.
 
 ```bash
 $BIN --output-dir=/tmp/coarsen/t3 --edge-conformal=true \
-     --fracture-param-file=sequential_implicit \
+     --fracture-param-file=sequential_implicit_legacy \
      --mech-coarsen-file=mech_coarsen_T3.txt T3_MINPV.DATA
 ```
 
@@ -274,7 +274,7 @@ box on day 10 and stop there with that message; the leaf rows stay inside.
 is the July showcase with the box made tall enough for the fracture:
 `CARFIN 'LGRW' 4 8 4 8 13 19 25 25 21` (5x laterally, 3x vertically; the showcase's
 15-17 box is left by day 41). With `--parsing-strictness=low
---fracture-param-file=sequential_implicit` it runs the full 106 days in 288 s: fracture
+--fracture-param-file=sequential_implicit_legacy` it runs the full 106 days in 288 s: fracture
 15 990 m2 / 452 m3 at z 2170-2254 m inside the box's 2140-2280 m, BHP 256 -> 276 bar,
 fracture share of the injection 82 % -> 60 %, all 179 mechanics solves converged, and a
 complete restart for every step.
@@ -341,7 +341,7 @@ Note that properties cannot be given *inside* a CARFIN block: block-local PORO, 
 and so on are scoped out and refined cells inherit the father (opm-gridrefined
 `docs/STATUS.md`); block-local MINPV is the one exception.
 
-## Baseline (2026-09-23, bcmech build, serial, 90 days, `sequential_implicit`)
+## Baseline (2026-09-23, bcmech build, serial, 90 days, `sequential_implicit_legacy`)
 
 Values at the last step. BHP is on its 290 bar limit in all three.
 
