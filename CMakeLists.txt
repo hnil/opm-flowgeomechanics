@@ -566,6 +566,12 @@ target_link_libraries(test_cake_remap PRIVATE opmflowgeomechanics)
 add_test(NAME Unit.CakeRemap COMMAND $<TARGET_FILE:test_cake_remap>)
 set_tests_properties(Unit.CakeRemap PROPERTIES TIMEOUT 30 LABELS "physics;unit")
 
+# Remapping between trimesh grids must respect the level of each map's refs.
+add_executable(test_level_remap tests/test_level_remap.cpp)
+target_link_libraries(test_level_remap PRIVATE opmflowgeomechanics)
+add_test(NAME Unit.LevelRemap COMMAND $<TARGET_FILE:test_level_remap>)
+set_tests_properties(Unit.LevelRemap PROPERTIES TIMEOUT 30 LABELS "physics;unit")
+
 # The well-relative fracture CTF change test must not depend on the CTF magnitude.
 add_executable(test_ctf_change_metric tests/test_ctf_change_metric.cpp)
 target_link_libraries(test_ctf_change_metric PRIVATE opmflowgeomechanics)
