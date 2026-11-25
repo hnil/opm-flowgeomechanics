@@ -95,6 +95,7 @@
    "ctf_change_threshold": "1e-15",
    "ctf_change_threshold_rel": 0.0,
    "ctf_relative_scale": 1.0,
+   "ctf_change_threshold_well": 1e-3,
    "coupling_update_mode": "legacy",
    "damping_factor_perf": 2.0,
    "coupling_relax_init": 1.0,
