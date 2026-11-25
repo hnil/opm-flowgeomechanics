@@ -128,7 +128,8 @@ namespace external{
     int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
         const Dune::CpGrid& grid,
         const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& enity_seed,
-        const cvf::Vec3d& point);
+        const cvf::Vec3d& point,
+        const cvf::Vec3d* tie_ref = nullptr);
 
     // True when the point's bounding-box hits include a cell this rank does not own.
     bool nearNonInteriorCell(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,

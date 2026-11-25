@@ -864,6 +864,7 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
     const std::string area_method = prm_.get<std::string>("solver.cell_mapping_area", "exact");
     if (area_method != "exact" && area_method != "fast")
         OPM_THROW(std::runtime_error, "Unknown solver.cell_mapping_area: " + area_method);
+    const external::cvf::Vec3d origin(origo_[0], origo_[1], origo_[2]);
     for (int elemIdx = 0; elemIdx < mesh_.numCells(); ++elemIdx) {
         std::vector<std::array<double,3>> tri_corners;
         {
@@ -889,7 +890,7 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
         using Vec3d = external::cvf::Vec3d;
         const auto& vertex = mesh_.cellCentroid(elemIdx);
         Vec3d point(vertex[0], vertex[1], vertex[2]);
-        reservoir_map_.cells[elemIdx]  = external::cellOfPoint(cellSearchTree, grid, entity_seeds, point);
+        reservoir_map_.cells[elemIdx]  = external::cellOfPoint(cellSearchTree, grid, entity_seeds, point, &origin);
 
         if(full_intersections){
             std::vector<int> rcells;
@@ -916,7 +917,7 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
             }
             const auto& c = mesh_.cellCentroid(elemIdx);
             reservoir_map_.mechCells[elemIdx] = external::cellOfPoint(
-                *mech_lookup_.tree, *mech_lookup_.grid, *mech_lookup_.seeds, external::cvf::Vec3d(c[0], c[1], c[2]));
+                *mech_lookup_.tree, *mech_lookup_.grid, *mech_lookup_.seeds, external::cvf::Vec3d(c[0], c[1], c[2]), &origin);
         }
     }
     int clipped = 0;

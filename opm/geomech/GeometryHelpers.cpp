@@ -82,13 +82,15 @@ buildBoundingBoxTree(cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree, std::vect
 int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
                 const Dune::CpGrid& grid,
                 const std::vector<Dune::CpGrid::Codim<0>::Entity::EntitySeed>& entity_seed,
-                const cvf::Vec3d& point){
+                const cvf::Vec3d& point,
+                const cvf::Vec3d* tie_ref){
         external::cvf::BoundingBox bb;
         bb.add(point);
         std::vector<size_t> cells = external::findCloseCellIndices(m_cellSearchTree, bb);
         int outcell = -1;
         double min_distance =1e99;
-        Dune::FieldVector<double,3> local;
+        double min_ref = 1e99;
+        long long min_id = 0;
         for(const auto& cell: cells){
             auto element = grid.entity(entity_seed[cell]);
             if (element.partitionType() != Dune::InteriorEntity){
@@ -101,9 +103,20 @@ int cellOfPoint(const cvf::ref<cvf::BoundingBoxTree>& m_cellSearchTree,
             vec[0] = point[0];
             vec[1] = point[1];
             vec[2] = point[2];
-            auto d_vec = vec-center;
-            if(d_vec.two_norm() < min_distance){
-                min_distance = d_vec.two_norm();
+            const double d = (vec - center).two_norm();
+            // a point on a shared face goes to the cell nearest tie_ref, then the lowest
+            // global id: independent of the partition and of the search order
+            double ref = 0.0;
+            if (tie_ref) {
+                Dune::FieldVector<double,3> r{(*tie_ref)[0], (*tie_ref)[1], (*tie_ref)[2]};
+                ref = (r - center).two_norm();
+            }
+            const auto id = static_cast<long long>(grid.globalIdSet().id(element));
+            if (d < min_distance
+                || (d == min_distance && (ref < min_ref || (ref == min_ref && id < min_id)))) {
+                min_distance = d;
+                min_ref = ref;
+                min_id = id;
                 outcell = cell;
             }
             //NB should probably point is inside model
