@@ -626,7 +626,7 @@ target_link_libraries(test_trimesh_neighbors PRIVATE opmflowgeomechanics)
 add_test(NAME Unit.TrimeshNeighbors COMMAND $<TARGET_FILE:test_trimesh_neighbors>)
 set_tests_properties(Unit.TrimeshNeighbors PROPERTIES TIMEOUT 30 LABELS "physics;unit")
 
-# A fracture piece joined only at a vertex must stay face-disconnected in the Dune grid.
+# A fracture piece joined only at a vertex must stay face-disconnected in the fracture mesh.
 add_executable(test_vertex_joined_pieces tests/test_vertex_joined_pieces.cpp)
 target_link_libraries(test_vertex_joined_pieces PRIVATE opmflowgeomechanics)
 add_test(NAME Unit.VertexJoinedPieces COMMAND $<TARGET_FILE:test_vertex_joined_pieces>)

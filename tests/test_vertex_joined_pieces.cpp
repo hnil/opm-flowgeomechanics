@@ -18,10 +18,10 @@
 */
 
 #include <config.h>
+#include <opm/geomech/FractureMesh.hpp>
 #include <opm/geomech/RegularTrimesh.hpp>
 
 #include <dune/common/parallel/mpihelper.hh>
-#include <dune/grid/common/mcmgmapper.hh>
 
 #include <iostream>
 #include <stdexcept>
@@ -39,7 +39,7 @@ void require(bool condition, const std::string& message)
 }
 } // namespace
 
-// A piece joined to the rest at one node must be its own face-connected piece in the Dune grid,
+// A piece joined to the rest at one node must be its own face-connected piece in the fracture mesh,
 // with every cell an outer cell: the case Fracture::restoreLeakoffOfIsolatedPieces_ handles.
 int main(int argc, char** argv)
 {
@@ -59,19 +59,17 @@ int main(int argc, char** argv)
             require(n == CellRef {4, 4, 0} || !mesh.isActive(n), "the piece has no edge neighbour in the block");
         }
 
-        auto [grid, cellmap, bmap] = mesh.createDuneGrid(0, {}, false);
-        const auto gv = grid->leafGridView();
-        Dune::MultipleCodimMultipleGeomTypeMapper<Grid::LeafGridView> mapper(gv, Dune::mcmgElementLayout());
-        const std::size_t nc = gv.size(0);
-        require(nc == cells.size(), "no smoothing or coarsening: one Dune cell per trimesh cell");
+        const auto tri = mesh.createTriangulation(0, {}, false);
+        const auto fm = buildFractureMesh(tri.nodes, tri.triangles);
+        const std::size_t nc = fm.numCells();
+        require(nc == cells.size(), "no smoothing or coarsening: one mesh cell per trimesh cell");
 
         std::vector<std::vector<int>> nbs(nc);
         std::vector<bool> on_boundary(nc, false);
-        for (const auto& e : elements(gv)) {
-            const int c = mapper.index(e);
-            for (const auto& is : intersections(gv, e)) {
-                if (is.neighbor()) {
-                    nbs[c].push_back(mapper.index(is.outside()));
+        for (std::size_t c = 0; c < nc; ++c) {
+            for (const int n : fm.cellNeighbours(static_cast<int>(c))) {
+                if (n >= 0) {
+                    nbs[c].push_back(n);
                 } else {
                     on_boundary[c] = true;
                 }
