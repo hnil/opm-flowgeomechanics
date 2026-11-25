@@ -49,6 +49,7 @@
 
 
 #include <opm/simulators/flow/FlowProblem.hpp>
+#include <opm/simulators/flow/SimulatorFullyImplicit.hpp>
 #include <opm/simulators/flow/Transmissibility.hpp>
 #include <opm/simulators/linalg/PropertyTree.hpp>
 #include <opm/simulators/utils/MPIPacker.hpp>
@@ -255,6 +256,15 @@ namespace Opm{
             // Much below 1e-4 the block inverter's |det| < 1e-40 cutoff (matrixblock.hh)
             // is hit, since a fracture row scales with aperture^3.
             const auto minWidth = prm.get<double>("solver.embedded_min_aperture", 1e-3);
+
+            // serializeOp throws for embedded fractures; fail here, not at the first save.
+            if (!Parameters::Get<Parameters::SaveStep>().empty()
+                || !Parameters::Get<Parameters::LoadFile>().empty()
+                || Parameters::Get<Parameters::SaveAtDay>() >= 0.0) {
+                OPM_THROW(std::runtime_error,
+                          "Embedded fractures cannot be saved or loaded; drop --save-step, "
+                          "--save-at-day and --load-file, or use the upscaled fracture flow.");
+            }
 
             fractureAuxCells_ = &this->registerAuxCellModule_
                 (std::make_unique<FractureAuxCells<TypeTag>>(this->simulator(),
