@@ -875,7 +875,7 @@ if(TARGET summary AND Python3_EXECUTABLE)
 	$<TARGET_FILE:summary>
 	test_simple_mech_frac_lgr_cross/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_LGR_CROSS
 	test_simple_mech_frac_lgr_cross_restart/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_LGR_CROSS
-	--prefix CWIR CFC)
+	--prefix W CWIR CFC)
   set_tests_properties(CompareSummary.SIMPLE_MECH_FRAC_LGR_CROSS.Restart.EnergyGeomech
 	PROPERTIES FIXTURES_REQUIRED "frac_lgr_cross_save;frac_lgr_cross_restart")
 endif()

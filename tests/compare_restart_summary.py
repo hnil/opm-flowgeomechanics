@@ -17,16 +17,16 @@
 # along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 """Compare a restarted run's summary with the full run's.
 
-The restart must have the same connection keys with the given prefixes, and equal values
+The restart must have the same well and connection keys with the given prefixes, and equal values
 at every time both runs report.
 """
 import argparse, re, subprocess, sys
 
 
-# `summary -l` prints fixed-width columns that run long keys together, so match whole connection keys.
+# `summary -l` prints fixed-width columns that run long keys together, so match whole well/connection keys.
 def keys(summary, smspec, prefixes):
     out = subprocess.run([summary, "-l", smspec], capture_output=True, text=True, check=True).stdout
-    pattern = "(?:" + "|".join(map(re.escape, prefixes)) + r")[A-Z0-9_]*:[A-Za-z0-9_\-]+:\d+,\d+,\d+"
+    pattern = r"(?<![A-Za-z_:\-])(?:" + "|".join(map(re.escape, prefixes)) + r")[A-Z0-9_]*:[A-Za-z0-9_\-]+(?::\d+,\d+,\d+)?"
     return set(re.findall(pattern, out))
 
 
