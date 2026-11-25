@@ -458,6 +458,28 @@ foreach(np ${PartitionOfUnity_NumProcs})
 	endif()
 endforeach()
 
+# A fracture growing into another rank's cells stops the run by default, naming the fracture and rank.
+if (NOT MPIEXEC_MAX_NUMPROCS LESS 2)
+	add_test(NAME Run.CASE_PRESS_FRAC.PartitionStop.np-2
+		COMMAND
+		${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 ${MPIEXEC_PREFLAGS}
+		$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>> ${MPIEXEC_POSTFLAGS}
+		--parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac_seq.ini
+		${CMAKE_CURRENT_LIST_DIR}/data/CASE_PRESS_FRAC_nx_21_ny_21_nz_25_THERMAL.DATA
+		--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/best_practice/seq_implicit_ratewell.json
+		--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/best_practice/mech_lines.json
+		--solver-max-time-step-in-days=5 --solver-min-time-step=0.005
+		--solver-continue-on-convergence-failure=true --threads-per-process=1
+		--output-dir=test_press_frac_partition_stop
+	)
+	set_tests_properties(Run.CASE_PRESS_FRAC.PartitionStop.np-2
+		PROPERTIES
+		PROCESSORS 2
+		TIMEOUT 300
+		PASS_REGULAR_EXPRESSION "Rank [0-9]: Fracture_on_B-3H_perf_0_nr \\([0-9]+ elements\\) reached the edge.*Repartition and rerun"
+	)
+endif()
+
 ####################33
 function(add_mechtest_compareECLFiles)
 	set(oneValueArgs CASENAME REFERENCE_CASENAME FILENAME SIMULATOR ABS_TOL REL_TOL DIR DIR_PREFIX PREFIX RESTART_STEP RESTART_SCHED)
