@@ -307,6 +307,25 @@ public:
     Scalar lastBindChange() const
     { return this->lastBindChange_; }
 
+    //! Restart state; the connections and perforations are rebuilt by the next bind().
+    template <class Serializer>
+    void serializeOp(Serializer& serializer)
+    {
+        serializer(this->active_);
+        serializer(this->boundLayout_);
+        serializer(this->bulkVolume_);
+        serializer(this->lastTotalTrans_);
+        serializer(this->lastTotalPv_);
+        serializer(this->lastBindChange_);
+        if (!serializer.isSerializing()) {
+            // the saved start-of-step volumes; the model's are those of its initial binding
+            for (unsigned slot = 0; slot < this->bulkVolume_.size(); ++slot) {
+                this->simulator_.model().setDofTotalVolumeOld(
+                    static_cast<unsigned>(this->localToGlobalDof(slot)), this->bulkVolume_[slot]);
+            }
+        }
+    }
+
     /*!
      * \brief The well's perforations of this fracture's cells.
      *

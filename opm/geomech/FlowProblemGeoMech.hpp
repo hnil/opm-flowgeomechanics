@@ -262,15 +262,6 @@ namespace Opm{
             // is hit, since a fracture row scales with aperture^3.
             const auto minWidth = prm.get<double>("solver.embedded_min_aperture", 1e-3);
 
-            // serializeOp throws for embedded fractures; fail here, not at the first save.
-            if (!Parameters::Get<Parameters::SaveStep>().empty()
-                || !Parameters::Get<Parameters::LoadFile>().empty()
-                || Parameters::Get<Parameters::SaveAtDay>() >= 0.0) {
-                OPM_THROW(std::runtime_error,
-                          "Embedded fractures cannot be saved or loaded; drop --save-step, "
-                          "--save-at-day and --load-file, or use the upscaled fracture flow.");
-            }
-
             fractureAuxCells_ = &this->registerAuxCellModule_
                 (std::make_unique<FractureAuxCells<TypeTag>>(this->simulator(),
                                                              static_cast<unsigned>(capacity),
@@ -955,11 +946,12 @@ namespace Opm{
         template <class Serializer>
         void serializeOp(Serializer& serializer)
         {
-            if (this->fractureFlowIsEmbedded()) {
-                OPM_THROW(std::runtime_error, "Saving or loading is not implemented for embedded fractures.");
-            }
             serializer(static_cast<MechParent&>(*this));
             serializer(geoMechModel_);
+            if (this->fractureFlowIsEmbedded()) {
+                serializer(*fractureAuxCells_);
+                serializer(lastSeenFractureLayout_);
+            }
         }
 
         void beginTimeStep() override{
