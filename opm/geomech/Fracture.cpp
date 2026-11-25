@@ -62,6 +62,7 @@
 #include <utility>
 #include <vector>
 #include <limits>
+#include <unordered_set>
 #include <numeric>
 #include <cassert>
 
@@ -291,7 +292,17 @@ Fracture::updateFilterCakeProps(const Opm::Connection& connection,
         // Local sum, as the former SingleWellState::frac_rate: the fracture update
         // does not run collectively over the ranks of a well.
         const auto& frac_rates = wellstate.perf_data.fracture_data.injected_rate;
-        const double sim_frac_rate = std::accumulate(frac_rates.begin(), frac_rates.end(), 0.0);
+        double sim_frac_rate = std::accumulate(frac_rates.begin(), frac_rates.end(), 0.0);
+        // Opt-in: only the connections in this fracture's reservoir cells, for wells with several fractures.
+        if (prm_.get<bool>("config.scale_filtrate_per_fracture", false)) {
+            const std::unordered_set<int> own(reservoir_map_.cells.begin(), reservoir_map_.cells.end());
+            sim_frac_rate = 0.0;
+            for (std::size_t i = 0; i < frac_rates.size() && i < perfdata.cell_index.size(); ++i) {
+                if (own.count(perfdata.cell_index[i]) > 0) {
+                    sim_frac_rate += frac_rates[i];
+                }
+            }
+        }
         double sim_frac_flux = sim_frac_rate * basis_factor / b_frac;
         //NB maybe we should only use posive fluxes (cross flow problems)
         if(frac_flux > 1.0e-12){
