@@ -867,6 +867,18 @@ add_test(NAME Compare.SIMPLE_MECH_FRAC_LGR_CROSS.Restart.EnergyGeomech
 )
 set_tests_properties(Compare.SIMPLE_MECH_FRAC_LGR_CROSS.Restart.EnergyGeomech
 	PROPERTIES FIXTURES_REQUIRED "frac_lgr_cross_save;frac_lgr_cross_restart")
+# Connections added before the load step must keep their summary vectors in the restart.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(TARGET summary AND Python3_EXECUTABLE)
+  add_test(NAME CompareSummary.SIMPLE_MECH_FRAC_LGR_CROSS.Restart.EnergyGeomech
+	COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/tests/compare_restart_summary.py
+	$<TARGET_FILE:summary>
+	test_simple_mech_frac_lgr_cross/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_LGR_CROSS
+	test_simple_mech_frac_lgr_cross_restart/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_LGR_CROSS
+	--prefix CWIR CFC)
+  set_tests_properties(CompareSummary.SIMPLE_MECH_FRAC_LGR_CROSS.Restart.EnergyGeomech
+	PROPERTIES FIXTURES_REQUIRED "frac_lgr_cross_save;frac_lgr_cross_restart")
+endif()
 
 ## regressuin
 opm_set_test_driver(${PROJECT_SOURCE_DIR}/tests/run-mechRegressionTest.sh "")
