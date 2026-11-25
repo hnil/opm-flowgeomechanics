@@ -94,6 +94,7 @@ public:
     //! Collective: elements that another rank's interior cells contain count as clipped.
     void claimPartitionElements(const Dune::CpGrid& grid);
     std::string partitionClippedReport() const;
+    void resetPartitionClipped();
     //! Fracture cells outside the flow grid take their stress from this mechanics grid.
     void setMechGrid(const Dune::CpGrid& mechGrid)
     {

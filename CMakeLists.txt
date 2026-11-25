@@ -478,6 +478,25 @@ if (NOT MPIEXEC_MAX_NUMPROCS LESS 2)
 		TIMEOUT 300
 		PASS_REGULAR_EXPRESSION "Rank [0-9]: Fracture_on_B-3H_perf_0_nr \\([0-9]+ elements\\) reached the edge.*Repartition and rerun"
 	)
+	# Same with the well's region kept on one rank: growth past that region must stop too.
+	add_test(NAME Run.CASE_PRESS_FRAC.PartitionStopRadius.np-2
+		COMMAND
+		${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 ${MPIEXEC_PREFLAGS}
+		$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>> ${MPIEXEC_POSTFLAGS}
+		--parameter-file=${CMAKE_CURRENT_LIST_DIR}/data/myparamsfrac_seq.ini
+		${CMAKE_CURRENT_LIST_DIR}/data/CASE_PRESS_FRAC_nx_21_ny_21_nz_25_THERMAL.DATA
+		--fracture-param-file=sequential_implicit
+		--linear-solver-mech=${CMAKE_CURRENT_LIST_DIR}/data/best_practice/mech_lines.json
+		--solver-max-time-step-in-days=5 --threads-per-process=1
+		--fracture-partition-radius=600
+		--output-dir=test_press_frac_partition_stop_radius
+	)
+	set_tests_properties(Run.CASE_PRESS_FRAC.PartitionStopRadius.np-2
+		PROPERTIES
+		PROCESSORS 2
+		TIMEOUT 300
+		PASS_REGULAR_EXPRESSION "Rank [0-9]: Fracture_on_B-3H_perf_0_nr \\([0-9]+ elements\\) reached the edge.*Repartition and rerun"
+	)
 endif()
 
 ####################33

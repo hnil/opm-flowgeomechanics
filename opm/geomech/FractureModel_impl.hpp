@@ -106,6 +106,16 @@ namespace Opm {
         }
     }
 
+    inline void
+    FractureModel::resetPartitionClipped()
+    {
+        for (auto& well_fracture : well_fractures_) {
+            for (auto& fracture : well_fracture) {
+                fracture.resetPartitionClipped();
+            }
+        }
+    }
+
     inline std::string
     FractureModel::partitionClippedReport() const
     {

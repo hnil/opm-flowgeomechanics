@@ -935,16 +935,19 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
             }
         }
     }
-    partition_clipped_ = clipped;
-    unclaimed_ = unclaimed;
+    // Kept until resetPartitionClipped(): expansion can drop clipped elements before the step ends.
+    partition_clipped_ = std::max(partition_clipped_, clipped);
+    for (const auto& c : unclaimed) {
+        if (std::find(unclaimed_.begin(), unclaimed_.end(), c) == unclaimed_.end()) {
+            unclaimed_.push_back(c);
+        }
+    }
     auto it = std::find(reservoir_map_.cells.begin(), reservoir_map_.cells.end(), -1);
     auto extended_fractures = prm_.get<bool>("extended_fractures");
     if (!(it == reservoir_map_.cells.end()) && !(extended_fractures) && this->removeCells()) {
         OpmLog::warning(clipped > 0 ? "Remove fracture cells outside this rank's part of the model"
                                     : "Remove fracture outside of model");
         this->updateReservoirCells(cellSearchTree, grid, entity_seeds);
-        partition_clipped_ = std::max(partition_clipped_, clipped);
-        unclaimed_ = std::move(unclaimed);
     }else{
       if(!(it == reservoir_map_.cells.end())){
           OpmLog::warning("Fracture outside of model");

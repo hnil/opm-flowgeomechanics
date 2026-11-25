@@ -1015,13 +1015,14 @@ namespace Opm{
             this->geoMechModel_.fractureModel().claimPartitionElements(this->simulator().vanguard().grid());
             const auto& model = this->geoMechModel().fractureModel();
             const int clipped = comm.sum(model.numPartitionClipped());
+            const std::string own = model.partitionClippedReport();
+            this->geoMechModel_.fractureModel().resetPartitionClipped();
             if (clipped == 0) {
                 return;
             }
             // Fixed width so a plain allgather carries every rank's report.
             constexpr int width = 256;
             std::array<char, width> mine{};
-            const std::string own = model.partitionClippedReport();
             std::copy_n(own.begin(), std::min<std::size_t>(own.size(), width - 1), mine.begin());
             std::vector<char> all(static_cast<std::size_t>(width) * comm.size());
             comm.allgather(mine.data(), width, all.data());

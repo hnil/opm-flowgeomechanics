@@ -364,11 +364,12 @@ public:
 
     //! Reservoir cell each fracture cell leaks into, by fracture cell index.
     const std::vector<int>& reservoirCells() const { return reservoir_map_.cells; }
-    //! Elements outside this rank's cells but inside another rank's (last updateReservoirCells).
+    //! Elements outside this rank's cells but inside another rank's (since resetPartitionClipped).
     int numPartitionClipped() const { return partition_clipped_; }
-    //! Centroids of elements outside this rank's cells and its overlap (last updateReservoirCells).
+    //! Centroids of elements outside this rank's cells and its overlap (since resetPartitionClipped).
     const std::vector<std::array<double, 3>>& unclaimedCentroids() const { return unclaimed_; }
     void addPartitionClipped(int n) { partition_clipped_ += n; }
+    void resetPartitionClipped() { partition_clipped_ = 0; unclaimed_.clear(); }
 
     //! Leak-off coefficient per fracture cell.  Includes the reservoir mobility.
     const std::vector<double>& leakOf() const { return leakof_; }
