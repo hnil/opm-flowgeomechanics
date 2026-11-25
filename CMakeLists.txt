@@ -588,6 +588,12 @@ target_link_libraries(test_ctf_change_metric PRIVATE opmflowgeomechanics)
 add_test(NAME Unit.CtfChangeMetric COMMAND $<TARGET_FILE:test_ctf_change_metric>)
 set_tests_properties(Unit.CtfChangeMetric PROPERTIES TIMEOUT 30 LABELS "physics;unit")
 
+# cellNeighbors must give the three edge neighbours.
+add_executable(test_trimesh_neighbors tests/test_trimesh_neighbors.cpp)
+target_link_libraries(test_trimesh_neighbors PRIVATE opmflowgeomechanics)
+add_test(NAME Unit.TrimeshNeighbors COMMAND $<TARGET_FILE:test_trimesh_neighbors>)
+set_tests_properties(Unit.TrimeshNeighbors PROPERTIES TIMEOUT 30 LABELS "physics;unit")
+
 # Interpolated stress must keep cell values and stop at faults.
 add_executable(test_centre_stress tests/test_centre_stress.cpp)
 target_link_libraries(test_centre_stress PRIVATE opmflowgeomechanics)
