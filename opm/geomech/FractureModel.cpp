@@ -23,6 +23,8 @@
 
 #include <opm/common/OpmLog/OpmLog.hpp>
 
+#include <fmt/format.h>
+
 #include <dune/common/fmatrixev.hh>
 #include <opm/geomech/DiscreteDisplacement.hpp>
 
@@ -525,6 +527,14 @@ Opm::FractureModel::addFracturesWellSeed(const ScheduleState& sched,
             // deck WSEED. Note this is distinct from solver.min_width (a
             // numerical clamp inside the width solve).
             prm_.put("config.axis_scale", frac_size[0]); // vertical scale
+            if (json_min_width_ < 0.0) {
+                json_min_width_ = prm_.get<double>("config.min_width", 0.0);
+            }
+            if (json_min_width_ > 0.0 && json_min_width_ != frac_size[2]) {
+                OpmLog::warning(fmt::format("Fracture seed on {}: WSEED item 10 (WIDTH) = {:g} m replaces "
+                                            "config.min_width = {:g} m from the fracture parameters",
+                                            fracWell.name(), frac_size[2], json_min_width_));
+            }
             prm_.put("config.min_width", frac_size[2]);
             OpmLog::info("Fracture seed on " + fracWell.name()
                          + ": flow-width floor (WSEED WIDTH) = "

@@ -258,6 +258,7 @@ public:
         std::vector<FractureWell> wells_;
         std::vector<std::vector<Fracture>> well_fractures_;
         Opm::PropertyTree prm_;
+        double json_min_width_ = -1.0; // config.min_width as read from the parameter file; negative until read
         FractureSolveStats last_solve_stats_{};
         FractureSolveStats total_solve_stats_{};
         int step_growth_rounds_{0};
