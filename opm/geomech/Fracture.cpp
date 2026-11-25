@@ -246,6 +246,7 @@ Fracture::removeCells()
     removal_boundary_map_ = std::move(bmap);
     setFractureGrid(std::move(grid));
     grid_changed_since_checkpoint_ = true;
+    clearContactMemoryOnRegrid_();
     return true;
 }
 
@@ -2847,6 +2848,7 @@ void Fracture::finishReset()
 
 void Fracture::resetFracture()
 {
+    clearContactMemoryOnRegrid_();
     if (!trimesh_prev_) {
         // No checkpoint available: moveForwardInTime was never called before this
         // step, which happens when the fracture model was first initialized during
@@ -2914,6 +2916,24 @@ void Fracture::rebuildGridForLoad(const std::vector<std::vector<CellRef>>& saved
     grid_mesh_map_ = saved_map;
     grid_mesh_level_ = 0;
     setFractureGrid(std::move(std::get<0>(built)));
+}
+
+// closed_cells_ and the toggle/FB arrays are indexed by the old grid; with
+// contact_memory_on_regrid=reset they are dropped at once instead of read by position.
+void Fracture::clearContactMemoryOnRegrid_()
+{
+    const auto mode = prm_.get<std::string>("solver.contact_memory_on_regrid", "positional");
+    if (mode != "positional" && mode != "reset") {
+        OPM_THROW(std::runtime_error, "Unknown contact_memory_on_regrid: " + mode);
+    }
+    if (mode == "reset") {
+        OpmLog::debug(fmt::format("Fracture {}: contact memory reset on grid change ({} closed of {} entries, {} cells now)",
+                                  name(), std::accumulate(closed_cells_.begin(), closed_cells_.end(), 0),
+                                  closed_cells_.size(), numFractureCells()));
+        closed_cells_.clear();
+        cell_last_toggle_iter_.clear();
+        fb_cell_residual_.clear();
+    }
 }
 
 void Fracture::logDtCaps_() const

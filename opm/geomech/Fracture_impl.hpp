@@ -964,6 +964,7 @@ Fracture::regridTo_(const RegularTrimesh& trimesh, const int level, const Propag
     updateReservoirProperties<TypeTag, Simulator>(simulator, true);
     initPressureMatrix();
     grid_changed_since_checkpoint_ = true;
+    clearContactMemoryOnRegrid_();
     rhs_pressure_.resize(0);
     coupling_matrix_ = nullptr;
 

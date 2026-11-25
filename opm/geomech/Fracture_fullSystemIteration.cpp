@@ -479,6 +479,10 @@ Fracture::InnerSolveOptions::read(const PropertyTree& prm)
     o.isFb = (policy == "fischer_burmeister");
     o.closeForceTol = prm.get<double>("solver.close_force_tolerance", 0.0);
     o.reopenForceTol = prm.get<double>("solver.reopen_force_tolerance", o.closeForceTol);
+    const auto contactMemory = prm.get<std::string>("solver.contact_memory_on_regrid", "positional");
+    if (contactMemory != "positional" && contactMemory != "reset") {
+        OPM_THROW(std::runtime_error, "Unknown contact_memory_on_regrid: " + contactMemory);
+    }
     if (o.isFb) {
         o.fbScaledConvergence = prm.get<bool>("solver.fb_scaled_convergence", false);
         o.fbLineSearch = prm.get<bool>("solver.fb_line_search", false);
