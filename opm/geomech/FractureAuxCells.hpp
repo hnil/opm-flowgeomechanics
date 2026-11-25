@@ -34,6 +34,7 @@
 #include <limits>
 #include <cmath>
 #include <map>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -318,6 +319,12 @@ public:
         serializer(this->lastTotalPv_);
         serializer(this->lastBindChange_);
         if (!serializer.isSerializing()) {
+            if (this->active_.size() != this->capacity_ || this->bulkVolume_.size() != this->capacity_) {
+                throw std::runtime_error("The restart file reserves " + std::to_string(this->active_.size())
+                                         + " embedded fracture cells, this run "
+                                         + std::to_string(this->capacity_)
+                                         + ". Use the same fractureparam.solver.embedded_capacity.");
+            }
             // the saved start-of-step volumes; the model's are those of its initial binding
             for (unsigned slot = 0; slot < this->bulkVolume_.size(); ++slot) {
                 this->simulator_.model().setDofTotalVolumeOld(

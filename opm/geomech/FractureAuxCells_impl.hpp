@@ -21,6 +21,8 @@
 
 #include <opm/geomech/FractureModel.hpp>
 
+#include <opm/simulators/utils/NonRetryableError.hpp>
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -93,7 +95,6 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
             const auto depths = fracture.cellDepths();
 
             if (nextSlot + numCells > this->capacity_) {
-                // logged here: the time-step retry loop treats the throw as an ordinary substep failure
                 const auto msg = fmt::format("The fracture cells need more degrees of freedom than "
                                              "were reserved for them: {} in use, {} more wanted, {} "
                                              "reserved. Raise "
@@ -103,7 +104,8 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
                     OpmLog::error(msg);
                     this->capacityErrorLogged_ = true;
                 }
-                OPM_THROW(std::runtime_error, msg);
+                // a smaller time step cannot help, so stop instead of retrying
+                throw NonRetryableError(msg);
             }
 
             const auto firstSlot = nextSlot;
