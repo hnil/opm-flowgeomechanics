@@ -186,6 +186,10 @@ namespace Opm{
             OpmLog::info(os.str());
 
             hasFractures_ = this->simulator().vanguard().eclState().runspec().frac();
+            if (!hasFractures_ && filename != "notafile") {
+                OpmLog::warning("A fracture parameter file was given (" + filename
+                                + ") but RUNSPEC has no FRAC keyword: fractures are not modelled.");
+            }
                         const bool waterActive = this->simulator().vanguard().eclState().runspec().phases().active(Opm::Phase::WATER);
                         if (hasFractures_ && !waterActive) {
                                 OPM_THROW(std::runtime_error,
