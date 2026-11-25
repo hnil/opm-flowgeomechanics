@@ -572,6 +572,11 @@ target_link_libraries(test_level_remap PRIVATE opmflowgeomechanics)
 add_test(NAME Unit.LevelRemap COMMAND $<TARGET_FILE:test_level_remap>)
 set_tests_properties(Unit.LevelRemap PROPERTIES TIMEOUT 30 LABELS "physics;unit")
 
+add_executable(test_coarsen_majority tests/test_coarsen_majority.cpp)
+target_link_libraries(test_coarsen_majority PRIVATE opmflowgeomechanics)
+add_test(NAME Unit.CoarsenMajority COMMAND $<TARGET_FILE:test_coarsen_majority>)
+set_tests_properties(Unit.CoarsenMajority PROPERTIES TIMEOUT 30 LABELS "physics;unit")
+
 add_executable(test_pieces_without_sink tests/test_pieces_without_sink.cpp)
 target_link_libraries(test_pieces_without_sink PRIVATE opmflowgeomechanics)
 add_test(NAME Unit.PiecesWithoutSink COMMAND $<TARGET_FILE:test_pieces_without_sink>)
