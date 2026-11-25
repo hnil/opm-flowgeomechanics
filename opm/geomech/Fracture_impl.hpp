@@ -306,7 +306,7 @@ void Fracture::updateInjectedPhase(const Simulator& simulator)
 }
 
 template <class TypeTag, class Simulator>
-void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_constant_vals,bool /*update_filtercake*/)
+void Fracture::updateReservoirProperties(const Simulator& simulator, bool init_constant_vals)
     {
         // if `init_contant_vals` is true, the fields that should normally not
         // change, i.e.  E_, nu_ and reservoir_.perm will be updated. This should
@@ -961,7 +961,7 @@ Fracture::regridTo_(const RegularTrimesh& trimesh, const int level, const Propag
     removed_cells_.clear();
     updateReservoirCells(cell_search_tree, cpgrid, entity_seeds);
     composeFlowStateDonor(maps.before, grid_mesh_map_, level, maps.before_level);
-    updateReservoirProperties<TypeTag, Simulator>(simulator, true, false);
+    updateReservoirProperties<TypeTag, Simulator>(simulator, true);
     initPressureMatrix();
     grid_changed_since_checkpoint_ = true;
     rhs_pressure_.resize(0);

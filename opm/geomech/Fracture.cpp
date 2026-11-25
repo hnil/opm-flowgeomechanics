@@ -266,27 +266,9 @@ Fracture::updateFilterCakeProps(const Opm::Connection& connection,
     const int inj_index = pu.phaseIsActive(injected_phase_idx_)
         ? pu.canonicalToActivePhaseIdx(injected_phase_idx_) : -1;
 
-    double qw_sum = 0.0;
-    double qwpos_sum = 0.0;
-    // should we do this based on fracture cross flow?
     for (size_t i = 0; i < perfdata.cell_index.size() && inj_index >= 0; ++i) {
-        int cell_index = perfdata.cell_index[i];
         // similar as in WellFilterCake.cpp:148
-        const auto& connection_rates = perfdata.phase_rates;
-        const double inj_rate = std::max(0.0, connection_rates[i * np + inj_index]);
-        qwpos_sum += std::max(0.0, inj_rate);
-        qw_sum += inj_rate;
-        WI_fluxes[cell_index] = inj_rate;
-    }
-    double xfact = 1.0;
-    if (qwpos_sum > 1.0e-12) {
-        xfact = qw_sum / qwpos_sum;
-    }else{
-      if(qwpos_sum == qw_sum){
-        xfact = 1.0;
-      }else{
-        xfact = 0.0;
-      }
+        WI_fluxes[perfdata.cell_index[i]] = std::max(0.0, perfdata.phase_rates[i * np + inj_index]);
     }
     // Leak-off is a reservoir (fracture fluid) volume rate. Convert it to the volume
     // basis of the concentration: surface volumes with b of the injected fluid (taken
@@ -314,7 +296,7 @@ Fracture::updateFilterCakeProps(const Opm::Connection& connection,
             scale_factor = std::max(0.0,sim_frac_flux) / frac_flux;
         }
     }
-    double filtrate_conn = wellstate.filtrate_conc*xfact;
+    double filtrate_conn = wellstate.filtrate_conc;
     has_filtercake_ = connection.filterCakeActive();
     if (has_filtercake_) {
         auto& filter_cake = connection.getFilterCake();
@@ -2578,16 +2560,14 @@ Fracture::updateLeakoff()
     std::vector<bool> elementHasBoundaryNode(gv.size(codimCell), false);
     for (const auto& element : elements(gv)) {
         auto eidx = indexSet.index(element);
-        if(true){
         int nv = element.subEntities(codimVertex);
         for (int i = 0; i < nv; i++) {
-          auto vertex = element.subEntity<codimVertex>(i);
+            auto vertex = element.subEntity<codimVertex>(i);
             auto vid = indexSet.index(vertex);
             if (isBoundaryNode[vid]) {
                 elementHasBoundaryNode[eidx] = true;
-                break; // no need to check more vertices
+                break;
             }
-        }
         }
     }
     // cells whose centre lies within this distance [m] of the fracture boundary get almost no leak-off

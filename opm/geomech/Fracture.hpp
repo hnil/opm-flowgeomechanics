@@ -307,7 +307,7 @@ public:
     bool removeCells();
 
     template <class TypeTag, class Simulator>
-    void updateReservoirProperties(const Simulator& simulator, bool init_constant_vals=false,bool update_filtercake=true);
+    void updateReservoirProperties(const Simulator& simulator, bool init_constant_vals = false);
 
     // Max |change| of water pressure and temperature in the fracture's reservoir cells
     // since the last call with record=true; infinite if nothing was recorded on this mesh.
