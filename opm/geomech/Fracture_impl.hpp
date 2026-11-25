@@ -879,10 +879,6 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 last_solve_rel_growth_ = (fprop_before.area > 0.0)
                     ? std::abs(area_after / fprop_before.area - 1.0)
                     : (area_after > 0.0 ? std::numeric_limits<double>::infinity() : 0.0);
-                if (opt.levelConsistent) {
-                    // the dt cap follows the accepted growth, not an intermediate expansion state
-                    capFlowTimeStep_(area_after, fprop_before.area);
-                }
             }
 
             // Opt-in damped fixed point on the width exposed to the coupling
