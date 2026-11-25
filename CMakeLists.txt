@@ -577,6 +577,11 @@ target_link_libraries(test_pieces_without_sink PRIVATE opmflowgeomechanics)
 add_test(NAME Unit.PiecesWithoutSink COMMAND $<TARGET_FILE:test_pieces_without_sink>)
 set_tests_properties(Unit.PiecesWithoutSink PROPERTIES TIMEOUT 30 LABELS "physics;unit")
 
+add_executable(test_mech_side_direction tests/test_mech_side_direction.cpp)
+target_link_libraries(test_mech_side_direction PRIVATE opmflowgeomechanics)
+add_test(NAME Unit.MechSideDirection COMMAND $<TARGET_FILE:test_mech_side_direction>)
+set_tests_properties(Unit.MechSideDirection PROPERTIES TIMEOUT 30 LABELS "physics;unit")
+
 # The well-relative fracture CTF change test must not depend on the CTF magnitude.
 add_executable(test_ctf_change_metric tests/test_ctf_change_metric.cpp)
 target_link_libraries(test_ctf_change_metric PRIVATE opmflowgeomechanics)

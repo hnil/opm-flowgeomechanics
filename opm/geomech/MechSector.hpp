@@ -55,6 +55,7 @@ struct Padding
     double growth = 1.0;
     double depth = std::numeric_limits<double>::quiet_NaN();
     bool verticalPillars = false;    // lateral only
+    bool sideDirection = false;      // lateral, inclined: one outward direction per side, so pillars cannot cross
 };
 
 struct Spec
@@ -272,6 +273,32 @@ inline Grdecl padLateral(const Grdecl& in, int axis, const Padding& pad,
             }
         }
     }
+    // Inclined pillars with sideDirection: the mean of the per-pillar top-point directions of each side.
+    std::array<std::array<double,2>,2> sideDirTop{};
+    if (pad.sideDirection && !pad.verticalPillars && n > 0) {
+        const int other = 1 - axis;
+        for (int side = 0; side < 2; ++side) {
+            const int edge = side == 0 ? 0 : d[axis], inner = side == 0 ? 1 : d[axis] - 1;
+            double ux = 0.0, uy = 0.0;
+            for (int t = 0; t <= d[other]; ++t) {
+                std::array<int,2> ce{}, ci{};
+                ce[axis] = edge; ce[other] = t;
+                ci[axis] = inner; ci[other] = t;
+                const double* a = &in.coord[6*(ce[0] + pxIn*ce[1])];
+                const double* b = &in.coord[6*(ci[0] + pxIn*ci[1])];
+                const double len = std::hypot(a[0] - b[0], a[1] - b[1]);
+                if (len > 0.0) {
+                    ux += (a[0] - b[0])/len;
+                    uy += (a[1] - b[1])/len;
+                }
+            }
+            const double len = std::hypot(ux, uy);
+            if (!(len > 0.0)) {
+                OPM_THROW(std::runtime_error, "Mechanics padding: no outward direction at the box edge");
+            }
+            sideDirTop[side] = {ux/len, uy/len};
+        }
+    }
     for (int pj = 0; pj <= out.dims[1]; ++pj)
     for (int pi = 0; pi <= out.dims[0]; ++pi) {
         std::array<int,2> q{pi, pj};
@@ -310,6 +337,10 @@ inline Grdecl padLateral(const Grdecl& in, int axis, const Padding& pad,
                 const auto& u = sideDir[side];
                 dst[0] = dst[3] = ps[0] + (sideDrift[side] + shift)*u[0];
                 dst[1] = dst[4] = ps[1] + (sideDrift[side] + shift)*u[1];
+            } else if (pad.sideDirection) {
+                const auto& u = sideDirTop[s[axis] == 0 ? 0 : 1];
+                dst[0] += shift*u[0]; dst[1] += shift*u[1];
+                dst[3] += shift*u[0]; dst[4] += shift*u[1];
             } else {
                 ux *= shift/len;
                 uy *= shift/len;
@@ -652,6 +683,7 @@ inline Spec readSpec(const std::string& file, const std::array<int,3>& deckDims)
         }
         if (!vertical) {
             p.verticalPillars = tree.get<bool>(name + ".vertical_pillars", false);
+            p.sideDirection = tree.get<bool>(name + ".side_direction", false);
         }
         if (p.cells < 0 || !(p.growth > 0.0)
             || (p.cells > 0 && !(p.size > 0.0) && std::isnan(p.depth))) {
