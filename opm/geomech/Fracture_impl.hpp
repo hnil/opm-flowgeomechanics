@@ -251,6 +251,13 @@ void Fracture::initReservoirProperties(const Simulator& simulator)
     reservoir_map_.dist.resize(ncf, dist);
     double numax = -1e99;
     double Emax = -1e99;
+    // one E, nu per fracture for the DDM: the maximum (default) or the area-weighted mean over cells
+    const std::string moduli = prm_.get<std::string>("config.ddm_moduli", "max");
+    if (moduli != "max" && moduli != "area_mean") {
+        OPM_THROW(std::runtime_error, "Unknown ddm_moduli: " + moduli);
+    }
+    const std::vector<double> areas = (moduli == "area_mean") ? cellAreas() : std::vector<double>{};
+    double Esum = 0.0, nusum = 0.0, asum = 0.0;
     assert(ncf > 0);
     for (size_t i = 0; i < ncf; ++i) {
         int cell = reservoir_map_.cells[i];
@@ -273,9 +280,14 @@ void Fracture::initReservoirProperties(const Simulator& simulator)
         }
         Emax = std::max(Emax, problem.yModule(cell));
         numax = std::max(numax, problem.pRatio(cell));
+        if (i < areas.size()) {
+            Esum += areas[i] * problem.yModule(cell);
+            nusum += areas[i] * problem.pRatio(cell);
+            asum += areas[i];
+        }
     }
-    E_ = Emax;
-    nu_ = numax;
+    E_ = (asum > 0.0) ? Esum / asum : Emax;
+    nu_ = (asum > 0.0) ? nusum / asum : numax;
     assert(E_ > 0);
     assert(nu_ > 0 && nu_ < 1);
 }
