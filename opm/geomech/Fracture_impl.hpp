@@ -946,7 +946,7 @@ Fracture::regridTo_(const RegularTrimesh& trimesh, const int level, const Propag
     grid_mesh_map_ = fsmap;
     grid_mesh_level_ = level;
     grid_fixed_cells_ = wsources;
-    composeFlowStateDonor(maps.before, fsmap, level, maps.before_level);
+    grid_tri_args_ = {opt.maxNumCoarsening, opt.smoothBoundary, opt.numcellThreshold, opt.bandRings};
     setFractureGrid(std::move(grid));
 
     std::map<CellRef, size_t> fsmap_inv;
@@ -957,14 +957,17 @@ Fracture::regridTo_(const RegularTrimesh& trimesh, const int level, const Propag
     for (const auto& cell : wsources)
         well_source_.push_back(fsmap_inv[cell]);
 
+    removal_boundary_map_.reset();
+    removed_cells_.clear();
     updateReservoirCells(cell_search_tree, cpgrid, entity_seeds);
+    composeFlowStateDonor(maps.before, grid_mesh_map_, level, maps.before_level);
     updateReservoirProperties<TypeTag, Simulator>(simulator, true, false);
     initPressureMatrix();
     rhs_pressure_.resize(0);
     coupling_matrix_ = nullptr;
 
-    maps.after = std::move(fsmap);
-    maps.boundary = std::move(bmap);
+    maps.after = grid_mesh_map_;
+    maps.boundary = removal_boundary_map_ ? std::move(*removal_boundary_map_) : std::move(bmap);
     return maps;
 }
 

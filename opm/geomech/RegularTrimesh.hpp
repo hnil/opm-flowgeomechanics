@@ -120,6 +120,7 @@ public:
     std::vector<Coord3D> nodeCoords() const;
 
     static std::array<NodeRef, 3> cellNodes(const CellRef& cell);
+    static std::array<CellRef, 3> cellNeighbors(const CellRef& cell); // across the three edges
     std::vector<std::array<size_t, 3>> cellNodesLinear() const;
 
     std::pair<NodeRef, NodeRef> edgeNodes(const EdgeRef& edge) const;

@@ -51,6 +51,7 @@
 #include <functional>
 #include <iostream>
 #include <map>
+#include <set>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -303,7 +304,7 @@ public:
     void updateFilterCakePropertiesPost(const Simulator& simulator);
     // solver related
     void updateReservoirProperties();
-    void removeCells();
+    bool removeCells();
 
     template <class TypeTag, class Simulator>
     void updateReservoirProperties(const Simulator& simulator, bool init_constant_vals=false,bool update_filtercake=true);
@@ -799,6 +800,15 @@ private:
     int grid_mesh_level_ = 0; // level of grid_mesh_map_ refs; nonzero only inside a propagation
                                                       // NB: in general many-to-many
     std::vector<CellRef> grid_fixed_cells_; // cells kept fine when grid_ was built from trimesh_
+    struct TriangulationArgs {
+        int coarsen_levels = 1;
+        bool smooth = true;
+        int cellnum_threshold = 10;
+        int band_rings = 1;
+    };
+    TriangulationArgs grid_tri_args_; // with grid_fixed_cells_: the createDuneGrid call grid_ came from
+    std::optional<std::map<CellRef, int>> removal_boundary_map_; // boundary map of the last removeCells
+    std::set<CellRef> removed_cells_; // trimesh_ cells dropped by removeCells since the last regrid
     std::unique_ptr<Grid> grid_;
     // grid definition in case of step fails
     std::unique_ptr<Opm::RegularTrimesh> trimesh_prev_; // experimental, implicitly defined grids

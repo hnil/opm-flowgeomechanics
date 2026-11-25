@@ -160,6 +160,7 @@ Fracture::init(const std::string& well,
         grid_mesh_map_ = fsmap;
         grid_fixed_cells_ = well_source_cellref_;
         grid_mesh_level_ = 0;
+        grid_tri_args_ = {};
 
         setFractureGrid(std::move(grid)); // create the physical grid from trimesh
     }
@@ -192,39 +193,58 @@ Fracture::resetWriters()
     }
 }
 
-/**
- * @brief Removes cells from the grid if they are out side reservoir.
- */
-void
+// Drops the trimesh cells under fracture cells outside the reservoir and rebuilds the mesh, so
+// trimesh_, grid_mesh_map_ and grid_ stay one grid. False when only fixed cells are outside.
+bool
 Fracture::removeCells()
 {
-    // copy all to presistent container
-    ElementMapper mapper(grid_->leafGridView(), Dune::mcmgElementLayout()); // used id sets interally
-    Dune::PersistentContainer<Grid, double> fracture_width(*grid_, 0);
-    fracture_width.resize();
-    for (const auto& elem : elements(grid_->leafGridView())) {
-        size_t eIdx = mapper.index(elem);
-        fracture_width[elem] = fracture_width_[eIdx];
-    }
-
-    for (const auto& elem : elements(grid_->leafGridView())) {
-        size_t eIdx = mapper.index(elem);
-        if (reservoir_map_.cells[eIdx] < 0) {
-            grid_->removeElement(elem);
+    bool changed = false;
+    for (std::size_t c = 0; c < numFractureCells(); ++c) {
+        if (reservoir_map_.cells[c] >= 0) {
+            continue;
+        }
+        for (const auto& cell : grid_mesh_map_[c]) { // a smoothing triangle lists its two boundary cells
+            if (std::find(grid_fixed_cells_.begin(), grid_fixed_cells_.end(), cell) == grid_fixed_cells_.end()) {
+                if (trimesh_->setInactive(cell)) {
+                    removed_cells_.insert(cell);
+                    changed = true;
+                }
+            }
         }
     }
-
-    grid_->grow();
-    grid_->postGrow();
-    // resize array
-
-    fracture_width_.resize(numFractureCells());
-    // copy back from presistent contatiner
-    for (const auto& elem : elements(grid_->leafGridView())) {
-        size_t eIdx = mapper.index(elem);
-        fracture_width_[eIdx] = fracture_width[elem];
+    if (!changed) {
+        return false;
     }
-    this->resetWriters();
+    const auto& args = grid_tri_args_;
+    auto [grid, fsmap, bmap] = trimesh_->createDuneGrid(
+        args.coarsen_levels, grid_fixed_cells_, args.smooth, args.cellnum_threshold, args.band_rings);
+    std::map<CellRef, std::size_t> fsmap_inv;
+    for (std::size_t i = 0; i != fsmap.size(); ++i) {
+        if (fsmap[i].size() == 1) {
+            fsmap_inv[fsmap[i].front()] = i;
+        }
+    }
+    well_source_.clear();
+    for (const auto& cell : grid_fixed_cells_) {
+        well_source_.push_back(fsmap_inv[cell]);
+    }
+    // keep the width of cells the rebuild left unchanged, so callers holding a width stay consistent
+    if (fracture_width_.size() == grid_mesh_map_.size()) {
+        std::map<std::vector<CellRef>, double> old_width;
+        for (std::size_t i = 0; i != grid_mesh_map_.size(); ++i) {
+            old_width[grid_mesh_map_[i]] = fracture_width_[i][0];
+        }
+        const double w0 = prm_.get<double>("config.initial_fracture_width");
+        fracture_width_.resize(fsmap.size());
+        for (std::size_t i = 0; i != fsmap.size(); ++i) {
+            const auto it = old_width.find(fsmap[i]);
+            fracture_width_[i] = (it != old_width.end()) ? it->second : w0;
+        }
+    }
+    grid_mesh_map_ = std::move(fsmap);
+    removal_boundary_map_ = std::move(bmap);
+    setFractureGrid(std::move(grid));
+    return true;
 }
 
 void
@@ -918,10 +938,8 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
     }
     auto it = std::find(reservoir_map_.cells.begin(), reservoir_map_.cells.end(), -1);
     auto extended_fractures = prm_.get<bool>("extended_fractures");
-    if (!(it == reservoir_map_.cells.end()) && !(extended_fractures)) {
+    if (!(it == reservoir_map_.cells.end()) && !(extended_fractures) && this->removeCells()) {
         OpmLog::warning("Remove fracture outside of model");
-        // remove fracture outside of model
-        this->removeCells();
         this->updateReservoirCells(cellSearchTree, grid, entity_seeds);
     }else{
       if(!(it == reservoir_map_.cells.end())){
@@ -2248,6 +2266,14 @@ Fracture::propagationScores_(std::map<CellRef, int>& boundary, const GridSolve& 
         }
     }
     vetoForceLimit_(score, front, opt);
+    // growing towards cells removeCells dropped would only add them again
+    for (size_t i = 0; i != score.size() && !removed_cells_.empty(); ++i) {
+        for (const auto& nb : RegularTrimesh::cellNeighbors(boundary_cells[i])) {
+            if (removed_cells_.count(nb) > 0) {
+                score[i] = -1.0;
+            }
+        }
+    }
     // K1 from an unconverged solve is unreliable, and growth on it cannot be undone.
     if (opt.conservative && !solve.converged) {
         std::fill(score.begin(), score.end(), -1.0);
@@ -2771,6 +2797,8 @@ void Fracture::resetFracture()
     // Restore trimesh from checkpoint.  Use the saved well-source CellRefs so
     // that the Dune grid and grid_mesh_map_ are consistent with the checkpoint.
     trimesh_ = std::make_unique<Opm::RegularTrimesh>(*trimesh_prev_);
+    removed_cells_.clear();
+    removal_boundary_map_.reset();
     const int MAX_NUM_COARSENING = prm_.get<int>("solver.max_num_coarsening");
     const int numcell_threshold  = prm_.get<int>("solver.numcell_threshold");
     bool smooth_boundary = prm_.get<bool>("solver.smooth_boundary", false);
@@ -2781,6 +2809,7 @@ void Fracture::resetFracture()
     grid_mesh_map_ = fsmap;
     grid_fixed_cells_ = wsources;
     grid_mesh_level_ = 0;
+    grid_tri_args_ = {MAX_NUM_COARSENING, smooth_boundary, numcell_threshold, band_rings};
     // Restore grid and cell normals (setFractureGrid clears reservoir_map_.cells;
     // they will be repopulated by FractureModel::resetFractures via
     // updateFractureReservoirCells + initReservoirProperties).
@@ -2809,10 +2838,12 @@ void Fracture::rebuildGridForLoad(const std::vector<std::vector<CellRef>>& saved
     const int numcell_threshold = prm_.get<int>("solver.numcell_threshold");
     const bool smooth_boundary = prm_.get<bool>("solver.smooth_boundary", false);
     const int band_rings = prm_.get<int>("solver.band_rings", 1);
+    grid_tri_args_ = {max_coarsening, smooth_boundary, numcell_threshold, band_rings};
     auto built = trimesh_->createDuneGrid(max_coarsening, grid_fixed_cells_, smooth_boundary, numcell_threshold,
                                           band_rings);
     if (std::get<1>(built) != saved_map) {
         // a fracture that has not grown still has its seed grid, see init()
+        grid_tri_args_ = {};
         built = trimesh_->createDuneGrid(1, grid_fixed_cells_);
     }
     if (std::get<1>(built) != saved_map) {

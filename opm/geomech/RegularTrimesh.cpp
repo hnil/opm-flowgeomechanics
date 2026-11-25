@@ -64,17 +64,6 @@ edge2cells(const EdgeRef& edge)
         : array<CellRef, 2> {CellRef {edge[0], edge[1], 1}, CellRef {edge[0], edge[1], 0}};
 }
 
-array<CellRef, 3>
-cellNeighbors(const CellRef& cell)
-{
-    return (cell[2] == 0) ? array<CellRef, 3> {CellRef {cell[0], cell[1], 1},
-                                               CellRef {cell[0] - 1, cell[1], 1},
-                                               CellRef {cell[0], cell[1] - 1, 1}}
-                          : array<CellRef, 3> {CellRef {cell[0], cell[1], 0},
-                                               CellRef {cell[0] + 1, cell[1], 0},
-                                               CellRef {cell[0], cell[1] + 1, 0}};
-};
-
 // += operator for Opm::Coord3D
 Opm::Coord3D&
 operator+=(Opm::Coord3D& lhs, const Opm::Coord3D& rhs)
@@ -1283,6 +1272,18 @@ RegularTrimesh::removeSawtooths()
             it = range.second - 1;
         }
     }
+}
+
+// ----------------------------------------------------------------------------
+array<CellRef, 3>
+RegularTrimesh::cellNeighbors(const CellRef& cell)
+{
+    return (cell[2] == 0) ? array<CellRef, 3> {CellRef {cell[0], cell[1], 1},
+                                               CellRef {cell[0] - 1, cell[1], 1},
+                                               CellRef {cell[0], cell[1] - 1, 1}}
+                          : array<CellRef, 3> {CellRef {cell[0], cell[1], 0},
+                                               CellRef {cell[0] + 1, cell[1], 0},
+                                               CellRef {cell[0], cell[1] + 1, 0}};
 }
 
 // ----------------------------------------------------------------------------
