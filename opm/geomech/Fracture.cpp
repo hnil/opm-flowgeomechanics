@@ -2737,7 +2737,7 @@ Fracture::restoreLeakoffOfIsolatedPieces_(const std::vector<double>& full_leakof
 bool
 Fracture::halfTransOwnCell_() const
 {
-    return prm_.get<bool>("solver.half_trans_own_cell", false);
+    return prm_.get<bool>("solver.half_trans_own_cell", true);
 }
 
 std::vector<Fracture::Htrans>
