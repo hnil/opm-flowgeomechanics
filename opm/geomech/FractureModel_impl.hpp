@@ -169,8 +169,11 @@ namespace Opm {
         // Opt-in: outside the timestep retry scope (endTimeStep) a fracture solve
         // failure is fatal; "warn_keep_state" logs and continues on whatever state
         // the solve left. Serial-tested only.
-        const bool warn_keep_state =
-            prm_.get<std::string>("solver.solve_failure_policy", "throw") == "warn_keep_state";
+        const auto policy = prm_.get<std::string>("solver.solve_failure_policy", "throw");
+        // "warn_restore": as warn_keep_state, but a failed fracture goes back to its step-start state
+        const bool warn_restore = policy == "warn_restore";
+        const bool warn_keep_state = policy == "warn_keep_state" || warn_restore;
+        bool any_restored = false;
         for (size_t i = 0; i < wells_.size(); ++i) {
             std::vector<Fracture>& fractures = well_fractures_[i];
             for (size_t j = 0; j < fractures.size(); ++j) {
@@ -183,8 +186,12 @@ namespace Opm {
                         } catch (const std::exception& e) {
                             last_solve_stats_.converged = false;
                             OpmLog::warning("Fracture solve FAILED for " + fractures[j].name()
-                                            + "; solve_failure_policy=warn_keep_state, continuing: "
+                                            + "; solve_failure_policy=" + policy + ", continuing: "
                                             + e.what());
+                            if (warn_restore) {
+                                fractures[j].resetFracture();
+                                any_restored = true;
+                            }
                         }
                     } else {
                         fractures[j].solve<TypeTag, Simulator>(cell_search_tree_, cell_seeds_, simulator, mode);
@@ -193,6 +200,9 @@ namespace Opm {
                     fractures[j].warnIfOpenButNotConducting();
                 }
             }
+        }
+        if (any_restored) {
+            refreshAfterReset_<TypeTag, Simulator>(simulator);
         }
         total_solve_stats_ += last_solve_stats_;
     }
@@ -288,6 +298,13 @@ namespace Opm {
                 fracture.resetFracture();
             }
         }
+        refreshAfterReset_<TypeTag, Simulator>(simulator);
+    }
+
+    template <class TypeTag, class Simulator>
+    void
+    FractureModel::refreshAfterReset_(const Simulator& simulator)
+    {
         const auto& cpgrid = simulator.vanguard().grid();
         updateFractureReservoirCells(cpgrid);
         this->initReservoirProperties<TypeTag, Simulator>(simulator);

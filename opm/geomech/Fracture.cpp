@@ -2015,13 +2015,21 @@ void
 Fracture::remapState_(const RegridMaps& maps, const int level, const PropagationOptions& opt,
                       const FilterCakeSnapshot& cake0)
 {
+    // a throw lets solve_failure_policy handle a state a failed solve left behind
+    const auto checkRemapBounds = [this] {
+        for (const auto& p : fracture_pressure_) {
+            if (!(std::abs(p[0]) < 1e10)) {
+                OPM_THROW(std::runtime_error, "Fracture " + name() + ": pressure out of bounds at regrid");
+            }
+        }
+        for (const auto& w : fracture_width_) {
+            if (!(std::abs(w[0]) < 0.6)) {
+                OPM_THROW(std::runtime_error, "Fracture " + name() + ": width out of bounds at regrid");
+            }
+        }
+    };
     if (opt.remapSolution) {
-        for (size_t i = 0; i < fracture_pressure_.size(); ++i) {
-            assert(std::abs(fracture_pressure_[i][0]) < 1e10);
-        }
-        for (size_t i = 0; i < fracture_width_.size(); ++i) {
-            assert(std::abs(fracture_width_[i][0]) < 0.6);
-        }
+        checkRemapBounds();
         const auto old_size = fracture_width_.size();
         if (opt.majorityCoarsen) {
             const auto w = remapFilterCakeConservative(maps.width_volumes, maps.before, level,
@@ -2075,12 +2083,7 @@ Fracture::remapState_(const RegridMaps& maps, const int level, const Propagation
             fracture_pressure_.resize(fracture_pressure_.size() + 1);
             fracture_pressure_[fracture_pressure_.size() - 1] = well_value;
         }
-        for (size_t i = 0; i < fracture_pressure_.size(); ++i) {
-            assert(std::abs(fracture_pressure_[i][0]) < 1e10);
-        }
-        for (size_t i = 0; i < fracture_width_.size(); ++i) {
-            assert(std::abs(fracture_width_[i][0]) < 0.6);
-        }
+        checkRemapBounds();
         // cell entries only: reservoir_.pressure has no well-equation entry
         const size_t num_press_cells = fracture_pressure_.size() - numWellEquations();
         const std::string front_init = prm_.get<std::string>("solver.front_cell_init", "reservoir");
@@ -2864,6 +2867,10 @@ Fracture::remapFilterCakeConservative(const RegularTrimesh::CellVolumes& source,
 
 void Fracture::finishReset()
 {
+    if (!reset_pending_) {
+        return;
+    }
+    reset_pending_ = false;
     if (grid_changed_since_checkpoint_) {
         const std::size_t htrans_before = htrans_.size();
         const std::size_t perfinj_before = perfinj_.size();
@@ -2878,6 +2885,7 @@ void Fracture::finishReset()
 
 void Fracture::resetFracture()
 {
+    reset_pending_ = true;
     clearContactMemoryOnRegrid_();
     if (!trimesh_prev_) {
         // No checkpoint available: moveForwardInTime was never called before this

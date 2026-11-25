@@ -248,6 +248,8 @@ public:
         }
 
     private:
+        template <class TypeTag, class Simulator>
+        void refreshAfterReset_(const Simulator& simulator);
         std::vector<RuntimePerforation> wellIndicesOf_(const std::string& wellname, bool convergedOnly) const;
         bool vtkwritewells_ = false; // write wells to VTK files
         template <class TypeTag, class Simulator>
