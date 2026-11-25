@@ -921,16 +921,22 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
         }
     }
     int clipped = 0;
+    std::vector<std::array<double, 3>> unclaimed;
     if (grid.comm().size() > 1) {
         for (int elemIdx = 0; elemIdx < mesh_.numCells(); ++elemIdx) {
             if (reservoir_map_.cells[elemIdx] < 0) {
                 const auto& c = mesh_.cellCentroid(elemIdx);
-                clipped += external::nearNonInteriorCell(cellSearchTree, grid, entity_seeds,
-                                                         external::cvf::Vec3d(c[0], c[1], c[2]));
+                if (external::nearNonInteriorCell(cellSearchTree, grid, entity_seeds,
+                                                  external::cvf::Vec3d(c[0], c[1], c[2]))) {
+                    ++clipped;
+                } else {
+                    unclaimed.push_back({c[0], c[1], c[2]});
+                }
             }
         }
     }
     partition_clipped_ = clipped;
+    unclaimed_ = unclaimed;
     auto it = std::find(reservoir_map_.cells.begin(), reservoir_map_.cells.end(), -1);
     auto extended_fractures = prm_.get<bool>("extended_fractures");
     if (!(it == reservoir_map_.cells.end()) && !(extended_fractures) && this->removeCells()) {
@@ -938,6 +944,7 @@ Fracture::updateReservoirCells(const external::cvf::ref<external::cvf::BoundingB
                                     : "Remove fracture outside of model");
         this->updateReservoirCells(cellSearchTree, grid, entity_seeds);
         partition_clipped_ = std::max(partition_clipped_, clipped);
+        unclaimed_ = std::move(unclaimed);
     }else{
       if(!(it == reservoir_map_.cells.end())){
           OpmLog::warning("Fracture outside of model");

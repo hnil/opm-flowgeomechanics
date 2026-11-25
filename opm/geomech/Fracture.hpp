@@ -366,6 +366,9 @@ public:
     const std::vector<int>& reservoirCells() const { return reservoir_map_.cells; }
     //! Elements outside this rank's cells but inside another rank's (last updateReservoirCells).
     int numPartitionClipped() const { return partition_clipped_; }
+    //! Centroids of elements outside this rank's cells and its overlap (last updateReservoirCells).
+    const std::vector<std::array<double, 3>>& unclaimedCentroids() const { return unclaimed_; }
+    void addPartitionClipped(int n) { partition_clipped_ += n; }
 
     //! Leak-off coefficient per fracture cell.  Includes the reservoir mobility.
     const std::vector<double>& leakOf() const { return leakof_; }
@@ -919,6 +922,7 @@ private:
     };
     ReservoirMap reservoir_map_;
     int partition_clipped_ = 0;
+    std::vector<std::array<double, 3>> unclaimed_;
     MechLookup mech_lookup_;
     // Reservoir-cell mapping per fracture triangle, keyed on its exact corner coordinates
     // (solver.cache_cell_mapping); valid while the reservoir grid is fixed.

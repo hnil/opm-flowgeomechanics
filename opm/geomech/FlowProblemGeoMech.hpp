@@ -1012,6 +1012,7 @@ namespace Opm{
                 return;
             }
             const auto& comm = this->gridView().comm();
+            this->geoMechModel_.fractureModel().claimPartitionElements(this->simulator().vanguard().grid());
             const auto& model = this->geoMechModel().fractureModel();
             const int clipped = comm.sum(model.numPartitionClipped());
             if (clipped == 0) {
@@ -1035,8 +1036,7 @@ namespace Opm{
             const double day = 86400.0;
             const double t0 = this->simulator().time() / day;
             const double t1 = t0 + this->simulator().timeStepSize() / day;
-            // Counts only elements over this rank's overlap cells, so it is a lower bound.
-            const std::string msg = "Fracture partition: at least " + std::to_string(clipped)
+            const std::string msg = "Fracture partition: " + std::to_string(clipped)
                 + " fracture elements reach cells owned by another MPI rank in the step "
                 + fmt::format("{:.1f} -> {:.1f}", t0, t1) + " days."
                 + " Those elements get no flow coupling and no well index (or are removed when"

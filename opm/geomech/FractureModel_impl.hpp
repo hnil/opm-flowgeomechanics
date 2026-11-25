@@ -55,6 +55,57 @@ namespace Opm {
         return n;
     }
 
+    inline void
+    FractureModel::claimPartitionElements(const Dune::CpGrid& grid)
+    {
+        const auto& comm = grid.comm();
+        if (comm.size() == 1) {
+            return;
+        }
+        std::vector<double> mine; // x, y, z, fracture index on this rank
+        int nfrac = 0;
+        for (const auto& well_fracture : well_fractures_) {
+            for (const auto& fracture : well_fracture) {
+                for (const auto& c : fracture.unclaimedCentroids()) {
+                    mine.insert(mine.end(), {c[0], c[1], c[2], static_cast<double>(nfrac)});
+                }
+                ++nfrac;
+            }
+        }
+        const int nloc = static_cast<int>(mine.size());
+        std::vector<int> counts(comm.size());
+        comm.allgather(&nloc, 1, counts.data());
+        std::vector<int> displ(comm.size() + 1, 0);
+        for (int r = 0; r < comm.size(); ++r) {
+            displ[r + 1] = displ[r] + counts[r];
+        }
+        if (displ.back() == 0) {
+            return;
+        }
+        std::vector<double> all(displ.back());
+        comm.allgatherv(mine.data(), nloc, all.data(), counts.data(), displ.data());
+        const int maxfrac = std::max(comm.max(nfrac), 1);
+        std::vector<int> hits(static_cast<std::size_t>(comm.size()) * maxfrac, 0);
+        for (int r = 0; r < comm.size(); ++r) {
+            if (r == comm.rank()) {
+                continue;
+            }
+            for (int i = displ[r]; i < displ[r + 1]; i += 4) {
+                const external::cvf::Vec3d p(all[i], all[i + 1], all[i + 2]);
+                if (external::cellOfPoint(cell_search_tree_, grid, cell_seeds_, p) >= 0) {
+                    ++hits[static_cast<std::size_t>(r) * maxfrac + static_cast<int>(all[i + 3])];
+                }
+            }
+        }
+        comm.sum(hits.data(), static_cast<int>(hits.size()));
+        int k = 0;
+        for (auto& well_fracture : well_fractures_) {
+            for (auto& fracture : well_fracture) {
+                fracture.addPartitionClipped(hits[static_cast<std::size_t>(comm.rank()) * maxfrac + k++]);
+            }
+        }
+    }
+
     inline std::string
     FractureModel::partitionClippedReport() const
     {
