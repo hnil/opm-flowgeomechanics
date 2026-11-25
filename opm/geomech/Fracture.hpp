@@ -850,6 +850,7 @@ private:
     void addSource();
     void initPressureMatrix();
     bool halfTransOwnCell_() const;
+    void restoreLeakoffOfIsolatedPieces_(const std::vector<double>& full_leakof);
     void updateLeakoff();
     double leakoffMobilityFor(int eIdx, bool upwind) const;
     double leakoffPotentialDifference(int eIdx) const;

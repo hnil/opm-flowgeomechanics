@@ -27,6 +27,7 @@
 #include <string> // std::string
 
 #include <opm/geomech/Fracture.hpp>
+#include <opm/geomech/FracturePieces.hpp>
 
 #include <opm/geomech/Math.hpp>
 #include <opm/grid/polyhedralgrid.hh>
@@ -2614,6 +2615,7 @@ Fracture::updateLeakoff()
     // (filtercake_thikness_ is the total over all faces); faces act in parallel
     const double sides = leakoffSides();
     const bool injected_fluid_cake = useInjectedFluidMobility();
+    std::vector<double> full_leakof(nc, 0.0);
     for (auto& element : Dune::elements(grid_->leafGridView())) {
         const int eIdx = mapper.index(element);
         const auto geom = element.geometry();
@@ -2633,11 +2635,52 @@ Fracture::updateLeakoff()
             }
         }
         leakof_[eIdx] = sides / invtrans;
+        full_leakof[eIdx] = leakof_[eIdx];
         if(elementHasBoundaryNode[eIdx] && no_leakof_outercells){
           leakof_[eIdx] = 0.0;
         } else if (inFrontBand[eIdx]) {
           leakof_[eIdx] *= front_band_factor;
         }
+    }
+    restoreLeakoffOfIsolatedPieces_(full_leakof);
+}
+
+// A piece joined to the rest only at a vertex has no face flow to the well; with zero leak-off on
+// all its cells its pressure rows are singular, so it gets its unreduced leak-off back.
+void
+Fracture::restoreLeakoffOfIsolatedPieces_(const std::vector<double>& full_leakof)
+{
+    const auto gv = grid_->leafGridView();
+    ElementMapper mapper(gv, Dune::mcmgElementLayout());
+    const std::size_t nc = numFractureCells();
+    std::vector<std::vector<int>> nbs(nc);
+    for (const auto& element : Dune::elements(gv)) {
+        const int e = mapper.index(element);
+        for (const auto& is : Dune::intersections(gv, element)) {
+            if (is.neighbor()) {
+                nbs[e].push_back(mapper.index(is.outside()));
+            }
+        }
+    }
+    std::vector<bool> fed(nc, false);
+    for (const int c : well_source_) {
+        if (c >= 0 && static_cast<std::size_t>(c) < nc) {
+            fed[c] = true;
+        }
+    }
+    for (const auto& [c, wi] : perfinj_) {
+        if (c >= 0 && static_cast<std::size_t>(c) < nc) {
+            fed[c] = true;
+        }
+    }
+    const std::vector<int> isolated = cellsInPiecesWithoutSink(nbs, fed, leakof_);
+    for (const int c : isolated) {
+        leakof_[c] = full_leakof[c];
+    }
+    const std::size_t restored = isolated.size();
+    if (restored > 0) {
+        OpmLog::warning(fmt::format("Fracture {}: {} cells in pieces without a well source or leak-off "
+                                    "keep their leak-off", name(), restored));
     }
 }
 // Consumers pair the half-transmissibility t1 with the first index; legacy (false) gives it the other cell's.

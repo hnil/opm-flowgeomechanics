@@ -572,6 +572,11 @@ target_link_libraries(test_level_remap PRIVATE opmflowgeomechanics)
 add_test(NAME Unit.LevelRemap COMMAND $<TARGET_FILE:test_level_remap>)
 set_tests_properties(Unit.LevelRemap PROPERTIES TIMEOUT 30 LABELS "physics;unit")
 
+add_executable(test_pieces_without_sink tests/test_pieces_without_sink.cpp)
+target_link_libraries(test_pieces_without_sink PRIVATE opmflowgeomechanics)
+add_test(NAME Unit.PiecesWithoutSink COMMAND $<TARGET_FILE:test_pieces_without_sink>)
+set_tests_properties(Unit.PiecesWithoutSink PROPERTIES TIMEOUT 30 LABELS "physics;unit")
+
 # The well-relative fracture CTF change test must not depend on the CTF magnitude.
 add_executable(test_ctf_change_metric tests/test_ctf_change_metric.cpp)
 target_link_libraries(test_ctf_change_metric PRIVATE opmflowgeomechanics)
