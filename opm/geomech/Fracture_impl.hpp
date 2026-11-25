@@ -852,6 +852,11 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
             score_function(mesh, cur_level);
           }
         } else {
+        if (opt.levelConsistent) {
+            // a stop can leave an unsolved mesh; keep the grid that was solved
+            mesh = *trimesh_;
+            cur_level = grid_mesh_level_;
+        }
         bool any_removed = removeNewZeroWithCells(mesh,cur_level, initial_mesh);
         if(any_removed){
           mesh.removeSawtooths();
@@ -874,6 +879,10 @@ void Fracture::solve(const external::cvf::ref<external::cvf::BoundingBoxTree>& c
                 last_solve_rel_growth_ = (fprop_before.area > 0.0)
                     ? std::abs(area_after / fprop_before.area - 1.0)
                     : (area_after > 0.0 ? std::numeric_limits<double>::infinity() : 0.0);
+                if (opt.levelConsistent) {
+                    // the dt cap follows the accepted growth, not an intermediate expansion state
+                    capFlowTimeStep_(area_after, fprop_before.area);
+                }
             }
 
             // Opt-in damped fixed point on the width exposed to the coupling

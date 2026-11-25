@@ -629,6 +629,7 @@ private:
                                                        double inj_press) const;
    std::vector<RuntimePerforation> wellIndices_() const;
    bool  expantionMax(const FractureProperties& fprop);
+   bool capFlowTimeStep_(double area, double ref_area); // sets max_flow_time_step_; true if over area_change_fac
 
    // ---- trimesh propagation solve (solve()) ----
    struct PropagationOptions
@@ -643,6 +644,7 @@ private:
        bool remapSolution{true};
        bool conservativeCake{false};
        bool majorityCoarsen{false}; // width remapped by volume
+       bool levelConsistent{false}; // expansion ends on the last solved grid and level
        double forceLimit{0.0};
        bool conservative{false};
        bool convergedCellsOnly{false};

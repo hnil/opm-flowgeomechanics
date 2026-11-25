@@ -1868,20 +1868,25 @@ bool
 Fracture::expantionMax(const FractureProperties& fprop)
 {
     FractureProperties fprop_current = calculateFractureProperties();
+    const bool exceeded = capFlowTimeStep_(fprop_current.area, fprop.area);
+    if (exceeded) {
+        OpmLog::debug(fmt::format("Fracture area doubled, stopping expansion (area {} -> {}, level {}, {} cells)",
+                                  fprop.area, fprop_current.area, grid_mesh_level_, numFractureCells()));
+    }
+    return exceeded;
+}
+
+bool
+Fracture::capFlowTimeStep_(const double area, const double ref_area)
+{
     const double area_change_fac = area_change_fac_override_ > 0.0
         ? area_change_fac_override_ : prm_.get<double>("solver.area_change_fac");
-    const double dt_lim = prm_.get<double>("solver.dt_limit")*86400.0;
-    if (fprop_current.area > area_change_fac * fprop.area) {
-        OpmLog::debug("Fracture area doubled, stopping expansion");
-        // the area dt controller replaces the fixed dt_limit
-        max_flow_time_step_ = prm_.get<double>("solver.area_dt_target", 0.0) > 0.0
-            ? std::numeric_limits<double>::max() : dt_lim;
-        return true;
-    } else {
-      max_flow_time_step_  = std::numeric_limits<double>::max();// no limit
-        return false;
-    }
-    return false;
+    const bool exceeded = area > area_change_fac * ref_area;
+    // the area dt controller replaces the fixed dt_limit
+    max_flow_time_step_ = (exceeded && !(prm_.get<double>("solver.area_dt_target", 0.0) > 0.0))
+        ? prm_.get<double>("solver.dt_limit") * 86400.0
+        : std::numeric_limits<double>::max();
+    return exceeded;
 }
 
 Fracture::PropagationOptions
@@ -1905,6 +1910,7 @@ Fracture::PropagationOptions::read(const PropertyTree& prm)
     }
     o.conservativeCake = (cake_remap == "conservative");
     o.majorityCoarsen = prm.get<bool>("solver.coarsen_majority", false);
+    o.levelConsistent = prm.get<bool>("solver.expand_level_consistent", false);
     o.conservativeCake = o.conservativeCake || o.majorityCoarsen;
     o.forceLimit = prm.get<double>("solver.force_limit", 0.0);
     o.conservative = prm.get<bool>("solver.conservative_propagation", false);
