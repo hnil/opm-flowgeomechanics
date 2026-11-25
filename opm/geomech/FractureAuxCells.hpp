@@ -69,6 +69,7 @@ class FractureAuxCells : public FlowAuxCellModule<TypeTag>
     using Linearizer = GetPropType<TypeTag, Properties::Linearizer>;
     using RateVector = GetPropType<TypeTag, Properties::RateVector>;
     using Indices = GetPropType<TypeTag, Properties::Indices>;
+    using PrimaryVariables = GetPropType<TypeTag, Properties::PrimaryVariables>;
 
     enum { dimWorld = GridView::dimensionworld };
 
@@ -259,6 +260,14 @@ public:
      */
     const std::vector<unsigned>& newbornDofs() const
     { return this->newbornDofs_; }
+
+    //! Remapped DOFs of the last bind() and their donor's start-of-step state.
+    const std::vector<std::pair<unsigned, PrimaryVariables>>& remappedOldStates() const
+    { return this->remappedOld_; }
+
+    //! Per fracture: first local slot and cell count of the current binding.
+    const std::vector<std::pair<unsigned, std::size_t>>& boundLayout() const
+    { return this->boundLayout_; }
 
     /*!
      * \brief Whether every fracture still has the cell count its slots were handed out for.
@@ -605,6 +614,7 @@ private:
     std::map<std::string, std::vector<RuntimePerforation>> wellPerforations_{};
     std::map<std::string, std::vector<int>> wellCells_{}; // active aux DOFs per well
     std::vector<unsigned> newbornDofs_{}; // see newbornDofs()
+    std::vector<std::pair<unsigned, PrimaryVariables>> remappedOld_{}; // see remappedOldStates()
     std::vector<std::pair<unsigned, std::size_t>> boundLayout_{}; // per fracture: first slot, cells
     bool remapState_{false}; // see setRemapState()
     bool newbornPressureMode_{true}; // see setNewbornOwnPressure()

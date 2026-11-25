@@ -109,6 +109,7 @@ namespace Opm{
         // grid cell of that region, which the material-law lookup is redirected to.
         int embeddedSatnum_ = 0;
         int embeddedCellDump_ = 0; // solver.embedded_cell_dump: worst-N aux cells per report
+        bool embeddedInventoryLog_ = false; // solver.embedded_inventory_log
         mutable int embeddedSatProxyCell_ = -1;
         std::vector<std::size_t> lastSeenFractureLayout_ {}; // see bindFractureAuxCells
         bool embeddedLeakoffReport_ = false;
@@ -246,6 +247,7 @@ namespace Opm{
             embeddedStatic_ = prm.get<bool>("solver.embedded_static", false);
             embeddedSatnum_ = prm.get<int>("solver.embedded_satnum", 0);
             embeddedCellDump_ = prm.get<int>("solver.embedded_cell_dump", 0);
+            embeddedInventoryLog_ = prm.get<bool>("solver.embedded_inventory_log", false);
             embeddedLeakoffReport_ = prm.get<bool>("solver.embedded_leakoff_report", false);
 
             // Aperture floor for cell volume and cubic-law transmissibility; not
@@ -409,6 +411,9 @@ namespace Opm{
                 previousAux.push_back(previous[dof]);
             }
 
+            const auto inventoryBefore = embeddedInventoryLog_
+                ? this->embeddedOldInventory_(/*remappedFromCurrent=*/false)
+                : std::vector<std::array<Scalar, 2>>{};
             const bool topologyChanged = fractureAuxCells_->bind(fractureModel);
             if (fractureAuxCells_->layoutMatches(fractureModel)) {
                 for (auto& wellFractures : fractureModel.wellFractures()) {
@@ -433,11 +438,18 @@ namespace Opm{
                         previous[dof] = previousAux[dof - firstAux];
                     }
                 }
+                // refreshAuxCellModules_ set previous = current; remapped cells need their donor's old state
+                for (const auto& [dof, state] : fractureAuxCells_->remappedOldStates()) {
+                    previous[dof] = state;
+                }
             }
             // newborn cells were assigned at both time levels; refresh their cached
             // intensive quantities so the first linearization sees that state
             this->model().updateAuxiliaryIntQuants(/*timeIdx=*/0);
             this->model().updateAuxiliaryIntQuants(/*timeIdx=*/1);
+            if (embeddedInventoryLog_ && topologyChanged) {
+                this->logEmbeddedInventory_(inventoryBefore);
+            }
             embeddedCouplingChange_ = fractureAuxCells_->lastBindChange();
             if (topologyChanged && requireStableLayout) {
                 // A restructure inside the step handed the fracture different
@@ -463,6 +475,58 @@ namespace Opm{
          * keeps the cost bounded by checking only that many columns per
          * fracture, spread over the matrix; -1 checks every one.
          */
+        // Start-of-step water and energy per fracture: storage(old state) * V_old. With
+        // remappedFromCurrent, remapped cells use their current state instead.
+        std::vector<std::array<Scalar, 2>> embeddedOldInventory_(const bool remappedFromCurrent) const
+        {
+            using LocalResidual = GetPropType<TypeTag, Properties::LocalResidual>;
+            using EqVector = GetPropType<TypeTag, Properties::EqVector>;
+            using Indices = GetPropType<TypeTag, Properties::Indices>;
+            const auto& model = this->model();
+            const unsigned waterEq = Indices::conti0EqIdx
+                + FluidSystem::canonicalToActiveCompIdx(FluidSystem::waterCompIdx);
+            const auto& remapped = fractureAuxCells_->remappedOldStates();
+            std::vector<std::array<Scalar, 2>> inventory;
+            for (const auto& [first, cells] : fractureAuxCells_->boundLayout()) {
+                std::array<Scalar, 2> sum {0.0, 0.0};
+                for (std::size_t c = 0; c < cells; ++c) {
+                    const auto slot = static_cast<unsigned>(first + c);
+                    if (!fractureAuxCells_->isActive(slot)) {
+                        continue;
+                    }
+                    const auto dof = static_cast<unsigned>(fractureAuxCells_->localToGlobalDof(slot));
+                    const bool fromCurrent = remappedFromCurrent
+                        && std::any_of(remapped.begin(), remapped.end(),
+                                       [dof](const auto& r) { return r.first == dof; });
+                    EqVector storage;
+                    LocalResidual::template computeStorage<Scalar>
+                        (storage, model.intensiveQuantities(dof, fromCurrent ? 0 : 1));
+                    const Scalar volume = model.dofTotalVolumeOld(dof);
+                    sum[0] += storage[waterEq] * volume;
+                    if constexpr (getPropValue<TypeTag, Properties::EnableEnergy>()) {
+                        sum[1] += storage[Indices::contiEnergyEqIdx] * volume;
+                    }
+                }
+                inventory.push_back(sum);
+            }
+            return inventory;
+        }
+
+        void logEmbeddedInventory_(const std::vector<std::array<Scalar, 2>>& before) const
+        {
+            const auto after = this->embeddedOldInventory_(false);
+            const auto ifCurrent = this->embeddedOldInventory_(true);
+            for (std::size_t f = 0; f < after.size(); ++f) {
+                const auto b = (f < before.size()) ? before[f] : std::array<Scalar, 2>{0.0, 0.0};
+                OpmLog::info(fmt::format("EMBINV fracture {} remapped {} old water {:.6e} -> {:.6e} "
+                                         "(from current {:.6e}) old energy {:.6e} -> {:.6e} "
+                                         "(from current {:.6e})",
+                                         f, fractureAuxCells_->remappedOldStates().size(),
+                                         b[0], after[f][0], ifCurrent[f][0],
+                                         b[1], after[f][1], ifCurrent[f][1]));
+            }
+        }
+
         void checkFractureCouplingIfRequested_()
         {
             if ((fractureAuxCells_ == nullptr) || !this->geoMechModel().fractureModelActive()) {

@@ -258,6 +258,7 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
     auto& solution = this->simulator_.model().solution(/*timeIdx=*/0);
     auto& solutionOld = this->simulator_.model().solution(/*timeIdx=*/1);
     this->newbornDofs_.clear();
+    this->remappedOld_.clear();
     for (unsigned slot = 0; slot < nextSlot; ++slot) {
         if (this->active_[slot] && !wasActive[slot]) {
             const auto p = this->newbornPressureMode_ ? this->newbornPressure_[slot] : Scalar{-1};
@@ -306,6 +307,7 @@ FractureAuxCells<TypeTag>::bind(const FractureModel& fractures)
                         ++remapDiagCount;
                         solution[dof] = prevNow[from];
                         solutionOld[dof] = prevOld[from];
+                        this->remappedOld_.emplace_back(dof, prevOld[from]);
                         this->simulator_.model().setDofTotalVolumeOld(dof, this->bulkVolume_[slot]);
                         if (std::find(this->newbornDofs_.begin(), this->newbornDofs_.end(), dof)
                             == this->newbornDofs_.end()) {
