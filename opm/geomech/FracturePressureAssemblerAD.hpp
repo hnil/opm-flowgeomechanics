@@ -201,6 +201,7 @@ struct FracturePressureInput
     std::vector<double> leakof;
     double min_width = 1e-6;
     double max_width = std::numeric_limits<double>::infinity(); // cubic-law width cap
+    bool cubic_sum_floor = false; // h^3 = max(w,0)^3 + min_width^3 instead of clamp
     size_t num_cells = 0;
 
     // Well data
@@ -213,6 +214,31 @@ struct FracturePressureInput
     bool use_fluid_mobility_for_internal_faces = false;
     bool use_fluid_mobility_for_well_connections = false;
 };
+
+inline double cubedFlowWidth(double w, const FracturePressureInput& input)
+{
+    if (!input.cubic_sum_floor) {
+        const double h = std::clamp(w, input.min_width, input.max_width);
+        return h * h * h;
+    }
+    const double wp = std::max(w, 0.0);
+    const double f = input.min_width;
+    const double m = input.max_width;
+    return std::min(wp * wp * wp + f * f * f, m * m * m);
+}
+
+template <int N>
+LocalAD<N> cubedFlowWidthAD(const LocalAD<N>& w, const FracturePressureInput& input)
+{
+    if (!input.cubic_sum_floor) {
+        const LocalAD<N> h = adMin(adMax(w, input.min_width), input.max_width);
+        return h * h * h;
+    }
+    const LocalAD<N> wp = adMax(w, 0.0);
+    const double f = input.min_width;
+    const double m = input.max_width;
+    return adMin(wp * wp * wp + LocalAD<N>::constant(f * f * f), m * m * m);
+}
 
 inline double
 cellMobilityValue(const CellFluidProperty& density,
@@ -542,13 +568,9 @@ assemblePressureAD(const FracturePressureInput& input)
         AD4 w_i_ad = AD4::variable(input.fracture_width[i], W_I);
         AD4 w_j_ad = AD4::variable(input.fracture_width[j], W_J);
 
-        // apply minimum width (matches original std::max(width, min_width))
-        AD4 h1 = adMin(adMax(w_i_ad, input.min_width), input.max_width);
-        AD4 h2 = adMin(adMax(w_j_ad, input.min_width), input.max_width);
-
         // Poiseuille (cubic law) transmissibility – same formula as Fracture::assemblePressure
-        AD4 h1_cubed = h1 * h1 * h1;
-        AD4 h2_cubed = h2 * h2 * h2;
+        AD4 h1_cubed = cubedFlowWidthAD(w_i_ad, input);
+        AD4 h2_cubed = cubedFlowWidthAD(w_j_ad, input);
         AD4 inv_trans = AD4::constant(12.0) / (h1_cubed * AD4::constant(t1))
                   + AD4::constant(12.0) / (h2_cubed * AD4::constant(t2));
 
@@ -622,10 +644,8 @@ assemblePressureOriginal(const FracturePressureInput& input)
         const double t1 = std::get<2>(ht);
         const double t2 = std::get<3>(ht);
 
-        const double h1 = std::clamp(input.fracture_width[i], input.min_width, input.max_width);
-        const double h2 = std::clamp(input.fracture_width[j], input.min_width, input.max_width);
-
-        double value = 12.0 / (h1 * h1 * h1 * t1) + 12.0 / (h2 * h2 * h2 * t2);
+        double value = 12.0 / (cubedFlowWidth(input.fracture_width[i], input) * t1)
+            + 12.0 / (cubedFlowWidth(input.fracture_width[j], input) * t2);
         const double mobility = faceMobilityValue(input, i, j);
         value = 1.0 / value;
         value *= mobility;

@@ -99,6 +99,13 @@ Fracture::init(const std::string& well,
     min_width_ = prm_.get<double>("config.min_width", 1e-3);
     max_flow_width_ = prm_.get<double>("solver.max_flow_width", std::numeric_limits<double>::infinity());
     {
+        const auto floor = prm_.get<std::string>("solver.flow_width_floor", "clamp");
+        if (floor != "clamp" && floor != "cubic_sum") {
+            OPM_THROW(std::runtime_error, "solver.flow_width_floor must be clamp or cubic_sum, got " + floor);
+        }
+        flow_width_cubic_sum_ = (floor == "cubic_sum");
+    }
+    {
         const auto mode = prm_.get<std::string>("solver.closed_cell_leakoff", "full");
         if (mode != "full" && mode != "none" && mode != "ramp") {
             OPM_THROW(std::runtime_error, "Unknown solver.closed_cell_leakoff: " + mode);
@@ -1027,10 +1034,9 @@ Fracture::addSource()
         size_t j = std::get<1>(matel);
         double t1 = std::get<2>(matel);
         double t2 = std::get<3>(matel);
-        const double h1 = flowWidth(fracture_width_[i][0]);
-        const double h2 = flowWidth(fracture_width_[j][0]);
-        // harmonic mean of surface flow
-        double value = 12. / (h1 * h1 * h1 * t1) + 12. / (h2 * h2 * h2 * t2);
+        // harmonic mean of surface flow; same width law as cubedFlowWidth in FracturePressureAssemblerAD.hpp
+        double value = 12. / (flowWidthCubed(fracture_width_[i][0]) * t1)
+            + 12. / (flowWidthCubed(fracture_width_[j][0]) * t2);
 
         const double mobility = 0.5 * (fractureFlowMobility(i) + fractureFlowMobility(j));
         value = 1 / value;

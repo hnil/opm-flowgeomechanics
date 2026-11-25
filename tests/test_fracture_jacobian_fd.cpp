@@ -132,6 +132,62 @@ void flowBlocksMatchFiniteDifferences()
     require(sC > 0.0, "coupling block is not empty (some widths above min_width)");
 }
 
+// Largest abs(C) entry in the columns of every third cell, those moved across the floor below.
+double crossingColumnsMax(const FracturePressureInput& in)
+{
+    const auto C = assemblePressureAD(in).coupling_matrix;
+    double m = 0.0;
+    for (auto row = C->begin(); row != C->end(); ++row)
+        for (auto col = row->begin(); col != row->end(); ++col)
+            if (col.index() % 3 == 0) m = std::max(m, std::abs((*col)[0][0]));
+    return m;
+}
+
+// Largest relative change of crossingColumnsMax over 1 % width steps from 0.8 to 1.2 min_width.
+double worstStepAcrossFloor(bool cubicSum)
+{
+    std::mt19937 gen(42);
+    FracturePressureInput in = makeInput(gen);
+    in.cubic_sum_floor = cubicSum;
+    double prev = -1.0, worst = 0.0;
+    for (int s = 0; s <= 40; ++s) {
+        for (int c = 0; c < nc; c += 3) in.fracture_width[c] = (0.8 + 0.01 * s) * min_width;
+        const double m = crossingColumnsMax(in);
+        if (prev >= 0.0) worst = std::max(worst, std::abs(m - prev) / std::max(m, prev));
+        prev = m;
+    }
+    return worst;
+}
+
+// cubic_sum_floor (h^3 = max(w,0)^3 + min_width^3): C is continuous across the floor and
+// FD-exact next to it; the clamp floor switches C on from zero (negative control).
+void cubicSumFloorIsSmoothAndExact()
+{
+    std::mt19937 gen(42);
+    FracturePressureInput in = makeInput(gen);
+    in.cubic_sum_floor = true;
+    for (int c = 0; c < nc; c += 3) in.fracture_width[c] = min_width * ((c / 3) % 2 ? 1.005 : 0.995);
+    const auto base = assemblePressureAD(in);
+    const double sC = blockMax(*base.coupling_matrix);
+    double errC = 0.0;
+    for (int k = 0; k < nc; ++k) {
+        FracturePressureInput ip = in, im = in;
+        const double h = 1e-6 * std::max(in.fracture_width[k], min_width);
+        ip.fracture_width[k] += h;
+        im.fracture_width[k] -= h;
+        BlockVector1 fd = assemblePressureAD(ip).residual;
+        fd -= assemblePressureAD(im).residual;
+        fd *= 0.5 / h;
+        errC = std::max(errC, columnError(*base.coupling_matrix, k, fd, sC));
+    }
+    const double smooth = worstStepAcrossFloor(true), clamp = worstStepAcrossFloor(false);
+    std::cout << "cubic_sum floor: dR/dw rel error at +-0.5% of floor " << errC
+              << ", worst C change per 1% width step " << smooth << " (clamp " << clamp << ")\n";
+    require(errC < 1e-6, "cubic_sum coupling block matches finite differences at the floor");
+    require(smooth < 0.05, "cubic_sum keeps C continuous across the floor");
+    require(clamp > 0.5, "negative control: clamp switches C on at the floor");
+}
+
 // Hand copy of Fracture::addSource's face gravity term T(w) g: rhs - M p with it
 // must equal minus the AD residual.
 void solverResidualFormMatchesAdResidual()
@@ -214,6 +270,7 @@ int main()
 {
     try {
         flowBlocksMatchFiniteDifferences();
+        cubicSumFloorIsSmoothAndExact();
         solverResidualFormMatchesAdResidual();
         fbRowsMatchFiniteDifferences();
     } catch (const std::exception& e) {
