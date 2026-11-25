@@ -104,6 +104,17 @@ Run flags that belong to them: `seq_fast` with `--linear-solver-mech=mech_lines.
 `postsolve_nocap` has no per-solve area cap: at a fixed BHP, K1 grows with fracture length, so the first
 fracture solve can run to the model edge. Use `seq_fast` for BHP-controlled injectors.
 
+## Presets of record (2026-11-25)
+
+Not compiled in; the code defaults are unchanged.
+
+| file | = | note |
+|---|---|---|
+| `seq_record.json` | `seq_fast` + `drop_fluid_mech_linearization=false`, `keep_coupling_after_stable_iters=3` | keeps the coupling block once the contact set is stable; same physics as `seq_fast` on the 7 test decks |
+| `postsolve_record.json` | `postsolve.json` + fracture-solve `max_iter` 400 | no keep-C: in PostSolve it changes the open area |
+
+Run flags as for `seq_fast` / `postsolve.json`.
+
 So for the two main schemes you can skip the file entirely and pass the alias. The files in
 this directory are the place to start when you need to change control (rate), turn on a
 case-specific lever (performance), or pin settings for reproducibility.
