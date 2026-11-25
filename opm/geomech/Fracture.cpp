@@ -1916,7 +1916,7 @@ Fracture::PropagationOptions::read(const PropertyTree& prm)
     }
     o.conservativeCake = (cake_remap == "conservative");
     o.majorityCoarsen = prm.get<bool>("solver.coarsen_majority", false);
-    o.levelConsistent = prm.get<bool>("solver.expand_level_consistent", o.smoothBoundary);
+    o.levelConsistent = prm.get<bool>("solver.expand_level_consistent", false);
     o.conservativeCake = o.conservativeCake || o.majorityCoarsen;
     o.forceLimit = prm.get<double>("solver.force_limit", 0.0);
     o.conservative = prm.get<bool>("solver.conservative_propagation", false);
