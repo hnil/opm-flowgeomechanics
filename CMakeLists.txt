@@ -802,6 +802,34 @@ add_test(NAME Run.SIMPLE_MECH_FRAC_LGR.EnergyGeomech
 	--output-dir=test_simple_mech_frac_lgr
 )
 
+# Fracture grows out of a one-layer LGR into the main grid; saved at step 2
+# and restarted from there.  Run-only.
+add_test(NAME Run.SIMPLE_MECH_FRAC_LGR_CROSS.EnergyGeomech
+	COMMAND
+	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
+	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_LGR_CROSS.DATA
+	--parsing-strictness=low
+	--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/best_practice/seq_fast.json
+	--edge-conformal=true
+	--save-step=2
+	--output-dir=test_simple_mech_frac_lgr_cross
+)
+set_tests_properties(Run.SIMPLE_MECH_FRAC_LGR_CROSS.EnergyGeomech
+	PROPERTIES FIXTURES_SETUP frac_lgr_cross_save)
+add_test(NAME Run.SIMPLE_MECH_FRAC_LGR_CROSS.Restart.EnergyGeomech
+	COMMAND
+	$<SHELL_PATH:$<TARGET_FILE:flow_energy_geomech>>
+	${CMAKE_CURRENT_LIST_DIR}/data/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_LGR_CROSS.DATA
+	--parsing-strictness=low
+	--fracture-param-file=${CMAKE_CURRENT_LIST_DIR}/data/best_practice/seq_fast.json
+	--edge-conformal=true
+	--load-file=test_simple_mech_frac_lgr_cross/SIMPLE_MECH_NX_11_NY_11_NZ_25_FRAC_LGR_CROSS.OPMRST
+	--load-step=2
+	--output-dir=test_simple_mech_frac_lgr_cross_restart
+)
+set_tests_properties(Run.SIMPLE_MECH_FRAC_LGR_CROSS.Restart.EnergyGeomech
+	PROPERTIES FIXTURES_REQUIRED frac_lgr_cross_save)
+
 ## regressuin
 opm_set_test_driver(${PROJECT_SOURCE_DIR}/tests/run-mechRegressionTest.sh "")
 
